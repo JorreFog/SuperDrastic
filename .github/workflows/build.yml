@@ -1,0 +1,63 @@
+# Builds libsuperdrastic.so the way build.sh documents: clang + lld against a Debian trixie arm64 sysroot (glibc 2.41,
+# the same as ROCKNIX 20260901; the library needs 2.38), checks what it built, and keeps the package as an artifact.
+# A tag push (v*) also publishes a release with the package and the library attached.
+name: build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain and arm64 sysroot
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends clang lld llvm ca-certificates curl
+          dpkg --add-architecture arm64
+          apt-get update
+          mkdir -p /tmp/deb && cd /tmp/deb
+          apt-get download libc6:arm64 libc6-dev:arm64 linux-libc-dev libdrm-dev:arm64 libdrm2:arm64 \
+                           libgcc-14-dev:arm64 libgcc-s1:arm64
+          for d in *.deb; do dpkg-deb -x "$d" /sysroot; done
+          ln -s usr/lib /sysroot/lib
+      - name: Version
+        run: |
+          case "$GITHUB_REF" in refs/tags/v*) echo "${GITHUB_REF#refs/tags/v}" > VERSION ;; esac
+          cat VERSION
+      - name: Build
+        run: sh build.sh /sysroot shtest
+      - name: Check
+        run: |
+          L=build/libsuperdrastic.so
+          llvm-readelf -h $L | grep -q 'AArch64' || { echo "not an AArch64 library"; exit 1; }
+          newest=$(llvm-readelf -V $L | grep -o 'GLIBC_2\.[0-9]*' | sort -uV | tail -n1)
+          echo "needs up to $newest"
+          [ "$(printf '%s\nGLIBC_2.38\n' "$newest" | sort -V | tail -n1)" = GLIBC_2.38 ] || { echo "needs glibc newer than 2.38"; exit 1; }
+          for s in SDL_RenderPresent SDL_LockTexture SDL_UnlockTexture SDL_OpenAudio SDL_PollEvent; do
+            llvm-nm -D --defined-only $L | grep -q " $s\$" || { echo "hook $s missing"; exit 1; }
+          done
+          sh -n runner/superdrastic-run && sh -n runner/superdrastic-update
+      - name: Package
+        run: sh package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: superdrastic-${{ github.sha }}
+          path: build/superdrastic-*-aarch64.tar.gz
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apt-get install -y --no-install-recommends gh git
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gh release upload "${GITHUB_REF#refs/tags/}" build/superdrastic-*-aarch64.tar.gz build/libsuperdrastic.so --clobber \
+            || gh release create "${GITHUB_REF#refs/tags/}" build/superdrastic-*-aarch64.tar.gz build/libsuperdrastic.so \
+                 --title "SuperDrastic ${GITHUB_REF#refs/tags/v}" --notes "See the README and docs/INTEGRATION.md."

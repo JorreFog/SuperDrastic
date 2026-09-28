@@ -1,0 +1,14 @@
+# tools
+
+Test and measurement tools, run on the device unless noted.
+
+| Tool | |
+|---|---|
+| `shtest.c` | Runs one shader on a frame without DraStic and times it (`sh build.sh <sysroot> shtest`) |
+| `touchtap.py` | Injects a real tap or swipe into the touchscreen (evdev write) |
+| `padkey.py` | Presses a gamepad button the same way |
+| `touchcal.c` | Draws crosshairs on the panels to calibrate the touchscreen (KMS) |
+| `dsprobe.c` | Logs DraStic's display path (SDL calls and timings), for studying a DraStic build |
+| `kmstest.c` | Minimal KMS bring-up test for two panels |
+| `ramp.py` | Maps a stress-ROM run's presents to its levels |
+| `dev/` | The scripts used while bringing SuperDrastic up on the RG DS under ROCKNIX (they assume its paths) |

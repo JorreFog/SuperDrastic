@@ -164,6 +164,12 @@ void cpugov_start(void) {
     char gov[32], avail[256];
     rd_str(POL "scaling_governor", gov, sizeof gov);
     if (strcmp(gov, "performance")) { dsflip_log("[cpugov] off: governor is %s, not performance\n", gov); return; }
+    /* one clock domain only (the RK3566/RK3568's four A55s): with several clusters DraStic's threads may run on one
+     * this doesn't manage, and the load/clock model below would be wrong */
+    if (access("/sys/devices/system/cpu/cpufreq/policy1", F_OK) == 0 || access("/sys/devices/system/cpu/cpufreq/policy2", F_OK) == 0 ||
+        access("/sys/devices/system/cpu/cpufreq/policy4", F_OK) == 0 || access("/sys/devices/system/cpu/cpufreq/policy6", F_OK) == 0) {
+        dsflip_log("[cpugov] off: more than one CPU cluster\n"); return;
+    }
     rd_str(POL "scaling_available_frequencies", avail, sizeof avail);
     for (char *s = strtok(avail, " "); s && nf < 24; s = strtok(0, " ")) freqs[nf++] = atoi(s);
     for (int i = 1; i < nf; i++) for (int j = i; j > 0 && freqs[j] < freqs[j - 1]; j--) { int x = freqs[j]; freqs[j] = freqs[j - 1]; freqs[j - 1] = x; }

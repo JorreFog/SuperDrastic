@@ -1,0 +1,145 @@
+#!/bin/sh
+# superdrastic-run <drastic> [drastic args...] <rom>
+#
+# Runs the Linux DraStic build with SuperDrastic (libsuperdrastic.so preloaded): DraStic draws straight into the
+# panels' scanout buffers, paced to their refresh, with SuperDrastic's shaders, audio pump, touch, CPU governor and
+# RetroAchievements. Use it in place of your firmware's DraStic command. Exit status: DraStic's.
+#
+# SuperDrastic needs the display (DRM master) for itself, so whatever shows your frontend has to let go of it first.
+# DSFLIP_HANDOVER picks how:
+#   auto  (default) cmd if DSFLIP_STOP_CMD is set, else vt if a compositor is running, else none
+#   none  nothing holds the display (the frontend is a plain KMS program that exits or drops it while games run)
+#   vt    switch the console to another VT (DSFLIP_VT, default 12): a compositor started through seatd or logind
+#         releases the display then, and takes it back when we switch back. The frontend keeps running.
+#   cmd   run DSFLIP_STOP_CMD before the game and DSFLIP_START_CMD after it (e.g. stop and start your frontend)
+# If SuperDrastic can't take the display (see its verdict in docs/INTEGRATION.md), the display is handed back and
+# DraStic runs the ordinary way, unless DSFLIP_FALLBACK=0.
+#
+# While the game runs, and put back afterwards (each only where the system has it):
+#   - the GPU's clock (devfreq): its lowest with no shader (the GPU has nothing to draw), load-following with a
+#     shader, full with ds-fsr; re-applied if another service changes it. DSFLIP_GPU_CLOCKS=0: leave it alone.
+#   - the CPU's clock limit, which SuperDrastic's own governor lowers (it is lifted the moment DraStic exits).
+#   - PipeWire at DraStic's 44.1 kHz, so it doesn't resample every cycle. DSFLIP_AUDIO_RATE=0: leave it alone.
+# Settings: environment variables, or superdrastic.conf beside this script (shell syntax: KEY=value).
+HERE=$(cd "$(dirname "$0")" && pwd)
+[ -f "$HERE/superdrastic.conf" ] && . "$HERE/superdrastic.conf"
+[ $# -ge 1 ] || { echo "usage: superdrastic-run <drastic> [args...] <rom>" >&2; exit 2; }
+DRASTIC=$1; shift
+case "$DRASTIC" in /*) ;; *) DRASTIC=$(cd "$(dirname "$DRASTIC")" && pwd)/$(basename "$DRASTIC") ;; esac
+# DraStic reads its configuration from its working directory: its own folder, unless DSFLIP_DRASTIC_DIR says otherwise
+# (for starting it through a link named "drastic" kept elsewhere, so exit hotkeys that kill "drastic" match)
+WORKDIR=${DSFLIP_DRASTIC_DIR:-$(dirname "$DRASTIC")}
+LIB=${DSFLIP_LIB:-$HERE/libsuperdrastic.so}
+export DSFLIP_STATE=${DSFLIP_STATE:-/tmp/superdrastic-state}
+export DSFLIP_DATA=${DSFLIP_DATA:-$HERE/data}
+LOGDIR=${DSFLIP_LOGDIR:-$HERE/logs}
+export DSFLIP_LOG=${DSFLIP_LOG:-$LOGDIR/superdrastic.log}
+mkdir -p "$DSFLIP_DATA" "$LOGDIR" 2>/dev/null
+RUNLOG=$LOGDIR/run.log
+for v in DSFLIP_SHADER DSFLIP_SHADER_DIR DSFLIP_TOP DSFLIP_CARD DSFLIP_TOUCH DSFLIP_TOUCH_INVERT DSFLIP_FONT \
+         DSFLIP_RA_USER DSFLIP_RA_PASSWORD DSFLIP_RA_SOUND DSFLIP_CPUGOV DSFLIP_CPU_MIN DSFLIP_CPU_MAX DSHOOK_MIC_THRESH; do
+    eval "[ -n \"\${$v}\" ] && export $v"
+done
+SHADER=${DSFLIP_SHADER:-${DSHOOK_SHADER:-none}}
+
+say() { echo "$(date '+%F %T') $*" >> "$RUNLOG"; }
+plain() { cd "$WORKDIR" && exec "$DRASTIC" "$@"; }
+[ -f "$LIB" ] || { say "no $LIB: plain DraStic"; plain "$@"; }
+
+HANDOVER=${DSFLIP_HANDOVER:-auto}
+if [ "$HANDOVER" = auto ]; then
+    if [ -n "$DSFLIP_STOP_CMD" ]; then HANDOVER=cmd
+    elif pidof sway weston labwc cage gamescope kwin_wayland Xorg X >/dev/null 2>&1; then HANDOVER=vt
+    else HANDOVER=none; fi
+fi
+
+OLDVT=
+release() {
+    case "$HANDOVER" in
+    vt)
+        OLDVT=$(fgconsole 2>/dev/null || echo 1)
+        VT=${DSFLIP_VT:-12}
+        # a new VT in graphics mode, or a blanked console, powers the panels down under us: keep it text, unblanked
+        command -v python3 >/dev/null && python3 -c 'import fcntl, os, sys; fcntl.ioctl(os.open("/dev/tty" + sys.argv[1], os.O_RDWR), 0x4B3A, 0)' "$VT" 2>/dev/null
+        chvt "$VT"
+        echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null ;;
+    cmd) sh -c "$DSFLIP_STOP_CMD" ;;
+    esac
+}
+restore_display() {
+    case "$HANDOVER" in
+    vt) [ -n "$OLDVT" ] && chvt "$OLDVT"; OLDVT= ;;
+    cmd) [ -n "$DSFLIP_START_CMD" ] && sh -c "$DSFLIP_START_CMD"; DSFLIP_START_CMD= ;;
+    esac
+}
+
+# ---- clocks and audio rate, saved to put back ----
+CPU=/sys/devices/system/cpu/cpufreq/policy0
+CPU_MAX=$(cat $CPU/scaling_max_freq 2>/dev/null)
+cpu_back() { [ -n "$CPU_MAX" ] && echo "$CPU_MAX" > $CPU/scaling_max_freq 2>/dev/null; }
+GPU=
+if [ "${DSFLIP_GPU_CLOCKS:-1}" != 0 ]; then
+    for d in /sys/class/devfreq/*gpu* /sys/class/devfreq/*mali*; do [ -w "$d/governor" ] && { GPU=$d; break; }; done
+fi
+GPU_GOV= GPU_MIN= GOV=
+if [ -n "$GPU" ]; then
+    GPU_GOV=$(cat $GPU/governor) GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
+    avail=$(cat $GPU/available_governors 2>/dev/null)
+    case "$SHADER" in
+        none|bilinear) GOV=powersave ;;               # nothing is drawn on the GPU: its lowest clock
+        ds-fsr) GOV=performance ;;                    # ~9 ms of GPU per frame: the full clock from the start
+        *) GOV=simple_ondemand ;;                     # a shader: follow the load
+    esac
+    case " $avail " in *" $GOV "*) ;; *) GOV= ;; esac
+    if [ -n "$GOV" ]; then
+        echo $GOV > $GPU/governor 2>/dev/null
+        # with a shader, a floor at the closest step to 400 MHz: ramping up from the lowest clock dropped frames
+        if [ $GOV = simple_ondemand ]; then
+            floor=$(tr ' ' '\n' < $GPU/available_frequencies 2>/dev/null | awk '$1 >= 400000000' | sort -n | head -n1)
+            [ -n "$floor" ] && echo $floor > $GPU/min_freq 2>/dev/null
+        fi
+    fi
+fi
+gpu_back() { [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > $GPU/governor; [ -n "$GPU_MIN" ] && echo "$GPU_MIN" > $GPU/min_freq; } 2>/dev/null; }
+PWRATE=
+if [ "${DSFLIP_AUDIO_RATE:-1}" != 0 ] && command -v pw-metadata >/dev/null && pidof pipewire >/dev/null 2>&1; then
+    PWRATE=$(pw-metadata -n settings 0 clock.force-rate 2>/dev/null | sed -n "s/.*value:'\([0-9]*\)'.*/\1/p" | head -n1)
+    pw-metadata -n settings 0 clock.force-rate 44100 >/dev/null 2>&1
+fi
+audio_back() { [ -n "$PWRATE" ] && pw-metadata -n settings 0 clock.force-rate "$PWRATE" >/dev/null 2>&1; PWRATE=; }
+put_back() { cpu_back; gpu_back; audio_back; restore_display; }
+
+say "start: $* (handover $HANDOVER, shader $SHADER, gpu ${GOV:-untouched})"
+release
+rm -f "$DSFLIP_STATE"
+# SuperDrastic retries the display for 3 s itself, so no wait here for the frontend to let go
+( cd "$WORKDIR" && SDL_VIDEODRIVER=dummy DSFLIP_SHADER="$SHADER" LD_PRELOAD="$LIB${LD_PRELOAD:+:$LD_PRELOAD}" exec "$DRASTIC" "$@" ) &
+P=$!
+trap 'kill -9 $P 2>/dev/null; wait $P; put_back; say "stopped by a signal"; exit 143' TERM INT HUP
+# other services (a battery/charger watcher, say) may change the GPU's governor mid-game: put ours back
+[ -n "$GOV" ] && ( while kill -0 $P 2>/dev/null; do
+    sleep 2
+    kill -0 $P 2>/dev/null || break
+    [ "$(cat $GPU/governor 2>/dev/null)" = "$GOV" ] || { echo $GOV > $GPU/governor 2>/dev/null; say "GPU governor changed by another service: back to $GOV"; }
+  done ) &
+
+# the verdict: "ready", or "passthrough: <why>" (decided within ~6 s: 3 s for the display, 3 s for a shader)
+v=; i=0
+while [ $i -lt 200 ] && kill -0 $P 2>/dev/null; do
+    v=$(cat "$DSFLIP_STATE" 2>/dev/null); [ -n "$v" ] && break
+    sleep 0.05; i=$((i + 1))
+done
+say "SuperDrastic: ${v:-no verdict}"
+if [ "$v" != ready ]; then
+    kill -9 $P 2>/dev/null; wait $P 2>/dev/null
+    put_back
+    trap - TERM INT HUP
+    [ "${DSFLIP_FALLBACK:-1}" = 0 ] && exit 1
+    say "running DraStic without SuperDrastic"
+    plain "$@"
+fi
+wait $P; rc=$?
+cpu_back                       # at once: SuperDrastic's governor may have lowered the limit
+put_back
+say "drastic exited: $rc"
+exit $rc

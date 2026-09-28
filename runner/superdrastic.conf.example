@@ -1,0 +1,35 @@
+# superdrastic.conf: settings for superdrastic-run (copy this file to superdrastic.conf beside it). Shell syntax.
+# A value set here wins over the same variable in the environment.
+
+# How your frontend lets go of the display (see docs/INTEGRATION.md): auto, none, vt or cmd
+#DSFLIP_HANDOVER=auto
+#DSFLIP_VT=12
+#DSFLIP_STOP_CMD="systemctl stop my-frontend.service"
+#DSFLIP_START_CMD="systemctl start my-frontend.service"
+
+# A shader from shaders/: ds-crisp, ds-crisp-color, ds-grid, ds-grid-color, ds-grid-2x, ds-integer, ds-fsr.
+# Unset or "none": no shader (DraStic's frames go straight to the panels, the GPU stays idle).
+#DSFLIP_SHADER=ds-crisp
+
+# RetroAchievements (softcore). The password is only used for the first login; after that a token is kept in data/.
+#DSFLIP_RA_USER=
+#DSFLIP_RA_PASSWORD=
+#DSFLIP_RA_SOUND=/path/to/unlock.ogg
+
+# Microphone: how far above the background noise counts as blowing or speaking into the DS mic.
+# 0.03 = high sensitivity, 0.15 = medium, 0.3 = low; 0: mic off
+#DSHOOK_MIC_THRESH=0
+
+# SuperDrastic's CPU governor (on with the "performance" governor and one CPU cluster): 0 = leave the clock alone
+#DSFLIP_CPUGOV=1
+# The GPU clock per shader and PipeWire at 44.1 kHz while a game runs: 0 = leave them alone
+#DSFLIP_GPU_CLOCKS=1
+#DSFLIP_AUDIO_RATE=1
+
+# Display: the connector that shows the DS top screen, the DRM device, the bottom touchscreen's device path fragment
+#DSFLIP_TOP=DSI-2
+#DSFLIP_CARD=/dev/dri/card0
+#DSFLIP_TOUCH=fe5e0000.i2c
+
+# Run DraStic the ordinary way if SuperDrastic can't take the display (1) or give up (0)
+#DSFLIP_FALLBACK=1
