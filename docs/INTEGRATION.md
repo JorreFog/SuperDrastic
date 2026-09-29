@@ -17,8 +17,8 @@ original name (libdsflip), so existing integrations keep working.
 | `shaders/` | The `ds-*` shaders |
 | `VERSION`, `README.md`, `LICENSE`, `THIRD_PARTY.md` | |
 
-The folder can live anywhere writable. `data/` (RetroAchievements login token, badge cache) and `logs/` are created
-beside the launcher.
+The folder can live anywhere writable. `data/` (RetroAchievements login token, badge cache, the CPU governor's memory)
+and `logs/` are created beside the launcher.
 
 ## Starting a game
 
@@ -72,7 +72,9 @@ system has it):
 - **The CPU's clock limit**: SuperDrastic's own governor lowers `scaling_max_freq` while the game needs less. It works
   only when the `performance` governor is active and the CPU is one cluster (`cpufreq/policy0` only); otherwise it
   stays off and your governor decides. The launcher lifts the limit the moment DraStic exits. `DSFLIP_CPUGOV=0`
-  turns the governor off.
+  turns the governor off. A clock that dropped frames is remembered per game, shader and resolution
+  (`data/cpugov/`), so the next session doesn't find it again by dropping frames; two minutes at it without a drop
+  forgive it. `DSFLIP_CPUGOV_MEMORY=0` starts every session knowing nothing.
 - **PipeWire's rate**, set to DraStic's 44.1 kHz (`clock.force-rate`) so it doesn't resample every cycle, and put back
   afterwards. Set before DraStic opens its audio: switching mid-stream makes the audio timing uneven.
   `DSFLIP_AUDIO_RATE=0` leaves it alone.
@@ -107,6 +109,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_FONT` | DejaVu Sans / Liberation Sans | Font for the pop-ups (TTF/OTF) |
 | `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low |
 | `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz) |
+| `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
 | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |

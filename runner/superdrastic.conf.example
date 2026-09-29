@@ -22,6 +22,8 @@
 
 # SuperDrastic's CPU governor (on with the "performance" governor and one CPU cluster): 0 = leave the clock alone
 #DSFLIP_CPUGOV=1
+# It remembers clocks that dropped frames, per game, shader and resolution (data/cpugov/): 0 = start knowing nothing
+#DSFLIP_CPUGOV_MEMORY=1
 # The GPU clock per shader and PipeWire at 44.1 kHz while a game runs: 0 = leave them alone
 #DSFLIP_GPU_CLOCKS=1
 #DSFLIP_AUDIO_RATE=1
