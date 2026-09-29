@@ -11,4 +11,6 @@ Test and measurement tools, run on the device unless noted.
 | `dsprobe.c` | Logs DraStic's display path (SDL calls and timings), for studying a DraStic build |
 | `kmstest.c` | Minimal KMS bring-up test for two panels |
 | `ramp.py` | Maps a stress-ROM run's presents to its levels |
+| `shaders.sh`, `shbench.sh` | GPU time per shader on real frames (run `shaders.sh` on a PC with `RGDS_SSH`/`RGDS_HOST`; it pushes `build/shtest`, `shaders/` and `shbench.sh` to the device) |
+| `gen-color-shaders.py` | Writes `ds-crisp-color` and `ds-grid-color` from `ds-crisp` and `ds-grid` (on a PC) |
 | `dev/` | The scripts used while bringing SuperDrastic up on the RG DS under ROCKNIX (they assume its paths) |
