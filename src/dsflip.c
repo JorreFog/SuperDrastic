@@ -87,6 +87,7 @@ typedef struct {                        /* one panel */
     long long last_flip;
     dbuf *src;                          /* shader mode: DraStic's newest finished buffer, not yet shaded */
     long long src_t;                    /* ...and when DraStic presented it */
+    int src_held;                       /* ...after a hold on a full queue (DSFLIP_QUEUE_WAIT): not a phase sample */
     dbuf out[NOUT];                     /* shader mode: panel-sized buffers the shader draws into */
     dbuf *q[QMAX]; int nq;              /* frame queue: the frames after `ready`, oldest first (see enqueue) */
 } panel;
@@ -346,6 +347,10 @@ static int queue_depth = 1;             /* DSFLIP_QUEUE: 0 = mailbox, 1..QMAX fr
 static int queue_wait_us;               /* DSFLIP_QUEUE_WAIT=<ms>: hold DraStic's present this long at most while the
                                            queue is full, instead of dropping its oldest frame (0: off) */
 static int st_qwait_n; static long long st_qwait_us, st_qwait_max;   /* presents held, total and longest hold */
+/* a held present is let go by a commit, so it arrives at the latch point: counting it in the phase average made the
+ * latch move away from its own releases, the held frames follow, and so on (arrival spread R -> 0, latch pinned at
+ * an edge, holds running into the limit and dropping after all: measured in 2 of 3 launches). Held frames don't
+ * count (panel.src_held carries it to shade_pending in shader mode). */
 static int st_wait[QMAX + 2], st_fcommit; /* frame commits by frames left waiting behind them; frame commits */
 static dbuf *dequeue(int i) {
     if (!P[i].nq) return 0;
@@ -560,11 +565,11 @@ static void enqueue(int i, dbuf *b, long long t) {
 }
 
 static void shade_pending(void) {
-    dbuf *src[2] = { 0, 0 }, *dst[2] = { 0, 0 }; long long st[2] = { 0, 0 };
+    dbuf *src[2] = { 0, 0 }, *dst[2] = { 0, 0 }; long long st[2] = { 0, 0 }; int held_any = 0;
     lock(&mu);
     for (int i = 0; i < 2; i++) {
         if (!(src[i] = P[i].src)) continue;
-        st[i] = P[i].src_t;
+        st[i] = P[i].src_t; held_any |= P[i].src_held;
         P[i].src = 0;
         for (int k = 0; k < NOUT && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
         if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; st_drop_buf++; continue; }
@@ -590,7 +595,7 @@ static void shade_pending(void) {
     st_shade_sum += dt; st_shade_n++; if (dt > st_shade_max) st_shade_max = dt;
     lock(&mu);
     long long tr = now_us();
-    note_phase(tr);
+    if (!held_any) note_phase(tr);
     for (int i = 0; i < 2; i++) if (src[i] && st[i]) {
         long long l = tr - st[i]; lat_sum += l; lat_n++; if (l > lat_max) lat_max = l;
     }
@@ -1295,6 +1300,7 @@ int SDL_RenderClear(void *rn) {
 void SDL_RenderPresent(void *rn) {
     REAL(void, SDL_RenderPresent, void *);
     if (!ok) { real(rn); return; }
+    int held = 0;                       /* this present waited on a full queue */
     if (queue_wait_us && queue_depth && pacing_latch) {
         /* a full queue would drop its oldest frame for this one: hold DraStic until a commit makes room (it then
          * runs a few ms later, and its audio ring covers that), at most queue_wait_us. The queue sits full once it
@@ -1302,7 +1308,7 @@ void SDL_RenderPresent(void *rn) {
          * drop, and at lower clocks frames come early more often. Game screens only, never DraStic's menu. */
         lock(&mu);
         long long t0 = 0;
-        while (ph_n >= 120) {
+        while (ph_n >= 120) {   /* (held stays 0 unless this loop waits) */
             int full = 0;
             for (int i = 0; i < 2; i++) {
                 stex *s = pending_route[i]; if (!s || s->kind != K_SCREEN) continue;
@@ -1315,7 +1321,7 @@ void SDL_RenderPresent(void *rn) {
             struct timespec ts = { dl / 1000000, (dl % 1000000) * 1000 };
             pthread_cond_timedwait(&qcond, &mtx[0], &ts);
         }
-        if (t0) { long long w = now_us() - t0; st_qwait_n++; st_qwait_us += w; if (w > st_qwait_max) st_qwait_max = w; lk_t = now_us(); }
+        if (t0) { long long w = now_us() - t0; st_qwait_n++; st_qwait_us += w; if (w > st_qwait_max) st_qwait_max = w; lk_t = now_us(); held = 1; }
         unlock(&mu);
     }
     long long tp = now_us();
@@ -1328,7 +1334,7 @@ void SDL_RenderPresent(void *rn) {
     st_present++; dsflip_presents++;
     if (vbl_ref) {                       /* where in the refresh cycle did this frame arrive? */
         note_raw(tp);
-        if (!shader_on) note_phase(tp);  /* shader mode: when the shaded frame is ready (shade_pending) */
+        if (!shader_on && !held) note_phase(tp);  /* shader mode: when the shaded frame is ready (shade_pending) */
     }
     touch_rect_ok = pending_route[1] && pending_route[1]->kind == K_SCREEN;
     if (pending_route[1]) menu_touch = pending_route[1]->kind == K_MENU;
@@ -1347,7 +1353,7 @@ void SDL_RenderPresent(void *rn) {
             b = &s->b[s->written]; s->written = -1; b->state = READY;
             if (shader_on && s->kind == K_SCREEN) {   /* the presenter shades it into a panel buffer */
                 if (P[i].src) { release(P[i].src); st_drop++; st_drop_src++; }
-                P[i].src = b; P[i].src_t = tp;
+                P[i].src = b; P[i].src_t = tp; P[i].src_held = held;
                 continue;
             }
         }
