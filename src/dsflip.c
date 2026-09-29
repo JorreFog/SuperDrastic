@@ -64,7 +64,9 @@
 #endif
 
 typedef struct { int x, y, w, h; } SDL_Rect;
-#define NBUF 6                          /* writing, written, 2 queued (see enqueue), committed, scanout */
+#define QMAX 3                          /* deepest frame queue (DSFLIP_QUEUE): frames waiting behind `ready` */
+#define NBUF (5 + QMAX)                 /* writing, written, ready + QMAX queued (see enqueue), committed, scanout */
+#define NOUT (4 + QMAX)                 /* shader mode's panel buffers: shading, ready + QMAX queued, committed, scanout */
 #define FMT_ARGB8888 0x16362004u         /* SDL_PIXELFORMAT_* */
 #define FMT_RGB565   0x15151002u
 enum { FREE, WRITING, WRITTEN, READY, QUEUED, SCANOUT };
@@ -85,8 +87,8 @@ typedef struct {                        /* one panel */
     long long last_flip;
     dbuf *src;                          /* shader mode: DraStic's newest finished buffer, not yet shaded */
     long long src_t;                    /* ...and when DraStic presented it */
-    dbuf out[6];                        /* shader mode: panel-sized buffers the shader draws into */
-    dbuf *ready2;                       /* frame queue: the frame after `ready` (see enqueue) */
+    dbuf out[NOUT];                     /* shader mode: panel-sized buffers the shader draws into */
+    dbuf *q[QMAX]; int nq;              /* frame queue: the frames after `ready`, oldest first (see enqueue) */
 } panel;
 
 static int fd = -1, efd = -1, ok;
@@ -336,6 +338,16 @@ static void add_toast(drmModeAtomicReq *r) {
     }
 }
 
+/* frame queue (with mu held): the oldest frame waiting behind panel i's `ready`, or 0 */
+static int queue_depth = 1;             /* DSFLIP_QUEUE: 0 = mailbox, 1..QMAX frames */
+static int st_wait[QMAX + 2], st_fcommit; /* frame commits by frames left waiting behind them; frame commits */
+static dbuf *dequeue(int i) {
+    if (!P[i].nq) return 0;
+    dbuf *b = P[i].q[0];
+    memmove(P[i].q, P[i].q + 1, (size_t)--P[i].nq * sizeof P[i].q[0]);
+    return b;
+}
+
 static void try_commit(void) {         /* called with mu held */
     if (pending_mask) return;
     int mask = 0;
@@ -353,14 +365,17 @@ static void try_commit(void) {         /* called with mu held */
         if (ret != -EBUSY) {           /* rejected config: drop the frame rather than retry forever */
             LOG("[dsflip] commit rejected: %s%s\n", strerror(-ret), with_toast ? " (toasts disabled)" : "");
             if (with_toast) { tp_plane = 0; toast_dirty = 0; }
-            for (int i = 0; i < 2; i++) { release(P[i].ready); release(P[i].ready2); P[i].ready = P[i].ready2 = 0; }
+            for (int i = 0; i < 2; i++) { release(P[i].ready); P[i].ready = 0; while (P[i].nq) release(P[i].q[--P[i].nq]); }
         }
         return;
     }
+    int waiting = 0, frames = 0;
     for (int i = 0; i < 2; i++) if (P[i].ready) {
-        drop_fence(P[i].ready); P[i].queued = P[i].ready; P[i].queued->state = QUEUED;
-        P[i].ready = P[i].ready2; P[i].ready2 = 0;   /* the queued frame is next */
+        drop_fence(P[i].ready); P[i].queued = P[i].ready; P[i].queued->state = QUEUED; frames = 1;
+        P[i].ready = dequeue(i);        /* the oldest queued frame is next */
+        if (P[i].ready && 1 + P[i].nq > waiting) waiting = 1 + P[i].nq;
     }
+    if (frames) { st_wait[waiting]++; st_fcommit++; }   /* frames left waiting behind this one = refreshes of latency */
     if (P[0].ready || P[1].ready) ready_since = now_us();
     if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
     commit_t = now_us(); commit_vref = vbl_ref; commit_latch = in_latch;
@@ -523,17 +538,18 @@ static void note_phase(long long tp) {  /* with mu held: where in the refresh cy
     ph_hist[(int)(ph / period * 16) & 15]++;
 }
 
-/* frame queue (DSFLIP_QUEUE=0: mailbox). DraStic's frame times are uneven at 2x (measured: intervals alternate
- * ~13 / ~21 ms), so two frames can arrive between two commits. A mailbox shows only the newest and drops the
- * other (a visible hitch); the queue keeps one more frame and shows them in order, one per refresh, which turns
- * uneven arrival into even display at the cost of up to one refresh of latency while a frame waits. A third
- * frame drops the oldest, so latency never grows beyond that. With mu held. */
-static int queue_on = 1;
+/* frame queue (DSFLIP_QUEUE=N frames, 0: mailbox). DraStic's frame times are uneven at 2x (measured: intervals
+ * alternate ~13 / ~21 ms), so two frames can arrive between two commits. A mailbox shows only the newest and drops
+ * the other (a visible hitch); the queue keeps up to N more frames and shows them in order, one per refresh, which
+ * turns uneven arrival into even display at the cost of a refresh of latency per waiting frame. A frame that finds
+ * the queue full drops the oldest, so latency never grows beyond N refreshes. A deeper queue also rides out a
+ * frame that takes longer than a refresh (the waiting frames cover the gap) instead of a higher CPU clock doing it.
+ * With mu held. */
 static void enqueue(int i, dbuf *b, long long t) {
     if (!P[i].ready) { if (!P[0].ready && !P[1].ready) ready_since = t; P[i].ready = b; return; }
-    if (queue_on && !P[i].ready2) { P[i].ready2 = b; return; }
+    if (P[i].nq < queue_depth) { P[i].q[P[i].nq++] = b; return; }
     release(P[i].ready); st_drop++; st_drop_q++; dsflip_queue_drops++;
-    if (queue_on) { P[i].ready = P[i].ready2; P[i].ready2 = b; } else P[i].ready = b;
+    if (queue_depth) { P[i].ready = dequeue(i); P[i].q[P[i].nq++] = b; } else P[i].ready = b;
 }
 
 static void shade_pending(void) {
@@ -543,7 +559,7 @@ static void shade_pending(void) {
         if (!(src[i] = P[i].src)) continue;
         st[i] = P[i].src_t;
         P[i].src = 0;
-        for (int k = 0; k < 6 && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
+        for (int k = 0; k < NOUT && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
         if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; st_drop_buf++; continue; }
         dst[i]->state = WRITING;
     }
@@ -676,15 +692,25 @@ static void *presenter(void *a) {
               LOG("\n"); memset(iv_hist, 0, sizeof iv_hist); lat_sum = lat_max = 0; lat_n = 0; }
             /* the margin shrinks back after a clean 10 s, so one bad moment doesn't narrow the latch zone forever */
             if (!st_late && latch_margin > LATCH_MARGIN) latch_margin = fmax(LATCH_MARGIN, latch_margin - 400);
+            {   /* how full the queue runs: each waiting frame is a refresh of latency (and cover for a late frame) */
+                int n = 0; double sum = 0; char w[96]; size_t m = 0;
+                for (int k = 0; k <= QMAX + 1; k++) { n += st_wait[k]; sum += (double)k * st_wait[k]; }
+                for (int k = 0; k <= queue_depth + 1 && k <= QMAX + 1; k++) m += snprintf(w + m, sizeof w - m, " %d:%d", k, st_wait[k]);
+                if (n) LOG("[queue] depth %d, frames waiting after a commit%s, avg %.2f (%.1f ms added)\n",
+                           queue_depth, w, sum / n, sum / n * period / 1000.0);
+                memset(st_wait, 0, sizeof st_wait);
+            }
             st_late = 0; st_miss = 0; st10 = t;
             unlock(&mu);
         }
         if (t - st_t0 >= 1000000) {
             lock(&mu);
-            LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us touch=%d drop-src=%d drop-q=%d drop-buf=%d\n",
+            /* repeat: refreshes that showed no new frame (a late frame the queue couldn't cover; also loading pauses) */
+            long rep = st_present ? lround((t - st_t0) / period) - st_fcommit : 0;
+            LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us touch=%d drop-src=%d drop-q=%d drop-buf=%d repeat=%ld\n",
                 st_present * 1e6 / (t - st_t0), st_commit, st_drop, st_busy, st_flips[0], st_flips[1], st_iv_max[0], st_iv_max[1], st_touch,
-                st_drop_src, st_drop_q, st_drop_buf);
-            st_drop_src = st_drop_q = st_drop_buf = 0;
+                st_drop_src, st_drop_q, st_drop_buf, rep > 0 ? rep : 0);
+            st_drop_src = st_drop_q = st_drop_buf = 0; st_fcommit = 0;
             st_present = st_commit = st_drop = st_busy = st_flips[0] = st_flips[1] = st_touch = 0; st_iv_max[0] = st_iv_max[1] = 0; st_t0 = t;
             unlock(&mu);
         }
@@ -1043,17 +1069,18 @@ __attribute__((constructor)) static void init(void) {
     }
     LOG("[dsflip] toast plane: %u\n", tp_plane);
     signal(SIGUSR2, on_usr2);
-    { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q == '0') queue_on = 0; }
+    { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q) { queue_depth = atoi(q); if (queue_depth < 0) queue_depth = 0; if (queue_depth > QMAX) queue_depth = QMAX; } }
     const char *pm = getenv("DSFLIP_PACING");
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
     if (pacing_latch) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
     if (tfd < 0) pacing_latch = 0;                                   /* no timer: never wait for a latch */
-    LOG("[dsflip] pacing: %s, %s\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_on ? "1-frame queue" : "mailbox");
+    if (queue_depth) LOG("[dsflip] pacing: %s, %d-frame queue\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_depth);
+    else LOG("[dsflip] pacing: %s, mailbox\n", pacing_latch ? "latch (adaptive)" : "immediate");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
     if ((shader_nm = shader_name()))
-        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < 6; k++)
+        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < NOUT; k++)
             if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
                 LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
             }
@@ -1136,7 +1163,7 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
                 *g = *b;                /* the panel pointers follow the buffer to its new home */
                 for (int i = 0; i < 2; i++) {
                     if (P[i].ready == b) P[i].ready = g;
-                    if (P[i].ready2 == b) P[i].ready2 = g;
+                    for (int j = 0; j < P[i].nq; j++) if (P[i].q[j] == b) P[i].q[j] = g;
                     if (P[i].queued == b) P[i].queued = g;
                     if (P[i].scan == b) P[i].scan = g;
                     if (P[i].src == b) P[i].src = g;
@@ -1276,7 +1303,9 @@ void SDL_RenderPresent(void *rn) {
         dbuf *b;
         if (s->kind == K_BLACK) {
             b = &blk.b[0];
-            if (P[i].scan == b || P[i].queued == b || P[i].ready == b || P[i].ready2 == b) continue;
+            int held = P[i].scan == b || P[i].queued == b || P[i].ready == b;
+            for (int j = 0; j < P[i].nq; j++) held |= P[i].q[j] == b;
+            if (held) continue;
         } else {
             if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
             b = &s->b[s->written]; s->written = -1; b->state = READY;
