@@ -56,8 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apt-get install -y --no-install-recommends gh git
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          gh release upload "${GITHUB_REF#refs/tags/}" build/superdrastic-*-aarch64.tar.gz build/libsuperdrastic.so --clobber \
-            || gh release create "${GITHUB_REF#refs/tags/}" build/superdrastic-*-aarch64.tar.gz build/libsuperdrastic.so \
+          apt-get install -y --no-install-recommends gh
+          gh release upload -R "$GITHUB_REPOSITORY" "${GITHUB_REF#refs/tags/}" build/superdrastic-*-aarch64.tar.gz build/libsuperdrastic.so --clobber \
+            || gh release create -R "$GITHUB_REPOSITORY" "${GITHUB_REF#refs/tags/}" build/superdrastic-*-aarch64.tar.gz build/libsuperdrastic.so \
                  --title "SuperDrastic ${GITHUB_REF#refs/tags/v}" --notes "See the README and docs/INTEGRATION.md."
