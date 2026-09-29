@@ -274,11 +274,18 @@ static long long commit_t, commit_vref; /* last commit time and the vblank refer
 static int st_miss;                     /* commits that reached the screen a vblank later than intended */
 #define LATCH_MARGIN 1300               /* starting commit margin before vblank; measured on the top panel: 600 us always
                                            makes it, 300 us doesn't. Grows on late commits (latch_margin) */
+static double margin_base = LATCH_MARGIN;   /* DSFLIP_LATCH_MARGIN=<us>: the floor the adaptive margin returns to (tests) */
+static int st_unfenced, commit_unfenced;    /* commits whose frame the GPU hadn't finished yet (shader mode); the last was */
 static double latch_margin = LATCH_MARGIN;  /* adaptive: +400 us per latch that found the previous flip still pending,
                                                -400 us per clean 10 s */
 static double bot_off;                  /* bottom panel's vblank phase relative to the top's, us in (-P/2, P/2] */
 static int bot_n, latch_skipped;        /* bottom phase samples; a latch was skipped because a flip was pending */
 static int in_latch, commit_latch;      /* a commit is being made at the latch point; the last commit was */
+/* late-latch diagnostics: which kind of commit the latch found still pending, on which panel(s), and when in the
+ * cycle it was made. Kinds: L latch, C catch-up after a flip, S safety net, T overlay only, I immediate/warm-up */
+static char commit_src = 'I', last_src = 'I';
+static int st_late_src[5], st_late_mask[4], st_safety, st_late_unf; static double st_late_ph[8]; static int st_late_n;
+static int src_idx(char c) { return c == 'L' ? 0 : c == 'C' ? 1 : c == 'S' ? 2 : c == 'T' ? 3 : 4; }
 
 
 static void drop_fence(dbuf *b) { if (b && b->fence >= 0) { close(b->fence); b->fence = -1; } }
@@ -360,6 +367,7 @@ static dbuf *dequeue(int i) {
 }
 
 static void try_commit(void) {         /* called with mu held */
+    char src = commit_src; commit_src = 'I';   /* the caller's kind, for this attempt only */
     if (pending_mask) return;
     int mask = 0;
     for (int i = 0; i < 2; i++) if (P[i].ready) mask |= 1 << i;
@@ -367,6 +375,11 @@ static void try_commit(void) {         /* called with mu held */
     if (with_toast) mask |= 1;          /* the toast plane lives on the top panel's CRTC */
     if (!mask) return;
     drmModeAtomicReq *r = drmModeAtomicAlloc();
+    int unf = 0;                        /* diagnostics: is the GPU still drawing a frame we're about to show? */
+    for (int i = 0; i < 2; i++) if (P[i].ready && P[i].ready->fence >= 0) {
+        struct pollfd pf = { .fd = P[i].ready->fence, .events = POLLIN };
+        if (poll(&pf, 1, 0) == 0) unf = 1;
+    }
     for (int i = 0; i < 2; i++) if (P[i].ready) add_fb(r, &P[i], P[i].ready);
     if (with_toast) add_toast(r);
     int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, P);
@@ -390,7 +403,7 @@ static void try_commit(void) {         /* called with mu held */
     if (frames && queue_wait_us) pthread_cond_broadcast(&qcond);   /* a present held on a full queue may go on */
     if (P[0].ready || P[1].ready) ready_since = now_us();
     if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
-    commit_t = now_us(); commit_vref = vbl_ref; commit_latch = in_latch;
+    commit_t = now_us(); commit_vref = vbl_ref; commit_latch = in_latch; last_src = src; commit_unfenced = unf; st_unfenced += unf;
     pending_mask = mask;                /* one flip event per CRTC in the commit */
     st_commit++;
 }
@@ -434,7 +447,7 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
          * that flip pending, catches up after it again, and so on: every latch "late" from then on, and the margin
          * grew each time until the latch zone was squeezed into the frames' arrivals (drop storms, measured) */
         if (latch_skipped && pacing_latch && ph_n >= 120 && vbl_ref && phase_of(now_us()) > latch_hi()) latch_skipped = 0;
-        else { latch_skipped = 0; try_commit(); }
+        else { commit_src = latch_skipped ? 'C' : 'I'; latch_skipped = 0; try_commit(); }
     }
     unlock(&mu);
 }
@@ -657,24 +670,26 @@ static void *presenter(void *a) {
             if (pending_mask && vbl_ref && commit_t >= now - (long long)phase_of(now)) {
                 /* this cycle's frames went out already (a catch-up commit after a late flip): nothing to do */
             } else if (pending_mask) {          /* the previous commit missed a vblank: commit as soon as its */
+                st_late_src[src_idx(last_src)]++; st_late_mask[pending_mask & 3]++; st_late_unf += commit_unfenced;
+                if (st_late_n < 8) st_late_ph[st_late_n++] = phase_of(commit_t) / 1000.0;
                 st_late++;                      /* flip lands (one repeat, not a 30 fps lock), and if the latch */
                 latch_skipped = 1;              /* was near the vblank edge, widen the margin */
                 /* only when a latch commit missed (a catch-up or safety-net commit made elsewhere in the cycle says
                  * nothing about the margin), and not during warm-up: a shader's first frames are slow and would pin
                  * the margin at max */
                 if (commit_latch && latch_off > period / 2 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
-            } else { in_latch = 1; try_commit(); in_latch = 0; }
+            } else { in_latch = 1; commit_src = 'L'; try_commit(); in_latch = 0; }
             if (P[0].ready || P[1].ready) arm_latch();
             unlock(&mu);
         }
         if (pacing_latch && ph_n >= 120) {                                /* safety net: never sit on a frame */
             lock(&mu);
-            if ((P[0].ready || P[1].ready) && !pending_mask && now_us() - ready_since > 2 * (long long)period) { st_late++; try_commit(); }
+            if ((P[0].ready || P[1].ready) && !pending_mask && now_us() - ready_since > 2 * (long long)period) { st_late++; st_safety++; commit_src = 'S'; try_commit(); }
             unlock(&mu);
         }
         if (anim_dir) { lock(&mu); toast_dirty = 1; unlock(&mu); }       /* the overlay is moving: every commit carries it */
         if (toast_dirty && !pending_mask && !P[0].ready && !P[1].ready) {   /* an overlay change with no frame coming */
-            lock(&mu); try_commit(); unlock(&mu);
+            lock(&mu); commit_src = 'T'; try_commit(); unlock(&mu);
         }
         if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
         if (tdump_n < touch_dumps && tdump_x >= 0) { lock(&mu); dump_touch(); unlock(&mu); tdump_n++; tdump_x = -1; }
@@ -686,6 +701,17 @@ static void *presenter(void *a) {
             double mean = fmod(atan2(ph_s, ph_c) / (2 * M_PI) * period + period, period);
             LOG("[pace] mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, margin %.0f us, bottom %+.0f us, late=%d missed=%d\n",
                 pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, latch_margin, bot_off, st_late, st_miss);
+            if (st_late) {
+                char ph[96]; size_t m = 0; ph[0] = 0;
+                for (int k = 0; k < st_late_n; k++) m += snprintf(ph + m, sizeof ph - m, "%s%.1f", k ? " " : "", st_late_ph[k]);
+                LOG("[late] %d: pending commit was latch %d, catch-up %d, safety %d, overlay %d, other %d; still pending top %d "
+                    "bottom %d both %d; GPU unfinished at commit %d; safety-net commits %d; pending commits made at (ms after top vblank) %s\n",
+                    st_late, st_late_src[0], st_late_src[1], st_late_src[2], st_late_src[3], st_late_src[4],
+                    st_late_mask[1], st_late_mask[2], st_late_mask[3], st_late_unf, st_safety, ph);
+            }
+            if (st_unfenced) LOG("[fence] %d commits showed a frame the GPU hadn't finished\n", st_unfenced);
+            memset(st_late_src, 0, sizeof st_late_src); memset(st_late_mask, 0, sizeof st_late_mask);
+            st_safety = 0; st_late_n = 0; st_late_unf = 0; st_unfenced = 0;
             audio_pump_log();
             LOG("[flip] event delivery max %.2f ms, commit->flip max %.2f ms, %d flips >1 refresh after their commit\n",
                 st_evt_max / 1000.0, st_c2f_max / 1000.0, st_c2f_long);
@@ -703,7 +729,7 @@ static void *presenter(void *a) {
               if (lat_n) LOG(" | present->ready %.2f ms avg, %.2f max", lat_sum / 1000.0 / lat_n, lat_max / 1000.0);
               LOG("\n"); memset(iv_hist, 0, sizeof iv_hist); lat_sum = lat_max = 0; lat_n = 0; }
             /* the margin shrinks back after a clean 10 s, so one bad moment doesn't narrow the latch zone forever */
-            if (!st_late && latch_margin > LATCH_MARGIN) latch_margin = fmax(LATCH_MARGIN, latch_margin - 400);
+            if (!st_late && latch_margin > margin_base) latch_margin = fmax(margin_base, latch_margin - 400);
             {   /* how full the queue runs: each waiting frame is a refresh of latency (and cover for a late frame) */
                 int n = 0; double sum = 0; char w[96]; size_t m = 0;
                 for (int k = 0; k <= QMAX + 1; k++) { n += st_wait[k]; sum += (double)k * st_wait[k]; }
@@ -1089,6 +1115,7 @@ __attribute__((constructor)) static void init(void) {
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
     if (pacing_latch) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
     if (tfd < 0) pacing_latch = 0;                                   /* no timer: never wait for a latch */
+    { const char *lm = getenv("DSFLIP_LATCH_MARGIN"); if (lm && atoi(lm) > 0) latch_margin = margin_base = atoi(lm); }
     { const char *qw = getenv("DSFLIP_QUEUE_WAIT"); if (qw && *qw) queue_wait_us = atoi(qw) * 1000; if (queue_wait_us < 0) queue_wait_us = 0; }
     if (queue_depth && queue_wait_us) LOG("[dsflip] pacing: %s, %d-frame queue, a full queue holds DraStic up to %d ms\n",
                                           pacing_latch ? "latch (adaptive)" : "immediate", queue_depth, queue_wait_us / 1000);

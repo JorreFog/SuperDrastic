@@ -124,6 +124,9 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low |
 | `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz) |
 | `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |
+| `DSFLIP_QUEUE` | 1 | Frames that may wait behind the next one, 0-3 (0 = newest only). Each is a refresh (16.7 ms) of input latency, and covers one late frame |
+| `DSFLIP_QUEUE_WAIT` | 0 (off) | Milliseconds DraStic is held when the queue is full, instead of dropping a frame (20 works; for capped clocks) |
+| `DSFLIP_LATCH_MARGIN` | 1300 | The shortest time (µs) before a vblank that a frame is committed at (diagnostics) |
 | `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD` | | See *Quitting with a save* |
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |

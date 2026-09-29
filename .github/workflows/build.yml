@@ -57,6 +57,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           apt-get install -y --no-install-recommends gh
+          # a tag with a suffix (v0.3.0-beta.1) is a pre-release, never "Latest"
+          case "${GITHUB_REF#refs/tags/}" in *-*) PRE="--prerelease --latest=false" ;; *) PRE= ;; esac
           gh release upload -R "$GITHUB_REPOSITORY" "${GITHUB_REF#refs/tags/}" build/superdrastic-*-aarch64.tar.gz build/libsuperdrastic.so --clobber \
             || gh release create -R "$GITHUB_REPOSITORY" "${GITHUB_REF#refs/tags/}" build/superdrastic-*-aarch64.tar.gz build/libsuperdrastic.so \
-                 --title "SuperDrastic ${GITHUB_REF#refs/tags/v}" --notes "See the README and docs/INTEGRATION.md."
+                 $PRE --title "SuperDrastic ${GITHUB_REF#refs/tags/v}" --notes "See the README and docs/INTEGRATION.md."
