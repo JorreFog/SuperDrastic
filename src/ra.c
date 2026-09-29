@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <dirent.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -478,7 +479,7 @@ static void ra_start(void) {
         if (fgets(tu, sizeof tu, tf) && fgets(tok, sizeof tok, tf)) { tu[strcspn(tu, "\r\n")] = 0; tok[strcspn(tok, "\r\n")] = 0; }
         fclose(tf);
     }
-    if (*tok && !strcmp(tu, user)) rc_client_begin_login_with_token(rc, user, tok, on_login_token, 0);
+    if (*tok && !strcasecmp(tu, user)) rc_client_begin_login_with_token(rc, user, tok, on_login_token, 0);
     else if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
     else dsflip_toast("RetroAchievements", "no password set in ES", 0xff7a4a, 4000);
 }
