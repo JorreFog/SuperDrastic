@@ -104,11 +104,14 @@ static int menu_hw;                     /* VOP2 scales the 800x480 menu itself *
  * few loads/stores plus one non-blocking commit ioctl. */
 static int mu, tmu;
 static pthread_mutex_t mtx[2];          /* [0] = mu, [1] = tmu */
+static pthread_cond_t qcond;            /* with mtx[0]: a commit made room in the frame queue (DSFLIP_QUEUE_WAIT) */
 __attribute__((constructor(101))) static void init_locks(void) {   /* before init() and any hook */
     pthread_mutexattr_t a; pthread_mutexattr_init(&a);
     pthread_mutexattr_setprotocol(&a, PTHREAD_PRIO_INHERIT);
     for (int i = 0; i < 2; i++) pthread_mutex_init(&mtx[i], &a);
     pthread_mutexattr_destroy(&a);
+    pthread_condattr_t c; pthread_condattr_init(&c); pthread_condattr_setclock(&c, CLOCK_MONOTONIC);
+    pthread_cond_init(&qcond, &c); pthread_condattr_destroy(&c);
 }
 static long long now_us(void);
 static volatile long long lk_wait_us, lk_wait_max, lk_hold_max; static volatile int lk_waits;  /* diagnostics */
@@ -340,6 +343,9 @@ static void add_toast(drmModeAtomicReq *r) {
 
 /* frame queue (with mu held): the oldest frame waiting behind panel i's `ready`, or 0 */
 static int queue_depth = 1;             /* DSFLIP_QUEUE: 0 = mailbox, 1..QMAX frames */
+static int queue_wait_us;               /* DSFLIP_QUEUE_WAIT=<ms>: hold DraStic's present this long at most while the
+                                           queue is full, instead of dropping its oldest frame (0: off) */
+static int st_qwait_n; static long long st_qwait_us, st_qwait_max;   /* presents held, total and longest hold */
 static int st_wait[QMAX + 2], st_fcommit; /* frame commits by frames left waiting behind them; frame commits */
 static dbuf *dequeue(int i) {
     if (!P[i].nq) return 0;
@@ -376,6 +382,7 @@ static void try_commit(void) {         /* called with mu held */
         if (P[i].ready && 1 + P[i].nq > waiting) waiting = 1 + P[i].nq;
     }
     if (frames) { st_wait[waiting]++; st_fcommit++; }   /* frames left waiting behind this one = refreshes of latency */
+    if (frames && queue_wait_us) pthread_cond_broadcast(&qcond);   /* a present held on a full queue may go on */
     if (P[0].ready || P[1].ready) ready_since = now_us();
     if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
     commit_t = now_us(); commit_vref = vbl_ref; commit_latch = in_latch;
@@ -696,9 +703,12 @@ static void *presenter(void *a) {
                 int n = 0; double sum = 0; char w[96]; size_t m = 0;
                 for (int k = 0; k <= QMAX + 1; k++) { n += st_wait[k]; sum += (double)k * st_wait[k]; }
                 for (int k = 0; k <= queue_depth + 1 && k <= QMAX + 1; k++) m += snprintf(w + m, sizeof w - m, " %d:%d", k, st_wait[k]);
-                if (n) LOG("[queue] depth %d, frames waiting after a commit%s, avg %.2f (%.1f ms added)\n",
+                if (n) LOG("[queue] depth %d, frames waiting after a commit%s, avg %.2f (%.1f ms added)",
                            queue_depth, w, sum / n, sum / n * period / 1000.0);
-                memset(st_wait, 0, sizeof st_wait);
+                if (n && queue_wait_us) LOG(" | DraStic held %d times, %.1f ms in total, longest %.1f ms",
+                                            st_qwait_n, st_qwait_us / 1000.0, st_qwait_max / 1000.0);
+                if (n) LOG("\n");
+                memset(st_wait, 0, sizeof st_wait); st_qwait_n = 0; st_qwait_us = st_qwait_max = 0;
             }
             st_late = 0; st_miss = 0; st10 = t;
             unlock(&mu);
@@ -1074,7 +1084,10 @@ __attribute__((constructor)) static void init(void) {
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
     if (pacing_latch) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
     if (tfd < 0) pacing_latch = 0;                                   /* no timer: never wait for a latch */
-    if (queue_depth) LOG("[dsflip] pacing: %s, %d-frame queue\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_depth);
+    { const char *qw = getenv("DSFLIP_QUEUE_WAIT"); if (qw && *qw) queue_wait_us = atoi(qw) * 1000; if (queue_wait_us < 0) queue_wait_us = 0; }
+    if (queue_depth && queue_wait_us) LOG("[dsflip] pacing: %s, %d-frame queue, a full queue holds DraStic up to %d ms\n",
+                                          pacing_latch ? "latch (adaptive)" : "immediate", queue_depth, queue_wait_us / 1000);
+    else if (queue_depth) LOG("[dsflip] pacing: %s, %d-frame queue\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_depth);
     else LOG("[dsflip] pacing: %s, mailbox\n", pacing_latch ? "latch (adaptive)" : "immediate");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
@@ -1282,6 +1295,29 @@ int SDL_RenderClear(void *rn) {
 void SDL_RenderPresent(void *rn) {
     REAL(void, SDL_RenderPresent, void *);
     if (!ok) { real(rn); return; }
+    if (queue_wait_us && queue_depth && pacing_latch) {
+        /* a full queue would drop its oldest frame for this one: hold DraStic until a commit makes room (it then
+         * runs a few ms later, and its audio ring covers that), at most queue_wait_us. The queue sits full once it
+         * has filled (the panels are only ~50 ppm faster than DraStic), so without this every early frame was a
+         * drop, and at lower clocks frames come early more often. Game screens only, never DraStic's menu. */
+        lock(&mu);
+        long long t0 = 0;
+        while (ph_n >= 120) {
+            int full = 0;
+            for (int i = 0; i < 2; i++) {
+                stex *s = pending_route[i]; if (!s || s->kind != K_SCREEN) continue;
+                if ((P[i].ready != 0) + P[i].nq + (P[i].src != 0) > queue_depth) full = 1;
+            }
+            if (!full) break;
+            long long now = now_us(); if (!t0) t0 = now;
+            if (now - t0 >= queue_wait_us) break;
+            long long dl = t0 + queue_wait_us;
+            struct timespec ts = { dl / 1000000, (dl % 1000000) * 1000 };
+            pthread_cond_timedwait(&qcond, &mtx[0], &ts);
+        }
+        if (t0) { long long w = now_us() - t0; st_qwait_n++; st_qwait_us += w; if (w > st_qwait_max) st_qwait_max = w; lk_t = now_us(); }
+        unlock(&mu);
+    }
     long long tp = now_us();
     {   /* this frame's CPU time on DraStic's main thread (the one presenting) */
         static long long last; struct timespec ct; clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct);
