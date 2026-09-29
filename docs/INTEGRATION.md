@@ -79,6 +79,20 @@ system has it):
   afterwards. Set before DraStic opens its audio: switching mid-stream makes the audio timing uneven.
   `DSFLIP_AUDIO_RATE=0` leaves it alone.
 
+## Quitting with a save (resume)
+
+Exit hotkeys usually kill DraStic (`kill -9`), which loses the game's place. Send it **SIGUSR1** instead and set
+`DSFLIP_RESUME_FILE`: SuperDrastic presses DraStic's own "save state" control (the joystick button `drastic.cfg`
+maps to it), writes the savestate to that file instead of one of the player's slots, and exits with SIGKILL (status
+137, as a hotkey kill). Measured on the RG DS: ~0.8 s for the save. A second SIGUSR1, or no savestate within 5 s,
+exits at once. Start the game next time with `DSFLIP_RESUME_LOAD=1` as well: once it runs, SuperDrastic presses
+"load state" with DraStic's lookup pointed at the resume file, shows a "Resumed" pop-up and deletes the file.
+
+Keep the file in DraStic's `savestates/` folder (a rename, no copy) and name it anything but `<game>_<digit>.dss`.
+With DraStic's `backup_in_savestates` on (its default), loading a state also puts back the in-game save it was taken
+with: don't load a resume state older than the game's `.dsv` (ROCKNIXDS drops it then). On ROCKNIX the hotkey runs
+`killall $(cat /tmp/.process-kill-data)`, so writing `-USR1 drastic` there after `start_drastic.sh` has set it is enough.
+
 ## What SuperDrastic tells you
 
 - **The verdict file**, `DSFLIP_STATE` (default `/tmp/superdrastic-state`): `ready` once SuperDrastic has both panels,
@@ -110,6 +124,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low |
 | `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz) |
 | `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |
+| `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD` | | See *Quitting with a save* |
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
 | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |

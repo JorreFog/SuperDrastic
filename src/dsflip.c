@@ -139,6 +139,7 @@ volatile long long dsflip_frame_work_max; /* the heaviest frame's CPU time on Dr
 volatile int dsflip_queue_drops;        /* frames dropped from the queue since start (cpugov.c) */
 volatile int dsflip_screen_w;           /* DraStic's screen texture width, 256 or 512 (cpugov.c: 1x or 2x) */
 void cpugov_start(void);
+void resume_start(void); void resume_frame(void); int resume_poll(void *e);   /* resume.c */
 static int st_drop_src, st_drop_q, st_drop_buf;
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
@@ -854,6 +855,7 @@ static void *touch_thread(void *a) {
 
 int SDL_PollEvent(void *e) {
     REAL(int, SDL_PollEvent, void *);
+    if (ok && e && resume_poll(e)) return 1;         /* a save/load state control press (resume.c) */
     if (tq_head != tq_tail) {
         lock(&tmu);
         if (tq_head != tq_tail) {
@@ -1074,6 +1076,7 @@ __attribute__((constructor)) static void init(void) {
     LOG("[dsflip] ready: top plane %u, bottom plane %u (init %lld ms)\n", P[0].plane, P[1].plane, (now_us() - t_init) / 1000);
     verdict("ready");
     cpugov_start();
+    resume_start();
 }
 
 /* ---------- audio: the pump (audio.c); DSFLIP_AUDIO_PUMP=0 leaves DraStic's audio to SDL ---------- */
@@ -1288,4 +1291,5 @@ void SDL_RenderPresent(void *rn) {
     unlock(&mu);
     uint64_t one = 1; if (write(shader_on ? wfd : efd, &one, 8) < 0) {}   /* shader mode: the worker shades first */
     ra_frame();
+    resume_frame();
 }
