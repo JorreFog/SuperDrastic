@@ -24,6 +24,14 @@
 // two minutes at a clock or lower without a drop forgive it one strike. <data>/cpugov/<rom>.<shader>.<1x|2x> holds
 // "<kHz> <strikes>" per clock that has any; <data> is DSFLIP_DATA, else libdsflip's folder.
 //
+// Only a drop that looks CPU-bound earns a strike: a frame in the last second took BLAME_PEAK of a refresh, or the
+// busiest thread was over TARGET. Most drops in real play are not that: they come in waves as DraStic's presents drift
+// through the refresh cycle (~50 ppm, one cycle every 4-9 min), at every clock including the top, with the heaviest
+// frame at 55-65% (2 h of real play, 2026-09-29: 62 of 70 strikes were such drops, and the strikes they left on 1800 MHz
+// held the clock at 1992 for 75% of a Black 2 session while it dropped more there than anywhere). A light drop still
+// steps up once and keeps the clock it happened at away for BAD_FOR_S, but it isn't remembered or escalated. A drop
+// while the game isn't running (DraStic's menu, quitting: busiest thread under IDLE_BUSY) is ignored.
+//
 // DSFLIP_CPUGOV=0: off (the clock stays as ROCKNIX set it). DSFLIP_CPU_MIN / DSFLIP_CPU_MAX (kHz): bounds.
 // DSFLIP_CPUGOV_MEMORY=0: start every session knowing nothing. DSFLIP_CPUGOV_LOG=1: one log line per decision window
 // instead of per change.
@@ -54,6 +62,8 @@ extern volatile int dsflip_screen_w;        /* dsflip.c: DraStic's screen width,
 #define BAD_MAX_S 600
 #define FORGIVE_MS 120000                    /* this long at a clock or lower without a drop forgives it one strike */
 #define MAX_STRIKES 6                        /* more wouldn't ban it longer (30 s << 5 is past BAD_MAX_S already) */
+#define BLAME_PEAK 0.80                      /* a drop is held against the clock only after a frame this heavy (last 1 s)... */
+#define IDLE_BUSY 0.25                       /* ...and ignored with the busiest thread below this (menu, quitting) */
 #define FPS_WINDOWS 4                        /* the frame rate is judged over 1 s: 250 ms holds only ~15 frames */
 #define DOWN_AFTER 8                         /* windows (2 s) in a row that fit a lower clock before stepping down */
 #define MAXT 64
@@ -159,6 +169,7 @@ static void *gov_thread(void *a) {
     struct timespec w = { 0, WINDOW_MS * 1000000L };
     int drops_prev = dsflip_queue_drops;
     long long t_prev = 0, fps_t[FPS_WINDOWS] = { 0 }; int fps_p[FPS_WINDOWS] = { 0 }, fi = 0, low = 0, rescan = 0;
+    double peaks[FPS_WINDOWS] = { 0 };                  /* the heaviest frame of each of the last windows (1 s) */
     int w_cand = 0, w_stable = 0;                        /* DraStic's screen width, and for how many windows */
     for (;;) {
         if (--rescan <= 0) {                             /* DraStic's threads (not ours: dsf-*), once a second */
@@ -198,22 +209,28 @@ static void *gov_thread(void *a) {
          * catches up with a burst, and the queue drops a frame (measured: all extra drops at low clocks were those) */
         double peak = __atomic_exchange_n(&dsflip_frame_work_max, 0, __ATOMIC_RELAXED) / 16.67e6;
         last_peak = peak;
+        /* a late frame makes DraStic catch up in the next window, so the drop can land a window after it */
+        peaks[fi] = peak; double peak1s = 0; for (int k = 0; k < FPS_WINDOWS; k++) if (peaks[k] > peak1s) peak1s = peaks[k];
         int drops = dsflip_queue_drops, dropped = drops - drops_prev; drops_prev = drops;
         double need = cur * umax / TARGET, needp = cur * peak / PEAK_TARGET;
         int want = fit(need > needp ? need : needp);
         const char *why = 0;
         if (umax > HIGH) why = "busy";
         else if (peak > PEAK_HIGH) why = "heavy frame";
+        else if (dropped && umax < IDLE_BUSY) {
+            dsflip_log("[cpugov] drop ignored: the game isn't running (busiest thread %.0f%%)\n", umax * 100);
+        }
         else if (dropped) {
-            /* any drop, however light the frames look: at low clocks frames were dropped with the main thread's
-             * heaviest frame at only ~40% of a refresh (measured at 816 MHz in a still HeartGold dialog) */
-            why = "dropped"; if (want <= cur) want = fit(cur + 1);
+            /* up one step either way (at 816 MHz frames were dropped with the heaviest at only ~40% of a refresh, in a
+             * still HeartGold dialog; the floor is 1104 now), but only a CPU-bound drop is a strike (see the top) */
+            int blame = peak1s >= BLAME_PEAK || umax > TARGET;
+            why = blame ? "dropped" : "dropped, light frames"; if (want <= cur) want = fit(cur + 1);
             int c = idx(cur);
-            if (c >= 0 && cur < fmax_) {                 /* (at the top there's nothing to avoid: not held against it) */
+            if (c >= 0 && cur < fmax_ && blame) {        /* (at the top there's nothing to avoid: not held against it) */
                 bad_until[c] = t + ban_ns(strikes[c]); strikes[c]++;
                 for (int i = 0; i < nf; i++) if (freqs[i] <= cur) proof_ms[i] = 0;   /* and lower won't do better */
                 mem_save();
-            }
+            } else if (c >= 0 && cur < fmax_ && bad_until[c] < t + ban_ns(0)) bad_until[c] = t + ban_ns(0);
         }
         else if (fps < 58.5 && fps > 5 && umax > 0.5) { why = "slow"; if (want <= cur) want = fit(cur + 1); }   /* +1 step */
         if (!dropped) {                                  /* a window without a drop: time towards forgiveness */
