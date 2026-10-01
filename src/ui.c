@@ -2,7 +2,8 @@
 // in the theme's DSi font, drawn into libdsflip's overlay plane on a thread of its own so no game frame waits.
 //
 // The plane is TOAST_W x TOAST_H ARGB8888 at the top of the top panel, scanned out over the game with per-pixel
-// alpha. DRM's default blend mode is premultiplied, so everything here is drawn premultiplied. Pop-ups queue up
+// alpha. The layouts are designed at 72 rows (a 640 px wide panel) and scale with the plane's height (115 rows on the
+// RG DS Plus's 1024x768 panels). The volume indicator (volume.c feeds it) shows over everything for 1.5 s. DRM's default blend mode is premultiplied, so everything here is drawn premultiplied. Pop-ups queue up
 // (several achievements can unlock in one frame) and show one after another; the progress pill shows whenever no
 // pop-up does. Font: the dii-ess-aye theme's DSi font if installed, else Liberation Sans (stb_truetype reads both);
 // badges: PNG files (stb_image), drawn with rounded corners.
@@ -43,6 +44,10 @@ typedef struct { char l1[128], l2[192]; uint32_t accent; int ms; uint8_t *badge;
 static popup q[QMAX]; static int qn;                  /* pending pop-ups, q[0] is the one showing */
 static long long q_until;                              /* when q[0] goes away (0: not shown yet) */
 static char prog_text[48]; static uint8_t *prog_badge; static int prog_bw, prog_bh, prog_on;
+static int vol_pct, vol_on; static long long vol_until;    /* the volume indicator: percent, showing, until when */
+static float sc_ = 1.0f;                                    /* layout scale: plane height / 72 */
+#define S(v) ((int)((v) * sc_ + 0.5f))
+#define SF(v) ((v) * sc_)
 static int dirty;
 static pthread_mutex_t mx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
@@ -167,39 +172,67 @@ static void draw_text(canvas *c, const char *t, float x, int y, float px, uint32
 
 /* ---------- the two layouts ---------- */
 static void render_popup(canvas *c, const popup *p) {
-    int x0 = 8, y0 = 4, x1 = c->w - 8, y1 = c->h - 4;
-    fill_rrect(c, x0, y0, x1, y1, 12, 0x1b1d21, 0.95f);
-    stroke_rrect(c, x0, y0, x1, y1, 12, 0x464a52, 1.0f);
-    int tx = x0 + 18;
-    if (p->badge) { draw_image(c, p->badge, p->bw, p->bh, x0 + 6, y0 + 6, (y1 - y0) - 12, 8); tx = x0 + (y1 - y0) + 8; }
-    else fill_rrect(c, x0 + 6, y0 + 10, x0 + 10, y1 - 10, 2, p->accent, 1.0f);   /* accent bar */
-    float maxw = (float)(x1 - 14 - tx);
-    draw_text(c, p->l1, (float)tx, y0 + 25, 19.0f, p->accent, maxw);
-    draw_text(c, p->l2, (float)tx, y0 + 52, 22.0f, 0xf2f3f5, maxw);
+    int x0 = S(8), y0 = S(4), x1 = c->w - S(8), y1 = c->h - S(4);
+    fill_rrect(c, x0, y0, x1, y1, SF(12), 0x1b1d21, 0.95f);
+    stroke_rrect(c, x0, y0, x1, y1, SF(12), 0x464a52, 1.0f);
+    int tx = x0 + S(18);
+    if (p->badge) { draw_image(c, p->badge, p->bw, p->bh, x0 + S(6), y0 + S(6), (y1 - y0) - S(12), SF(8)); tx = x0 + (y1 - y0) + S(8); }
+    else fill_rrect(c, x0 + S(6), y0 + S(10), x0 + S(10), y1 - S(10), SF(2), p->accent, 1.0f);   /* accent bar */
+    float maxw = (float)(x1 - S(14) - tx);
+    draw_text(c, p->l1, (float)tx, y0 + S(25), SF(19), p->accent, maxw);
+    draw_text(c, p->l2, (float)tx, y0 + S(52), SF(22), 0xf2f3f5, maxw);
 }
 
 static void render_pill(canvas *c) {
-    float tw = text_width(prog_text, 20.0f, 64);
-    int h = 40, bs = prog_badge ? 30 : 0, w = 14 + bs + (bs ? 8 : 0) + (int)ceilf(tw) + 14;
-    int x1 = c->w - 8, x0 = x1 - w, y0 = 4, y1 = y0 + h;
-    fill_rrect(c, x0, y0, x1, y1, 20, 0x1b1d21, 0.92f);
-    stroke_rrect(c, x0, y0, x1, y1, 20, 0x464a52, 1.0f);
-    if (prog_badge) draw_image(c, prog_badge, prog_bw, prog_bh, x0 + 8, y0 + 5, bs, 6);
-    draw_text(c, prog_text, (float)(x0 + 14 + bs + (bs ? 2 : 0)), y0 + 27, 20.0f, 0xf2f3f5, tw + 2);
+    float tw = text_width(prog_text, SF(20), 64);
+    int h = S(40), bs = prog_badge ? S(30) : 0, w = S(14) + bs + (bs ? S(8) : 0) + (int)ceilf(tw) + S(14);
+    int x1 = c->w - S(8), x0 = x1 - w, y0 = S(4), y1 = y0 + h;
+    fill_rrect(c, x0, y0, x1, y1, SF(20), 0x1b1d21, 0.92f);
+    stroke_rrect(c, x0, y0, x1, y1, SF(20), 0x464a52, 1.0f);
+    if (prog_badge) draw_image(c, prog_badge, prog_bw, prog_bh, x0 + S(8), y0 + S(5), bs, SF(6));
+    draw_text(c, prog_text, (float)(x0 + S(14) + bs + (bs ? S(2) : 0)), y0 + S(27), SF(20), 0xf2f3f5, tw + 2);
+}
+
+/* the volume indicator: a centred card with a speaker mark, a level bar and the percentage */
+static void render_volume(canvas *c, int pct) {
+    int w = S(300), h = S(40), x0 = (c->w - w) / 2, y0 = S(4), x1 = x0 + w, y1 = y0 + h;
+    fill_rrect(c, x0, y0, x1, y1, SF(20), 0x1b1d21, 0.92f);
+    stroke_rrect(c, x0, y0, x1, y1, SF(20), 0x464a52, 1.0f);
+    /* speaker: a box and a wedge */
+    int sx = x0 + S(18), cy = (y0 + y1) / 2;
+    fill_rrect(c, sx, cy - S(5), sx + S(6), cy + S(5), SF(1), 0xf2f3f5, 1.0f);
+    for (int i = 0; i < S(8); i++) {
+        float t = (float)i / (float)(S(8) > 1 ? S(8) - 1 : 1);
+        int hh = S(5) + (int)(t * S(6));
+        for (int y = cy - hh; y <= cy + hh; y++) blend(c, sx + S(6) + i, y, 0xf2f3f5, 1.0f);
+    }
+    if (pct <= 0) {                                                   /* muted: a slash */
+        for (int i = 0; i < S(14); i++) blend(c, sx + S(2) + i, cy + S(7) - i, 0xff5c5c, 1.0f);
+    }
+    char t[8]; snprintf(t, sizeof t, "%d%%", pct);
+    float tw = text_width(t, SF(20), 8);
+    int tx1 = x1 - S(18), bx0 = sx + S(26), bx1 = tx1 - (int)ceilf(tw) - S(12);
+    draw_text(c, t, (float)tx1 - tw, y0 + S(27), SF(20), 0xf2f3f5, tw + 2);
+    int by0 = cy - S(4), by1 = cy + S(4);
+    fill_rrect(c, bx0, by0, bx1, by1, SF(4), 0x33363c, 1.0f);
+    int fill = bx0 + (int)((bx1 - bx0) * (pct > 100 ? 100 : pct) / 100.0f + 0.5f);
+    if (fill > bx0 + S(4)) fill_rrect(c, bx0, by0, fill, by1, SF(4), 0x58a6ff, 1.0f);
 }
 
 static void render(void) {                            /* with mx held */
     int pitch, w, h;
     uint32_t *px = dsflip_overlay_begin(&pitch, &w, &h);
     if (!px) return;
-    int show = qn > 0 || prog_on;
+    int show = qn > 0 || prog_on || vol_on;
     if (show) {
         for (int y = 0; y < h; y++) memset((char *)px + y * pitch, 0, (size_t)w * 4);
         canvas c = { px, pitch, w, h };
-        if (qn) render_popup(&c, &q[0]); else render_pill(&c);
+        sc_ = h / 72.0f;
+        if (vol_on) render_volume(&c, vol_pct); else if (qn) render_popup(&c, &q[0]); else render_pill(&c);
     }
     dsflip_overlay_end(show);
-    dsflip_log("[ui] overlay: %s\n", qn ? q[0].l2 : prog_on ? prog_text : "hidden");
+    if (vol_on) dsflip_log("[ui] overlay: volume %d%%\n", vol_pct);
+    else dsflip_log("[ui] overlay: %s\n", qn ? q[0].l2 : prog_on ? prog_text : "hidden");
 }
 
 static void *ui_thread(void *a) {
@@ -211,10 +244,13 @@ static void *ui_thread(void *a) {
             free(q[0].badge); memmove(q, q + 1, (size_t)(qn - 1) * sizeof *q); qn--; q_until = 0; dirty = 1;
         }
         if (qn && !q_until) { q_until = t + q[0].ms; dirty = 1; }
+        if (vol_on && t >= vol_until) { vol_on = 0; dirty = 1; }
         if (dirty) { dirty = 0; render(); }
-        if (qn) {
+        if (qn || vol_on) {
             struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
-            long long wait = q_until - now_ms(); if (wait < 1) wait = 1;
+            long long until = qn ? q_until : vol_until;
+            if (vol_on && vol_until < until) until = vol_until;
+            long long wait = until - now_ms(); if (wait < 1) wait = 1;
             ts.tv_sec += wait / 1000; ts.tv_nsec += (wait % 1000) * 1000000; if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
             pthread_cond_timedwait(&cv, &mx, &ts);
         } else pthread_cond_wait(&cv, &mx);
@@ -271,6 +307,16 @@ void ui_progress(const char *text, const char *badge_png) {
     if (prog_badge) { stbi_image_free(prog_badge); prog_badge = 0; }
     prog_on = text && *text;
     if (prog_on) { snprintf(prog_text, sizeof prog_text, "%s", text); prog_badge = load_png(badge_png, &prog_bw, &prog_bh); }
+    dirty = 1;
+    pthread_cond_signal(&cv);
+    pthread_mutex_unlock(&mx);
+}
+
+/* show the volume indicator at pct for 1.5 s (again: refreshed, the time restarts). Thread-safe. */
+void ui_volume(int pct) {
+    pthread_mutex_lock(&mx);
+    if (!ui_start()) { pthread_mutex_unlock(&mx); return; }
+    vol_pct = pct; vol_on = 1; vol_until = now_ms() + 1500;
     dirty = 1;
     pthread_cond_signal(&cv);
     pthread_mutex_unlock(&mx);

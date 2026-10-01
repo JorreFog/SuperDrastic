@@ -305,8 +305,9 @@ static void release(dbuf *b) {
 
 /* toast: a small overlay plane on the top panel (RetroAchievements pop-ups), committed together with the
  * game frames. Rendered into one of two buffers, never the one being scanned out. */
-#define TOAST_W 640
-#define TOAST_H 72
+/* 640x72 on a 640x480 panel; on a wider panel (RG DS Plus, 1024x768) the same card scaled up: 1024x115. ui.c scales
+ * its layout by the height. Set from the top panel's mode before the buffers are made. */
+static int TOAST_W = 640, TOAST_H = 72;
 static uint32_t tp_plane, tp_fb, tp_crtc, tp_sx, tp_sy, tp_sw, tp_sh, tp_cx, tp_cy, tp_cw, tp_ch;
 static dbuf toast[2];
 static int toast_cur, toast_shown, toast_want, toast_dirty;
@@ -478,6 +479,7 @@ void dsflip_overlay_end(int show) {
     uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
 }
 void ui_popup(const char *l1, const char *l2, const char *badge_png, uint32_t accent, int ms);
+void volume_start(void);
 /* public: a two-line pop-up without a badge (thread-safe) */
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms) {
     if (!ok || !tp_plane) return;
@@ -1096,6 +1098,7 @@ __attribute__((constructor)) static void init(void) {
     LOG("[dsflip] menu scaling: %s\n", menu_hw ? "hardware" : "CPU nearest");
 
     /* toast plane: a free overlay plane that can go on the top panel's CRTC with ARGB8888 */
+    if (P[0].mode.hdisplay > 640) { TOAST_W = P[0].mode.hdisplay; TOAST_H = (72 * TOAST_W + 320) / 640; }
     for (int k = 0; k < 2; k++) if (mkbuf(&toast[k], TOAST_W, TOAST_H, DRM_FORMAT_ARGB8888, 32)) { toast[0].map = 0; break; }
     for (uint32_t k = 0; k < pres->count_planes && !tp_plane && toast[0].map; k++) {
         drmModePlane *pl = drmModeGetPlane(fd, pres->planes[k]);
@@ -1114,7 +1117,8 @@ __attribute__((constructor)) static void init(void) {
         }
         drmModeFreePlane(pl);
     }
-    LOG("[dsflip] toast plane: %u\n", tp_plane);
+    LOG("[dsflip] toast plane: %u (%dx%d)\n", tp_plane, TOAST_W, TOAST_H);
+    if (tp_plane) volume_start();           /* the volume keys' indicator (volume.c): mako is down with sway */
     signal(SIGUSR2, on_usr2);
     { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q) { queue_depth = atoi(q); if (queue_depth < 0) queue_depth = 0; if (queue_depth > QMAX) queue_depth = QMAX; } }
     const char *pm = getenv("DSFLIP_PACING");
