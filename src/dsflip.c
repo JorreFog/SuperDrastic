@@ -679,7 +679,11 @@ static void *presenter(void *a) {
                 /* only when a latch commit missed (a catch-up or safety-net commit made elsewhere in the cycle says
                  * nothing about the margin), and not during warm-up: a shader's first frames are slow and would pin
                  * the margin at max */
-                if (commit_latch && latch_off > period / 2 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
+                /* "near the edge" = the latch sits at its upper bound (latch_hi), wherever that is in the cycle: on the
+                 * RG DS Plus the bottom panel's vblank comes 6.8 ms before the top's, which puts that bound at 8.2 ms,
+                 * before mid-period, and the old test (latch_off > period / 2) never let the margin grow there:
+                 * 2-4 late latches/s for a whole session at 1700 us (measured 2026-10-01) */
+                if (commit_latch && latch_off >= latch_hi() - 1 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
             } else { in_latch = 1; commit_src = 'L'; try_commit(); in_latch = 0; }
             if (P[0].ready || P[1].ready) arm_latch();
             unlock(&mu);
