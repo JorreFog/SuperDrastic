@@ -134,7 +134,7 @@ static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a 
 static int menu_touch;                                     /* DraStic's menu is on the bottom panel (no touch: see touch_emit) */
 static int vp_x, vp_y, vp_w, vp_h;                         /* where a shader draws the DS screen on the panel (0x0: all of it) */
 static int touch_outside;                                  /* the current touch began outside that rectangle: ignore it */
-int shader_viewport(int *v);
+int shader_viewport(int *v, int pw, int ph);
 static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
@@ -988,6 +988,12 @@ static int open_card(void) {
 }
 
 __attribute__((constructor)) static void init(void) {
+    /* Only the process that was actually exec'd with LD_PRELOAD may take the display.
+       Its children inherit the preload (DraStic starts `sh -c pactl subscribe` for the volume
+       keys). Those shells were rotating this log out from under the game and, after failing
+       to become DRM master for 3 s, writing "passthrough" over the session's verdict. */
+    if (getenv("DSFLIP_IN_GAME")) return;
+    setenv("DSFLIP_IN_GAME", "1", 1);
     const char *lp = getenv("DSFLIP_LOG"); if (!lp) lp = "/storage/dsflip/logs/dsflip.log";
     {   /* keep the previous three sessions' logs (.1 = the last one): testers lost evidence to the overwrite */
         char a[512], b[512];
@@ -1137,7 +1143,8 @@ __attribute__((constructor)) static void init(void) {
     for (int k = 0; k < 300 && !shader_done; k++) usleep(10000);
     if (shader_nm) LOG("[dsflip] shader input: %s\n", shader_copy_mode ? "upload from memory" : "dma-buf import");
     anim_log = getenv("DSFLIP_UI_DEMO") != 0;
-    { int v[4]; if (shader_on && shader_viewport(v)) { vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; } }
+    { int v[4], pw = P[1].mode.hdisplay ? P[1].mode.hdisplay : 640, ph = P[1].mode.vdisplay ? P[1].mode.vdisplay : 480;
+      if (shader_on && shader_viewport(v, pw, ph)) { vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; } }
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");
