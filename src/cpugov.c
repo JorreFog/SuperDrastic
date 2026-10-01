@@ -190,10 +190,10 @@ static void *gov_thread(void *a) {
         long long t = now.tv_sec * 1000000000LL + now.tv_nsec, dt = t_prev ? t - t_prev : 0;
         now_ns = t;
         t_prev = t;
-        double umax = 0;
+        double umax = 0, usum = 0;                       /* the busiest DraStic thread, and all of them together */
         for (int k = 0; k < nt; k++) {
             long long ns = thread_ns(tids[k]);
-            if (ns >= 0 && last[k] >= 0 && dt > 0) { double u = (double)(ns - last[k]) / dt; if (u > umax) umax = u; }
+            if (ns >= 0 && last[k] >= 0 && dt > 0) { double u = (double)(ns - last[k]) / dt; if (u > umax) umax = u; usum += u; }
             last[k] = ns;
         }
         /* presents over the last FPS_WINDOWS windows: one present of jitter in 250 ms alone reads as 56 or 64 fps */
@@ -232,7 +232,15 @@ static void *gov_thread(void *a) {
                 mem_save();
             } else if (c >= 0 && cur < fmax_ && bad_until[c] < t + ban_ns(0)) bad_until[c] = t + ban_ns(0);
         }
-        else if (fps < 58.5 && fps > 5 && umax > 0.5) { why = "slow"; if (want <= cur) want = fit(cur + 1); }   /* +1 step */
+        /* below full speed with real work going on: the busiest thread alone is not the measure when a game's load
+         * is in DraStic's 3D helper threads (Dragon Quest Monsters: main 38%, three helpers 35% each, presents at
+         * 52-58/s and the clock stepped down to 1104 as "light"), so all of DraStic's threads together count too */
+        else if (fps < 58.5 && fps > 5 && (umax > 0.5 || usum > 1.0)) {
+            why = "slow"; if (want <= cur) want = fit(cur + 1);                              /* +1 step... */
+            int c = idx(cur);                                                                /* ...and the clock that was */
+            if (c >= 0 && cur < fmax_) { bad_until[c] = t + ban_ns(strikes[c]); strikes[c]++; mem_save(); }   /* too slow is held
+                against it like a drop: stepping back down to it after 15 s "light" and up again made a 1104/1416 see-saw */
+        }
         if (!dropped) {                                  /* a window without a drop: time towards forgiveness */
             int forgiven = 0;
             for (int i = 0; i < nf; i++) if (strikes[i] && freqs[i] >= cur && (proof_ms[i] += dt / 1000000) >= FORGIVE_MS) {
@@ -243,7 +251,9 @@ static void *gov_thread(void *a) {
             if (forgiven) mem_save();
         }
         if (why && want > cur) { set_clock(want, why, umax, fps); low = 0; }
-        else if (want < cur && fps >= 59 && (!mem_on || mem_w)) { if (++low >= DOWN_AFTER)   /* never while below full speed */ { set_clock(step_down(cur), "light", umax, fps); low = 0; } }
+        else if (want < cur && fps >= 59 && usum < 1.2 * cur / (double)step_down(cur) && (!mem_on || mem_w)) {   /* never while below full speed, nor
+                 when all of DraStic's threads together would exceed 1.2 cores at the lower clock */
+            if (++low >= DOWN_AFTER) { set_clock(step_down(cur), "light", umax, fps); low = 0; } }
         else low = 0;
         if (verbose) dsflip_log("[cpugov] window: busiest %.0f%% peak frame %.0f%% fps %.1f drops %d at %d MHz, fits %d\n",
                                 umax * 100, peak * 100, fps, dropped, cur / 1000, want / 1000);
