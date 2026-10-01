@@ -45,6 +45,8 @@ jobs:
             llvm-nm -D --defined-only $L | grep -q " $s\$" || { echo "hook $s missing"; exit 1; }
           done
           sh -n runner/superdrastic-run && sh -n runner/superdrastic-update
+          clang -O2 -Wall -Wextra -o /tmp/resume-keep-test tools/resume-keep-test.c src/resume.c -ldl -lpthread
+          /tmp/resume-keep-test
       - name: Package
         run: sh package.sh
       - uses: actions/upload-artifact@v4
