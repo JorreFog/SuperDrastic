@@ -85,7 +85,7 @@ Exit hotkeys usually kill DraStic (`kill -9`), which loses the game's place. Sen
 `DSFLIP_RESUME_FILE`: SuperDrastic presses DraStic's own "save state" control (the joystick button `drastic.cfg`
 maps to it), writes the savestate to that file instead of one of the player's slots, and exits with SIGKILL (status
 137, as a hotkey kill). Measured on the RG DS: ~0.8 s for the save. A second SIGUSR1, or no savestate within 5 s,
-exits at once. Start the game next time with `DSFLIP_RESUME_LOAD=1` as well: once it runs, SuperDrastic presses
+exits at once; a resume file already there is left as it was if that save doesn't finish. Start the game next time with `DSFLIP_RESUME_LOAD=1` as well: once it runs, SuperDrastic presses
 "load state" with DraStic's lookup pointed at the resume file, shows a "Resumed" pop-up and deletes the file.
 
 Keep the file in DraStic's `savestates/` folder (a rename, no copy) and name it anything but `<game>_<digit>.dss`.
