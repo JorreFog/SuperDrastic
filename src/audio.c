@@ -195,24 +195,38 @@ static long (*a_readi)(void *, void *, unsigned long);
 static int (*a_recover)(void *, int, int);
 static const char *(*a_strerror)(int);
 static volatile int st_xrun;
-static int alsa_syms(void) {
+/* Opening and configuring PCMs is serialized: the output and the mic used to be opened at the same moment from two
+ * threads (DraStic's, in SDL_OpenAudio, and the mic's), and PipeWire's ALSA plugin sets itself up on each open
+ * (pw_init, a context and a thread loop) without guarding against that. Turning the mic on made games crash or hang
+ * before their first frame (ROCKNIXDS issue 26). */
+static pthread_mutex_t alsa_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_once_t alsa_once = PTHREAD_ONCE_INIT;
+static int alsa_ok;
+static void alsa_load(void) {
     void *h = dlopen("libasound.so.2", RTLD_NOW | RTLD_LOCAL);
-    if (!h) return -1;
+    if (!h) return;
     *(void **)&a_open = dlsym(h, "snd_pcm_open"); *(void **)&a_set_params = dlsym(h, "snd_pcm_set_params");
     *(void **)&a_writei = dlsym(h, "snd_pcm_writei"); *(void **)&a_recover = dlsym(h, "snd_pcm_recover");
     *(void **)&a_strerror = dlsym(h, "snd_strerror");
     *(void **)&a_readi = dlsym(h, "snd_pcm_readi");
-    return a_open && a_set_params && a_writei && a_readi && a_recover ? 0 : -1;
+    alsa_ok = a_open && a_set_params && a_writei && a_readi && a_recover;
+}
+static int alsa_syms(void) { pthread_once(&alsa_once, alsa_load); return alsa_ok ? 0 : -1; }
+/* open "default" for playback (0) or capture (1) and set it up; 0 or a negative ALSA error */
+static int alsa_pcm(void **p, int stream, int channels, int rate, unsigned latency_us, const char *who) {
+    if (alsa_syms()) return -1;
+    pthread_mutex_lock(&alsa_mu);
+    int e = a_open(p, "default", stream, 0);
+    if (e < 0) dsflip_log("[%s] ALSA open: %s\n", who, a_strerror ? a_strerror(e) : "?");
+    else if ((e = a_set_params(*p, 2 /* SND_PCM_FORMAT_S16_LE */, 3 /* SND_PCM_ACCESS_RW_INTERLEAVED */, channels, rate,
+                               1 /* soft resample */, latency_us)) < 0)
+        dsflip_log("[%s] ALSA params: %s\n", who, a_strerror ? a_strerror(e) : "?");
+    pthread_mutex_unlock(&alsa_mu);
+    return e < 0 ? e : 0;
 }
 static int alsa_open(void) {
-    if (alsa_syms()) return -1;
-    int e = a_open(&pcm, "default", 0 /* SND_PCM_STREAM_PLAYBACK */, 0);
-    if (e < 0) { dsflip_log("[audio] ALSA open: %s\n", a_strerror ? a_strerror(e) : "?"); return -1; }
     const char *l = getenv("DSFLIP_ALSA_LATENCY");
-    e = a_set_params(pcm, 2 /* SND_PCM_FORMAT_S16_LE */, 3 /* SND_PCM_ACCESS_RW_INTERLEAVED */, fb / 2, freq,
-                     1 /* soft resample */, l ? (unsigned)atoi(l) : 30000);
-    if (e < 0) { dsflip_log("[audio] ALSA params: %s\n", a_strerror ? a_strerror(e) : "?"); return -1; }
-    return 0;
+    return alsa_pcm(&pcm, 0 /* SND_PCM_STREAM_PLAYBACK */, fb / 2, freq, l ? (unsigned)atoi(l) : 30000, "audio") < 0 ? -1 : 0;
 }
 static void *writer(void *a) {           /* blocking writes pace this thread at the device's true rate */
     (void)a;
@@ -278,9 +292,7 @@ void dsflip_mic_key(int down);
 static void *mic_thread(void *a) {
     float thresh = *(float *)a;
     void *cap = 0;
-    for (int i = 0; i < 100 && !dcb && audio_pump_enabled(); i++) { struct timespec d = { 0, 20000000 }; nanosleep(&d, 0); }
-    if (alsa_syms() || a_open(&cap, "default", 1 /* SND_PCM_STREAM_CAPTURE */, 0) < 0 ||
-        a_set_params(cap, 2 /* S16_LE */, 3 /* RW_INTERLEAVED */, 1, 44100, 1, 100000) < 0) {
+    if (alsa_pcm(&cap, 1 /* SND_PCM_STREAM_CAPTURE */, 1, 44100, 100000, "mic") < 0) {
         dsflip_log("[mic] no capture device\n");
         return 0;
     }
@@ -288,10 +300,16 @@ static void *mic_thread(void *a) {
     float coup = 0; int coup_n = 0;     /* how much speaker output leaks into the mic (mic rms / output rms) */
     int16_t buf[1024];
     float floor_ = 0, peak = 0; int n = 0, down = 0, blocks = 0, presses = 0;
+    int errs = 0;
     for (;;) {
         long r = a_readi(cap, buf, 1024);
-        if (r < 0) { a_recover(cap, (int)r, 1); continue; }
-        if (r == 0) continue;
+        if (r < 0 && a_recover(cap, (int)r, 1) < 0) {    /* a capture that can't recover: don't spin on it */
+            if (++errs >= 50) { dsflip_log("[mic] capture keeps failing (%s): mic off\n", a_strerror ? a_strerror((int)r) : "?"); return 0; }
+            struct timespec d = { 0, 100000000 }; nanosleep(&d, 0);
+            continue;
+        }
+        if (r <= 0) continue;
+        errs = 0;
         double acc = 0;
         for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; }
         float level = (float)sqrt(acc / r);
@@ -317,10 +335,12 @@ static void *mic_thread(void *a) {
     }
     return 0;
 }
+/* called once DraStic's audio is open (SDL_OpenAudio returned), so the output is set up before the mic is */
 void audio_mic_start(void) {
     const char *t = getenv("DSHOOK_MIC_THRESH");
     static float thresh;
-    thresh = t ? (float)atof(t) : 0;
+    thresh = t ? (float)strtod(t, 0) : 0;
+    if (thresh != thresh || thresh > 1) thresh = 0;    /* not a number, or nothing could reach it */
     if (thresh <= 0) { dsflip_log("[mic] off (ES: microphone sensitivity)\n"); return; }
     pthread_t th; if (!pthread_create(&th, 0, mic_thread, &thresh)) pthread_setname_np(th, "dsf-mic");
 }

@@ -145,7 +145,7 @@ volatile long long dsflip_frame_work_max; /* the heaviest frame's CPU time on Dr
 volatile int dsflip_queue_drops;        /* frames dropped from the queue since start (cpugov.c) */
 volatile int dsflip_screen_w;           /* DraStic's screen texture width, 256 or 512 (cpugov.c: 1x or 2x) */
 void cpugov_start(void);
-void resume_start(void); void resume_frame(void); int resume_poll(void *e);   /* resume.c */
+void resume_start(void); void resume_frame(void); int resume_poll(void *e); void resume_saw_event(const void *e);   /* resume.c */
 static int st_drop_src, st_drop_q, st_drop_buf;
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
@@ -484,6 +484,35 @@ void volume_start(void);
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms) {
     if (!ok || !tp_plane) return;
     ui_popup(l1, l2, 0, accent, ms);
+}
+
+/* DraStic's menu opened: a card on the top panel with the time and the battery, like ROCKNIX's status bar in its
+ * menus (the game is paused, so this is when the player looks). DSFLIP_STATUS_CARD=0: off. */
+static int battery_pct(int *charging) {
+    glob_t g; int pct = -1; *charging = 0;
+    if (glob("/sys/class/power_supply/*/type", 0, 0, &g) == 0) {
+        for (size_t i = 0; i < g.gl_pathc && pct < 0; i++) {
+            char t[32] = "", p[300]; FILE *f = fopen(g.gl_pathv[i], "r");
+            if (f) { if (!fgets(t, sizeof t, f)) t[0] = 0; fclose(f); }
+            if (strncmp(t, "Battery", 7)) continue;
+            size_t n = strlen(g.gl_pathv[i]) - 4;                 /* ".../type" -> ".../" */
+            snprintf(p, sizeof p, "%.*scapacity", (int)n, g.gl_pathv[i]);
+            if ((f = fopen(p, "r"))) { if (fscanf(f, "%d", &pct) != 1) pct = -1; fclose(f); }
+            snprintf(p, sizeof p, "%.*sstatus", (int)n, g.gl_pathv[i]);
+            if ((f = fopen(p, "r"))) { char st[32] = ""; if (fgets(st, sizeof st, f)) *charging = !strncmp(st, "Charging", 8) || !strncmp(st, "Full", 4); fclose(f); }
+        }
+        globfree(&g);
+    }
+    return pct;
+}
+static void status_card(void) {
+    const char *e = getenv("DSFLIP_STATUS_CARD"); if (e && *e == '0') return;
+    char l1[64], l2[96]; time_t t = time(0); struct tm lt; localtime_r(&t, &lt);
+    strftime(l1, sizeof l1, "%H:%M", &lt);
+    int chg, pct = battery_pct(&chg);
+    if (pct >= 0) snprintf(l2, sizeof l2, "Battery %d%%%s", pct, chg ? ", charging" : "");
+    else snprintf(l2, sizeof l2, "Paused");
+    dsflip_toast(l1, l2, pct >= 0 && pct <= 15 && !chg ? 0xe04040 : 0x3aa0ff, 3000);
 }
 
 /* SIGUSR2: dump what each panel scans out to <logdir>/scan<i>.raw (header "w h pitch bpp\n" + pixels) */
@@ -939,7 +968,9 @@ int SDL_PollEvent(void *e) {
         }
         unlock(&tmu);
     }
-    return real(e);
+    int r = real(e);
+    if (r && e && ok) resume_saw_event(e);           /* a save/load state press: CPU boost (resume.c, cpugov.c) */
+    return r;
 }
 
 /* ---------- init ---------- */
@@ -1182,10 +1213,13 @@ struct SDL_AudioSpec_ { int freq; unsigned short format; unsigned char channels,
 int SDL_OpenAudio(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have) {
     REAL(int, SDL_OpenAudio, struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *);
     if (!ok || !want) return real(want, have);
+    int r;
+    if (audio_pump_enabled()) { pump_on = 1; r = audio_pump_open(want, have, real); }   /* audio.c */
+    else r = real(want, have);
+    /* the mic after the output: the pump's output feeds its echo gate, and the two must not be opened at once */
     static int mic_started;
-    if (!mic_started) { mic_started = 1; audio_mic_start(); }   /* after the pump exists: its output feeds the echo gate */
-    if (audio_pump_enabled()) { pump_on = 1; return audio_pump_open(want, have, real); }   /* audio.c */
-    return real(want, have);
+    if (!mic_started) { mic_started = 1; audio_mic_start(); }
+    return r;
 }
 
 /* ---------- SDL interception ---------- */
@@ -1379,7 +1413,9 @@ void SDL_RenderPresent(void *rn) {
         if (!shader_on && !held) note_phase(tp);  /* shader mode: when the shaded frame is ready (shade_pending) */
     }
     touch_rect_ok = pending_route[1] && pending_route[1]->kind == K_SCREEN;
+    int menu_was = menu_touch;
     if (pending_route[1]) menu_touch = pending_route[1]->kind == K_MENU;
+    int menu_opened = menu_touch && !menu_was;
 
     for (int i = 0; i < 2; i++) {
         stex *s = pending_route[i]; pending_route[i] = 0;
@@ -1403,6 +1439,7 @@ void SDL_RenderPresent(void *rn) {
     }
     unlock(&mu);
     uint64_t one = 1; if (write(shader_on ? wfd : efd, &one, 8) < 0) {}   /* shader mode: the worker shades first */
+    if (menu_opened) status_card();
     ra_frame();
     resume_frame();
 }

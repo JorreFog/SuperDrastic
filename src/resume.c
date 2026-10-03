@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 void dsflip_log(const char *fmt, ...);
+void cpugov_boost(int ms);
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 
 static char resume_path[512];
@@ -68,6 +69,7 @@ static int move_file(const char *a, const char *b) {
 #define NEXT(ret, name, ...) static ret (*real)(__VA_ARGS__); if (!real) real = (ret (*)(__VA_ARGS__))dlsym(RTLD_NEXT, name)
 static const char *redirect_load(const char *p, const char *call) {
     if (trace && p && strstr(p, ".dss")) dsflip_log("[resume] %s %s\n", call, p);
+    if (p && strstr(p, ".dss")) cpugov_boost(2000);   /* a savestate being written or read: full clock (cpugov.c) */
     if (!loading || !is_slot(p)) return p;
     if (!load_redirects++) dsflip_log("[resume] loading the resume state instead of %s\n", strrchr(p, '/') ? strrchr(p, '/') + 1 : p);
     return resume_path;
@@ -112,11 +114,11 @@ int __xstat(int v, const char *p, struct stat *s) { NEXT(int, "__xstat", int, co
 int __xstat64(int v, const char *p, struct stat64 *s) { NEXT(int, "__xstat64", int, const char *, struct stat64 *); return real(v, redirect_load(p, "stat64"), s); }
 
 /* ---- DraStic's controls ---- */
-/* controls_a[CONTROL_INDEX_<name>] from config/drastic.cfg: 1024 + n is joystick button n */
-static int control_button(const char *name) {
+/* controls_<set>[CONTROL_INDEX_<name>] from config/drastic.cfg: 1024 + n is joystick button n */
+static int control_button_in(const char *set, const char *name) {
     FILE *f = fopen("config/drastic.cfg", "r"); if (!f) return -1;
     char key[96], line[256]; int b = -1;
-    snprintf(key, sizeof key, "controls_a[CONTROL_INDEX_%s] = ", name);
+    snprintf(key, sizeof key, "controls_%s[CONTROL_INDEX_%s] = ", set, name);
     while (fgets(line, sizeof line, f)) if (!strncmp(line, key, strlen(key))) {
         int v = atoi(line + strlen(key)); if (v >= 1024 && v < 1024 + 64) b = v - 1024;
         break;
@@ -124,6 +126,9 @@ static int control_button(const char *name) {
     fclose(f);
     return b;
 }
+static int control_button(const char *name) { return control_button_in("a", name); }
+/* either set (ROCKNIX maps START and SELECT in controls_b) */
+static int control_button_any(const char *name) { int b = control_button_in("a", name); return b >= 0 ? b : control_button_in("b", name); }
 
 void *SDL_JoystickOpen(int i) {
     static void *(*real)(int); if (!real) real = (void *(*)(int))dlsym(RTLD_NEXT, "SDL_JoystickOpen");
@@ -146,6 +151,30 @@ int resume_poll(void *ev) {
     return 1;
 }
 
+/* Exit combos: Start + Select, or Menu + Start, held for EXIT_HOLD_MS quit the game the way the exit hotkey does
+ * (with a resume save when that is on). ROCKNIX's DraStic had them through gptokeyb, which this session doesn't
+ * run. DSFLIP_EXIT_COMBO=0: off. */
+#define EXIT_HOLD_MS 500
+static int btn_start = -1, btn_select = -1, btn_menu = -1, exit_combo = 1;
+static uint64_t held_btns;                             /* joystick buttons down, by number */
+static long long combo_since;                          /* when the combo was complete (0: it isn't) */
+static void on_usr1(int sig);
+
+/* SDL_PollEvent (dsflip.c) shows this every event DraStic gets: a press of its save or load state button boosts the
+ * CPU before DraStic starts on the state (it compresses it all first, then writes the file); the exit combos */
+void resume_saw_event(const void *ev) {
+    const uint8_t *e = ev; uint32_t type; memcpy(&type, e, 4);
+    if (type != 0x603 && type != 0x604) return;          /* SDL_JOYBUTTONDOWN / UP */
+    int b = e[12], down = type == 0x603;
+    if (down && (b == btn_save || b == btn_load)) cpugov_boost(3000);
+    if (b < 64) { if (down) held_btns |= 1ULL << b; else held_btns &= ~(1ULL << b); }
+    #define HELD(x) ((x) >= 0 && (held_btns >> (x) & 1))
+    int combo = exit_combo && HELD(btn_start) && (HELD(btn_select) || HELD(btn_menu));
+    #undef HELD
+    if (!combo) combo_since = 0;
+    else if (!combo_since) combo_since = now_ms();
+}
+
 /* ---- quitting with a save ---- */
 static void *save_thread(void *a) {
     (void)a;
@@ -165,6 +194,11 @@ static void on_usr1(int sig) {
 /* every present (dsflip.c): starts a pending save or load on DraStic's own thread */
 void resume_frame(void) {
     frames++;
+    if (combo_since && now_ms() - combo_since >= EXIT_HOLD_MS) {
+        combo_since = 0; held_btns = 0;
+        dsflip_log("[resume] exit combo held: quitting\n");
+        on_usr1(SIGUSR1);
+    }
     if (want_save && !saving) {
         saving = 1; want_save = 0;
         dsflip_log("[resume] quit requested: saving a resume state\n");
@@ -190,10 +224,13 @@ void resume_frame(void) {
 void resume_start(void) {
     trace = getenv("DSFLIP_RESUME_TRACE") != 0;
     btn_press = btn_release = -1;
+    btn_save = control_button("SAVE_STATE"); btn_load = control_button("LOAD_STATE");   /* (also for the CPU boost) */
+    btn_start = control_button_any("START"); btn_select = control_button_any("SELECT"); btn_menu = control_button_any("MENU");
+    { const char *x = getenv("DSFLIP_EXIT_COMBO"); exit_combo = !(x && *x == '0'); }
+    if (exit_combo) dsflip_log("[resume] exit combos: start %d + select %d, menu %d + start\n", btn_start, btn_select, btn_menu);
     const char *p = getenv("DSFLIP_RESUME_FILE");
     if (!p || !*p) return;
     snprintf(resume_path, sizeof resume_path, "%s", p);
-    btn_save = control_button("SAVE_STATE"); btn_load = control_button("LOAD_STATE");
     struct sigaction sa; memset(&sa, 0, sizeof sa); sa.sa_handler = on_usr1; sigaction(SIGUSR1, &sa, 0);
     const char *l = getenv("DSFLIP_RESUME_LOAD");
     int have = access(resume_path, R_OK) == 0;

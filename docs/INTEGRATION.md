@@ -74,7 +74,9 @@ system has it):
   stays off and your governor decides. The launcher lifts the limit the moment DraStic exits. `DSFLIP_CPUGOV=0`
   turns the governor off. A clock that dropped frames is remembered per game, shader and resolution
   (`data/cpugov/`), so the next session doesn't find it again by dropping frames; two minutes at it without a drop
-  forgive it. `DSFLIP_CPUGOV_MEMORY=0` starts every session knowing nothing.
+  forgive it. `DSFLIP_CPUGOV_MEMORY=0` starts every session knowing nothing. While DraStic saves or loads a state
+  (its save/load button, or a savestate file opened) the clock goes to the CPU's top for a few seconds, then back:
+  DraStic does that work on its main thread, and at a low clock the game stalled visibly.
 - **PipeWire's rate**, set to DraStic's 44.1 kHz (`clock.force-rate`) so it doesn't resample every cycle, and put back
   afterwards. Set before DraStic opens its audio: switching mid-stream makes the audio timing uneven.
   `DSFLIP_AUDIO_RATE=0` leaves it alone.
@@ -92,6 +94,15 @@ Keep the file in DraStic's `savestates/` folder (a rename, no copy) and name it 
 With DraStic's `backup_in_savestates` on (its default), loading a state also puts back the in-game save it was taken
 with: don't load a resume state older than the game's `.dsv` (ROCKNIXDS drops it then). On ROCKNIX the hotkey runs
 `killall $(cat /tmp/.process-kill-data)`, so writing `-USR1 drastic` there after `start_drastic.sh` has set it is enough.
+
+**Exit combos.** Holding **Start + Select** or **Menu + Start** for half a second quits the same way (with a resume
+save when `DSFLIP_RESUME_FILE` is set, else at once), like ROCKNIX's gptokeyb did for DraStic. The buttons are the
+ones `drastic.cfg` maps to `START`, `SELECT` and `MENU` (either control set). `DSFLIP_EXIT_COMBO=0` turns them off.
+
+## DraStic's menu
+
+Opening DraStic's menu shows a card on the top screen with the time and the battery (red at 15% or less, unless
+charging) for 3 seconds. `DSFLIP_STATUS_CARD=0` turns it off.
 
 ## What SuperDrastic tells you
 
@@ -121,7 +132,8 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_RA_USER`, `DSFLIP_RA_PASSWORD` | | RetroAchievements account; the password is used once, then the token |
 | `DSFLIP_RA_SOUND` | none | An `.ogg` played on unlocks |
 | `DSFLIP_FONT` | DejaVu Sans / Liberation Sans | Font for the pop-ups (TTF/OTF) |
-| `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low |
+| `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low. The mic is opened after DraStic's audio output, never at the same time |
+| `DSFLIP_EXIT_COMBO`, `DSFLIP_STATUS_CARD` | 1, 1 | 0 = no Start+Select / Menu+Start exit; no time and battery card in DraStic's menu |
 | `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz) |
 | `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |
 | `DSFLIP_QUEUE` | 1 | Frames that may wait behind the next one, 0-3 (0 = newest only). Each is a refresh (16.7 ms) of input latency, and covers one late frame |

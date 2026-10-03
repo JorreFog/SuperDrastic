@@ -32,6 +32,12 @@
 // steps up once and keeps the clock it happened at away for BAD_FOR_S, but it isn't remembered or escalated. A drop
 // while the game isn't running (DraStic's menu, quitting: busiest thread under IDLE_BUSY) is ignored.
 //
+// Savestates: DraStic saves (and loads) on its main thread, compressing the whole machine state in one go, and at a
+// low clock that stalls the game for a long, visible moment (at 2x a save at 1104 MHz; ROCKNIX's "performance" runs it
+// at 1992). A save or load press, or DraStic opening a savestate file, boosts the clock to the hardware's top for a few
+// seconds (cpugov_boost); the windows meanwhile don't count (the stall isn't a drop at any clock) and the clock from
+// before comes back after it.
+//
 // DSFLIP_CPUGOV=0: off (the clock stays as ROCKNIX set it). DSFLIP_CPU_MIN / DSFLIP_CPU_MAX (kHz): bounds.
 // DSFLIP_CPUGOV_MEMORY=0: start every session knowing nothing. DSFLIP_CPUGOV_LOG=1: one log line per decision window
 // instead of per change.
@@ -74,6 +80,9 @@ static int strikes[24];                      /* per clock: how often it dropped 
 static int proof_ms[24];                     /* per clock: time at it or lower without a drop, towards a forgiveness */
 static long long now_ns;
 static int verbose;
+static int hwmax_;                           /* the hardware's top clock (savestate boosts) */
+static volatile long long boost_until;       /* CLOCK_MONOTONIC ns: boosted until then (cpugov_boost) */
+static volatile int gov_on;
 
 /* how long a clock's (k+1)th drop keeps it banned */
 static long long ban_ns(int k) {
@@ -171,6 +180,7 @@ static void *gov_thread(void *a) {
     long long t_prev = 0, fps_t[FPS_WINDOWS] = { 0 }; int fps_p[FPS_WINDOWS] = { 0 }, fi = 0, low = 0, rescan = 0;
     double peaks[FPS_WINDOWS] = { 0 };                  /* the heaviest frame of each of the last windows (1 s) */
     int w_cand = 0, w_stable = 0;                        /* DraStic's screen width, and for how many windows */
+    int boosted = 0;                                     /* during a savestate boost: the clock to go back to */
     for (;;) {
         if (--rescan <= 0) {                             /* DraStic's threads (not ours: dsf-*), once a second */
             DIR *d = opendir("/proc/self/task"); struct dirent *e; int n = 0; int nt_[MAXT]; long long nl[MAXT];
@@ -201,6 +211,20 @@ static void *gov_thread(void *a) {
         if (fps_t[fi]) fps = (pres - fps_p[fi]) * 1e9 / (t - fps_t[fi]);
         fps_t[fi] = t; fps_p[fi] = pres; fi = (fi + 1) % FPS_WINDOWS;
         if (!dt) continue;
+        if (boost_until > t || boosted) {               /* a savestate: the top clock, nothing counts meanwhile */
+            if (boost_until > t) {
+                if (!boosted) { boosted = cur; dsflip_log("[cpugov] savestate: %d MHz until it's done\n", hwmax_ / 1000); }
+                cur = hwmax_;
+            } else {
+                dsflip_log("[cpugov] savestate done: back to %d MHz\n", boosted / 1000);
+                if (wr_int(POL "scaling_max_freq", boosted) == 0) cur = boosted;
+                boosted = 0;
+                for (int k = 0; k < FPS_WINDOWS; k++) { fps_t[k] = 0; peaks[k] = 0; }   /* the stall isn't this clock's */
+            }
+            __atomic_exchange_n(&dsflip_frame_work_max, 0, __ATOMIC_RELAXED);
+            drops_prev = dsflip_queue_drops; low = 0;
+            continue;
+        }
         /* the memory for the resolution DraStic settled on (it starts at 1x and switches to 2x a moment later; the
          * player can switch in its menu): once it has held for 1 s. No stepping down before that. */
         { int w = dsflip_screen_w; if (w != w_cand) { w_cand = w; w_stable = 0; } else w_stable++;
@@ -284,7 +308,20 @@ void cpugov_start(void) {
     /* 816 MHz dropped frames at 2x even in a still scene; the step to 1104 saves little */
     fmin_ = getenv("DSFLIP_CPU_MIN") ? atoi(getenv("DSFLIP_CPU_MIN")) : 1104000;
     if (nf < 2 || cur <= 0 || access(POL "scaling_max_freq", W_OK)) { dsflip_log("[cpugov] off: no writable cpufreq\n"); return; }
+    hwmax_ = rd_int(POL "cpuinfo_max_freq"); if (hwmax_ < fmax_) hwmax_ = fmax_;
     dsflip_log("[cpugov] on: %d..%d MHz, target %.0f%% load of the busiest DraStic thread\n", fmin_ / 1000, fmax_ / 1000, TARGET * 100);
+    gov_on = 1;
     pthread_t th;
     if (!pthread_create(&th, 0, gov_thread, 0)) pthread_setname_np(th, "dsf-cpugov");
+}
+
+/* DraStic is about to save or load a state (resume.c): the top clock now, for ms from now (extends a boost) */
+void cpugov_boost(int ms) {
+    if (!gov_on) return;
+    struct timespec n; clock_gettime(CLOCK_MONOTONIC, &n);
+    long long t = n.tv_sec * 1000000000LL + n.tv_nsec, until = t + ms * 1000000LL;
+    if (until <= boost_until) return;
+    int fresh = boost_until <= t;
+    boost_until = until;
+    if (fresh) wr_int(POL "scaling_max_freq", hwmax_);  /* at once, not at the governor's next window */
 }
