@@ -14,7 +14,8 @@ the alpha test when the texture can fail it (T, else T = 0), writes the attribut
 with the polygon's index in the owner buffer (kargs.owner, u16 per pixel, 512 per bin line) and does the edge
 marking; rast_kern_s<T><F><B> (shade) then colours the pixels whose owner is this polygon (kargs.idx16).
 Runtime flags: bit 0 affine steps (w constant), bit 1 depth-equal test, bit 2 white vertex colour (flat batches; the
-kernels compute it per line otherwise), bit 6 edge marking; translucent only: bit 3 alpha blending (DISP3DCNT bit 3),
+kernels compute it per line otherwise), bit 6 edge marking, bit 7 a palette of at most 16 entries (kargs.pal16;
+the nearest-filtering paletted kernels then look the texels up with tbl in v18-v21 instead of loading them); translucent only: bit 3 alpha blending (DISP3DCNT bit 3),
 bit 4 fog (attr bit 15), bit 5 depth update (attr bit 11). Translucent kernels store each line's first id in id0[].
 The per-pixel math is that of fused_neon.c's batch_neon (opaque path), lane for lane: see there and spec/ for
 the derivation of every operation. The point of generating assembly is register allocation: the group loop keeps
@@ -39,7 +40,7 @@ import sys
 K = dict(recip=0x00, recip_u=0x08, tex=0x10, pal=0x18, pid24=0x20, bytes=0x30, K=0x38, tw=0x3c,
          s_and=0x40, t_and=0x50, s_lo=0x60, t_lo=0x70, s_hi=0x80, t_hi=0x90, s_flip=0xa0, t_flip=0xb0,
          fraclut=0xc0, owner=0xd0, idx16=0xe0, lstride=0xf0, attr_off=0xf4, id_off=0xf8, id_stride=0xfc,
-         owner_stride=0x100, size=0x110)
+         owner_stride=0x100, pal16=0x110, size=0x150)
 # span entry fields (stride 4 per line), see spec/edges.c; SPS = bytes per array (DraStic's 0xb0; the hi-res
 # pipeline's 48-line bins use 0x100), HR = the hi-res kernel set: buffer strides from kargs instead of DraStic's
 # context layout (line 0x800 bytes, attributes at +0x10000, ids at +0x20000 with 0x200 per line, owners 0x400)
@@ -57,7 +58,7 @@ L_DR, L_DG, L_DB, L_TW, L_DU, L_DV = 0, 1, 2, 3, 4, 5
 out = []
 def e(s=""): out.append("\t" + s if s and not s.endswith(":") and not s.startswith(".") else s)
 
-def prologue(name, D, T, R, F, M=0):
+def prologue(name, D, T, R, F, M=0, B=0):
     """M: 0 the kernel, 1 visibility, 2 shade"""
     e(f".globl {name}"); e(f".type {name}, %function"); e(f"{name}:")
     e("stp d8, d9, [sp, #-160]!"); e("stp d10, d11, [sp, #16]"); e("stp d12, d13, [sp, #32]"); e("stp d14, d15, [sp, #48]")
@@ -69,6 +70,8 @@ def prologue(name, D, T, R, F, M=0):
     if T:
         e(f"ldr q16, [x19, #{K['s_and']}]"); e(f"ldr q17, [x19, #{K['t_and']}]")
         e(f"ldp x6, x21, [x19, #{K['tex']}]")
+        if T in (3, 4) and not B:
+            e("tbz w27, #7, 1f"); e(f"add x8, x19, #{K['pal16']}"); e("ld1 {v18.16b, v19.16b, v20.16b, v21.16b}, [x8]"); e("1:")
     e(f"ldr q22, [x19, #{K['pid24']}]"); e(f"ldr d23, [x19, #{K['bytes']}]")
     e("mov x0, #0")
     # ---- per line ----
@@ -241,16 +244,33 @@ def texcoord(axis, T, r):
         e(f"and {r}.16b, {r}.16b, v{16 + axis}.16b")
 
 def gather(T):
-    """8 texels at the u32 addresses in v29 (0-3) and v27 (4-7) -> v29 (texels 0-3), v30 (4-7)"""
+    """8 texels at the u32 addresses in v29 (0-3) and v27 (4-7) -> channels tr v29, tg v27, tb v31, ta v30 (8 x u8).
+    Paletted textures with a palette of at most 16 entries (flag bit 7) look the channels up with tbl from the
+    palette held in v18-v21 (byte offset = index * 4 + channel) instead of loading each texel's palette entry."""
     e("stp q29, q27, [sp]")
     e("ldp w9, w10, [sp]"); e("ldp w11, w12, [sp, #8]"); e("ldp w13, w14, [sp, #16]"); e("ldp w15, w16, [sp, #24]")
     if T in (3, 4):
         for r in range(9, 17): e(f"ldrb w{r}, [x6, w{r}, uxtw]")
+        e("tbz w7, #7, 1f")
+        e("stp w9, w10, [sp, #32]"); e("stp w11, w12, [sp, #40]"); e("stp w13, w14, [sp, #48]"); e("stp w15, w16, [sp, #56]")
+        e("ldp q29, q30, [sp, #32]")
+        e("uzp1 v29.8h, v29.8h, v30.8h"); e("xtn v29.8b, v29.8h"); e("shl v29.8b, v29.8b, #2")
+        e("movi v30.8b, #1"); e("add v27.8b, v29.8b, v30.8b"); e("add v31.8b, v27.8b, v30.8b"); e("add v30.8b, v31.8b, v30.8b")
+        e("tbl v29.8b, {v18.16b, v19.16b, v20.16b, v21.16b}, v29.8b")
+        e("tbl v27.8b, {v18.16b, v19.16b, v20.16b, v21.16b}, v27.8b")
+        e("tbl v31.8b, {v18.16b, v19.16b, v20.16b, v21.16b}, v31.8b")
+        e("tbl v30.8b, {v18.16b, v19.16b, v20.16b, v21.16b}, v30.8b")
+        e("b 2f")
+        e("1:")
         for r in range(9, 17): e(f"ldr w{r}, [x21, w{r}, uxtw #2]")
     else:
         for r in range(9, 17): e(f"ldr w{r}, [x6, w{r}, uxtw #2]")
     e("stp w9, w10, [sp, #32]"); e("stp w11, w12, [sp, #40]"); e("stp w13, w14, [sp, #48]"); e("stp w15, w16, [sp, #56]")
     e("ldp q29, q30, [sp, #32]")
+    e("uzp1 v27.8h, v29.8h, v30.8h"); e("uzp2 v30.8h, v29.8h, v30.8h")
+    e("xtn v29.8b, v27.8h"); e("shrn v27.8b, v27.8h, #8")
+    e("xtn v31.8b, v30.8h"); e("shrn v30.8b, v30.8h, #8")
+    if T in (3, 4): e("2:")
 
 def texture(T):
     """texel channels -> tr v29, tg v27, tb v31, ta v30 (8 x u8 each)"""
@@ -268,9 +288,6 @@ def texture(T):
     e(f"umull v29.4s, v27.4h, v15.h[{L_TW}]"); e(f"umull2 v27.4s, v27.8h, v15.h[{L_TW}]")
     e("uaddw v29.4s, v29.4s, v30.4h"); e("uaddw2 v27.4s, v27.4s, v30.8h")
     gather(T)
-    e("uzp1 v27.8h, v29.8h, v30.8h"); e("uzp2 v30.8h, v29.8h, v30.8h")
-    e("xtn v29.8b, v27.8h"); e("shrn v27.8b, v27.8h, #8")
-    e("xtn v31.8b, v30.8h"); e("shrn v30.8b, v30.8h, #8")
 
 def texture_bilinear(T):
     """bilinear: the same outputs as texture(). The coordinate has 3 fraction bits (1/8 texel); the sample point is
@@ -515,7 +532,7 @@ def kernel_vis(D, T):
 def kernel_shade(T, F, B):
     """shade pass of a deferred opaque polygon: the pixels it owns"""
     name = f"{PFX}s{T}{F}{B}"
-    prologue(name, 2, T, 0, F, 2)
+    prologue(name, 2, T, 0, F, 2, B)
     e("0:")
     steps(); owner_test(); colour(T, F, B, 2); shade_store()
     latch(2, 2)
@@ -527,7 +544,7 @@ def kernel_shade(T, F, B):
 
 def kernel(D, T, R, F, B):
     name = f"{PFX}{D}{T}{R}{F}{B}"
-    prologue(name, D, T, R, F)
+    prologue(name, D, T, R, F, 0, B)
     e("0:")
     steps(); depth(D); test(D); colour(T, F, B)
     if R: trans_store(D)

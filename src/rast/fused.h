@@ -21,7 +21,8 @@ typedef struct {
      * attribute and id buffer offsets, id and owner line strides (DraStic: 0x800, 0x10000, 0x20000, 0x200, 0x400);
      * hr: the hi-res kernel set (strides from kargs) */
     unsigned sps, lstride, attr_off, id_off, id_stride, owner_stride, hr;
-    uint8_t kargs[0x110] __attribute__((aligned(16)));   /* fused_asm.c: the assembly kernels' arguments */
+    int pal16;              /* fused_asm.c: the palette has at most 16 entries (tbl lookups) */
+    uint8_t kargs[0x150] __attribute__((aligned(16)));   /* fused_asm.c: the assembly kernels' arguments */
 } poly_t;
 #define SPO(P, k) ((P)->sps * (k))      /* span array k: 0 W0, 1 dW, 2 Z0, 3 dZ, 4 st, 5 dst, 6 rg, 7 drg, 8 xb, 9 cdb, 10 edges */
 /* the layouts (also for the hi-res pipeline, hr.c): per scale, the span block stride and the context strides */
@@ -40,7 +41,7 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
           unsigned nlines, unsigned flags, uint8_t *v0, int dmode, unsigned idx);
 void f_begin_frame(void);       /* per render thread, per frame: forgets the texture classifications */
 /* defer.c */
-extern int rast_defer;
+extern int rast_defer, rast_texfilter;
 uint16_t *defer_owner(void);
 void defer_poly(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0,
                 unsigned nlines, unsigned flags, uint8_t *v0);

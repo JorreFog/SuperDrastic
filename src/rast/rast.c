@@ -194,6 +194,8 @@ static void dump_frame(uint8_t *ctx) {
 
 static int print_frames;         /* RAST_FRAMES=1: the frame count every 10 frames (profiling runs) */
 static void hook_entry(uint8_t *ctx) {
+    static __thread int named;
+    if (!named) { named = 1; pthread_setname_np(pthread_self(), "rast-3d"); }  /* the performance log's per-thread CPU */
     if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; (rast_scale == 3 ? hr_render_bins : render_bins)(ctx); in_ours = 0; }
     if (dump_dir) dump_frame(ctx);
     if (print_frames && U8(ctx, CTX_FIRST_BIN) == 0) {
@@ -323,8 +325,9 @@ __attribute__((constructor)) static void rast_init(void) {
     mode = e ? (!strcmp(e, "ours") ? 1 : !strcmp(e, "diff") ? 2 : 0) : (d && *d == '1');
     if (!mode) return;
     if (!e) e = "ours";
-    { extern int rast_texfilter; const char *t = getenv("DSFLIP_RAST_TEXFILTER"); if (!t) t = getenv("RAST_TEXFILTER"); if (t) rast_texfilter = atoi(t); }
-    { const char *t = getenv("DSFLIP_RAST_DEFER"); if (!t) t = getenv("RAST_DEFER"); if (t) rast_defer = atoi(t); }
+    { const char *t = getenv("DSFLIP_RAST_TEXFILTER"); if (!t) t = getenv("RAST_TEXFILTER"); if (t) rast_texfilter = atoi(t); }
+    /* deferred shading pays only when shading is expensive (bilinear filtering): on with it unless set */
+    { const char *t = getenv("DSFLIP_RAST_DEFER"); if (!t) t = getenv("RAST_DEFER"); rast_defer = t ? atoi(t) : rast_texfilter != 0; }
     { const char *t = getenv("DSFLIP_RAST_SCALE"); if (!t) t = getenv("RAST_SCALE"); if (t) rast_scale = atoi(t) == 3 ? 3 : 2; }
     if (mode == 2) rast_scale = 2;
     hr_vcheck = getenv("RAST_VCHECK") != 0;

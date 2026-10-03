@@ -26,13 +26,15 @@ typedef struct {                /* layout shared with kerngen.py (K dict): the p
     uint16_t *owner; uint64_t pad2;  /* deferred shading: the owner buffer and the polygon's index, splat */
     uint16_t idx16[8];
     uint32_t lstride, attr_off, id_off, id_stride, owner_stride, pad3[3];   /* the hi-res kernels' buffer layout */
+    uint32_t pal16[16];         /* the palette when it has at most 16 entries (flag bit 7): tbl lookups */
 } kargs_t;
-_Static_assert(sizeof(kargs_t) == 0x110, "kargs_t layout");
+_Static_assert(sizeof(kargs_t) == 0x150, "kargs_t layout");
 _Static_assert(__builtin_offsetof(kargs_t, pid24) == 0x20 && __builtin_offsetof(kargs_t, bytes) == 0x30 &&
                __builtin_offsetof(kargs_t, K) == 0x38 && __builtin_offsetof(kargs_t, tw) == 0x3c &&
                __builtin_offsetof(kargs_t, s_and) == 0x40 && __builtin_offsetof(kargs_t, fraclut) == 0xc0 &&
                __builtin_offsetof(kargs_t, owner) == 0xd0 && __builtin_offsetof(kargs_t, idx16) == 0xe0 &&
-               __builtin_offsetof(kargs_t, lstride) == 0xf0 && __builtin_offsetof(kargs_t, owner_stride) == 0x100, "kargs_t layout");
+               __builtin_offsetof(kargs_t, lstride) == 0xf0 && __builtin_offsetof(kargs_t, owner_stride) == 0x100 &&
+               __builtin_offsetof(kargs_t, pal16) == 0x110, "kargs_t layout");
 
 typedef uint64_t kern_fn(const kargs_t *, const uint8_t *bs, uint32_t k, uint32_t line, uint8_t *ctx, uint32_t flags, uint8_t *id0);
 /* the kernel tables, for the exact 2x set (rast_kern_) and the hi-res set (rast_kern_h, strides from kargs) */
@@ -80,8 +82,13 @@ static void kargs_poly(poly_t *P) {
     a->owner_stride = P->owner_stride;
     static const uint8_t lut_linear[16] = { 0, 1, 2, 3, 4, 5, 6, 7 }, lut_sharp[16] = { 0, 0, 0, 2, 4, 6, 8, 8 };
     memcpy(a->fraclut, rast_texfilter == 2 ? lut_sharp : lut_linear, 16);
+    P->pal16 = 0;
     if (P->flags & 2) {
         a->tex = P->paletted ? (const void *)P->idx8 : (const void *)P->texels32; a->pal = P->pal;
+        if (P->paletted) {
+            unsigned fmt = P->tex[0x49], np = fmt == 2 ? 4 : fmt == 3 ? 16 : 0;    /* I2, I4: 4 and 16 colours */
+            if (np) { memcpy(a->pal16, P->pal, np * 4); P->pal16 = 1; }
+        }
         /* texcoord(): flip where x & flip; clamp [lo, hi] (identity for wrap/flip); & (W-1) (identity for clamp) */
         splat16(a->s_and, P->tw - 1); splat16(a->t_and, P->th - 1);
         splat16(a->s_lo, P->ms == CLAMP ? 0 : 0x8000); splat16(a->t_lo, P->mt == CLAMP ? 0 : 0x8000);
@@ -104,7 +111,7 @@ static void batch_asm(poly_t *P, const uint8_t *bs, unsigned k, unsigned line, u
     const int edges = !R && ((P->d3 >> 5) & 1);
     /* flags: 0 affine steps, 1 depth equal, 2 white (flat batches; the kernels compute it per line otherwise),
      * 6 edge marking; translucent: 3 blend, 4 fog, 5 depth update */
-    const unsigned flags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | flat_white << 2 | edges << 6 |
+    const unsigned flags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | flat_white << 2 | edges << 6 | P->pal16 << 7 |
         (R ? ((P->d3 >> 3) & 1) << 3 | ((P->attr >> 15) & 1) << 4 | ((P->attr >> 11) & 1) << 5 : 0);
     uint8_t dummy[32];
     uint64_t anypass = kern(a, bs, k, line, P->ctx, flags, id0 ? id0 : dummy);
@@ -122,7 +129,7 @@ static void batch_vis(poly_t *P, const uint8_t *bs, unsigned k, unsigned line, u
     int D = (fl & 0x10) ? 2 : (fl & 8) ? 1 : 0;
     kargs_t *a = (kargs_t *)P->kargs;
     const int edges = (P->d3 >> 5) & 1;
-    const unsigned flags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | edges << 6;
+    const unsigned flags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | edges << 6 | P->pal16 << 7;
     uint8_t dummy[32];
     if (ksets[P->hr].vis[D][tex_variant(P)](a, bs, k, line, P->ctx, flags, dummy)) { P->pass = 1; P->fogused |= 1; }
     (void)id0;
@@ -136,7 +143,7 @@ static void batch_shade(poly_t *P, const uint8_t *bs, unsigned k, unsigned line,
     unsigned fr = U16(bs, SPO(P, 6)) >> 3, fg = U16(bs, SPO(P, 6) + 2) >> 3, fb = U16(bs, SPO(P, 8) + 2) >> 3;
     a->bytes[4] = (uint8_t)fr; a->bytes[5] = (uint8_t)fg; a->bytes[6] = (uint8_t)fb;
     int flat_white = (fl & 4) && T && P->A == 31 && fr == 63 && fg == 63 && fb == 63;
-    const unsigned flags = ((fl >> 5) & 1) | flat_white << 2;
+    const unsigned flags = ((fl >> 5) & 1) | flat_white << 2 | P->pal16 << 7;
     uint8_t dummy[32];
     ksets[P->hr].shade[T][(fl >> 2) & 1][T && rast_texfilter ? 1 : 0](a, bs, k, line, P->ctx, flags, dummy);
     (void)id0;
