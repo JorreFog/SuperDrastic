@@ -878,6 +878,14 @@ RC_EXPORT int RC_CCONV rc_client_is_processing_required(rc_client_t* client);
 RC_EXPORT void RC_CCONV rc_client_do_frame(rc_client_t* client);
 
 /**
+ * SuperDrastic: rc_client_do_frame in two halves. rc_client_do_frame_update reads the emulator's memory and must be
+ * called at the frame boundary; rc_client_do_frame_evaluate processes the frame and may run on another thread. Call
+ * each once per frame, in order: the next update only after the previous evaluate has returned.
+ */
+RC_EXPORT void RC_CCONV rc_client_do_frame_update(rc_client_t* client);
+RC_EXPORT void RC_CCONV rc_client_do_frame_evaluate(rc_client_t* client);
+
+/**
  * Processes the periodic queue.
  * Called internally by rc_client_do_frame.
  * Should be explicitly called if rc_client_do_frame is not being called because emulation is paused.

@@ -270,6 +270,8 @@ typedef struct rc_client_game_info_t {
   uint32_t max_valid_address;
 
   uint8_t waiting_for_reset;
+  uint8_t frame_updated;  /* SuperDrastic: rc_client_do_frame_update ran, rc_client_do_frame_evaluate not yet */
+  uint32_t split_modified_count;  /* SuperDrastic: modified memrefs when their in_update flags were worked out */
   uint8_t pending_events;
 
   rc_buffer_t buffer;

@@ -1,1 +1,1 @@
-rcheevos v12.5.0 (https://github.com/RetroAchievements/rcheevos), MIT, unmodified
+rcheevos v12.5.0 (https://github.com/RetroAchievements/rcheevos), MIT, with one change: rc_client_do_frame split into rc_client_do_frame_update and rc_client_do_frame_evaluate (marked "SuperDrastic" in rc_client.c, rc_client.h, rc_client_internal.h, rcheevos/rc_internal.h)

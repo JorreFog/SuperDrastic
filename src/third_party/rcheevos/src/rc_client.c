@@ -5975,11 +5975,83 @@ int rc_client_is_processing_required(rc_client_t* client)
   return (client->game->runtime.richpresence && client->game->runtime.richpresence->richpresence);
 }
 
+/* SuperDrastic: which modified memrefs rc_client_do_frame_update computes. Those that read memory (an indirect read)
+ * and every modified memref they depend on must be computed at the frame boundary; so must any with an operand that
+ * isn't a memref or a constant (a recall), to keep its timing. The rest are arithmetic on this frame's values:
+ * rc_client_do_frame_evaluate computes them, in list order (a modified memref comes after those it depends on), so
+ * each still gets exactly one new value per frame from that frame's inputs. Worked out again when the count changes
+ * (a subset or rich presence loaded). */
+static int rc_client_modified_operand_is_plain(const rc_operand_t* op) {
+  return rc_operand_is_memref(op) || op->type == RC_OPERAND_CONST || op->type == RC_OPERAND_FP;
+}
+
+static void rc_client_mark_in_update(const rc_operand_t* op, int* changed) {
+  if (rc_operand_is_memref(op) && op->value.memref->value.memref_type == RC_MEMREF_TYPE_MODIFIED_MEMREF) {
+    rc_modified_memref_t* parent = (rc_modified_memref_t*)op->value.memref;
+    if (!parent->in_update) {
+      parent->in_update = 1;
+      *changed = 1;
+    }
+  }
+}
+
+static void rc_client_split_modified_memrefs(rc_client_game_info_t* game) {
+  rc_modified_memref_list_t* list;
+  uint32_t count = 0;
+  int changed;
+
+  for (list = &game->runtime.memrefs->modified_memrefs; list; list = list->next)
+    count += list->count;
+  if (count == game->split_modified_count)
+    return;
+  game->split_modified_count = count;
+
+  for (list = &game->runtime.memrefs->modified_memrefs; list; list = list->next) {
+    rc_modified_memref_t* m = list->items;
+    const rc_modified_memref_t* stop = m + list->count;
+    for (; m < stop; ++m)
+      m->in_update = (m->modifier_type == RC_OPERATOR_INDIRECT_READ ||
+                      !rc_client_modified_operand_is_plain(&m->parent) || !rc_client_modified_operand_is_plain(&m->modifier));
+  }
+
+  do {
+    changed = 0;
+    for (list = &game->runtime.memrefs->modified_memrefs; list; list = list->next) {
+      rc_modified_memref_t* m = list->items;
+      const rc_modified_memref_t* stop = m + list->count;
+      for (; m < stop; ++m) {
+        if (m->in_update) {
+          rc_client_mark_in_update(&m->parent, &changed);
+          rc_client_mark_in_update(&m->modifier, &changed);
+        }
+      }
+    }
+  } while (changed);
+}
+
+/* the modified memrefs rc_client_do_frame_update left: in_update = 0 */
+static void rc_client_update_deferred_memrefs(rc_client_t* client) {
+  rc_modified_memref_list_t* list = &client->game->runtime.memrefs->modified_memrefs;
+  if (!list->count)
+    return;
+  do {
+    rc_modified_memref_t* m = list->items;
+    const rc_modified_memref_t* stop = m + list->count;
+    for (; m < stop; ++m) {
+      if (!m->in_update)
+        rc_update_memref_value(&m->memref.value, rc_get_modified_memref_value(m, client->state.legacy_peek, client));
+    }
+    list = list->next;
+  } while (list);
+}
+
 static void rc_client_update_memref_values(rc_client_t* client) {
   rc_memrefs_t* memrefs = client->game->runtime.memrefs;
   rc_memref_list_t* memref_list;
   rc_modified_memref_list_t* modified_memref_list;
   int invalidated_memref = 0;
+
+  rc_client_split_modified_memrefs(client->game);
 
   memref_list = &memrefs->memrefs;
   do {
@@ -6016,8 +6088,10 @@ static void rc_client_update_memref_values(rc_client_t* client) {
       rc_modified_memref_t* modified_memref = modified_memref_list->items;
       const rc_modified_memref_t* modified_memref_stop = modified_memref + modified_memref_list->count;
 
-      for (; modified_memref < modified_memref_stop; ++modified_memref)
-        rc_update_memref_value(&modified_memref->memref.value, rc_get_modified_memref_value(modified_memref, client->state.legacy_peek, client));
+      for (; modified_memref < modified_memref_stop; ++modified_memref) {
+        if (modified_memref->in_update)
+          rc_update_memref_value(&modified_memref->memref.value, rc_get_modified_memref_value(modified_memref, client->state.legacy_peek, client));
+      }
 
       modified_memref_list = modified_memref_list->next;
     } while (modified_memref_list);
@@ -6421,7 +6495,11 @@ static void rc_client_raise_pending_events(rc_client_t* client, rc_client_game_i
   game->pending_events = RC_CLIENT_GAME_PENDING_EVENT_NONE;
 }
 
-void rc_client_do_frame(rc_client_t* client)
+/* SuperDrastic: rc_client_do_frame in two halves. The update reads the emulator's memory (every memref, the indirect
+ * ones, rich presence) and must run at the frame boundary, on the emulator's thread; the evaluation only uses the
+ * values read and can run on another thread. Call them in order, once per frame: the update for a frame must not
+ * start before the previous frame's evaluation has returned (the memrefs' delta and prior values are per frame). */
+void rc_client_do_frame_update(rc_client_t* client)
 {
   if (!client)
     return;
@@ -6434,14 +6512,42 @@ void rc_client_do_frame(rc_client_t* client)
 #endif
 
   if (client->game && !client->game->waiting_for_reset) {
-    rc_runtime_richpresence_t* richpresence;
-    rc_client_subset_info_t* subset;
-
     rc_mutex_lock(&client->state.mutex);
 
     rc_client_reset_pending_events(client);
 
     rc_client_update_memref_values(client);
+
+    client->game->frame_updated = 1;
+
+    rc_mutex_unlock(&client->state.mutex);
+  }
+}
+
+void rc_client_do_frame_evaluate(rc_client_t* client)
+{
+  if (!client)
+    return;
+
+#ifdef RC_CLIENT_SUPPORTS_EXTERNAL
+  if (client->state.external_client && client->state.external_client->do_frame)
+    return;  /* the update did the whole frame */
+#endif
+
+  if (client->game && !client->game->waiting_for_reset && client->game->frame_updated) {
+    rc_runtime_richpresence_t* richpresence;
+    rc_client_subset_info_t* subset;
+
+    rc_mutex_lock(&client->state.mutex);
+
+    client->game->frame_updated = 0;
+
+    rc_client_update_deferred_memrefs(client);
+
+    /* rich presence shares the game's memrefs (rc_runtime_activate_richpresence): no memory reads of its own */
+    richpresence = client->game->runtime.richpresence;
+    if (richpresence && richpresence->richpresence)
+      rc_update_richpresence_internal(richpresence->richpresence, client->state.legacy_peek, client);
 
     client->game->progress_tracker.progress = 0.0;
     for (subset = client->game->subsets; subset; subset = subset->next) {
@@ -6457,10 +6563,6 @@ void rc_client_do_frame(rc_client_t* client)
           rc_client_do_frame_process_leaderboards(client, subset);
       }
     }
-
-    richpresence = client->game->runtime.richpresence;
-    if (richpresence && richpresence->richpresence)
-      rc_update_richpresence_internal(richpresence->richpresence, client->state.legacy_peek, client);
 
     rc_mutex_unlock(&client->state.mutex);
 
@@ -6488,6 +6590,12 @@ void rc_client_do_frame(rc_client_t* client)
   }
 
   rc_client_idle(client);
+}
+
+void rc_client_do_frame(rc_client_t* client)
+{
+  rc_client_do_frame_update(client);
+  rc_client_do_frame_evaluate(client);
 }
 
 void rc_client_idle(rc_client_t* client)

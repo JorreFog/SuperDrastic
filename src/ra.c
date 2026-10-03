@@ -623,6 +623,53 @@ static void ra_start(void) {
     else dsflip_toast("RetroAchievements", "no password set in ES", 0xff7a4a, 4000);
 }
 
+/* ---------- the frame's evaluation on its own thread ----------
+ * rc_client_do_frame on DraStic's main thread was ~20% of that thread in HeartGold (136 achievements at 1104 MHz:
+ * ~2.4 ms a frame), and the main thread is what sets the clock. Only the memory reads must happen at the frame
+ * boundary: rc_client_do_frame_update runs here, rc_client_do_frame_evaluate on "dsf-ra". The next update waits for
+ * the previous evaluation (rcheevos' delta/prior values are per frame); it has a whole frame for ~1.5 ms of work.
+ * DSFLIP_RA_THREAD=0: the whole frame on the main thread, as before. */
+static pthread_mutex_t ev_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t ev_cv = PTHREAD_COND_INITIALIZER;
+static int ev_pending, ev_thread = -1;   /* -1: not decided yet */
+static unsigned ev_waits;               /* frames whose update had to wait for the previous evaluation */
+static void *ev_loop(void *a) {
+    (void)a;
+    pthread_mutex_lock(&ev_mu);
+    for (;;) {
+        while (!ev_pending) pthread_cond_wait(&ev_cv, &ev_mu);
+        pthread_mutex_unlock(&ev_mu);
+        rc_client_do_frame_evaluate(rc);
+        pthread_mutex_lock(&ev_mu);
+        ev_pending = 0;
+        pthread_cond_broadcast(&ev_cv);
+    }
+    return 0;
+}
+static void ev_wait_idle(void) {          /* the previous frame's evaluation has returned */
+    if (ev_thread != 1) return;
+    pthread_mutex_lock(&ev_mu);
+    if (ev_pending) ev_waits++;
+    while (ev_pending) pthread_cond_wait(&ev_cv, &ev_mu);
+    pthread_mutex_unlock(&ev_mu);
+}
+static void ra_do_frame(void) {
+    if (ev_thread < 0) {
+        const char *e = getenv("DSFLIP_RA_THREAD");
+        pthread_t t;
+        ev_thread = !(e && *e == '0') && pthread_create(&t, 0, ev_loop, 0) == 0;
+        if (ev_thread) { pthread_detach(t); pthread_setname_np(t, "dsf-ra"); }
+        dsflip_log("[ra] achievements evaluated %s\n", ev_thread ? "on their own thread (dsf-ra)" : "on DraStic's main thread");
+    }
+    if (!ev_thread) { rc_client_do_frame(rc); return; }
+    ev_wait_idle();
+    rc_client_do_frame_update(rc);
+    pthread_mutex_lock(&ev_mu);
+    ev_pending = 1;
+    pthread_cond_signal(&ev_cv);
+    pthread_mutex_unlock(&ev_mu);
+}
+
 /* called from every SDL_RenderPresent */
 void ra_frame(void) {
     frames++;
@@ -656,6 +703,7 @@ void ra_frame(void) {
         dsflip_log("[ra] test: DTCM read %u bytes, %u non-zero, top word %02x%02x%02x%02x\n", got, nz,
                    t[DTCM_SIZE - 5], t[DTCM_SIZE - 6], t[DTCM_SIZE - 7], t[DTCM_SIZE - 8]);
     }
-    if (game_loaded && ram) rc_client_do_frame(rc);
-    else rc_client_idle(rc);
+    if (game_loaded && ram) ra_do_frame();
+    else { ev_wait_idle(); rc_client_idle(rc); }
+    if (ev_waits && frames % 600 == 0) { dsflip_log("[ra] %u frames waited for the previous evaluation\n", ev_waits); ev_waits = 0; }
 }
