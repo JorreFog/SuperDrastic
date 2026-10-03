@@ -26,6 +26,9 @@ own, for any firmware.
 - **An audio pump** that calls DraStic's audio at an exact rate on a real-time timer, which removes the stutter
   SDL's audio caused, and an echo-gated **microphone**.
 - **Touch** on the bottom panel, mapped to exactly where the DS screen is drawn.
+- **Gengis Engine**, its own 3D rasterizer for DraStic's hi-res mode (`DSFLIP_RAST=1`): the same pixels as
+  DraStic's renderer, bit for bit, with ~20% less work in DraStic's 3D threads (about 25% less CPU a frame on the
+  3D stress ROM, 6-11% in Pokémon HeartGold), and optional bilinear texture filtering. See `tools/rast/README.md`.
 - **RetroAchievements** (softcore) with pop-ups, badges and a progress indicator, including sets that read the DS's
   DTCM memory, for `.nds` ROMs and ROMs in a `.zip`.
 - **Its own CPU governor**: the lowest clock at which the game drops no more frames than at full clock (HeartGold at
