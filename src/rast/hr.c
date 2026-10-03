@@ -210,7 +210,7 @@ static void hr_render_list(hr_t *H, const uint8_t *list, uint8_t *polys, uint8_t
 }
 
 /* ---- clear: the clear colour, or the rear-plane bitmap (as rast.c's clear_bin, texels 3x3 at 3x) ---- */
-static void hr_clear_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned hy0) {
+static __attribute__((noinline)) void hr_clear_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned hy0) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT), cattr = U32(sys, SYS_CLEAR_ATTR);
     uint32_t *col = (uint32_t *)H->ctx, *att = (uint32_t *)(H->ctx + HR_ATTR);
     if (!(d3 & (1u << 14))) {
@@ -255,7 +255,7 @@ static int32_t sqshl16(int32_t v, int8_t s) {
 }
 /* fog weights of a line (spec/resolve.c's fog_calculate_weights), NEON over 8 pixels: d = sat(((attr >> 9) & 0x7fff)
  * - off), v = sqshl16(d, shift), i = v >> 10, f = v & 0x3ff, w = table[i] + ((s8)table[32 + i] * f) >> 10 */
-static void fog_weights(const uint32_t *attr, uint8_t *w, const uint8_t *table, uint32_t params) {
+static __attribute__((noinline)) void fog_weights(const uint32_t *attr, uint8_t *w, const uint8_t *table, uint32_t params) {
     const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16)), m15 = vdupq_n_u16(0x7fff), m10 = vdupq_n_u16(0x3ff);
     const int16x8_t sh = vdupq_n_s16((int8_t)(params & 0xff));
     const uint8x16x2_t tab = { { vld1q_u8(table), vld1q_u8(table + 16) } }, dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
@@ -275,7 +275,7 @@ static void fog_weights(const uint32_t *attr, uint8_t *w, const uint8_t *table, 
 /* fog of a line in place (fog_modulate_full/alpha_intermediate), NEON over 4 pixels: per byte c += ((s8)(c - F) *
  * k) >> 7 with k = -w (and -128 for 127) where the pixel's fog flag (bit 31) is set, else 0; the flag is cleared;
  * alpha-only fog leaves r, g, b */
-static void fog_line(uint32_t *c, const uint8_t *w, uint32_t fogc, int full) {
+static __attribute__((noinline)) void fog_line(uint32_t *c, const uint8_t *w, uint32_t fogc, int full) {
     static const uint8_t kidx[16] = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3 };
     const uint8x16_t ki = vld1q_u8(kidx), fcol = vreinterpretq_u8_u32(vdupq_n_u32(fogc)), x7f = vdupq_n_u8(0x7f);
     const uint8x16_t chmask = vreinterpretq_u8_u32(vdupq_n_u32(full ? 0xffffffffu : 0xff000000u));
@@ -300,7 +300,7 @@ static void fog_line(uint32_t *c, const uint8_t *w, uint32_t fogc, int full) {
  * (c3 = ((C >> 24) & 0x7f) ^ 0x40 against n3 = (N >> 24) & 0x3f); the edge byte is c3 >> 3, or 0xff when no edge;
  * marked pixels (edge byte < 8, i.e. the polygon's edge flag set) take the edge colour of their id >> 3 and keep
  * alpha bits 0-4; unmarked ones get alpha (ca & 0x1f) | ((e >> 3) & 0xe0) (spec/resolve.c's edge_mark). */
-static void edge_line(uint32_t *out, const uint32_t *col, const uint32_t *cur, const uint32_t *above, const uint32_t *below,
+static __attribute__((noinline)) void edge_line(uint32_t *out, const uint32_t *col, const uint32_t *cur, const uint32_t *above, const uint32_t *below,
                       uint32_t clear, const uint8_t *ec) {
     const uint32x4_t key = vdupq_n_u32(0xffffff), x40 = vdupq_n_u32(0x40), clr = vdupq_n_u32(clear);
     const uint8x8_t ecr = vld1_u8(ec), ecg = vld1_u8(ec + 8), ecb = vld1_u8(ec + 16);
@@ -328,7 +328,7 @@ static void edge_line(uint32_t *out, const uint32_t *col, const uint32_t *cur, c
         prev = c;
     }
 }
-static void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
+static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
     int edges = (d3 >> 5) & 1, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
@@ -360,7 +360,7 @@ static void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
  * Newton step, exact enough for these ranges) scaled to 16 bits and applied with umull. The even output pixels of
  * a row are the left outputs and the odd ones the right outputs, which is the output block's layout. */
 #include <arm_neon.h>
-static void hr_downsample(const uint32_t *in, uint8_t *out) {
+static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out) {
     static const uint8_t alpha_idx[16] = { 3, 3, 3, 3, 7, 7, 7, 7, 11, 11, 11, 11, 15, 15, 15, 15 };
     const uint8x16_t aidx = vld1q_u8(alpha_idx);
     const uint8x8_t amask = vreinterpret_u8_u32(vdup_n_u32(0xff000000));
