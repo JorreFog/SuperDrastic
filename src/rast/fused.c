@@ -318,6 +318,9 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
     }
     batch_fn *bf = use_neon >= 3 || L->hr ? asm_batch_for(&P) : use_neon ? neon_batch_for(&P) : 0;
 
+    /* batches: runs of lines with pixels, at most 512 pixels (DraStic's batches: the flat colour and the id quirk
+     * follow them); the hi-res pipeline, with lines of up to 768 pixels and no exactness to keep, batches longer */
+    const unsigned bmax = L->hr ? 4096 : 512;
     unsigned line = line0, left = nlines, i = 0;
     while (left) {
         while (left && !U16(spans, SPO(PP, 9) + 4 * i)) { i++; line++; left--; }
@@ -325,7 +328,7 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
         unsigned first = i, k = 0, n = 0;
         while (left) {
             unsigned c = U16(spans, SPO(PP, 9) + 4 * i);
-            if (!c || n + c > 512) break;
+            if (!c || (k && n + c > bmax)) break;
             n += c; k++; i++; left--;
         }
         uint8_t *bs = spans + 4 * first;

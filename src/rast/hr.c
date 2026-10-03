@@ -179,6 +179,20 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
         hr_render_polygon_setup_spans_4x(span, lines);
     }
     unsigned line0 = (unsigned)((int)(y_top > bin_top ? y_top : bin_top) - lb);     /* context line of the first line */
+    /* a guard against spans outside the context (should not happen: clipped polygons stay within the viewport) */
+    for (int i = 0; i < lines; i++) {
+        unsigned X = U16(sp, 8 * HR_SPS + 4 * i), C = U16(sp, 9 * HR_SPS + 4 * i);
+        if (X > HR_W || X + C > HR_W || line0 + (unsigned)lines > HR_CL) {
+            static unsigned nrep;
+            if (nrep++ < 8) {
+                fprintf(stderr, "[hr] bad span: poly %08x line %d/%d X %u C %u line0 %u ytop %u ybot %u bin %u..%u\n", a8, i, lines, X, C,
+                        line0, y_top, ybot, bin_top, bin_bot);
+                for (unsigned k = 0; k < count; k++)
+                    fprintf(stderr, "   v%u (%u,%u) w %d z %u\n", k, U16(vptr[k], 4), U16(vptr[k], 6), (int32_t)U32(vptr[k], 0), U16(vptr[k], 8));
+            }
+            return;
+        }
+    }
     if (defer) defer_poly(&layout_3x, H->ctx, sp, poly, 0, line0, (unsigned)lines, flags, vptr[0]);
     else f_run(&layout_3x, H->ctx, sp, poly, 0, line0, (unsigned)lines, flags, vptr[0], 0, 0);
 }
