@@ -61,6 +61,21 @@ static void line_px(poly_t *P, uint8_t *s, const uint8_t *bs, unsigned y, uint8_
     uint32_t V0 = ((uint32_t)(int32_t)(int16_t)(st0 >> 16) << 15) + (dv > 0 ? 0x400 : 0);
     unsigned EL = U16(s, SPO(PP, 10)), ER = U16(s, SPO(PP, 10) + 2);
     uint8_t fr = (uint8_t)(U16(bs, SPO(PP, 6)) >> 3), fg = (uint8_t)(U16(bs, SPO(PP, 6) + 2) >> 3), fb = (uint8_t)(U16(bs, SPO(PP, 8) + 2) >> 3);
+    /* shadow polygons (mode 3; b0.c has DraStic's batch version): the stencil is attribute bit 31. A shadow mask
+     * (id 0) sets it where its depth test fails and writes nothing else; before the first mask touches a line
+     * after a shadow drew on it (the line mask, one bit per bin line, cleared by shadows) the line's stencil bits
+     * are reset. A shadow (id != 0) draws, as a translucent polygon, only where the stencil is set and the pixel's
+     * id differs from its own. */
+    int shadow = P->mode == 3;
+    if (shadow) {
+        uint64_t *lm = (uint64_t *)(P->ctx + P->hdr_off + 0x18), bit = 1ull << y;
+        if (P->pid) *lm &= ~bit;
+        else if (!(*lm & bit)) {
+            *lm |= bit;
+            uint32_t *al = (uint32_t *)(P->ctx + P->attr_off + y * P->lstride);
+            for (unsigned i = 0; i < P->lstride / 4; i++) al[i] &= 0x7fffffffu;
+        }
+    }
 
     for (unsigned i = 0; i < C; i++) {
         unsigned j = i & 7;
@@ -80,6 +95,10 @@ static void line_px(poly_t *P, uint8_t *s, const uint8_t *bs, unsigned y, uint8_
         uint32_t da = att_l[i], pass;
         if (P->attr & (1u << 14)) { uint32_t d = dep - (da & 0xffffff); if ((int32_t)d < 0) d = 0u - d; pass = d < 0x100; }
         else pass = (da & 0xffffff) > dep;
+        if (shadow) {
+            if (!P->pid) { if (!pass) att_l[i] = da | 0x80000000u; continue; }
+            if (!(da >> 31) || ((da >> 24) & 63) == P->pid) pass = 0;
+        }
         uint8_t m = pass ? 0xff : 0;
         if (!m && !(fl & 1)) continue;       /* opaque: nothing written for a failed pixel */
 
@@ -280,13 +299,11 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
           unsigned nlines, unsigned flags, uint8_t *v0, int dmode, unsigned idx) {
     poly_t P;
     P.sps = L->sps; P.lstride = L->lstride; P.attr_off = L->attr_off; P.id_off = L->id_off;
-    P.id_stride = L->id_stride; P.owner_stride = L->owner_stride; P.hr = L->hr;
+    P.id_stride = L->id_stride; P.owner_stride = L->owner_stride; P.hr = L->hr; P.hdr_off = L->hdr_off;
     P.ctx = ctx; P.sys = PTR(ctx, L->hdr_off); P.geom = PTR(ctx, L->hdr_off + 8); P.poly = poly; P.v0 = v0;
     P.attr = U32(poly, 4); P.mode = (P.attr >> 4) & 3;
-    if (P.mode == 3) {
-        if (L->hr) return 0;                                /* hr.c: shadow polygons are not rendered yet */
-        b0_setup_4x(ctx, spans, poly, buf, line0, nlines, flags, v0); return 1;
-    }
+    if (P.mode == 3 && !L->hr) { b0_setup_4x(ctx, spans, poly, buf, line0, nlines, flags, v0); return 1; }
+    /* (the 3x pipeline renders shadow polygons on the scalar line path, see line_px) */
     P.pid = (P.attr >> 24) & 63; P.A = (P.attr >> 16) & 31; P.flags = flags;
     P.d3 = U32(P.sys, SYS_DISP3DCNT); P.aref = U32(P.sys, 0x34eb44);
     P.dmode = dmode; P.owner = dmode ? defer_owner() : 0; P.idx = idx;
@@ -316,7 +333,7 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
         P.t_lo = P.mt == CLAMP ? 0 : -32768; P.t_hi = P.mt == CLAMP ? (int16_t)(P.th - 1) : 32767;
         P.t_and = P.mt == CLAMP ? 0xffff : (uint16_t)(P.th - 1); P.t_flip = P.mt == FLIP ? (uint16_t)(P.th & ~(P.th - 1)) : 0;
     }
-    batch_fn *bf = use_neon >= 3 || L->hr ? asm_batch_for(&P) : use_neon ? neon_batch_for(&P) : 0;
+    batch_fn *bf = P.mode == 3 ? 0 : use_neon >= 3 || L->hr ? asm_batch_for(&P) : use_neon ? neon_batch_for(&P) : 0;
 
     /* batches: runs of lines with pixels, at most 512 pixels (DraStic's batches: the flat colour and the id quirk
      * follow them); the hi-res pipeline, with lines of up to 768 pixels and no exactness to keep, batches longer */

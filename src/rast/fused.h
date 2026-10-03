@@ -20,7 +20,7 @@ typedef struct {
     /* the layouts: the span block's bytes per array (DraStic 0xb0; hi-res 0x100) and the context's line stride,
      * attribute and id buffer offsets, id and owner line strides (DraStic: 0x800, 0x10000, 0x20000, 0x200, 0x400);
      * hr: the hi-res kernel set (strides from kargs) */
-    unsigned sps, lstride, attr_off, id_off, id_stride, owner_stride, hr;
+    unsigned sps, lstride, attr_off, id_off, id_stride, owner_stride, hr, hdr_off;
     int pal16;              /* fused_asm.c: the palette has at most 16 entries (tbl lookups) */
     uint8_t kargs[0x150] __attribute__((aligned(16)));   /* fused_asm.c: the assembly kernels' arguments */
 } poly_t;

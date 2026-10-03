@@ -52,8 +52,9 @@
 const layout_t layout_3x = { HR_SPS, HR_LSTRIDE, HR_ATTR, HR_ID, HR_W, HR_W * 2, HR_W, HR_CL, 1, HR_HDR };
 
 typedef struct { uint16_t x, y; } hrv_t;
-static hrv_t hr_vtx[2][1568];           /* the vertices' 3x screen coordinates, per geometry buffer */
-static hrv_t hr_vtx2[2][1568];          /* RAST_VCHECK: the 2x ones, to check the index mapping against DraStic's */
+#define HR_NVTX 6144                    /* vertex records per geometry buffer (GEOM_VERTS_BUF / 16: the DS's vertex RAM) */
+static hrv_t hr_vtx[2][HR_NVTX];        /* the vertices' 3x screen coordinates, per geometry buffer */
+static hrv_t hr_vtx2[2][HR_NVTX];       /* the 2x ones: the index mapping check against DraStic's records */
 int hr_vcheck;
 uint32_t *hr_frame;                     /* RAST_DUMP: the resolved 3x frame (576 x 768) */
 
@@ -83,8 +84,8 @@ void hr_vertices(uint8_t *p, const uint32_t *recips, const uint32_t *shifts) {
     /* geometry_flush_polygons appends this flush's n vertices to the buffer's vertex records: the record of
      * vertex i is total - n + i (the count at GEOM_VERTS + 0x18000 already includes them) */
     unsigned total = U32(p, GEOM_VERTS + buf * GEOM_VERTS_BUF + 0x18000), base = total >= n ? total - n : 0;
-    if (base >= 1568) return;
-    if (base + n > 1568) n = 1568 - base;
+    if (base >= HR_NVTX) return;
+    if (base + n > HR_NVTX) n = HR_NVTX - base;
     const int32_t *X = (const int32_t *)(p + GEOM_CLIP_X), *Y = (const int32_t *)(p + GEOM_CLIP_Y), *W = (const int32_t *)(p + GEOM_CLIP_W);
     uint32_t vw = U16(p, GEOM_VIEWPORT), vh = U16(p, GEOM_VIEWPORT + 2), vx = U16(p, GEOM_VIEWPORT + 4), vy = U16(p, GEOM_VIEWPORT + 6);
     uint32_t oy = (uint32_t)(192 - (int)vy - (int)vh);
@@ -103,7 +104,7 @@ void hr_vertices(uint8_t *p, const uint32_t *recips, const uint32_t *shifts) {
             x2 = (uint32_t)((px * 2) << -e); y2 = (uint32_t)((py * 2) << -e);
         }
         o[i].x = (uint16_t)(HR_N * vx + x3); o[i].y = (uint16_t)(HR_N * oy + y3);
-        if (hr_vcheck) { o2[i].x = (uint16_t)(2 * vx + x2); o2[i].y = (uint16_t)(2 * oy + y2); }
+        o2[i].x = (uint16_t)(2 * vx + x2); o2[i].y = (uint16_t)(2 * oy + y2);
     }
 }
 
@@ -112,7 +113,7 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
                        unsigned bin_bot, int lb, uint32_t d3, int defer) {
     uint32_t a8 = U32(poly, 8);
     unsigned count = a8 & 15, flags = (a8 >> 8) & 0xff, oi = (a8 >> 16) & 0x7f, base = U16(poly, 0x1a);
-    if (count < 3 || count > 10) return;
+    if (count < 1 || count > 10) return;             /* DraStic walks 1 and 2 vertices too (points, lines) */
     /* the vertex order: DraStic's table entry oi = group + t is the group's base sequence rotated to start at its
      * top vertex t; the top vertex is chosen again from the 3x coordinates (ties keep DraStic's) */
     const uint32_t *orders = (const uint32_t *)(ds_base + DS_VERTEX_ORDERS);
@@ -122,7 +123,7 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     unsigned ymin = 0xffff;
     for (unsigned k = 0; k < count; k++) {
         idx[k] = base + ((seq >> (4 * k)) & 15);
-        if (idx[k] >= 1568) return;
+        if (idx[k] >= HR_NVTX) return;
         ys[k] = hv[idx[k]].y;
         if (ys[k] < ymin) ymin = ys[k];
     }
@@ -132,9 +133,14 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     for (unsigned k = 0; k < count; k++) {
         unsigned vi = idx[(top + k) % count];
         memcpy(vbuf[k], verts + 16 * vi, 16);
-        if (hr_vcheck && (U16(vbuf[k], 4) != hv2[vi].x || U16(vbuf[k], 6) != hv2[vi].y)) bad++;
-        U16(vbuf[k], 4) = hv[vi].x; U16(vbuf[k], 6) = hv[vi].y;
-        if (hv[vi].y > ybot) ybot = hv[vi].y;
+        unsigned x3 = hv[vi].x, y3 = hv[vi].y;
+        if (U16(vbuf[k], 4) != hv2[vi].x || U16(vbuf[k], 6) != hv2[vi].y) {
+            /* DraStic changed the record after its transform (or the mapping is off): scale its 2x coordinates */
+            if (hr_vcheck) bad++;
+            x3 = (3 * U16(vbuf[k], 4) + 1) / 2; y3 = (3 * U16(vbuf[k], 6) + 1) / 2;
+        }
+        U16(vbuf[k], 4) = (uint16_t)x3; U16(vbuf[k], 6) = (uint16_t)y3;
+        if (y3 > ybot) ybot = y3;
         vptr[k] = vbuf[k];
     }
     vptr[count] = vptr[0]; vptr[count + 1] = vptr[1];
@@ -146,7 +152,7 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
                 unsigned vi = idx[(top + k) % count];
                 const uint8_t *v = verts + 16 * vi;
                 int found = -1;
-                for (unsigned j = 0; j < 1568 && found < 0; j++)
+                for (unsigned j = 0; j < HR_NVTX && found < 0; j++)
                     if (hv2[j].x == U16(v, 4) && hv2[j].y == U16(v, 6)) found = (int)j;
                 fprintf(stderr, "   v%u idx %u: record (%u,%u) ours (%u,%u) w %d; first index with the record's x,y: %d\n", k, vi,
                         U16(v, 4), U16(v, 6), hv2[vi].x, hv2[vi].y, (int32_t)U32(v, 0), found);
@@ -353,17 +359,20 @@ static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint
  * b + 2c of each triple (a b c), vertically the top output 2 r0 + r1 and the bottom r1 + 2 r2 of the three rows,
  * so each output is a weighted sum of 9 (weights summing to 9). Colours are weighted by alpha as well (so the
  * clear colour of transparent pixels does not darken polygon edges): colour = sum(w a c) / sum(w a), alpha =
- * sum(w a) / 9, both rounded; a pixel whose sum(w a) is 0 is fully transparent and gets colour 0.
+ * sum(w a) / 9, both rounded; a pixel whose sum(w a) is 0 is fully transparent and gets the clear colour (as the 2x
+ * output has there in the common case; the compositor does not show it).
  * NEON, two triples (four output pixels) at a time: ld3 gives the a, b and c pixels of the triples as vectors;
  * the four channels of a pixel are u16 lanes (sums fit: 9 x 31 x 63 < 65536); the alpha of each pixel is spread
  * over its four lanes with tbl to be the per-channel divisor. The division is a float reciprocal (frecpe plus one
  * Newton step, exact enough for these ranges) scaled to 16 bits and applied with umull. The even output pixels of
  * a row are the left outputs and the odd ones the right outputs, which is the output block's layout. */
 #include <arm_neon.h>
-static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out) {
+static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out, uint32_t clear) {
     static const uint8_t alpha_idx[16] = { 3, 3, 3, 3, 7, 7, 7, 7, 11, 11, 11, 11, 15, 15, 15, 15 };
     const uint8x16_t aidx = vld1q_u8(alpha_idx);
     const uint8x8_t amask = vreinterpret_u8_u32(vdup_n_u32(0xff000000));
+    const uint8x16_t a5 = vdupq_n_u8(0x1f);     /* the 5-bit alpha only: the resolve may leave flag bits 5-7 in byte 3 */
+    const uint32x2_t clr = vdup_n_u32(clear & 0xffffff);    /* fully transparent outputs carry the clear colour, as at 2x */
     const uint32x4_t zero = vdupq_n_u32(0), k9 = vdupq_n_u32(7282);           /* 7282 / 65536 = 1 / 9 */
     for (unsigned by = 0; by < HR_BL / 3; by++) {
         const uint32_t *r0 = in + 3 * by * HR_W, *r1 = r0 + HR_W, *r2 = r1 + HR_W;
@@ -376,7 +385,7 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
                 uint32x2x3_t t = vld3_u32(r); \
                 uint8x16_t ab16 = vcombine_u8(vreinterpret_u8_u32(t.val[0]), vreinterpret_u8_u32(t.val[1])); \
                 uint8x16_t cb16 = vcombine_u8(vreinterpret_u8_u32(t.val[2]), vreinterpret_u8_u32(t.val[1])); \
-                uint8x16_t aa = vqtbl1q_u8(ab16, aidx), ca = vqtbl1q_u8(cb16, aidx); \
+                uint8x16_t aa = vandq_u8(vqtbl1q_u8(ab16, aidx), a5), ca = vandq_u8(vqtbl1q_u8(cb16, aidx), a5); \
                 uint16x8_t pa = vmull_u8(vget_low_u8(ab16), vget_low_u8(aa)), pbb = vmull_u8(vget_high_u8(ab16), vget_high_u8(aa)); \
                 uint16x8_t pc = vmull_u8(vget_low_u8(cb16), vget_low_u8(ca)); \
                 uint16x8_t wa = vmovl_u8(vget_low_u8(aa)), wb = vmovl_u8(vget_high_u8(aa)), wc = vmovl_u8(vget_low_u8(ca)); \
@@ -404,7 +413,8 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
                 uint32x4_t cl = vmull_u16(vget_low_u16(P), vget_low_u16(k)), ch = vmull_u16(vget_high_u16(P), vget_high_u16(k)); \
                 uint16x8_t c = vcombine_u16(vrshrn_n_u32(cl, 16), vrshrn_n_u32(ch, 16)); \
                 uint16x8_t a9 = vcombine_u16(vrshrn_n_u32(vmulq_u32(al32, k9), 16), vrshrn_n_u32(vmulq_u32(ah32, k9), 16)); \
-                OUT = vreinterpret_u32_u8(vbsl_u8(amask, vmovn_u16(a9), vmovn_u16(c))); \
+                uint32x2_t px = vreinterpret_u32_u8(vbsl_u8(amask, vmovn_u16(a9), vmovn_u16(c))); \
+                OUT = vbsl_u32(vceq_u32(px & vdup_n_u32(0xff000000), vdup_n_u32(0)), clr, px); \
             } while (0)
             uint32x2_t out00, out01, out10, out11;
             DIV(pt, at, out00); DIV(prt, art, out01); DIV(pb, ab, out10); DIV(prb, arb, out11);
@@ -435,6 +445,7 @@ void hr_render_bins(uint8_t *ctx) {
         if (bin_bot > HR_BL * NBINS) bin_bot = HR_BL * NBINS;
         hr_clear_bin(H, sys, geom, hy0);
         U32(H->ctx, HR_HDR + 0x10) = 0xffffffffu; U32(H->ctx, HR_HDR + 0x14) = 0;
+        U64(H->ctx, HR_HDR + 0x18) = ~0ull;             /* the shadow line mask (fused.c line_px): all lines clean */
         hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, rast_defer);
         if (ntrl) {
             memset(H->ctx + HR_ID, 0xff, HR_CL * HR_W);
@@ -442,6 +453,6 @@ void hr_render_bins(uint8_t *ctx) {
         }
         hr_resolve_bin(H, sys, geom, bin);
         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, H->out, HR_BL * HR_W * 4);
-        hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES);
+        hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
     }
 }

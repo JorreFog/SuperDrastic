@@ -167,10 +167,18 @@ static void diff_render_bins(uint8_t *ctx) {
  * frame as <dir>/fNNNNN.ppm (other threads' bins may be mid-frame) */
 static const char *dump_dir;
 static unsigned dump_every = 60;
+static int alpha_hist;          /* RAST_ALPHAHIST=1: with each dump, a histogram of the output frame's byte 3 */
 static void dump_frame(uint8_t *ctx) {
     static unsigned long n;
     if (U8(ctx, CTX_FIRST_BIN) != 0 || n++ % dump_every) return;
     const uint8_t *o = PTR(PTR(ctx, CTX_SYS), SYS_OUTPUT);
+    if (alpha_hist) {
+        unsigned long h[256] = { 0 };
+        for (int y = 0; y < 384; y++) for (int x = 0; x < 512; x++) h[o[(2 * y + (x & 1)) * 0x400 + (x >> 1) * 4 + 3]]++;
+        fprintf(stderr, "[rast] frame %lu clear colour %08x byte3:", n - 1, U32(PTR(ctx, CTX_SYS), SYS_CLEAR_COLOR));
+        for (int v = 0; v < 256; v++) if (h[v]) fprintf(stderr, " %02x:%lu", v, h[v]);
+        fprintf(stderr, "\n");
+    }
     char fn[512]; snprintf(fn, sizeof fn, "%s/f%05lu.ppm", dump_dir, n - 1);
     FILE *f = fopen(fn, "wb"); if (!f) return;
     fprintf(f, "P6\n512 384\n255\n");
@@ -334,6 +342,7 @@ __attribute__((constructor)) static void rast_init(void) {
     dump_dir = getenv("RAST_DUMP");
     rast_stats = getenv("RAST_STATS") != 0;
     print_frames = getenv("RAST_FRAMES") != 0;
+    alpha_hist = getenv("RAST_ALPHAHIST") != 0;
     pdiff = getenv("RAST_PDIFF") != 0;
     if (getenv("RAST_PDIFF_STRICT")) pdiff_strict = atoi(getenv("RAST_PDIFF_STRICT"));
     if (getenv("RAST_PIPE")) pipe_sel = atoi(getenv("RAST_PIPE"));

@@ -45,9 +45,12 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   layout), the same kernels in a hi-res instantiation (rast_kern_h*, strides from the kernel arguments; deferred
   shading and bilinear filtering included), the bin resolve over 768-pixel lines and a 3:2 alpha-weighted box
   filter into the output block. The 2D compositing then sees a normal 2x frame, with anti-aliased polygon edges
-  and 2.25 samples per pixel of texture detail. Not rendered at 3x yet: shadow polygons (mode 3); DraStic's
-  sprite path (axis-aligned textured quads) goes through the general walker. The downsample, the edge marking
-  and the fog of the resolve are NEON (unit-tested against the scalar versions). The field scene costs 10.3 M
+  and 2.25 samples per pixel of texture detail. Shadow polygons (mode 3) render on the scalar line path with
+  DraStic's stencil rules; DraStic's sprite path (axis-aligned textured quads) goes through the general walker;
+  points and lines (1- and 2-vertex polygons) walk like DraStic's. The vertex table holds the DS's 6144 vertices
+  (an earlier 1568 limit skipped polygons with higher vertex indices: a black sky and missing sparkles behind
+  Ho-Oh in HG/SS). The downsample, the edge marking and the fog of the resolve are NEON (unit-tested against the
+  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage. The field scene costs 10.3 M
   instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the rest the clear, the resolve
   and the downsample over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
 - **Palette lookups with tbl.** 4- and 16-colour textures (the common DS formats I2 and I4) keep their palette
@@ -79,5 +82,5 @@ test; one that all pass is stored straight.
 - Device A/B: the same game with the option off and on, from the performance logs.
 - TBL palette lookups for 4- and 16-colour textures (saves the second gather); 64-bit texel-pair loads in the
   bilinear gathers.
-- 3x: NEON downsample and resolve, shadow polygons, the top vertex at 3x for tied vertices; later the hi-res 3D
-  layer presented through the dsflip shader instead of downsampled.
+- 3x: the top vertex at 3x for tied vertices; cheaper edge marking and downsample; later the hi-res 3D layer
+  presented through the dsflip shader instead of downsampled.
