@@ -37,6 +37,17 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   runs twice: with nearest filtering it is slower (stress ROM, overdraw 1.5: +8%; field scene, overdraw 1.0: +29%),
   so it is meant for the bilinear and hi-res modes; figures for those below.
 
+- **3x internal resolution** (`DSFLIP_RAST_SCALE` / `RAST_SCALE=3`, `src/rast/hr.c`). The scene is rendered at
+  768x576 and supersampled into DraStic's 2x frame: every bin at 48 lines x 768 (plus a neighbour line above and
+  below for the edge marking), with the vertices' 3x coordinates from a hook on DraStic's perspective transform
+  (the same math with the viewport scaled by 3), our own polygon walker (spec/edges.c's routines with the wider
+  layout), the same kernels in a hi-res instantiation (rast_kern_h*, strides from the kernel arguments; deferred
+  shading and bilinear filtering included), the bin resolve over 768-pixel lines and a 3:2 alpha-weighted box
+  filter into the output block. The 2D compositing then sees a normal 2x frame, with anti-aliased polygon edges
+  and 2.25 samples per pixel of texture detail. Not rendered at 3x yet: shadow polygons (mode 3); DraStic's
+  sprite path (axis-aligned textured quads) goes through the general walker. Costs about 2.5x the 2x stage in
+  the simulator before the downsample is vectorized (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
+
 ## How it works
 
 `src/rast/spec/`: DraStic's ~85 raster routines ported to exact C, each unit-tested bit for bit against the
@@ -62,5 +73,5 @@ test; one that all pass is stored straight.
 - Device A/B: the same game with the option off and on, from the performance logs.
 - TBL palette lookups for 4- and 16-colour textures (saves the second gather); 64-bit texel-pair loads in the
   bilinear gathers.
-- 3x/4x internal resolution with a supersampled 2x output (anti-aliasing), then the hi-res 3D layer presented
-  through the dsflip shader.
+- 3x: NEON downsample and resolve, shadow polygons, the top vertex at 3x for tied vertices; later the hi-res 3D
+  layer presented through the dsflip shader instead of downsampled.
