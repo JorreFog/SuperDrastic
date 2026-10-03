@@ -134,7 +134,8 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_FONT` | DejaVu Sans / Liberation Sans | Font for the pop-ups (TTF/OTF) |
 | `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low. The mic is opened after DraStic's audio output, never at the same time |
 | `DSFLIP_EXIT_COMBO`, `DSFLIP_STATUS_CARD` | 1, 1 | 0 = no Start+Select / Menu+Start exit; no time and battery card in DraStic's menu |
-| `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz) |
+| `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz). A `DSFLIP_CPU_MAX` below the top holds from the first moment |
+| `DSFLIP_CPU_MAX_SOFT` | 0 | 1 = `DSFLIP_CPU_MAX` is passed while the game is below full speed with real work going on (for a "balanced" profile: a heavy game gets the clock it needs instead of running slow at the bound) |
 | `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |
 | `DSFLIP_QUEUE` | 1 | Frames that may wait behind the next one, 0-3 (0 = newest only). Each is a refresh (16.7 ms) of input latency, and covers one late frame |
 | `DSFLIP_QUEUE_WAIT` | 0 (off) | Milliseconds DraStic is held when the queue is full, instead of dropping a frame (20 works; for capped clocks) |
