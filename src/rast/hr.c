@@ -253,34 +253,47 @@ static int32_t sqshl16(int32_t v, int8_t s) {
     if (n >= 16) return v < 0 ? -1 : 0;
     return v >> n;
 }
+/* fog weights of a line (spec/resolve.c's fog_calculate_weights), NEON over 8 pixels: d = sat(((attr >> 9) & 0x7fff)
+ * - off), v = sqshl16(d, shift), i = v >> 10, f = v & 0x3ff, w = table[i] + ((s8)table[32 + i] * f) >> 10 */
 static void fog_weights(const uint32_t *attr, uint8_t *w, const uint8_t *table, uint32_t params) {
-    uint32_t off = params >> 16;
-    int8_t sh = (int8_t)(params & 0xff);
-    for (int x = 0; x < HR_W; x++) {
-        uint32_t d = (attr[x] >> 9) & 0x7fff;
-        d = d > off ? d - off : 0;
-        uint16_t v = (uint16_t)sqshl16((int32_t)d, sh);
-        uint32_t i = (uint32_t)(v >> 10) & 0x3f;
-        int32_t f = v & 0x3ff, a = (int32_t)(int8_t)table[32 + i] * 32, p = (2 * a * f) >> 16;
-        w[x] = (uint8_t)(table[i] + (uint8_t)p);
+    const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16)), m15 = vdupq_n_u16(0x7fff), m10 = vdupq_n_u16(0x3ff);
+    const int16x8_t sh = vdupq_n_s16((int8_t)(params & 0xff));
+    const uint8x16x2_t tab = { { vld1q_u8(table), vld1q_u8(table + 16) } }, dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
+    for (int x = 0; x < HR_W; x += 8) {
+        uint32x4_t a0 = vld1q_u32(attr + x), a1 = vld1q_u32(attr + x + 4);
+        uint16x8_t d = vandq_u16(vcombine_u16(vshrn_n_u32(a0, 9), vshrn_n_u32(a1, 9)), m15);
+        d = vqsubq_u16(d, off);
+        uint16x8_t v = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(d), sh));
+        uint8x8_t i = vmovn_u16(vshrq_n_u16(v, 10));
+        uint8x8_t t = vqtbl2_u8(tab, i), dl = vqtbl2_u8(dlt, i);
+        int16x8_t f = vreinterpretq_s16_u16(vandq_u16(v, m10)), dl16 = vmovl_s8(vreinterpret_s8_u8(dl));
+        int32x4_t p0 = vmull_s16(vget_low_s16(dl16), vget_low_s16(f)), p1 = vmull_s16(vget_high_s16(dl16), vget_high_s16(f));
+        int16x8_t p = vcombine_s16(vshrn_n_s32(p0, 10), vshrn_n_s32(p1, 10));
+        vst1_u8(w + x, vadd_u8(t, vmovn_u16(vreinterpretq_u16_s16(p))));
     }
 }
-static inline uint8_t fog_ch(uint8_t c, uint8_t f, uint8_t k) {
-    int16_t p = (int16_t)((int8_t)(uint8_t)(c - f) * (int8_t)k);
-    return (uint8_t)(c + (uint8_t)((uint16_t)p >> 7));
-}
+/* fog of a line in place (fog_modulate_full/alpha_intermediate), NEON over 4 pixels: per byte c += ((s8)(c - F) *
+ * k) >> 7 with k = -w (and -128 for 127) where the pixel's fog flag (bit 31) is set, else 0; the flag is cleared;
+ * alpha-only fog leaves r, g, b */
 static void fog_line(uint32_t *c, const uint8_t *w, uint32_t fogc, int full) {
-    for (int x = 0; x < HR_W; x++) {
-        uint32_t px = c[x];
-        uint8_t c3 = px >> 24, k = (uint8_t)(-w[x] + (w[x] == 0x7f ? 0xff : 0));
-        if (c3 <= 0x7f) k = 0;
-        c3 &= 0x7f;
-        if (full) {
-            uint8_t r = fog_ch(px, fogc, k), g = fog_ch(px >> 8, fogc >> 8, k), b = fog_ch(px >> 16, fogc >> 16, k);
-            px = r | g << 8 | b << 16;
-        } else px &= 0xffffff;
-        c[x] = px | (uint32_t)fog_ch(c3, fogc >> 24, k) << 24;
+    static const uint8_t kidx[16] = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3 };
+    const uint8x16_t ki = vld1q_u8(kidx), fcol = vreinterpretq_u8_u32(vdupq_n_u32(fogc)), x7f = vdupq_n_u8(0x7f);
+    const uint8x16_t chmask = vreinterpretq_u8_u32(vdupq_n_u32(full ? 0xffffffffu : 0xff000000u));
+    for (int x = 0; x < HR_W; x += 4) {
+        uint8x16_t px = vreinterpretq_u8_u32(vld1q_u32(c + x));
+        uint8x8_t w8 = vreinterpret_u8_u32(vdup_n_u32(*(const uint32_t *)(w + x)));
+        uint8x8_t k8 = vsub_u8(vdup_n_u8(0), vsub_u8(w8, vceq_u8(w8, vdup_n_u8(0x7f))));   /* -w, -128 for 127 */
+        uint8x16_t k = vqtbl1q_u8(vcombine_u8(k8, k8), ki);                                 /* per pixel, 4 lanes */
+        uint8x16_t flag = vreinterpretq_u8_u32(vcgtq_u32(vreinterpretq_u32_u8(px), vdupq_n_u32(0x7fffffff)));
+        k = vandq_u8(vandq_u8(k, flag), chmask);
+        px = vandq_u8(px, vreinterpretq_u8_u32(vdupq_n_u32(0x7fffffff)));
+        int8x16_t diff = vreinterpretq_s8_u8(vsubq_u8(px, fcol));
+        int16x8_t lo = vmulq_s16(vmovl_s8(vget_low_s8(diff)), vmovl_s8(vget_low_s8(vreinterpretq_s8_u8(k))));
+        int16x8_t hi = vmulq_s16(vmovl_s8(vget_high_s8(diff)), vmovl_s8(vget_high_s8(vreinterpretq_s8_u8(k))));
+        uint8x16_t add = vcombine_u8(vmovn_u16(vreinterpretq_u16_s16(vshrq_n_s16(lo, 7))), vmovn_u16(vreinterpretq_u16_s16(vshrq_n_s16(hi, 7))));
+        vst1q_u32(c + x, vreinterpretq_u32_u8(vaddq_u8(px, add)));
     }
+    (void)x7f;
 }
 /* edge marking of a line, NEON over 8 pixels: a pixel C is an edge against a neighbour N (left, right, above,
  * below; the clear attribute beyond the line's ends) when N's 24-bit key is larger and the polygon ids differ
