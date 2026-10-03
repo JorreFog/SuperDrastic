@@ -14,7 +14,7 @@ typedef struct {
     int16_t s_lo, s_hi, t_lo, t_hi;
     uint16_t s_and, t_and, s_flip, t_flip;
     int fogused, pass;      /* pass: some pixel of the batch survived the depth and alpha tests */
-    uint8_t kargs[0x160] __attribute__((aligned(16)));   /* fused_asm.c: the assembly kernels' arguments */
+    uint8_t kargs[0xc0] __attribute__((aligned(16)));    /* fused_asm.c: the assembly kernels' arguments */
 } poly_t;
 /* a batch: lines bs[0..k) of the span block, bin lines line.., at most 512 pixels; id0[l] receives the
  * translucent id of each line's first pixel afterwards (translucent polygons) */
