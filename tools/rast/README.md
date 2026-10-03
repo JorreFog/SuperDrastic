@@ -34,8 +34,9 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   only where they still own the pixel: a pixel is shaded once however many polygons covered it. Same bits as the
   one-pass render (checked with `RAST=diff` on the stress ROM and the scenes). Toon, highlight and shadow polygons
   flush the queue and render at once. It pays only when shading is expensive relative to the per-line setup, which
-  runs twice: with nearest filtering it is slower (stress ROM, overdraw 1.5: +8%; field scene, overdraw 1.0: +29%),
-  so it is meant for the bilinear and hi-res modes; figures for those below.
+  runs twice: with nearest filtering it is slower (stress ROM, overdraw 1.5: +2.5%; field scene, overdraw 1.0:
+  +28%), with bilinear filtering faster on the stress ROM (20.9 against 22.6 M) and still +10% on the field scene.
+  So it is on by default with bilinear filtering and off otherwise (`RAST_DEFER=0/1` overrides).
 
 - **3x internal resolution** (`DSFLIP_RAST_SCALE` / `RAST_SCALE=3`, `src/rast/hr.c`). The scene is rendered at
   768x576 and supersampled into DraStic's 2x frame: every bin at 48 lines x 768 (plus a neighbour line above and
@@ -45,8 +46,13 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   shading and bilinear filtering included), the bin resolve over 768-pixel lines and a 3:2 alpha-weighted box
   filter into the output block. The 2D compositing then sees a normal 2x frame, with anti-aliased polygon edges
   and 2.25 samples per pixel of texture detail. Not rendered at 3x yet: shadow polygons (mode 3); DraStic's
-  sprite path (axis-aligned textured quads) goes through the general walker. Costs about 2.5x the 2x stage in
-  the simulator before the downsample is vectorized (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
+  sprite path (axis-aligned textured quads) goes through the general walker. The downsample, the edge marking
+  and the fog of the resolve are NEON (unit-tested against the scalar versions). The field scene costs 10.3 M
+  instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the rest the clear, the resolve
+  and the downsample over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
+- **Palette lookups with tbl.** 4- and 16-colour textures (the common DS formats I2 and I4) keep their palette
+  in four NEON registers and look texels up with `tbl` instead of a dependent load per texel; exact. The
+  instruction count hardly changes; the gain is the removed load latency on the handheld's in-order cores.
 
 ## How it works
 
