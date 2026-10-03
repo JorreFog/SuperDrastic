@@ -221,15 +221,61 @@ void b0_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsi
 void b0_flush(uint8_t *ctx, uint8_t *spans, uint8_t *poly, unsigned line0, unsigned nlines, uint8_t *buf,
               unsigned n, unsigned flags, uint8_t *v0);
 
+/* ---- deferred shading: can a texture's alpha test fail? ----
+ * The lowest texel alpha of each texture used, found once per frame per render thread (the texture cache entries
+ * are stable while a frame renders): the texels of direct and compressed textures, the palette entries of paletted
+ * ones (spec/texture.c: formats 2/3/4 have 4/16/256 entries, A3I5 and A5I3 256). */
+typedef struct { const uint8_t *tex; uint32_t gen; uint8_t min_a; } texinfo_t;
+#define TEXINFO_N 1024
+static __thread texinfo_t texinfo[TEXINFO_N];
+static __thread uint32_t tex_gen = 1;
+void f_begin_frame(void) { tex_gen++; }
+
+static unsigned tex_min_alpha_scan(const poly_t *P) {
+    unsigned m = 255;
+    if (P->paletted) {
+        unsigned fmt = P->tex[0x49], np = fmt == 2 ? 4 : fmt == 3 ? 16 : 256;
+        for (unsigned i = 0; i < np; i++) { unsigned a = P->pal[i] >> 24; if (a < m) m = a; }
+    } else {
+        unsigned n = (unsigned)P->tw * P->th;
+        const uint8_t *b = (const uint8_t *)P->texels32;
+        uint8x16_t acc = vdupq_n_u8(255);
+        unsigned i = 0;
+        for (; i + 16 <= n; i += 16) acc = vminq_u8(acc, vld4q_u8(b + 4 * i).val[3]);
+        m = vminvq_u8(acc);
+        for (; i < n; i++) if (b[4 * i + 3] < m) m = b[4 * i + 3];
+    }
+    return m;
+}
+
+static unsigned tex_min_alpha(const poly_t *P) {
+    unsigned h = (unsigned)((uintptr_t)P->tex >> 4) & (TEXINFO_N - 1);
+    for (unsigned n = 0; n < TEXINFO_N; n++, h = (h + 1) & (TEXINFO_N - 1)) {
+        texinfo_t *t = &texinfo[h];
+        if (t->gen == tex_gen && t->tex == P->tex) return t->min_a;
+        if (t->gen != tex_gen) {
+            t->tex = P->tex; t->gen = tex_gen; t->min_a = (uint8_t)tex_min_alpha_scan(P);
+            return t->min_a;
+        }
+    }
+    return tex_min_alpha_scan(P);
+}
+
 void f_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
                 unsigned flags, uint8_t *v0) {
+    f_run_4x(ctx, spans, poly, buf, line0, nlines, flags, v0, 0, 0);
+}
+
+int f_run_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
+             unsigned flags, uint8_t *v0, int dmode, unsigned idx) {
     poly_t P;
     P.ctx = ctx; P.sys = PTR(ctx, CTX_SYS); P.geom = PTR(ctx, CTX_GEOM); P.poly = poly; P.v0 = v0;
     P.attr = U32(poly, 4); P.mode = (P.attr >> 4) & 3;
-    if (P.mode == 3) { b0_setup_4x(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
+    if (P.mode == 3) { b0_setup_4x(ctx, spans, poly, buf, line0, nlines, flags, v0); return 1; }
     P.pid = (P.attr >> 24) & 63; P.A = (P.attr >> 16) & 31; P.flags = flags;
     P.d3 = U32(P.sys, SYS_DISP3DCNT); P.aref = U32(P.sys, 0x34eb44);
-    if (!(flags & 2) && P.A <= P.aref) return;
+    P.dmode = dmode; P.owner = dmode ? defer_owner() : 0; P.idx = idx;
+    if (!(flags & 2) && P.A <= P.aref) return 0;
     P.toon = P.geom + 0x99cc;
     P.recip = (const uint32_t *)(ds_base + DS_RECIP); P.recip_u = (const uint32_t *)(ds_base + DS_RECIP_U);
     P.K = (flags & 8) ? U32(v0, 0) : (uint32_t)U16(v0, 8) << 9;
@@ -242,7 +288,12 @@ void f_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsig
         P.paletted = P.tex[0x4a];
         P.texels32 = (const uint32_t *)PTR(P.tex, 0x10); P.idx8 = PTR(P.tex, 0x10); P.pal = (const uint32_t *)PTR(P.tex, 0x18);
     }
-    P.fogused = 0;
+    P.fogused = 0; P.pass = 0;
+    if (dmode == 1 && (flags & 2)) {
+        /* the visibility pass needs the texture only when its alpha test can fail: ca = modulate(A, ta) <= aref */
+        unsigned ta = tex_min_alpha(&P), ca = ((P.A + 1) * (ta + 1) - 1) >> 5;
+        if (ca > P.aref) P.flags &= ~2u;
+    }
     if (flags & 2) {
         /* texcoord() as clamp-and-mask (fused_neon.c): clamp [0, W-1]; wrap: & (W-1); flip: invert where x & W */
         P.s_lo = P.ms == CLAMP ? 0 : -32768; P.s_hi = P.ms == CLAMP ? (int16_t)(P.tw - 1) : 32767;
@@ -286,4 +337,5 @@ void f_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsig
     }
     if ((P.fogused & 1) && (((flags & 1) && (P.attr & (1u << 15))) || (!(flags & 1) && (P.attr & (1u << 15)))))
         U32(ctx, CTX_FOGUSED) = 1;
+    return P.pass;
 }

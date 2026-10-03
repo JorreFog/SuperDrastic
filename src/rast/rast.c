@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include "ds3d.h"
 #include "rast.h"
+#include "fused.h"
 
 uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
@@ -76,11 +77,19 @@ static void resolve_bin(uint8_t *ctx, uint8_t *sys, unsigned bin) {
     }
 }
 
-static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8_t *verts, unsigned y0) {
+static __thread int in_defer;    /* hook_setup: the polygon goes to the deferred queue */
+static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8_t *verts, unsigned y0, int defer) {
     typedef void (*pfn)(void *, void *, void *, unsigned long, unsigned long);
     uint32_t n = U32(list, 0x1000);
-    for (uint32_t i = 0; i < n; i++)
-        DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, polys + 32 * (size_t)((const uint16_t *)list)[i], verts, y0, y0 + 32);
+    for (uint32_t i = 0; i < n; i++) {
+        uint8_t *poly = polys + 32 * (size_t)((const uint16_t *)list)[i];
+        /* deferred: modulate-shaded polygons queue up; the others (toon, highlight, shadow) flush and render now */
+        in_defer = defer && !((U32(poly, 4) >> 4) & 3);
+        if (defer && !in_defer) defer_flush(ctx);
+        DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
+    }
+    in_defer = 0;
+    if (defer) defer_flush(ctx);
 }
 
 /* RAST_STATS: opaque pixels written (shaded) vs opaque pixels finally covered (attr id != clear id): the
@@ -101,15 +110,16 @@ static void render_bins(uint8_t *ctx) {
     uint8_t *verts = geom + GEOM_VERTS + buf * GEOM_VERTS_BUF;
     uint8_t *opa = geom + GEOM_POLYS_OPA + buf * GEOM_POLYS_BUF, *trl = geom + GEOM_POLYS_TRL + buf * GEOM_POLYS_BUF;
     uint32_t ntrl = U32(geom, GEOM_TRL_COUNT + buf * GEOM_POLYS_BUF);
+    f_begin_frame();
     for (unsigned k = 0; k < nb; k++) {
         unsigned bin = U8(ctx, CTX_FIRST_BIN) + k * stride, y0 = bin * 32;
         clear_bin(ctx, sys, geom, y0);
         U64(ctx, CTX_LINEMASK) = 0xffffffffull;
-        render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0);
+        render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0, rast_defer && pipe_sel == 3 && !pdiff);
         if (rast_stats) stats_bin(ctx, sys);
         if (ntrl) {
             memset(ctx + CTX_IDBUF, 0xff, 0x4000);
-            render_list(ctx, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, y0);
+            render_list(ctx, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, y0, 0);
         }
         resolve_bin(ctx, sys, bin);
     }
@@ -172,9 +182,14 @@ static void dump_frame(uint8_t *ctx) {
     fclose(f);
 }
 
+static int print_frames;         /* RAST_FRAMES=1: the frame count every 10 frames (profiling runs) */
 static void hook_entry(uint8_t *ctx) {
     if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; render_bins(ctx); in_ours = 0; }
     if (dump_dir) dump_frame(ctx);
+    if (print_frames && U8(ctx, CTX_FIRST_BIN) == 0) {
+        static unsigned long n;
+        if (++n % 10 == 0) fprintf(stderr, "[rast] frames %lu\n", n);
+    }
 }
 
 /* ---- install ---- */
@@ -215,6 +230,7 @@ static setup_fn orig_setup;
 static void hook_setup(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
                        unsigned flags, uint8_t *v0) {
     if (!in_ours) { orig_setup(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
+    if (in_defer) { defer_poly(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
     if (!pdiff) { (pipe_sel ? f_setup_4x : b0_setup_4x)(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
     /* RAST_PDIFF: per polygon, run DraStic's and ours on the same buffers; report the first differences */
     static __thread uint8_t *save, *ref;
@@ -289,8 +305,11 @@ __attribute__((constructor)) static void rast_init(void) {
     mode = e ? (!strcmp(e, "ours") ? 1 : !strcmp(e, "diff") ? 2 : 0) : (d && *d == '1');
     if (!mode) return;
     if (!e) e = "ours";
+    { extern int rast_texfilter; const char *t = getenv("DSFLIP_RAST_TEXFILTER"); if (!t) t = getenv("RAST_TEXFILTER"); if (t) rast_texfilter = atoi(t); }
+    { const char *t = getenv("DSFLIP_RAST_DEFER"); if (!t) t = getenv("RAST_DEFER"); if (t) rast_defer = atoi(t); }
     dump_dir = getenv("RAST_DUMP");
     rast_stats = getenv("RAST_STATS") != 0;
+    print_frames = getenv("RAST_FRAMES") != 0;
     pdiff = getenv("RAST_PDIFF") != 0;
     if (getenv("RAST_PDIFF_STRICT")) pdiff_strict = atoi(getenv("RAST_PDIFF_STRICT"));
     if (getenv("RAST_PIPE")) pipe_sel = atoi(getenv("RAST_PIPE"));
