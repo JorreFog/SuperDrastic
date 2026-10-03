@@ -1,0 +1,222 @@
+/* t_resolve.c: bin resolve / fog / edge marking ports (src/rast/spec/resolve.c) vs DraStic's originals.
+ * run.sh t_resolve.c ../../../src/rast/spec/resolve.c */
+#include "ut.h"
+#include "spec/resolve.h"
+
+#define CTX_SZ  0x24100
+#define SYS_SZ  0x34f000
+#define GEOM_SZ 0xa000
+#define OUT_SZ  (12 * 0x10000)
+#define GAPS_LO 0x32db40
+#define GAPS_HI 0x34eb40
+#define VB_OFS  0x1056c0
+
+typedef void (*resolve_fn)(void *, void *);
+typedef void (*weights_fn)(const uint32_t *, uint8_t *, const uint8_t *, uint32_t);
+typedef void (*mod_fn)(void *, const uint32_t *, const uint8_t *, uint32_t);
+typedef void (*mark_fn)(void *, const uint32_t *, const uint8_t *, const uint8_t *);
+typedef void (*ident_fn)(uint8_t *, const uint32_t *, const uint32_t *, const uint32_t *, uint32_t);
+typedef void (*ident2_fn)(uint8_t *, const uint32_t *, const uint32_t *, uint32_t);
+typedef void (*drv_fn)(void *, void *, uint32_t);
+typedef void (*gaps_fn)(void *);
+
+static uint8_t *ctx[2], *sys[2], *geom[2], *outf[2];
+
+/* attribute word: random, or structured to give ties / few polygon ids / few depths */
+static uint32_t rnd_attr(int mode) {
+    switch (mode) {
+    case 0: return (uint32_t)rnd64();
+    case 1: return rnd(4) << 24 | rnd(2) << 30 | rnd(2) << 31 | rnd(4) << 16 | rnd(2) << 8 | rnd(2);
+    case 2: return (rnd(2) ? 0x40000000u : 0) | rnd(64) << 24 | (rnd(3) * 0x3fff) << 9 | rnd(512);
+    default: return rnd(2) ? 0x7f001234u : (uint32_t)rnd64() & 0x7fffffff;
+    }
+}
+static void fill_attr(uint32_t *a, size_t n) {
+    int mode = rnd(4);
+    for (size_t i = 0; i < n; i++) a[i] = (i && rnd(3) == 0) ? a[i - 1] : rnd_attr(mode);
+}
+static void fill_color(uint32_t *c, size_t n) {
+    int mode = rnd(3);
+    for (size_t i = 0; i < n; i++)
+        c[i] = mode == 0 ? (uint32_t)rnd64() : (rnd(64) | rnd(64) << 8 | rnd(64) << 16 | rnd(32) << 24 | rnd(2) << 31);
+}
+static void fill_weights(uint8_t *w, size_t n) {
+    int mode = rnd(3);
+    for (size_t i = 0; i < n; i++) w[i] = mode == 0 ? rnd(256) : mode == 1 ? rnd(128) : (rnd(2) ? 127 : rnd(2) ? 0 : rnd(128));
+}
+static void fill_edges(uint8_t *e, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        switch (rnd(4)) {
+        case 0: e[i] = rnd(256); break;
+        case 1: e[i] = rnd(16); break;
+        case 2: e[i] = 0xff; break;
+        default: e[i] = 120 + rnd(20); break;
+        }
+    }
+}
+static void fill_fog_table(uint8_t *t) {
+    if (rnd(2)) { rndfill(t, 64); return; }
+    uint8_t v = rnd(32);
+    for (int i = 0; i < 32; i++) { t[i] = v; v += rnd(8); if (v > 127) v = 127; }
+    for (int i = 0; i < 31; i++) t[32 + i] = t[i + 1] - t[i];
+    t[63] = rnd(2) ? 0 : rnd(256);
+}
+static uint32_t fog_params_rnd(void) {
+    if (rnd(4) == 0) return (uint32_t)rnd64();
+    uint32_t sh = rnd(16);
+    return sh | (((uint32_t)rnd(0x8000) + (0x400u >> sh)) << 16);
+}
+
+static void set_ptrs(int k) {
+    *(uint64_t *)(ctx[k] + 0x24000) = (uint64_t)(uintptr_t)sys[k];
+    *(uint64_t *)(ctx[k] + 0x24008) = (uint64_t)(uintptr_t)geom[k];
+    *(uint64_t *)(sys[k] + 0x34eb58) = (uint64_t)(uintptr_t)outf[k];
+    *(uint64_t *)(sys[k] + 0x2c1748) = (uint64_t)(uintptr_t)geom[k];
+}
+/* randomize the structures the drivers read (copy 0), then mirror to copy 1 */
+static void setup(void) {
+    fill_color((uint32_t *)ctx[0], 32 * 512);
+    fill_attr((uint32_t *)(ctx[0] + 0x10000), 32 * 512);
+    rndfill(ctx[0] + 0x20000, CTX_SZ - 0x20000);
+    *(uint32_t *)(ctx[0] + 0x24014) = rnd(4) ? 1 : 0;
+    rndfill(geom[0] + 0x9900, 0x200);
+    fill_fog_table(geom[0] + 0x9974);
+    for (int i = 0; i < 24; i++) if (rnd(2)) geom[0][0x99b4 + i] &= 0x3f;
+    rndfill(sys[0] + GAPS_LO, GAPS_HI - GAPS_LO + 0x20);
+    fill_attr((uint32_t *)(sys[0] + GAPS_LO), 11 * 0x800);
+    fill_color((uint32_t *)(sys[0] + 0x343b40), 11 * 0x400);
+    *(uint32_t *)(sys[0] + 0x34eb40) &= rnd(2) ? 0xffffffffu : 0xffff;
+    *(uint32_t *)(sys[0] + 0x34eb50) = rnd(4) ? (uint32_t)-1 : 0;
+    if (rnd(4) == 0) *(uint32_t *)(sys[0] + 0x34eb4c) = rnd_attr(rnd(4));
+    rndfill(outf[0], OUT_SZ);
+    memcpy(ctx[1], ctx[0], CTX_SZ);
+    memcpy(geom[1] + 0x9900, geom[0] + 0x9900, 0x200);
+    memcpy(sys[1] + GAPS_LO, sys[0] + GAPS_LO, GAPS_HI - GAPS_LO + 0x20);
+    memcpy(outf[1], outf[0], OUT_SZ);
+    for (int k = 0; k < 2; k++) set_ptrs(k);
+}
+static int check(const char *what) {
+    int f = ut_fail;
+    ut_cmp(what, outf[0], outf[1], OUT_SZ);
+    ut_cmp(what, ctx[0], ctx[1], 0x24000);
+    ut_cmp(what, ctx[0] + 0x24010, ctx[1] + 0x24010, CTX_SZ - 0x24010);
+    ut_cmp(what, sys[0] + GAPS_LO, sys[1] + GAPS_LO, GAPS_HI - GAPS_LO + 0x10);
+    ut_cmp(what, geom[0] + 0x9900, geom[1] + 0x9900, 0x200);
+    return ut_fail != f;
+}
+
+static void test_leaves(int n) {
+    static uint32_t a0[512], a1[512], a2[512], c[2][512 + 16], d[2][512 + 16];
+    static uint8_t w[2][512 + 32], tbl[64], ec[24], e[2][512 + 32], o[2][0x800 + 64];
+    for (int it = 0; it < n && ut_fail < 10; it++) {
+        /* weights */
+        fill_attr(a0, 512); fill_fog_table(tbl);
+        uint32_t p = fog_params_rnd();
+        memset(w, 0x5a, sizeof w);
+        DS(weights_fn, 0x9cf00)(a0, w[0], tbl, p);
+        spec_video_3d_fog_calculate_weights_4x(a0, w[1], tbl, p);
+        ut_cmp("fog_calculate_weights", w[0], w[1], sizeof w[0]);
+
+        /* modulate (4 variants), intermediate both in place and out of place */
+        fill_color(c[0], 512); memcpy(c[1], c[0], sizeof c[0]);
+        fill_weights(w[0], 512);
+        uint32_t fc = rnd(2) ? (uint32_t)rnd64() : (rnd(64) | rnd(64) << 8 | rnd(64) << 16 | rnd(32) << 24);
+        static const uint32_t moff[4] = {0x9cff8, 0x9d0b0, 0x9d18c, 0x9d220};
+        static const char *mname[4] = {"modulate_full_intermediate", "modulate_full_resolve",
+                                       "modulate_alpha_intermediate", "modulate_alpha_resolve"};
+        for (int m = 0; m < 4; m++) {
+            memset(o, 0xa5, sizeof o);
+            memcpy(d[0], c[0], sizeof d[0]); memcpy(d[1], c[0], sizeof d[1]);
+            int inplace = rnd(2);
+            void *dst0 = (m & 1) ? (void *)o[0] : inplace ? (void *)d[0] : (void *)o[0];
+            void *dst1 = (m & 1) ? (void *)o[1] : inplace ? (void *)d[1] : (void *)o[1];
+            DS(mod_fn, moff[m])(dst0, d[0], w[0], fc);
+            switch (m) {
+            case 0: spec_video_3d_fog_modulate_full_intermediate_4x(dst1, d[1], w[0], fc); break;
+            case 1: spec_video_3d_fog_modulate_full_resolve_4x(dst1, d[1], w[0], fc); break;
+            case 2: spec_video_3d_fog_modulate_alpha_intermediate_4x(dst1, d[1], w[0], fc); break;
+            default: spec_video_3d_fog_modulate_alpha_resolve_4x(dst1, d[1], w[0], fc); break;
+            }
+            ut_cmp(mname[m], o[0], o[1], sizeof o[0]);
+            ut_cmp(mname[m], d[0], d[1], sizeof d[0]);
+        }
+
+        /* edge mark */
+        fill_edges(e[0], 512); rndfill(ec, sizeof ec);
+        memset(o, 0x3c, sizeof o);
+        DS(mark_fn, 0x9d2d8)(o[0], c[0], e[0], ec);
+        spec_video_3d_edge_mark_4x(o[1], c[0], e[0], ec);
+        ut_cmp("edge_mark", o[0], o[1], sizeof o[0]);
+
+        /* edge identify (3 variants) */
+        int mode = rnd(4);
+        for (int i = 0; i < 512; i++) { a0[i] = rnd_attr(mode); a1[i] = rnd(2) ? a0[i] : rnd_attr(mode); a2[i] = rnd(2) ? a1[i] : rnd_attr(mode); }
+        uint32_t clr = rnd(2) ? rnd_attr(mode) : (uint32_t)rnd64();
+        memset(e, 0x77, sizeof e);
+        DS(ident_fn, 0x9d368)(e[0], a0, a1, a2, clr);
+        spec_video_3d_edge_identify_4x(e[1], a0, a1, a2, clr);
+        ut_cmp("edge_identify", e[0], e[1], sizeof e[0]);
+        memset(e, 0x77, sizeof e);
+        DS(ident2_fn, 0x9d6d0)(e[0], a1, a2, clr);
+        spec_video_3d_edge_identify_top_4x(e[1], a1, a2, clr);
+        ut_cmp("edge_identify_top", e[0], e[1], sizeof e[0]);
+        memset(e, 0x77, sizeof e);
+        DS(ident2_fn, 0x9da38)(e[0], a1, a0, clr);
+        spec_video_3d_edge_identify_bottom_4x(e[1], a1, a0, clr);
+        ut_cmp("edge_identify_bottom", e[0], e[1], sizeof e[0]);
+    }
+}
+
+static void test_drivers(int n) {
+    static const struct { const char *name; uint32_t off; drv_fn spec; int kind; } drv[] = {
+        {"resolve_bin", 0x9ce78, 0, 0},
+        {"resolve_bin_fog_full", 0x57c70, spec_video_3d_resolve_bin_fog_full_4x, 1},
+        {"resolve_bin_fog_alpha", 0x58280, spec_video_3d_resolve_bin_fog_alpha_4x, 1},
+        {"resolve_bin_edge_mark", 0x56420, spec_video_3d_resolve_bin_edge_mark_4x, 1},
+        {"resolve_bin_edge_mark_fog_full", 0x57d90, spec_video_3d_resolve_bin_edge_mark_fog_full_4x, 1},
+        {"resolve_bin_edge_mark_fog_alpha", 0x583a0, spec_video_3d_resolve_bin_edge_mark_fog_alpha_4x, 1},
+        {"resolve_bin_edge_mark_gaps", 0x56630, (drv_fn)spec_video_3d_resolve_bin_edge_mark_gaps_4x, 2},
+        {"resolve_bin_edge_mark_fog_full_gaps", 0x580c0, (drv_fn)spec_video_3d_resolve_bin_edge_mark_fog_full_gaps_4x, 2},
+        {"resolve_bin_edge_mark_fog_alpha_gaps", 0x586d0, (drv_fn)spec_video_3d_resolve_bin_edge_mark_fog_alpha_gaps_4x, 2},
+    };
+    for (int it = 0; it < n && ut_fail < 10; it++) {
+        for (unsigned d = 0; d < sizeof drv / sizeof drv[0]; d++) {
+            setup();
+            uint32_t bin = rnd(12);
+            uint32_t ob = bin * 0x10000;
+            switch (drv[d].kind) {
+            case 0:
+                DS(resolve_fn, drv[d].off)(outf[0] + ob, ctx[0]);
+                spec_video_3d_resolve_bin_4x(outf[1] + ob, ctx[1]);
+                break;
+            case 1:
+                DS(drv_fn, drv[d].off)(ctx[0], outf[0] + ob, bin);
+                drv[d].spec(ctx[1], outf[1] + ob, bin);
+                break;
+            default:
+                DS(gaps_fn, drv[d].off)(sys[0] + VB_OFS);
+                ((gaps_fn)drv[d].spec)(sys[1] + VB_OFS);
+                break;
+            }
+            if (check(drv[d].name)) fprintf(stderr, "  (iteration %d, bin %u)\n", it, bin);
+        }
+    }
+}
+
+void ut_main(void) {
+    for (int k = 0; k < 2; k++) {
+        ctx[k] = calloc(1, CTX_SZ); sys[k] = calloc(1, SYS_SZ); geom[k] = calloc(1, GEOM_SZ); outf[k] = calloc(1, OUT_SZ);
+    }
+    rndfill(sys[0], SYS_SZ); memcpy(sys[1], sys[0], SYS_SZ);
+    rndfill(geom[0], GEOM_SZ); memcpy(geom[1], geom[0], GEOM_SZ);
+    const char *s = getenv("UT_N");
+    int n = s ? atoi(s) : 1000;
+    test_leaves(n * 4);
+    test_drivers(n);
+    set_ptrs(0); set_ptrs(1);
+    *(uint64_t *)(sys[1] + 0x34eb58) = *(uint64_t *)(sys[0] + 0x34eb58);
+    *(uint64_t *)(sys[1] + 0x2c1748) = *(uint64_t *)(sys[0] + 0x2c1748);
+    ut_cmp("sys (whole)", sys[0], sys[1], SYS_SZ);
+    ut_cmp("geom (whole)", geom[0], geom[1], GEOM_SZ);
+    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers\n", n * 4, n);
+}

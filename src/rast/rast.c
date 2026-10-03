@@ -1,0 +1,287 @@
+/* rast.c: our 3D rasterizer in place of DraStic's (video_3d_render_bins_4x and everything under it).
+ *
+ * DraStic calls video_3d_render_bins_4x(ctx) once per render thread per frame. We patch its entry with a branch to
+ * rast_render_bins(). RAST env: "off" leaves DraStic alone, "ours" renders with ours only, "diff" (development)
+ * renders every bin with both, compares the resolved output and keeps DraStic's, logging any mismatch. */
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <link.h>
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include "ds3d.h"
+#include "rast.h"
+
+uintptr_t ds_base;
+static int mode;                 /* 0 off, 1 ours, 2 diff */
+static void (*orig_render_bins)(uint8_t *ctx);
+static __thread int in_ours;
+static int pipe_sel = 2, pdiff;  /* RAST_PIPE: 0 = b0 stage by stage, 1 = fused scalar, 2 = fused NEON */
+
+#define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
+#define U16(p, o) (*(uint16_t *)((uint8_t *)(p) + (o)))
+#define U32(p, o) (*(uint32_t *)((uint8_t *)(p) + (o)))
+#define U64(p, o) (*(uint64_t *)((uint8_t *)(p) + (o)))
+#define PTR(p, o) ((uint8_t *)U64(p, o))
+#define DSFN(type, off) ((type)(ds_base + (off)))
+
+/* ---- the bin loop (Phase A: our structure, DraStic's polygon and resolve routines) ---- */
+
+static void clear_bin(uint8_t *ctx, uint8_t *sys, uint8_t *geom, unsigned y0) {
+    uint32_t d3 = U32(sys, SYS_DISP3DCNT), cattr = U32(sys, SYS_CLEAR_ATTR);
+    uint32_t *col = (uint32_t *)(ctx + CTX_COLOR), *att = (uint32_t *)(ctx + CTX_ATTR);
+    if (!(d3 & (1u << 14))) {                                   /* plain clear colour */
+        uint32_t c = U32(sys, SYS_CLEAR_COLOR);
+        for (int i = 0; i < 32 * 512; i++) col[i] = c, att[i] = cattr;
+        return;
+    }
+    /* rear-plane bitmap: texture slots 2 (colour) and 3 (depth), scrolled by CLRIMAGE_OFFSET */
+    const uint16_t *ci = (const uint16_t *)PTR(sys, SYS_CLRIMG_COL), *di = (const uint16_t *)PTR(sys, SYS_CLRIMG_DEP);
+    uint16_t ofs = U16(geom, GEOM_CLRIMG_OFS);
+    unsigned xo = ofs & 0xff, yl = y0 + (ofs >> 8);
+    uint32_t idattr = cattr & 0x3f000000;
+    for (int l = 0; l < 32; l++, yl++) {
+        unsigned row = ((yl >> 1) & 0xff) << 8;
+        uint32_t *c = col + l * 512, *a = att + l * 512;
+        for (int i = 0; i < 256; i++) {
+            unsigned idx = row + ((xo + i) & 0xff);
+            uint32_t pc, pa;
+            if (ci) pc = rast_pixel_embedded_alpha(ci[idx]);
+            if (ci && di)  { uint16_t d = di[idx]; pc |= (uint32_t)(d >> 15) << 31; pa = ((d & 0x7fffu) << 9) | idattr; }
+            else if (ci)   { pc |= 0x80000000u; pa = idattr | 0xfffe00; }
+            else if (di)   { uint16_t d = di[idx]; pc = (uint32_t)(d >> 15) << 31; pa = ((d & 0x7fffu) << 9) | idattr; }
+            else           { pc = 0x80000000u; pa = idattr | 0xfffe00; }
+            c[2 * i] = c[2 * i + 1] = pc; a[2 * i] = a[2 * i + 1] = pa;
+        }
+    }
+}
+
+static void resolve_bin(uint8_t *ctx, uint8_t *sys, unsigned bin) {
+    uint32_t d3 = U32(sys, SYS_DISP3DCNT);
+    uint8_t *out = PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES;
+    unsigned m = ((d3 >> 5) & 1) << 2 | ((d3 >> 6) & 3);       /* edge marking, fog alpha-only, fog */
+    if (U8(ctx, CTX_NO_EDGE)) m &= ~4u;
+    typedef void (*rfn)(void *, void *, unsigned long);
+    switch (m) {
+    case 2: DSFN(rfn, DS_RESOLVE_FOG_FULL_4X)(ctx, out, m); break;
+    case 3: DSFN(rfn, DS_RESOLVE_FOG_ALPHA_4X)(ctx, out, m); break;
+    case 4: case 5: DSFN(rfn, DS_RESOLVE_EDGE_4X)(ctx, out, bin); break;
+    case 6: DSFN(rfn, DS_RESOLVE_EDGE_FOG_FULL_4X)(ctx, out, bin); break;
+    case 7: DSFN(rfn, DS_RESOLVE_EDGE_FOG_ALPHA_4X)(ctx, out, bin); break;
+    default: DSFN(void (*)(void *, void *), DS_RESOLVE_BIN_ASM_4X)(out, ctx); break;
+    }
+}
+
+static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8_t *verts, unsigned y0) {
+    typedef void (*pfn)(void *, void *, void *, unsigned long, unsigned long);
+    uint32_t n = U32(list, 0x1000);
+    for (uint32_t i = 0; i < n; i++)
+        DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, polys + 32 * (size_t)((const uint16_t *)list)[i], verts, y0, y0 + 32);
+}
+
+static void render_bins(uint8_t *ctx) {
+    uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
+    unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride;
+    unsigned buf = U8(geom, GEOM_SWAP_BUF) ^ 1;
+    uint8_t *verts = geom + GEOM_VERTS + buf * GEOM_VERTS_BUF;
+    uint8_t *opa = geom + GEOM_POLYS_OPA + buf * GEOM_POLYS_BUF, *trl = geom + GEOM_POLYS_TRL + buf * GEOM_POLYS_BUF;
+    uint32_t ntrl = U32(geom, GEOM_TRL_COUNT + buf * GEOM_POLYS_BUF);
+    for (unsigned k = 0; k < nb; k++) {
+        unsigned bin = U8(ctx, CTX_FIRST_BIN) + k * stride, y0 = bin * 32;
+        clear_bin(ctx, sys, geom, y0);
+        U64(ctx, CTX_LINEMASK) = 0xffffffffull;
+        render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0);
+        if (ntrl) {
+            memset(ctx + CTX_IDBUF, 0xff, 0x4000);
+            render_list(ctx, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, y0);
+        }
+        resolve_bin(ctx, sys, bin);
+    }
+}
+
+/* ---- diff mode ---- */
+
+static pthread_mutex_t stat_lock = PTHREAD_MUTEX_INITIALIZER;
+static unsigned long st_bins, st_bad, st_calls;
+
+static void diff_render_bins(uint8_t *ctx) {
+    uint8_t *sys = PTR(ctx, CTX_SYS);
+    unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride, first = U8(ctx, CTX_FIRST_BIN);
+    orig_render_bins(ctx);
+    uint8_t *out = PTR(sys, SYS_OUTPUT);
+    static __thread uint8_t *ref;
+    if (!ref) ref = malloc(NBINS * BIN_BYTES);
+    for (unsigned k = 0; k < nb; k++) { unsigned b = first + k * stride; memcpy(ref + b * BIN_BYTES, out + b * BIN_BYTES, BIN_BYTES); }
+    in_ours = 1; render_bins(ctx); in_ours = 0;
+    unsigned long bad = 0;
+    for (unsigned k = 0; k < nb; k++) {
+        unsigned b = first + k * stride;
+        const uint32_t *r = (const uint32_t *)(ref + b * BIN_BYTES), *o = (const uint32_t *)(out + b * BIN_BYTES);
+        unsigned nd = 0, fi = 0;
+        for (unsigned i = 0; i < BIN_BYTES / 4; i++) if (r[i] != o[i]) { if (!nd++) fi = i; }
+        if (nd) {
+            bad++;
+            pthread_mutex_lock(&stat_lock);
+            if (st_bad < 40)
+                fprintf(stderr, "[rast] call %lu bin %u: %u words differ, first word %u: drastic %08x ours %08x\n",
+                        st_calls, b, nd, fi, r[fi], o[fi]);
+            pthread_mutex_unlock(&stat_lock);
+            memcpy(out + b * BIN_BYTES, ref + b * BIN_BYTES, BIN_BYTES);
+        }
+    }
+    pthread_mutex_lock(&stat_lock);
+    st_calls++; st_bins += nb; st_bad += bad;
+    if (st_calls % 600 == 0) fprintf(stderr, "[rast] diff: %lu bins compared, %lu differ\n", st_bins, st_bad);
+    pthread_mutex_unlock(&stat_lock);
+}
+
+/* RAST_DUMP=<dir>: every RAST_DUMP_EVERY (default 60) frames, the thread that renders bin 0 writes the output
+ * frame as <dir>/fNNNNN.ppm (other threads' bins may be mid-frame) */
+static const char *dump_dir;
+static unsigned dump_every = 60;
+static void dump_frame(uint8_t *ctx) {
+    static unsigned long n;
+    if (U8(ctx, CTX_FIRST_BIN) != 0 || n++ % dump_every) return;
+    const uint8_t *o = PTR(PTR(ctx, CTX_SYS), SYS_OUTPUT);
+    char fn[512]; snprintf(fn, sizeof fn, "%s/f%05lu.ppm", dump_dir, n - 1);
+    FILE *f = fopen(fn, "wb"); if (!f) return;
+    fprintf(f, "P6\n512 384\n255\n");
+    for (int y = 0; y < 384; y++) for (int x = 0; x < 512; x++) {
+        const uint8_t *p = o + (2 * y + (x & 1)) * 0x400 + (x >> 1) * 4;
+        uint8_t px[3] = { (uint8_t)(p[0] << 2), (uint8_t)(p[1] << 2), (uint8_t)(p[2] << 2) };
+        fwrite(px, 1, 3, f);
+    }
+    fclose(f);
+}
+
+static void hook_entry(uint8_t *ctx) {
+    if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; render_bins(ctx); in_ours = 0; }
+    if (dump_dir) dump_frame(ctx);
+}
+
+/* ---- install ---- */
+
+static int cb(struct dl_phdr_info *i, size_t s, void *d) { if (!i->dlpi_name[0] && !ds_base) ds_base = i->dlpi_addr; return 0; }
+
+static void patch_jump(uint32_t *at, void *to) {
+    at[0] = 0x58000050;                   /* ldr x16, #8 */
+    at[1] = 0xd61f0200;                   /* br x16 */
+    memcpy(at + 2, &to, 8);
+}
+
+/* patch DraStic's function at `off` (whose first 4 instructions must be `expect` and position independent) to jump
+ * to `to`; returns a trampoline that runs the original, or 0 */
+static void *hook(uintptr_t off, const uint32_t expect[4], void *to) {
+    uint32_t *entry = (uint32_t *)(ds_base + off);
+    if (memcmp(entry, expect, 16)) return 0;
+    static uint32_t *tramp; static int used;
+    if (!tramp) tramp = mmap(0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    uint32_t *t = tramp + used; used += 8;
+    memcpy(t, entry, 16);
+    patch_jump(t + 4, entry + 4);
+    __builtin___clear_cache((char *)t, (char *)(t + 8));
+    uintptr_t pg = (uintptr_t)entry & ~4095ul;
+    mprotect((void *)pg, 8192, PROT_READ | PROT_WRITE | PROT_EXEC);
+    patch_jump(entry, to);
+    __builtin___clear_cache((char *)entry, (char *)(entry + 4));
+    mprotect((void *)pg, 8192, PROT_READ | PROT_EXEC);
+    return t;
+}
+
+static const uint32_t expect_bins[4] = { 0x91408001, 0xa9b17bfd, 0x52800183, 0x910003fd };
+static const uint32_t expect_setup[4] = { 0xd10243ff, 0xa9017bfd, 0x910043fd, 0xa90253f3 };
+
+/* render_polygon_setup_4x: ours while our bin loop runs, DraStic's otherwise (diff mode runs both) */
+typedef void (*setup_fn)(uint8_t *, uint8_t *, uint8_t *, uint8_t *, unsigned, unsigned, unsigned, uint8_t *);
+static setup_fn orig_setup;
+static void hook_setup(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
+                       unsigned flags, uint8_t *v0) {
+    if (!in_ours) { orig_setup(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
+    if (!pdiff) { (pipe_sel ? f_setup_4x : b0_setup_4x)(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
+    /* RAST_PDIFF: per polygon, run DraStic's and ours on the same buffers; report the first differences */
+    static __thread uint8_t *save, *ref;
+    if (!save) { save = malloc(0x24020); ref = malloc(0x24020); }
+    uint8_t spans_copy[0x800];
+    memcpy(spans_copy, spans, sizeof spans_copy);
+    memcpy(save, ctx, 0x24020);
+    orig_setup(ctx, spans, poly, buf, line0, nlines, flags, v0);
+    memcpy(ref, ctx, 0x24020);
+    memcpy(ctx, save, 0x24020);
+    memcpy(spans, spans_copy, sizeof spans_copy);
+    (pipe_sel ? f_setup_4x : b0_setup_4x)(ctx, spans, poly, buf, line0, nlines, flags, v0);
+    if (flags & 1) {
+        /* DraStic stores, as the last pixel's translucent id of a batch-ending line with 5 mod 8 pixels, a value
+         * computed from stale scratch memory (render_polygon_4x's stack): not reproducible, so not compared */
+        unsigned left = nlines, i = 0, line = line0;
+        while (left) {
+            while (left && !*(uint16_t *)(spans + 0x630 + 4 * i)) { i++; line++; left--; }
+            if (!left) break;
+            unsigned k = 0, n = 0;
+            while (left) {
+                unsigned c = *(uint16_t *)(spans + 0x630 + 4 * i);
+                if (!c || n + c > 512) break;
+                n += c; k++; i++; left--;
+            }
+            unsigned c = *(uint16_t *)(spans + 0x630 + 4 * (i - 1)), x = *(uint16_t *)(spans + 0x580 + 4 * (i - 1));
+            if (c % 8 == 5) { unsigned o = 0x20000 + (line + k - 1) * 0x200 + x + c - 1; ctx[o] = ref[o]; }
+            /* a 1-pixel batch: alpha_id_test's 32-byte mask store runs into the id array and ANDs it with a test
+             * of stale bytes */
+            if (n == 1) { unsigned o = 0x20000 + line * 0x200 + x; ctx[o] = ref[o]; }
+            line += k;
+        }
+    }
+    if (memcmp(ref, ctx, 0x24020)) {
+        static int nrep;
+        pthread_mutex_lock(&stat_lock);
+        if (nrep++ < 30) {
+            const char *what[3] = { "color", "attr", "id" };
+            fprintf(stderr, "[pdiff] poly attr %08x flags %02x line0 %u nlines %u tex %p", *(uint32_t *)(poly + 4), flags, line0, nlines,
+                    *(void **)(poly + 0x10));
+            for (unsigned l = 0; l < nlines; l++) fprintf(stderr, " [%u:%u]", *(uint16_t *)(spans + 0x580 + 4 * l), *(uint16_t *)(spans + 0x630 + 4 * l));
+            fprintf(stderr, "\n");
+            int shown = 0;
+            for (int b = 0; b < 3 && shown < 6; b++) {
+                unsigned base = b == 0 ? 0 : b == 1 ? 0x10000 : 0x20000, sz = b == 2 ? 0x4000 : 0x10000, w = b == 2 ? 1 : 4;
+                for (unsigned o = 0; o < sz && shown < 6; o += w)
+                    if (memcmp(ref + base + o, ctx + base + o, w)) {
+                        unsigned px = o / w, y = px / 512, x = px % 512;
+                        uint32_t a = 0, c = 0; memcpy(&a, ref + base + o, w); memcpy(&c, ctx + base + o, w);
+                        fprintf(stderr, "   %s line %u x %u: drastic %08x ours %08x (before %08x)\n", what[b], y, x, a, c,
+                                b == 2 ? save[base + o] : *(uint32_t *)(save + base + o));
+                        if (b == 2 && y + 1 >= line0 && y + 1 < line0 + nlines) {
+                            unsigned l = y + 1 - line0, nx = *(uint16_t *)(spans + 0x580 + 4 * l);
+                            unsigned oo = 0x20000 + (y + 1) * 0x200 + nx;
+                            fprintf(stderr, "     next line %u x %u: before %02x drastic %02x ours %02x; this line ids before:", y + 1, nx, save[oo], ref[oo], ctx[oo]);
+                            for (int q = -6; q <= 2; q++) fprintf(stderr, " %02x/%02x/%02x", save[base + o + q], ref[base + o + q], ctx[base + o + q]);
+                            fprintf(stderr, "\n");
+                        }
+                        shown++;
+                    }
+            }
+            if (memcmp(ref + 0x24000, ctx + 0x24000, 0x20)) fprintf(stderr, "   ctx header differs\n");
+        }
+        pthread_mutex_unlock(&stat_lock);
+        memcpy(ctx, ref, 0x24020);
+    }
+}
+
+__attribute__((constructor)) static void rast_init(void) {
+    const char *e = getenv("RAST");
+    mode = !e ? 0 : !strcmp(e, "ours") ? 1 : !strcmp(e, "diff") ? 2 : 0;
+    if (!mode) return;
+    dump_dir = getenv("RAST_DUMP");
+    pdiff = getenv("RAST_PDIFF") != 0;
+    if (getenv("RAST_PIPE")) pipe_sel = atoi(getenv("RAST_PIPE"));
+    { extern int use_neon; use_neon = pipe_sel != 1; }
+    if (getenv("RAST_DUMP_EVERY")) dump_every = atoi(getenv("RAST_DUMP_EVERY"));
+    dl_iterate_phdr(cb, 0);
+    orig_render_bins = (void (*)(uint8_t *))hook(DS_RENDER_BINS_4X, expect_bins, (void *)hook_entry);
+    if (!orig_render_bins) { fprintf(stderr, "[rast] unknown DraStic build, not hooking\n"); return; }
+    orig_setup = (setup_fn)hook(DS_RENDER_POLYGON_SETUP_4X, expect_setup, (void *)hook_setup);
+    { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
+    fprintf(stderr, "[rast] hooked video_3d_render_bins_4x, mode %s\n", e);
+}
