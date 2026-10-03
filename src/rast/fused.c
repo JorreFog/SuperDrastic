@@ -6,7 +6,7 @@
  *
  * Batch structure still matters in a few places and is kept: flat colour comes from the batch's first line, and a
  * quirk in writeback_alpha_asm_4x stores, for a line whose pixel count is 5 mod 8, the next packed pixel's
- * translucent id into the line's last pixel. Shadow polygons (mode 3) go through b0. */
+ * translucent id into the line's last pixel (tail_id). Shadow polygons (mode 3) go through b0. */
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
@@ -169,6 +169,53 @@ static void line_px(poly_t *P, uint8_t *s, const uint8_t *bs, unsigned y, uint8_
     }
 }
 
+/* The translucent id DraStic's stages compute for pixel index i of a line (i may be C, one past the end: the
+ * stages run whole vectors, so that lane holds the line's continuation against the next pixel's buffer state).
+ * writeback_alpha_asm_4x stores lane C's id as the last pixel's id of a batch-ending line with C % 8 == 5. */
+static uint8_t tail_id(poly_t *P, const uint8_t *s, const uint8_t *bs, unsigned y, unsigned i) {
+    unsigned X = U16(s, 0x580), C = U16(s, 0x630);
+    const uint32_t *col_l = (const uint32_t *)(P->ctx + CTX_COLOR + y * 0x800) + X;
+    const uint32_t *att_l = (const uint32_t *)(P->ctx + CTX_ATTR + y * 0x800) + X;
+    const uint8_t *id_l = P->ctx + CTX_IDBUF + y * 0x200 + X;
+    uint32_t fl = P->flags;
+    int32_t W0 = (int32_t)U32(s, 0x000), dW = (int32_t)U32(s, 0x0b0);
+    uint32_t Z0 = U32(s, 0x160); int32_t dZ = (int32_t)U32(s, 0x210);
+    uint64_t zstep = (uint64_t)((int64_t)dZ * (int64_t)(int32_t)P->recip[C] + (dZ < 0 ? 0x3fffffff : 0));
+    float fW0 = (float)W0, fD = (float)dW, S = (float)(int32_t)(uint32_t)((uint32_t)W0 + (uint32_t)dW) * (float)C;
+    float num = (float)(i & 7) * fW0, den = fmaf(-(float)(i & 7), fD, S);
+    for (unsigned g = 0; g < i / 8; g++) { num = num + 8.0f * fW0; den = den - 8.0f * fD; }
+    int16_t st;
+    if (fl & 0x20) st = (int16_t)((uint32_t)(i * P->recip_u[C]) >> 16);
+    else { float r = vrecpes_f32(den); r = r * vrecpss_f32(r, den); r = r * vrecpss_f32(r, den); st = (int16_t)vcvts_n_s32_f32(num * r, 15); }
+    uint32_t dep;
+    if (fl & 0x10) dep = P->K;
+    else if (fl & 8) dep = (uint32_t)W0 + (uint32_t)(((int64_t)dW * st) >> 15);
+    else dep = (uint32_t)((((uint64_t)Z0 << 30) + (uint64_t)i * zstep) >> 30);
+    uint32_t da = att_l[i], m;
+    if (P->attr & (1u << 14)) { uint32_t d = dep - (da & 0xffffff); if ((int32_t)d < 0) d = 0u - d; m = d < 0x100; }
+    else m = (da & 0xffffff) > dep;
+    uint32_t sa = P->A;
+    if (fl & 2) {
+        uint32_t st0 = U32(s, 0x2c0), dst = U32(s, 0x370);
+        int16_t du = (int16_t)dst, dv = (int16_t)(dst >> 16);
+        uint32_t U0 = ((uint32_t)(int32_t)(int16_t)st0 << 15) + (du > 0 ? 0x400 : 0);
+        uint32_t V0 = ((uint32_t)(int32_t)(int16_t)(st0 >> 16) << 15) + (dv > 0 ? 0x400 : 0);
+        uint16_t u = (uint16_t)((int16_t)((U0 + (uint32_t)(du * st)) >> 16) >> 3);
+        uint16_t v = (uint16_t)((int16_t)((V0 + (uint32_t)(dv * st)) >> 16) >> 3);
+        uint16_t k = m ? 0xffff : 0;
+        uint32_t a = (uint32_t)(texcoord(u, P->ms, P->tw) & k) + (uint32_t)(texcoord(v, P->mt, P->th) & k) * P->tw;
+        uint32_t t = P->paletted ? P->pal[P->idx8[a]] : P->texels32[a], ta = t >> 24;
+        if (P->mode == 1) sa = P->A;
+        else if (P->mode == 2 && (P->d3 & 2)) sa = (((P->A * ta + P->A + ta) & 0xffff) >> 5) & 0x1f;
+        else sa = (((P->A * ta + P->A + ta) & 0xffff) >> 5) & 0xff;
+        if (!(sa > (P->aref & 0xff))) m = 0;
+    }
+    (void)col_l; (void)bs;
+    uint8_t did = id_l[i];
+    if (did == (uint8_t)P->pid && (uint8_t)sa != 0x1f) m = 0;
+    return (m && (uint8_t)sa != 0x1f) ? (uint8_t)P->pid : did;
+}
+
 void b0_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
                  unsigned flags, uint8_t *v0);
 void b0_flush(uint8_t *ctx, uint8_t *spans, uint8_t *poly, unsigned line0, unsigned nlines, uint8_t *buf,
@@ -217,17 +264,19 @@ void f_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsig
         }
         uint8_t *bs = spans + 4 * first;
         if (0) {        } else if (flags & 1) {
-            /* the quirk: a line with 5 mod 8 pixels gets the next line's first new id as its last id, but only if
-             * the batch is written at all (DraStic skips a batch in which no pixel passes). For the batch's last
-             * line DraStic takes that id from stale scratch memory of its own; that pixel keeps our id. */
+            /* the quirk: a line with 5 mod 8 pixels gets the next line's first new id as its last id (the batch's
+             * last line: the id the stages compute one past its end), but only if the batch is written at all
+             * (DraStic skips a batch in which no pixel passes) */
             uint8_t id0[32];
             P.pass = 0;
             if (bf) bf(&P, bs, k, line, id0);
             else for (unsigned l = 0; l < k; l++) line_px(&P, bs + 4 * l, bs, line + l, &id0[l]);
             if (P.pass)
-                for (unsigned l = 0; l + 1 < k; l++) {
+                for (unsigned l = 0; l < k; l++) {
                     unsigned c = U16(bs, 0x630 + 4 * l);
-                    if (c % 8 == 5) ctx[CTX_IDBUF + (line + l) * 0x200 + U16(bs, 0x580 + 4 * l) + c - 1] = id0[l + 1];
+                    if (c % 8 != 5) continue;
+                    uint8_t id = l + 1 < k ? id0[l + 1] : tail_id(&P, bs + 4 * l, bs, line + l, c);
+                    ctx[CTX_IDBUF + (line + l) * 0x200 + U16(bs, 0x580 + 4 * l) + c - 1] = id;
                 }
         } else {
             if (bf) bf(&P, bs, k, line, 0);

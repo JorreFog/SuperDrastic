@@ -20,7 +20,7 @@ uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
 static void (*orig_render_bins)(uint8_t *ctx);
 static __thread int in_ours;
-static int pipe_sel = 3, pdiff;  /* RAST_PIPE: 0 b0 stage by stage, 1 fused scalar, 2 fused C NEON, 3 assembly kernels */
+static int pipe_sel = 3, pdiff, pdiff_strict;   /* RAST_PDIFF_STRICT: 1 compares the 5-mod-8 quirk pixel too, 2 the 1-pixel batches too */  /* RAST_PIPE: 0 b0 stage by stage, 1 fused scalar, 2 fused C NEON, 3 assembly kernels */
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
 #define U16(p, o) (*(uint16_t *)((uint8_t *)(p) + (o)))
@@ -241,10 +241,10 @@ static void hook_setup(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf
                 n += c; k++; i++; left--;
             }
             unsigned c = *(uint16_t *)(spans + 0x630 + 4 * (i - 1)), x = *(uint16_t *)(spans + 0x580 + 4 * (i - 1));
-            if (c % 8 == 5) { unsigned o = 0x20000 + (line + k - 1) * 0x200 + x + c - 1; ctx[o] = ref[o]; }
+            if (c % 8 == 5 && pdiff_strict < 1) { unsigned o = 0x20000 + (line + k - 1) * 0x200 + x + c - 1; ctx[o] = ref[o]; }
             /* a 1-pixel batch: alpha_id_test's 32-byte mask store runs into the id array and ANDs it with a test
              * of stale bytes */
-            if (n == 1) { unsigned o = 0x20000 + line * 0x200 + x; ctx[o] = ref[o]; }
+            if (n == 1 && pdiff_strict < 2) { unsigned o = 0x20000 + line * 0x200 + x; ctx[o] = ref[o]; }
             line += k;
         }
     }
@@ -284,12 +284,15 @@ static void hook_setup(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf
 }
 
 __attribute__((constructor)) static void rast_init(void) {
-    const char *e = getenv("RAST");
-    mode = !e ? 0 : !strcmp(e, "ours") ? 1 : !strcmp(e, "diff") ? 2 : 0;
+    /* DSFLIP_RAST=1 (the handheld) or RAST=ours|diff (the simulator); off otherwise */
+    const char *e = getenv("RAST"), *d = getenv("DSFLIP_RAST");
+    mode = e ? (!strcmp(e, "ours") ? 1 : !strcmp(e, "diff") ? 2 : 0) : (d && *d == '1');
     if (!mode) return;
+    if (!e) e = "ours";
     dump_dir = getenv("RAST_DUMP");
     rast_stats = getenv("RAST_STATS") != 0;
     pdiff = getenv("RAST_PDIFF") != 0;
+    if (getenv("RAST_PDIFF_STRICT")) pdiff_strict = atoi(getenv("RAST_PDIFF_STRICT"));
     if (getenv("RAST_PIPE")) pipe_sel = atoi(getenv("RAST_PIPE"));
     { extern int use_neon; use_neon = pipe_sel >= 1 ? pipe_sel : 1; }
     if (getenv("RAST_DUMP_EVERY")) dump_every = atoi(getenv("RAST_DUMP_EVERY"));
