@@ -3,6 +3,8 @@
  * from the pass masks the kernel leaves in pm. The non-modulate shading modes stay on the C paths. */
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "ds3d.h"
 #include "rast.h"

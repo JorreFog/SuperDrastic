@@ -333,7 +333,7 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
             /* the quirk: a line with 5 mod 8 pixels gets the next line's first new id as its last id (the batch's
              * last line: the id the stages compute one past its end), but only if the batch is written at all
              * (DraStic skips a batch in which no pixel passes) */
-            uint8_t id0[32];
+            uint8_t id0[64];                    /* one per batch line (a hi-res bin has 50 lines) */
             P.pass = 0;
             if (bf) bf(&P, bs, k, line, id0);
             else for (unsigned l = 0; l < k; l++) line_px(&P, bs + 4 * l, bs, line + l, &id0[l]);

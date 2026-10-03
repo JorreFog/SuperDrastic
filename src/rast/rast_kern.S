@@ -50325,33 +50325,6 @@ rast_kern_v00:
 	add x1, x10, x24, lsl #10
 	add x1, x1, x8, lsl #1
 	add x3, sp, #256
-	ldr w8, [x9, #0]
-	ldr w10, [x9, #176]
-	add w11, w8, w10
-	scvtf s24, w11
-	ucvtf s25, w5
-	fmul s24, s24, s25
-	scvtf s26, w8
-	scvtf s27, w10
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
-	dup v2.4s, v24.s[0]
-	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	tbnz w7, #0, 1f
-	fmov s28, #8.0
-	fmul s26, s26, s28
-	fmul s27, s27, s28
-	dup v4.4s, v26.s[0]
-	dup v5.4s, v27.s[0]
-	b 2f
-1:
-	ldp q4, q5, [x20, #160]
-	ldr x11, [x19, #8]
-	ldr w17, [x11, w5, uxtw #2]
-2:
 	ldr w8, [x9, #352]
 	ldrsw x10, [x9, #528]
 	ldr x11, [x19, #0]
@@ -50370,39 +50343,6 @@ rast_kern_v00:
 	add v7.2d, v6.2d, v8.2d
 	shl v8.2d, v9.2d, #2
 	shl v9.2d, v9.2d, #3
-	ldr w8, [x9, #1056]
-	ldr w10, [x9, #1232]
-	ldr w11, [x9, #1408]
-	ldr w12, [x9, #1584]
-	ldr w13, [x9, #704]
-	ldr w14, [x9, #880]
-	ubfiz w15, w8, #15, #16
-	dup v10.4s, w15
-	lsr w15, w8, #16
-	lsl w15, w15, #15
-	dup v11.4s, w15
-	lsr w15, w11, #16
-	lsl w15, w15, #15
-	dup v12.4s, w15
-	sbfiz w15, w13, #15, #16
-	sxth w16, w14
-	cmp w16, #0
-	cset w16, gt
-	add w15, w15, w16, lsl #10
-	dup v13.4s, w15
-	asr w15, w13, #16
-	lsl w15, w15, #15
-	asr w16, w14, #16
-	cmp w16, #0
-	cset w16, gt
-	add w15, w15, w16, lsl #10
-	dup v14.4s, w15
-	mov v15.s[0], w10
-	lsr w15, w12, #16
-	mov v15.h[2], w15
-	ldrh w15, [x19, #60]
-	mov v15.h[3], w15
-	mov v15.s[2], w14
 	mov x4, #0
 0:
 	shrn v25.2s, v6.2d, #30
@@ -50470,17 +50410,6 @@ rast_kern_v00:
 	add x4, x4, #8
 	cmp x4, x5
 	b.hs 9f
-	tbnz w7, #0, 1f
-	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
-	fsub v2.4s, v2.4s, v5.4s
-	fsub v3.4s, v3.4s, v5.4s
-	b 2f
-1:
-	movi v24.4s, #8
-	add v4.4s, v4.4s, v24.4s
-	add v5.4s, v5.4s, v24.4s
-2:
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 0b
@@ -53539,68 +53468,8 @@ rast_kern_v20:
 	add x1, x10, x24, lsl #10
 	add x1, x1, x8, lsl #1
 	add x3, sp, #256
-	ldr w8, [x9, #0]
-	ldr w10, [x9, #176]
-	add w11, w8, w10
-	scvtf s24, w11
-	ucvtf s25, w5
-	fmul s24, s24, s25
-	scvtf s26, w8
-	scvtf s27, w10
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
-	dup v2.4s, v24.s[0]
-	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	tbnz w7, #0, 1f
-	fmov s28, #8.0
-	fmul s26, s26, s28
-	fmul s27, s27, s28
-	dup v4.4s, v26.s[0]
-	dup v5.4s, v27.s[0]
-	b 2f
-1:
-	ldp q4, q5, [x20, #160]
-	ldr x11, [x19, #8]
-	ldr w17, [x11, w5, uxtw #2]
-2:
 	add x8, x19, #56
 	ld1r {v6.4s}, [x8]
-	ldr w8, [x9, #1056]
-	ldr w10, [x9, #1232]
-	ldr w11, [x9, #1408]
-	ldr w12, [x9, #1584]
-	ldr w13, [x9, #704]
-	ldr w14, [x9, #880]
-	ubfiz w15, w8, #15, #16
-	dup v10.4s, w15
-	lsr w15, w8, #16
-	lsl w15, w15, #15
-	dup v11.4s, w15
-	lsr w15, w11, #16
-	lsl w15, w15, #15
-	dup v12.4s, w15
-	sbfiz w15, w13, #15, #16
-	sxth w16, w14
-	cmp w16, #0
-	cset w16, gt
-	add w15, w15, w16, lsl #10
-	dup v13.4s, w15
-	asr w15, w13, #16
-	lsl w15, w15, #15
-	asr w16, w14, #16
-	cmp w16, #0
-	cset w16, gt
-	add w15, w15, w16, lsl #10
-	dup v14.4s, w15
-	mov v15.s[0], w10
-	lsr w15, w12, #16
-	mov v15.h[2], w15
-	ldrh w15, [x19, #60]
-	mov v15.h[3], w15
-	mov v15.s[2], w14
 	mov x4, #0
 0:
 	ldp q27, q28, [x2]
@@ -53660,17 +53529,6 @@ rast_kern_v20:
 	add x4, x4, #8
 	cmp x4, x5
 	b.hs 9f
-	tbnz w7, #0, 1f
-	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
-	fsub v2.4s, v2.4s, v5.4s
-	fsub v3.4s, v3.4s, v5.4s
-	b 2f
-1:
-	movi v24.4s, #8
-	add v4.4s, v4.4s, v24.4s
-	add v5.4s, v5.4s, v24.4s
-2:
 	b 0b
 9:
 	tbz w27, #6, 15f
@@ -61646,7 +61504,7 @@ rast_kern_h00000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -61921,7 +61779,7 @@ rast_kern_h00000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -61946,7 +61804,7 @@ rast_kern_h00010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -62209,7 +62067,7 @@ rast_kern_h00010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -62234,7 +62092,7 @@ rast_kern_h00100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -62546,7 +62404,7 @@ rast_kern_h00100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -62571,7 +62429,7 @@ rast_kern_h00110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -62871,7 +62729,7 @@ rast_kern_h00110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -62896,7 +62754,7 @@ rast_kern_h01000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -63260,7 +63118,7 @@ rast_kern_h01000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -63285,7 +63143,7 @@ rast_kern_h01001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -63864,7 +63722,7 @@ rast_kern_h01001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -63889,7 +63747,7 @@ rast_kern_h01010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -64228,7 +64086,7 @@ rast_kern_h01010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -64253,7 +64111,7 @@ rast_kern_h01011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -64807,7 +64665,7 @@ rast_kern_h01011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -64832,7 +64690,7 @@ rast_kern_h01100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -65233,7 +65091,7 @@ rast_kern_h01100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -65258,7 +65116,7 @@ rast_kern_h01101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -65874,7 +65732,7 @@ rast_kern_h01101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -65899,7 +65757,7 @@ rast_kern_h01110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -66275,7 +66133,7 @@ rast_kern_h01110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -66300,7 +66158,7 @@ rast_kern_h01111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -66891,7 +66749,7 @@ rast_kern_h01111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -66916,7 +66774,7 @@ rast_kern_h02000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -67266,7 +67124,7 @@ rast_kern_h02000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -67291,7 +67149,7 @@ rast_kern_h02001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -67842,7 +67700,7 @@ rast_kern_h02001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -67867,7 +67725,7 @@ rast_kern_h02010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -68192,7 +68050,7 @@ rast_kern_h02010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -68217,7 +68075,7 @@ rast_kern_h02011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -68743,7 +68601,7 @@ rast_kern_h02011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -68768,7 +68626,7 @@ rast_kern_h02100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -69155,7 +69013,7 @@ rast_kern_h02100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -69180,7 +69038,7 @@ rast_kern_h02101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -69768,7 +69626,7 @@ rast_kern_h02101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -69793,7 +69651,7 @@ rast_kern_h02110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -70155,7 +70013,7 @@ rast_kern_h02110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -70180,7 +70038,7 @@ rast_kern_h02111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -70743,7 +70601,7 @@ rast_kern_h02111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -70768,7 +70626,7 @@ rast_kern_h03000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -71140,7 +70998,7 @@ rast_kern_h03000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -71165,7 +71023,7 @@ rast_kern_h03001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -71776,7 +71634,7 @@ rast_kern_h03001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -71801,7 +71659,7 @@ rast_kern_h03010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -72148,7 +72006,7 @@ rast_kern_h03010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -72173,7 +72031,7 @@ rast_kern_h03011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -72759,7 +72617,7 @@ rast_kern_h03011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -72784,7 +72642,7 @@ rast_kern_h03100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -73193,7 +73051,7 @@ rast_kern_h03100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -73218,7 +73076,7 @@ rast_kern_h03101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -73866,7 +73724,7 @@ rast_kern_h03101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -73891,7 +73749,7 @@ rast_kern_h03110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -74275,7 +74133,7 @@ rast_kern_h03110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -74300,7 +74158,7 @@ rast_kern_h03111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -74923,7 +74781,7 @@ rast_kern_h03111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -74948,7 +74806,7 @@ rast_kern_h04000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -75306,7 +75164,7 @@ rast_kern_h04000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -75331,7 +75189,7 @@ rast_kern_h04001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -75914,7 +75772,7 @@ rast_kern_h04001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -75939,7 +75797,7 @@ rast_kern_h04010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -76272,7 +76130,7 @@ rast_kern_h04010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -76297,7 +76155,7 @@ rast_kern_h04011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -76855,7 +76713,7 @@ rast_kern_h04011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -76880,7 +76738,7 @@ rast_kern_h04100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -77275,7 +77133,7 @@ rast_kern_h04100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -77300,7 +77158,7 @@ rast_kern_h04101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -77920,7 +77778,7 @@ rast_kern_h04101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -77945,7 +77803,7 @@ rast_kern_h04110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -78315,7 +78173,7 @@ rast_kern_h04110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -78340,7 +78198,7 @@ rast_kern_h04111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -78935,7 +78793,7 @@ rast_kern_h04111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -78960,7 +78818,7 @@ rast_kern_h10000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -79224,7 +79082,7 @@ rast_kern_h10000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -79249,7 +79107,7 @@ rast_kern_h10010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -79501,7 +79359,7 @@ rast_kern_h10010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -79526,7 +79384,7 @@ rast_kern_h10100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -79827,7 +79685,7 @@ rast_kern_h10100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -79852,7 +79710,7 @@ rast_kern_h10110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -80141,7 +79999,7 @@ rast_kern_h10110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -80166,7 +80024,7 @@ rast_kern_h11000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -80519,7 +80377,7 @@ rast_kern_h11000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -80544,7 +80402,7 @@ rast_kern_h11001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -81112,7 +80970,7 @@ rast_kern_h11001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -81137,7 +80995,7 @@ rast_kern_h11010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -81465,7 +81323,7 @@ rast_kern_h11010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -81490,7 +81348,7 @@ rast_kern_h11011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -82033,7 +81891,7 @@ rast_kern_h11011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -82058,7 +81916,7 @@ rast_kern_h11100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -82448,7 +82306,7 @@ rast_kern_h11100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -82473,7 +82331,7 @@ rast_kern_h11101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -83078,7 +82936,7 @@ rast_kern_h11101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -83103,7 +82961,7 @@ rast_kern_h11110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -83468,7 +83326,7 @@ rast_kern_h11110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -83493,7 +83351,7 @@ rast_kern_h11111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -84073,7 +83931,7 @@ rast_kern_h11111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -84098,7 +83956,7 @@ rast_kern_h12000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -84437,7 +84295,7 @@ rast_kern_h12000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -84462,7 +84320,7 @@ rast_kern_h12001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -85002,7 +84860,7 @@ rast_kern_h12001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -85027,7 +84885,7 @@ rast_kern_h12010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -85341,7 +85199,7 @@ rast_kern_h12010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -85366,7 +85224,7 @@ rast_kern_h12011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -85881,7 +85739,7 @@ rast_kern_h12011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -85906,7 +85764,7 @@ rast_kern_h12100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -86282,7 +86140,7 @@ rast_kern_h12100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -86307,7 +86165,7 @@ rast_kern_h12101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -86884,7 +86742,7 @@ rast_kern_h12101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -86909,7 +86767,7 @@ rast_kern_h12110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -87260,7 +87118,7 @@ rast_kern_h12110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -87285,7 +87143,7 @@ rast_kern_h12111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -87837,7 +87695,7 @@ rast_kern_h12111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -87862,7 +87720,7 @@ rast_kern_h13000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -88223,7 +88081,7 @@ rast_kern_h13000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -88248,7 +88106,7 @@ rast_kern_h13001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -88848,7 +88706,7 @@ rast_kern_h13001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -88873,7 +88731,7 @@ rast_kern_h13010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -89209,7 +89067,7 @@ rast_kern_h13010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -89234,7 +89092,7 @@ rast_kern_h13011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -89809,7 +89667,7 @@ rast_kern_h13011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -89834,7 +89692,7 @@ rast_kern_h13100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -90232,7 +90090,7 @@ rast_kern_h13100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -90257,7 +90115,7 @@ rast_kern_h13101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -90894,7 +90752,7 @@ rast_kern_h13101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -90919,7 +90777,7 @@ rast_kern_h13110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -91292,7 +91150,7 @@ rast_kern_h13110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -91317,7 +91175,7 @@ rast_kern_h13111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -91929,7 +91787,7 @@ rast_kern_h13111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -91954,7 +91812,7 @@ rast_kern_h14000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -92301,7 +92159,7 @@ rast_kern_h14000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -92326,7 +92184,7 @@ rast_kern_h14001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -92898,7 +92756,7 @@ rast_kern_h14001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -92923,7 +92781,7 @@ rast_kern_h14010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -93245,7 +93103,7 @@ rast_kern_h14010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -93270,7 +93128,7 @@ rast_kern_h14011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -93817,7 +93675,7 @@ rast_kern_h14011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -93842,7 +93700,7 @@ rast_kern_h14100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -94226,7 +94084,7 @@ rast_kern_h14100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -94251,7 +94109,7 @@ rast_kern_h14101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -94860,7 +94718,7 @@ rast_kern_h14101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -94885,7 +94743,7 @@ rast_kern_h14110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -95244,7 +95102,7 @@ rast_kern_h14110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -95269,7 +95127,7 @@ rast_kern_h14111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -95853,7 +95711,7 @@ rast_kern_h14111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -95878,7 +95736,7 @@ rast_kern_h20000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -96127,7 +95985,7 @@ rast_kern_h20000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -96152,7 +96010,7 @@ rast_kern_h20010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -96389,7 +96247,7 @@ rast_kern_h20010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -96414,7 +96272,7 @@ rast_kern_h20100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -96700,7 +96558,7 @@ rast_kern_h20100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -96725,7 +96583,7 @@ rast_kern_h20110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -96999,7 +96857,7 @@ rast_kern_h20110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -97024,7 +96882,7 @@ rast_kern_h21000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -97362,7 +97220,7 @@ rast_kern_h21000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -97387,7 +97245,7 @@ rast_kern_h21001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -97940,7 +97798,7 @@ rast_kern_h21001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -97965,7 +97823,7 @@ rast_kern_h21010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -98278,7 +98136,7 @@ rast_kern_h21010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -98303,7 +98161,7 @@ rast_kern_h21011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -98831,7 +98689,7 @@ rast_kern_h21011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -98856,7 +98714,7 @@ rast_kern_h21100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -99231,7 +99089,7 @@ rast_kern_h21100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -99256,7 +99114,7 @@ rast_kern_h21101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -99846,7 +99704,7 @@ rast_kern_h21101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -99871,7 +99729,7 @@ rast_kern_h21110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -100221,7 +100079,7 @@ rast_kern_h21110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -100246,7 +100104,7 @@ rast_kern_h21111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -100811,7 +100669,7 @@ rast_kern_h21111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -100836,7 +100694,7 @@ rast_kern_h22000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -101160,7 +101018,7 @@ rast_kern_h22000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -101185,7 +101043,7 @@ rast_kern_h22001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -101710,7 +101568,7 @@ rast_kern_h22001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -101735,7 +101593,7 @@ rast_kern_h22010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -102034,7 +101892,7 @@ rast_kern_h22010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -102059,7 +101917,7 @@ rast_kern_h22011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -102559,7 +102417,7 @@ rast_kern_h22011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -102584,7 +102442,7 @@ rast_kern_h22100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -102945,7 +102803,7 @@ rast_kern_h22100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -102970,7 +102828,7 @@ rast_kern_h22101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -103532,7 +103390,7 @@ rast_kern_h22101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -103557,7 +103415,7 @@ rast_kern_h22110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -103893,7 +103751,7 @@ rast_kern_h22110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -103918,7 +103776,7 @@ rast_kern_h22111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -104455,7 +104313,7 @@ rast_kern_h22111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -104480,7 +104338,7 @@ rast_kern_h23000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -104826,7 +104684,7 @@ rast_kern_h23000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -104851,7 +104709,7 @@ rast_kern_h23001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -105436,7 +105294,7 @@ rast_kern_h23001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -105461,7 +105319,7 @@ rast_kern_h23010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -105782,7 +105640,7 @@ rast_kern_h23010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -105807,7 +105665,7 @@ rast_kern_h23011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -106367,7 +106225,7 @@ rast_kern_h23011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -106392,7 +106250,7 @@ rast_kern_h23100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -106775,7 +106633,7 @@ rast_kern_h23100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -106800,7 +106658,7 @@ rast_kern_h23101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -107422,7 +107280,7 @@ rast_kern_h23101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -107447,7 +107305,7 @@ rast_kern_h23110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -107805,7 +107663,7 @@ rast_kern_h23110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -107830,7 +107688,7 @@ rast_kern_h23111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -108427,7 +108285,7 @@ rast_kern_h23111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -108452,7 +108310,7 @@ rast_kern_h24000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -108784,7 +108642,7 @@ rast_kern_h24000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -108809,7 +108667,7 @@ rast_kern_h24001:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -109366,7 +109224,7 @@ rast_kern_h24001:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -109391,7 +109249,7 @@ rast_kern_h24010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -109698,7 +109556,7 @@ rast_kern_h24010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -109723,7 +109581,7 @@ rast_kern_h24011:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -110255,7 +110113,7 @@ rast_kern_h24011:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -110280,7 +110138,7 @@ rast_kern_h24100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -110649,7 +110507,7 @@ rast_kern_h24100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -110674,7 +110532,7 @@ rast_kern_h24101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -111268,7 +111126,7 @@ rast_kern_h24101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -111293,7 +111151,7 @@ rast_kern_h24110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -111637,7 +111495,7 @@ rast_kern_h24110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -111662,7 +111520,7 @@ rast_kern_h24111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -112231,7 +112089,7 @@ rast_kern_h24111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -112256,7 +112114,7 @@ rast_kern_hv00:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -112287,33 +112145,6 @@ rast_kern_hv00:
 	add x1, x11, x10
 	add x1, x1, x8, lsl #1
 	add x3, sp, #256
-	ldr w8, [x9, #0]
-	ldr w10, [x9, #256]
-	add w11, w8, w10
-	scvtf s24, w11
-	ucvtf s25, w5
-	fmul s24, s24, s25
-	scvtf s26, w8
-	scvtf s27, w10
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
-	dup v2.4s, v24.s[0]
-	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	tbnz w7, #0, 1f
-	fmov s28, #8.0
-	fmul s26, s26, s28
-	fmul s27, s27, s28
-	dup v4.4s, v26.s[0]
-	dup v5.4s, v27.s[0]
-	b 2f
-1:
-	ldp q4, q5, [x20, #160]
-	ldr x11, [x19, #8]
-	ldr w17, [x11, w5, uxtw #2]
-2:
 	ldr w8, [x9, #512]
 	ldrsw x10, [x9, #768]
 	ldr x11, [x19, #0]
@@ -112332,39 +112163,6 @@ rast_kern_hv00:
 	add v7.2d, v6.2d, v8.2d
 	shl v8.2d, v9.2d, #2
 	shl v9.2d, v9.2d, #3
-	ldr w8, [x9, #1536]
-	ldr w10, [x9, #1792]
-	ldr w11, [x9, #2048]
-	ldr w12, [x9, #2304]
-	ldr w13, [x9, #1024]
-	ldr w14, [x9, #1280]
-	ubfiz w15, w8, #15, #16
-	dup v10.4s, w15
-	lsr w15, w8, #16
-	lsl w15, w15, #15
-	dup v11.4s, w15
-	lsr w15, w11, #16
-	lsl w15, w15, #15
-	dup v12.4s, w15
-	sbfiz w15, w13, #15, #16
-	sxth w16, w14
-	cmp w16, #0
-	cset w16, gt
-	add w15, w15, w16, lsl #10
-	dup v13.4s, w15
-	asr w15, w13, #16
-	lsl w15, w15, #15
-	asr w16, w14, #16
-	cmp w16, #0
-	cset w16, gt
-	add w15, w15, w16, lsl #10
-	dup v14.4s, w15
-	mov v15.s[0], w10
-	lsr w15, w12, #16
-	mov v15.h[2], w15
-	ldrh w15, [x19, #60]
-	mov v15.h[3], w15
-	mov v15.s[2], w14
 	mov x4, #0
 0:
 	shrn v25.2s, v6.2d, #30
@@ -112432,17 +112230,6 @@ rast_kern_hv00:
 	add x4, x4, #8
 	cmp x4, x5
 	b.hs 9f
-	tbnz w7, #0, 1f
-	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
-	fsub v2.4s, v2.4s, v5.4s
-	fsub v3.4s, v3.4s, v5.4s
-	b 2f
-1:
-	movi v24.4s, #8
-	add v4.4s, v4.4s, v24.4s
-	add v5.4s, v5.4s, v24.4s
-2:
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 0b
@@ -112489,7 +112276,7 @@ rast_kern_hv00:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -112514,7 +112301,7 @@ rast_kern_hv01:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -112838,7 +112625,7 @@ rast_kern_hv01:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -112863,7 +112650,7 @@ rast_kern_hv02:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -113173,7 +112960,7 @@ rast_kern_hv02:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -113198,7 +112985,7 @@ rast_kern_hv03:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -113530,7 +113317,7 @@ rast_kern_hv03:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -113555,7 +113342,7 @@ rast_kern_hv04:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -113873,7 +113660,7 @@ rast_kern_hv04:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -113898,7 +113685,7 @@ rast_kern_hv10:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -114145,7 +113932,7 @@ rast_kern_hv10:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -114170,7 +113957,7 @@ rast_kern_hv11:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -114483,7 +114270,7 @@ rast_kern_hv11:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -114508,7 +114295,7 @@ rast_kern_hv12:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -114807,7 +114594,7 @@ rast_kern_hv12:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -114832,7 +114619,7 @@ rast_kern_hv13:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -115153,7 +114940,7 @@ rast_kern_hv13:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -115178,7 +114965,7 @@ rast_kern_hv14:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -115485,7 +115272,7 @@ rast_kern_hv14:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -115510,7 +115297,7 @@ rast_kern_hv20:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -115541,68 +115328,8 @@ rast_kern_hv20:
 	add x1, x11, x10
 	add x1, x1, x8, lsl #1
 	add x3, sp, #256
-	ldr w8, [x9, #0]
-	ldr w10, [x9, #256]
-	add w11, w8, w10
-	scvtf s24, w11
-	ucvtf s25, w5
-	fmul s24, s24, s25
-	scvtf s26, w8
-	scvtf s27, w10
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
-	dup v2.4s, v24.s[0]
-	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	tbnz w7, #0, 1f
-	fmov s28, #8.0
-	fmul s26, s26, s28
-	fmul s27, s27, s28
-	dup v4.4s, v26.s[0]
-	dup v5.4s, v27.s[0]
-	b 2f
-1:
-	ldp q4, q5, [x20, #160]
-	ldr x11, [x19, #8]
-	ldr w17, [x11, w5, uxtw #2]
-2:
 	add x8, x19, #56
 	ld1r {v6.4s}, [x8]
-	ldr w8, [x9, #1536]
-	ldr w10, [x9, #1792]
-	ldr w11, [x9, #2048]
-	ldr w12, [x9, #2304]
-	ldr w13, [x9, #1024]
-	ldr w14, [x9, #1280]
-	ubfiz w15, w8, #15, #16
-	dup v10.4s, w15
-	lsr w15, w8, #16
-	lsl w15, w15, #15
-	dup v11.4s, w15
-	lsr w15, w11, #16
-	lsl w15, w15, #15
-	dup v12.4s, w15
-	sbfiz w15, w13, #15, #16
-	sxth w16, w14
-	cmp w16, #0
-	cset w16, gt
-	add w15, w15, w16, lsl #10
-	dup v13.4s, w15
-	asr w15, w13, #16
-	lsl w15, w15, #15
-	asr w16, w14, #16
-	cmp w16, #0
-	cset w16, gt
-	add w15, w15, w16, lsl #10
-	dup v14.4s, w15
-	mov v15.s[0], w10
-	lsr w15, w12, #16
-	mov v15.h[2], w15
-	ldrh w15, [x19, #60]
-	mov v15.h[3], w15
-	mov v15.s[2], w14
 	mov x4, #0
 0:
 	ldp q27, q28, [x2]
@@ -115662,17 +115389,6 @@ rast_kern_hv20:
 	add x4, x4, #8
 	cmp x4, x5
 	b.hs 9f
-	tbnz w7, #0, 1f
-	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
-	fsub v2.4s, v2.4s, v5.4s
-	fsub v3.4s, v3.4s, v5.4s
-	b 2f
-1:
-	movi v24.4s, #8
-	add v4.4s, v4.4s, v24.4s
-	add v5.4s, v5.4s, v24.4s
-2:
 	b 0b
 9:
 	tbz w27, #6, 15f
@@ -115717,7 +115433,7 @@ rast_kern_hv20:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -115742,7 +115458,7 @@ rast_kern_hv21:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -116040,7 +115756,7 @@ rast_kern_hv21:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -116065,7 +115781,7 @@ rast_kern_hv22:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -116349,7 +116065,7 @@ rast_kern_hv22:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -116374,7 +116090,7 @@ rast_kern_hv23:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -116680,7 +116396,7 @@ rast_kern_hv23:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -116705,7 +116421,7 @@ rast_kern_hv24:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -116997,7 +116713,7 @@ rast_kern_hv24:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -117022,7 +116738,7 @@ rast_kern_hs000:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -117212,7 +116928,7 @@ rast_kern_hs000:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -117237,7 +116953,7 @@ rast_kern_hs010:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -117415,7 +117131,7 @@ rast_kern_hs010:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -117440,7 +117156,7 @@ rast_kern_hs100:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -117714,7 +117430,7 @@ rast_kern_hs100:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -117739,7 +117455,7 @@ rast_kern_hs101:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -118228,7 +117944,7 @@ rast_kern_hs101:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -118253,7 +117969,7 @@ rast_kern_hs110:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -118502,7 +118218,7 @@ rast_kern_hs110:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -118527,7 +118243,7 @@ rast_kern_hs111:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -118991,7 +118707,7 @@ rast_kern_hs111:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -119016,7 +118732,7 @@ rast_kern_hs200:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -119276,7 +118992,7 @@ rast_kern_hs200:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -119301,7 +119017,7 @@ rast_kern_hs201:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -119762,7 +119478,7 @@ rast_kern_hs201:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -119787,7 +119503,7 @@ rast_kern_hs210:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -120022,7 +119738,7 @@ rast_kern_hs210:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -120047,7 +119763,7 @@ rast_kern_hs211:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -120483,7 +120199,7 @@ rast_kern_hs211:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -120508,7 +120224,7 @@ rast_kern_hs300:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -120790,7 +120506,7 @@ rast_kern_hs300:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -120815,7 +120531,7 @@ rast_kern_hs301:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -121336,7 +121052,7 @@ rast_kern_hs301:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -121361,7 +121077,7 @@ rast_kern_hs310:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -121618,7 +121334,7 @@ rast_kern_hs310:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -121643,7 +121359,7 @@ rast_kern_hs311:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -122139,7 +121855,7 @@ rast_kern_hs311:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -122164,7 +121880,7 @@ rast_kern_hs400:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -122432,7 +122148,7 @@ rast_kern_hs400:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -122457,7 +122173,7 @@ rast_kern_hs401:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -122950,7 +122666,7 @@ rast_kern_hs401:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -122975,7 +122691,7 @@ rast_kern_hs410:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -123218,7 +122934,7 @@ rast_kern_hs410:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]
@@ -123243,7 +122959,7 @@ rast_kern_hs411:
 	stp x23, x24, [sp, #96]
 	stp x25, x26, [sp, #112]
 	stp x27, x28, [sp, #128]
-	sub sp, sp, #784
+	sub sp, sp, #1040
 	mov x19, x0
 	mov x22, x1
 	mov w23, w2
@@ -123711,7 +123427,7 @@ rast_kern_hs411:
 	add w24, w24, #1
 	subs w23, w23, #1
 	b.ne 10b
-	add sp, sp, #784
+	add sp, sp, #1040
 	ldp x27, x28, [sp, #128]
 	ldp x25, x26, [sp, #112]
 	ldp x23, x24, [sp, #96]

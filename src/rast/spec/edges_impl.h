@@ -212,6 +212,7 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_interpolate_edges)(void *unused, uint
             if (y_start > yp) { len += (int32_t)(yp - y_start); sk = y_start - yp; }
             if (y1 > y_end) len += (int32_t)(y_end - y1);
             if (len > 0) {
+                if (n == 16) break;                     /* the arrays hold 16 edges (never reached by DraStic's polygons) */
                 counts[n] = (uint8_t)len;
                 if (n == 0) skip0 = sk;
                 total += (uint32_t)len;

@@ -80,11 +80,15 @@ static hr_t *hr_get(void) {
  * (u64 products, the u64 >> (48 - s) a ushl by s - 48). At 3x: X3 = 3 vx + (3 P) >> (63 - s) with the same P. */
 void hr_vertices(uint8_t *p, const uint32_t *recips, const uint32_t *shifts) {
     unsigned n = U32(p, GEOM_VTX_COUNT), buf = U8(p, GEOM_SWAP_BUF);
-    if (n > 1568) n = 1568;
+    /* geometry_flush_polygons appends this flush's n vertices to the buffer's vertex records: the record of
+     * vertex i is total - n + i (the count at GEOM_VERTS + 0x18000 already includes them) */
+    unsigned total = U32(p, GEOM_VERTS + buf * GEOM_VERTS_BUF + 0x18000), base = total >= n ? total - n : 0;
+    if (base >= 1568) return;
+    if (base + n > 1568) n = 1568 - base;
     const int32_t *X = (const int32_t *)(p + GEOM_CLIP_X), *Y = (const int32_t *)(p + GEOM_CLIP_Y), *W = (const int32_t *)(p + GEOM_CLIP_W);
     uint32_t vw = U16(p, GEOM_VIEWPORT), vh = U16(p, GEOM_VIEWPORT + 2), vx = U16(p, GEOM_VIEWPORT + 4), vy = U16(p, GEOM_VIEWPORT + 6);
     uint32_t oy = (uint32_t)(192 - (int)vy - (int)vh);
-    hrv_t *o = hr_vtx[buf], *o2 = hr_vtx2[buf];
+    hrv_t *o = hr_vtx[buf] + base, *o2 = hr_vtx2[buf] + base;
     for (unsigned i = 0; i < n; i++) {
         uint32_t x = (uint32_t)X[i], y = (uint32_t)Y[i], w = (uint32_t)W[i], r = recips[i];
         int s = (int)shifts[i];
@@ -136,7 +140,18 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     vptr[count] = vptr[0]; vptr[count + 1] = vptr[1];
     if (bad) {
         static unsigned nrep;
-        if (nrep++ < 10) fprintf(stderr, "[hr] vertex check: %u of %u vertices differ (poly %08x)\n", bad, count, a8);
+        if (nrep++ < 6) {
+            fprintf(stderr, "[hr] vertex check: %u of %u vertices differ (poly %08x base %u order %08x)\n", bad, count, a8, base, seq);
+            for (unsigned k = 0; k < count; k++) {
+                unsigned vi = idx[(top + k) % count];
+                const uint8_t *v = verts + 16 * vi;
+                int found = -1;
+                for (unsigned j = 0; j < 1568 && found < 0; j++)
+                    if (hv2[j].x == U16(v, 4) && hv2[j].y == U16(v, 6)) found = (int)j;
+                fprintf(stderr, "   v%u idx %u: record (%u,%u) ours (%u,%u) w %d; first index with the record's x,y: %d\n", k, vi,
+                        U16(v, 4), U16(v, 6), hv2[vi].x, hv2[vi].y, (int32_t)U32(v, 0), found);
+            }
+        }
     }
     unsigned y_top = U16(vptr[0], 6);
     int top_clip = y_top < bin_top, bot_clip = ybot > bin_bot;

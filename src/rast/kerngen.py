@@ -31,7 +31,8 @@ Register use in the group loop:
   x5 C  x6 texels  x7 flags  x8 scratch  x9-x16 gather  x17 Rwc  x19 kargs  x20 tail-mask table  x21 palette
   x22 span entry  x23 lines left  x24 bin line  x25 ctx  x26 id0  x27 batch flags  x28 attribute line base  x0 anypass
 Stack: [sp] 8 texel addresses, [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
-(bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks."""
+(bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
+(512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
 import sys
 
 # kargs_t layout (fused_asm.c mirrors it): the per-polygon constants; everything per line comes from the span entry
@@ -43,6 +44,7 @@ K = dict(recip=0x00, recip_u=0x08, tex=0x10, pal=0x18, pid24=0x20, bytes=0x30, K
 # pipeline's 48-line bins use 0x100), HR = the hi-res kernel set: buffer strides from kargs instead of DraStic's
 # context layout (line 0x800 bytes, attributes at +0x10000, ids at +0x20000 with 0x200 per line, owners 0x400)
 SPS, HR, PFX = 0xb0, False, "rast_kern_"
+FRAME = 784             # the stack frame: [sp,#256] holds a line's pass masks (512 pixels; 768 in the hi-res set)
 def span_layout(stride):
     global SPS, SP
     SPS = stride
@@ -61,7 +63,7 @@ def prologue(name, D, T, R, F, M=0):
     e("stp d8, d9, [sp, #-160]!"); e("stp d10, d11, [sp, #16]"); e("stp d12, d13, [sp, #32]"); e("stp d14, d15, [sp, #48]")
     e("stp x19, x20, [sp, #64]"); e("stp x21, x22, [sp, #80]"); e("stp x23, x24, [sp, #96]"); e("stp x25, x26, [sp, #112]")
     e("stp x27, x28, [sp, #128]")
-    e("sub sp, sp, #784")
+    e(f"sub sp, sp, #{FRAME}")
     e("mov x19, x0"); e("mov x22, x1"); e("mov w23, w2"); e("mov w24, w3"); e("mov x25, x4"); e("mov w27, w5"); e("mov x26, x6")
     e("adrp x20, rast_kern_tail"); e("add x20, x20, :lo12:rast_kern_tail")
     if T:
@@ -91,7 +93,14 @@ def prologue(name, D, T, R, F, M=0):
         if M == 2: e(f"ldr x10, [x19, #{K['owner']}]"); e("add x2, x10, x24, lsl #10"); e("add x2, x2, x8, lsl #1")
         if R: e("lsl x10, x24, #9"); e("add x3, x25, x10"); e("add x3, x3, #0x20, lsl #12"); e("add x3, x3, x8")
         else: e("add x3, sp, #256")
+    uses_st = not (M == 1 and D != 1 and not T)
     # perspective steps: num_j = j * W0, den_j = (W0 + dW) * C - j * dW, as floats; or the affine lane counters
+    if uses_st: steps_setup()
+    depth_setup(D)
+    if uses_st: interpolants_setup(T, F, M)
+    e("mov x4, #0")
+
+def steps_setup():
     e(f"ldr w8, [x9, #{SP['W0']}]"); e(f"ldr w10, [x9, #{SP['dW']}]")
     e("add w11, w8, w10"); e("scvtf s24, w11"); e("ucvtf s25, w5"); e("fmul s24, s24, s25")
     e("scvtf s26, w8"); e("scvtf s27, w10")
@@ -104,7 +113,8 @@ def prologue(name, D, T, R, F, M=0):
     e("b 2f")
     e("1:"); e("ldp q4, q5, [x20, #160]"); e(f"ldr x11, [x19, #{K['recip_u']}]"); e("ldr w17, [x11, w5, uxtw #2]")
     e("2:")
-    # depth
+
+def depth_setup(D):
     if D == 0:
         e(f"ldr w8, [x9, #{SP['Z0']}]"); e(f"ldrsw x10, [x9, #{SP['dZ']}]")
         e(f"ldr x11, [x19, #{K['recip']}]"); e("ldrsw x11, [x11, w5, uxtw #2]")
@@ -116,7 +126,8 @@ def prologue(name, D, T, R, F, M=0):
         e(f"add x8, x9, #{SP['dW']}"); e("ld1r {v6.4s}, [x8]"); e("ld1r {v7.4s}, [x9]")
     else:
         e(f"add x8, x19, #{K['K']}"); e("ld1r {v6.4s}, [x8]")
-    # interpolants
+
+def interpolants_setup(T, F, M):
     e(f"ldr w8, [x9, #{SP['rg0']}]"); e(f"ldr w10, [x9, #{SP['drg']}]"); e(f"ldr w11, [x9, #{SP['xb']}]")
     e(f"ldr w12, [x9, #{SP['cdb']}]"); e(f"ldr w13, [x9, #{SP['st0']}]"); e(f"ldr w14, [x9, #{SP['dst']}]")
     e("ubfiz w15, w8, #15, #16"); e("dup v10.4s, w15")
@@ -134,7 +145,6 @@ def prologue(name, D, T, R, F, M=0):
         e("lsr w16, w12, #16"); e("ccmp w16, #0, #0, eq")
         e(f"ldrb w16, [x19, #{K['bytes']}]"); e("ccmp w16, #31, #0, eq")
         e("cset w15, eq"); e("orr w7, w7, w15, lsl #2")
-    e("mov x4, #0")
 
 def line_end(R):
     """after a line's group loop: edge marking fix-up (opaque) or the first id (translucent); next line"""
@@ -160,7 +170,7 @@ def line_end(R):
     e("add x22, x22, #4"); e("add w24, w24, #1"); e("subs w23, w23, #1"); e("b.ne 10b")
 
 def epilogue():
-    e("add sp, sp, #784")
+    e(f"add sp, sp, #{FRAME}")
     e("ldp x27, x28, [sp, #128]"); e("ldp x25, x26, [sp, #112]"); e("ldp x23, x24, [sp, #96]"); e("ldp x21, x22, [sp, #80]")
     e("ldp x19, x20, [sp, #64]")
     e("ldp d14, d15, [sp, #48]"); e("ldp d12, d13, [sp, #32]"); e("ldp d10, d11, [sp, #16]"); e("ldp d8, d9, [sp], #160")
@@ -432,14 +442,15 @@ def trans_store(D):
     e("ldp q24, q28, [x2]"); e("bit v24.16b, v25.16b, v30.16b"); e("bit v28.16b, v26.16b, v31.16b"); e("stp q24, q28, [x2]")
     e("8:")
 
-def latch(D, M=0):
+def latch(D, M=0, steps=True):
     e(f"add x1, x1, #{16 if M == 1 else 32}"); e(f"add x2, x2, #{16 if M == 2 else 32}"); e("add x4, x4, #8")
     e("cmp x4, x5"); e("b.hs 9f")
-    e("tbnz w7, #0, 1f")
-    e("fadd v0.4s, v0.4s, v4.4s"); e("fadd v1.4s, v1.4s, v4.4s"); e("fsub v2.4s, v2.4s, v5.4s"); e("fsub v3.4s, v3.4s, v5.4s")
-    e("b 2f")
-    e("1:"); e("movi v24.4s, #8"); e("add v4.4s, v4.4s, v24.4s"); e("add v5.4s, v5.4s, v24.4s")
-    e("2:")
+    if steps:
+        e("tbnz w7, #0, 1f")
+        e("fadd v0.4s, v0.4s, v4.4s"); e("fadd v1.4s, v1.4s, v4.4s"); e("fsub v2.4s, v2.4s, v5.4s"); e("fsub v3.4s, v3.4s, v5.4s")
+        e("b 2f")
+        e("1:"); e("movi v24.4s, #8"); e("add v4.4s, v4.4s, v24.4s"); e("add v5.4s, v5.4s, v24.4s")
+        e("2:")
     if D == 0: e("add v6.2d, v6.2d, v9.2d"); e("add v7.2d, v7.2d, v9.2d")
     e("b 0b")
 
@@ -494,7 +505,7 @@ def kernel_vis(D, T):
         e("dup v25.8b, v23.b[0]"); modulate("v25", "v30", 5)
         alpha_test()
     vis_store(D)
-    latch(D, 1)
+    latch(D, 1, D == 1 or T)
     e("9:")
     line_end(0)
     epilogue()
@@ -543,7 +554,7 @@ def all_kernels():
         for F in range(2):
             for B in range(2 if T else 1): kernel_shade(T, F, B)
 all_kernels()                                       # DraStic's layout (the exact 2x path)
-span_layout(0x100); HR = True; PFX = "rast_kern_h"  # the hi-res pipeline (hr.c)
+span_layout(0x100); HR = True; PFX = "rast_kern_h"; FRAME = 1040  # the hi-res pipeline (hr.c): lines of 768
 all_kernels()
 e(".section .rodata")
 e(".balign 16")
