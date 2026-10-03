@@ -19,6 +19,24 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   trips through scratch memory between stages.
 - Not yet measured on a handheld.
 
+## Options beyond DraStic's rendering
+
+- **Texture filtering** (`DSFLIP_RAST_TEXFILTER` / `RAST_TEXFILTER`: 0 nearest = exact, 1 bilinear, 2 sharp
+  bilinear). Kernel variant B blends the four texels around the sample point with 3-bit weights; "sharp" remaps the
+  texel fraction through a curve that keeps texels crisp away from their edges. Where one of the four texels is
+  transparent the pixel takes the nearest texel in all four channels, so cut-out textures (colour-0 transparency,
+  alpha-tested sprites) keep their shape and show no dark fringes. Costs about 1.8x the raster stage on the stress
+  ROM and 2.4x on the field scene (four texel gathers a pixel instead of one). Toon, highlight and decal polygons
+  stay nearest.
+- **Deferred opaque shading** (`DSFLIP_RAST_DEFER` / `RAST_DEFER=1`, `src/rast/defer.c`). Opaque polygons go
+  through a visibility pass first (depth test, the alpha test only for textures whose lowest texel alpha can fail
+  it, attribute words, edge marks, and the polygon's index per pixel in an owner buffer), and are shaded afterwards
+  only where they still own the pixel: a pixel is shaded once however many polygons covered it. Same bits as the
+  one-pass render (checked with `RAST=diff` on the stress ROM and the scenes). Toon, highlight and shadow polygons
+  flush the queue and render at once. It pays only when shading is expensive relative to the per-line setup, which
+  runs twice: with nearest filtering it is slower (stress ROM, overdraw 1.5: +8%; field scene, overdraw 1.0: +29%),
+  so it is meant for the bilinear and hi-res modes; figures for those below.
+
 ## How it works
 
 `src/rast/spec/`: DraStic's ~85 raster routines ported to exact C, each unit-tested bit for bit against the
@@ -36,10 +54,13 @@ test; one that all pass is stored straight.
 - `RAST=ours RAST_PDIFF=1` compares per polygon and reports the differing pixels; `RAST_PDIFF_STRICT=1` includes
   the 5-mod-8 translucent quirk pixel (exact), `2` the 1-pixel batches (the known deviation).
 - `RAST_PIPE` selects the pipeline: 0 = b0 (stage by stage), 1 = fused scalar, 2 = fused C NEON, 3 = assembly.
-- `RAST_DUMP=<dir>` writes frames as PPM; `RAST_STATS=1` prints the opaque overdraw.
+- `RAST_DUMP=<dir>` writes frames as PPM; `RAST_STATS=1` prints the opaque overdraw; `RAST_FRAMES=1` prints the
+  frame count every 10 frames (for per-frame figures from a block profile).
 
 ## Next
 
 - Device A/B: the same game with the option off and on, from the performance logs.
-- TBL palette lookups for 4- and 16-colour textures (saves the second gather); deferred shading of opaque
-  polygons (skips the shading of pixels a nearer opaque polygon overwrites: 1.0-1.5x overdraw in the scenes).
+- TBL palette lookups for 4- and 16-colour textures (saves the second gather); 64-bit texel-pair loads in the
+  bilinear gathers.
+- 3x/4x internal resolution with a supersampled 2x output (anti-aliasing), then the hi-res 3D layer presented
+  through the dsflip shader.

@@ -24,7 +24,8 @@ static __thread unsigned dq_n, dq_cap;
 static __thread uint16_t *owner;
 
 uint16_t *defer_owner(void) {
-    if (!owner) { owner = aligned_alloc(16, 32 * 512 * 2); memset(owner, 0xff, 32 * 512 * 2); }
+    /* the kernels store whole groups of 8: the last line's last group may run 7 entries past the end */
+    if (!owner) { owner = aligned_alloc(64, 32 * 512 * 2 + 64); memset(owner, 0xff, 32 * 512 * 2 + 64); }
     return owner;
 }
 
