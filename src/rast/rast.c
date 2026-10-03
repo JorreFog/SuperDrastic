@@ -20,7 +20,7 @@ uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
 static void (*orig_render_bins)(uint8_t *ctx);
 static __thread int in_ours;
-static int pipe_sel = 2, pdiff;  /* RAST_PIPE: 0 = b0 stage by stage, 1 = fused scalar, 2 = fused NEON */
+static int pipe_sel = 3, pdiff;  /* RAST_PIPE: 0 b0 stage by stage, 1 fused scalar, 2 fused C NEON, 3 assembly kernels */
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
 #define U16(p, o) (*(uint16_t *)((uint8_t *)(p) + (o)))
@@ -83,6 +83,17 @@ static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8
         DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, polys + 32 * (size_t)((const uint16_t *)list)[i], verts, y0, y0 + 32);
 }
 
+/* RAST_STATS: opaque pixels written (shaded) vs opaque pixels finally covered (attr id != clear id): the
+ * overdraw a deferred opaque pass would remove */
+unsigned long st_written, st_covered; int rast_stats;
+static void stats_bin(uint8_t *ctx, uint8_t *sys) {
+    const uint32_t *att = (const uint32_t *)(ctx + CTX_ATTR);
+    uint32_t cid = U32(sys, SYS_CLEAR_ATTR) & 0x3f000000;
+    unsigned long cov = 0;
+    for (int i = 0; i < 32 * 512; i++) cov += (att[i] & 0x3f000000) != cid;
+    __atomic_fetch_add(&st_covered, cov, __ATOMIC_RELAXED);
+}
+
 static void render_bins(uint8_t *ctx) {
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
     unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride;
@@ -95,6 +106,7 @@ static void render_bins(uint8_t *ctx) {
         clear_bin(ctx, sys, geom, y0);
         U64(ctx, CTX_LINEMASK) = 0xffffffffull;
         render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0);
+        if (rast_stats) stats_bin(ctx, sys);
         if (ntrl) {
             memset(ctx + CTX_IDBUF, 0xff, 0x4000);
             render_list(ctx, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, y0);
@@ -136,6 +148,8 @@ static void diff_render_bins(uint8_t *ctx) {
     pthread_mutex_lock(&stat_lock);
     st_calls++; st_bins += nb; st_bad += bad;
     if (st_calls % 600 == 0) fprintf(stderr, "[rast] diff: %lu bins compared, %lu differ\n", st_bins, st_bad);
+    if (rast_stats && st_calls % 600 == 0)
+        fprintf(stderr, "[rast] opaque: %lu pixels shaded, %lu covered: overdraw %.2f\n", st_written, st_covered, (double)st_written / (st_covered ? st_covered : 1));
     pthread_mutex_unlock(&stat_lock);
 }
 
@@ -274,9 +288,10 @@ __attribute__((constructor)) static void rast_init(void) {
     mode = !e ? 0 : !strcmp(e, "ours") ? 1 : !strcmp(e, "diff") ? 2 : 0;
     if (!mode) return;
     dump_dir = getenv("RAST_DUMP");
+    rast_stats = getenv("RAST_STATS") != 0;
     pdiff = getenv("RAST_PDIFF") != 0;
     if (getenv("RAST_PIPE")) pipe_sel = atoi(getenv("RAST_PIPE"));
-    { extern int use_neon; use_neon = pipe_sel != 1; }
+    { extern int use_neon; use_neon = pipe_sel >= 1 ? pipe_sel : 1; }
     if (getenv("RAST_DUMP_EVERY")) dump_every = atoi(getenv("RAST_DUMP_EVERY"));
     dl_iterate_phdr(cb, 0);
     orig_render_bins = (void (*)(uint8_t *))hook(DS_RENDER_BINS_4X, expect_bins, (void *)hook_entry);

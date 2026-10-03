@@ -6,8 +6,7 @@
  *
  * Batch structure still matters in a few places and is kept: flat colour comes from the batch's first line, and a
  * quirk in writeback_alpha_asm_4x stores, for a line whose pixel count is 5 mod 8, the next packed pixel's
- * translucent id into the line's last pixel. When that next pixel is past the batch (the stages' padding lanes),
- * the batch goes through b0 instead. Shadow polygons (mode 3) also go through b0. */
+ * translucent id into the line's last pixel. Shadow polygons (mode 3) go through b0. */
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
@@ -24,8 +23,8 @@
 #define PTR(p, o) ((uint8_t *)U64(p, o))
 #define DS_RECIP   0x3f27120
 #define DS_RECIP_U 0x3f28520
+#include "fused.h"
 
-enum { CLAMP, WRAP, FLIP };
 static inline uint16_t texcoord(uint16_t x, int mode, uint16_t size) {
     uint16_t m = (uint16_t)(size - 1);
     switch (mode) {
@@ -36,9 +35,8 @@ static inline uint16_t texcoord(uint16_t x, int mode, uint16_t size) {
 }
 static inline uint32_t sel(uint32_t x, uint32_t y, uint32_t k) { return (x & ~k) | (y & k); }
 
-#include "fused.h"
 
-int use_neon = 1;          /* RAST_PIPE=2 / 1: NEON lines / scalar reference lines */
+int use_neon = 2;          /* RAST_PIPE: 1 scalar reference lines, 2 C NEON batches, 3 assembly kernels */
 
 /* one line of a batch: s = this line's span entry, bs = the batch's first line's entry, y = line in the bin.
  * id0_out: the new translucent id of the line's first pixel (for the quirk, see f_setup_4x) */
@@ -198,7 +196,14 @@ void f_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsig
         P.texels32 = (const uint32_t *)PTR(P.tex, 0x10); P.idx8 = PTR(P.tex, 0x10); P.pal = (const uint32_t *)PTR(P.tex, 0x18);
     }
     P.fogused = 0;
-    line_fn *nl = use_neon ? neon_line_for(&P) : 0;
+    if (flags & 2) {
+        /* texcoord() as clamp-and-mask (fused_neon.c): clamp [0, W-1]; wrap: & (W-1); flip: invert where x & W */
+        P.s_lo = P.ms == CLAMP ? 0 : -32768; P.s_hi = P.ms == CLAMP ? (int16_t)(P.tw - 1) : 32767;
+        P.s_and = P.ms == CLAMP ? 0xffff : (uint16_t)(P.tw - 1); P.s_flip = P.ms == FLIP ? (uint16_t)(P.tw & ~(P.tw - 1)) : 0;
+        P.t_lo = P.mt == CLAMP ? 0 : -32768; P.t_hi = P.mt == CLAMP ? (int16_t)(P.th - 1) : 32767;
+        P.t_and = P.mt == CLAMP ? 0xffff : (uint16_t)(P.th - 1); P.t_flip = P.mt == FLIP ? (uint16_t)(P.th & ~(P.th - 1)) : 0;
+    }
+    batch_fn *bf = use_neon >= 3 ? asm_batch_for(&P) : use_neon ? neon_batch_for(&P) : 0;
 
     unsigned line = line0, left = nlines, i = 0;
     while (left) {
@@ -211,27 +216,23 @@ void f_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsig
             n += c; k++; i++; left--;
         }
         uint8_t *bs = spans + 4 * first;
-        if ((flags & 1) && U16(bs, 0x630 + 4 * (k - 1)) % 8 == 5) {
-            /* the last line's quirk reads the stages' padding: run this batch stage by stage */
-            int fu = U32(ctx, CTX_FOGUSED);
-            b0_flush(ctx, bs, poly, line, k, buf, n, flags, v0);
-            if (U32(ctx, CTX_FOGUSED) != (uint32_t)fu) P.fogused |= 2;
-        } else if (flags & 1) {
+        if (0) {        } else if (flags & 1) {
             /* the quirk: a line with 5 mod 8 pixels gets the next line's first new id as its last id, but only if
-             * the batch is written at all (DraStic skips a batch in which no pixel passes) */
+             * the batch is written at all (DraStic skips a batch in which no pixel passes). For the batch's last
+             * line DraStic takes that id from stale scratch memory of its own; that pixel keeps our id. */
             uint8_t id0[32];
             P.pass = 0;
-            for (unsigned l = 0; l < k; l++)
-                if (nl) { nl(&P, bs + 4 * l, bs, line + l); id0[l] = ctx[CTX_IDBUF + (line + l) * 0x200 + U16(bs, 0x580 + 4 * l)]; }
-                else line_px(&P, bs + 4 * l, bs, line + l, &id0[l]);
+            if (bf) bf(&P, bs, k, line, id0);
+            else for (unsigned l = 0; l < k; l++) line_px(&P, bs + 4 * l, bs, line + l, &id0[l]);
             if (P.pass)
                 for (unsigned l = 0; l + 1 < k; l++) {
                     unsigned c = U16(bs, 0x630 + 4 * l);
                     if (c % 8 == 5) ctx[CTX_IDBUF + (line + l) * 0x200 + U16(bs, 0x580 + 4 * l) + c - 1] = id0[l + 1];
                 }
-        } else
-            for (unsigned l = 0; l < k; l++)
-                if (nl) nl(&P, bs + 4 * l, bs, line + l); else line_px(&P, bs + 4 * l, bs, line + l, 0);
+        } else {
+            if (bf) bf(&P, bs, k, line, 0);
+            else for (unsigned l = 0; l < k; l++) line_px(&P, bs + 4 * l, bs, line + l, 0);
+        }
         line += k;
     }
     if ((P.fogused & 1) && (((flags & 1) && (P.attr & (1u << 15))) || (!(flags & 1) && (P.attr & (1u << 15)))))
