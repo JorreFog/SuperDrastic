@@ -3,7 +3,7 @@
 // - Credentials come from ROCKNIX's own settings (ES > RetroAchievements writes them to system.cfg:
 //   global.retroachievements=1, .username, .password). After the first password login only RA's
 //   login token is kept, in /storage/.config/drastic/dsflip/ra.token (mode 600).
-// - The ROM is identified by rcheevos' own NDS hash of the file DraStic was started with.
+// - The ROM is identified by rcheevos' own NDS hash of the file DraStic was started with (for a .zip, of the .nds in it).
 // - DS main RAM (RA addresses 0x000000-0x3FFFFF) is found inside DraStic's process: the DS keeps a
 //   copy of the cartridge header at 0x027FFE00, i.e. at offset 0x3FFE00 of main RAM, so we look for the
 //   ROM's header in DraStic's writable memory at that offset from a 4 MB span.
@@ -429,6 +429,142 @@ static void sound_setup(void) {
 
 static void on_rc_log(const char *msg, const rc_client_t *c) { (void)c; dsflip_log("[rc] %s\n", msg); }
 
+/* ---------- the ROM's bytes, also from inside a .zip ----------
+ * DraStic starts zipped ROMs too (ES lists .nds .zip .7z for the DS) and unpacks them in memory. rcheevos' NDS hash
+ * and our RAM scan both need the .nds's own bytes: given the zip they read its zip headers, the hash failed ("arm9
+ * code size ... exceeds 16MB") and the RAM scan never matched the cartridge header (ROCKNIXDS issue 31). This reader
+ * hands rcheevos (rc_hash_init_custom_filereader) and ra_start the first .nds in a zip, inflated as it is read; the
+ * hash only reads the header, the ARM9/ARM7 code and the icon, so nothing is unpacked whole. zlib is dlopen()ed like
+ * libcurl; its z_stream is declared here (the sysroot has no zlib.h; inflateInit2_ checks the size). Stored (0) and
+ * deflated (8) entries, no zip64 (DS ROMs are at most 512 MB). */
+typedef struct {
+    const uint8_t *next_in; unsigned avail_in; unsigned long total_in;
+    uint8_t *next_out; unsigned avail_out; unsigned long total_out;
+    const char *msg; void *state, *zalloc, *zfree, *opaque;
+    int data_type; unsigned long adler, reserved;
+} zstream_t;
+static int (*z_init2)(zstream_t *, int, const char *, int), (*z_inflate)(zstream_t *, int), (*z_end)(zstream_t *);
+static void zlib_load(void) {
+    void *h = dlopen("libz.so.1", RTLD_NOW | RTLD_LOCAL);
+    if (!h) return;
+    *(void **)&z_init2 = dlsym(h, "inflateInit2_"); *(void **)&z_inflate = dlsym(h, "inflate"); *(void **)&z_end = dlsym(h, "inflateEnd");
+}
+typedef struct {
+    FILE *f;
+    int zip, method, zinit;
+    long data;                      /* zip: where the entry's bytes start */
+    uint32_t csize, usize, cread;   /* zip: compressed and unpacked sizes, compressed bytes fed to zlib */
+    int64_t pos, want;              /* zip: bytes unpacked so far, where the next read starts */
+    zstream_t z;
+    uint8_t in[65536];
+} romfile_t;
+static uint32_t le32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
+static uint16_t le16(const uint8_t *p) { return p[0] | p[1] << 8; }
+static int has_ext(const char *path, const char *ext) {
+    size_t n = strlen(path), e = strlen(ext);
+    return n > e && !strcasecmp(path + n - e, ext);
+}
+/* finds the first .nds in the zip's central directory (else its first file) */
+static int zip_find(romfile_t *r) {
+    uint8_t buf[65536 + 22];
+    if (fseek(r->f, 0, SEEK_END)) return 0;
+    long size = ftell(r->f), n = size < (long)sizeof buf ? size : (long)sizeof buf;
+    if (n < 22 || fseek(r->f, size - n, SEEK_SET) || fread(buf, 1, n, r->f) != (size_t)n) return 0;
+    long e = n - 22; while (e >= 0 && le32(buf + e) != 0x06054b50) e--;
+    if (e < 0) return 0;
+    uint32_t cd_size = le32(buf + e + 12), cd_off = le32(buf + e + 16);
+    uint8_t *cd = malloc(cd_size);
+    if (!cd || fseek(r->f, cd_off, SEEK_SET) || fread(cd, 1, cd_size, r->f) != cd_size) { free(cd); return 0; }
+    long pick = -1;
+    for (uint32_t i = 0; i + 46 <= cd_size && le32(cd + i) == 0x02014b50; ) {
+        uint16_t nl = le16(cd + i + 28), xl = le16(cd + i + 30), cl = le16(cd + i + 32);
+        if (i + 46 + nl > cd_size) break;
+        char name[512]; snprintf(name, sizeof name, "%.*s", nl, (const char *)cd + i + 46);
+        if (name[0] && name[strlen(name) - 1] != '/') {
+            if (pick < 0) pick = i;
+            if (has_ext(name, ".nds")) { pick = i; break; }
+        }
+        i += 46 + nl + xl + cl;
+    }
+    int ok = 0;
+    if (pick >= 0) {
+        uint8_t lh[30];
+        r->method = le16(cd + pick + 10); r->csize = le32(cd + pick + 20); r->usize = le32(cd + pick + 24);
+        uint32_t lo = le32(cd + pick + 42);
+        if (!fseek(r->f, lo, SEEK_SET) && fread(lh, 1, 30, r->f) == 30 && le32(lh) == 0x04034b50 &&
+            r->csize != 0xffffffffu && (r->method == 0 || r->method == 8)) {
+            r->data = lo + 30 + le16(lh + 26) + le16(lh + 28);
+            ok = 1;
+        }
+    }
+    free(cd);
+    return ok;
+}
+static void *rom_open(const char *path) {
+    romfile_t *r = calloc(1, sizeof *r);
+    if (!r || !(r->f = fopen(path, "rb"))) { free(r); return 0; }
+    if (!has_ext(path, ".zip")) return r;
+    static pthread_once_t once = PTHREAD_ONCE_INIT; pthread_once(&once, zlib_load);
+    r->zip = 1;
+    if (!zip_find(r) || (r->method == 8 && !(z_init2 && z_inflate && z_end))) {
+        dsflip_log("[ra] no usable .nds in %s%s\n", path, z_init2 ? "" : " (no zlib)");
+        fclose(r->f); free(r); return 0;
+    }
+    return r;
+}
+static void rom_seek(void *h, int64_t off, int origin) {
+    romfile_t *r = h;
+    if (!r->zip) { fseeko(r->f, off, origin); return; }
+    r->want = origin == SEEK_SET ? off : origin == SEEK_CUR ? r->want + off : (int64_t)r->usize + off;
+    if (r->want < 0) r->want = 0;
+}
+static int64_t rom_tell(void *h) { romfile_t *r = h; return r->zip ? r->want : ftello(r->f); }
+/* inflates up to n bytes at r->pos into out (out NULL: skip them); returns the bytes produced */
+static size_t zip_inflate(romfile_t *r, uint8_t *out, size_t n) {
+    uint8_t skip[16384];
+    size_t done = 0;
+    while (done < n && r->pos < r->usize) {
+        if (!r->z.avail_in && r->cread < r->csize) {
+            uint32_t k = r->csize - r->cread < sizeof r->in ? r->csize - r->cread : sizeof r->in;
+            if (fseek(r->f, r->data + r->cread, SEEK_SET) || fread(r->in, 1, k, r->f) != k) break;
+            r->z.next_in = r->in; r->z.avail_in = k; r->cread += k;
+        }
+        size_t chunk = n - done; if (!out && chunk > sizeof skip) chunk = sizeof skip;
+        r->z.next_out = out ? out + done : skip; r->z.avail_out = (unsigned)chunk;
+        int e = z_inflate(&r->z, 0 /* Z_NO_FLUSH */);
+        size_t got = chunk - r->z.avail_out;
+        done += got; r->pos += got;
+        if (e == 1 /* Z_STREAM_END */) break;
+        if (e < 0 || (!got && !r->z.avail_in && r->cread >= r->csize)) break;
+    }
+    return done;
+}
+static size_t rom_read(void *h, void *buf, size_t n) {
+    romfile_t *r = h;
+    if (!r->zip) return fread(buf, 1, n, r->f);
+    if (r->want >= r->usize) return 0;
+    if (n > r->usize - r->want) n = r->usize - r->want;
+    if (r->method == 0) {           /* stored */
+        if (fseek(r->f, r->data + r->want, SEEK_SET)) return 0;
+        size_t got = fread(buf, 1, n, r->f); r->want += got; return got;
+    }
+    if (!r->zinit || r->want < r->pos) {   /* first read, or backwards: start the stream again */
+        if (r->zinit) z_end(&r->z);
+        memset(&r->z, 0, sizeof r->z); r->cread = 0; r->pos = 0;
+        if (z_init2(&r->z, -15 /* raw deflate */, "1.2.11", (int)sizeof r->z) != 0) { r->zinit = 0; return 0; }
+        r->zinit = 1;
+    }
+    if (r->pos < r->want) zip_inflate(r, 0, r->want - r->pos);
+    size_t got = r->pos == r->want ? zip_inflate(r, buf, n) : 0;
+    r->want += got;
+    return got;
+}
+static void rom_close(void *h) {
+    romfile_t *r = h;
+    if (r->zinit) z_end(&r->z);
+    fclose(r->f); free(r);
+}
+
 /* called once, from the first SDL_RenderPresent (DraStic's main thread) */
 static void ra_start(void) {
     char v[16] = "";
@@ -452,9 +588,12 @@ static void ra_start(void) {
         char *last = buf; for (char *p = buf; p < buf + n; p += strlen(p) + 1) if (*p) last = p;
         snprintf(rom_path, sizeof rom_path, "%s", last);
     }
-    FILE *r = fopen(rom_path, "rb");
-    if (!r || fread(rom_hdr, 1, sizeof rom_hdr, r) != sizeof rom_hdr) { if (r) fclose(r); dsflip_log("[ra] can't read ROM %s\n", rom_path); return; }
-    fclose(r);
+    if (has_ext(rom_path, ".7z")) { dsflip_log("[ra] %s: RetroAchievements needs the .nds or a .zip, not a .7z\n", rom_path); return; }
+    static rc_hash_filereader_t reader = { rom_open, rom_seek, rom_tell, rom_read, rom_close };
+    rc_hash_init_custom_filereader(&reader);
+    void *r = rom_open(rom_path);
+    if (!r || rom_read(r, rom_hdr, sizeof rom_hdr) != sizeof rom_hdr) { if (r) rom_close(r); dsflip_log("[ra] can't read ROM %s\n", rom_path); return; }
+    rom_close(r);
     if (test) {       /* offline self-test: hash + RAM discovery only */
         char hash[33] = "";
         if (!rc_hash_generate_from_file(hash, RC_CONSOLE_NINTENDO_DS, rom_path)) hash[0] = 0;

@@ -27,7 +27,7 @@ own, for any firmware.
   SDL's audio caused, and an echo-gated **microphone**.
 - **Touch** on the bottom panel, mapped to exactly where the DS screen is drawn.
 - **RetroAchievements** (softcore) with pop-ups, badges and a progress indicator, including sets that read the DS's
-  DTCM memory.
+  DTCM memory, for `.nds` ROMs and ROMs in a `.zip`.
 - **Its own CPU governor**: the lowest clock at which the game drops no more frames than at full clock (HeartGold at
   2x: ~1450-1660 MHz instead of 1992), and the GPU's clock chosen per shader.
 - **DraStic's menu** on the bottom panel while the game stays on top, with the time and the battery on the top screen.
@@ -49,7 +49,8 @@ The measurements behind these numbers are in ROCKNIXDS's
 
 **Requirements:** the Linux DraStic build (r2.5.2.2, aarch64, SDL2), glibc 2.38 or newer, KMS with atomic
 modesetting and two connected panels, and the right to take the display while a game runs (root, or the seat's
-session). Optional: libcurl (RetroAchievements), EGL + GLES2 with dma-buf import (shaders), ALSA (audio pump).
+session). Optional: libcurl (RetroAchievements), zlib (RetroAchievements for zipped ROMs), EGL + GLES2 with dma-buf
+import (shaders), ALSA (audio pump).
 
 **Why not Android:** SuperDrastic works by loading into the *Linux* DraStic and driving the panels directly. Android's
 DraStic is a different, paid app, which can't be extended from outside without root-level patching, and Android apps
