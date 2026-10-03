@@ -47,6 +47,14 @@
 
 /* geometry state; buf = the render-side buffer of the double-buffered polygon/vertex RAM */
 #define GEOM_SWAP_BUF   0x9ac0      /* u8: geometry-side buffer; render side is ^1 */
+/* the geometry side's clip-space vertex arrays and viewport (geometry_perspective_apply_hires_asm's inputs) */
+#define GEOM_VTX_COUNT  0x64c       /* u32 */
+#define GEOM_CLIP_X     0x17f0      /* s32[1568] clip x (screen x after the transform) */
+#define GEOM_CLIP_Y     0x3070      /* s32[1568] */
+#define GEOM_CLIP_W     0x6170      /* s32[1568] */
+#define GEOM_VIEWPORT   0x9ab6      /* u16 width, height, x1, y1 */
+#define DS_PERSP_APPLY_HIRES 0x9e648    /* geometry_perspective_apply_hires_asm(geom, recips, shifts) */
+#define DS_VERTEX_ORDERS 0x11df90       /* u32[128]: vertex walk orders, nibbles; entry count*8 + top vertex */
 #define GEOM_CLRIMG_OFS 0x9aa8      /* u16: CLRIMAGE_OFFSET */
 #define GEOM_VERTS      0x9ad4      /* + buf * 0x18004: vertex[] (16 bytes each) */
 #define GEOM_VERTS_BUF  0x18004

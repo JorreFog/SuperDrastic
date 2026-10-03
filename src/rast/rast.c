@@ -21,7 +21,7 @@ uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
 static void (*orig_render_bins)(uint8_t *ctx);
 static __thread int in_ours;
-static int pipe_sel = 3, pdiff, pdiff_strict;   /* RAST_PDIFF_STRICT: 1 compares the 5-mod-8 quirk pixel too, 2 the 1-pixel batches too */  /* RAST_PIPE: 0 b0 stage by stage, 1 fused scalar, 2 fused C NEON, 3 assembly kernels */
+static int pipe_sel = 3, pdiff, pdiff_strict, rast_scale = 2;   /* RAST_SCALE: 2 (DraStic's hi-res, exact) or 3 (hr.c) */   /* RAST_PDIFF_STRICT: 1 compares the 5-mod-8 quirk pixel too, 2 the 1-pixel batches too */  /* RAST_PIPE: 0 b0 stage by stage, 1 fused scalar, 2 fused C NEON, 3 assembly kernels */
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
 #define U16(p, o) (*(uint16_t *)((uint8_t *)(p) + (o)))
@@ -85,11 +85,11 @@ static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8
         uint8_t *poly = polys + 32 * (size_t)((const uint16_t *)list)[i];
         /* deferred: modulate-shaded polygons queue up; the others (toon, highlight, shadow) flush and render now */
         in_defer = defer && !((U32(poly, 4) >> 4) & 3);
-        if (defer && !in_defer) defer_flush(ctx);
+        if (defer && !in_defer) defer_flush(&layout_2x, ctx);
         DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
     }
     in_defer = 0;
-    if (defer) defer_flush(ctx);
+    if (defer) defer_flush(&layout_2x, ctx);
 }
 
 /* RAST_STATS: opaque pixels written (shaded) vs opaque pixels finally covered (attr id != clear id): the
@@ -180,11 +180,21 @@ static void dump_frame(uint8_t *ctx) {
         fwrite(px, 1, 3, f);
     }
     fclose(f);
+    if (!hr_frame) return;
+    snprintf(fn, sizeof fn, "%s/h%05lu.ppm", dump_dir, n - 1);
+    f = fopen(fn, "wb"); if (!f) return;
+    fprintf(f, "P6\n768 576\n255\n");
+    for (int i = 0; i < 768 * 576; i++) {
+        uint32_t c = hr_frame[i];
+        uint8_t px[3] = { (uint8_t)(c << 2), (uint8_t)(c >> 6), (uint8_t)(c >> 14) };
+        fwrite(px, 1, 3, f);
+    }
+    fclose(f);
 }
 
 static int print_frames;         /* RAST_FRAMES=1: the frame count every 10 frames (profiling runs) */
 static void hook_entry(uint8_t *ctx) {
-    if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; render_bins(ctx); in_ours = 0; }
+    if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; (rast_scale == 3 ? hr_render_bins : render_bins)(ctx); in_ours = 0; }
     if (dump_dir) dump_frame(ctx);
     if (print_frames && U8(ctx, CTX_FIRST_BIN) == 0) {
         static unsigned long n;
@@ -225,12 +235,20 @@ static const uint32_t expect_bins[4] = { 0x91408001, 0xa9b17bfd, 0x52800183, 0x9
 static const uint32_t expect_setup[4] = { 0xd10243ff, 0xa9017bfd, 0x910043fd, 0xa90253f3 };
 
 /* render_polygon_setup_4x: ours while our bin loop runs, DraStic's otherwise (diff mode runs both) */
+/* the 3x pipeline's vertex hook: the 3x screen coordinates from the same inputs, then DraStic's transform */
+static void (*orig_persp)(uint8_t *, const uint32_t *, const uint32_t *);
+static void hook_persp(uint8_t *geom, const uint32_t *recips, const uint32_t *shifts) {
+    hr_vertices(geom, recips, shifts);
+    orig_persp(geom, recips, shifts);
+}
+static const uint32_t expect_persp[4] = { 0x91402403, 0x79557864, 0x5280180d, 0xd280188e };
+
 typedef void (*setup_fn)(uint8_t *, uint8_t *, uint8_t *, uint8_t *, unsigned, unsigned, unsigned, uint8_t *);
 static setup_fn orig_setup;
 static void hook_setup(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
                        unsigned flags, uint8_t *v0) {
     if (!in_ours) { orig_setup(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
-    if (in_defer) { defer_poly(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
+    if (in_defer) { defer_poly(&layout_2x, ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
     if (!pdiff) { (pipe_sel ? f_setup_4x : b0_setup_4x)(ctx, spans, poly, buf, line0, nlines, flags, v0); return; }
     /* RAST_PDIFF: per polygon, run DraStic's and ours on the same buffers; report the first differences */
     static __thread uint8_t *save, *ref;
@@ -307,6 +325,9 @@ __attribute__((constructor)) static void rast_init(void) {
     if (!e) e = "ours";
     { extern int rast_texfilter; const char *t = getenv("DSFLIP_RAST_TEXFILTER"); if (!t) t = getenv("RAST_TEXFILTER"); if (t) rast_texfilter = atoi(t); }
     { const char *t = getenv("DSFLIP_RAST_DEFER"); if (!t) t = getenv("RAST_DEFER"); if (t) rast_defer = atoi(t); }
+    { const char *t = getenv("DSFLIP_RAST_SCALE"); if (!t) t = getenv("RAST_SCALE"); if (t) rast_scale = atoi(t) == 3 ? 3 : 2; }
+    if (mode == 2) rast_scale = 2;
+    hr_vcheck = getenv("RAST_VCHECK") != 0;
     dump_dir = getenv("RAST_DUMP");
     rast_stats = getenv("RAST_STATS") != 0;
     print_frames = getenv("RAST_FRAMES") != 0;
@@ -319,6 +340,11 @@ __attribute__((constructor)) static void rast_init(void) {
     orig_render_bins = (void (*)(uint8_t *))hook(DS_RENDER_BINS_4X, expect_bins, (void *)hook_entry);
     if (!orig_render_bins) { fprintf(stderr, "[rast] unknown DraStic build, not hooking\n"); return; }
     orig_setup = (setup_fn)hook(DS_RENDER_POLYGON_SETUP_4X, expect_setup, (void *)hook_setup);
+    if (rast_scale == 3) {
+        orig_persp = (void (*)(uint8_t *, const uint32_t *, const uint32_t *))hook(DS_PERSP_APPLY_HIRES, expect_persp, (void *)hook_persp);
+        if (!orig_persp) { fprintf(stderr, "[rast] cannot hook the vertex transform, 3x off\n"); rast_scale = 2; }
+        else if (dump_dir) hr_frame = calloc(768 * 576, 4);
+    }
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
-    fprintf(stderr, "[rast] hooked video_3d_render_bins_4x, mode %s\n", e);
+    fprintf(stderr, "[rast] hooked video_3d_render_bins_4x, mode %s, scale %d\n", e, rast_scale);
 }

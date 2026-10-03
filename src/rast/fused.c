@@ -40,26 +40,27 @@ int use_neon = 2;          /* RAST_PIPE: 1 scalar reference lines, 2 C NEON batc
 
 /* one line of a batch: s = this line's span entry, bs = the batch's first line's entry, y = line in the bin.
  * id0_out: the new translucent id of the line's first pixel (for the quirk, see f_setup_4x) */
+#define PP P
 static void line_px(poly_t *P, uint8_t *s, const uint8_t *bs, unsigned y, uint8_t *id0_out) {
-    unsigned X = U16(s, 0x580), C = U16(s, 0x630);
-    uint32_t *col_l = (uint32_t *)(P->ctx + CTX_COLOR + y * 0x800) + X;
-    uint32_t *att_l = (uint32_t *)(P->ctx + CTX_ATTR + y * 0x800) + X;
-    uint8_t *id_l = P->ctx + CTX_IDBUF + y * 0x200 + X;
+    unsigned X = U16(s, SPO(PP, 8)), C = U16(s, SPO(PP, 9));
+    uint32_t *col_l = (uint32_t *)(P->ctx + y * P->lstride) + X;
+    uint32_t *att_l = (uint32_t *)(P->ctx + P->attr_off + y * P->lstride) + X;
+    uint8_t *id_l = P->ctx + P->id_off + y * P->id_stride + X;
     uint32_t fl = P->flags;
-    int32_t W0 = (int32_t)U32(s, 0x000), dW = (int32_t)U32(s, 0x0b0);
-    uint32_t Z0 = U32(s, 0x160); int32_t dZ = (int32_t)U32(s, 0x210);
+    int32_t W0 = (int32_t)U32(s, SPO(PP, 0)), dW = (int32_t)U32(s, SPO(PP, 1));
+    uint32_t Z0 = U32(s, SPO(PP, 2)); int32_t dZ = (int32_t)U32(s, SPO(PP, 3));
     uint64_t zstep = (uint64_t)((int64_t)dZ * (int64_t)(int32_t)P->recip[C] + (dZ < 0 ? 0x3fffffff : 0));
     uint32_t Rwc = P->recip_u[C];
     float fW0 = (float)W0, fD = (float)dW, S = (float)(int32_t)(uint32_t)((uint32_t)W0 + (uint32_t)dW) * (float)C;
     float E0 = 8.0f * fW0, E1 = 8.0f * fD, num[8], den[8];
     for (int j = 0; j < 8; j++) { num[j] = (float)j * fW0; den[j] = fmaf(-(float)j, fD, S); }
-    uint32_t rg0 = U32(s, 0x420), drg = U32(s, 0x4d0), xb = U32(s, 0x580), cdb = U32(s, 0x630);
-    uint32_t st0 = U32(s, 0x2c0), dst = U32(s, 0x370);
+    uint32_t rg0 = U32(s, SPO(PP, 6)), drg = U32(s, SPO(PP, 7)), xb = U32(s, SPO(PP, 8)), cdb = U32(s, SPO(PP, 9));
+    uint32_t st0 = U32(s, SPO(PP, 4)), dst = U32(s, SPO(PP, 5));
     int16_t du = (int16_t)dst, dv = (int16_t)(dst >> 16);
     uint32_t U0 = ((uint32_t)(int32_t)(int16_t)st0 << 15) + (du > 0 ? 0x400 : 0);
     uint32_t V0 = ((uint32_t)(int32_t)(int16_t)(st0 >> 16) << 15) + (dv > 0 ? 0x400 : 0);
-    unsigned EL = U16(s, 0x6e0), ER = U16(s, 0x6e2);
-    uint8_t fr = (uint8_t)(U16(bs, 0x420) >> 3), fg = (uint8_t)(U16(bs, 0x422) >> 3), fb = (uint8_t)(U16(bs, 0x582) >> 3);
+    unsigned EL = U16(s, SPO(PP, 10)), ER = U16(s, SPO(PP, 10) + 2);
+    uint8_t fr = (uint8_t)(U16(bs, SPO(PP, 6)) >> 3), fg = (uint8_t)(U16(bs, SPO(PP, 6) + 2) >> 3), fb = (uint8_t)(U16(bs, SPO(PP, 8) + 2) >> 3);
 
     for (unsigned i = 0; i < C; i++) {
         unsigned j = i & 7;
@@ -173,13 +174,13 @@ static void line_px(poly_t *P, uint8_t *s, const uint8_t *bs, unsigned y, uint8_
  * stages run whole vectors, so that lane holds the line's continuation against the next pixel's buffer state).
  * writeback_alpha_asm_4x stores lane C's id as the last pixel's id of a batch-ending line with C % 8 == 5. */
 static uint8_t tail_id(poly_t *P, const uint8_t *s, const uint8_t *bs, unsigned y, unsigned i) {
-    unsigned X = U16(s, 0x580), C = U16(s, 0x630);
-    const uint32_t *col_l = (const uint32_t *)(P->ctx + CTX_COLOR + y * 0x800) + X;
-    const uint32_t *att_l = (const uint32_t *)(P->ctx + CTX_ATTR + y * 0x800) + X;
-    const uint8_t *id_l = P->ctx + CTX_IDBUF + y * 0x200 + X;
+    unsigned X = U16(s, SPO(PP, 8)), C = U16(s, SPO(PP, 9));
+    const uint32_t *col_l = (const uint32_t *)(P->ctx + y * P->lstride) + X;
+    const uint32_t *att_l = (const uint32_t *)(P->ctx + P->attr_off + y * P->lstride) + X;
+    const uint8_t *id_l = P->ctx + P->id_off + y * P->id_stride + X;
     uint32_t fl = P->flags;
-    int32_t W0 = (int32_t)U32(s, 0x000), dW = (int32_t)U32(s, 0x0b0);
-    uint32_t Z0 = U32(s, 0x160); int32_t dZ = (int32_t)U32(s, 0x210);
+    int32_t W0 = (int32_t)U32(s, SPO(PP, 0)), dW = (int32_t)U32(s, SPO(PP, 1));
+    uint32_t Z0 = U32(s, SPO(PP, 2)); int32_t dZ = (int32_t)U32(s, SPO(PP, 3));
     uint64_t zstep = (uint64_t)((int64_t)dZ * (int64_t)(int32_t)P->recip[C] + (dZ < 0 ? 0x3fffffff : 0));
     float fW0 = (float)W0, fD = (float)dW, S = (float)(int32_t)(uint32_t)((uint32_t)W0 + (uint32_t)dW) * (float)C;
     float num = (float)(i & 7) * fW0, den = fmaf(-(float)(i & 7), fD, S);
@@ -196,7 +197,7 @@ static uint8_t tail_id(poly_t *P, const uint8_t *s, const uint8_t *bs, unsigned 
     else m = (da & 0xffffff) > dep;
     uint32_t sa = P->A;
     if (fl & 2) {
-        uint32_t st0 = U32(s, 0x2c0), dst = U32(s, 0x370);
+        uint32_t st0 = U32(s, SPO(PP, 4)), dst = U32(s, SPO(PP, 5));
         int16_t du = (int16_t)dst, dv = (int16_t)(dst >> 16);
         uint32_t U0 = ((uint32_t)(int32_t)(int16_t)st0 << 15) + (du > 0 ? 0x400 : 0);
         uint32_t V0 = ((uint32_t)(int32_t)(int16_t)(st0 >> 16) << 15) + (dv > 0 ? 0x400 : 0);
@@ -261,17 +262,31 @@ static unsigned tex_min_alpha(const poly_t *P) {
     return tex_min_alpha_scan(P);
 }
 
+#undef PP
+#define PP (&P)
+const layout_t layout_2x = { 0xb0, 0x800, CTX_ATTR, CTX_IDBUF, 0x200, 0x400, 512, 32, 0, CTX_SYS };
+
 void f_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
                 unsigned flags, uint8_t *v0) {
-    f_run_4x(ctx, spans, poly, buf, line0, nlines, flags, v0, 0, 0);
+    f_run(&layout_2x, ctx, spans, poly, buf, line0, nlines, flags, v0, 0, 0);
 }
 
 int f_run_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
              unsigned flags, uint8_t *v0, int dmode, unsigned idx) {
+    return f_run(&layout_2x, ctx, spans, poly, buf, line0, nlines, flags, v0, dmode, idx);
+}
+
+int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0,
+          unsigned nlines, unsigned flags, uint8_t *v0, int dmode, unsigned idx) {
     poly_t P;
-    P.ctx = ctx; P.sys = PTR(ctx, CTX_SYS); P.geom = PTR(ctx, CTX_GEOM); P.poly = poly; P.v0 = v0;
+    P.sps = L->sps; P.lstride = L->lstride; P.attr_off = L->attr_off; P.id_off = L->id_off;
+    P.id_stride = L->id_stride; P.owner_stride = L->owner_stride; P.hr = L->hr;
+    P.ctx = ctx; P.sys = PTR(ctx, L->hdr_off); P.geom = PTR(ctx, L->hdr_off + 8); P.poly = poly; P.v0 = v0;
     P.attr = U32(poly, 4); P.mode = (P.attr >> 4) & 3;
-    if (P.mode == 3) { b0_setup_4x(ctx, spans, poly, buf, line0, nlines, flags, v0); return 1; }
+    if (P.mode == 3) {
+        if (L->hr) return 0;                                /* hr.c: shadow polygons are not rendered yet */
+        b0_setup_4x(ctx, spans, poly, buf, line0, nlines, flags, v0); return 1;
+    }
     P.pid = (P.attr >> 24) & 63; P.A = (P.attr >> 16) & 31; P.flags = flags;
     P.d3 = U32(P.sys, SYS_DISP3DCNT); P.aref = U32(P.sys, 0x34eb44);
     P.dmode = dmode; P.owner = dmode ? defer_owner() : 0; P.idx = idx;
@@ -301,15 +316,15 @@ int f_run_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned
         P.t_lo = P.mt == CLAMP ? 0 : -32768; P.t_hi = P.mt == CLAMP ? (int16_t)(P.th - 1) : 32767;
         P.t_and = P.mt == CLAMP ? 0xffff : (uint16_t)(P.th - 1); P.t_flip = P.mt == FLIP ? (uint16_t)(P.th & ~(P.th - 1)) : 0;
     }
-    batch_fn *bf = use_neon >= 3 ? asm_batch_for(&P) : use_neon ? neon_batch_for(&P) : 0;
+    batch_fn *bf = use_neon >= 3 || L->hr ? asm_batch_for(&P) : use_neon ? neon_batch_for(&P) : 0;
 
     unsigned line = line0, left = nlines, i = 0;
     while (left) {
-        while (left && !U16(spans, 0x630 + 4 * i)) { i++; line++; left--; }
+        while (left && !U16(spans, SPO(PP, 9) + 4 * i)) { i++; line++; left--; }
         if (!left) break;
         unsigned first = i, k = 0, n = 0;
         while (left) {
-            unsigned c = U16(spans, 0x630 + 4 * i);
+            unsigned c = U16(spans, SPO(PP, 9) + 4 * i);
             if (!c || n + c > 512) break;
             n += c; k++; i++; left--;
         }
@@ -324,10 +339,10 @@ int f_run_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned
             else for (unsigned l = 0; l < k; l++) line_px(&P, bs + 4 * l, bs, line + l, &id0[l]);
             if (P.pass)
                 for (unsigned l = 0; l < k; l++) {
-                    unsigned c = U16(bs, 0x630 + 4 * l);
+                    unsigned c = U16(bs, SPO(PP, 9) + 4 * l);
                     if (c % 8 != 5) continue;
                     uint8_t id = l + 1 < k ? id0[l + 1] : tail_id(&P, bs + 4 * l, bs, line + l, c);
-                    ctx[CTX_IDBUF + (line + l) * 0x200 + U16(bs, 0x580 + 4 * l) + c - 1] = id;
+                    ctx[P.id_off + (line + l) * P.id_stride + U16(bs, SPO(PP, 8) + 4 * l) + c - 1] = id;
                 }
         } else {
             if (bf) bf(&P, bs, k, line, 0);
@@ -336,6 +351,6 @@ int f_run_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned
         line += k;
     }
     if ((P.fogused & 1) && (((flags & 1) && (P.attr & (1u << 15))) || (!(flags & 1) && (P.attr & (1u << 15)))))
-        U32(ctx, CTX_FOGUSED) = 1;
+        U32(ctx, L->hdr_off + 0x14) = 1;
     return P.pass;
 }

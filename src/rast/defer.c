@@ -17,34 +17,37 @@
 
 int rast_defer;
 
-typedef struct { uint8_t *poly, *v0; unsigned flags, line0, nlines; uint8_t spans[0x800]; } dq_t;
+typedef struct { uint8_t *poly, *v0; unsigned flags, line0, nlines; uint8_t spans[0xb00]; } dq_t;
 #define DQ_MAX 4096
+#define OWNER_MAX (50 * 768 * 2)        /* the largest layout's (hr.c) */
 static __thread dq_t *dq;
 static __thread unsigned dq_n, dq_cap;
 static __thread uint16_t *owner;
+static __thread const layout_t *dq_layout;
 
 uint16_t *defer_owner(void) {
     /* the kernels store whole groups of 8: the last line's last group may run 7 entries past the end */
-    if (!owner) { owner = aligned_alloc(64, 32 * 512 * 2 + 64); memset(owner, 0xff, 32 * 512 * 2 + 64); }
+    if (!owner) { owner = aligned_alloc(64, OWNER_MAX + 64); memset(owner, 0xff, OWNER_MAX + 64); }
     return owner;
 }
 
-void defer_poly(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
-                unsigned flags, uint8_t *v0) {
-    if (dq_n == DQ_MAX) defer_flush(ctx);
+void defer_poly(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0,
+                unsigned nlines, unsigned flags, uint8_t *v0) {
+    if (dq_n == DQ_MAX) defer_flush(L, ctx);
     if (dq_n == dq_cap) { dq_cap = dq_cap ? 2 * dq_cap : 256; dq = realloc(dq, dq_cap * sizeof *dq); }
-    if (!f_run_4x(ctx, spans, poly, buf, line0, nlines, flags, v0, 1, dq_n)) return;   /* no pixel: nothing to shade */
+    dq_layout = L;
+    if (!f_run(L, ctx, spans, poly, buf, line0, nlines, flags, v0, 1, dq_n)) return;   /* no pixel: nothing to shade */
     dq_t *e = &dq[dq_n++];
     e->poly = poly; e->v0 = v0; e->flags = flags; e->line0 = line0; e->nlines = nlines;
-    memcpy(e->spans, spans, sizeof e->spans);
+    memcpy(e->spans, spans, 11 * L->sps);
 }
 
-void defer_flush(uint8_t *ctx) {
+void defer_flush(const layout_t *L, uint8_t *ctx) {
     if (!dq_n) return;
     for (unsigned i = 0; i < dq_n; i++) {
         dq_t *e = &dq[i];
-        f_run_4x(ctx, e->spans, e->poly, 0, e->line0, e->nlines, e->flags, e->v0, 2, i);
+        f_run(L, ctx, e->spans, e->poly, 0, e->line0, e->nlines, e->flags, e->v0, 2, i);
     }
-    memset(owner, 0xff, 32 * 512 * 2);
+    memset(owner, 0xff, L->lines * L->width * 2);
     dq_n = 0;
 }

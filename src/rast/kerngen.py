@@ -37,9 +37,18 @@ import sys
 # kargs_t layout (fused_asm.c mirrors it): the per-polygon constants; everything per line comes from the span entry
 K = dict(recip=0x00, recip_u=0x08, tex=0x10, pal=0x18, pid24=0x20, bytes=0x30, K=0x38, tw=0x3c,
          s_and=0x40, t_and=0x50, s_lo=0x60, t_lo=0x70, s_hi=0x80, t_hi=0x90, s_flip=0xa0, t_flip=0xb0,
-         fraclut=0xc0, owner=0xd0, idx16=0xe0, size=0xf0)
-# span entry fields (stride 4 per line), see spec/edges.c
-SP = dict(W0=0x000, dW=0x0b0, Z0=0x160, dZ=0x210, st0=0x2c0, dst=0x370, rg0=0x420, drg=0x4d0, xb=0x580, cdb=0x630)
+         fraclut=0xc0, owner=0xd0, idx16=0xe0, lstride=0xf0, attr_off=0xf4, id_off=0xf8, id_stride=0xfc,
+         owner_stride=0x100, size=0x110)
+# span entry fields (stride 4 per line), see spec/edges.c; SPS = bytes per array (DraStic's 0xb0; the hi-res
+# pipeline's 48-line bins use 0x100), HR = the hi-res kernel set: buffer strides from kargs instead of DraStic's
+# context layout (line 0x800 bytes, attributes at +0x10000, ids at +0x20000 with 0x200 per line, owners 0x400)
+SPS, HR, PFX = 0xb0, False, "rast_kern_"
+def span_layout(stride):
+    global SPS, SP
+    SPS = stride
+    SP = dict(W0=0, dW=stride, Z0=2 * stride, dZ=3 * stride, st0=4 * stride, dst=5 * stride, rg0=6 * stride,
+              drg=7 * stride, xb=8 * stride, cdb=9 * stride, edges=10 * stride)
+span_layout(0xb0)
 # lanes of the delta register v15
 L_DR, L_DG, L_DB, L_TW, L_DU, L_DV = 0, 1, 2, 3, 4, 5
 
@@ -65,12 +74,23 @@ def prologue(name, D, T, R, F, M=0):
     e("mov x9, x22"); e("mov w7, w27")
     e(f"ldrh w5, [x9, #{SP['cdb']}]")                                           # C
     e(f"ldrh w8, [x9, #{SP['xb']}]")                                            # X
-    e("lsl x10, x24, #11"); e("add x1, x25, x10"); e("add x1, x1, x8, lsl #2")
-    e("add x2, x1, #0x10, lsl #12"); e("mov x28, x2")
-    if M == 1: e(f"ldr x10, [x19, #{K['owner']}]"); e("add x1, x10, x24, lsl #10"); e("add x1, x1, x8, lsl #1")
-    if M == 2: e(f"ldr x10, [x19, #{K['owner']}]"); e("add x2, x10, x24, lsl #10"); e("add x2, x2, x8, lsl #1")
-    if R: e("lsl x10, x24, #9"); e("add x3, x25, x10"); e("add x3, x3, #0x20, lsl #12"); e("add x3, x3, x8")
-    else: e("add x3, sp, #256")
+    if HR:
+        e(f"ldr w10, [x19, #{K['lstride']}]"); e("mul x10, x24, x10"); e("add x1, x25, x10"); e("add x1, x1, x8, lsl #2")
+        e(f"ldr w10, [x19, #{K['attr_off']}]"); e("add x2, x1, x10"); e("mov x28, x2")
+        if M:
+            e(f"ldr w10, [x19, #{K['owner_stride']}]"); e("mul x10, x24, x10"); e(f"ldr x11, [x19, #{K['owner']}]")
+            e(f"add x{M}, x11, x10"); e(f"add x{M}, x{M}, x8, lsl #1")
+        if R:
+            e(f"ldr w10, [x19, #{K['id_stride']}]"); e("mul x10, x24, x10"); e(f"ldr w11, [x19, #{K['id_off']}]")
+            e("add x3, x25, x11"); e("add x3, x3, x10"); e("add x3, x3, x8")
+        else: e("add x3, sp, #256")
+    else:
+        e("lsl x10, x24, #11"); e("add x1, x25, x10"); e("add x1, x1, x8, lsl #2")
+        e("add x2, x1, #0x10, lsl #12"); e("mov x28, x2")
+        if M == 1: e(f"ldr x10, [x19, #{K['owner']}]"); e("add x1, x10, x24, lsl #10"); e("add x1, x1, x8, lsl #1")
+        if M == 2: e(f"ldr x10, [x19, #{K['owner']}]"); e("add x2, x10, x24, lsl #10"); e("add x2, x2, x8, lsl #1")
+        if R: e("lsl x10, x24, #9"); e("add x3, x25, x10"); e("add x3, x3, #0x20, lsl #12"); e("add x3, x3, x8")
+        else: e("add x3, sp, #256")
     # perspective steps: num_j = j * W0, den_j = (W0 + dW) * C - j * dW, as floats; or the affine lane counters
     e(f"ldr w8, [x9, #{SP['W0']}]"); e(f"ldr w10, [x9, #{SP['dW']}]")
     e("add w11, w8, w10"); e("scvtf s24, w11"); e("ucvtf s25, w5"); e("fmul s24, s24, s25")
@@ -125,13 +145,13 @@ def line_end(R):
         # polygon wrote; EL may be C + 1 on the polygon's last line (DraStic marks its padding)
         e("tbz w27, #6, 15f")
         e(f"ldr w13, [x19, #{K['pid24']}]")
-        e("ldrh w8, [x22, #0x6e0]"); e("cmp w8, w5"); e("csel w8, w8, w5, lo"); e("mov x10, #0")
+        e(f"ldrh w8, [x22, #{SP['edges']}]"); e("cmp w8, w5"); e("csel w8, w8, w5, lo"); e("mov x10, #0")
         e("11:"); e("cmp x10, x8"); e("b.hs 12f")
         e("ldrb w12, [x3, x10]"); e("cbz w12, 13f")
         e("ldr w12, [x28, x10, lsl #2]"); e("and w12, w12, #0xffffff"); e("orr w12, w12, #0x40000000"); e("orr w12, w12, w13"); e("str w12, [x28, x10, lsl #2]")
         e("13:"); e("add x10, x10, #1"); e("b 11b")
         e("12:")
-        e("ldrh w8, [x22, #0x6e2]"); e("cmp w8, w5"); e("csel w8, w8, w5, lo"); e("sub x10, x5, x8")
+        e(f"ldrh w8, [x22, #{SP['edges'] + 2}]"); e("cmp w8, w5"); e("csel w8, w8, w5, lo"); e("sub x10, x5, x8")
         e("14:"); e("cmp x10, x5"); e("b.hs 15f")
         e("ldrb w12, [x3, x10]"); e("cbz w12, 16f")
         e("ldr w12, [x28, x10, lsl #2]"); e("and w12, w12, #0xffffff"); e("orr w12, w12, #0x40000000"); e("orr w12, w12, w13"); e("str w12, [x28, x10, lsl #2]")
@@ -464,7 +484,7 @@ def shade_store():
 
 def kernel_vis(D, T):
     """visibility pass of a deferred opaque polygon; T only for textures whose alpha test can fail"""
-    name = f"rast_kern_v{D}{T}"
+    name = f"{PFX}v{D}{T}"
     prologue(name, D, T, 0, 0, 1)
     e("0:")
     if D == 1 or T: steps()
@@ -483,7 +503,7 @@ def kernel_vis(D, T):
 
 def kernel_shade(T, F, B):
     """shade pass of a deferred opaque polygon: the pixels it owns"""
-    name = f"rast_kern_s{T}{F}{B}"
+    name = f"{PFX}s{T}{F}{B}"
     prologue(name, 2, T, 0, F, 2)
     e("0:")
     steps(); owner_test(); colour(T, F, B, 2); shade_store()
@@ -495,7 +515,7 @@ def kernel_shade(T, F, B):
     e()
 
 def kernel(D, T, R, F, B):
-    name = f"rast_kern_{D}{T}{R}{F}{B}"
+    name = f"{PFX}{D}{T}{R}{F}{B}"
     prologue(name, D, T, R, F)
     e("0:")
     steps(); depth(D); test(D); colour(T, F, B)
@@ -510,17 +530,21 @@ def kernel(D, T, R, F, B):
 
 e("// generated by kerngen.py: do not edit")
 e(".text")
-for D in range(3):
+def all_kernels():
+    for D in range(3):
+        for T in range(5):
+            for R in range(2):
+                for F in range(2):
+                    for B in range(2 if T else 1):
+                        kernel(D, T, R, F, B)
+    for D in range(3):
+        for T in range(5): kernel_vis(D, T)
     for T in range(5):
-        for R in range(2):
-            for F in range(2):
-                for B in range(2 if T else 1):
-                    kernel(D, T, R, F, B)
-for D in range(3):
-    for T in range(5): kernel_vis(D, T)
-for T in range(5):
-    for F in range(2):
-        for B in range(2 if T else 1): kernel_shade(T, F, B)
+        for F in range(2):
+            for B in range(2 if T else 1): kernel_shade(T, F, B)
+all_kernels()                                       # DraStic's layout (the exact 2x path)
+span_layout(0x100); HR = True; PFX = "rast_kern_h"  # the hi-res pipeline (hr.c)
+all_kernels()
 e(".section .rodata")
 e(".balign 16")
 e("rast_kern_tail:")
