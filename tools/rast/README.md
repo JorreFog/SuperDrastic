@@ -25,8 +25,8 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   `RAST_COMP` 0 off, 1 the NEON replacement only, 2 the table, the default; `RAST_COMPCHECK=1` checks every
   answer against a C port of DraStic's routine). A quarter that shows only the 3D layer and the backdrop is then
   written in one NEON pass instead of DraStic's five-stage chain (`render_scanline_2d_composite` hooked,
-  `RAST_COMPFUSE=0` off): on the stress ROM the chain's @@L4BEFORE@@ M a frame become @@L4AFTER@@ M, on the field
-  scene @@S7BEFORE@@ M become @@S7AFTER@@ M, checked byte for byte against the original in the running emulator.
+  `RAST_COMPFUSE=0` off): on the stress ROM the chain's 0.81 M a frame become 0.39 M, on the field
+  scene 0.47 M become 0.07 M, checked byte for byte against the original in the running emulator.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -121,8 +121,8 @@ itself against the original on random engines, scratch areas and quarters throug
 on and off; `RAST_COMPCHECK=1` runs every fused call twice in the emulator (ours, then the original through the
 trampoline on the same input bytes) and compares the scratch frame, the planes, the 3D pixels and the engine
 (`[comp] composite:` counts every 2 s). Cost per frame (simulator instruction counts, 90 s each): the chain's
-functions on the stress ROM L4 @@L4BEFORE@@ M -> @@L4AFTER@@ M (the quarters of engine B, which has no 3D layer,
-stay with DraStic's chain), on the field scene S7 @@S7BEFORE@@ M -> @@S7AFTER@@ M; frame totals @@L4TOT@@ and @@S7TOT@@.
+functions on the stress ROM L4 0.81 M -> 0.39 M (the quarters of engine B, which has no 3D layer,
+stay with DraStic's chain), on the field scene S7 0.47 M -> 0.07 M; frame totals 16.6 M (was 17.8) and 3.5 M (was 3.4; the totals move by about 0.5 M between runs, the per-call costs are exact: about 620 instructions a quarter before, 45 / 30 / 150 after).
 
 ## How it works
 
