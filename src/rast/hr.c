@@ -301,38 +301,99 @@ static __attribute__((noinline)) void fog_line(uint32_t *c, const uint8_t *w, ui
     }
     (void)x7f;
 }
-/* edge marking of a line, NEON over 8 pixels: a pixel C is an edge against a neighbour N (left, right, above,
- * below; the clear attribute beyond the line's ends) when N's 24-bit key is larger and the polygon ids differ
- * (c3 = ((C >> 24) & 0x7f) ^ 0x40 against n3 = (N >> 24) & 0x3f); the edge byte is c3 >> 3, or 0xff when no edge;
- * marked pixels (edge byte < 8, i.e. the polygon's edge flag set) take the edge colour of their id >> 3 and keep
- * alpha bits 0-4; unmarked ones get alpha (ca & 0x1f) | ((e >> 3) & 0xe0) (spec/resolve.c's edge_mark). */
-static __attribute__((noinline)) void edge_line(uint32_t *out, const uint32_t *col, const uint32_t *cur, const uint32_t *above, const uint32_t *below,
-                      uint32_t clear, const uint8_t *ec) {
-    const uint32x4_t key = vdupq_n_u32(0xffffff), x40 = vdupq_n_u32(0x40), clr = vdupq_n_u32(clear);
-    const uint8x8_t ecr = vld1_u8(ec), ecg = vld1_u8(ec + 8), ecb = vld1_u8(ec + 16);
-    uint32x4_t prev = clr;
-    for (int x = 0; x < HR_W; x += 4) {
-        uint32x4_t c = vld1q_u32(cur + x);
-        uint32x4_t next = x + 4 < HR_W ? vld1q_u32(cur + x + 4) : clr;
-        uint32x4_t l = vextq_u32(prev, c, 3), r = vextq_u32(c, next, 1);
-        uint32x4_t a = vld1q_u32(above + x), b = vld1q_u32(below + x);
-        uint32x4_t ck = vandq_u32(c, key), c3 = veorq_u32(vandq_u32(vshrq_n_u32(c, 24), vdupq_n_u32(0x7f)), x40);
-#define EDGE(N) vandq_u32(vcgtq_u32(vandq_u32(N, key), ck), vmvnq_u32(vceqq_u32(vandq_u32(vshrq_n_u32(N, 24), vdupq_n_u32(0x3f)), c3)))
-        uint32x4_t any = vorrq_u32(vorrq_u32(EDGE(l), EDGE(r)), vorrq_u32(EDGE(a), EDGE(b)));
-#undef EDGE
-        uint32x4_t e = vandq_u32(vorrq_u32(vshrq_n_u32(c3, 3), vmvnq_u32(any)), vdupq_n_u32(0xff));   /* the edge byte; 0xff no edge */
-        uint32x4_t px = vld1q_u32(col + x);
-        uint32x4_t marked = vcltq_u32(e, vdupq_n_u32(8));
-        uint8x8_t idx = vmovn_u16(vcombine_u16(vmovn_u32(vandq_u32(e, vdupq_n_u32(7))), vdup_n_u16(0)));
-        /* the edge colours of the 4 pixels: tbl on the 8-entry tables, lanes 0-3 */
-        uint8x8_t er = vtbl1_u8(ecr, idx), eg = vtbl1_u8(ecg, idx), eb = vtbl1_u8(ecb, idx);
-        uint32x4_t ecol = vorrq_u32(vorrq_u32(vmovl_u16(vget_low_u16(vmovl_u8(er))), vshlq_n_u32(vmovl_u16(vget_low_u16(vmovl_u8(eg))), 8)),
-                                    vshlq_n_u32(vmovl_u16(vget_low_u16(vmovl_u8(eb))), 16));
-        uint32x4_t alpha = vorrq_u32(vandq_u32(px, vdupq_n_u32(0x1f000000)), vshlq_n_u32(vandq_u32(vshrq_n_u32(e, 3), vdupq_n_u32(0xe0)), 24));
-        uint32x4_t res = vbslq_u32(marked, ecol, vandq_u32(px, key));
-        vst1q_u32(out + x, vorrq_u32(res, alpha));
-        prev = c;
-    }
+/* edge marking (spec/resolve.c's edge_identify + edge_mark): a pixel C is an edge against a neighbour N (left, right,
+ * above, below; the clear attribute beyond the line's ends) when N's 24-bit key is larger and the polygon ids differ
+ * (c3 = ((C >> 24) & 0x7f) ^ 0x40 against n3 = (N >> 24) & 0x3f, never equal when C's bit 30 is clear); the edge byte
+ * is c3 >> 3, or 0xff when no edge; pixels with an edge byte < 8 (an edge and bit 30 set) take the edge colour of
+ * their id >> 3, all others keep r, g, b, and every alpha byte becomes ca & 0x1f (the edge byte's (e >> 3) & 0xe0 is
+ * always 0). So per pixel:
+ *   marked = bit 30 of C && some N with (N & 0xffffff) > (C & 0xffffff) and (N ^ C) & 0x3f000000,
+ *   out = marked ? ec[(C >> 27) & 7] (r, g, b) | (px & 0x1f000000) : px & 0x1fffffff.
+ * NEON over 16 pixels on byte planes: ld4 splits 16 attribute words into the key bytes k0, k1, k2 and the top byte t,
+ * and 16 colours into r, g, b, a (st4 interleaves them back). N > C is lexicographic over the key planes,
+ * k2 == ? (k1 == ? k0 > : k1 >) : k2 >, with cmeq/cmhi and two selects. The id test is folded in: (N > C) & (tN ^ tC)
+ * is nonzero in bits 0-5 iff N is an edge for C (bit 30 aside), so the four are ORed and tested against 0x3f once.
+ * Neighbours share their compares: from the same equalities, N > C and N >= C, whose complement is C > N, and the same
+ * id xor give the test of C against N and the test of N against C. So the pair (x, x+1) gives the right test of x
+ * and the left test of x+1 (the left results move one lane on, the lane before pixel 0 being pixel 0's test against
+ * the clear attribute; the pixels to the right are an ld4 one pixel on), and two lines are marked at once: the pair
+ * (line l, line l+1) gives the below test of l and the above test of l+1. The colour is a tbx on 16-entry tables
+ * (entries 2i and 2i+1 = ec[7 - i]) indexed by ~(t >> 2) & 0x1f = 15 - (id >> 2) when bit 30 is set (16 or more when
+ * clear) and by 31 where there is no edge: out-of-range indices keep the pixel's colour. */
+static inline __attribute__((always_inline)) uint8x16_t edge_sel(uint8x16_t m, uint8x16_t t, uint8x16_t f) {
+    /* m ? t : f as one bif (the bsl intrinsic becomes and/orr pairs when the compiler sees that the operands of the
+     * compare chains are exclusive). f must not be an all-ones constant when testing under qemu: 9.2's TCG folds a
+     * bit select whose false operand is a known -1 to -1 (fold_bitsel_vec's orc case swaps the wrong operands). */
+    __asm__("bif %0.16b, %1.16b, %2.16b" : "+w"(t) : "w"(f), "w"(m));
+    return t;
+}
+/* N > C on the key planes */
+static inline __attribute__((always_inline)) uint8x16_t edge_gt(uint8x16x4_t n, uint8x16x4_t c) {
+    return edge_sel(vceqq_u8(n.val[2], c.val[2]), edge_sel(vceqq_u8(n.val[1], c.val[1]), vcgtq_u8(n.val[0], c.val[0]),
+                                                         vcgtq_u8(n.val[1], c.val[1])), vcgtq_u8(n.val[2], c.val[2]));
+}
+/* a pair of neighbours: *nc = the test of C against N ((N > C) & id xor), returns the test of N against C */
+static inline __attribute__((always_inline)) uint8x16_t edge_pair(uint8x16x4_t n, uint8x16x4_t c, uint8x16_t *nc) {
+    uint8x16_t e1 = vceqq_u8(n.val[1], c.val[1]), e2 = vceqq_u8(n.val[2], c.val[2]), g1 = vcgtq_u8(n.val[1], c.val[1]);
+    uint8x16_t g2 = vcgtq_u8(n.val[2], c.val[2]), xid = veorq_u8(n.val[3], c.val[3]);
+    uint8x16_t gt = edge_sel(e2, edge_sel(e1, vcgtq_u8(n.val[0], c.val[0]), g1), g2);        /* N > C */
+    uint8x16_t ge = edge_sel(e2, edge_sel(e1, vcgeq_u8(n.val[0], c.val[0]), g1), g2);        /* N >= C */
+    *nc = vandq_u8(gt, xid);
+    return vbicq_u8(xid, ge);
+}
+/* the marking of 16 pixels with the top bytes t and the tests y */
+static inline __attribute__((always_inline)) void edge_mark(uint32_t *out, const uint32_t *col, uint8x16_t t, uint8x16_t y,
+                                                            uint8x16_t er, uint8x16_t eg, uint8x16_t eb) {
+    const uint8x16_t m1f = vdupq_n_u8(0x1f), m3f = vdupq_n_u8(0x3f);
+    /* ~(t >> 2) & 0x1f = 15 - (id >> 2) + (bit 30 clear ? 16 : 0) where there is an edge, 31 where not */
+    uint8x16_t idx = edge_sel(vtstq_u8(y, m3f), vbicq_u8(m1f, vshrq_n_u8(t, 2)), m1f);
+    uint8x16x4_t p = vld4q_u8((const uint8_t *)col);
+    p.val[0] = vqtbx1q_u8(p.val[0], er, idx); p.val[1] = vqtbx1q_u8(p.val[1], eg, idx); p.val[2] = vqtbx1q_u8(p.val[2], eb, idx);
+    p.val[3] = vandq_u8(p.val[3], m1f);
+    vst4q_u8((uint8_t *)out, p);
+}
+/* 16 pixels of two lines (the last ones of the lines when last: the clear attribute to the right), lp0 and lp1 = the
+ * previous block's left tests (lane 15 is the one for this block's pixel 0), replaced by this block's */
+static inline __attribute__((always_inline)) void edge_block(uint32_t *out0, uint32_t *out1, const uint32_t *col0, const uint32_t *col1,
+                                                             const uint32_t *a, const uint32_t *c0, const uint32_t *c1, const uint32_t *b,
+                                                             int last, uint8x16x4_t k, uint8x16_t *lp0, uint8x16_t *lp1,
+                                                             uint8x16_t er, uint8x16_t eg, uint8x16_t eb) {
+    uint8x16x4_t p0 = vld4q_u8((const uint8_t *)c0), p1 = vld4q_u8((const uint8_t *)c1), r, n;
+    uint8x16_t y0, y1, v, lt;
+    /* the right neighbours: the planes of an ld4 one pixel on */
+    if (!last) r = vld4q_u8((const uint8_t *)(c0 + 1));
+    else for (int i = 0; i < 4; i++) r.val[i] = vextq_u8(p0.val[i], k.val[i], 1);
+    lt = edge_pair(r, p0, &y0);
+    y0 = vorrq_u8(y0, vextq_u8(*lp0, lt, 15)); *lp0 = lt;
+    n = vld4q_u8((const uint8_t *)a);
+    y0 = vorrq_u8(y0, vandq_u8(edge_gt(n, p0), veorq_u8(n.val[3], p0.val[3])));
+    y1 = edge_pair(p1, p0, &v);                                 /* line 1 against line 0 above it, and the reverse */
+    edge_mark(out0, col0, p0.val[3], vorrq_u8(y0, v), er, eg, eb);
+    if (!last) r = vld4q_u8((const uint8_t *)(c1 + 1));
+    else for (int i = 0; i < 4; i++) r.val[i] = vextq_u8(p1.val[i], k.val[i], 1);
+    lt = edge_pair(r, p1, &v);
+    y1 = vorrq_u8(vorrq_u8(y1, v), vextq_u8(*lp1, lt, 15)); *lp1 = lt;
+    n = vld4q_u8((const uint8_t *)b);
+    y1 = vorrq_u8(y1, vandq_u8(edge_gt(n, p1), veorq_u8(n.val[3], p1.val[3])));
+    edge_mark(out1, col1, p1.val[3], y1, er, eg, eb);
+}
+/* two lines of the bin, out0/col0/c0 and out1/col1/c1 (the line below), a = the line above the first, b = the line
+ * below the second */
+static __attribute__((noinline)) void edge_lines(uint32_t *out0, uint32_t *out1, const uint32_t *col0, const uint32_t *col1,
+                                                 const uint32_t *a, const uint32_t *c0, const uint32_t *c1, const uint32_t *b,
+                                                 uint32_t clear, const uint8_t *ec) {
+    uint8x8_t ecr = vrev64_u8(vld1_u8(ec)), ecg = vrev64_u8(vld1_u8(ec + 8)), ecb = vrev64_u8(vld1_u8(ec + 16));
+    uint8x16_t er = vcombine_u8(ecr, ecr), eg = vcombine_u8(ecg, ecg), eb = vcombine_u8(ecb, ecb);
+    er = vzip1q_u8(er, er); eg = vzip1q_u8(eg, eg); eb = vzip1q_u8(eb, eb);       /* entries 2i, 2i+1 = ec[7 - i] */
+    /* the left tests of the lines' pixel 0 against the clear attribute, in lane 15 */
+    uint8x16_t lp0 = vsetq_lane_u8((clear & 0xffffff) > (c0[0] & 0xffffff) ? (uint8_t)((clear ^ c0[0]) >> 24) : 0, vdupq_n_u8(0), 15);
+    uint8x16_t lp1 = vsetq_lane_u8((clear & 0xffffff) > (c1[0] & 0xffffff) ? (uint8_t)((clear ^ c1[0]) >> 24) : 0, vdupq_n_u8(0), 15);
+    const uint8x16x4_t k = { { vdupq_n_u8((uint8_t)clear), vdupq_n_u8((uint8_t)(clear >> 8)), vdupq_n_u8((uint8_t)(clear >> 16)),
+                               vdupq_n_u8((uint8_t)(clear >> 24)) } };
+    int x = 0;
+    for (; x < HR_W - 16; x += 16)
+        edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 0, k, &lp0, &lp1, er, eg, eb);
+    edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
 }
 static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
@@ -344,11 +405,12 @@ static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint
     (void)bin;
 #define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
 #define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
-    for (int l = 1; l <= HR_BL; l++) {
+    _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
+    for (int l = 1; l <= HR_BL; l += 2) {               /* two lines a step: the edge marking shares their compares */
         uint32_t *o = H->out + (l - 1) * HR_W;
-        if (fog) { fog_weights(ATT(l), w, geom + 0x9974, params); fog_line(COL(l), w, fogc, fog == 1); }
-        if (edges) edge_line(o, COL(l), ATT(l), ATT(l - 1), ATT(l + 1), clear, geom + 0x99b4);
-        else for (int x = 0; x < HR_W; x++) o[x] = COL(l)[x] & 0x1fffffff;
+        if (fog) for (int k = l; k <= l + 1; k++) { fog_weights(ATT(k), w, geom + 0x9974, params); fog_line(COL(k), w, fogc, fog == 1); }
+        if (edges) edge_lines(o, o + HR_W, COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), clear, geom + 0x99b4);
+        else for (int x = 0; x < 2 * HR_W; x++) o[x] = COL(l)[x] & 0x1fffffff;
     }
 #undef COL
 #undef ATT
