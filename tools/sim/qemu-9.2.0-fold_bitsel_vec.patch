@@ -1,0 +1,19 @@
+diff --git a/tcg/optimize.c b/tcg/optimize.c
+index e9ef16b..00f1e43 100644
+--- a/tcg/optimize.c
++++ b/tcg/optimize.c
+@@ -2783,9 +2783,12 @@ static bool fold_bitsel_vec(OptContext *ctx, TCGOp *op)
+             return fold_and(ctx, op);
+         }
+         if (fv == -1 && TCG_TARGET_HAS_orc_vec) {
++            /* (a & b) | ~a == b | ~a: orc(b, a), not orc(c, a) with c == -1
++               (which folded every lane to all-ones). */
++            TCGArg sel = op->args[1];
+             op->opc = INDEX_op_orc_vec;
+-            op->args[2] = op->args[1];
+-            op->args[1] = op->args[3];
++            op->args[1] = op->args[2];
++            op->args[2] = sel;
+             return fold_orc(ctx, op);
+         }
+     }

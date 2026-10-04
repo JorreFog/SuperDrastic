@@ -26,7 +26,7 @@ typedef struct {                /* layout shared with kerngen.py (K dict): the p
     uint16_t *owner; uint64_t pad2;  /* deferred shading: the owner buffer and the polygon's index, splat */
     uint16_t idx16[8];
     uint32_t lstride, attr_off, id_off, id_stride, owner_stride, pad3[3];   /* the hi-res kernels' buffer layout */
-    uint32_t pal16[16];         /* the palette when it has at most 16 entries (flag bit 7): tbl lookups */
+    uint8_t pal16[4][16];       /* the palette when it has at most 16 entries (flag bit 7), per channel: tbl lookups */
 } kargs_t;
 _Static_assert(sizeof(kargs_t) == 0x150, "kargs_t layout");
 _Static_assert(__builtin_offsetof(kargs_t, pid24) == 0x20 && __builtin_offsetof(kargs_t, bytes) == 0x30 &&
@@ -87,15 +87,33 @@ static void kargs_poly(poly_t *P) {
         a->tex = P->paletted ? (const void *)P->idx8 : (const void *)P->texels32; a->pal = P->pal;
         if (P->paletted) {
             unsigned fmt = P->tex[0x49], np = fmt == 2 ? 4 : fmt == 3 ? 16 : 0;    /* I2, I4: 4 and 16 colours */
-            if (np) { memcpy(a->pal16, P->pal, np * 4); P->pal16 = 1; }
+            if (np) {
+                for (unsigned i = 0; i < np; i++) for (int c = 0; c < 4; c++) a->pal16[c][i] = (uint8_t)(P->pal[i] >> 8 * c);
+                P->pal16 = 1;
+            }
         }
-        /* texcoord(): flip where x & flip; clamp [lo, hi] (identity for wrap/flip); & (W-1) (identity for clamp) */
+        /* texcoord(): clamp axes (flag bits 11, 12) to [0, W-1]; the others flip where x & flip, & (W-1). (lo, hi:
+         * the clamp bounds, identity for wrap/flip; the kernels clamp with the sign and W-1 instead) */
         splat16(a->s_and, P->tw - 1); splat16(a->t_and, P->th - 1);
         splat16(a->s_lo, P->ms == CLAMP ? 0 : 0x8000); splat16(a->t_lo, P->mt == CLAMP ? 0 : 0x8000);
         splat16(a->s_hi, P->ms == CLAMP ? P->tw - 1 : 0xffff); splat16(a->t_hi, P->mt == CLAMP ? P->th - 1 : 0xffff);
         splat16(a->s_flip, P->ms == FLIP ? (uint16_t)(P->tw & ~(P->tw - 1)) : 0);
         splat16(a->t_flip, P->mt == FLIP ? (uint16_t)(P->th & ~(P->th - 1)) : 0);
     }
+}
+
+/* the batch's first line has a white vertex colour (rg 0x1ff 0x1ff, b 0x1ff, deltas 0) and A is 31: flag bit 9 makes the
+ * kernels look for white lines (modulate is the identity there). A batch whose first line is not white skips the
+ * per-line test and never takes the shortcut, which gives the same bits: a polygon's lines are white together or
+ * rarely at all. */
+static int first_white(const poly_t *P, const uint8_t *bs) {
+    return P->A == 31 && U32(bs, SPO(P, 6)) == 0x01ff01ff && !U32(bs, SPO(P, 7)) && U16(bs, SPO(P, 8) + 2) == 0x1ff &&
+           !U16(bs, SPO(P, 9) + 2);
+}
+
+/* flag bits 11 and 12: the texture's s and t axes clamp (the kernels' texcoord without the flip test) */
+static unsigned clamp_bits(const poly_t *P) {
+    return (P->flags & 2) ? (unsigned)(P->ms == CLAMP) << 11 | (unsigned)(P->mt == CLAMP) << 12 : 0;
 }
 
 /* a batch through the assembly kernel of this polygon's variant */
@@ -109,9 +127,11 @@ static void batch_asm(poly_t *P, const uint8_t *bs, unsigned k, unsigned line, u
     a->bytes[4] = (uint8_t)fr; a->bytes[5] = (uint8_t)fg; a->bytes[6] = (uint8_t)fb;
     int flat_white = (fl & 4) && T && P->A == 31 && fr == 63 && fg == 63 && fb == 63;
     const int edges = !R && ((P->d3 >> 5) & 1);
-    /* flags: 0 affine steps, 1 depth equal, 2 white (flat batches; the kernels compute it per line otherwise),
-     * 6 edge marking; translucent: 3 blend, 4 fog, 5 depth update */
+    const int wtest = T && !(fl & 4) && first_white(P, bs);
+    /* flags: 0 affine steps, 1 depth equal, 2 white (flat batches; per line with 9), 6 edge marking, 7 pal16, 8 no
+     * alpha test, 9 look for white lines, 10 A is 31, 11 12 s t clamp; translucent: 3 blend, 4 fog, 5 depth update */
     const unsigned flags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | flat_white << 2 | edges << 6 | P->pal16 << 7 |
+        P->noat << 8 | wtest << 9 | (P->A == 31) << 10 | clamp_bits(P) |
         (R ? ((P->d3 >> 3) & 1) << 3 | ((P->attr >> 15) & 1) << 4 | ((P->attr >> 11) & 1) << 5 : 0);
     uint8_t dummy[32];
     uint64_t anypass = kern(a, bs, k, line, P->ctx, flags, id0 ? id0 : dummy);
@@ -129,7 +149,8 @@ static void batch_vis(poly_t *P, const uint8_t *bs, unsigned k, unsigned line, u
     int D = (fl & 0x10) ? 2 : (fl & 8) ? 1 : 0;
     kargs_t *a = (kargs_t *)P->kargs;
     const int edges = (P->d3 >> 5) & 1;
-    const unsigned flags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | edges << 6 | P->pal16 << 7;
+    const unsigned flags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | edges << 6 | P->pal16 << 7 | (P->A == 31) << 10 |
+        clamp_bits(P);
     uint8_t dummy[32];
     if (ksets[P->hr].vis[D][tex_variant(P)](a, bs, k, line, P->ctx, flags, dummy)) { P->pass = 1; P->fogused |= 1; }
     (void)id0;
@@ -143,7 +164,8 @@ static void batch_shade(poly_t *P, const uint8_t *bs, unsigned k, unsigned line,
     unsigned fr = U16(bs, SPO(P, 6)) >> 3, fg = U16(bs, SPO(P, 6) + 2) >> 3, fb = U16(bs, SPO(P, 8) + 2) >> 3;
     a->bytes[4] = (uint8_t)fr; a->bytes[5] = (uint8_t)fg; a->bytes[6] = (uint8_t)fb;
     int flat_white = (fl & 4) && T && P->A == 31 && fr == 63 && fg == 63 && fb == 63;
-    const unsigned flags = ((fl >> 5) & 1) | flat_white << 2 | P->pal16 << 7;
+    const int wtest = T && !(fl & 4) && first_white(P, bs);
+    const unsigned flags = ((fl >> 5) & 1) | flat_white << 2 | P->pal16 << 7 | wtest << 9 | (P->A == 31) << 10 | clamp_bits(P);
     uint8_t dummy[32];
     ksets[P->hr].shade[T][(fl >> 2) & 1][T && rast_texfilter ? 1 : 0](a, bs, k, line, P->ctx, flags, dummy);
     (void)id0;

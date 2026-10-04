@@ -65,4 +65,31 @@
 
 #define BIN_BYTES 0x10000
 #define NBINS 12
+
+/* the output frames, as the 2D compositor reads them (comp.c). update_frame_3d_4x(sys, skip) picks the frame to
+ * write (SYS_OUTPUT): with threaded_3d the one that is not published, else the current one. It renders the bins into
+ * it, then (edge marking on) re-marks the rows 32k-1 and 32k of each bin boundary (the gap passes, spec/resolve.c);
+ * or, when it does not render (no new geometry), with threaded_3d copies the last rendered frame into it.
+ * render_scanline_3d returns SYS_OUTPUT + line*0x1000 (SYS_PUBLISHED with threaded_3d). */
+#define SYS_CFG         0x8         /* u64: configuration */
+#define CFG_THREADED_3D 0x468       /* u32 */
+#define SYS_FRAMEBUF    0x1056c0    /* two output frames of NBINS * BIN_BYTES (reset_video_3d clears both) */
+#define SYS_PUBLISHED   0x34eb60    /* u64: the frame the compositor reads with threaded_3d */
+#define SYS_LAST        0x34eb68    /* u64: the frame last rendered (the source of the copy) */
+#define DS_SET_3D_VISIBILITY  0x3c2c0   /* render_scanline_set_3d_visibility(u8 bits[32], const u32 px[256]) */
+#define DS_UPDATE_FRAME_3D_4X 0x58f10   /* update_frame_3d_4x(sys, u32 skip) */
+#define DS_UPDATE_FRAME_3D_1X 0x52870   /* update_frame_3d_1x(sys, u32 skip) */
+#define DS_RESET_VIDEO_3D     0x59a60   /* reset_video_3d(sys + SYS_FRAMEBUF) */
+
+/* the 2D compositor's quarter (comp.c, spec/composite.c): render_scanline_2d_composite(eng, out, S, layers, p3d, alpha,
+ * lmask, bldcnt, flags, line) and the two routines its simple path calls. S = render_scanline_2d's scratch area
+ * (its stack frame + 0x180; the frame is 0x1d30 bytes). */
+#define DS_2D_COMPOSITE       0x3c6d0
+#define DS_PRIORITY_ENCODE_SINGLE 0x9ffc0   /* (eng, S + S_VIS, S + S_EXCL); clobbers x3-x7, v0-v7, v16, v17 only */
+#define DS_SELECT_PIXELS      0x39330   /* (eng, out, excl, layers, p3d, alpha, lmask) */
+#define ENG_BACKDROP    0x18        /* u64: pointer to the backdrop colour (u16 BGR555) */
+#define S_VIS           0xda0       /* u8 [8][32]: visibility bitmaps, BG0..BG3, OBJ by priority */
+#define S_EXCL          0x10c0      /* u8 [6][32]: the priority encoder's masks, BG0..BG3, OBJ, backdrop */
+#define S_FRAME_BELOW   0x180       /* render_scanline_2d's frame: S - 0x180 .. S + 0x1bb0 */
+#define S_FRAME_SIZE    0x1d30
 #endif

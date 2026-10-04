@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 extern uintptr_t ds_base;
+void *rast_hook(uintptr_t off, const uint32_t expect[4], void *to);
 
 /* DS BGR555 + alpha bit -> scanline format (r6 | g6<<8 | b6<<16 | a5<<24); 5->6 bits as c*2 + (c != 0) */
 static inline uint32_t rast_expand555(uint32_t c) {

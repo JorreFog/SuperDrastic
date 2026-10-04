@@ -22,6 +22,7 @@ typedef struct {
      * hr: the hi-res kernel set (strides from kargs) */
     unsigned sps, lstride, attr_off, id_off, id_stride, owner_stride, hr, hdr_off;
     int pal16;              /* fused_asm.c: the palette has at most 16 entries (tbl lookups) */
+    int noat;               /* textured: the alpha test cannot fail (the texture's lowest alpha passes it) */
     uint8_t kargs[0x150] __attribute__((aligned(16)));   /* fused_asm.c: the assembly kernels' arguments */
 } poly_t;
 #define SPO(P, k) ((P)->sps * (k))      /* span array k: 0 W0, 1 dW, 2 Z0, 3 dZ, 4 st, 5 dst, 6 rg, 7 drg, 8 xb, 9 cdb, 10 edges */

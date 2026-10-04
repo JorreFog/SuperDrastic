@@ -14,9 +14,19 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   what earlier polygons left behind. About one pixel in a thousand 32-line bins of the stress ROM; invisible
   unless a later translucent polygon with the same id covers the pixel.
 - **Faster than DraStic in the simulator.** Instruction counts under qemu, stress ROM L4 at 2x: the stage costs
-  13.5 M instructions a frame against DraStic's 16.5 M (a full frame 20.3 M against 22.9 M). Device timings are
-  the open question: the kernel's texel gather is scalar like DraStic's, the rest is NEON without DraStic's
-  trips through scratch memory between stages.
+  11.3 M instructions a frame against DraStic's 16.5 M (0.3.0-rast3: 12.2 M; the kernels' exact shortcuts of
+  rast4, see below). The field scene S7 1.53 M (was 1.65), deferred shading on L4 9.8 M (was 13.1); at 3x S7 5.0 M
+  (was 12.2) and the fog and edge-marking scene S4 13.1 M (was 28.0), after the NEON downsample, edge marking and
+  fog of rast4. Device timings are the open question: the kernel's texel gather is scalar like DraStic's, the
+  rest is NEON without DraStic's trips through scratch memory between stages.
+- **Less on the emulation thread.** DraStic's 2x compositor asks, per half-row, which 3D pixels are visible
+  (`render_scanline_set_3d_visibility`, 0.33 M instructions a frame on the emulation thread); the render threads
+  now fill that table as they finish each bin and the hook answers from it (0.02 M on the emulation thread;
+  `RAST_COMP` 0 off, 1 the NEON replacement only, 2 the table, the default; `RAST_COMPCHECK=1` checks every
+  answer against a C port of DraStic's routine). A quarter that shows only the 3D layer and the backdrop is then
+  written in one NEON pass instead of DraStic's five-stage chain (`render_scanline_2d_composite` hooked,
+  `RAST_COMPFUSE=0` off): on the stress ROM the chain's 0.81 M a frame become 0.39 M, on the field
+  scene 0.47 M become 0.07 M, checked byte for byte against the original in the running emulator.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -50,12 +60,69 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   points and lines (1- and 2-vertex polygons) walk like DraStic's. The vertex table holds the DS's 6144 vertices
   (an earlier 1568 limit skipped polygons with higher vertex indices: a black sky and missing sparkles behind
   Ho-Oh in HG/SS). The downsample, the edge marking and the fog of the resolve are NEON (unit-tested against the
-  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage. The field scene costs 10.3 M
-  instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the rest the clear, the resolve
-  and the downsample over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
+  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage. The field scene costs 4.9 M
+  instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the downsample 0.66 M (four
+  triples a step; groups whose 36 alphas are all 31 or all 0 take fast paths, the same bits as the general case),
+  the rest the clear and the resolve over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
 - **Palette lookups with tbl.** 4- and 16-colour textures (the common DS formats I2 and I4) keep their palette
   in four NEON registers and look texels up with `tbl` instead of a dependent load per texel; exact. The
   instruction count hardly changes; the gain is the removed load latency on the handheld's in-order cores.
+
+## The 2D compositor's 3D visibility step (`src/rast/comp.c`, exact)
+
+DraStic composites the 3D screen on the emulation thread, per DS line in four quarters of 256 pixels (the two
+output rows' even and odd pixels). For each quarter `render_scanline_set_3d_visibility` turns the 3D pixels' alpha
+bytes into BG0's visibility bitmap (bit = alpha != 0) and a flag (2: some alpha not 0 or 31, which selects the
+blending path; 0x10: visible and all opaque; 0: nothing visible): ~425 instructions, 768 calls a frame. With the
+renderer hooked (`RAST=ours`/`diff`, `DSFLIP_RAST=1`):
+
+- **NEON replacement** (`DSFLIP_RAST_COMP` / `RAST_COMP=1`): the same 32 bytes and return value in ~140
+  instructions a call (the kernel 124, `src/rast/compvis.h`: `ld4` for the alpha bytes, `cmtst` + bit weights + an `addp` tree for the
+  bitmap, `umin(a, a ^ 31)` for the flag), for any pointer DraStic passes (the 2x frame, the 1x line, a
+  BG0HOFS-shifted copy on its stack).
+- **Per-bin table** (`RAST_COMP=2`, the default): the result depends only on the 1 KiB half-row the pointer
+  addresses, so the render threads compute all 64 half-rows of a bin right after its output block is written, into
+  a table per output frame; the hook copies the entry (~28 instructions) when the pointer is a half-row of a frame
+  whose table is current. Wrappers on `update_frame_3d_4x` (re-marked gap rows, the frame copy when nothing is
+  rendered with `threaded_3d`, the unpublished frame), `update_frame_3d_1x` and `reset_video_3d` keep the tables in
+  step with every write DraStic makes to the two output frames (the rule is in comp.c's header).
+- Exactness: `spec/composite.c` is the C port, unit-tested against the originals (`tools/rast/ut/t_composite.c`,
+  which also tests the NEON version); `RAST_COMPCHECK=1` checks every call in the running emulator against the C
+  port, and every table when it becomes valid (`[comp] check:` every 2 s, `[compcheck]` lines for differences).
+  The test ROMs' 3D layer is opaque nearly everywhere, so a stale table entry mostly gives the right answer anyway:
+  the check mode catches a missing gap-row update (S4: 172 differing calls in 30 s with it removed) but hardly a
+  missing table copy (a frame-skipping S4 with `threaded_3d=1` flags only its first copy). `tools/rast/ut/t_comp_hook.c`
+  covers that bookkeeping on random frames: the hook's lookup and the wrappers' validity rule (rendered with
+  re-marked gap rows, copied, unchanged, 1x, reset; `threaded_3d` on and off) against the original, with stubs that
+  write the frames as the disassembly of `update_frame_3d_4x` shows.
+- Cost per frame, simulator instruction counts (stress ROM L4 and the field scene S7, 90 s each): DraStic's
+  function and its gather 0.326 M (425 a call); NEON 0.108 M (139 a call); table 0.024 M in the compositor (28 a
+  call) plus 0.100 M on the render threads (`comp_bin`, 130 a half-row) and 0.006 M for the gap rows. On the
+  emulation thread's critical path: with `threaded_3d=1` 0.024 M against 0.108 M for NEON alone; with
+  `threaded_3d=0` the emulation thread renders a third of the bins and waits for the rest, so about 0.063 M against
+  0.108 M. (The block profiler keys blocks by start ^ length; two of hook_vis's blocks collide there, so its
+  report undercounts the NEON path as 99 a call: the figures here are the static path lengths.)
+
+### The fused 3D + backdrop quarter (`render_scanline_2d_composite`, `src/rast/compfuse.h`)
+
+After the visibility step, DraStic composites the quarter: `render_scanline_2d_composite` runs its priority encoder
+(which layer is on top per pixel: 256-bit masks per layer and for the backdrop) and `select_pixels`, which merges the
+layers' u16 lines, puts the backdrop in, expands the u16 line into 6-bit R/G/B planes, and then writes the 3D pixels'
+bytes over the planes where BG0 is on top (`spec/composite.c` documents every routine; ~620 instructions a quarter,
+768 quarters a frame on the emulation thread). The hook on `render_scanline_2d_composite` (`comp.c`) runs DraStic's
+own encoder, so the masks in the scratch area are its bytes, and reads them: when no other layer of the layer mask
+claims a pixel and every pixel is BG0's or the backdrop's, the planes are `mask ? 3D bytes : backdrop` for every
+pixel, whatever BG0's own u16 line holds (the derivation is in `compfuse.h`), and one NEON pass writes them: 40
+instructions for a quarter that is all 3D, 27 all backdrop, ~140 mixed. Otherwise it calls DraStic's
+`select_pixels` as the original does; blending or brightness flags, no 3D layer (engine B) or another layer mask go
+to the original through a trampoline. Exactness: the C ports of the chain are unit-tested against the originals, and
+the fused pass against DraStic's `select_pixels` and the ports (`t_composite.c`); `t_comp_hook.c` runs the hook
+itself against the original on random engines, scratch areas and quarters through every path, with the check mode
+on and off; `RAST_COMPCHECK=1` runs every fused call twice in the emulator (ours, then the original through the
+trampoline on the same input bytes) and compares the scratch frame, the planes, the 3D pixels and the engine
+(`[comp] composite:` counts every 2 s). Cost per frame (simulator instruction counts, 90 s each): the chain's
+functions on the stress ROM L4 0.81 M -> 0.39 M (the quarters of engine B, which has no 3D layer,
+stay with DraStic's chain), on the field scene S7 0.47 M -> 0.07 M; frame totals 16.6 M (was 17.8) and 3.5 M (was 3.4; the totals move by about 0.5 M between runs, the per-call costs are exact: about 620 instructions a quarter before, 45 / 30 / 150 after).
 
 ## How it works
 
@@ -66,7 +133,10 @@ stages at once; `fused_neon.c` is that in C NEON (8 pixels a step), and `kerngen
 same in assembly with a fixed register allocation, one kernel per variant (depth source x texture x translucency
 x flat colour), which is what runs. Shortcuts that give the same bits: a white vertex colour with alpha 31 makes
 modulate the identity, so the texel is the colour; a group of 8 pixels that all fail the depth test stops at the
-test; one that all pass is stored straight.
+test; one that all pass is stored straight; a texture whose lowest alpha passes the alpha test skips it, and A = 31
+skips the alpha modulate; with z or constant depth the perspective weights wait for the depth test, and a line's
+weights and interpolants for its first passing pixel; the vertex colour and the w depth use 16-bit products where
+they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flags and the register use.
 
 ## Simulator usage (see `tools/sim/` for setup; `dev/` holds the scripts used during development)
 
@@ -76,11 +146,22 @@ test; one that all pass is stored straight.
 - `RAST_PIPE` selects the pipeline: 0 = b0 (stage by stage), 1 = fused scalar, 2 = fused C NEON, 3 = assembly.
 - `RAST_DUMP=<dir>` writes frames as PPM; `RAST_STATS=1` prints the opaque overdraw; `RAST_FRAMES=1` prints the
   frame count every 10 frames (for per-frame figures from a block profile).
+- The simulator's qemu 9.2.0 needs `tools/sim/qemu-9.2.0-fold_bitsel_vec.patch` (setup.sh applies it): unpatched, its
+  TCG optimizer folds a vector bit-select with a constant all-ones false operand to all-ones, so NEON C code using
+  `vbslq` with such a constant computes the wrong thing under the simulator only. The generated kernels use runtime
+  masks and are not affected; the 3x stage functions' unit tests (edge, fog, downsample) pass with the patched qemu.
 
 ## Next
 
-- Device A/B: the same game with the option off and on, from the performance logs.
-- TBL palette lookups for 4- and 16-colour textures (saves the second gather); 64-bit texel-pair loads in the
-  bilinear gathers.
-- 3x: the top vertex at 3x for tied vertices; cheaper edge marking and downsample; later the hi-res 3D layer
-  presented through the dsflip shader instead of downsampled.
+- Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
+- The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
+  the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
+- The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
+  into the scanout and skip the planes (~0.08 M a frame; needs the convert hook keyed by plane pointer).
+- 3x: the polygon walker's hot spots in NEON (interpolate_edges, setup_spans: ~1.4 M a frame on S4); the top vertex
+  at 3x for tied vertices; later the hi-res 3D layer presented through the dsflip shader instead of downsampled.
+- The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
+  assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
+  content signature in the key would make it certain.
+- In the simulator, dsscenes-cycle.nds dies at its scene 2 -> 3 transition (a SIGILL in DraStic's JIT cache, also with
+  our hooks off, since 2026-10-03); regress.sh checks the later scenes one ROM at a time until that is understood.

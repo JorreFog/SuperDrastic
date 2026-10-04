@@ -15,6 +15,7 @@
  *     (clear) pixels do not darken polygon edges; the averaged alpha gives anti-aliased edges over the 2D layers.
  * Not rendered at 3x yet: shadow polygons (mode 3). DraStic's sprite path (axis-aligned textured quads, polygon
  * flag bit 14) goes through the general walker here. */
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +23,7 @@
 #include "ds3d.h"
 #include "rast.h"
 #include "fused.h"
+#include "comp.h"
 #include "spec/edges.h"
 
 /* the 3x layout: 50 context lines (bin line l is frame line hy0 - 1 + l), 768 pixels; the span arrays 64 entries */
@@ -259,80 +261,153 @@ static int32_t sqshl16(int32_t v, int8_t s) {
     if (n >= 16) return v < 0 ? -1 : 0;
     return v >> n;
 }
-/* fog weights of a line (spec/resolve.c's fog_calculate_weights), NEON over 8 pixels: d = sat(((attr >> 9) & 0x7fff)
- * - off), v = sqshl16(d, shift), i = v >> 10, f = v & 0x3ff, w = table[i] + ((s8)table[32 + i] * f) >> 10 */
-static __attribute__((noinline)) void fog_weights(const uint32_t *attr, uint8_t *w, const uint8_t *table, uint32_t params) {
-    const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16)), m15 = vdupq_n_u16(0x7fff), m10 = vdupq_n_u16(0x3ff);
+/* fog of a line in place: spec/resolve.c's fog_calculate_weights and fog_modulate_full/alpha_intermediate in one
+ * pass, NEON over 16 pixels with colours and attributes split into byte planes (ld4), so a pixel's weight is one
+ * byte lane and the weights never go to memory.
+ * Weight: d = sat(((attr >> 9) & 0x7fff) - off) (attr bytes 1 and 2 zipped to u16 lanes, >> 1), v = sqshl16(d,
+ * shift), i = v >> 10, f = v & 0x3ff, w = table[i] + (u8)(((s8)table[32 + i] * f) >> 10). With v = f + 1024 i the
+ * product is floor(dl v / 1024) - dl i, the first as sqdmulh(32 dl, v) = (64 dl v) >> 16 (exact: |32 dl| <= 4096,
+ * v <= 0x7fff), the second folded into the table: -w = (dl i - table[i]) - (u8)floor(dl v / 1024) from a per-call
+ * table of dl i - table[i]. The factor k = -w (and -128 for 127, i.e. -w = 0x81) where the pixel's fog flag (alpha
+ * bit 7) is set, else 0: a clear flag sets the index's top bits, so both tbl lookups give 0 and k = 0.
+ * Per byte c += ((s8)(c - F) * k) >> 7 (smull, then shrn #7 keeps product bits 7-14); the flag is cleared;
+ * alpha-only fog leaves r, g, b. A group of 16 without any fog flag is unchanged (k = 0) and skipped. */
+static inline __attribute__((always_inline)) uint8x16_t fog_ch16(uint8x16_t c, uint8x16_t f, int8x16_t k) {
+    int8x16_t d = vreinterpretq_s8_u8(vsubq_u8(c, f));
+    int16x8_t lo = vmull_s8(vget_low_s8(d), vget_low_s8(k)), hi = vmull_high_s8(d, k);
+    return vaddq_u8(c, vreinterpretq_u8_s8(vshrn_high_n_s16(vshrn_n_s16(lo, 7), hi, 7)));
+}
+static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
+                                                             uint32_t fogc, int full) {
+    static const uint8_t idx[32] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                                     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
+    const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16));
     const int16x8_t sh = vdupq_n_s16((int8_t)(params & 0xff));
-    const uint8x16x2_t tab = { { vld1q_u8(table), vld1q_u8(table + 16) } }, dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
-    for (int x = 0; x < HR_W; x += 8) {
-        uint32x4_t a0 = vld1q_u32(attr + x), a1 = vld1q_u32(attr + x + 4);
-        uint16x8_t d = vandq_u16(vcombine_u16(vshrn_n_u32(a0, 9), vshrn_n_u32(a1, 9)), m15);
-        d = vqsubq_u16(d, off);
-        uint16x8_t v = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(d), sh));
-        uint8x8_t i = vmovn_u16(vshrq_n_u16(v, 10));
-        uint8x8_t t = vqtbl2_u8(tab, i), dl = vqtbl2_u8(dlt, i);
-        int16x8_t f = vreinterpretq_s16_u16(vandq_u16(v, m10)), dl16 = vmovl_s8(vreinterpret_s8_u8(dl));
-        int32x4_t p0 = vmull_s16(vget_low_s16(dl16), vget_low_s16(f)), p1 = vmull_s16(vget_high_s16(dl16), vget_high_s16(f));
-        int16x8_t p = vcombine_s16(vshrn_n_s32(p0, 10), vshrn_n_s32(p1, 10));
-        vst1_u8(w + x, vadd_u8(t, vmovn_u16(vreinterpretq_u16_s16(p))));
+    const uint8x16x2_t dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
+    const uint8x16x2_t ntab = { { vsubq_u8(vmulq_u8(dlt.val[0], vld1q_u8(idx)), vld1q_u8(table)),
+                                  vsubq_u8(vmulq_u8(dlt.val[1], vld1q_u8(idx + 16)), vld1q_u8(table + 16)) } };
+    const uint8x16_t fr = vdupq_n_u8((uint8_t)fogc), fg = vdupq_n_u8((uint8_t)(fogc >> 8)), fb = vdupq_n_u8((uint8_t)(fogc >> 16));
+    const uint8x16_t fa = vdupq_n_u8((uint8_t)(fogc >> 24)), x81 = vdupq_n_u8(0x81), x7f = vdupq_n_u8(0x7f);
+    uint8_t *c8 = (uint8_t *)c, *end = c8 + 4 * HR_W;
+    const ptrdiff_t ad = (const uint8_t *)attr - c8;                        /* one pointer: attr at c8 + ad */
+    for (; c8 != end; c8 += 64) {
+        uint8x16x4_t px = vld4q_u8(c8);
+        if (__builtin_expect(vmaxvq_u8(px.val[3]) < 0x80, 0)) continue;     /* no fog flag in the group */
+        uint8x16x4_t a = vld4q_u8(c8 + ad);
+        uint16x8_t d0 = vshrq_n_u16(vreinterpretq_u16_u8(vzip1q_u8(a.val[1], a.val[2])), 1);
+        uint16x8_t d1 = vshrq_n_u16(vreinterpretq_u16_u8(vzip2q_u8(a.val[1], a.val[2])), 1);
+        uint16x8_t v0 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d0, off)), sh));
+        uint16x8_t v1 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d1, off)), sh));
+        /* i = v >> 10 (the high bytes >> 2), or >= 0xc0 without the fog flag (tbl gives 0) */
+        uint8x16_t i = vsriq_n_u8(vcgezq_s8(vreinterpretq_s8_u8(px.val[3])), vuzp2q_u8(vreinterpretq_u8_u16(v0), vreinterpretq_u8_u16(v1)), 2);
+        int8x16_t dl = vreinterpretq_s8_u8(vqtbl2q_u8(dlt, i));
+        int16x8_t p0 = vqdmulhq_s16(vshll_n_s8(vget_low_s8(dl), 5), vreinterpretq_s16_u16(v0));
+        int16x8_t p1 = vqdmulhq_s16(vshll_high_n_s8(dl, 5), vreinterpretq_s16_u16(v1));
+        uint8x16_t k = vsubq_u8(vqtbl2q_u8(ntab, i), vuzp1q_u8(vreinterpretq_u8_s16(p0), vreinterpretq_u8_s16(p1)));   /* -w */
+        int8x16_t ks = vreinterpretq_s8_u8(vaddq_u8(k, vceqq_u8(k, x81)));  /* -128 for w = 127 */
+        px.val[3] = fog_ch16(vandq_u8(px.val[3], x7f), fa, ks);
+        if (full) px.val[0] = fog_ch16(px.val[0], fr, ks), px.val[1] = fog_ch16(px.val[1], fg, ks), px.val[2] = fog_ch16(px.val[2], fb, ks);
+        vst4q_u8(c8, px);
     }
 }
-/* fog of a line in place (fog_modulate_full/alpha_intermediate), NEON over 4 pixels: per byte c += ((s8)(c - F) *
- * k) >> 7 with k = -w (and -128 for 127) where the pixel's fog flag (bit 31) is set, else 0; the flag is cleared;
- * alpha-only fog leaves r, g, b */
-static __attribute__((noinline)) void fog_line(uint32_t *c, const uint8_t *w, uint32_t fogc, int full) {
-    static const uint8_t kidx[16] = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3 };
-    const uint8x16_t ki = vld1q_u8(kidx), fcol = vreinterpretq_u8_u32(vdupq_n_u32(fogc)), x7f = vdupq_n_u8(0x7f);
-    const uint8x16_t chmask = vreinterpretq_u8_u32(vdupq_n_u32(full ? 0xffffffffu : 0xff000000u));
-    for (int x = 0; x < HR_W; x += 4) {
-        uint8x16_t px = vreinterpretq_u8_u32(vld1q_u32(c + x));
-        uint8x8_t w8 = vreinterpret_u8_u32(vdup_n_u32(*(const uint32_t *)(w + x)));
-        uint8x8_t k8 = vsub_u8(vdup_n_u8(0), vsub_u8(w8, vceq_u8(w8, vdup_n_u8(0x7f))));   /* -w, -128 for 127 */
-        uint8x16_t k = vqtbl1q_u8(vcombine_u8(k8, k8), ki);                                 /* per pixel, 4 lanes */
-        uint8x16_t flag = vreinterpretq_u8_u32(vcgtq_u32(vreinterpretq_u32_u8(px), vdupq_n_u32(0x7fffffff)));
-        k = vandq_u8(vandq_u8(k, flag), chmask);
-        px = vandq_u8(px, vreinterpretq_u8_u32(vdupq_n_u32(0x7fffffff)));
-        int8x16_t diff = vreinterpretq_s8_u8(vsubq_u8(px, fcol));
-        int16x8_t lo = vmulq_s16(vmovl_s8(vget_low_s8(diff)), vmovl_s8(vget_low_s8(vreinterpretq_s8_u8(k))));
-        int16x8_t hi = vmulq_s16(vmovl_s8(vget_high_s8(diff)), vmovl_s8(vget_high_s8(vreinterpretq_s8_u8(k))));
-        uint8x16_t add = vcombine_u8(vmovn_u16(vreinterpretq_u16_s16(vshrq_n_s16(lo, 7))), vmovn_u16(vreinterpretq_u16_s16(vshrq_n_s16(hi, 7))));
-        vst1q_u32(c + x, vreinterpretq_u32_u8(vaddq_u8(px, add)));
-    }
-    (void)x7f;
+static __attribute__((noinline)) void fog_line(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc, int full) {
+    if (full) fog_line16(c, attr, table, params, fogc, 1);
+    else fog_line16(c, attr, table, params, fogc, 0);
 }
-/* edge marking of a line, NEON over 8 pixels: a pixel C is an edge against a neighbour N (left, right, above,
- * below; the clear attribute beyond the line's ends) when N's 24-bit key is larger and the polygon ids differ
- * (c3 = ((C >> 24) & 0x7f) ^ 0x40 against n3 = (N >> 24) & 0x3f); the edge byte is c3 >> 3, or 0xff when no edge;
- * marked pixels (edge byte < 8, i.e. the polygon's edge flag set) take the edge colour of their id >> 3 and keep
- * alpha bits 0-4; unmarked ones get alpha (ca & 0x1f) | ((e >> 3) & 0xe0) (spec/resolve.c's edge_mark). */
-static __attribute__((noinline)) void edge_line(uint32_t *out, const uint32_t *col, const uint32_t *cur, const uint32_t *above, const uint32_t *below,
-                      uint32_t clear, const uint8_t *ec) {
-    const uint32x4_t key = vdupq_n_u32(0xffffff), x40 = vdupq_n_u32(0x40), clr = vdupq_n_u32(clear);
-    const uint8x8_t ecr = vld1_u8(ec), ecg = vld1_u8(ec + 8), ecb = vld1_u8(ec + 16);
-    uint32x4_t prev = clr;
-    for (int x = 0; x < HR_W; x += 4) {
-        uint32x4_t c = vld1q_u32(cur + x);
-        uint32x4_t next = x + 4 < HR_W ? vld1q_u32(cur + x + 4) : clr;
-        uint32x4_t l = vextq_u32(prev, c, 3), r = vextq_u32(c, next, 1);
-        uint32x4_t a = vld1q_u32(above + x), b = vld1q_u32(below + x);
-        uint32x4_t ck = vandq_u32(c, key), c3 = veorq_u32(vandq_u32(vshrq_n_u32(c, 24), vdupq_n_u32(0x7f)), x40);
-#define EDGE(N) vandq_u32(vcgtq_u32(vandq_u32(N, key), ck), vmvnq_u32(vceqq_u32(vandq_u32(vshrq_n_u32(N, 24), vdupq_n_u32(0x3f)), c3)))
-        uint32x4_t any = vorrq_u32(vorrq_u32(EDGE(l), EDGE(r)), vorrq_u32(EDGE(a), EDGE(b)));
-#undef EDGE
-        uint32x4_t e = vandq_u32(vorrq_u32(vshrq_n_u32(c3, 3), vmvnq_u32(any)), vdupq_n_u32(0xff));   /* the edge byte; 0xff no edge */
-        uint32x4_t px = vld1q_u32(col + x);
-        uint32x4_t marked = vcltq_u32(e, vdupq_n_u32(8));
-        uint8x8_t idx = vmovn_u16(vcombine_u16(vmovn_u32(vandq_u32(e, vdupq_n_u32(7))), vdup_n_u16(0)));
-        /* the edge colours of the 4 pixels: tbl on the 8-entry tables, lanes 0-3 */
-        uint8x8_t er = vtbl1_u8(ecr, idx), eg = vtbl1_u8(ecg, idx), eb = vtbl1_u8(ecb, idx);
-        uint32x4_t ecol = vorrq_u32(vorrq_u32(vmovl_u16(vget_low_u16(vmovl_u8(er))), vshlq_n_u32(vmovl_u16(vget_low_u16(vmovl_u8(eg))), 8)),
-                                    vshlq_n_u32(vmovl_u16(vget_low_u16(vmovl_u8(eb))), 16));
-        uint32x4_t alpha = vorrq_u32(vandq_u32(px, vdupq_n_u32(0x1f000000)), vshlq_n_u32(vandq_u32(vshrq_n_u32(e, 3), vdupq_n_u32(0xe0)), 24));
-        uint32x4_t res = vbslq_u32(marked, ecol, vandq_u32(px, key));
-        vst1q_u32(out + x, vorrq_u32(res, alpha));
-        prev = c;
-    }
+/* edge marking (spec/resolve.c's edge_identify + edge_mark): a pixel C is an edge against a neighbour N (left, right,
+ * above, below; the clear attribute beyond the line's ends) when N's 24-bit key is larger and the polygon ids differ
+ * (c3 = ((C >> 24) & 0x7f) ^ 0x40 against n3 = (N >> 24) & 0x3f, never equal when C's bit 30 is clear); the edge byte
+ * is c3 >> 3, or 0xff when no edge; pixels with an edge byte < 8 (an edge and bit 30 set) take the edge colour of
+ * their id >> 3, all others keep r, g, b, and every alpha byte becomes ca & 0x1f (the edge byte's (e >> 3) & 0xe0 is
+ * always 0). So per pixel:
+ *   marked = bit 30 of C && some N with (N & 0xffffff) > (C & 0xffffff) and (N ^ C) & 0x3f000000,
+ *   out = marked ? ec[(C >> 27) & 7] (r, g, b) | (px & 0x1f000000) : px & 0x1fffffff.
+ * NEON over 16 pixels on byte planes: ld4 splits 16 attribute words into the key bytes k0, k1, k2 and the top byte t,
+ * and 16 colours into r, g, b, a (st4 interleaves them back). N > C is lexicographic over the key planes,
+ * k2 == ? (k1 == ? k0 > : k1 >) : k2 >, with cmeq/cmhi and two selects. The id test is folded in: (N > C) & (tN ^ tC)
+ * is nonzero in bits 0-5 iff N is an edge for C (bit 30 aside), so the four are ORed and tested against 0x3f once.
+ * Neighbours share their compares: from the same equalities, N > C and N >= C, whose complement is C > N, and the same
+ * id xor give the test of C against N and the test of N against C. So the pair (x, x+1) gives the right test of x
+ * and the left test of x+1 (the left results move one lane on, the lane before pixel 0 being pixel 0's test against
+ * the clear attribute; the pixels to the right are an ld4 one pixel on), and two lines are marked at once: the pair
+ * (line l, line l+1) gives the below test of l and the above test of l+1. The colour is a tbx on 16-entry tables
+ * (entries 2i and 2i+1 = ec[7 - i]) indexed by ~(t >> 2) & 0x1f = 15 - (id >> 2) when bit 30 is set (16 or more when
+ * clear) and by 31 where there is no edge: out-of-range indices keep the pixel's colour. */
+static inline __attribute__((always_inline)) uint8x16_t edge_sel(uint8x16_t m, uint8x16_t t, uint8x16_t f) {
+    /* m ? t : f as one bif (the bsl intrinsic becomes and/orr pairs when the compiler sees that the operands of the
+     * compare chains are exclusive). f must not be an all-ones constant when testing under an unpatched qemu 9.2:
+     * its TCG folds a bit select whose false operand is a known -1 to -1 (fold_bitsel_vec's orc case swaps the wrong
+     * operands; tools/sim/setup.sh applies the fix to the simulator's qemu). */
+    __asm__("bif %0.16b, %1.16b, %2.16b" : "+w"(t) : "w"(f), "w"(m));
+    return t;
+}
+/* N > C on the key planes */
+static inline __attribute__((always_inline)) uint8x16_t edge_gt(uint8x16x4_t n, uint8x16x4_t c) {
+    return edge_sel(vceqq_u8(n.val[2], c.val[2]), edge_sel(vceqq_u8(n.val[1], c.val[1]), vcgtq_u8(n.val[0], c.val[0]),
+                                                         vcgtq_u8(n.val[1], c.val[1])), vcgtq_u8(n.val[2], c.val[2]));
+}
+/* a pair of neighbours: *nc = the test of C against N ((N > C) & id xor), returns the test of N against C */
+static inline __attribute__((always_inline)) uint8x16_t edge_pair(uint8x16x4_t n, uint8x16x4_t c, uint8x16_t *nc) {
+    uint8x16_t e1 = vceqq_u8(n.val[1], c.val[1]), e2 = vceqq_u8(n.val[2], c.val[2]), g1 = vcgtq_u8(n.val[1], c.val[1]);
+    uint8x16_t g2 = vcgtq_u8(n.val[2], c.val[2]), xid = veorq_u8(n.val[3], c.val[3]);
+    uint8x16_t gt = edge_sel(e2, edge_sel(e1, vcgtq_u8(n.val[0], c.val[0]), g1), g2);        /* N > C */
+    uint8x16_t ge = edge_sel(e2, edge_sel(e1, vcgeq_u8(n.val[0], c.val[0]), g1), g2);        /* N >= C */
+    *nc = vandq_u8(gt, xid);
+    return vbicq_u8(xid, ge);
+}
+/* the marking of 16 pixels with the top bytes t and the tests y */
+static inline __attribute__((always_inline)) void edge_mark(uint32_t *out, const uint32_t *col, uint8x16_t t, uint8x16_t y,
+                                                            uint8x16_t er, uint8x16_t eg, uint8x16_t eb) {
+    const uint8x16_t m1f = vdupq_n_u8(0x1f), m3f = vdupq_n_u8(0x3f);
+    /* ~(t >> 2) & 0x1f = 15 - (id >> 2) + (bit 30 clear ? 16 : 0) where there is an edge, 31 where not */
+    uint8x16_t idx = edge_sel(vtstq_u8(y, m3f), vbicq_u8(m1f, vshrq_n_u8(t, 2)), m1f);
+    uint8x16x4_t p = vld4q_u8((const uint8_t *)col);
+    p.val[0] = vqtbx1q_u8(p.val[0], er, idx); p.val[1] = vqtbx1q_u8(p.val[1], eg, idx); p.val[2] = vqtbx1q_u8(p.val[2], eb, idx);
+    p.val[3] = vandq_u8(p.val[3], m1f);
+    vst4q_u8((uint8_t *)out, p);
+}
+/* 16 pixels of two lines (the last ones of the lines when last: the clear attribute to the right), lp0 and lp1 = the
+ * previous block's left tests (lane 15 is the one for this block's pixel 0), replaced by this block's */
+static inline __attribute__((always_inline)) void edge_block(uint32_t *out0, uint32_t *out1, const uint32_t *col0, const uint32_t *col1,
+                                                             const uint32_t *a, const uint32_t *c0, const uint32_t *c1, const uint32_t *b,
+                                                             int last, uint8x16x4_t k, uint8x16_t *lp0, uint8x16_t *lp1,
+                                                             uint8x16_t er, uint8x16_t eg, uint8x16_t eb) {
+    uint8x16x4_t p0 = vld4q_u8((const uint8_t *)c0), p1 = vld4q_u8((const uint8_t *)c1), r, n;
+    uint8x16_t y0, y1, v, lt;
+    /* the right neighbours: the planes of an ld4 one pixel on */
+    if (!last) r = vld4q_u8((const uint8_t *)(c0 + 1));
+    else for (int i = 0; i < 4; i++) r.val[i] = vextq_u8(p0.val[i], k.val[i], 1);
+    lt = edge_pair(r, p0, &y0);
+    y0 = vorrq_u8(y0, vextq_u8(*lp0, lt, 15)); *lp0 = lt;
+    n = vld4q_u8((const uint8_t *)a);
+    y0 = vorrq_u8(y0, vandq_u8(edge_gt(n, p0), veorq_u8(n.val[3], p0.val[3])));
+    y1 = edge_pair(p1, p0, &v);                                 /* line 1 against line 0 above it, and the reverse */
+    edge_mark(out0, col0, p0.val[3], vorrq_u8(y0, v), er, eg, eb);
+    if (!last) r = vld4q_u8((const uint8_t *)(c1 + 1));
+    else for (int i = 0; i < 4; i++) r.val[i] = vextq_u8(p1.val[i], k.val[i], 1);
+    lt = edge_pair(r, p1, &v);
+    y1 = vorrq_u8(vorrq_u8(y1, v), vextq_u8(*lp1, lt, 15)); *lp1 = lt;
+    n = vld4q_u8((const uint8_t *)b);
+    y1 = vorrq_u8(y1, vandq_u8(edge_gt(n, p1), veorq_u8(n.val[3], p1.val[3])));
+    edge_mark(out1, col1, p1.val[3], y1, er, eg, eb);
+}
+/* two lines of the bin, out0/col0/c0 and out1/col1/c1 (the line below), a = the line above the first, b = the line
+ * below the second */
+static __attribute__((noinline)) void edge_lines(uint32_t *out0, uint32_t *out1, const uint32_t *col0, const uint32_t *col1,
+                                                 const uint32_t *a, const uint32_t *c0, const uint32_t *c1, const uint32_t *b,
+                                                 uint32_t clear, const uint8_t *ec) {
+    uint8x8_t ecr = vrev64_u8(vld1_u8(ec)), ecg = vrev64_u8(vld1_u8(ec + 8)), ecb = vrev64_u8(vld1_u8(ec + 16));
+    uint8x16_t er = vcombine_u8(ecr, ecr), eg = vcombine_u8(ecg, ecg), eb = vcombine_u8(ecb, ecb);
+    er = vzip1q_u8(er, er); eg = vzip1q_u8(eg, eg); eb = vzip1q_u8(eb, eb);       /* entries 2i, 2i+1 = ec[7 - i] */
+    /* the left tests of the lines' pixel 0 against the clear attribute, in lane 15 */
+    uint8x16_t lp0 = vsetq_lane_u8((clear & 0xffffff) > (c0[0] & 0xffffff) ? (uint8_t)((clear ^ c0[0]) >> 24) : 0, vdupq_n_u8(0), 15);
+    uint8x16_t lp1 = vsetq_lane_u8((clear & 0xffffff) > (c1[0] & 0xffffff) ? (uint8_t)((clear ^ c1[0]) >> 24) : 0, vdupq_n_u8(0), 15);
+    const uint8x16x4_t k = { { vdupq_n_u8((uint8_t)clear), vdupq_n_u8((uint8_t)(clear >> 8)), vdupq_n_u8((uint8_t)(clear >> 16)),
+                               vdupq_n_u8((uint8_t)(clear >> 24)) } };
+    int x = 0;
+    for (; x < HR_W - 16; x += 16)
+        edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 0, k, &lp0, &lp1, er, eg, eb);
+    edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
 }
 static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
@@ -340,15 +415,15 @@ static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
     uint32_t params = 0, fogc = U32(geom, 0x9a9c), clear = U32(sys, SYS_CLEAR_ATTR);
     if (fog) { uint32_t sh = (d3 >> 8) & 0xf; params = sh | ((U16(geom, 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16; }
-    uint8_t w[HR_W];
     (void)bin;
 #define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
 #define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
-    for (int l = 1; l <= HR_BL; l++) {
+    _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
+    for (int l = 1; l <= HR_BL; l += 2) {               /* two lines a step: the edge marking shares their compares */
         uint32_t *o = H->out + (l - 1) * HR_W;
-        if (fog) { fog_weights(ATT(l), w, geom + 0x9974, params); fog_line(COL(l), w, fogc, fog == 1); }
-        if (edges) edge_line(o, COL(l), ATT(l), ATT(l - 1), ATT(l + 1), clear, geom + 0x99b4);
-        else for (int x = 0; x < HR_W; x++) o[x] = COL(l)[x] & 0x1fffffff;
+        if (fog) for (int k = l; k <= l + 1; k++) fog_line(COL(k), ATT(k), geom + 0x9974, params, fogc, fog == 1);
+        if (edges) edge_lines(o, o + HR_W, COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), clear, geom + 0x99b4);
+        else for (int x = 0; x < 2 * HR_W; x++) o[x] = COL(l)[x] & 0x1fffffff;
     }
 #undef COL
 #undef ATT
@@ -358,69 +433,101 @@ static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint
  * A 2x2 block of output pixels from a 3x3 block of 3x pixels: horizontally the left output is 2a + b and the right
  * b + 2c of each triple (a b c), vertically the top output 2 r0 + r1 and the bottom r1 + 2 r2 of the three rows,
  * so each output is a weighted sum of 9 (weights summing to 9). Colours are weighted by alpha as well (so the
- * clear colour of transparent pixels does not darken polygon edges): colour = sum(w a c) / sum(w a), alpha =
- * sum(w a) / 9, both rounded; a pixel whose sum(w a) is 0 is fully transparent and gets the clear colour (as the 2x
- * output has there in the common case; the compositor does not show it).
- * NEON, two triples (four output pixels) at a time: ld3 gives the a, b and c pixels of the triples as vectors;
- * the four channels of a pixel are u16 lanes (sums fit: 9 x 31 x 63 < 65536); the alpha of each pixel is spread
- * over its four lanes with tbl to be the per-channel divisor. The division is a float reciprocal (frecpe plus one
- * Newton step, exact enough for these ranges) scaled to 16 bits and applied with umull. The even output pixels of
- * a row are the left outputs and the odd ones the right outputs, which is the output block's layout. */
+ * clear colour of transparent pixels does not darken polygon edges): with the 5-bit alphas a (the resolve may leave
+ * flag bits 5-7 in byte 3), A = sum(w a) and P = sum(w a c) per channel, colour = (P K + 2^15) >> 16 with
+ * K = 65536 / A (floor, saturated to 65535 for A = 1) and alpha = (A 7282 + 2^15) >> 16 (A / 9, 7282 / 65536 = 1 / 9);
+ * an output whose alpha is 0 (A <= 4) is (nearly) transparent and gets the clear colour (as the 2x output has there
+ * in the common case; the compositor does not show it).
+ * NEON, four triples (four left and four right outputs in each of the two output rows) at a time: ld3 gives the a,
+ * b and c pixels of the triples as vectors. Each of the 9 input vectors has one weight w: a0 4, b0 2, c0 4, a1 2,
+ * b1 1, c1 2, a2 4, b2 2, c2 4 (top left: a0 b0 a1 b1, top right: c0 b0 c1 b1, bottom left: a1 b1 a2 b2, bottom
+ * right: c1 b1 c2 b2). Three cases by the 36 alphas:
+ *  - all 31 (the opaque interior, by far the most common): A = 279 and K = 234 everywhere, so colour =
+ *    (31 S 234 + 2^15) >> 16 = (7254 S + 2^15) >> 16 with S = sum(w c), which is sqrdmulh(S, 3627); alpha = 31.
+ *    S = 2X + b1 with X = 2a0 + b0 + a1 for the top left output (the others alike), X as u8 (<= 252 for 6-bit
+ *    channels), S as u16 (<= 567).
+ *  - all 0: every output is the clear colour.
+ *  - otherwise the general case: w a of each pixel spread over its four bytes with tbl (<= 124), the pixel's byte 3
+ *    replaced by 1, and umull/umlal chains sum an output's four products in u16 lanes: P in the colour lanes and A
+ *    in the alpha lane (sums fit: 9 x 31 x 63 < 65536). K per pixel from the alpha lanes (uzp2 and a shift give
+ *    four pixels' A in u32 lanes): a float reciprocal (frecpe plus two Newton steps) truncated to 16 fraction bits,
+ *    which is floor(65536 / A) for every A <= 279, saturated to u16. tbl spreads K over the pixel's colour lanes and
+ *    7282 into its alpha lane, so one umull and rounding narrow give the colours and the alpha (A = 0: P = 0, any K).
+ * The left outputs of a row go to the first 0x400 bytes of the output line and the right ones to the second (the
+ * even and the odd pixels: the output block's layout). */
 #include <arm_neon.h>
 static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out, uint32_t clear) {
     static const uint8_t alpha_idx[16] = { 3, 3, 3, 3, 7, 7, 7, 7, 11, 11, 11, 11, 15, 15, 15, 15 };
-    const uint8x16_t aidx = vld1q_u8(alpha_idx);
-    const uint8x8_t amask = vreinterpret_u8_u32(vdup_n_u32(0xff000000));
-    const uint8x16_t a5 = vdupq_n_u8(0x1f);     /* the 5-bit alpha only: the resolve may leave flag bits 5-7 in byte 3 */
-    const uint32x2_t clr = vdup_n_u32(clear & 0xffffff);    /* fully transparent outputs carry the clear colour, as at 2x */
-    const uint32x4_t zero = vdupq_n_u32(0), k9 = vdupq_n_u32(7282);           /* 7282 / 65536 = 1 / 9 */
+    /* the K spread: 7282 in bytes 0-7 and K of pixels 0-3 in bytes 8-15 (u16 lanes) -> two pixels' four lanes each */
+    static const uint8_t k_idx[32] = { 8, 9, 8, 9, 8, 9, 0, 1, 10, 11, 10, 11, 10, 11, 0, 1,
+                                       12, 13, 12, 13, 12, 13, 0, 1, 14, 15, 14, 15, 14, 15, 0, 1 };
+    const uint8x16_t aidx = vld1q_u8(alpha_idx), kidx0 = vld1q_u8(k_idx), kidx1 = vld1q_u8(k_idx + 16);
+    const uint8x16_t a5 = vdupq_n_u8(0x1f);
+    const uint32x4_t a5m = vdupq_n_u32(0x1f000000), amask = vdupq_n_u32(0xff000000), ones = vdupq_n_u32(1);
+    const uint32x4_t clr = vdupq_n_u32(clear & 0xffffff);   /* fully transparent outputs carry the clear colour, as at 2x */
+    const uint16x4_t k9 = vdup_n_u16(7282);
+    uint8x16_t two = vdupq_n_u8(2);
+    __asm__("" : "+w"(two));                /* (an opaque 2: mla, not add + shl, for b + 2a) */
     for (unsigned by = 0; by < HR_BL / 3; by++) {
         const uint32_t *r0 = in + 3 * by * HR_W, *r1 = r0 + HR_W, *r2 = r1 + HR_W;
-        uint8_t *o0 = out + (2 * by) * 0x800, *o1 = o0 + 0x800;
-        for (unsigned bx = 0; bx < HR_W / 3; bx += 2, r0 += 6, r1 += 6, r2 += 6, o0 += 8, o1 += 8) {
-            /* per row: the left (2a + b) and right (b + 2c) sums of the two triples, premultiplied colours (P) and
-             * alpha weights spread over the channels (A); then top = 2 H(r0) + H(r1), bottom = H(r1) + 2 H(r2) */
-            uint16x8_t pt, at, prt, art, pb, ab, prb, arb, p2, a2, pr2, ar2;
-#define ROW(r, PL, AL, PR, AR) do { \
-                uint32x2x3_t t = vld3_u32(r); \
-                uint8x16_t ab16 = vcombine_u8(vreinterpret_u8_u32(t.val[0]), vreinterpret_u8_u32(t.val[1])); \
-                uint8x16_t cb16 = vcombine_u8(vreinterpret_u8_u32(t.val[2]), vreinterpret_u8_u32(t.val[1])); \
-                uint8x16_t aa = vandq_u8(vqtbl1q_u8(ab16, aidx), a5), ca = vandq_u8(vqtbl1q_u8(cb16, aidx), a5); \
-                uint16x8_t pa = vmull_u8(vget_low_u8(ab16), vget_low_u8(aa)), pbb = vmull_u8(vget_high_u8(ab16), vget_high_u8(aa)); \
-                uint16x8_t pc = vmull_u8(vget_low_u8(cb16), vget_low_u8(ca)); \
-                uint16x8_t wa = vmovl_u8(vget_low_u8(aa)), wb = vmovl_u8(vget_high_u8(aa)), wc = vmovl_u8(vget_low_u8(ca)); \
-                PL = vaddq_u16(vaddq_u16(pa, pa), pbb); PR = vaddq_u16(vaddq_u16(pc, pc), pbb); \
-                AL = vaddq_u16(vaddq_u16(wa, wa), wb); AR = vaddq_u16(vaddq_u16(wc, wc), wb); \
-            } while (0)
-            ROW(r0, pt, at, prt, art);
-            pt = vaddq_u16(pt, pt); at = vaddq_u16(at, at); prt = vaddq_u16(prt, prt); art = vaddq_u16(art, art);
-            ROW(r1, pb, ab, prb, arb);
-            pt = vaddq_u16(pt, pb); at = vaddq_u16(at, ab); prt = vaddq_u16(prt, prb); art = vaddq_u16(art, arb);
-            ROW(r2, p2, a2, pr2, ar2);
-            pb = vaddq_u16(pb, vaddq_u16(p2, p2)); ab = vaddq_u16(ab, vaddq_u16(a2, a2));
-            prb = vaddq_u16(prb, vaddq_u16(pr2, pr2)); arb = vaddq_u16(arb, vaddq_u16(ar2, ar2));
-#undef ROW
-            /* colour = P / A per lane (K = 65536 / A as u16, 0 for A = 0; c = (P K + 2^15) >> 16), alpha = A / 9 */
-#define DIV(P, A, OUT) do { \
-                uint32x4_t al32 = vmovl_u16(vget_low_u16(A)), ah32 = vmovl_u16(vget_high_u16(A)); \
-                float32x4_t fl = vcvtq_f32_u32(al32), fh = vcvtq_f32_u32(ah32); \
-                float32x4_t rl = vrecpeq_f32(fl), rh = vrecpeq_f32(fh); \
-                rl = vmulq_f32(rl, vrecpsq_f32(rl, fl)); rh = vmulq_f32(rh, vrecpsq_f32(rh, fh)); \
-                rl = vmulq_f32(rl, vrecpsq_f32(rl, fl)); rh = vmulq_f32(rh, vrecpsq_f32(rh, fh)); \
-                uint32x4_t kl = vbicq_u32(vcvtq_n_u32_f32(rl, 16), vceqq_u32(al32, zero)); \
-                uint32x4_t kh = vbicq_u32(vcvtq_n_u32_f32(rh, 16), vceqq_u32(ah32, zero)); \
-                uint16x8_t k = vcombine_u16(vqmovn_u32(kl), vqmovn_u32(kh)); \
-                uint32x4_t cl = vmull_u16(vget_low_u16(P), vget_low_u16(k)), ch = vmull_u16(vget_high_u16(P), vget_high_u16(k)); \
-                uint16x8_t c = vcombine_u16(vrshrn_n_u32(cl, 16), vrshrn_n_u32(ch, 16)); \
-                uint16x8_t a9 = vcombine_u16(vrshrn_n_u32(vmulq_u32(al32, k9), 16), vrshrn_n_u32(vmulq_u32(ah32, k9), 16)); \
-                uint32x2_t px = vreinterpret_u32_u8(vbsl_u8(amask, vmovn_u16(a9), vmovn_u16(c))); \
-                OUT = vbsl_u32(vceq_u32(px & vdup_n_u32(0xff000000), vdup_n_u32(0)), clr, px); \
-            } while (0)
-            uint32x2_t out00, out01, out10, out11;
-            DIV(pt, at, out00); DIV(prt, art, out01); DIV(pb, ab, out10); DIV(prb, arb, out11);
+        uint8_t *o0 = out + (2 * by) * 0x800, *oe = o0 + 0x400;
+        for (; o0 != oe; o0 += 16) {
+            __asm__("" : "+r"(r0), "+r"(r1), "+r"(r2), "+r"(o0));     /* (four pointers, post-incremented by the accesses) */
+            uint32x4x3_t t0 = vld3q_u32(r0), t1 = vld3q_u32(r1), t2 = vld3q_u32(r2);
+            r0 += 12; r1 += 12; r2 += 12;
+            uint8x16_t a0 = vreinterpretq_u8_u32(t0.val[0]), b0 = vreinterpretq_u8_u32(t0.val[1]), c0 = vreinterpretq_u8_u32(t0.val[2]);
+            uint8x16_t a1 = vreinterpretq_u8_u32(t1.val[0]), b1 = vreinterpretq_u8_u32(t1.val[1]), c1 = vreinterpretq_u8_u32(t1.val[2]);
+            uint8x16_t a2 = vreinterpretq_u8_u32(t2.val[0]), b2 = vreinterpretq_u8_u32(t2.val[1]), c2 = vreinterpretq_u8_u32(t2.val[2]);
+            uint32x4_t all = vandq_u32(vandq_u32(vandq_u32(t0.val[0], t0.val[1]), vandq_u32(t0.val[2], t1.val[0])),
+                                       vandq_u32(vandq_u32(t1.val[1], t1.val[2]), vandq_u32(t2.val[0], t2.val[1])));
+            uint32x4_t tl, tr, bl, br;          /* the outputs: top left, top right, bottom left, bottom right */
+            if (!vmaxvq_u32(vbicq_u32(a5m, vandq_u32(all, t2.val[2])))) {
+                /* all opaque: S = 2X + b1 with X = 2a0 + b0 + a1 (top left), 2c0 + b0 + c1, 2a2 + b2 + a1, 2c2 + b2 + c1
+                 * (u8: <= 252), so the u8 stage is an add and an mla per output and the u16 stage a shift and an add;
+                 * sli puts 31 (a5's low byte) into byte 3 */
+                uint8x16_t xtl = vmlaq_u8(vaddq_u8(b0, a1), a0, two), xtr = vmlaq_u8(vaddq_u8(b0, c1), c0, two);
+                uint8x16_t xbl = vmlaq_u8(vaddq_u8(b2, a1), a2, two), xbr = vmlaq_u8(vaddq_u8(b2, c1), c2, two);
+#define DIV9(X) vsliq_n_u32(vreinterpretq_u32_u8(vuzp1q_u8( \
+                    vreinterpretq_u8_s16(vqrdmulhq_n_s16(vreinterpretq_s16_u16(vaddw_u8(vshll_n_u8(vget_low_u8(X), 1), vget_low_u8(b1))), 3627)), \
+                    vreinterpretq_u8_s16(vqrdmulhq_n_s16(vreinterpretq_s16_u16(vaddw_high_u8(vshll_high_n_u8(X, 1), b1)), 3627)))), vreinterpretq_u32_u8(a5), 24)
+                tl = DIV9(xtl); tr = DIV9(xtr); bl = DIV9(xbl); br = DIV9(xbr);
+#undef DIV9
+            } else if (!vmaxvq_u32(vandq_u32(a5m, vorrq_u32(vorrq_u32(vorrq_u32(vorrq_u32(t0.val[0], t0.val[1]), vorrq_u32(t0.val[2], t1.val[0])),
+                                                                     vorrq_u32(vorrq_u32(t1.val[1], t1.val[2]), vorrq_u32(t2.val[0], t2.val[1]))), t2.val[2])))) {
+                tl = tr = bl = br = clr;        /* all transparent */
+            } else {
+#define WA(v, s) vshlq_n_u8(vandq_u8(vqtbl1q_u8(v, aidx), a5), s)
+                uint8x16_t wa0 = WA(a0, 2), wb0 = WA(b0, 1), wc0 = WA(c0, 2), wa1 = WA(a1, 1), wb1 = vandq_u8(vqtbl1q_u8(b1, aidx), a5);
+                uint8x16_t wc1 = WA(c1, 1), wa2 = WA(a2, 2), wb2 = WA(b2, 1), wc2 = WA(c2, 2);
+#undef WA
+#define ONE(v) v = vreinterpretq_u8_u32(vsliq_n_u32(vreinterpretq_u32_u8(v), ones, 24))
+                ONE(a0); ONE(b0); ONE(c0); ONE(a1); ONE(b1); ONE(c1); ONE(a2); ONE(b2); ONE(c2);
+#undef ONE
+#define MAC4(X0, W0, X1, W1, X2, W2, X3, W3) \
+                vmlal_u8(vmlal_u8(vmlal_u8(vmull_u8(vget_low_u8(X0), vget_low_u8(W0)), vget_low_u8(X1), vget_low_u8(W1)), \
+                                  vget_low_u8(X2), vget_low_u8(W2)), vget_low_u8(X3), vget_low_u8(W3)), \
+                vmlal_high_u8(vmlal_high_u8(vmlal_high_u8(vmull_high_u8(X0, W0), X1, W1), X2, W2), X3, W3)
+                uint16x8_t ptl[2] = { MAC4(a0, wa0, b0, wb0, a1, wa1, b1, wb1) }, ptr[2] = { MAC4(c0, wc0, b0, wb0, c1, wc1, b1, wb1) };
+                uint16x8_t pbl[2] = { MAC4(a1, wa1, b1, wb1, a2, wa2, b2, wb2) }, pbr[2] = { MAC4(c1, wc1, b1, wb1, c2, wc2, b2, wb2) };
+#undef MAC4
+#define DIV(P, OUT) do { \
+                    float32x4_t f = vcvtq_f32_u32(vshrq_n_u32(vuzp2q_u32(vreinterpretq_u32_u16(P[0]), vreinterpretq_u32_u16(P[1])), 16)); \
+                    float32x4_t r = vrecpeq_f32(f); \
+                    r = vmulq_f32(r, vrecpsq_f32(r, f)); r = vmulq_f32(r, vrecpsq_f32(r, f)); \
+                    uint8x16_t k = vreinterpretq_u8_u16(vqmovn_high_u32(k9, vcvtq_n_u32_f32(r, 16))); \
+                    uint16x8_t k01 = vreinterpretq_u16_u8(vqtbl1q_u8(k, kidx0)), k23 = vreinterpretq_u16_u8(vqtbl1q_u8(k, kidx1)); \
+                    uint16x8_t c01 = vcombine_u16(vrshrn_n_u32(vmull_u16(vget_low_u16(P[0]), vget_low_u16(k01)), 16), \
+                                                  vrshrn_n_u32(vmull_high_u16(P[0], k01), 16)); \
+                    uint16x8_t c23 = vcombine_u16(vrshrn_n_u32(vmull_u16(vget_low_u16(P[1]), vget_low_u16(k23)), 16), \
+                                                  vrshrn_n_u32(vmull_high_u16(P[1], k23), 16)); \
+                    uint32x4_t px = vreinterpretq_u32_u8(vuzp1q_u8(vreinterpretq_u8_u16(c01), vreinterpretq_u8_u16(c23))); \
+                    OUT = vbslq_u32(vtstq_u32(px, amask), px, clr); \
+                } while (0)
+                DIV(ptl, tl); DIV(ptr, tr); DIV(pbl, bl); DIV(pbr, br);
 #undef DIV
-            vst1_u32((uint32_t *)o0, out00); vst1_u32((uint32_t *)(o0 + 0x400), out01);
-            vst1_u32((uint32_t *)o1, out10); vst1_u32((uint32_t *)(o1 + 0x400), out11);
+            }
+            vst1q_u32((uint32_t *)o0, tl); vst1q_u32((uint32_t *)(o0 + 0x400), tr);
+            vst1q_u32((uint32_t *)(o0 + 0x800), bl); vst1q_u32((uint32_t *)(o0 + 0xc00), br);
         }
     }
 }
@@ -454,5 +561,6 @@ void hr_render_bins(uint8_t *ctx) {
         hr_resolve_bin(H, sys, geom, bin);
         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, H->out, HR_BL * HR_W * 4);
         hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
+        comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */
     }
 }
