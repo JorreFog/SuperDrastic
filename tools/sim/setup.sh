@@ -49,6 +49,10 @@ md5sum drastic/drastic
 # ---- qemu-aarch64 with plugins, and the fnprof plugin ----
 if [ ! -x qemu-build/qemu-aarch64 ]; then
     [ -d qemu-src ] || git clone -q --depth 1 -b v9.2.0 https://github.com/qemu/qemu.git qemu-src
+    # 9.2.0's TCG optimizer folds a vector bit-select whose false operand is a known all-ones constant (bsl/bit/bif
+    # with a vdupq_n(0xff) operand, as clang emits for vbslq with a constant) to all-ones: NEON C code with such a
+    # select is mis-simulated. The one-line fix (orc(b, a), not orc(c, a)) is in qemu-9.2.0-fold_bitsel_vec.patch.
+    grep -q 'orc(b, a)' qemu-src/tcg/optimize.c || git -C qemu-src apply "$HERE/qemu-9.2.0-fold_bitsel_vec.patch"
     mkdir -p qemu-build && (cd qemu-build && ../qemu-src/configure --target-list=aarch64-linux-user --enable-plugins \
         --disable-docs --disable-werror >/dev/null && make -j"$(nproc)" qemu-aarch64 >/dev/null)
 fi

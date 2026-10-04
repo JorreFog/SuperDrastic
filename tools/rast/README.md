@@ -76,6 +76,10 @@ test; one that all pass is stored straight.
 - `RAST_PIPE` selects the pipeline: 0 = b0 (stage by stage), 1 = fused scalar, 2 = fused C NEON, 3 = assembly.
 - `RAST_DUMP=<dir>` writes frames as PPM; `RAST_STATS=1` prints the opaque overdraw; `RAST_FRAMES=1` prints the
   frame count every 10 frames (for per-frame figures from a block profile).
+- The simulator's qemu 9.2.0 needs `tools/sim/qemu-9.2.0-fold_bitsel_vec.patch` (setup.sh applies it): unpatched, its
+  TCG optimizer folds a vector bit-select with a constant all-ones false operand to all-ones, so NEON C code using
+  `vbslq` with such a constant computes the wrong thing under the simulator only. The generated kernels use runtime
+  masks and are not affected; the 3x stage functions' unit tests (edge, fog, downsample) pass with the patched qemu.
 
 ## Next
 
