@@ -65,4 +65,19 @@
 
 #define BIN_BYTES 0x10000
 #define NBINS 12
+
+/* the output frames, as the 2D compositor reads them (comp.c). update_frame_3d_4x(sys, skip) picks the frame to
+ * write (SYS_OUTPUT): with threaded_3d the one that is not published, else the current one. It renders the bins into
+ * it, then (edge marking on) re-marks the rows 32k-1 and 32k of each bin boundary (the gap passes, spec/resolve.c);
+ * or, when it does not render (no new geometry), with threaded_3d copies the last rendered frame into it.
+ * render_scanline_3d returns SYS_OUTPUT + line*0x1000 (SYS_PUBLISHED with threaded_3d). */
+#define SYS_CFG         0x8         /* u64: configuration */
+#define CFG_THREADED_3D 0x468       /* u32 */
+#define SYS_FRAMEBUF    0x1056c0    /* two output frames of NBINS * BIN_BYTES (reset_video_3d clears both) */
+#define SYS_PUBLISHED   0x34eb60    /* u64: the frame the compositor reads with threaded_3d */
+#define SYS_LAST        0x34eb68    /* u64: the frame last rendered (the source of the copy) */
+#define DS_SET_3D_VISIBILITY  0x3c2c0   /* render_scanline_set_3d_visibility(u8 bits[32], const u32 px[256]) */
+#define DS_UPDATE_FRAME_3D_4X 0x58f10   /* update_frame_3d_4x(sys, u32 skip) */
+#define DS_UPDATE_FRAME_3D_1X 0x52870   /* update_frame_3d_1x(sys, u32 skip) */
+#define DS_RESET_VIDEO_3D     0x59a60   /* reset_video_3d(sys + SYS_FRAMEBUF) */
 #endif

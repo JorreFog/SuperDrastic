@@ -22,6 +22,7 @@
 #include "ds3d.h"
 #include "rast.h"
 #include "fused.h"
+#include "comp.h"
 #include "spec/edges.h"
 
 /* the 3x layout: 50 context lines (bin line l is frame line hy0 - 1 + l), 768 pixels; the span arrays 64 entries */
@@ -454,5 +455,6 @@ void hr_render_bins(uint8_t *ctx) {
         hr_resolve_bin(H, sys, geom, bin);
         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, H->out, HR_BL * HR_W * 4);
         hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
+        comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */
     }
 }

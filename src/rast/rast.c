@@ -16,6 +16,7 @@
 #include "ds3d.h"
 #include "rast.h"
 #include "fused.h"
+#include "comp.h"
 
 uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
@@ -122,6 +123,7 @@ static void render_bins(uint8_t *ctx) {
             render_list(ctx, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, y0, 0);
         }
         resolve_bin(ctx, sys, bin);
+        comp_bin(sys, bin, 1);          /* the compositor's visibility table, while the block is in cache */
     }
 }
 
@@ -153,6 +155,7 @@ static void diff_render_bins(uint8_t *ctx) {
                         st_calls, b, nd, fi, r[fi], o[fi]);
             pthread_mutex_unlock(&stat_lock);
             memcpy(out + b * BIN_BYTES, ref + b * BIN_BYTES, BIN_BYTES);
+            comp_bin(sys, b, 0);        /* the block changed after render_bins computed its entries */
         }
     }
     pthread_mutex_lock(&stat_lock);
@@ -204,6 +207,7 @@ static int print_frames;         /* RAST_FRAMES=1: the frame count every 10 fram
 static void hook_entry(uint8_t *ctx) {
     static __thread int named;
     if (!named) { named = 1; pthread_setname_np(pthread_self(), "rast-3d"); }  /* the performance log's per-thread CPU */
+    comp_bins_begin(PTR(ctx, CTX_SYS));
     if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; (rast_scale == 3 ? hr_render_bins : render_bins)(ctx); in_ours = 0; }
     if (dump_dir) dump_frame(ctx);
     if (print_frames && U8(ctx, CTX_FIRST_BIN) == 0) {
@@ -222,9 +226,9 @@ static void patch_jump(uint32_t *at, void *to) {
     memcpy(at + 2, &to, 8);
 }
 
-/* patch DraStic's function at `off` (whose first 4 instructions must be `expect` and position independent) to jump
- * to `to`; returns a trampoline that runs the original, or 0 */
-static void *hook(uintptr_t off, const uint32_t expect[4], void *to) {
+/* patch DraStic's function at `off` (whose first 4 instructions must be `expect`) to jump to `to`; returns a
+ * trampoline that runs the original (valid only when those 4 instructions are position independent), or 0 */
+void *rast_hook(uintptr_t off, const uint32_t expect[4], void *to) {
     uint32_t *entry = (uint32_t *)(ds_base + off);
     if (memcmp(entry, expect, 16)) return 0;
     static uint32_t *tramp; static int used;
@@ -349,14 +353,15 @@ __attribute__((constructor)) static void rast_init(void) {
     { extern int use_neon; use_neon = pipe_sel >= 1 ? pipe_sel : 1; }
     if (getenv("RAST_DUMP_EVERY")) dump_every = atoi(getenv("RAST_DUMP_EVERY"));
     dl_iterate_phdr(cb, 0);
-    orig_render_bins = (void (*)(uint8_t *))hook(DS_RENDER_BINS_4X, expect_bins, (void *)hook_entry);
+    orig_render_bins = (void (*)(uint8_t *))rast_hook(DS_RENDER_BINS_4X, expect_bins, (void *)hook_entry);
     if (!orig_render_bins) { fprintf(stderr, "[rast] unknown DraStic build, not hooking\n"); return; }
-    orig_setup = (setup_fn)hook(DS_RENDER_POLYGON_SETUP_4X, expect_setup, (void *)hook_setup);
+    orig_setup = (setup_fn)rast_hook(DS_RENDER_POLYGON_SETUP_4X, expect_setup, (void *)hook_setup);
     if (rast_scale == 3) {
-        orig_persp = (void (*)(uint8_t *, const uint32_t *, const uint32_t *))hook(DS_PERSP_APPLY_HIRES, expect_persp, (void *)hook_persp);
+        orig_persp = (void (*)(uint8_t *, const uint32_t *, const uint32_t *))rast_hook(DS_PERSP_APPLY_HIRES, expect_persp, (void *)hook_persp);
         if (!orig_persp) { fprintf(stderr, "[rast] cannot hook the vertex transform, 3x off\n"); rast_scale = 2; }
         else if (dump_dir) hr_frame = calloc(768 * 576, 4);
     }
+    comp_init();                         /* the compositor's 3D visibility step (comp.c) */
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
     fprintf(stderr, "[rast] hooked video_3d_render_bins_4x, mode %s, scale %d\n", e, rast_scale);
 }
