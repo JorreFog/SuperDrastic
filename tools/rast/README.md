@@ -23,7 +23,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   (`render_scanline_set_3d_visibility`, 0.33 M instructions a frame on the emulation thread); the render threads
   now fill that table as they finish each bin and the hook answers from it (0.02 M on the emulation thread;
   `RAST_COMP` 0 off, 1 the NEON replacement only, 2 the table, the default; `RAST_COMPCHECK=1` checks every
-  answer against a C port of DraStic's routine).
+  answer against a C port of DraStic's routine). A quarter that shows only the 3D layer and the backdrop is then
+  written in one NEON pass instead of DraStic's five-stage chain (`render_scanline_2d_composite` hooked,
+  `RAST_COMPFUSE=0` off): on the stress ROM the chain's @@L4BEFORE@@ M a frame become @@L4AFTER@@ M, on the field
+  scene @@S7BEFORE@@ M become @@S7AFTER@@ M, checked byte for byte against the original in the running emulator.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -100,6 +103,27 @@ renderer hooked (`RAST=ours`/`diff`, `DSFLIP_RAST=1`):
   0.108 M. (The block profiler keys blocks by start ^ length; two of hook_vis's blocks collide there, so its
   report undercounts the NEON path as 99 a call: the figures here are the static path lengths.)
 
+### The fused 3D + backdrop quarter (`render_scanline_2d_composite`, `src/rast/compfuse.h`)
+
+After the visibility step, DraStic composites the quarter: `render_scanline_2d_composite` runs its priority encoder
+(which layer is on top per pixel: 256-bit masks per layer and for the backdrop) and `select_pixels`, which merges the
+layers' u16 lines, puts the backdrop in, expands the u16 line into 6-bit R/G/B planes, and then writes the 3D pixels'
+bytes over the planes where BG0 is on top (`spec/composite.c` documents every routine; ~620 instructions a quarter,
+768 quarters a frame on the emulation thread). The hook on `render_scanline_2d_composite` (`comp.c`) runs DraStic's
+own encoder, so the masks in the scratch area are its bytes, and reads them: when no other layer of the layer mask
+claims a pixel and every pixel is BG0's or the backdrop's, the planes are `mask ? 3D bytes : backdrop` for every
+pixel, whatever BG0's own u16 line holds (the derivation is in `compfuse.h`), and one NEON pass writes them: 40
+instructions for a quarter that is all 3D, 27 all backdrop, ~140 mixed. Otherwise it calls DraStic's
+`select_pixels` as the original does; blending or brightness flags, no 3D layer (engine B) or another layer mask go
+to the original through a trampoline. Exactness: the C ports of the chain are unit-tested against the originals, and
+the fused pass against DraStic's `select_pixels` and the ports (`t_composite.c`); `t_comp_hook.c` runs the hook
+itself against the original on random engines, scratch areas and quarters through every path, with the check mode
+on and off; `RAST_COMPCHECK=1` runs every fused call twice in the emulator (ours, then the original through the
+trampoline on the same input bytes) and compares the scratch frame, the planes, the 3D pixels and the engine
+(`[comp] composite:` counts every 2 s). Cost per frame (simulator instruction counts, 90 s each): the chain's
+functions on the stress ROM L4 @@L4BEFORE@@ M -> @@L4AFTER@@ M (the quarters of engine B, which has no 3D layer,
+stay with DraStic's chain), on the field scene S7 @@S7BEFORE@@ M -> @@S7AFTER@@ M; frame totals @@L4TOT@@ and @@S7TOT@@.
+
 ## How it works
 
 `src/rast/spec/`: DraStic's ~85 raster routines ported to exact C, each unit-tested bit for bit against the
@@ -132,8 +156,8 @@ they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flag
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
 - The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
-- The fused 3D + backdrop composite (`render_scanline_2d_composite`'s 3D part) on the render threads, like the
-  visibility table.
+- The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
+  into the scanout and skip the planes (~0.08 M a frame; needs the convert hook keyed by plane pointer).
 - 3x: the polygon walker's hot spots in NEON (interpolate_edges, setup_spans: ~1.4 M a frame on S4); the top vertex
   at 3x for tied vertices; later the hi-res 3D layer presented through the dsflip shader instead of downsampled.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it

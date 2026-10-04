@@ -80,4 +80,16 @@
 #define DS_UPDATE_FRAME_3D_4X 0x58f10   /* update_frame_3d_4x(sys, u32 skip) */
 #define DS_UPDATE_FRAME_3D_1X 0x52870   /* update_frame_3d_1x(sys, u32 skip) */
 #define DS_RESET_VIDEO_3D     0x59a60   /* reset_video_3d(sys + SYS_FRAMEBUF) */
+
+/* the 2D compositor's quarter (comp.c, spec/composite.c): render_scanline_2d_composite(eng, out, S, layers, p3d, alpha,
+ * lmask, bldcnt, flags, line) and the two routines its simple path calls. S = render_scanline_2d's scratch area
+ * (its stack frame + 0x180; the frame is 0x1d30 bytes). */
+#define DS_2D_COMPOSITE       0x3c6d0
+#define DS_PRIORITY_ENCODE_SINGLE 0x9ffc0   /* (eng, S + S_VIS, S + S_EXCL); clobbers x3-x7, v0-v7, v16, v17 only */
+#define DS_SELECT_PIXELS      0x39330   /* (eng, out, excl, layers, p3d, alpha, lmask) */
+#define ENG_BACKDROP    0x18        /* u64: pointer to the backdrop colour (u16 BGR555) */
+#define S_VIS           0xda0       /* u8 [8][32]: visibility bitmaps, BG0..BG3, OBJ by priority */
+#define S_EXCL          0x10c0      /* u8 [6][32]: the priority encoder's masks, BG0..BG3, OBJ, backdrop */
+#define S_FRAME_BELOW   0x180       /* render_scanline_2d's frame: S - 0x180 .. S + 0x1bb0 */
+#define S_FRAME_SIZE    0x1d30
 #endif

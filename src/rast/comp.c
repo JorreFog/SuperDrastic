@@ -31,8 +31,27 @@
  * being written, and the table writes reach it through the same mutex hand-off (video_3d_finish_rendering) as the
  * pixels. RAST_COMPCHECK=1 checks every call against the C port (and every table when it becomes valid).
  *
+ * 3. The quarters that show only the 3D layer and the backdrop (RAST_COMPFUSE, default on). After the visibility
+ *    step render_scanline_2d calls render_scanline_2d_composite (0x3c6d0) for the quarter. With (flags & 0xf) == 0
+ *    (no blending, no brightness) that is DraStic's priority encoder, then select_pixels: the layers' u16 lines
+ *    merged, the backdrop, the 6-bit expansion into the planes, then the 3D pixels' bytes over them where BG0 is on
+ *    top (spec/composite.c), ~620 instructions a quarter. hook_composite() runs the same priority encoder (DraStic's
+ *    own function, so the masks in S are its bytes) and, when the masks say the quarter is BG0's and the backdrop's
+ *    alone (compfuse.h: no other layer of the mask claims a pixel, and every pixel is BG0's or the backdrop's), writes
+ *    the planes in one NEON pass: ~45 instructions for a quarter that is all 3D, ~30 all backdrop, ~150 mixed.
+ *    Otherwise it calls DraStic's select_pixels with the arguments the original passes it; and for other flags, no
+ *    3D layer, another layer mask or overlapping buffers, the original through a trampoline (its first four
+ *    instructions are position independent; rast_hook() returns it). Both run the original encoder, and both the
+ *    original and the fused pass write only the planes after it (select_pixels' u16 line is its own stack, written
+ *    in full before it is read; nothing reads below the stack pointer afterwards), so the masks and the planes are
+ *    the whole observable state, and the planes are the same bytes by the derivation in compfuse.h.
+ *    RAST_COMPCHECK=1 also checks every call that does not go to the trampoline: our path, then the original through
+ *    the trampoline on the same input bytes, comparing render_scanline_2d's whole stack frame (S and the layer lines),
+ *    the planes with 0x40 bytes either side, the 3D pixels and the engine's first 0x400 bytes; counts per path every
+ *    2 s ("[comp] composite:" lines, "[compcheck]" for a difference).
+ *
  * RAST_COMP (or DSFLIP_RAST_COMP): 0 off (DraStic's function), 1 the NEON replacement only, 2 (default) with the
- * table. */
+ * table. RAST_COMPFUSE (DSFLIP_RAST_COMPFUSE) 0 leaves render_scanline_2d_composite alone. */
 #define _GNU_SOURCE
 #include <pthread.h>
 #include <stdio.h>
@@ -43,6 +62,7 @@
 #include "rast.h"
 #include "comp.h"
 #include "compvis.h"
+#include "compfuse.h"
 #include "spec/composite.h"
 
 #define U32(p, o) (*(uint32_t *)((uint8_t *)(p) + (o)))
@@ -206,9 +226,134 @@ static void hook_uf1(uint8_t *sys, uint32_t skip) {
 }
 static void hook_reset(uint8_t *vb) { invalidate_all(); orig_reset(vb); invalidate_all(); }
 
+/* ---- render_scanline_2d_composite: the 3D + backdrop quarters in one pass ---- */
+/* the original's arguments: x0..x7 and two u32 on the stack (flags, line). The callers write the stack slots and
+ * w6, w7 as 32-bit values; the upper halves of those registers and slots are undefined, so the parameters are
+ * taken as u64 and cut to 32 bits before use (the original reads them as w registers / 32-bit loads too). */
+typedef void (*composite_fn)(uint8_t *eng, uint8_t *out, uint8_t *S, uint8_t **layers, const uint32_t *p3d,
+                             uint8_t *alpha, uint64_t lmask, uint64_t bldcnt, uint64_t flags, uint64_t line);
+typedef void (*prio_fn)(uint8_t *eng, uint8_t *vis, uint8_t *excl);
+typedef void (*select_fn)(uint8_t *eng, uint8_t *out, uint8_t *excl, uint8_t **layers, const uint32_t *p3d,
+                          uint8_t *alpha, uint64_t lmask);
+static composite_fn orig_composite;                     /* the trampoline to DraStic's function */
+#define DSF(type, off) ((type)(ds_base + (off)))
+
+/* how a call is handled: the fused kinds, DraStic's select_pixels after our encoder call, or the original through
+ * the trampoline (and why); also the cf_n[] slot of the counters */
+enum { CF_ALL3D, CF_BACKDROP, CF_MIXED, CF_SELECT, CF_FLAGS, CF_NO3D, CF_LAYERS, CF_OVERLAP, CF_N };
+#define CF_TRAMPOLINE(r) ((r) >= CF_FLAGS)
+
+/* 0 when the call takes the simple path with the 3D layer, else the reason it goes to the original */
+static inline int cf_reason(const uint8_t *out, const uint8_t *S, const uint32_t *p3d, uint64_t lmask, uint64_t flags) {
+    if ((uint32_t)flags & 0xf) return CF_FLAGS;              /* blending (bits 0-2) or brightness (bit 3) */
+    if (!p3d) return CF_NO3D;                                /* no 3D layer (engine B, BG0 not 3D) */
+    if (((uint32_t)lmask & ~0x1eu) != 1) return CF_LAYERS;   /* BG0 off, or bits above OBJ (DraStic never sets them) */
+    /* the original writes the planes (expand) before it reads the 3D pixels and BG0's mask (binary32): with
+     * overlapping buffers the fused pass, which reads first, would differ. DraStic's buffers never overlap. */
+    uintptr_t o = (uintptr_t)out, p = (uintptr_t)p3d, x = (uintptr_t)S + S_EXCL;
+    if ((o < p + 0x400 && p < o + 0x300) || (o < x + 0xc0 && x < o + 0x300)) return CF_OVERLAP;
+    return 0;
+}
+
+/* the simple path: DraStic's priority encoder (so the masks in S are its bytes), then the fused planes, or
+ * DraStic's select_pixels with the arguments the original passes it. Returns the cf_n[] slot. */
+static inline int cf_run(uint8_t *eng, uint8_t *out, uint8_t *S, uint8_t **layers, const uint32_t *p3d, uint64_t lmask) {
+    DSF(prio_fn, DS_PRIORITY_ENCODE_SINGLE)(eng, S + S_VIS, S + S_EXCL);
+    int kind = comp_fused_kind(S + S_EXCL, (uint32_t)lmask);
+    if (kind == CF_KIND_NONE) {
+        DSF(select_fn, DS_SELECT_PIXELS)(eng, out, S + S_EXCL, layers, p3d, 0, (uint32_t)lmask);
+        return CF_SELECT;
+    }
+    comp_fused_planes(out, p3d, S + S_EXCL, **(const uint16_t **)(eng + ENG_BACKDROP), kind);
+    return kind - 1;                                         /* CF_ALL3D, CF_BACKDROP, CF_MIXED */
+}
+
+/* check mode: every call that does not go to the trampoline runs twice on the same input bytes: ours, then the
+ * original through the trampoline, and everything either may write is compared: render_scanline_2d's whole stack
+ * frame (S and the layer lines; the original writes only the encoder's masks in it), the planes with 0x40 bytes
+ * either side, the 3D pixels (which may lie in S: a BG0HOFS-shifted copy) and the engine's first 0x400 bytes.
+ * Counts per slot, printed every 2 s. */
+static pthread_mutex_t cf_lock = PTHREAD_MUTEX_INITIALIZER;
+static unsigned long cf_n[CF_N], cf_checked, cf_bad;
+static struct timespec cf_last;
+#define CF_OUT_PAD 0x40
+#define CF_ENG_BYTES 0x400
+static uint8_t cf_in_fr[S_FRAME_SIZE], cf_in_out[0x300 + 2 * CF_OUT_PAD], cf_in_px[0x400], cf_in_eng[CF_ENG_BYTES];
+static uint8_t cf_our_fr[S_FRAME_SIZE], cf_our_out[0x300 + 2 * CF_OUT_PAD], cf_our_px[0x400], cf_our_eng[CF_ENG_BYTES];
+
+static void cf_report(void) {                           /* under cf_lock, every 2 s */
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (now.tv_sec - cf_last.tv_sec < 2) return;
+    cf_last = now;
+    fprintf(stderr, "[comp] composite: %lu fused (%lu all 3D, %lu all backdrop, %lu mixed), %lu via select_pixels "
+            "(another layer shows), %lu to DraStic's (%lu flags, %lu no 3D, %lu layer mask, %lu overlap); "
+            "%lu checked, %lu differ\n", cf_n[CF_ALL3D] + cf_n[CF_BACKDROP] + cf_n[CF_MIXED], cf_n[CF_ALL3D],
+            cf_n[CF_BACKDROP], cf_n[CF_MIXED], cf_n[CF_SELECT], cf_n[CF_FLAGS] + cf_n[CF_NO3D] + cf_n[CF_LAYERS] + cf_n[CF_OVERLAP],
+            cf_n[CF_FLAGS], cf_n[CF_NO3D], cf_n[CF_LAYERS], cf_n[CF_OVERLAP], cf_checked, cf_bad);
+}
+
+/* the first differing byte of a region, for the log */
+static void cf_diff(const char *what, const uint8_t *ref, const uint8_t *ours, size_t n, long base) {
+    for (size_t i = 0; i < n; i++)
+        if (ref[i] != ours[i]) {
+            fprintf(stderr, "   %s %+ld: DraStic %02x, ours %02x\n", what, (long)i + base, ref[i], ours[i]);
+            return;
+        }
+}
+
+static __attribute__((noinline)) void hook_composite_check(uint8_t *eng, uint8_t *out, uint8_t *S, uint8_t **layers,
+                                                           const uint32_t *p3d, uint8_t *alpha, uint64_t lmask,
+                                                           uint64_t bldcnt, uint64_t flags, uint64_t line) {
+    int why = cf_reason(out, S, p3d, lmask, flags);
+    if (why) {
+        orig_composite(eng, out, S, layers, p3d, alpha, lmask, bldcnt, flags, line);
+        pthread_mutex_lock(&cf_lock);
+        cf_n[why]++;
+        cf_report();
+        pthread_mutex_unlock(&cf_lock);
+        return;
+    }
+    uint8_t *fr = S - S_FRAME_BELOW, *ow = out - CF_OUT_PAD, *px = (uint8_t *)p3d;
+    pthread_mutex_lock(&cf_lock);
+    memcpy(cf_in_fr, fr, S_FRAME_SIZE); memcpy(cf_in_out, ow, sizeof cf_in_out);
+    memcpy(cf_in_px, px, 0x400); memcpy(cf_in_eng, eng, CF_ENG_BYTES);
+    int slot = cf_run(eng, out, S, layers, p3d, lmask);
+    memcpy(cf_our_fr, fr, S_FRAME_SIZE); memcpy(cf_our_out, ow, sizeof cf_our_out);
+    memcpy(cf_our_px, px, 0x400); memcpy(cf_our_eng, eng, CF_ENG_BYTES);
+    /* the same input bytes again (p3d may lie in the frame: both copies hold the same bytes there) */
+    memcpy(fr, cf_in_fr, S_FRAME_SIZE); memcpy(ow, cf_in_out, sizeof cf_in_out);
+    memcpy(px, cf_in_px, 0x400); memcpy(eng, cf_in_eng, CF_ENG_BYTES);
+    orig_composite(eng, out, S, layers, p3d, alpha, lmask, bldcnt, flags, line);
+    int bad = memcmp(fr, cf_our_fr, S_FRAME_SIZE) || memcmp(ow, cf_our_out, sizeof cf_our_out) ||
+              memcmp(px, cf_our_px, 0x400) || memcmp(eng, cf_our_eng, CF_ENG_BYTES);
+    cf_n[slot]++; cf_checked++;
+    if (bad && cf_bad++ < 30) {
+        static const char *kn[] = { "all 3D", "all backdrop", "mixed", "select_pixels" };
+        fprintf(stderr, "[compcheck] render_scanline_2d_composite(out %p, S %p, p3d %p, lmask %#x, flags %#x) %s path "
+                "differs from DraStic's:\n", (void *)out, (void *)S, (const void *)p3d, (uint32_t)lmask, (uint32_t)flags, kn[slot]);
+        cf_diff("planes", ow, cf_our_out, sizeof cf_our_out, -CF_OUT_PAD);
+        cf_diff("S", fr, cf_our_fr, S_FRAME_SIZE, -S_FRAME_BELOW);
+        cf_diff("p3d", px, cf_our_px, 0x400, 0);
+        cf_diff("eng", eng, cf_our_eng, CF_ENG_BYTES, 0);
+    }
+    /* leave our result in place, as without the check */
+    memcpy(fr, cf_our_fr, S_FRAME_SIZE); memcpy(ow, cf_our_out, sizeof cf_our_out);
+    memcpy(px, cf_our_px, 0x400); memcpy(eng, cf_our_eng, CF_ENG_BYTES);
+    cf_report();
+    pthread_mutex_unlock(&cf_lock);
+}
+
+static void hook_composite(uint8_t *eng, uint8_t *out, uint8_t *S, uint8_t **layers, const uint32_t *p3d,
+                           uint8_t *alpha, uint64_t lmask, uint64_t bldcnt, uint64_t flags, uint64_t line) {
+    if (__builtin_expect(compcheck, 0)) { hook_composite_check(eng, out, S, layers, p3d, alpha, lmask, bldcnt, flags, line); return; }
+    if (cf_reason(out, S, p3d, lmask, flags)) { orig_composite(eng, out, S, layers, p3d, alpha, lmask, bldcnt, flags, line); return; }
+    cf_run(eng, out, S, layers, p3d, lmask);
+}
 static const uint32_t expect_vis[4] = { 0xa9aa7bfd, 0x910003fd, 0xa90153f3, 0xf0000914 };
 static const uint32_t expect_uf[4] = { 0xa9ba7bfd, 0x914d3402, 0x911b0042, 0x910003fd };    /* both update_frame_3d_* */
 static const uint32_t expect_reset[4] = { 0xa9bd7bfd, 0x52800001, 0x910003fd, 0xa90153f3 };
+static const uint32_t expect_composite[4] = { 0xa9b67bfd, 0xaa0303e8, 0x910003fd, 0xa9025bf5 };
 
 void comp_init(void) {
     const char *e = getenv("DSFLIP_RAST_COMP");
@@ -232,7 +377,14 @@ void comp_init(void) {
         return;
     }
     use_tab = comp_mode >= 2;
-    if (compcheck) clock_gettime(CLOCK_MONOTONIC, &cc_last);
+    if (compcheck) { clock_gettime(CLOCK_MONOTONIC, &cc_last); cf_last = cc_last; }
     fprintf(stderr, "[comp] set_3d_visibility replaced (NEON%s)%s\n", use_tab ? " + per-bin table" : "",
             compcheck ? ", checking every call" : "");
+    const char *f = getenv("DSFLIP_RAST_COMPFUSE");
+    if (!f) f = getenv("RAST_COMPFUSE");
+    if (f && !atoi(f)) return;
+    orig_composite = (composite_fn)rast_hook(DS_2D_COMPOSITE, expect_composite, (void *)hook_composite);
+    if (!orig_composite) { fprintf(stderr, "[comp] unknown render_scanline_2d_composite, fused path off\n"); return; }
+    fprintf(stderr, "[comp] render_scanline_2d_composite hooked: 3D + backdrop quarters fused%s\n",
+            compcheck ? ", checking every call against DraStic's" : "");
 }
