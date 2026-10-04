@@ -50,9 +50,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   points and lines (1- and 2-vertex polygons) walk like DraStic's. The vertex table holds the DS's 6144 vertices
   (an earlier 1568 limit skipped polygons with higher vertex indices: a black sky and missing sparkles behind
   Ho-Oh in HG/SS). The downsample, the edge marking and the fog of the resolve are NEON (unit-tested against the
-  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage. The field scene costs 10.3 M
-  instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the rest the clear, the resolve
-  and the downsample over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
+  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage. The field scene costs 4.9 M
+  instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the downsample 0.66 M (four
+  triples a step; groups whose 36 alphas are all 31 or all 0 take fast paths, the same bits as the general case),
+  the rest the clear and the resolve over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
 - **Palette lookups with tbl.** 4- and 16-colour textures (the common DS formats I2 and I4) keep their palette
   in four NEON registers and look texels up with `tbl` instead of a dependent load per texel; exact. The
   instruction count hardly changes; the gain is the removed load latency on the handheld's in-order cores.
@@ -82,5 +83,5 @@ test; one that all pass is stored straight.
 - Device A/B: the same game with the option off and on, from the performance logs.
 - TBL palette lookups for 4- and 16-colour textures (saves the second gather); 64-bit texel-pair loads in the
   bilinear gathers.
-- 3x: the top vertex at 3x for tied vertices; cheaper edge marking and downsample; later the hi-res 3D layer
+- 3x: the top vertex at 3x for tied vertices; cheaper edge marking; later the hi-res 3D layer
   presented through the dsflip shader instead of downsampled.
