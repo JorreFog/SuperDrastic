@@ -80,10 +80,8 @@ rast_kern_00000:
 	orr v16.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -110,16 +108,16 @@ rast_kern_00000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -143,6 +141,11 @@ rast_kern_00000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -154,7 +157,6 @@ rast_kern_00000:
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -215,7 +217,6 @@ rast_kern_00000:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	str d28, [x3], #8
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -225,20 +226,6 @@ rast_kern_00000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q14, q16, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v14.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -262,6 +249,20 @@ rast_kern_00000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v14.16b, v30.16b
+	bit v28.16b, v16.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -282,7 +283,7 @@ rast_kern_00000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -301,6 +302,8 @@ rast_kern_00000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -417,14 +420,23 @@ rast_kern_00010:
 	orr v11.16b, v25.16b, v22.16b
 	orr v12.16b, v26.16b, v22.16b
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q10, q10, [x1]
 	stp q11, q12, [x2]
-	b 7f
+8:
+	str d28, [x3], #8
+7:
+	subs x5, x5, #8
+	b.ls 9f
+	add x1, x1, #32
+	add x2, x2, #32
+	add v6.2d, v6.2d, v9.2d
+	add v7.2d, v7.2d, v9.2d
+	b 0b
 1:
+	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
@@ -436,17 +448,7 @@ rast_kern_00010:
 	bit v24.16b, v11.16b, v30.16b
 	bit v28.16b, v12.16b, v31.16b
 	stp q24, q28, [x2]
-	b 7f
-8:
-	str d28, [x3], #8
-7:
-	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
-	add x2, x2, #32
-	add v6.2d, v6.2d, v9.2d
-	add v7.2d, v7.2d, v9.2d
-	b 0b
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -542,7 +544,8 @@ rast_kern_00100:
 	add x28, sp, #32
 	ldr q22, [x19, #32]
 	ldr d23, [x19, #48]
-	dup v18.8b, v23.b[3]
+	dup v18.8b, v23.b[0]
+	dup v19.8b, v23.b[3]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -554,7 +557,6 @@ rast_kern_00100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -600,9 +602,7 @@ rast_kern_00100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -628,16 +628,16 @@ rast_kern_00100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -661,6 +661,8 @@ rast_kern_00100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -672,7 +674,6 @@ rast_kern_00100:
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -733,7 +734,6 @@ rast_kern_00100:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -743,9 +743,9 @@ rast_kern_00100:
 	and v26.8b, v26.8b, v13.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v14.8b, v13.8b, v30.8b
+	sub v14.8b, v13.8b, v18.8b
 	bic v14.8b, v14.8b, v28.8b
-	bif v13.8b, v30.8b, v28.8b
+	bif v13.8b, v18.8b, v28.8b
 	xtn v28.8b, v24.8h
 	ushll v24.8h, v31.8b, #0
 	umlal v24.8h, v31.8b, v13.8b
@@ -762,7 +762,7 @@ rast_kern_00100:
 	umlal v24.8h, v28.8b, v14.8b
 	shrn v27.8b, v24.8h, #5
 1:
-	umax v24.8b, v30.8b, v26.8b
+	umax v24.8b, v18.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -770,13 +770,13 @@ rast_kern_00100:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v18.8b
+	cmeq v24.8b, v18.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v18.8b, v31.8b
+	bsl v30.8b, v19.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -886,7 +886,11 @@ rast_kern_00110:
 	add x28, sp, #32
 	ldr q22, [x19, #32]
 	ldr d23, [x19, #48]
-	dup v14.8b, v23.b[3]
+	dup v14.8b, v23.b[0]
+	dup v19.8b, v23.b[3]
+	dup v16.8b, v23.b[4]
+	dup v17.8b, v23.b[5]
+	dup v18.8b, v23.b[6]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -941,10 +945,6 @@ rast_kern_00110:
 	orr v12.16b, v25.16b, v22.16b
 	orr v13.16b, v26.16b, v22.16b
 28:
-	dup v29.8b, v23.b[4]
-	dup v27.8b, v23.b[5]
-	dup v31.8b, v23.b[6]
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -954,26 +954,31 @@ rast_kern_00110:
 	and v26.8b, v26.8b, v10.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v11.8b, v10.8b, v30.8b
+	sub v11.8b, v10.8b, v14.8b
 	bic v11.8b, v11.8b, v28.8b
-	bif v10.8b, v30.8b, v28.8b
+	bif v10.8b, v14.8b, v28.8b
 	xtn v28.8b, v24.8h
-	ushll v24.8h, v31.8b, #0
-	umlal v24.8h, v31.8b, v10.8b
+	ushll v24.8h, v18.8b, #0
+	umlal v24.8h, v18.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v31.8b, v24.8h, #5
 	xtn v28.8b, v25.8h
-	ushll v24.8h, v29.8b, #0
-	umlal v24.8h, v29.8b, v10.8b
+	ushll v24.8h, v16.8b, #0
+	umlal v24.8h, v16.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v29.8b, v24.8h, #5
 	shrn v28.8b, v25.8h, #8
-	ushll v24.8h, v27.8b, #0
-	umlal v24.8h, v27.8b, v10.8b
+	ushll v24.8h, v17.8b, #0
+	umlal v24.8h, v17.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v27.8b, v24.8h, #5
+	b 2f
 1:
-	umax v24.8b, v30.8b, v26.8b
+	mov v29.8b, v16.8b
+	mov v27.8b, v17.8b
+	mov v31.8b, v18.8b
+2:
+	umax v24.8b, v14.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -981,13 +986,13 @@ rast_kern_00110:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v14.8b
+	cmeq v24.8b, v14.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v14.8b, v31.8b
+	bsl v30.8b, v19.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -1143,10 +1148,8 @@ rast_kern_01000:
 	orr v19.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -1173,16 +1176,16 @@ rast_kern_01000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -1206,6 +1209,11 @@ rast_kern_01000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -1241,9 +1249,8 @@ rast_kern_01000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -1384,7 +1391,6 @@ rast_kern_01000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v20.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -1395,20 +1401,6 @@ rast_kern_01000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q19, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -1432,6 +1424,20 @@ rast_kern_01000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v19.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -1452,7 +1458,7 @@ rast_kern_01000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -1471,6 +1477,8 @@ rast_kern_01000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -1583,10 +1591,8 @@ rast_kern_01001:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -1613,16 +1619,16 @@ rast_kern_01001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -1646,6 +1652,11 @@ rast_kern_01001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -1681,9 +1692,8 @@ rast_kern_01001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -2039,7 +2049,6 @@ rast_kern_01001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -2054,20 +2063,6 @@ rast_kern_01001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -2091,6 +2086,20 @@ rast_kern_01001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -2111,7 +2120,7 @@ rast_kern_01001:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -2130,6 +2139,8 @@ rast_kern_01001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -2248,10 +2259,8 @@ rast_kern_01010:
 	orr v11.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -2278,16 +2287,16 @@ rast_kern_01010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -2311,6 +2320,11 @@ rast_kern_01010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -2325,7 +2339,6 @@ rast_kern_01010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -2451,7 +2464,6 @@ rast_kern_01010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -2462,20 +2474,6 @@ rast_kern_01010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -2499,6 +2497,20 @@ rast_kern_01010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -2519,7 +2531,7 @@ rast_kern_01010:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -2538,6 +2550,8 @@ rast_kern_01010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -2650,10 +2664,8 @@ rast_kern_01011:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -2680,16 +2692,16 @@ rast_kern_01011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -2713,6 +2725,11 @@ rast_kern_01011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -2727,7 +2744,6 @@ rast_kern_01011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -3071,7 +3087,6 @@ rast_kern_01011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -3086,20 +3101,6 @@ rast_kern_01011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -3123,6 +3124,20 @@ rast_kern_01011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -3143,7 +3158,7 @@ rast_kern_01011:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -3162,6 +3177,8 @@ rast_kern_01011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -3234,7 +3251,6 @@ rast_kern_01100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -3280,9 +3296,7 @@ rast_kern_01100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -3308,16 +3322,16 @@ rast_kern_01100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -3341,6 +3355,8 @@ rast_kern_01100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -3376,9 +3392,8 @@ rast_kern_01100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -3689,7 +3704,6 @@ rast_kern_01101:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -3734,9 +3748,7 @@ rast_kern_01101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -3762,16 +3774,16 @@ rast_kern_01101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -3795,6 +3807,8 @@ rast_kern_01101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -3830,9 +3844,8 @@ rast_kern_01101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -4376,7 +4389,6 @@ rast_kern_01110:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -4422,9 +4434,7 @@ rast_kern_01110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -4450,16 +4460,16 @@ rast_kern_01110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -4483,6 +4493,8 @@ rast_kern_01110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -4497,7 +4509,6 @@ rast_kern_01110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -4793,7 +4804,6 @@ rast_kern_01111:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -4838,9 +4848,7 @@ rast_kern_01111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -4866,16 +4874,16 @@ rast_kern_01111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -4899,6 +4907,8 @@ rast_kern_01111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -4913,7 +4923,6 @@ rast_kern_01111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -5485,10 +5494,8 @@ rast_kern_02000:
 	orr v19.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -5515,16 +5522,16 @@ rast_kern_02000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -5548,6 +5555,11 @@ rast_kern_02000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -5583,9 +5595,8 @@ rast_kern_02000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -5706,7 +5717,6 @@ rast_kern_02000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v20.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -5717,20 +5727,6 @@ rast_kern_02000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q19, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -5754,6 +5750,20 @@ rast_kern_02000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v19.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -5774,7 +5784,7 @@ rast_kern_02000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -5793,6 +5803,8 @@ rast_kern_02000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -5905,10 +5917,8 @@ rast_kern_02001:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -5935,16 +5945,16 @@ rast_kern_02001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -5968,6 +5978,11 @@ rast_kern_02001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -6003,9 +6018,8 @@ rast_kern_02001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -6321,7 +6335,6 @@ rast_kern_02001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -6336,20 +6349,6 @@ rast_kern_02001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -6373,6 +6372,20 @@ rast_kern_02001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -6393,7 +6406,7 @@ rast_kern_02001:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -6412,6 +6425,8 @@ rast_kern_02001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -6530,10 +6545,8 @@ rast_kern_02010:
 	orr v11.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -6560,16 +6573,16 @@ rast_kern_02010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -6593,6 +6606,11 @@ rast_kern_02010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -6607,7 +6625,6 @@ rast_kern_02010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -6713,7 +6730,6 @@ rast_kern_02010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -6724,20 +6740,6 @@ rast_kern_02010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -6761,6 +6763,20 @@ rast_kern_02010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -6781,7 +6797,7 @@ rast_kern_02010:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -6800,6 +6816,8 @@ rast_kern_02010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -6912,10 +6930,8 @@ rast_kern_02011:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -6942,16 +6958,16 @@ rast_kern_02011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -6975,6 +6991,11 @@ rast_kern_02011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -6989,7 +7010,6 @@ rast_kern_02011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -7293,7 +7313,6 @@ rast_kern_02011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -7308,20 +7327,6 @@ rast_kern_02011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -7345,6 +7350,20 @@ rast_kern_02011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -7365,7 +7384,7 @@ rast_kern_02011:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -7384,6 +7403,8 @@ rast_kern_02011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -7456,7 +7477,6 @@ rast_kern_02100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -7502,9 +7522,7 @@ rast_kern_02100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -7530,16 +7548,16 @@ rast_kern_02100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -7563,6 +7581,8 @@ rast_kern_02100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -7598,9 +7618,8 @@ rast_kern_02100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -7891,7 +7910,6 @@ rast_kern_02101:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -7936,9 +7954,7 @@ rast_kern_02101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -7964,16 +7980,16 @@ rast_kern_02101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -7997,6 +8013,8 @@ rast_kern_02101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -8032,9 +8050,8 @@ rast_kern_02101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -8538,7 +8555,6 @@ rast_kern_02110:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -8584,9 +8600,7 @@ rast_kern_02110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -8612,16 +8626,16 @@ rast_kern_02110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -8645,6 +8659,8 @@ rast_kern_02110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -8659,7 +8675,6 @@ rast_kern_02110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -8935,7 +8950,6 @@ rast_kern_02111:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -8980,9 +8994,7 @@ rast_kern_02111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -9008,16 +9020,16 @@ rast_kern_02111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -9041,6 +9053,8 @@ rast_kern_02111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -9055,7 +9069,6 @@ rast_kern_02111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -9588,10 +9601,8 @@ rast_kern_03000:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -9618,16 +9629,16 @@ rast_kern_03000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -9651,6 +9662,11 @@ rast_kern_03000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -9686,9 +9702,8 @@ rast_kern_03000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -9851,7 +9866,6 @@ rast_kern_03000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -9866,20 +9880,6 @@ rast_kern_03000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -9903,6 +9903,20 @@ rast_kern_03000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -9923,7 +9937,7 @@ rast_kern_03000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -9942,6 +9956,8 @@ rast_kern_03000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -10054,10 +10070,8 @@ rast_kern_03001:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -10084,16 +10098,16 @@ rast_kern_03001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -10117,6 +10131,11 @@ rast_kern_03001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -10152,9 +10171,8 @@ rast_kern_03001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -10542,7 +10560,6 @@ rast_kern_03001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -10557,20 +10574,6 @@ rast_kern_03001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -10594,6 +10597,20 @@ rast_kern_03001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -10614,7 +10631,7 @@ rast_kern_03001:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -10633,6 +10650,8 @@ rast_kern_03001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -10751,10 +10770,8 @@ rast_kern_03010:
 	orr v11.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -10781,16 +10798,16 @@ rast_kern_03010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -10814,6 +10831,11 @@ rast_kern_03010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -10828,7 +10850,6 @@ rast_kern_03010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -10980,7 +11001,6 @@ rast_kern_03010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -10991,20 +11011,6 @@ rast_kern_03010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -11028,6 +11034,20 @@ rast_kern_03010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -11048,7 +11068,7 @@ rast_kern_03010:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -11067,6 +11087,8 @@ rast_kern_03010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -11179,10 +11201,8 @@ rast_kern_03011:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -11209,16 +11229,16 @@ rast_kern_03011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -11242,6 +11262,11 @@ rast_kern_03011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -11256,7 +11281,6 @@ rast_kern_03011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -11632,7 +11656,6 @@ rast_kern_03011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -11647,20 +11670,6 @@ rast_kern_03011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -11684,6 +11693,20 @@ rast_kern_03011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -11704,7 +11727,7 @@ rast_kern_03011:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -11723,6 +11746,8 @@ rast_kern_03011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -11799,7 +11824,6 @@ rast_kern_03100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -11844,9 +11868,7 @@ rast_kern_03100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -11872,16 +11894,16 @@ rast_kern_03100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -11905,6 +11927,8 @@ rast_kern_03100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -11940,9 +11964,8 @@ rast_kern_03100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -12290,7 +12313,6 @@ rast_kern_03101:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -12335,9 +12357,7 @@ rast_kern_03101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -12363,16 +12383,16 @@ rast_kern_03101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -12396,6 +12416,8 @@ rast_kern_03101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -12431,9 +12453,8 @@ rast_kern_03101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -13011,7 +13032,6 @@ rast_kern_03110:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -13056,9 +13076,7 @@ rast_kern_03110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -13084,16 +13102,16 @@ rast_kern_03110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -13117,6 +13135,8 @@ rast_kern_03110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -13131,7 +13151,6 @@ rast_kern_03110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -13453,7 +13472,6 @@ rast_kern_03111:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -13498,9 +13516,7 @@ rast_kern_03111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -13526,16 +13542,16 @@ rast_kern_03111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -13559,6 +13575,8 @@ rast_kern_03111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -13573,7 +13591,6 @@ rast_kern_03111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -14178,10 +14195,8 @@ rast_kern_04000:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -14208,16 +14223,16 @@ rast_kern_04000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -14241,6 +14256,11 @@ rast_kern_04000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -14276,9 +14296,8 @@ rast_kern_04000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -14421,7 +14440,6 @@ rast_kern_04000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -14436,20 +14454,6 @@ rast_kern_04000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -14473,6 +14477,20 @@ rast_kern_04000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -14493,7 +14511,7 @@ rast_kern_04000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -14512,6 +14530,8 @@ rast_kern_04000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -14624,10 +14644,8 @@ rast_kern_04001:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -14654,16 +14672,16 @@ rast_kern_04001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -14687,6 +14705,11 @@ rast_kern_04001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -14722,9 +14745,8 @@ rast_kern_04001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -15072,7 +15094,6 @@ rast_kern_04001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -15087,20 +15108,6 @@ rast_kern_04001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -15124,6 +15131,20 @@ rast_kern_04001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -15144,7 +15165,7 @@ rast_kern_04001:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -15163,6 +15184,8 @@ rast_kern_04001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -15281,10 +15304,8 @@ rast_kern_04010:
 	orr v11.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -15311,16 +15332,16 @@ rast_kern_04010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -15344,6 +15365,11 @@ rast_kern_04010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -15358,7 +15384,6 @@ rast_kern_04010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -15490,7 +15515,6 @@ rast_kern_04010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -15501,20 +15525,6 @@ rast_kern_04010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -15538,6 +15548,20 @@ rast_kern_04010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -15558,7 +15582,7 @@ rast_kern_04010:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -15577,6 +15601,8 @@ rast_kern_04010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -15689,10 +15715,8 @@ rast_kern_04011:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -15719,16 +15743,16 @@ rast_kern_04011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -15752,6 +15776,11 @@ rast_kern_04011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -15766,7 +15795,6 @@ rast_kern_04011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -16102,7 +16130,6 @@ rast_kern_04011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -16117,20 +16144,6 @@ rast_kern_04011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -16154,6 +16167,20 @@ rast_kern_04011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -16174,7 +16201,7 @@ rast_kern_04011:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -16193,6 +16220,8 @@ rast_kern_04011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -16269,7 +16298,6 @@ rast_kern_04100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -16314,9 +16342,7 @@ rast_kern_04100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -16342,16 +16368,16 @@ rast_kern_04100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -16375,6 +16401,8 @@ rast_kern_04100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -16410,9 +16438,8 @@ rast_kern_04100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -16740,7 +16767,6 @@ rast_kern_04101:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -16785,9 +16811,7 @@ rast_kern_04101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -16813,16 +16837,16 @@ rast_kern_04101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -16846,6 +16870,8 @@ rast_kern_04101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -16881,9 +16907,8 @@ rast_kern_04101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -17421,7 +17446,6 @@ rast_kern_04110:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -17466,9 +17490,7 @@ rast_kern_04110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -17494,16 +17516,16 @@ rast_kern_04110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -17527,6 +17549,8 @@ rast_kern_04110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -17541,7 +17565,6 @@ rast_kern_04110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -17843,7 +17866,6 @@ rast_kern_04111:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #352]
 	ldrsw x10, [x22, #528]
 	ldr x11, [x19, #0]
@@ -17888,9 +17910,7 @@ rast_kern_04111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -17916,16 +17936,16 @@ rast_kern_04111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -17949,6 +17969,8 @@ rast_kern_04111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -17963,7 +17985,6 @@ rast_kern_04111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -18515,6 +18536,10 @@ rast_kern_10000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -18545,18 +18570,14 @@ rast_kern_10000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -18591,7 +18612,6 @@ rast_kern_10000:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	str d28, [x3], #8
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -18601,20 +18621,6 @@ rast_kern_10000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q14, q16, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v14.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -18634,6 +18640,20 @@ rast_kern_10000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v14.16b, v30.16b
+	bit v28.16b, v16.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -18643,6 +18663,20 @@ rast_kern_10000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -18782,6 +18816,10 @@ rast_kern_10010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -18801,18 +18839,14 @@ rast_kern_10010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -18832,26 +18866,11 @@ rast_kern_10010:
 	orr v11.16b, v25.16b, v22.16b
 	orr v12.16b, v26.16b, v22.16b
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q10, q10, [x1]
 	stp q11, q12, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -18871,6 +18890,20 @@ rast_kern_10010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -18880,6 +18913,20 @@ rast_kern_10010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -18966,7 +19013,8 @@ rast_kern_10100:
 	add x28, sp, #32
 	ldr q22, [x19, #32]
 	ldr d23, [x19, #48]
-	dup v18.8b, v23.b[3]
+	dup v18.8b, v23.b[0]
+	dup v19.8b, v23.b[3]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -19014,6 +19062,10 @@ rast_kern_10100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -19044,18 +19096,14 @@ rast_kern_10100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -19090,7 +19138,6 @@ rast_kern_10100:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -19100,9 +19147,9 @@ rast_kern_10100:
 	and v26.8b, v26.8b, v13.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v14.8b, v13.8b, v30.8b
+	sub v14.8b, v13.8b, v18.8b
 	bic v14.8b, v14.8b, v28.8b
-	bif v13.8b, v30.8b, v28.8b
+	bif v13.8b, v18.8b, v28.8b
 	xtn v28.8b, v24.8h
 	ushll v24.8h, v31.8b, #0
 	umlal v24.8h, v31.8b, v13.8b
@@ -19119,7 +19166,7 @@ rast_kern_10100:
 	umlal v24.8h, v28.8b, v14.8b
 	shrn v27.8b, v24.8h, #5
 1:
-	umax v24.8b, v30.8b, v26.8b
+	umax v24.8b, v18.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -19127,13 +19174,13 @@ rast_kern_10100:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v18.8b
+	cmeq v24.8b, v18.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v18.8b, v31.8b
+	bsl v30.8b, v19.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -19194,6 +19241,20 @@ rast_kern_10100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -19239,7 +19300,11 @@ rast_kern_10110:
 	add x28, sp, #32
 	ldr q22, [x19, #32]
 	ldr d23, [x19, #48]
-	dup v14.8b, v23.b[3]
+	dup v14.8b, v23.b[0]
+	dup v19.8b, v23.b[3]
+	dup v16.8b, v23.b[4]
+	dup v17.8b, v23.b[5]
+	dup v18.8b, v23.b[6]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -19287,6 +19352,10 @@ rast_kern_10110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -19306,18 +19375,14 @@ rast_kern_10110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -19337,10 +19402,6 @@ rast_kern_10110:
 	orr v12.16b, v25.16b, v22.16b
 	orr v13.16b, v26.16b, v22.16b
 28:
-	dup v29.8b, v23.b[4]
-	dup v27.8b, v23.b[5]
-	dup v31.8b, v23.b[6]
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -19350,26 +19411,31 @@ rast_kern_10110:
 	and v26.8b, v26.8b, v10.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v11.8b, v10.8b, v30.8b
+	sub v11.8b, v10.8b, v14.8b
 	bic v11.8b, v11.8b, v28.8b
-	bif v10.8b, v30.8b, v28.8b
+	bif v10.8b, v14.8b, v28.8b
 	xtn v28.8b, v24.8h
-	ushll v24.8h, v31.8b, #0
-	umlal v24.8h, v31.8b, v10.8b
+	ushll v24.8h, v18.8b, #0
+	umlal v24.8h, v18.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v31.8b, v24.8h, #5
 	xtn v28.8b, v25.8h
-	ushll v24.8h, v29.8b, #0
-	umlal v24.8h, v29.8b, v10.8b
+	ushll v24.8h, v16.8b, #0
+	umlal v24.8h, v16.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v29.8b, v24.8h, #5
 	shrn v28.8b, v25.8h, #8
-	ushll v24.8h, v27.8b, #0
-	umlal v24.8h, v27.8b, v10.8b
+	ushll v24.8h, v17.8b, #0
+	umlal v24.8h, v17.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v27.8b, v24.8h, #5
+	b 2f
 1:
-	umax v24.8b, v30.8b, v26.8b
+	mov v29.8b, v16.8b
+	mov v27.8b, v17.8b
+	mov v31.8b, v18.8b
+2:
+	umax v24.8b, v14.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -19377,13 +19443,13 @@ rast_kern_10110:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v14.8b
+	cmeq v24.8b, v14.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v14.8b, v31.8b
+	bsl v30.8b, v19.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -19444,6 +19510,20 @@ rast_kern_10110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -19540,6 +19620,10 @@ rast_kern_11000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -19575,7 +19659,7 @@ rast_kern_11000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -19596,18 +19680,14 @@ rast_kern_11000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -19722,7 +19802,6 @@ rast_kern_11000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v20.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -19733,20 +19812,6 @@ rast_kern_11000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q19, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -19766,6 +19831,20 @@ rast_kern_11000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v19.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -19775,6 +19854,20 @@ rast_kern_11000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -19910,6 +20003,10 @@ rast_kern_11001:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -19945,7 +20042,7 @@ rast_kern_11001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -19966,18 +20063,14 @@ rast_kern_11001:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -20307,7 +20400,6 @@ rast_kern_11001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -20322,20 +20414,6 @@ rast_kern_11001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -20355,6 +20433,20 @@ rast_kern_11001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -20364,6 +20456,20 @@ rast_kern_11001:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -20504,6 +20610,10 @@ rast_kern_11010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -20537,18 +20647,14 @@ rast_kern_11010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -20648,7 +20754,6 @@ rast_kern_11010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -20659,20 +20764,6 @@ rast_kern_11010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -20692,6 +20783,20 @@ rast_kern_11010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -20701,6 +20806,20 @@ rast_kern_11010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -20836,6 +20955,10 @@ rast_kern_11011:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -20869,18 +20992,14 @@ rast_kern_11011:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -21198,7 +21317,6 @@ rast_kern_11011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -21213,20 +21331,6 @@ rast_kern_11011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -21246,6 +21350,20 @@ rast_kern_11011:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -21255,6 +21373,20 @@ rast_kern_11011:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -21393,6 +21525,10 @@ rast_kern_11100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -21428,7 +21564,7 @@ rast_kern_11100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -21449,18 +21585,14 @@ rast_kern_11100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -21680,6 +21812,20 @@ rast_kern_11100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -21777,6 +21923,10 @@ rast_kern_11101:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -21812,7 +21962,7 @@ rast_kern_11101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -21833,18 +21983,14 @@ rast_kern_11101:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -22294,6 +22440,20 @@ rast_kern_11101:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -22394,6 +22554,10 @@ rast_kern_11110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -22427,18 +22591,14 @@ rast_kern_11110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -22643,6 +22803,20 @@ rast_kern_11110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -22740,6 +22914,10 @@ rast_kern_11111:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -22773,18 +22951,14 @@ rast_kern_11111:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -23222,6 +23396,20 @@ rast_kern_11111:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -23318,6 +23506,10 @@ rast_kern_12000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -23353,7 +23545,7 @@ rast_kern_12000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -23374,18 +23566,14 @@ rast_kern_12000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -23480,7 +23668,6 @@ rast_kern_12000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v20.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -23491,20 +23678,6 @@ rast_kern_12000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q19, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -23524,6 +23697,20 @@ rast_kern_12000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v19.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -23533,6 +23720,20 @@ rast_kern_12000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -23668,6 +23869,10 @@ rast_kern_12001:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -23703,7 +23908,7 @@ rast_kern_12001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -23724,18 +23929,14 @@ rast_kern_12001:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -24025,7 +24226,6 @@ rast_kern_12001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -24040,20 +24240,6 @@ rast_kern_12001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -24073,6 +24259,20 @@ rast_kern_12001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -24082,6 +24282,20 @@ rast_kern_12001:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -24222,6 +24436,10 @@ rast_kern_12010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -24255,18 +24473,14 @@ rast_kern_12010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -24346,7 +24560,6 @@ rast_kern_12010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -24357,20 +24570,6 @@ rast_kern_12010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -24390,6 +24589,20 @@ rast_kern_12010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -24399,6 +24612,20 @@ rast_kern_12010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -24534,6 +24761,10 @@ rast_kern_12011:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -24567,18 +24798,14 @@ rast_kern_12011:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -24856,7 +25083,6 @@ rast_kern_12011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -24871,20 +25097,6 @@ rast_kern_12011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -24904,6 +25116,20 @@ rast_kern_12011:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -24913,6 +25139,20 @@ rast_kern_12011:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -25051,6 +25291,10 @@ rast_kern_12100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -25086,7 +25330,7 @@ rast_kern_12100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -25107,18 +25351,14 @@ rast_kern_12100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -25318,6 +25558,20 @@ rast_kern_12100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -25415,6 +25669,10 @@ rast_kern_12101:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -25450,7 +25708,7 @@ rast_kern_12101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -25471,18 +25729,14 @@ rast_kern_12101:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -25892,6 +26146,20 @@ rast_kern_12101:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -25992,6 +26260,10 @@ rast_kern_12110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -26025,18 +26297,14 @@ rast_kern_12110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -26221,6 +26489,20 @@ rast_kern_12110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -26318,6 +26600,10 @@ rast_kern_12111:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -26351,18 +26637,14 @@ rast_kern_12111:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -26760,6 +27042,20 @@ rast_kern_12111:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -26858,6 +27154,10 @@ rast_kern_13000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -26893,7 +27193,7 @@ rast_kern_13000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -26914,18 +27214,14 @@ rast_kern_13000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -27062,7 +27358,6 @@ rast_kern_13000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -27077,20 +27372,6 @@ rast_kern_13000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -27110,6 +27391,20 @@ rast_kern_13000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -27119,6 +27414,20 @@ rast_kern_13000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -27254,6 +27563,10 @@ rast_kern_13001:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -27289,7 +27602,7 @@ rast_kern_13001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -27310,18 +27623,14 @@ rast_kern_13001:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -27683,7 +27992,6 @@ rast_kern_13001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -27698,20 +28006,6 @@ rast_kern_13001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -27731,6 +28025,20 @@ rast_kern_13001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -27740,6 +28048,20 @@ rast_kern_13001:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -27880,6 +28202,10 @@ rast_kern_13010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -27913,18 +28239,14 @@ rast_kern_13010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -28050,7 +28372,6 @@ rast_kern_13010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -28061,20 +28382,6 @@ rast_kern_13010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -28094,6 +28401,20 @@ rast_kern_13010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -28103,6 +28424,20 @@ rast_kern_13010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -28238,6 +28573,10 @@ rast_kern_13011:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -28271,18 +28610,14 @@ rast_kern_13011:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -28632,7 +28967,6 @@ rast_kern_13011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -28647,20 +28981,6 @@ rast_kern_13011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -28680,6 +29000,20 @@ rast_kern_13011:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -28689,6 +29023,20 @@ rast_kern_13011:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -28831,6 +29179,10 @@ rast_kern_13100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -28866,7 +29218,7 @@ rast_kern_13100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -28887,18 +29239,14 @@ rast_kern_13100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -29155,6 +29503,20 @@ rast_kern_13100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -29252,6 +29614,10 @@ rast_kern_13101:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -29287,7 +29653,7 @@ rast_kern_13101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -29308,18 +29674,14 @@ rast_kern_13101:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -29801,6 +30163,20 @@ rast_kern_13101:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -29903,6 +30279,10 @@ rast_kern_13110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -29936,18 +30316,14 @@ rast_kern_13110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -30178,6 +30554,20 @@ rast_kern_13110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -30275,6 +30665,10 @@ rast_kern_13111:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -30308,18 +30702,14 @@ rast_kern_13111:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -30789,6 +31179,20 @@ rast_kern_13111:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -30887,6 +31291,10 @@ rast_kern_14000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -30922,7 +31330,7 @@ rast_kern_14000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -30943,18 +31351,14 @@ rast_kern_14000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -31071,7 +31475,6 @@ rast_kern_14000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -31086,20 +31489,6 @@ rast_kern_14000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -31119,6 +31508,20 @@ rast_kern_14000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -31128,6 +31531,20 @@ rast_kern_14000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -31263,6 +31680,10 @@ rast_kern_14001:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -31298,7 +31719,7 @@ rast_kern_14001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -31319,18 +31740,14 @@ rast_kern_14001:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -31652,7 +32069,6 @@ rast_kern_14001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -31667,20 +32083,6 @@ rast_kern_14001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -31700,6 +32102,20 @@ rast_kern_14001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -31709,6 +32125,20 @@ rast_kern_14001:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -31849,6 +32279,10 @@ rast_kern_14010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -31882,18 +32316,14 @@ rast_kern_14010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -31999,7 +32429,6 @@ rast_kern_14010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -32010,20 +32439,6 @@ rast_kern_14010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -32043,6 +32458,20 @@ rast_kern_14010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -32052,6 +32481,20 @@ rast_kern_14010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -32187,6 +32630,10 @@ rast_kern_14011:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -32220,18 +32667,14 @@ rast_kern_14011:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -32541,7 +32984,6 @@ rast_kern_14011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -32556,20 +32998,6 @@ rast_kern_14011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -32589,6 +33017,20 @@ rast_kern_14011:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -32598,6 +33040,20 @@ rast_kern_14011:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -32740,6 +33196,10 @@ rast_kern_14100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -32775,7 +33235,7 @@ rast_kern_14100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -32796,18 +33256,14 @@ rast_kern_14100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -33044,6 +33500,20 @@ rast_kern_14100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -33141,6 +33611,10 @@ rast_kern_14101:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -33176,7 +33650,7 @@ rast_kern_14101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -33197,18 +33671,14 @@ rast_kern_14101:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -33650,6 +34120,20 @@ rast_kern_14101:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -33752,6 +34236,10 @@ rast_kern_14110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -33785,18 +34273,14 @@ rast_kern_14110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -34007,6 +34491,20 @@ rast_kern_14110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -34104,6 +34602,10 @@ rast_kern_14111:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -34137,18 +34639,14 @@ rast_kern_14111:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -34578,6 +35076,20 @@ rast_kern_14111:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -34657,10 +35169,8 @@ rast_kern_20000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -34685,16 +35195,16 @@ rast_kern_20000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -34718,6 +35228,11 @@ rast_kern_20000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -34729,7 +35244,6 @@ rast_kern_20000:
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -34782,7 +35296,6 @@ rast_kern_20000:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	str d28, [x3], #8
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -34792,20 +35305,6 @@ rast_kern_20000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q14, q14, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v14.16b, v30.16b
-	bit v28.16b, v14.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -34827,6 +35326,20 @@ rast_kern_20000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v14.16b, v30.16b
+	bit v28.16b, v14.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -34847,7 +35360,7 @@ rast_kern_20000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -34866,6 +35379,8 @@ rast_kern_20000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -34961,14 +35476,21 @@ rast_kern_20010:
 	fmov x8, d28
 	cbz x8, 8f
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q10, q10, [x1]
 	stp q11, q11, [x2]
-	b 7f
+8:
+	str d28, [x3], #8
+7:
+	subs x5, x5, #8
+	b.ls 9f
+	add x1, x1, #32
+	add x2, x2, #32
+	b 0b
 1:
+	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
@@ -34980,15 +35502,7 @@ rast_kern_20010:
 	bit v24.16b, v11.16b, v30.16b
 	bit v28.16b, v11.16b, v31.16b
 	stp q24, q28, [x2]
-	b 7f
-8:
-	str d28, [x3], #8
-7:
-	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
-	add x2, x2, #32
-	b 0b
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -35087,7 +35601,8 @@ rast_kern_20100:
 	add x8, x19, #56
 	ld1r {v6.4s}, [x8]
 	orr v16.16b, v6.16b, v22.16b
-	dup v17.8b, v23.b[3]
+	dup v17.8b, v23.b[0]
+	dup v18.8b, v23.b[3]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -35099,7 +35614,6 @@ rast_kern_20100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -35121,9 +35635,7 @@ rast_kern_20100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -35147,16 +35659,16 @@ rast_kern_20100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -35180,6 +35692,8 @@ rast_kern_20100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -35191,7 +35705,6 @@ rast_kern_20100:
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -35244,7 +35757,6 @@ rast_kern_20100:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -35254,9 +35766,9 @@ rast_kern_20100:
 	and v26.8b, v26.8b, v13.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v14.8b, v13.8b, v30.8b
+	sub v14.8b, v13.8b, v17.8b
 	bic v14.8b, v14.8b, v28.8b
-	bif v13.8b, v30.8b, v28.8b
+	bif v13.8b, v17.8b, v28.8b
 	xtn v28.8b, v24.8h
 	ushll v24.8h, v31.8b, #0
 	umlal v24.8h, v31.8b, v13.8b
@@ -35273,7 +35785,7 @@ rast_kern_20100:
 	umlal v24.8h, v28.8b, v14.8b
 	shrn v27.8b, v24.8h, #5
 1:
-	umax v24.8b, v30.8b, v26.8b
+	umax v24.8b, v17.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -35281,13 +35793,13 @@ rast_kern_20100:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v17.8b
+	cmeq v24.8b, v17.8b, v24.8b
+	cmeq v26.8b, v31.8b, v18.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v17.8b, v31.8b
+	bsl v30.8b, v18.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -35398,7 +35910,11 @@ rast_kern_20110:
 	add x8, x19, #56
 	ld1r {v6.4s}, [x8]
 	orr v12.16b, v6.16b, v22.16b
-	dup v13.8b, v23.b[3]
+	dup v13.8b, v23.b[0]
+	dup v18.8b, v23.b[3]
+	dup v14.8b, v23.b[4]
+	dup v16.8b, v23.b[5]
+	dup v17.8b, v23.b[6]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -35429,10 +35945,6 @@ rast_kern_20110:
 	fmov x8, d28
 	cbz x8, 8f
 28:
-	dup v29.8b, v23.b[4]
-	dup v27.8b, v23.b[5]
-	dup v31.8b, v23.b[6]
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -35442,26 +35954,31 @@ rast_kern_20110:
 	and v26.8b, v26.8b, v10.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v11.8b, v10.8b, v30.8b
+	sub v11.8b, v10.8b, v13.8b
 	bic v11.8b, v11.8b, v28.8b
-	bif v10.8b, v30.8b, v28.8b
+	bif v10.8b, v13.8b, v28.8b
 	xtn v28.8b, v24.8h
-	ushll v24.8h, v31.8b, #0
-	umlal v24.8h, v31.8b, v10.8b
+	ushll v24.8h, v17.8b, #0
+	umlal v24.8h, v17.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v31.8b, v24.8h, #5
 	xtn v28.8b, v25.8h
-	ushll v24.8h, v29.8b, #0
-	umlal v24.8h, v29.8b, v10.8b
+	ushll v24.8h, v14.8b, #0
+	umlal v24.8h, v14.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v29.8b, v24.8h, #5
 	shrn v28.8b, v25.8h, #8
-	ushll v24.8h, v27.8b, #0
-	umlal v24.8h, v27.8b, v10.8b
+	ushll v24.8h, v16.8b, #0
+	umlal v24.8h, v16.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v27.8b, v24.8h, #5
+	b 2f
 1:
-	umax v24.8b, v30.8b, v26.8b
+	mov v29.8b, v14.8b
+	mov v27.8b, v16.8b
+	mov v31.8b, v17.8b
+2:
+	umax v24.8b, v13.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -35469,13 +35986,13 @@ rast_kern_20110:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v13.8b
+	cmeq v24.8b, v13.8b, v24.8b
+	cmeq v26.8b, v31.8b, v18.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v13.8b, v31.8b
+	bsl v30.8b, v18.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -35609,10 +36126,8 @@ rast_kern_21000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -35637,16 +36152,16 @@ rast_kern_21000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -35670,6 +36185,11 @@ rast_kern_21000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -35705,9 +36225,8 @@ rast_kern_21000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -35839,7 +36358,6 @@ rast_kern_21000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v19.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -35850,20 +36368,6 @@ rast_kern_21000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q18, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v18.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -35885,6 +36389,20 @@ rast_kern_21000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v18.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -35905,7 +36423,7 @@ rast_kern_21000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -35924,6 +36442,8 @@ rast_kern_21000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -36015,10 +36535,8 @@ rast_kern_21001:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -36043,16 +36561,16 @@ rast_kern_21001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -36076,6 +36594,11 @@ rast_kern_21001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -36111,9 +36634,8 @@ rast_kern_21001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -36462,7 +36984,6 @@ rast_kern_21001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -36475,20 +36996,6 @@ rast_kern_21001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -36510,6 +37017,20 @@ rast_kern_21001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -36530,7 +37051,7 @@ rast_kern_21001:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -36549,6 +37070,8 @@ rast_kern_21001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -36647,10 +37170,8 @@ rast_kern_21010:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -36675,16 +37196,16 @@ rast_kern_21010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -36708,6 +37229,11 @@ rast_kern_21010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -36722,7 +37248,6 @@ rast_kern_21010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -36839,7 +37364,6 @@ rast_kern_21010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v11.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -36850,20 +37374,6 @@ rast_kern_21010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q10, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -36885,6 +37395,20 @@ rast_kern_21010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -36905,7 +37429,7 @@ rast_kern_21010:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -36924,6 +37448,8 @@ rast_kern_21010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -37015,10 +37541,8 @@ rast_kern_21011:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -37043,16 +37567,16 @@ rast_kern_21011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -37076,6 +37600,11 @@ rast_kern_21011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -37090,7 +37619,6 @@ rast_kern_21011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -37427,7 +37955,6 @@ rast_kern_21011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -37440,20 +37967,6 @@ rast_kern_21011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -37475,6 +37988,20 @@ rast_kern_21011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -37495,7 +38022,7 @@ rast_kern_21011:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -37514,6 +38041,8 @@ rast_kern_21011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -37590,7 +38119,6 @@ rast_kern_21100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -37612,9 +38140,7 @@ rast_kern_21100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -37638,16 +38164,16 @@ rast_kern_21100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -37671,6 +38197,8 @@ rast_kern_21100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -37706,9 +38234,8 @@ rast_kern_21100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -38010,7 +38537,6 @@ rast_kern_21101:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -38032,9 +38558,7 @@ rast_kern_21101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -38058,16 +38582,16 @@ rast_kern_21101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -38091,6 +38615,8 @@ rast_kern_21101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -38126,9 +38652,8 @@ rast_kern_21101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -38665,7 +39190,6 @@ rast_kern_21110:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -38687,9 +39211,7 @@ rast_kern_21110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -38713,16 +39235,16 @@ rast_kern_21110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -38746,6 +39268,8 @@ rast_kern_21110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -38760,7 +39284,6 @@ rast_kern_21110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -39047,7 +39570,6 @@ rast_kern_21111:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -39069,9 +39591,7 @@ rast_kern_21111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -39095,16 +39615,16 @@ rast_kern_21111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -39128,6 +39648,8 @@ rast_kern_21111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -39142,7 +39664,6 @@ rast_kern_21111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -39683,10 +40204,8 @@ rast_kern_22000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -39711,16 +40230,16 @@ rast_kern_22000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -39744,6 +40263,11 @@ rast_kern_22000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -39779,9 +40303,8 @@ rast_kern_22000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -39893,7 +40416,6 @@ rast_kern_22000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v19.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -39904,20 +40426,6 @@ rast_kern_22000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q18, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v18.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -39939,6 +40447,20 @@ rast_kern_22000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v18.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -39959,7 +40481,7 @@ rast_kern_22000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -39978,6 +40500,8 @@ rast_kern_22000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -40069,10 +40593,8 @@ rast_kern_22001:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -40097,16 +40619,16 @@ rast_kern_22001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -40130,6 +40652,11 @@ rast_kern_22001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -40165,9 +40692,8 @@ rast_kern_22001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -40476,7 +41002,6 @@ rast_kern_22001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -40489,20 +41014,6 @@ rast_kern_22001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -40524,6 +41035,20 @@ rast_kern_22001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -40544,7 +41069,7 @@ rast_kern_22001:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -40563,6 +41088,8 @@ rast_kern_22001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -40661,10 +41188,8 @@ rast_kern_22010:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -40689,16 +41214,16 @@ rast_kern_22010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -40722,6 +41247,11 @@ rast_kern_22010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -40736,7 +41266,6 @@ rast_kern_22010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -40833,7 +41362,6 @@ rast_kern_22010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v11.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -40844,20 +41372,6 @@ rast_kern_22010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q10, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -40879,6 +41393,20 @@ rast_kern_22010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -40899,7 +41427,7 @@ rast_kern_22010:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -40918,6 +41446,8 @@ rast_kern_22010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -41009,10 +41539,8 @@ rast_kern_22011:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -41037,16 +41565,16 @@ rast_kern_22011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -41070,6 +41598,11 @@ rast_kern_22011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -41084,7 +41617,6 @@ rast_kern_22011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -41381,7 +41913,6 @@ rast_kern_22011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -41394,20 +41925,6 @@ rast_kern_22011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -41429,6 +41946,20 @@ rast_kern_22011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -41449,7 +41980,7 @@ rast_kern_22011:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -41468,6 +41999,8 @@ rast_kern_22011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -41544,7 +42077,6 @@ rast_kern_22100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -41566,9 +42098,7 @@ rast_kern_22100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -41592,16 +42122,16 @@ rast_kern_22100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -41625,6 +42155,8 @@ rast_kern_22100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -41660,9 +42192,8 @@ rast_kern_22100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -41944,7 +42475,6 @@ rast_kern_22101:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -41966,9 +42496,7 @@ rast_kern_22101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -41992,16 +42520,16 @@ rast_kern_22101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -42025,6 +42553,8 @@ rast_kern_22101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -42060,9 +42590,8 @@ rast_kern_22101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -42559,7 +43088,6 @@ rast_kern_22110:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -42581,9 +43109,7 @@ rast_kern_22110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -42607,16 +43133,16 @@ rast_kern_22110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -42640,6 +43166,8 @@ rast_kern_22110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -42654,7 +43182,6 @@ rast_kern_22110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -42921,7 +43448,6 @@ rast_kern_22111:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -42943,9 +43469,7 @@ rast_kern_22111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -42969,16 +43493,16 @@ rast_kern_22111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -43002,6 +43526,8 @@ rast_kern_22111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -43016,7 +43542,6 @@ rast_kern_22111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -43517,10 +44042,8 @@ rast_kern_23000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -43545,16 +44068,16 @@ rast_kern_23000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -43578,6 +44101,11 @@ rast_kern_23000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -43613,9 +44141,8 @@ rast_kern_23000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -43771,7 +44298,6 @@ rast_kern_23000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -43784,20 +44310,6 @@ rast_kern_23000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -43819,6 +44331,20 @@ rast_kern_23000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -43839,7 +44365,7 @@ rast_kern_23000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -43858,6 +44384,8 @@ rast_kern_23000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -43949,10 +44477,8 @@ rast_kern_23001:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -43977,16 +44503,16 @@ rast_kern_23001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -44010,6 +44536,11 @@ rast_kern_23001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -44045,9 +44576,8 @@ rast_kern_23001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -44428,7 +44958,6 @@ rast_kern_23001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -44441,20 +44970,6 @@ rast_kern_23001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -44476,6 +44991,20 @@ rast_kern_23001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -44496,7 +45025,7 @@ rast_kern_23001:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -44515,6 +45044,8 @@ rast_kern_23001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -44613,10 +45144,8 @@ rast_kern_23010:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -44641,16 +45170,16 @@ rast_kern_23010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -44674,6 +45203,11 @@ rast_kern_23010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -44688,7 +45222,6 @@ rast_kern_23010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -44831,7 +45364,6 @@ rast_kern_23010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v11.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -44842,20 +45374,6 @@ rast_kern_23010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q10, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -44877,6 +45395,20 @@ rast_kern_23010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -44897,7 +45429,7 @@ rast_kern_23010:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -44916,6 +45448,8 @@ rast_kern_23010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -45007,10 +45541,8 @@ rast_kern_23011:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -45035,16 +45567,16 @@ rast_kern_23011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -45068,6 +45600,11 @@ rast_kern_23011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -45082,7 +45619,6 @@ rast_kern_23011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -45451,7 +45987,6 @@ rast_kern_23011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -45464,20 +45999,6 @@ rast_kern_23011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -45499,6 +46020,20 @@ rast_kern_23011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -45519,7 +46054,7 @@ rast_kern_23011:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -45538,6 +46073,8 @@ rast_kern_23011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -45616,7 +46153,6 @@ rast_kern_23100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -45638,9 +46174,7 @@ rast_kern_23100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -45664,16 +46198,16 @@ rast_kern_23100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -45697,6 +46231,8 @@ rast_kern_23100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -45732,9 +46268,8 @@ rast_kern_23100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -46073,7 +46608,6 @@ rast_kern_23101:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -46095,9 +46629,7 @@ rast_kern_23101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -46121,16 +46653,16 @@ rast_kern_23101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -46154,6 +46686,8 @@ rast_kern_23101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -46189,9 +46723,8 @@ rast_kern_23101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -46760,7 +47293,6 @@ rast_kern_23110:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -46782,9 +47314,7 @@ rast_kern_23110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -46808,16 +47338,16 @@ rast_kern_23110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -46841,6 +47371,8 @@ rast_kern_23110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -46855,7 +47387,6 @@ rast_kern_23110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -47168,7 +47699,6 @@ rast_kern_23111:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -47190,9 +47720,7 @@ rast_kern_23111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -47216,16 +47744,16 @@ rast_kern_23111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -47249,6 +47777,8 @@ rast_kern_23111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -47263,7 +47793,6 @@ rast_kern_23111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -47836,10 +48365,8 @@ rast_kern_24000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -47864,16 +48391,16 @@ rast_kern_24000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -47897,6 +48424,11 @@ rast_kern_24000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -47932,9 +48464,8 @@ rast_kern_24000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -48070,7 +48601,6 @@ rast_kern_24000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -48083,20 +48613,6 @@ rast_kern_24000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -48118,6 +48634,20 @@ rast_kern_24000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -48138,7 +48668,7 @@ rast_kern_24000:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -48157,6 +48687,8 @@ rast_kern_24000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -48248,10 +48780,8 @@ rast_kern_24001:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -48276,16 +48806,16 @@ rast_kern_24001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -48309,6 +48839,11 @@ rast_kern_24001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -48344,9 +48879,8 @@ rast_kern_24001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -48687,7 +49221,6 @@ rast_kern_24001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -48700,20 +49233,6 @@ rast_kern_24001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -48735,6 +49254,20 @@ rast_kern_24001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -48755,7 +49288,7 @@ rast_kern_24001:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -48774,6 +49307,8 @@ rast_kern_24001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -48872,10 +49407,8 @@ rast_kern_24010:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -48900,16 +49433,16 @@ rast_kern_24010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -48933,6 +49466,11 @@ rast_kern_24010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -48947,7 +49485,6 @@ rast_kern_24010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -49070,7 +49607,6 @@ rast_kern_24010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v11.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -49081,20 +49617,6 @@ rast_kern_24010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q10, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -49116,6 +49638,20 @@ rast_kern_24010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -49136,7 +49672,7 @@ rast_kern_24010:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -49155,6 +49691,8 @@ rast_kern_24010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -49246,10 +49784,8 @@ rast_kern_24011:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -49274,16 +49810,16 @@ rast_kern_24011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -49307,6 +49843,11 @@ rast_kern_24011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -49321,7 +49862,6 @@ rast_kern_24011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -49650,7 +50190,6 @@ rast_kern_24011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -49663,20 +50202,6 @@ rast_kern_24011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -49698,6 +50223,20 @@ rast_kern_24011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -49718,7 +50257,7 @@ rast_kern_24011:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -49737,6 +50276,8 @@ rast_kern_24011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -49815,7 +50356,6 @@ rast_kern_24100:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -49837,9 +50377,7 @@ rast_kern_24100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -49863,16 +50401,16 @@ rast_kern_24100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -49896,6 +50434,8 @@ rast_kern_24100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -49931,9 +50471,8 @@ rast_kern_24100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -50252,7 +50791,6 @@ rast_kern_24101:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -50274,9 +50812,7 @@ rast_kern_24101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -50300,16 +50836,16 @@ rast_kern_24101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -50333,6 +50869,8 @@ rast_kern_24101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr s10, [x22, #1056]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -50368,9 +50906,8 @@ rast_kern_24101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -50899,7 +51436,6 @@ rast_kern_24110:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -50921,9 +51457,7 @@ rast_kern_24110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -50947,16 +51481,16 @@ rast_kern_24110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -50980,6 +51514,8 @@ rast_kern_24110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -50994,7 +51530,6 @@ rast_kern_24110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -51287,7 +51822,6 @@ rast_kern_24111:
 	add x3, x25, x24, lsl #9
 	add x3, x3, #0x20, lsl #12
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -51309,9 +51843,7 @@ rast_kern_24111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -51335,16 +51867,16 @@ rast_kern_24111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -51368,6 +51900,8 @@ rast_kern_24111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	sub x1, x2, #0x10, lsl #12
+	sub x4, x9, x5
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -51382,7 +51916,6 @@ rast_kern_24111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -51931,25 +52464,11 @@ rast_kern_v00:
 	orr v11.16b, v25.16b, v22.16b
 	orr v12.16b, v26.16b, v22.16b
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -51960,6 +52479,19 @@ rast_kern_v00:
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 0b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -52118,9 +52650,8 @@ rast_kern_v01:
 	orr v12.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
@@ -52148,16 +52679,16 @@ rast_kern_v01:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -52181,6 +52712,10 @@ rast_kern_v01:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -52195,7 +52730,6 @@ rast_kern_v01:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -52308,25 +52842,11 @@ rast_kern_v01:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -52350,6 +52870,19 @@ rast_kern_v01:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -52370,7 +52903,7 @@ rast_kern_v01:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -52389,6 +52922,8 @@ rast_kern_v01:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -52508,9 +53043,8 @@ rast_kern_v02:
 	orr v12.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
@@ -52538,16 +53072,16 @@ rast_kern_v02:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -52571,6 +53105,10 @@ rast_kern_v02:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -52585,7 +53123,6 @@ rast_kern_v02:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -52678,25 +53215,11 @@ rast_kern_v02:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -52720,6 +53243,19 @@ rast_kern_v02:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -52740,7 +53276,7 @@ rast_kern_v02:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -52759,6 +53295,8 @@ rast_kern_v02:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -52880,9 +53418,8 @@ rast_kern_v03:
 	orr v12.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
@@ -52910,16 +53447,16 @@ rast_kern_v03:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -52943,6 +53480,10 @@ rast_kern_v03:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -52957,7 +53498,6 @@ rast_kern_v03:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -53094,25 +53634,11 @@ rast_kern_v03:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -53136,6 +53662,19 @@ rast_kern_v03:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -53156,7 +53695,7 @@ rast_kern_v03:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -53175,6 +53714,8 @@ rast_kern_v03:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -53296,9 +53837,8 @@ rast_kern_v04:
 	orr v12.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
@@ -53326,16 +53866,16 @@ rast_kern_v04:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -53359,6 +53899,10 @@ rast_kern_v04:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -53373,7 +53917,6 @@ rast_kern_v04:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -53490,25 +54033,11 @@ rast_kern_v04:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -53532,6 +54061,19 @@ rast_kern_v04:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -53552,7 +54094,7 @@ rast_kern_v04:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -53571,6 +54113,8 @@ rast_kern_v04:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -53675,6 +54219,10 @@ rast_kern_v10:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -53694,18 +54242,14 @@ rast_kern_v10:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -53725,25 +54269,11 @@ rast_kern_v10:
 	orr v11.16b, v25.16b, v22.16b
 	orr v12.16b, v26.16b, v22.16b
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -53763,6 +54293,19 @@ rast_kern_v10:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -53772,6 +54315,20 @@ rast_kern_v10:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -53913,6 +54470,10 @@ rast_kern_v11:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -53946,18 +54507,14 @@ rast_kern_v11:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -54044,25 +54601,11 @@ rast_kern_v11:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -54082,6 +54625,19 @@ rast_kern_v11:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -54091,6 +54647,20 @@ rast_kern_v11:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -54232,6 +54802,10 @@ rast_kern_v12:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -54265,18 +54839,14 @@ rast_kern_v12:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -54343,25 +54913,11 @@ rast_kern_v12:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -54381,6 +54937,19 @@ rast_kern_v12:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -54390,6 +54959,20 @@ rast_kern_v12:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -54533,6 +55116,10 @@ rast_kern_v13:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -54566,18 +55153,14 @@ rast_kern_v13:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -54688,25 +55271,11 @@ rast_kern_v13:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -54726,6 +55295,19 @@ rast_kern_v13:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -54735,6 +55317,20 @@ rast_kern_v13:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -54878,6 +55474,10 @@ rast_kern_v14:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -54911,18 +55511,14 @@ rast_kern_v14:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -55013,25 +55609,11 @@ rast_kern_v14:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -55051,6 +55633,19 @@ rast_kern_v14:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -55060,6 +55655,20 @@ rast_kern_v14:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #1584]
@@ -55180,14 +55789,21 @@ rast_kern_v20:
 	fmov x8, d28
 	cbz x8, 8f
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
+8:
+	str d28, [x3], #8
+7:
+	subs x5, x5, #8
+	b.ls 9f
+	add x1, x1, #16
+	add x2, x2, #32
+	b 0b
 1:
+	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	ldr q24, [x1]
 	bit v24.16b, v10.16b, v28.16b
@@ -55198,15 +55814,7 @@ rast_kern_v20:
 	bit v24.16b, v11.16b, v30.16b
 	bit v28.16b, v11.16b, v31.16b
 	stp q24, q28, [x2]
-	b 7f
-8:
-	str d28, [x3], #8
-7:
-	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #16
-	add x2, x2, #32
-	b 0b
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -55344,9 +55952,8 @@ rast_kern_v21:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	b 20b
@@ -55372,16 +55979,16 @@ rast_kern_v21:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -55405,6 +56012,10 @@ rast_kern_v21:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -55419,7 +56030,6 @@ rast_kern_v21:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -55524,25 +56134,11 @@ rast_kern_v21:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -55564,6 +56160,19 @@ rast_kern_v21:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -55584,7 +56193,7 @@ rast_kern_v21:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -55603,6 +56212,8 @@ rast_kern_v21:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -55701,9 +56312,8 @@ rast_kern_v22:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	b 20b
@@ -55729,16 +56339,16 @@ rast_kern_v22:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -55762,6 +56372,10 @@ rast_kern_v22:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -55776,7 +56390,6 @@ rast_kern_v22:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -55861,25 +56474,11 @@ rast_kern_v22:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -55901,6 +56500,19 @@ rast_kern_v22:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -55921,7 +56533,7 @@ rast_kern_v22:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -55940,6 +56552,8 @@ rast_kern_v22:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -56041,9 +56655,8 @@ rast_kern_v23:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	b 20b
@@ -56069,16 +56682,16 @@ rast_kern_v23:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -56102,6 +56715,10 @@ rast_kern_v23:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -56116,7 +56733,6 @@ rast_kern_v23:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -56244,25 +56860,11 @@ rast_kern_v23:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -56284,6 +56886,19 @@ rast_kern_v23:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -56304,7 +56919,7 @@ rast_kern_v23:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -56323,6 +56938,8 @@ rast_kern_v23:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -56424,9 +57041,8 @@ rast_kern_v24:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	b 20b
@@ -56452,16 +57068,16 @@ rast_kern_v24:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -56485,6 +57101,10 @@ rast_kern_v24:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -56499,7 +57119,6 @@ rast_kern_v24:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -56607,25 +57226,11 @@ rast_kern_v24:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -56647,6 +57252,19 @@ rast_kern_v24:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -56667,7 +57285,7 @@ rast_kern_v24:
 	ldrh w8, [x22, #1760]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -56686,6 +57304,8 @@ rast_kern_v24:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -56787,16 +57407,16 @@ rast_kern_s000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -56831,7 +57451,6 @@ rast_kern_s000:
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -56885,15 +57504,6 @@ rast_kern_s000:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -56913,6 +57523,15 @@ rast_kern_s000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -56991,7 +57610,12 @@ rast_kern_s010:
 	cmn x8, #1
 	b.ne 1f
 	stp q10, q10, [x1]
-	b 8f
+8:
+	subs x5, x5, #8
+	b.ls 9f
+	add x1, x1, #32
+	add x2, x2, #16
+	b 0b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -57000,12 +57624,7 @@ rast_kern_s010:
 	bit v24.16b, v10.16b, v30.16b
 	bit v28.16b, v10.16b, v31.16b
 	stp q24, q28, [x1]
-8:
-	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
-	add x2, x2, #16
-	b 0b
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -57098,16 +57717,16 @@ rast_kern_s100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -57166,9 +57785,8 @@ rast_kern_s100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -57296,15 +57914,6 @@ rast_kern_s100:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -57324,6 +57933,15 @@ rast_kern_s100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -57414,16 +58032,16 @@ rast_kern_s101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -57482,9 +58100,8 @@ rast_kern_s101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -57830,15 +58447,6 @@ rast_kern_s101:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -57858,6 +58466,15 @@ rast_kern_s101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -57953,16 +58570,16 @@ rast_kern_s110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -58000,7 +58617,6 @@ rast_kern_s110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -58113,15 +58729,6 @@ rast_kern_s110:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -58141,6 +58748,15 @@ rast_kern_s110:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -58231,16 +58847,16 @@ rast_kern_s111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -58278,7 +58894,6 @@ rast_kern_s111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -58612,15 +59227,6 @@ rast_kern_s111:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -58640,6 +59246,15 @@ rast_kern_s111:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -58732,16 +59347,16 @@ rast_kern_s200:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -58800,9 +59415,8 @@ rast_kern_s200:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -58910,15 +59524,6 @@ rast_kern_s200:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -58938,6 +59543,15 @@ rast_kern_s200:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -59028,16 +59642,16 @@ rast_kern_s201:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -59096,9 +59710,8 @@ rast_kern_s201:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -59404,15 +60017,6 @@ rast_kern_s201:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -59432,6 +60036,15 @@ rast_kern_s201:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -59527,16 +60140,16 @@ rast_kern_s210:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -59574,7 +60187,6 @@ rast_kern_s210:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -59667,15 +60279,6 @@ rast_kern_s210:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -59695,6 +60298,15 @@ rast_kern_s210:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -59785,16 +60397,16 @@ rast_kern_s211:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -59832,7 +60444,6 @@ rast_kern_s211:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -60126,15 +60737,6 @@ rast_kern_s211:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -60154,6 +60756,15 @@ rast_kern_s211:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -60248,16 +60859,16 @@ rast_kern_s300:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -60316,9 +60927,8 @@ rast_kern_s300:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -60471,15 +61081,6 @@ rast_kern_s300:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -60499,6 +61100,15 @@ rast_kern_s300:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -60589,16 +61199,16 @@ rast_kern_s301:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -60657,9 +61267,8 @@ rast_kern_s301:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -61037,15 +61646,6 @@ rast_kern_s301:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -61065,6 +61665,15 @@ rast_kern_s301:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -61161,16 +61770,16 @@ rast_kern_s310:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -61208,7 +61817,6 @@ rast_kern_s310:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -61346,15 +61954,6 @@ rast_kern_s310:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -61374,6 +61973,15 @@ rast_kern_s310:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -61464,16 +62072,16 @@ rast_kern_s311:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -61511,7 +62119,6 @@ rast_kern_s311:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -61877,15 +62484,6 @@ rast_kern_s311:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -61905,6 +62503,15 @@ rast_kern_s311:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -61999,16 +62606,16 @@ rast_kern_s400:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -62067,9 +62674,8 @@ rast_kern_s400:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -62202,15 +62808,6 @@ rast_kern_s400:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -62230,6 +62827,15 @@ rast_kern_s400:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -62320,16 +62926,16 @@ rast_kern_s401:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -62388,9 +62994,8 @@ rast_kern_s401:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -62728,15 +63333,6 @@ rast_kern_s401:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -62756,6 +63352,15 @@ rast_kern_s401:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -62852,16 +63457,16 @@ rast_kern_s410:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -62899,7 +63504,6 @@ rast_kern_s410:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -63017,15 +63621,6 @@ rast_kern_s410:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -63045,6 +63640,15 @@ rast_kern_s410:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -63135,16 +63739,16 @@ rast_kern_s411:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -63182,7 +63786,6 @@ rast_kern_s411:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -63508,15 +64111,6 @@ rast_kern_s411:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -63536,6 +64130,15 @@ rast_kern_s411:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -63637,10 +64240,8 @@ rast_kern_h00000:
 	orr v16.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -63667,16 +64268,16 @@ rast_kern_h00000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -63700,6 +64301,12 @@ rast_kern_h00000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -63711,7 +64318,6 @@ rast_kern_h00000:
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -63772,7 +64378,6 @@ rast_kern_h00000:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	str d28, [x3], #8
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -63782,20 +64387,6 @@ rast_kern_h00000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q14, q16, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v14.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -63819,6 +64410,20 @@ rast_kern_h00000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v14.16b, v30.16b
+	bit v28.16b, v16.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -63839,7 +64444,7 @@ rast_kern_h00000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -63858,6 +64463,8 @@ rast_kern_h00000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -63977,14 +64584,23 @@ rast_kern_h00010:
 	orr v11.16b, v25.16b, v22.16b
 	orr v12.16b, v26.16b, v22.16b
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q10, q10, [x1]
 	stp q11, q12, [x2]
-	b 7f
+8:
+	str d28, [x3], #8
+7:
+	subs x5, x5, #8
+	b.ls 9f
+	add x1, x1, #32
+	add x2, x2, #32
+	add v6.2d, v6.2d, v9.2d
+	add v7.2d, v7.2d, v9.2d
+	b 0b
 1:
+	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
@@ -63996,17 +64612,7 @@ rast_kern_h00010:
 	bit v24.16b, v11.16b, v30.16b
 	bit v28.16b, v12.16b, v31.16b
 	stp q24, q28, [x2]
-	b 7f
-8:
-	str d28, [x3], #8
-7:
-	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
-	add x2, x2, #32
-	add v6.2d, v6.2d, v9.2d
-	add v7.2d, v7.2d, v9.2d
-	b 0b
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -64102,7 +64708,8 @@ rast_kern_h00100:
 	add x28, sp, #32
 	ldr q22, [x19, #32]
 	ldr d23, [x19, #48]
-	dup v18.8b, v23.b[3]
+	dup v18.8b, v23.b[0]
+	dup v19.8b, v23.b[3]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -64120,7 +64727,6 @@ rast_kern_h00100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -64166,9 +64772,7 @@ rast_kern_h00100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -64194,16 +64798,16 @@ rast_kern_h00100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -64227,6 +64831,9 @@ rast_kern_h00100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -64238,7 +64845,6 @@ rast_kern_h00100:
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -64299,7 +64905,6 @@ rast_kern_h00100:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -64309,9 +64914,9 @@ rast_kern_h00100:
 	and v26.8b, v26.8b, v13.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v14.8b, v13.8b, v30.8b
+	sub v14.8b, v13.8b, v18.8b
 	bic v14.8b, v14.8b, v28.8b
-	bif v13.8b, v30.8b, v28.8b
+	bif v13.8b, v18.8b, v28.8b
 	xtn v28.8b, v24.8h
 	ushll v24.8h, v31.8b, #0
 	umlal v24.8h, v31.8b, v13.8b
@@ -64328,7 +64933,7 @@ rast_kern_h00100:
 	umlal v24.8h, v28.8b, v14.8b
 	shrn v27.8b, v24.8h, #5
 1:
-	umax v24.8b, v30.8b, v26.8b
+	umax v24.8b, v18.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -64336,13 +64941,13 @@ rast_kern_h00100:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v18.8b
+	cmeq v24.8b, v18.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v18.8b, v31.8b
+	bsl v30.8b, v19.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -64452,7 +65057,11 @@ rast_kern_h00110:
 	add x28, sp, #32
 	ldr q22, [x19, #32]
 	ldr d23, [x19, #48]
-	dup v14.8b, v23.b[3]
+	dup v14.8b, v23.b[0]
+	dup v19.8b, v23.b[3]
+	dup v16.8b, v23.b[4]
+	dup v17.8b, v23.b[5]
+	dup v18.8b, v23.b[6]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -64513,10 +65122,6 @@ rast_kern_h00110:
 	orr v12.16b, v25.16b, v22.16b
 	orr v13.16b, v26.16b, v22.16b
 28:
-	dup v29.8b, v23.b[4]
-	dup v27.8b, v23.b[5]
-	dup v31.8b, v23.b[6]
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -64526,26 +65131,31 @@ rast_kern_h00110:
 	and v26.8b, v26.8b, v10.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v11.8b, v10.8b, v30.8b
+	sub v11.8b, v10.8b, v14.8b
 	bic v11.8b, v11.8b, v28.8b
-	bif v10.8b, v30.8b, v28.8b
+	bif v10.8b, v14.8b, v28.8b
 	xtn v28.8b, v24.8h
-	ushll v24.8h, v31.8b, #0
-	umlal v24.8h, v31.8b, v10.8b
+	ushll v24.8h, v18.8b, #0
+	umlal v24.8h, v18.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v31.8b, v24.8h, #5
 	xtn v28.8b, v25.8h
-	ushll v24.8h, v29.8b, #0
-	umlal v24.8h, v29.8b, v10.8b
+	ushll v24.8h, v16.8b, #0
+	umlal v24.8h, v16.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v29.8b, v24.8h, #5
 	shrn v28.8b, v25.8h, #8
-	ushll v24.8h, v27.8b, #0
-	umlal v24.8h, v27.8b, v10.8b
+	ushll v24.8h, v17.8b, #0
+	umlal v24.8h, v17.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v27.8b, v24.8h, #5
+	b 2f
 1:
-	umax v24.8b, v30.8b, v26.8b
+	mov v29.8b, v16.8b
+	mov v27.8b, v17.8b
+	mov v31.8b, v18.8b
+2:
+	umax v24.8b, v14.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -64553,13 +65163,13 @@ rast_kern_h00110:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v14.8b
+	cmeq v24.8b, v14.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v14.8b, v31.8b
+	bsl v30.8b, v19.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -64718,10 +65328,8 @@ rast_kern_h01000:
 	orr v19.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -64748,16 +65356,16 @@ rast_kern_h01000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -64781,6 +65389,12 @@ rast_kern_h01000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -64816,9 +65430,8 @@ rast_kern_h01000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -64959,7 +65572,6 @@ rast_kern_h01000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v20.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -64970,20 +65582,6 @@ rast_kern_h01000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q19, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -65007,6 +65605,20 @@ rast_kern_h01000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v19.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -65027,7 +65639,7 @@ rast_kern_h01000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -65046,6 +65658,8 @@ rast_kern_h01000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -65161,10 +65775,8 @@ rast_kern_h01001:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -65191,16 +65803,16 @@ rast_kern_h01001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -65224,6 +65836,12 @@ rast_kern_h01001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -65259,9 +65877,8 @@ rast_kern_h01001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -65617,7 +66234,6 @@ rast_kern_h01001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -65632,20 +66248,6 @@ rast_kern_h01001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -65669,6 +66271,20 @@ rast_kern_h01001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -65689,7 +66305,7 @@ rast_kern_h01001:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -65708,6 +66324,8 @@ rast_kern_h01001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -65829,10 +66447,8 @@ rast_kern_h01010:
 	orr v11.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -65859,16 +66475,16 @@ rast_kern_h01010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -65892,6 +66508,12 @@ rast_kern_h01010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -65906,7 +66528,6 @@ rast_kern_h01010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -66032,7 +66653,6 @@ rast_kern_h01010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -66043,20 +66663,6 @@ rast_kern_h01010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -66080,6 +66686,20 @@ rast_kern_h01010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -66100,7 +66720,7 @@ rast_kern_h01010:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -66119,6 +66739,8 @@ rast_kern_h01010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -66234,10 +66856,8 @@ rast_kern_h01011:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -66264,16 +66884,16 @@ rast_kern_h01011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -66297,6 +66917,12 @@ rast_kern_h01011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -66311,7 +66937,6 @@ rast_kern_h01011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -66655,7 +67280,6 @@ rast_kern_h01011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -66670,20 +67294,6 @@ rast_kern_h01011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -66707,6 +67317,20 @@ rast_kern_h01011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -66727,7 +67351,7 @@ rast_kern_h01011:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -66746,6 +67370,8 @@ rast_kern_h01011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -66824,7 +67450,6 @@ rast_kern_h01100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -66870,9 +67495,7 @@ rast_kern_h01100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -66898,16 +67521,16 @@ rast_kern_h01100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -66931,6 +67554,9 @@ rast_kern_h01100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -66966,9 +67592,8 @@ rast_kern_h01100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -67285,7 +67910,6 @@ rast_kern_h01101:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -67330,9 +67954,7 @@ rast_kern_h01101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -67358,16 +67980,16 @@ rast_kern_h01101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -67391,6 +68013,9 @@ rast_kern_h01101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -67426,9 +68051,8 @@ rast_kern_h01101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -67978,7 +68602,6 @@ rast_kern_h01110:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -68024,9 +68647,7 @@ rast_kern_h01110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -68052,16 +68673,16 @@ rast_kern_h01110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -68085,6 +68706,9 @@ rast_kern_h01110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -68099,7 +68723,6 @@ rast_kern_h01110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -68401,7 +69024,6 @@ rast_kern_h01111:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -68446,9 +69068,7 @@ rast_kern_h01111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -68474,16 +69094,16 @@ rast_kern_h01111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -68507,6 +69127,9 @@ rast_kern_h01111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -68521,7 +69144,6 @@ rast_kern_h01111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -69096,10 +69718,8 @@ rast_kern_h02000:
 	orr v19.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -69126,16 +69746,16 @@ rast_kern_h02000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -69159,6 +69779,12 @@ rast_kern_h02000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -69194,9 +69820,8 @@ rast_kern_h02000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -69317,7 +69942,6 @@ rast_kern_h02000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v20.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -69328,20 +69952,6 @@ rast_kern_h02000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q19, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -69365,6 +69975,20 @@ rast_kern_h02000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v19.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -69385,7 +70009,7 @@ rast_kern_h02000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -69404,6 +70028,8 @@ rast_kern_h02000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -69519,10 +70145,8 @@ rast_kern_h02001:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -69549,16 +70173,16 @@ rast_kern_h02001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -69582,6 +70206,12 @@ rast_kern_h02001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -69617,9 +70247,8 @@ rast_kern_h02001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -69935,7 +70564,6 @@ rast_kern_h02001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -69950,20 +70578,6 @@ rast_kern_h02001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -69987,6 +70601,20 @@ rast_kern_h02001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -70007,7 +70635,7 @@ rast_kern_h02001:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -70026,6 +70654,8 @@ rast_kern_h02001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -70147,10 +70777,8 @@ rast_kern_h02010:
 	orr v11.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -70177,16 +70805,16 @@ rast_kern_h02010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -70210,6 +70838,12 @@ rast_kern_h02010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -70224,7 +70858,6 @@ rast_kern_h02010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -70330,7 +70963,6 @@ rast_kern_h02010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -70341,20 +70973,6 @@ rast_kern_h02010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -70378,6 +70996,20 @@ rast_kern_h02010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -70398,7 +71030,7 @@ rast_kern_h02010:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -70417,6 +71049,8 @@ rast_kern_h02010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -70532,10 +71166,8 @@ rast_kern_h02011:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -70562,16 +71194,16 @@ rast_kern_h02011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -70595,6 +71227,12 @@ rast_kern_h02011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -70609,7 +71247,6 @@ rast_kern_h02011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -70913,7 +71550,6 @@ rast_kern_h02011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -70928,20 +71564,6 @@ rast_kern_h02011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -70965,6 +71587,20 @@ rast_kern_h02011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -70985,7 +71621,7 @@ rast_kern_h02011:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -71004,6 +71640,8 @@ rast_kern_h02011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -71082,7 +71720,6 @@ rast_kern_h02100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -71128,9 +71765,7 @@ rast_kern_h02100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -71156,16 +71791,16 @@ rast_kern_h02100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -71189,6 +71824,9 @@ rast_kern_h02100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -71224,9 +71862,8 @@ rast_kern_h02100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -71523,7 +72160,6 @@ rast_kern_h02101:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -71568,9 +72204,7 @@ rast_kern_h02101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -71596,16 +72230,16 @@ rast_kern_h02101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -71629,6 +72263,9 @@ rast_kern_h02101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -71664,9 +72301,8 @@ rast_kern_h02101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -72176,7 +72812,6 @@ rast_kern_h02110:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -72222,9 +72857,7 @@ rast_kern_h02110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -72250,16 +72883,16 @@ rast_kern_h02110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -72283,6 +72916,9 @@ rast_kern_h02110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -72297,7 +72933,6 @@ rast_kern_h02110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -72579,7 +73214,6 @@ rast_kern_h02111:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -72624,9 +73258,7 @@ rast_kern_h02111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -72652,16 +73284,16 @@ rast_kern_h02111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -72685,6 +73317,9 @@ rast_kern_h02111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -72699,7 +73334,6 @@ rast_kern_h02111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -73235,10 +73869,8 @@ rast_kern_h03000:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -73265,16 +73897,16 @@ rast_kern_h03000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -73298,6 +73930,12 @@ rast_kern_h03000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -73333,9 +73971,8 @@ rast_kern_h03000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -73498,7 +74135,6 @@ rast_kern_h03000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -73513,20 +74149,6 @@ rast_kern_h03000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -73550,6 +74172,20 @@ rast_kern_h03000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -73570,7 +74206,7 @@ rast_kern_h03000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -73589,6 +74225,8 @@ rast_kern_h03000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -73704,10 +74342,8 @@ rast_kern_h03001:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -73734,16 +74370,16 @@ rast_kern_h03001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -73767,6 +74403,12 @@ rast_kern_h03001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -73802,9 +74444,8 @@ rast_kern_h03001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -74192,7 +74833,6 @@ rast_kern_h03001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -74207,20 +74847,6 @@ rast_kern_h03001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -74244,6 +74870,20 @@ rast_kern_h03001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -74264,7 +74904,7 @@ rast_kern_h03001:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -74283,6 +74923,8 @@ rast_kern_h03001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -74404,10 +75046,8 @@ rast_kern_h03010:
 	orr v11.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -74434,16 +75074,16 @@ rast_kern_h03010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -74467,6 +75107,12 @@ rast_kern_h03010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -74481,7 +75127,6 @@ rast_kern_h03010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -74633,7 +75278,6 @@ rast_kern_h03010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -74644,20 +75288,6 @@ rast_kern_h03010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -74681,6 +75311,20 @@ rast_kern_h03010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -74701,7 +75345,7 @@ rast_kern_h03010:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -74720,6 +75364,8 @@ rast_kern_h03010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -74835,10 +75481,8 @@ rast_kern_h03011:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -74865,16 +75509,16 @@ rast_kern_h03011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -74898,6 +75542,12 @@ rast_kern_h03011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -74912,7 +75562,6 @@ rast_kern_h03011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -75288,7 +75937,6 @@ rast_kern_h03011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -75303,20 +75951,6 @@ rast_kern_h03011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -75340,6 +75974,20 @@ rast_kern_h03011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -75360,7 +76008,7 @@ rast_kern_h03011:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -75379,6 +76027,8 @@ rast_kern_h03011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -75461,7 +76111,6 @@ rast_kern_h03100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -75506,9 +76155,7 @@ rast_kern_h03100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -75534,16 +76181,16 @@ rast_kern_h03100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -75567,6 +76214,9 @@ rast_kern_h03100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -75602,9 +76252,8 @@ rast_kern_h03100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -75958,7 +76607,6 @@ rast_kern_h03101:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -76003,9 +76651,7 @@ rast_kern_h03101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -76031,16 +76677,16 @@ rast_kern_h03101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -76064,6 +76710,9 @@ rast_kern_h03101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -76099,9 +76748,8 @@ rast_kern_h03101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -76685,7 +77333,6 @@ rast_kern_h03110:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -76730,9 +77377,7 @@ rast_kern_h03110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -76758,16 +77403,16 @@ rast_kern_h03110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -76791,6 +77436,9 @@ rast_kern_h03110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -76805,7 +77453,6 @@ rast_kern_h03110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -77133,7 +77780,6 @@ rast_kern_h03111:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -77178,9 +77824,7 @@ rast_kern_h03111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -77206,16 +77850,16 @@ rast_kern_h03111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -77239,6 +77883,9 @@ rast_kern_h03111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -77253,7 +77900,6 @@ rast_kern_h03111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -77861,10 +78507,8 @@ rast_kern_h04000:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -77891,16 +78535,16 @@ rast_kern_h04000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -77924,6 +78568,12 @@ rast_kern_h04000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -77959,9 +78609,8 @@ rast_kern_h04000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -78104,7 +78753,6 @@ rast_kern_h04000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -78119,20 +78767,6 @@ rast_kern_h04000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -78156,6 +78790,20 @@ rast_kern_h04000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -78176,7 +78824,7 @@ rast_kern_h04000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -78195,6 +78843,8 @@ rast_kern_h04000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -78310,10 +78960,8 @@ rast_kern_h04001:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -78340,16 +78988,16 @@ rast_kern_h04001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -78373,6 +79021,12 @@ rast_kern_h04001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -78408,9 +79062,8 @@ rast_kern_h04001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -78758,7 +79411,6 @@ rast_kern_h04001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -78773,20 +79425,6 @@ rast_kern_h04001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -78810,6 +79448,20 @@ rast_kern_h04001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -78830,7 +79482,7 @@ rast_kern_h04001:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -78849,6 +79501,8 @@ rast_kern_h04001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -78970,10 +79624,8 @@ rast_kern_h04010:
 	orr v11.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -79000,16 +79652,16 @@ rast_kern_h04010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -79033,6 +79685,12 @@ rast_kern_h04010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -79047,7 +79705,6 @@ rast_kern_h04010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -79179,7 +79836,6 @@ rast_kern_h04010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -79190,20 +79846,6 @@ rast_kern_h04010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -79227,6 +79869,20 @@ rast_kern_h04010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -79247,7 +79903,7 @@ rast_kern_h04010:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -79266,6 +79922,8 @@ rast_kern_h04010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -79381,10 +80039,8 @@ rast_kern_h04011:
 	stp q25, q26, [sp, #64]
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
@@ -79411,16 +80067,16 @@ rast_kern_h04011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -79444,6 +80100,12 @@ rast_kern_h04011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -79458,7 +80120,6 @@ rast_kern_h04011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -79794,7 +80455,6 @@ rast_kern_h04011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -79809,20 +80469,6 @@ rast_kern_h04011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -79846,6 +80492,20 @@ rast_kern_h04011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -79866,7 +80526,7 @@ rast_kern_h04011:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -79885,6 +80545,8 @@ rast_kern_h04011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -79967,7 +80629,6 @@ rast_kern_h04100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -80012,9 +80673,7 @@ rast_kern_h04100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -80040,16 +80699,16 @@ rast_kern_h04100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -80073,6 +80732,9 @@ rast_kern_h04100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -80108,9 +80770,8 @@ rast_kern_h04100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -80444,7 +81105,6 @@ rast_kern_h04101:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -80489,9 +81149,7 @@ rast_kern_h04101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -80517,16 +81175,16 @@ rast_kern_h04101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -80550,6 +81208,9 @@ rast_kern_h04101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -80585,9 +81246,8 @@ rast_kern_h04101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -81131,7 +81791,6 @@ rast_kern_h04110:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -81176,9 +81835,7 @@ rast_kern_h04110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -81204,16 +81861,16 @@ rast_kern_h04110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -81237,6 +81894,9 @@ rast_kern_h04110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -81251,7 +81911,6 @@ rast_kern_h04110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -81559,7 +82218,6 @@ rast_kern_h04111:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 	ldr w8, [x22, #512]
 	ldrsw x10, [x22, #768]
 	ldr x11, [x19, #0]
@@ -81604,9 +82262,7 @@ rast_kern_h04111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 20b
@@ -81632,16 +82288,16 @@ rast_kern_h04111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -81665,6 +82321,9 @@ rast_kern_h04111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -81679,7 +82338,6 @@ rast_kern_h04111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -82234,6 +82892,10 @@ rast_kern_h10000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -82264,18 +82926,14 @@ rast_kern_h10000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -82310,7 +82968,6 @@ rast_kern_h10000:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	str d28, [x3], #8
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -82320,20 +82977,6 @@ rast_kern_h10000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q14, q16, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v14.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -82353,6 +82996,20 @@ rast_kern_h10000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v14.16b, v30.16b
+	bit v28.16b, v16.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -82362,6 +83019,20 @@ rast_kern_h10000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -82504,6 +83175,10 @@ rast_kern_h10010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -82523,18 +83198,14 @@ rast_kern_h10010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -82554,26 +83225,11 @@ rast_kern_h10010:
 	orr v11.16b, v25.16b, v22.16b
 	orr v12.16b, v26.16b, v22.16b
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q10, q10, [x1]
 	stp q11, q12, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -82593,6 +83249,20 @@ rast_kern_h10010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -82602,6 +83272,20 @@ rast_kern_h10010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -82688,7 +83372,8 @@ rast_kern_h10100:
 	add x28, sp, #32
 	ldr q22, [x19, #32]
 	ldr d23, [x19, #48]
-	dup v18.8b, v23.b[3]
+	dup v18.8b, v23.b[0]
+	dup v19.8b, v23.b[3]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -82742,6 +83427,10 @@ rast_kern_h10100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -82772,18 +83461,14 @@ rast_kern_h10100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -82818,7 +83503,6 @@ rast_kern_h10100:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -82828,9 +83512,9 @@ rast_kern_h10100:
 	and v26.8b, v26.8b, v13.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v14.8b, v13.8b, v30.8b
+	sub v14.8b, v13.8b, v18.8b
 	bic v14.8b, v14.8b, v28.8b
-	bif v13.8b, v30.8b, v28.8b
+	bif v13.8b, v18.8b, v28.8b
 	xtn v28.8b, v24.8h
 	ushll v24.8h, v31.8b, #0
 	umlal v24.8h, v31.8b, v13.8b
@@ -82847,7 +83531,7 @@ rast_kern_h10100:
 	umlal v24.8h, v28.8b, v14.8b
 	shrn v27.8b, v24.8h, #5
 1:
-	umax v24.8b, v30.8b, v26.8b
+	umax v24.8b, v18.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -82855,13 +83539,13 @@ rast_kern_h10100:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v18.8b
+	cmeq v24.8b, v18.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v18.8b, v31.8b
+	bsl v30.8b, v19.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -82922,6 +83606,20 @@ rast_kern_h10100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -82967,7 +83665,11 @@ rast_kern_h10110:
 	add x28, sp, #32
 	ldr q22, [x19, #32]
 	ldr d23, [x19, #48]
-	dup v14.8b, v23.b[3]
+	dup v14.8b, v23.b[0]
+	dup v19.8b, v23.b[3]
+	dup v16.8b, v23.b[4]
+	dup v17.8b, v23.b[5]
+	dup v18.8b, v23.b[6]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -83021,6 +83723,10 @@ rast_kern_h10110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -83040,18 +83746,14 @@ rast_kern_h10110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -83071,10 +83773,6 @@ rast_kern_h10110:
 	orr v12.16b, v25.16b, v22.16b
 	orr v13.16b, v26.16b, v22.16b
 28:
-	dup v29.8b, v23.b[4]
-	dup v27.8b, v23.b[5]
-	dup v31.8b, v23.b[6]
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -83084,26 +83782,31 @@ rast_kern_h10110:
 	and v26.8b, v26.8b, v10.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v11.8b, v10.8b, v30.8b
+	sub v11.8b, v10.8b, v14.8b
 	bic v11.8b, v11.8b, v28.8b
-	bif v10.8b, v30.8b, v28.8b
+	bif v10.8b, v14.8b, v28.8b
 	xtn v28.8b, v24.8h
-	ushll v24.8h, v31.8b, #0
-	umlal v24.8h, v31.8b, v10.8b
+	ushll v24.8h, v18.8b, #0
+	umlal v24.8h, v18.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v31.8b, v24.8h, #5
 	xtn v28.8b, v25.8h
-	ushll v24.8h, v29.8b, #0
-	umlal v24.8h, v29.8b, v10.8b
+	ushll v24.8h, v16.8b, #0
+	umlal v24.8h, v16.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v29.8b, v24.8h, #5
 	shrn v28.8b, v25.8h, #8
-	ushll v24.8h, v27.8b, #0
-	umlal v24.8h, v27.8b, v10.8b
+	ushll v24.8h, v17.8b, #0
+	umlal v24.8h, v17.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v27.8b, v24.8h, #5
+	b 2f
 1:
-	umax v24.8b, v30.8b, v26.8b
+	mov v29.8b, v16.8b
+	mov v27.8b, v17.8b
+	mov v31.8b, v18.8b
+2:
+	umax v24.8b, v14.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -83111,13 +83814,13 @@ rast_kern_h10110:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v14.8b
+	cmeq v24.8b, v14.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v14.8b, v31.8b
+	bsl v30.8b, v19.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -83178,6 +83881,20 @@ rast_kern_h10110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -83277,6 +83994,10 @@ rast_kern_h11000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -83312,7 +84033,7 @@ rast_kern_h11000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -83333,18 +84054,14 @@ rast_kern_h11000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -83459,7 +84176,6 @@ rast_kern_h11000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v20.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -83470,20 +84186,6 @@ rast_kern_h11000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q19, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -83503,6 +84205,20 @@ rast_kern_h11000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v19.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -83512,6 +84228,20 @@ rast_kern_h11000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -83650,6 +84380,10 @@ rast_kern_h11001:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -83685,7 +84419,7 @@ rast_kern_h11001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -83706,18 +84440,14 @@ rast_kern_h11001:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -84047,7 +84777,6 @@ rast_kern_h11001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -84062,20 +84791,6 @@ rast_kern_h11001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -84095,6 +84810,20 @@ rast_kern_h11001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -84104,6 +84833,20 @@ rast_kern_h11001:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -84247,6 +84990,10 @@ rast_kern_h11010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -84280,18 +85027,14 @@ rast_kern_h11010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -84391,7 +85134,6 @@ rast_kern_h11010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -84402,20 +85144,6 @@ rast_kern_h11010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -84435,6 +85163,20 @@ rast_kern_h11010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -84444,6 +85186,20 @@ rast_kern_h11010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -84582,6 +85338,10 @@ rast_kern_h11011:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -84615,18 +85375,14 @@ rast_kern_h11011:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -84944,7 +85700,6 @@ rast_kern_h11011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -84959,20 +85714,6 @@ rast_kern_h11011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -84992,6 +85733,20 @@ rast_kern_h11011:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -85001,6 +85756,20 @@ rast_kern_h11011:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -85145,6 +85914,10 @@ rast_kern_h11100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -85180,7 +85953,7 @@ rast_kern_h11100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -85201,18 +85974,14 @@ rast_kern_h11100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -85432,6 +86201,20 @@ rast_kern_h11100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -85535,6 +86318,10 @@ rast_kern_h11101:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -85570,7 +86357,7 @@ rast_kern_h11101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -85591,18 +86378,14 @@ rast_kern_h11101:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -86052,6 +86835,20 @@ rast_kern_h11101:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -86158,6 +86955,10 @@ rast_kern_h11110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -86191,18 +86992,14 @@ rast_kern_h11110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -86407,6 +87204,20 @@ rast_kern_h11110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -86510,6 +87321,10 @@ rast_kern_h11111:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -86543,18 +87358,14 @@ rast_kern_h11111:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -86992,6 +87803,20 @@ rast_kern_h11111:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -87091,6 +87916,10 @@ rast_kern_h12000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -87126,7 +87955,7 @@ rast_kern_h12000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -87147,18 +87976,14 @@ rast_kern_h12000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -87253,7 +88078,6 @@ rast_kern_h12000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v20.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -87264,20 +88088,6 @@ rast_kern_h12000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q19, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -87297,6 +88107,20 @@ rast_kern_h12000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v19.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -87306,6 +88130,20 @@ rast_kern_h12000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -87444,6 +88282,10 @@ rast_kern_h12001:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -87479,7 +88321,7 @@ rast_kern_h12001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -87500,18 +88342,14 @@ rast_kern_h12001:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -87801,7 +88639,6 @@ rast_kern_h12001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -87816,20 +88653,6 @@ rast_kern_h12001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -87849,6 +88672,20 @@ rast_kern_h12001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -87858,6 +88695,20 @@ rast_kern_h12001:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -88001,6 +88852,10 @@ rast_kern_h12010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -88034,18 +88889,14 @@ rast_kern_h12010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -88125,7 +88976,6 @@ rast_kern_h12010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -88136,20 +88986,6 @@ rast_kern_h12010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -88169,6 +89005,20 @@ rast_kern_h12010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -88178,6 +89028,20 @@ rast_kern_h12010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -88316,6 +89180,10 @@ rast_kern_h12011:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -88349,18 +89217,14 @@ rast_kern_h12011:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -88638,7 +89502,6 @@ rast_kern_h12011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -88653,20 +89516,6 @@ rast_kern_h12011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -88686,6 +89535,20 @@ rast_kern_h12011:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -88695,6 +89558,20 @@ rast_kern_h12011:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -88839,6 +89716,10 @@ rast_kern_h12100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -88874,7 +89755,7 @@ rast_kern_h12100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -88895,18 +89776,14 @@ rast_kern_h12100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -89106,6 +89983,20 @@ rast_kern_h12100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -89209,6 +90100,10 @@ rast_kern_h12101:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -89244,7 +90139,7 @@ rast_kern_h12101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -89265,18 +90160,14 @@ rast_kern_h12101:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -89686,6 +90577,20 @@ rast_kern_h12101:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -89792,6 +90697,10 @@ rast_kern_h12110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -89825,18 +90734,14 @@ rast_kern_h12110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -90021,6 +90926,20 @@ rast_kern_h12110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -90124,6 +91043,10 @@ rast_kern_h12111:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -90157,18 +91080,14 @@ rast_kern_h12111:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -90566,6 +91485,20 @@ rast_kern_h12111:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -90667,6 +91600,10 @@ rast_kern_h13000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -90702,7 +91639,7 @@ rast_kern_h13000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -90723,18 +91660,14 @@ rast_kern_h13000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -90871,7 +91804,6 @@ rast_kern_h13000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -90886,20 +91818,6 @@ rast_kern_h13000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -90919,6 +91837,20 @@ rast_kern_h13000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -90928,6 +91860,20 @@ rast_kern_h13000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -91066,6 +92012,10 @@ rast_kern_h13001:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -91101,7 +92051,7 @@ rast_kern_h13001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -91122,18 +92072,14 @@ rast_kern_h13001:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -91495,7 +92441,6 @@ rast_kern_h13001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -91510,20 +92455,6 @@ rast_kern_h13001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -91543,6 +92474,20 @@ rast_kern_h13001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -91552,6 +92497,20 @@ rast_kern_h13001:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -91695,6 +92654,10 @@ rast_kern_h13010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -91728,18 +92691,14 @@ rast_kern_h13010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -91865,7 +92824,6 @@ rast_kern_h13010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -91876,20 +92834,6 @@ rast_kern_h13010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -91909,6 +92853,20 @@ rast_kern_h13010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -91918,6 +92876,20 @@ rast_kern_h13010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -92056,6 +93028,10 @@ rast_kern_h13011:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -92089,18 +93065,14 @@ rast_kern_h13011:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -92450,7 +93422,6 @@ rast_kern_h13011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -92465,20 +93436,6 @@ rast_kern_h13011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -92498,6 +93455,20 @@ rast_kern_h13011:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -92507,6 +93478,20 @@ rast_kern_h13011:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -92655,6 +93640,10 @@ rast_kern_h13100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -92690,7 +93679,7 @@ rast_kern_h13100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -92711,18 +93700,14 @@ rast_kern_h13100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -92979,6 +93964,20 @@ rast_kern_h13100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -93082,6 +94081,10 @@ rast_kern_h13101:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -93117,7 +94120,7 @@ rast_kern_h13101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -93138,18 +94141,14 @@ rast_kern_h13101:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -93631,6 +94630,20 @@ rast_kern_h13101:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -93739,6 +94752,10 @@ rast_kern_h13110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -93772,18 +94789,14 @@ rast_kern_h13110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -94014,6 +95027,20 @@ rast_kern_h13110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -94117,6 +95144,10 @@ rast_kern_h13111:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -94150,18 +95181,14 @@ rast_kern_h13111:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -94631,6 +95658,20 @@ rast_kern_h13111:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -94732,6 +95773,10 @@ rast_kern_h14000:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -94767,7 +95812,7 @@ rast_kern_h14000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -94788,18 +95833,14 @@ rast_kern_h14000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -94916,7 +95957,6 @@ rast_kern_h14000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -94931,20 +95971,6 @@ rast_kern_h14000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -94964,6 +95990,20 @@ rast_kern_h14000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -94973,6 +96013,20 @@ rast_kern_h14000:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -95111,6 +96165,10 @@ rast_kern_h14001:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -95146,7 +96204,7 @@ rast_kern_h14001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -95167,18 +96225,14 @@ rast_kern_h14001:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -95500,7 +96554,6 @@ rast_kern_h14001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -95515,20 +96568,6 @@ rast_kern_h14001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -95548,6 +96587,20 @@ rast_kern_h14001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -95557,6 +96610,20 @@ rast_kern_h14001:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -95700,6 +96767,10 @@ rast_kern_h14010:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -95733,18 +96804,14 @@ rast_kern_h14010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -95850,7 +96917,6 @@ rast_kern_h14010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v12.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -95861,20 +96927,6 @@ rast_kern_h14010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q11, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -95894,6 +96946,20 @@ rast_kern_h14010:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -95903,6 +96969,20 @@ rast_kern_h14010:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -96041,6 +97121,10 @@ rast_kern_h14011:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -96074,18 +97158,14 @@ rast_kern_h14011:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -96395,7 +97475,6 @@ rast_kern_h14011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -96410,20 +97489,6 @@ rast_kern_h14011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q26, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -96443,6 +97508,20 @@ rast_kern_h14011:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v26.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -96452,6 +97531,20 @@ rast_kern_h14011:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -96600,6 +97693,10 @@ rast_kern_h14100:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -96635,7 +97732,7 @@ rast_kern_h14100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -96656,18 +97753,14 @@ rast_kern_h14100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -96904,6 +97997,20 @@ rast_kern_h14100:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -97007,6 +98114,10 @@ rast_kern_h14101:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -97042,7 +98153,7 @@ rast_kern_h14101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
 	tbnz w7, #0, 6f
 0:
@@ -97063,18 +98174,14 @@ rast_kern_h14101:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -97516,6 +98623,20 @@ rast_kern_h14101:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -97624,6 +98745,10 @@ rast_kern_h14110:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -97657,18 +98782,14 @@ rast_kern_h14110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -97879,6 +99000,20 @@ rast_kern_h14110:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -97982,6 +99117,10 @@ rast_kern_h14111:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -98015,18 +99154,14 @@ rast_kern_h14111:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -98456,6 +99591,20 @@ rast_kern_h14111:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	ldrb w8, [x3]
 	strb w8, [x26], #1
@@ -98538,10 +99687,8 @@ rast_kern_h20000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -98566,16 +99713,16 @@ rast_kern_h20000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -98599,6 +99746,12 @@ rast_kern_h20000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -98610,7 +99763,6 @@ rast_kern_h20000:
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -98663,7 +99815,6 @@ rast_kern_h20000:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	str d28, [x3], #8
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -98673,20 +99824,6 @@ rast_kern_h20000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q14, q14, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v14.16b, v30.16b
-	bit v28.16b, v14.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -98708,6 +99845,20 @@ rast_kern_h20000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v14.16b, v30.16b
+	bit v28.16b, v14.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -98728,7 +99879,7 @@ rast_kern_h20000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -98747,6 +99898,8 @@ rast_kern_h20000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -98845,14 +99998,21 @@ rast_kern_h20010:
 	fmov x8, d28
 	cbz x8, 8f
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q10, q10, [x1]
 	stp q11, q11, [x2]
-	b 7f
+8:
+	str d28, [x3], #8
+7:
+	subs x5, x5, #8
+	b.ls 9f
+	add x1, x1, #32
+	add x2, x2, #32
+	b 0b
 1:
+	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
@@ -98864,15 +100024,7 @@ rast_kern_h20010:
 	bit v24.16b, v11.16b, v30.16b
 	bit v28.16b, v11.16b, v31.16b
 	stp q24, q28, [x2]
-	b 7f
-8:
-	str d28, [x3], #8
-7:
-	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
-	add x2, x2, #32
-	b 0b
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -98971,7 +100123,8 @@ rast_kern_h20100:
 	add x8, x19, #56
 	ld1r {v6.4s}, [x8]
 	orr v16.16b, v6.16b, v22.16b
-	dup v17.8b, v23.b[3]
+	dup v17.8b, v23.b[0]
+	dup v18.8b, v23.b[3]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -98989,7 +100142,6 @@ rast_kern_h20100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -99011,9 +100163,7 @@ rast_kern_h20100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -99037,16 +100187,16 @@ rast_kern_h20100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -99070,6 +100220,9 @@ rast_kern_h20100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -99081,7 +100234,6 @@ rast_kern_h20100:
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -99134,7 +100286,6 @@ rast_kern_h20100:
 	addhn v31.4h, v31.4s, v12.4s
 	addhn2 v31.8h, v26.4s, v12.4s
 	shrn v31.8b, v31.8h, #2
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -99144,9 +100295,9 @@ rast_kern_h20100:
 	and v26.8b, v26.8b, v13.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v14.8b, v13.8b, v30.8b
+	sub v14.8b, v13.8b, v17.8b
 	bic v14.8b, v14.8b, v28.8b
-	bif v13.8b, v30.8b, v28.8b
+	bif v13.8b, v17.8b, v28.8b
 	xtn v28.8b, v24.8h
 	ushll v24.8h, v31.8b, #0
 	umlal v24.8h, v31.8b, v13.8b
@@ -99163,7 +100314,7 @@ rast_kern_h20100:
 	umlal v24.8h, v28.8b, v14.8b
 	shrn v27.8b, v24.8h, #5
 1:
-	umax v24.8b, v30.8b, v26.8b
+	umax v24.8b, v17.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -99171,13 +100322,13 @@ rast_kern_h20100:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v17.8b
+	cmeq v24.8b, v17.8b, v24.8b
+	cmeq v26.8b, v31.8b, v18.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v17.8b, v31.8b
+	bsl v30.8b, v18.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -99288,7 +100439,11 @@ rast_kern_h20110:
 	add x8, x19, #56
 	ld1r {v6.4s}, [x8]
 	orr v12.16b, v6.16b, v22.16b
-	dup v13.8b, v23.b[3]
+	dup v13.8b, v23.b[0]
+	dup v18.8b, v23.b[3]
+	dup v14.8b, v23.b[4]
+	dup v16.8b, v23.b[5]
+	dup v17.8b, v23.b[6]
 	mov w7, w27
 	mov x0, #0
 10:
@@ -99325,10 +100480,6 @@ rast_kern_h20110:
 	fmov x8, d28
 	cbz x8, 8f
 28:
-	dup v29.8b, v23.b[4]
-	dup v27.8b, v23.b[5]
-	dup v31.8b, v23.b[6]
-	dup v30.8b, v23.b[0]
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -99338,26 +100489,31 @@ rast_kern_h20110:
 	and v26.8b, v26.8b, v10.8b
 	tbz w7, #3, 1f
 	cmeq v28.8b, v26.8b, #0
-	sub v11.8b, v10.8b, v30.8b
+	sub v11.8b, v10.8b, v13.8b
 	bic v11.8b, v11.8b, v28.8b
-	bif v10.8b, v30.8b, v28.8b
+	bif v10.8b, v13.8b, v28.8b
 	xtn v28.8b, v24.8h
-	ushll v24.8h, v31.8b, #0
-	umlal v24.8h, v31.8b, v10.8b
+	ushll v24.8h, v17.8b, #0
+	umlal v24.8h, v17.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v31.8b, v24.8h, #5
 	xtn v28.8b, v25.8h
-	ushll v24.8h, v29.8b, #0
-	umlal v24.8h, v29.8b, v10.8b
+	ushll v24.8h, v14.8b, #0
+	umlal v24.8h, v14.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v29.8b, v24.8h, #5
 	shrn v28.8b, v25.8h, #8
-	ushll v24.8h, v27.8b, #0
-	umlal v24.8h, v27.8b, v10.8b
+	ushll v24.8h, v16.8b, #0
+	umlal v24.8h, v16.8b, v10.8b
 	umlal v24.8h, v28.8b, v11.8b
 	shrn v27.8b, v24.8h, #5
+	b 2f
 1:
-	umax v24.8b, v30.8b, v26.8b
+	mov v29.8b, v14.8b
+	mov v27.8b, v16.8b
+	mov v31.8b, v17.8b
+2:
+	umax v24.8b, v13.8b, v26.8b
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	zip1 v27.8h, v29.8h, v25.8h
@@ -99365,13 +100521,13 @@ rast_kern_h20110:
 	fmov d28, x8
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v13.8b
+	cmeq v24.8b, v13.8b, v24.8b
+	cmeq v26.8b, v31.8b, v18.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	and v26.8b, v28.8b, v24.8b
 	bic v30.8b, v28.8b, v24.8b
-	bsl v30.8b, v13.8b, v31.8b
+	bsl v30.8b, v18.8b, v31.8b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
@@ -99508,10 +100664,8 @@ rast_kern_h21000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -99536,16 +100690,16 @@ rast_kern_h21000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -99569,6 +100723,12 @@ rast_kern_h21000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -99604,9 +100764,8 @@ rast_kern_h21000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -99738,7 +100897,6 @@ rast_kern_h21000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v19.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -99749,20 +100907,6 @@ rast_kern_h21000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q18, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v18.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -99784,6 +100928,20 @@ rast_kern_h21000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v18.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -99804,7 +100962,7 @@ rast_kern_h21000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -99823,6 +100981,8 @@ rast_kern_h21000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -99917,10 +101077,8 @@ rast_kern_h21001:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -99945,16 +101103,16 @@ rast_kern_h21001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -99978,6 +101136,12 @@ rast_kern_h21001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -100013,9 +101177,8 @@ rast_kern_h21001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -100364,7 +101527,6 @@ rast_kern_h21001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -100377,20 +101539,6 @@ rast_kern_h21001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -100412,6 +101560,20 @@ rast_kern_h21001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -100432,7 +101594,7 @@ rast_kern_h21001:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -100451,6 +101613,8 @@ rast_kern_h21001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -100552,10 +101716,8 @@ rast_kern_h21010:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -100580,16 +101742,16 @@ rast_kern_h21010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -100613,6 +101775,12 @@ rast_kern_h21010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -100627,7 +101795,6 @@ rast_kern_h21010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -100744,7 +101911,6 @@ rast_kern_h21010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v11.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -100755,20 +101921,6 @@ rast_kern_h21010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q10, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -100790,6 +101942,20 @@ rast_kern_h21010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -100810,7 +101976,7 @@ rast_kern_h21010:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -100829,6 +101995,8 @@ rast_kern_h21010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -100923,10 +102091,8 @@ rast_kern_h21011:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -100951,16 +102117,16 @@ rast_kern_h21011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -100984,6 +102150,12 @@ rast_kern_h21011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -100998,7 +102170,6 @@ rast_kern_h21011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -101335,7 +102506,6 @@ rast_kern_h21011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -101348,20 +102518,6 @@ rast_kern_h21011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -101383,6 +102539,20 @@ rast_kern_h21011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -101403,7 +102573,7 @@ rast_kern_h21011:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -101422,6 +102592,8 @@ rast_kern_h21011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -101504,7 +102676,6 @@ rast_kern_h21100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -101526,9 +102697,7 @@ rast_kern_h21100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -101552,16 +102721,16 @@ rast_kern_h21100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -101585,6 +102754,9 @@ rast_kern_h21100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -101620,9 +102792,8 @@ rast_kern_h21100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -101930,7 +103101,6 @@ rast_kern_h21101:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -101952,9 +103122,7 @@ rast_kern_h21101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -101978,16 +103146,16 @@ rast_kern_h21101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -102011,6 +103179,9 @@ rast_kern_h21101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -102046,9 +103217,8 @@ rast_kern_h21101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -102591,7 +103761,6 @@ rast_kern_h21110:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -102613,9 +103782,7 @@ rast_kern_h21110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -102639,16 +103806,16 @@ rast_kern_h21110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -102672,6 +103839,9 @@ rast_kern_h21110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -102686,7 +103856,6 @@ rast_kern_h21110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -102979,7 +104148,6 @@ rast_kern_h21111:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -103001,9 +104169,7 @@ rast_kern_h21111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -103027,16 +104193,16 @@ rast_kern_h21111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -103060,6 +104226,9 @@ rast_kern_h21111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -103074,7 +104243,6 @@ rast_kern_h21111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -103618,10 +104786,8 @@ rast_kern_h22000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -103646,16 +104812,16 @@ rast_kern_h22000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -103679,6 +104845,12 @@ rast_kern_h22000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -103714,9 +104886,8 @@ rast_kern_h22000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -103828,7 +104999,6 @@ rast_kern_h22000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v19.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -103839,20 +105009,6 @@ rast_kern_h22000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q18, q18, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v18.16b, v30.16b
-	bit v28.16b, v18.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -103874,6 +105030,20 @@ rast_kern_h22000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v18.16b, v30.16b
+	bit v28.16b, v18.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -103894,7 +105064,7 @@ rast_kern_h22000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -103913,6 +105083,8 @@ rast_kern_h22000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -104007,10 +105179,8 @@ rast_kern_h22001:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -104035,16 +105205,16 @@ rast_kern_h22001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -104068,6 +105238,12 @@ rast_kern_h22001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -104103,9 +105279,8 @@ rast_kern_h22001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -104414,7 +105589,6 @@ rast_kern_h22001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -104427,20 +105601,6 @@ rast_kern_h22001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -104462,6 +105622,20 @@ rast_kern_h22001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -104482,7 +105656,7 @@ rast_kern_h22001:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -104501,6 +105675,8 @@ rast_kern_h22001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -104602,10 +105778,8 @@ rast_kern_h22010:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -104630,16 +105804,16 @@ rast_kern_h22010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -104663,6 +105837,12 @@ rast_kern_h22010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -104677,7 +105857,6 @@ rast_kern_h22010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -104774,7 +105953,6 @@ rast_kern_h22010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v11.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -104785,20 +105963,6 @@ rast_kern_h22010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q10, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -104820,6 +105984,20 @@ rast_kern_h22010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -104840,7 +106018,7 @@ rast_kern_h22010:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -104859,6 +106037,8 @@ rast_kern_h22010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -104953,10 +106133,8 @@ rast_kern_h22011:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -104981,16 +106159,16 @@ rast_kern_h22011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -105014,6 +106192,12 @@ rast_kern_h22011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -105028,7 +106212,6 @@ rast_kern_h22011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -105325,7 +106508,6 @@ rast_kern_h22011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -105338,20 +106520,6 @@ rast_kern_h22011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -105373,6 +106541,20 @@ rast_kern_h22011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -105393,7 +106575,7 @@ rast_kern_h22011:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -105412,6 +106594,8 @@ rast_kern_h22011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -105494,7 +106678,6 @@ rast_kern_h22100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -105516,9 +106699,7 @@ rast_kern_h22100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -105542,16 +106723,16 @@ rast_kern_h22100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -105575,6 +106756,9 @@ rast_kern_h22100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -105610,9 +106794,8 @@ rast_kern_h22100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -105900,7 +107083,6 @@ rast_kern_h22101:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -105922,9 +107104,7 @@ rast_kern_h22101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -105948,16 +107128,16 @@ rast_kern_h22101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -105981,6 +107161,9 @@ rast_kern_h22101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -106016,9 +107199,8 @@ rast_kern_h22101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -106521,7 +107703,6 @@ rast_kern_h22110:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -106543,9 +107724,7 @@ rast_kern_h22110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -106569,16 +107748,16 @@ rast_kern_h22110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -106602,6 +107781,9 @@ rast_kern_h22110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -106616,7 +107798,6 @@ rast_kern_h22110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -106889,7 +108070,6 @@ rast_kern_h22111:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -106911,9 +108091,7 @@ rast_kern_h22111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -106937,16 +108115,16 @@ rast_kern_h22111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -106970,6 +108148,9 @@ rast_kern_h22111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -106984,7 +108165,6 @@ rast_kern_h22111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -107488,10 +108668,8 @@ rast_kern_h23000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -107516,16 +108694,16 @@ rast_kern_h23000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -107549,6 +108727,12 @@ rast_kern_h23000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -107584,9 +108768,8 @@ rast_kern_h23000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -107742,7 +108925,6 @@ rast_kern_h23000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -107755,20 +108937,6 @@ rast_kern_h23000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -107790,6 +108958,20 @@ rast_kern_h23000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -107810,7 +108992,7 @@ rast_kern_h23000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -107829,6 +109011,8 @@ rast_kern_h23000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -107923,10 +109107,8 @@ rast_kern_h23001:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -107951,16 +109133,16 @@ rast_kern_h23001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -107984,6 +109166,12 @@ rast_kern_h23001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -108019,9 +109207,8 @@ rast_kern_h23001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -108402,7 +109589,6 @@ rast_kern_h23001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -108415,20 +109601,6 @@ rast_kern_h23001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -108450,6 +109622,20 @@ rast_kern_h23001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -108470,7 +109656,7 @@ rast_kern_h23001:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -108489,6 +109675,8 @@ rast_kern_h23001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -108590,10 +109778,8 @@ rast_kern_h23010:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -108618,16 +109804,16 @@ rast_kern_h23010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -108651,6 +109837,12 @@ rast_kern_h23010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -108665,7 +109857,6 @@ rast_kern_h23010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -108808,7 +109999,6 @@ rast_kern_h23010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v11.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -108819,20 +110009,6 @@ rast_kern_h23010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q10, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -108854,6 +110030,20 @@ rast_kern_h23010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -108874,7 +110064,7 @@ rast_kern_h23010:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -108893,6 +110083,8 @@ rast_kern_h23010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -108987,10 +110179,8 @@ rast_kern_h23011:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -109015,16 +110205,16 @@ rast_kern_h23011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -109048,6 +110238,12 @@ rast_kern_h23011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -109062,7 +110258,6 @@ rast_kern_h23011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -109431,7 +110626,6 @@ rast_kern_h23011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -109444,20 +110638,6 @@ rast_kern_h23011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -109479,6 +110659,20 @@ rast_kern_h23011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -109499,7 +110693,7 @@ rast_kern_h23011:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -109518,6 +110712,8 @@ rast_kern_h23011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -109602,7 +110798,6 @@ rast_kern_h23100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -109624,9 +110819,7 @@ rast_kern_h23100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -109650,16 +110843,16 @@ rast_kern_h23100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -109683,6 +110876,9 @@ rast_kern_h23100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -109718,9 +110914,8 @@ rast_kern_h23100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -110065,7 +111260,6 @@ rast_kern_h23101:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -110087,9 +111281,7 @@ rast_kern_h23101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -110113,16 +111305,16 @@ rast_kern_h23101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -110146,6 +111338,9 @@ rast_kern_h23101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -110181,9 +111376,8 @@ rast_kern_h23101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -110758,7 +111952,6 @@ rast_kern_h23110:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -110780,9 +111973,7 @@ rast_kern_h23110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -110806,16 +111997,16 @@ rast_kern_h23110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -110839,6 +112030,9 @@ rast_kern_h23110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -110853,7 +112047,6 @@ rast_kern_h23110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -111172,7 +112365,6 @@ rast_kern_h23111:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -111194,9 +112386,7 @@ rast_kern_h23111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -111220,16 +112410,16 @@ rast_kern_h23111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -111253,6 +112443,9 @@ rast_kern_h23111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -111267,7 +112460,6 @@ rast_kern_h23111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -111843,10 +113035,8 @@ rast_kern_h24000:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -111871,16 +113061,16 @@ rast_kern_h24000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -111904,6 +113094,12 @@ rast_kern_h24000:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -111939,9 +113135,8 @@ rast_kern_h24000:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -112077,7 +113272,6 @@ rast_kern_h24000:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -112090,20 +113284,6 @@ rast_kern_h24000:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -112125,6 +113305,20 @@ rast_kern_h24000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -112145,7 +113339,7 @@ rast_kern_h24000:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -112164,6 +113358,8 @@ rast_kern_h24000:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -112258,10 +113454,8 @@ rast_kern_h24001:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -112286,16 +113480,16 @@ rast_kern_h24001:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -112319,6 +113513,12 @@ rast_kern_h24001:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -112354,9 +113554,8 @@ rast_kern_h24001:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -112697,7 +113896,6 @@ rast_kern_h24001:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -112710,20 +113908,6 @@ rast_kern_h24001:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -112745,6 +113929,20 @@ rast_kern_h24001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -112765,7 +113963,7 @@ rast_kern_h24001:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -112784,6 +113982,8 @@ rast_kern_h24001:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -112885,10 +114085,8 @@ rast_kern_h24010:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -112913,16 +114111,16 @@ rast_kern_h24010:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -112946,6 +114144,12 @@ rast_kern_h24010:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -112960,7 +114164,6 @@ rast_kern_h24010:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -113083,7 +114286,6 @@ rast_kern_h24010:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	orr v30.8b, v30.8b, v11.8b
 	zip1 v29.16b, v29.16b, v27.16b
@@ -113094,20 +114296,6 @@ rast_kern_h24010:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q10, q10, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v10.16b, v30.16b
-	bit v28.16b, v10.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -113129,6 +114317,20 @@ rast_kern_h24010:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v10.16b, v30.16b
+	bit v28.16b, v10.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -113149,7 +114351,7 @@ rast_kern_h24010:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -113168,6 +114370,8 @@ rast_kern_h24010:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -113262,10 +114466,8 @@ rast_kern_h24011:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
+	b.ls 15f
 	add x2, x2, #32
 	b 20b
 34:
@@ -113290,16 +114492,16 @@ rast_kern_h24011:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -113323,6 +114525,12 @@ rast_kern_h24011:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -113337,7 +114545,6 @@ rast_kern_h24011:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -113666,7 +114873,6 @@ rast_kern_h24011:
 	fmov x8, d28
 	cbz x8, 8f
 2:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	dup v25.8b, v23.b[2]
 	orr v30.8b, v30.8b, v25.8b
@@ -113679,20 +114885,6 @@ rast_kern_h24011:
 	b.ne 1f
 	stp q27, q29, [x1]
 	stp q25, q25, [x2]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
-	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v25.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -113714,6 +114906,20 @@ rast_kern_h24011:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	ldp q24, q28, [x2]
+	bit v24.16b, v25.16b, v30.16b
+	bit v28.16b, v25.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -113734,7 +114940,7 @@ rast_kern_h24011:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -113753,6 +114959,8 @@ rast_kern_h24011:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -113837,7 +115045,6 @@ rast_kern_h24100:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -113859,9 +115066,7 @@ rast_kern_h24100:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -113885,16 +115090,16 @@ rast_kern_h24100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -113918,6 +115123,9 @@ rast_kern_h24100:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -113953,9 +115161,8 @@ rast_kern_h24100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -114280,7 +115487,6 @@ rast_kern_h24101:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -114302,9 +115508,7 @@ rast_kern_h24101:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -114328,16 +115532,16 @@ rast_kern_h24101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -114361,6 +115565,9 @@ rast_kern_h24101:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr s10, [x22, #1536]
 	ushll v10.4s, v10.4h, #15
 	dup v11.4s, v10.s[1]
@@ -114396,9 +115603,8 @@ rast_kern_h24101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -114933,7 +116139,6 @@ rast_kern_h24110:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -114955,9 +116160,7 @@ rast_kern_h24110:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -114981,16 +116184,16 @@ rast_kern_h24110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -115014,6 +116217,9 @@ rast_kern_h24110:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -115028,7 +116234,6 @@ rast_kern_h24110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -115327,7 +116532,6 @@ rast_kern_h24111:
 	add x3, x25, x11
 	add x3, x3, x10
 	add x3, x3, x8
-	mov x4, #0
 20:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
@@ -115349,9 +116553,7 @@ rast_kern_h24111:
 21:
 	subs x5, x5, #8
 	b.ls 9f
-	add x1, x1, #32
 	add x2, x2, #32
-	add x4, x4, #8
 	b 20b
 34:
 	sub v27.4s, v6.4s, v27.4s
@@ -115375,16 +116577,16 @@ rast_kern_h24111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -115408,6 +116610,9 @@ rast_kern_h24111:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	ldr w16, [x19, #244]
+	sub x1, x2, x16
+	sub x4, x9, x5
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -115422,7 +116627,6 @@ rast_kern_h24111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -115976,25 +117180,11 @@ rast_kern_hv00:
 	orr v11.16b, v25.16b, v22.16b
 	orr v12.16b, v26.16b, v22.16b
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -116005,6 +117195,19 @@ rast_kern_hv00:
 	add v6.2d, v6.2d, v9.2d
 	add v7.2d, v7.2d, v9.2d
 	b 0b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -116168,9 +117371,8 @@ rast_kern_hv01:
 	orr v12.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
@@ -116198,16 +117400,16 @@ rast_kern_hv01:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -116231,6 +117433,10 @@ rast_kern_hv01:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -116245,7 +117451,6 @@ rast_kern_hv01:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -116358,25 +117563,11 @@ rast_kern_hv01:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -116400,6 +117591,19 @@ rast_kern_hv01:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -116420,7 +117624,7 @@ rast_kern_hv01:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -116439,6 +117643,8 @@ rast_kern_hv01:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -116563,9 +117769,8 @@ rast_kern_hv02:
 	orr v12.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
@@ -116593,16 +117798,16 @@ rast_kern_hv02:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -116626,6 +117831,10 @@ rast_kern_hv02:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -116640,7 +117849,6 @@ rast_kern_hv02:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -116733,25 +117941,11 @@ rast_kern_hv02:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -116775,6 +117969,19 @@ rast_kern_hv02:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -116795,7 +118002,7 @@ rast_kern_hv02:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -116814,6 +118021,8 @@ rast_kern_hv02:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -116940,9 +118149,8 @@ rast_kern_hv03:
 	orr v12.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
@@ -116970,16 +118178,16 @@ rast_kern_hv03:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -117003,6 +118211,10 @@ rast_kern_hv03:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -117017,7 +118229,6 @@ rast_kern_hv03:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -117154,25 +118365,11 @@ rast_kern_hv03:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -117196,6 +118393,19 @@ rast_kern_hv03:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -117216,7 +118426,7 @@ rast_kern_hv03:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -117235,6 +118445,8 @@ rast_kern_hv03:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -117361,9 +118573,8 @@ rast_kern_hv04:
 	orr v12.16b, v26.16b, v22.16b
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	add v6.2d, v6.2d, v9.2d
@@ -117391,16 +118602,16 @@ rast_kern_hv04:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -117424,6 +118635,10 @@ rast_kern_hv04:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -117438,7 +118653,6 @@ rast_kern_hv04:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -117555,25 +118769,11 @@ rast_kern_hv04:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -117597,6 +118797,19 @@ rast_kern_hv04:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -117617,7 +118830,7 @@ rast_kern_hv04:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -117636,6 +118849,8 @@ rast_kern_hv04:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -117745,6 +118960,10 @@ rast_kern_hv10:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -117764,18 +118983,14 @@ rast_kern_hv10:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -117795,25 +119010,11 @@ rast_kern_hv10:
 	orr v11.16b, v25.16b, v22.16b
 	orr v12.16b, v26.16b, v22.16b
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -117833,6 +119034,19 @@ rast_kern_hv10:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -117842,6 +119056,20 @@ rast_kern_hv10:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -117988,6 +119216,10 @@ rast_kern_hv11:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -118021,18 +119253,14 @@ rast_kern_hv11:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -118119,25 +119347,11 @@ rast_kern_hv11:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -118157,6 +119371,19 @@ rast_kern_hv11:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -118166,6 +119393,20 @@ rast_kern_hv11:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -118312,6 +119553,10 @@ rast_kern_hv12:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -118345,18 +119590,14 @@ rast_kern_hv12:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -118423,25 +119664,11 @@ rast_kern_hv12:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -118461,6 +119688,19 @@ rast_kern_hv12:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -118470,6 +119710,20 @@ rast_kern_hv12:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -118618,6 +119872,10 @@ rast_kern_hv13:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -118651,18 +119909,14 @@ rast_kern_hv13:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -118773,25 +120027,11 @@ rast_kern_hv13:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -118811,6 +120051,19 @@ rast_kern_hv13:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -118820,6 +120073,20 @@ rast_kern_hv13:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -118968,6 +120235,10 @@ rast_kern_hv14:
 	ld1r {v6.4s}, [x8]
 	ld1r {v7.4s}, [x22]
 2:
+	fmov w16, s6
+	cmp w16, w16, sxth
+	cset w16, eq
+	bfi w7, w16, #13, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -119001,18 +120272,14 @@ rast_kern_hv14:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	sshll v26.4s, v24.4h, #0
-	sshll2 v27.4s, v24.8h, #0
-	smull v25.2d, v26.2s, v6.2s
-	smull2 v26.2d, v26.4s, v6.4s
-	shrn v25.2s, v25.2d, #15
-	shrn2 v25.4s, v26.2d, #15
+	tbz w7, #13, 23f
+	smull v25.4s, v24.4h, v6.h[0]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	sshr v25.4s, v25.4s, #15
+	sshr v26.4s, v26.4s, #15
 	add v25.4s, v25.4s, v7.4s
-	smull v26.2d, v27.2s, v6.2s
-	smull2 v27.2d, v27.4s, v6.4s
-	shrn v26.2s, v26.2d, #15
-	shrn2 v26.4s, v27.2d, #15
 	add v26.4s, v26.4s, v7.4s
+22:
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -119103,25 +120370,11 @@ rast_kern_hv14:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q12, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -119141,6 +120394,19 @@ rast_kern_hv14:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v12.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -119150,6 +120416,20 @@ rast_kern_hv14:
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
+23:
+	sshll v26.4s, v24.4h, #0
+	sshll2 v27.4s, v24.8h, #0
+	smull v25.2d, v26.2s, v6.2s
+	smull2 v26.2d, v26.4s, v6.4s
+	shrn v25.2s, v25.2d, #15
+	shrn2 v25.4s, v26.2d, #15
+	add v25.4s, v25.4s, v7.4s
+	smull v26.2d, v27.2s, v6.2s
+	smull2 v27.2d, v27.4s, v6.4s
+	shrn v26.2s, v26.2d, #15
+	shrn2 v26.4s, v27.2d, #15
+	add v26.4s, v26.4s, v7.4s
+	b 22b
 9:
 	tbz w27, #6, 15f
 	ldrh w5, [x22, #2304]
@@ -119275,14 +120555,21 @@ rast_kern_hv20:
 	fmov x8, d28
 	cbz x8, 8f
 28:
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
+8:
+	str d28, [x3], #8
+7:
+	subs x5, x5, #8
+	b.ls 9f
+	add x1, x1, #16
+	add x2, x2, #32
+	b 0b
 1:
+	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	ldr q24, [x1]
 	bit v24.16b, v10.16b, v28.16b
@@ -119293,15 +120580,7 @@ rast_kern_hv20:
 	bit v24.16b, v11.16b, v30.16b
 	bit v28.16b, v11.16b, v31.16b
 	stp q24, q28, [x2]
-	b 7f
-8:
-	str d28, [x3], #8
-7:
-	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #16
-	add x2, x2, #32
-	b 0b
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -119444,9 +120723,8 @@ rast_kern_hv21:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	b 20b
@@ -119472,16 +120750,16 @@ rast_kern_hv21:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -119505,6 +120783,10 @@ rast_kern_hv21:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -119519,7 +120801,6 @@ rast_kern_hv21:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -119624,25 +120905,11 @@ rast_kern_hv21:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -119664,6 +120931,19 @@ rast_kern_hv21:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -119684,7 +120964,7 @@ rast_kern_hv21:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -119703,6 +120983,8 @@ rast_kern_hv21:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -119806,9 +121088,8 @@ rast_kern_hv22:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	b 20b
@@ -119834,16 +121115,16 @@ rast_kern_hv22:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -119867,6 +121148,10 @@ rast_kern_hv22:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -119881,7 +121166,6 @@ rast_kern_hv22:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -119966,25 +121250,11 @@ rast_kern_hv22:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -120006,6 +121276,19 @@ rast_kern_hv22:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -120026,7 +121309,7 @@ rast_kern_hv22:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -120045,6 +121328,8 @@ rast_kern_hv22:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -120151,9 +121436,8 @@ rast_kern_hv23:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	b 20b
@@ -120179,16 +121463,16 @@ rast_kern_hv23:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -120212,6 +121496,10 @@ rast_kern_hv23:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -120226,7 +121514,6 @@ rast_kern_hv23:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -120354,25 +121641,11 @@ rast_kern_hv23:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -120394,6 +121667,19 @@ rast_kern_hv23:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -120414,7 +121700,7 @@ rast_kern_hv23:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -120433,6 +121719,8 @@ rast_kern_hv23:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -120539,9 +121827,8 @@ rast_kern_hv24:
 	cbz x8, 21f
 	b 27f
 21:
-	str d28, [x3], #8
 	subs x5, x5, #8
-	b.ls 9f
+	b.ls 15f
 	add x1, x1, #16
 	add x2, x2, #32
 	b 20b
@@ -120567,16 +121854,16 @@ rast_kern_hv24:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -120600,6 +121887,10 @@ rast_kern_hv24:
 	lsl w17, w17, #3
 	dup v1.4s, w17
 2:
+	tbz w27, #6, 1f
+	sub x4, x9, x5
+	add x3, x3, x4
+1:
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -120614,7 +121905,6 @@ rast_kern_hv24:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -120722,25 +122012,11 @@ rast_kern_hv24:
 	and v28.8b, v28.8b, v25.8b
 	fmov x8, d28
 	cbz x8, 8f
-	str d28, [x3], #8
 	orr x0, x0, x8
 	cmn x8, #1
 	b.ne 1f
 	stp q11, q11, [x2]
 	str q10, [x1]
-	b 7f
-1:
-	sshll v28.8h, v28.8b, #0
-	ldr q24, [x1]
-	bit v24.16b, v10.16b, v28.16b
-	str q24, [x1]
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x2]
-	bit v24.16b, v11.16b, v30.16b
-	bit v28.16b, v11.16b, v31.16b
-	stp q24, q28, [x2]
-	b 7f
 8:
 	str d28, [x3], #8
 7:
@@ -120762,6 +122038,19 @@ rast_kern_hv24:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	str d28, [x3], #8
+	sshll v28.8h, v28.8b, #0
+	ldr q24, [x1]
+	bit v24.16b, v10.16b, v28.16b
+	str q24, [x1]
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x2]
+	bit v24.16b, v11.16b, v30.16b
+	bit v28.16b, v11.16b, v31.16b
+	stp q24, q28, [x2]
+	b 7b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -120782,7 +122071,7 @@ rast_kern_hv24:
 	ldrh w8, [x22, #2560]
 	cmp w8, w5
 	csel w8, w8, w5, lo
-	mov x10, #0
+	mov x10, x4
 11:
 	cmp x10, x8
 	b.hs 12f
@@ -120801,6 +122090,8 @@ rast_kern_hv24:
 	cmp w8, w5
 	csel w8, w8, w5, lo
 	sub x10, x5, x8
+	cmp x10, x4
+	csel x10, x10, x4, hs
 14:
 	cmp x10, x5
 	b.hs 15f
@@ -120906,16 +122197,16 @@ rast_kern_hs000:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -120950,7 +122241,6 @@ rast_kern_hs000:
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -121004,15 +122294,6 @@ rast_kern_hs000:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -121032,6 +122313,15 @@ rast_kern_hs000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -121114,7 +122404,12 @@ rast_kern_hs010:
 	cmn x8, #1
 	b.ne 1f
 	stp q10, q10, [x1]
-	b 8f
+8:
+	subs x5, x5, #8
+	b.ls 9f
+	add x1, x1, #32
+	add x2, x2, #16
+	b 0b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -121123,12 +122418,7 @@ rast_kern_hs010:
 	bit v24.16b, v10.16b, v30.16b
 	bit v28.16b, v10.16b, v31.16b
 	stp q24, q28, [x1]
-8:
-	subs x5, x5, #8
-	b.ls 9f
-	add x1, x1, #32
-	add x2, x2, #16
-	b 0b
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -121225,16 +122515,16 @@ rast_kern_hs100:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -121293,9 +122583,8 @@ rast_kern_hs100:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -121423,15 +122712,6 @@ rast_kern_hs100:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -121451,6 +122731,15 @@ rast_kern_hs100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -121545,16 +122834,16 @@ rast_kern_hs101:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -121613,9 +122902,8 @@ rast_kern_hs101:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -121961,15 +123249,6 @@ rast_kern_hs101:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -121989,6 +123268,15 @@ rast_kern_hs101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -122088,16 +123376,16 @@ rast_kern_hs110:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -122135,7 +123423,6 @@ rast_kern_hs110:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -122248,15 +123535,6 @@ rast_kern_hs110:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -122276,6 +123554,15 @@ rast_kern_hs110:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -122370,16 +123657,16 @@ rast_kern_hs111:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -122417,7 +123704,6 @@ rast_kern_hs111:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -122751,15 +124037,6 @@ rast_kern_hs111:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -122779,6 +124056,15 @@ rast_kern_hs111:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -122875,16 +124161,16 @@ rast_kern_hs200:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -122943,9 +124229,8 @@ rast_kern_hs200:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -123053,15 +124338,6 @@ rast_kern_hs200:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -123081,6 +124357,15 @@ rast_kern_hs200:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -123175,16 +124460,16 @@ rast_kern_hs201:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -123243,9 +124528,8 @@ rast_kern_hs201:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -123551,15 +124835,6 @@ rast_kern_hs201:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -123579,6 +124854,15 @@ rast_kern_hs201:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -123678,16 +124962,16 @@ rast_kern_hs210:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -123725,7 +125009,6 @@ rast_kern_hs210:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -123818,15 +125101,6 @@ rast_kern_hs210:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -123846,6 +125120,15 @@ rast_kern_hs210:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -123940,16 +125223,16 @@ rast_kern_hs211:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -123987,7 +125270,6 @@ rast_kern_hs211:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -124281,15 +125563,6 @@ rast_kern_hs211:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -124309,6 +125582,15 @@ rast_kern_hs211:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -124407,16 +125689,16 @@ rast_kern_hs300:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -124475,9 +125757,8 @@ rast_kern_hs300:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -124630,15 +125911,6 @@ rast_kern_hs300:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -124658,6 +125930,15 @@ rast_kern_hs300:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -124752,16 +126033,16 @@ rast_kern_hs301:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -124820,9 +126101,8 @@ rast_kern_hs301:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -125200,15 +126480,6 @@ rast_kern_hs301:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -125228,6 +126499,15 @@ rast_kern_hs301:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -125328,16 +126608,16 @@ rast_kern_hs310:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -125375,7 +126655,6 @@ rast_kern_hs310:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -125513,15 +126792,6 @@ rast_kern_hs310:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -125541,6 +126811,15 @@ rast_kern_hs310:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -125635,16 +126914,16 @@ rast_kern_hs311:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -125682,7 +126961,6 @@ rast_kern_hs311:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -126048,15 +127326,6 @@ rast_kern_hs311:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -126076,6 +127345,15 @@ rast_kern_hs311:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -126174,16 +127452,16 @@ rast_kern_hs400:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -126242,9 +127520,8 @@ rast_kern_hs400:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -126377,15 +127654,6 @@ rast_kern_hs400:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -126405,6 +127673,15 @@ rast_kern_hs400:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -126499,16 +127776,16 @@ rast_kern_hs401:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -126567,9 +127844,8 @@ rast_kern_hs401:
 	orr w15, w15, w16, lsr #16
 	cmp w15, #0
 	cset w15, eq
-	orr w7, w27, w15, lsl #2
+	bfi w7, w15, #2, #1
 1:
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -126907,15 +128183,6 @@ rast_kern_hs401:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -126935,6 +128202,15 @@ rast_kern_hs401:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -127035,16 +128311,16 @@ rast_kern_hs410:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -127082,7 +128358,6 @@ rast_kern_hs410:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -127200,15 +128475,6 @@ rast_kern_hs410:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -127228,6 +128494,15 @@ rast_kern_hs410:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1
@@ -127322,16 +128597,16 @@ rast_kern_hs411:
 	fmul s24, s24, s25
 	scvtf s26, w12
 	scvtf s27, w13
-	ldp q28, q29, [x20, #128]
-	fmul v0.4s, v28.4s, v26.s[0]
-	fmul v1.4s, v29.4s, v26.s[0]
+	ldp q29, q30, [x20, #128]
+	fmul v0.4s, v29.4s, v26.s[0]
+	fmul v1.4s, v30.4s, v26.s[0]
 	dup v2.4s, v24.s[0]
 	dup v3.4s, v24.s[0]
-	fmls v2.4s, v28.4s, v27.s[0]
-	fmls v3.4s, v29.4s, v27.s[0]
-	ldr q28, [x20, #192]
-	fmul v4.4s, v28.4s, v26.s[0]
-	fmul v5.4s, v28.4s, v27.s[0]
+	fmls v2.4s, v29.4s, v27.s[0]
+	fmls v3.4s, v30.4s, v27.s[0]
+	ldr q31, [x20, #192]
+	fmul v4.4s, v31.4s, v26.s[0]
+	fmul v5.4s, v31.4s, v27.s[0]
 	cbz w15, 2f
 29:
 	fadd v0.4s, v0.4s, v4.4s
@@ -127369,7 +128644,6 @@ rast_kern_hs411:
 	csel w15, w16, w15, ge
 	dup v14.4s, w15
 	mov v15.s[2], w14
-	fmov d28, x8
 	b 28f
 0:
 	ldr q27, [x2]
@@ -127695,15 +128969,6 @@ rast_kern_hs411:
 	cmn x8, #1
 	b.ne 1f
 	stp q27, q29, [x1]
-	b 8f
-1:
-	sshll v28.8h, v28.8b, #0
-	sshll v30.4s, v28.4h, #0
-	sshll2 v31.4s, v28.8h, #0
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v30.16b
-	bit v28.16b, v29.16b, v31.16b
-	stp q24, q28, [x1]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -127723,6 +128988,15 @@ rast_kern_hs411:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+1:
+	sshll v28.8h, v28.8b, #0
+	sshll v30.4s, v28.4h, #0
+	sshll2 v31.4s, v28.8h, #0
+	ldp q24, q28, [x1]
+	bit v24.16b, v27.16b, v30.16b
+	bit v28.16b, v29.16b, v31.16b
+	stp q24, q28, [x1]
+	b 8b
 9:
 	add x22, x22, #4
 	add w24, w24, #1

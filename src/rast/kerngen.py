@@ -18,8 +18,8 @@ bit 9 the kernels set it per line), bit 6 edge marking, bit 7 a palette of at mo
 nearest-filtering paletted kernels then look the texels up with tbl in v18-v21 instead of loading them), bit 8 no
 alpha test (the texture's lowest alpha passes it), bit 9 look for white lines (the batch's first line is white and
 A is 31; other batches never take the white shortcut, which gives the same bits), bit 10 A is 31 (the alpha
-modulate is the identity), bits 11 and 12 the s and t axes clamp (textures not wrapped on both); translucent only:
-bit 3 alpha
+modulate is the identity), bits 11 and 12 the s and t axes clamp (textures not wrapped on both), bit 13 (set by the
+kernels per line, w depth) dW fits in s16; translucent only: bit 3 alpha
 blending (DISP3DCNT bit 3), bit 4 fog (attr bit 15), bit 5 depth update (attr bit 11). Translucent kernels store
 each line's first id in id0[].
 The per-pixel math is that of fused_neon.c's batch_neon (opaque path), lane for lane: see there and spec/ for
@@ -98,6 +98,9 @@ def roles(D, T, R, F, B, M):
         if R == 0 and M != 1: want.append(("fog", 1))
         if F and M != 1: want.append(("flat", 3))
         want.append(("a", 1))
+    elif R:                                                                      # (the colour stays in them)
+        want.append(("a", 1))
+        if F: want.append(("flat", 3))
     if R: want.append(("pid", 1))
     if T and M != 2: want.append(("aref", 1))
     r = {}
@@ -155,15 +158,16 @@ def prologue(name, D, T, R, F, M=0, B=0):
             e(f"add x{M}, x11, x10"); e(f"add x{M}, x{M}, x8, lsl #1")
         if R:
             e(f"ldr w10, [x19, #{K['id_stride']}]"); e("mul x10, x24, x10"); e(f"ldr w11, [x19, #{K['id_off']}]")
-            e("add x3, x25, x11"); e("add x3, x3, x10"); e("add x3, x3, x8"); e("mov x4, #0")
+            e("add x3, x25, x11"); e("add x3, x3, x10"); e("add x3, x3, x8")
         elif M != 2: e("add x3, sp, #256")
     else:
         e("add x1, x25, x24, lsl #11"); e("add x1, x1, x8, lsl #2")
         if M != 2: e("add x2, x1, #0x10, lsl #12")
         if M: e(f"ldr x10, [x19, #{K['owner']}]"); e(f"add x{M}, x10, x24, lsl #10"); e(f"add x{M}, x{M}, x8, lsl #1")
-        if R: e("add x3, x25, x24, lsl #9"); e("add x3, x3, #0x20, lsl #12"); e("add x3, x3, x8"); e("mov x4, #0")
+        if R: e("add x3, x25, x24, lsl #9"); e("add x3, x3, #0x20, lsl #12"); e("add x3, x3, x8")
         elif M != 2: e("add x3, sp, #256")
     st = uses_st(D, T, F, M)
+    if R and not lazy(D, st): e("mov x4, #0")
     if D == 0: depth_setup_z()
     if not lazy(D, st): line_setup(D, T, F, M)
     if st and D == 1: e("tbnz w7, #0, 6f")                                      # affine: the group loop's entry
@@ -173,8 +177,8 @@ def lazy(D, st):
     depth test: z or constant depth)"""
     return st and D != 1
 
-def line_setup(D, T, F, M, lazy=False):
-    if uses_st(D, T, F, M): steps_setup(D, lazy)
+def line_setup(D, T, F, M):
+    if uses_st(D, T, F, M): steps_setup(D)
     interpolants_setup(T, F, M)
     if T and not F and M != 1: white_test()
 
@@ -185,17 +189,18 @@ def steps_setup(D, lazy=False):
     the pass mask): the steps of the g groups before it applied as the group loop applies them (perspective: g
     roundings in order; affine: the lanes i + 8 g)."""
     c, w0, dw, t, p = ("w9", "w12", "w13", "w14", "x14") if lazy else ("w5", "w8", "w10", "w11", "x11")
+    ja, jb, j8 = ("v29", "v30", "v31") if lazy else ("v28", "v29", "v28")       # (lazy: v28 holds the pass mask)
     if lazy: e(f"ldrh {c}, [x22, #{SP['cdb']}]"); e(f"sub w15, {c}, w5"); e("lsr w15, w15, #3")    # C, g
     e("tbnz w7, #0, 1f")
     e(f"ldr {w0}, [x22, #{SP['W0']}]"); e(f"ldr {dw}, [x22, #{SP['dW']}]")
     e(f"add {t}, {w0}, {dw}"); e(f"scvtf s24, {t}"); e(f"ucvtf s25, {c}"); e("fmul s24, s24, s25")
     e(f"scvtf s26, {w0}"); e(f"scvtf s27, {dw}")
-    e("ldp q28, q29, [x20, #128]")                                               # j = 0..7 as floats
-    e("fmul v0.4s, v28.4s, v26.s[0]"); e("fmul v1.4s, v29.4s, v26.s[0]")
+    e(f"ldp {q(ja)}, {q(jb)}, [x20, #128]")                                       # j = 0..7 as floats
+    e(f"fmul v0.4s, {ja}.4s, v26.s[0]"); e(f"fmul v1.4s, {jb}.4s, v26.s[0]")
     e("dup v2.4s, v24.s[0]"); e("dup v3.4s, v24.s[0]")
-    e("fmls v2.4s, v28.4s, v27.s[0]"); e("fmls v3.4s, v29.4s, v27.s[0]")
-    e("ldr q28, [x20, #192]")                                                    # 8.0
-    e("fmul v4.4s, v28.4s, v26.s[0]"); e("fmul v5.4s, v28.4s, v27.s[0]")
+    e(f"fmls v2.4s, {ja}.4s, v27.s[0]"); e(f"fmls v3.4s, {jb}.4s, v27.s[0]")
+    e(f"ldr {q(j8)}, [x20, #192]")                                                # 8.0
+    e(f"fmul v4.4s, {j8}.4s, v26.s[0]"); e(f"fmul v5.4s, {j8}.4s, v27.s[0]")
     if D == 1: e(f"dup v6.4s, {dw}"); e(f"dup v7.4s, {w0}")
     if lazy:
         e("cbz w15, 2f")
@@ -210,6 +215,8 @@ def steps_setup(D, lazy=False):
     e("lsl w17, w17, #3"); e("dup v1.4s, w17")
     if D == 1: e(f"add x8, x22, #{SP['dW']}"); e("ld1r {v6.4s}, [x8]"); e("ld1r {v7.4s}, [x22]")
     e("2:")
+    if D == 1:                                                                   # bit 13: dW fits in s16
+        e("fmov w16, s6"); e("cmp w16, w16, sxth"); e("cset w16, eq"); e("bfi w7, w16, #13, #1")
 
 def depth_setup_z():
     """z: the line's DDA in u64 lanes, z0 << 30 + i * zstep, zstep = dZ * recip[C] (+ 0x3fffffff for dZ < 0)"""
@@ -244,11 +251,12 @@ def white_test():
     e(f"ldr w9, [x22, #{SP['rg0']}]"); e(f"ldr w11, [x22, #{SP['xb']}]")
     e("eor w15, w9, #0x1ff01ff"); e("orr w15, w15, w10")                        # rg ^ white | drg
     e("eor w16, w11, #0x1ff0000"); e("orr w16, w16, w12")                       # high halves: b ^ white | db
-    e("orr w15, w15, w16, lsr #16"); e("cmp w15, #0"); e("cset w15, eq"); e("orr w7, w27, w15, lsl #2")
+    e("orr w15, w15, w16, lsr #16"); e("cmp w15, #0"); e("cset w15, eq"); e("bfi w7, w15, #2, #1")
     e("1:")
 
-def line_end(R):
-    """after a line's group loop: edge marking fix-up (opaque) or the first id (translucent); next line"""
+def line_end(R, lz=False):
+    """after a line's group loop: edge marking fix-up (opaque) or the first id (translucent); next line. lz (lazy
+    kernels): the pass masks start at the first passing pixel x4"""
     if R:
         e("ldrb w8, [x3]"); e("strb w8, [x26], #1")
     else:
@@ -259,13 +267,14 @@ def line_end(R):
         e(f"ldrh w5, [x22, #{SP['cdb']}]")
         e("sub w8, w5, #1"); e("lsr w8, w8, #3"); e("sub x17, x2, x8, lsl #5"); e("add x3, sp, #256")
         e(f"ldr w13, [x19, #{K['pid24']}]")
-        e(f"ldrh w8, [x22, #{SP['edges']}]"); e("cmp w8, w5"); e("csel w8, w8, w5, lo"); e("mov x10, #0")
+        e(f"ldrh w8, [x22, #{SP['edges']}]"); e("cmp w8, w5"); e("csel w8, w8, w5, lo"); e(f"mov x10, {'x4' if lz else '#0'}")
         e("11:"); e("cmp x10, x8"); e("b.hs 12f")
         e("ldrb w12, [x3, x10]"); e("cbz w12, 13f")
         e("ldr w12, [x17, x10, lsl #2]"); e("and w12, w12, #0xffffff"); e("orr w12, w12, #0x40000000"); e("orr w12, w12, w13"); e("str w12, [x17, x10, lsl #2]")
         e("13:"); e("add x10, x10, #1"); e("b 11b")
         e("12:")
         e(f"ldrh w8, [x22, #{SP['edges'] + 2}]"); e("cmp w8, w5"); e("csel w8, w8, w5, lo"); e("sub x10, x5, x8")
+        if lz: e("cmp x10, x4"); e("csel x10, x10, x4, hs")
         e("14:"); e("cmp x10, x5"); e("b.hs 15f")
         e("ldrb w12, [x3, x10]"); e("cbz w12, 16f")
         e("ldr w12, [x17, x10, lsl #2]"); e("and w12, w12, #0xffffff"); e("orr w12, w12, #0x40000000"); e("orr w12, w12, w13"); e("str w12, [x17, x10, lsl #2]")
@@ -313,13 +322,25 @@ def depth(D):
         e("add v26.2d, v6.2d, v8.2d"); e("add v27.2d, v7.2d, v8.2d")
         e("shrn v26.2s, v26.2d, #30"); e("shrn2 v26.4s, v27.2d, #30")
     elif D == 1:
-        e("sshll v26.4s, v24.4h, #0"); e("sshll2 v27.4s, v24.8h, #0")
-        e("smull v25.2d, v26.2s, v6.2s"); e("smull2 v26.2d, v26.4s, v6.4s")
-        e("shrn v25.2s, v25.2d, #15"); e("shrn2 v25.4s, v26.2d, #15")
-        e("add v25.4s, v25.4s, v7.4s")
-        e("smull v26.2d, v27.2s, v6.2s"); e("smull2 v27.2d, v27.4s, v6.4s")
-        e("shrn v26.2s, v26.2d, #15"); e("shrn2 v26.4s, v27.2d, #15")
-        e("add v26.4s, v26.4s, v7.4s")
+        # W0 + (dW * st >> 15): with dW in s16 (flag bit 13, per line) the products fit in 32 bits; else the 64-bit
+        # products out of line (23:)
+        e("tbz w7, #13, 23f")
+        e("smull v25.4s, v24.4h, v6.h[0]"); e("smull2 v26.4s, v24.8h, v6.h[0]")
+        e("sshr v25.4s, v25.4s, #15"); e("sshr v26.4s, v26.4s, #15")
+        e("add v25.4s, v25.4s, v7.4s"); e("add v26.4s, v26.4s, v7.4s")
+        e("22:")
+
+def depth_ool(D):
+    if D != 1: return
+    e("23:")
+    e("sshll v26.4s, v24.4h, #0"); e("sshll2 v27.4s, v24.8h, #0")
+    e("smull v25.2d, v26.2s, v6.2s"); e("smull2 v26.2d, v26.4s, v6.4s")
+    e("shrn v25.2s, v25.2d, #15"); e("shrn2 v25.4s, v26.2d, #15")
+    e("add v25.4s, v25.4s, v7.4s")
+    e("smull v26.2d, v27.2s, v6.2s"); e("smull2 v27.2d, v27.4s, v6.4s")
+    e("shrn v26.2s, v26.2d, #15"); e("shrn2 v26.4s, v27.2d, #15")
+    e("add v26.4s, v26.4s, v7.4s")
+    e("b 22b")
 
 def tail(r):
     """the line's last group: only its x5 (< 8) pixels"""
@@ -525,10 +546,14 @@ def colour(T, F, B, M=0):
             e("tbnz w7, #8, 2f"); alpha_test(); e("2:")
         return "v29", "v27", "v31", "v30"
     if "colw" in RL: return None
-    for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")): vertex_colour(ch, F, t)
-    if "caf" in RL: return "v29", "v27", "v31", RL["caf"][0]
+    if "flat" in RL: c = RL["flat"]
+    else:
+        c = ("v29", "v27", "v31")
+        for ch in range(3): vertex_colour(ch, F, c[ch])
+    if "caf" in RL: return (*c, RL["caf"][0])
+    if "a" in RL: return (*c, RL["a"][0])
     e("dup v30.8b, v23.b[0]")
-    return "v29", "v27", "v31", "v30"
+    return (*c, "v30")
 
 def pack(cols):
     """the colour bytes and the fog bit -> the colour words c.l, c.h (v27 v29, or the batch's)"""
@@ -544,24 +569,28 @@ def pack(cols):
     return "v27", "v29"
 
 def store(D, cols):
-    """opaque: pack, fog bit, store the group (all 8 lanes straight when they all pass); the pass mask to [x3]"""
-    e("str d28, [x3], #8"); e("orr x0, x0, x8")
+    """opaque: pack, fog bit, store the group (all 8 lanes straight when they all pass) and its pass mask. The full
+    group and a group without a pixel (8:) fall through into the latch (7:); returns the out-of-line partial group"""
+    e("orr x0, x0, x8")
     cl, ch = pack(cols)
     d0, d1 = dep_words(D)
     e("cmn x8, #1"); e("b.ne 1f")
     e(f"stp {q(cl)}, {q(ch)}, [x1]"); e(f"stp {q(d0)}, {q(d1)}, [x2]")
-    e("b 7f")
-    e("1:")
-    e("sshll v28.8h, v28.8b, #0"); e("sshll v30.4s, v28.4h, #0"); e("sshll2 v31.4s, v28.8h, #0")
-    e(f"ldp q24, q28, [x1]"); e(f"bit v24.16b, {cl}.16b, v30.16b"); e(f"bit v28.16b, {ch}.16b, v31.16b"); e("stp q24, q28, [x1]")
-    e(f"ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
-    e("b 7f")
-    e("8:"); e("str d28, [x3], #8")                                              # no pixel of the group: mask 0
+    e("8:"); e("str d28, [x3], #8")                                              # the pass mask (edge marking)
     e("7:")
+    def ool():
+        e("1:"); e("str d28, [x3], #8")
+        e("sshll v28.8h, v28.8b, #0"); e("sshll v30.4s, v28.4h, #0"); e("sshll2 v31.4s, v28.8h, #0")
+        e(f"ldp q24, q28, [x1]"); e(f"bit v24.16b, {cl}.16b, v30.16b"); e(f"bit v28.16b, {ch}.16b, v31.16b"); e("stp q24, q28, [x1]")
+        e(f"ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
+        e("b 7b")
+    return ool
 
-def trans_store(D):
+def trans_store(D, cols):
     """translucent: blend with the destination, id test, combine, store (spec/blend.c, fused_neon.c's TRANS path).
-    In: cr v29, cg v27, cb v31, ca v30, m8 v28 (and x8), the depth words (dep_words). x3 = id line pointer, x4 index."""
+    In: cols = cr cg cb sa (v29 v27 v31 v30, or per-batch registers with the trans role), m8 v28 (and x8), the
+    depth words (dep_words). x3 = id line pointer, x4 index."""
+    cr, cg, cb, sa = cols
     e("orr x0, x0, x8")
     if "trans" in RL:
         ws, wd = RL["trans"]
@@ -569,18 +598,24 @@ def trans_store(D):
         e("uzp2 v24.8h, v25.8h, v26.8h"); e("uzp1 v25.8h, v25.8h, v26.8h")       # dhi (b|a<<8), dlo (r|g<<8)
         e(f"movi {ws}.8b, #0x1f"); e("shrn v26.8b, v24.8h, #8"); e(f"and v26.8b, v26.8b, {ws}.8b")   # dal = dst alpha & 0x1f
         e("tbz w7, #3, 1f")
-        # blend in place: c' = (c + c*ws + d*wd) >> 5, ws = dal ? sa : 31, wd = dal ? 31 - sa : 0 (m8 is in x8)
+        # blend: c' = (c + c*ws + d*wd) >> 5, ws = dal ? sa : 31, wd = dal ? 31 - sa : 0 (m8 is in x8), into v29 v27 v31
         e("cmeq v28.8b, v26.8b, #0")
-        e(f"sub {wd}.8b, {ws}.8b, v30.8b"); e(f"bic {wd}.8b, {wd}.8b, v28.8b"); e(f"bif {ws}.8b, v30.8b, v28.8b")
-        for c, d in (("v31", "xtn v28.8b, v24.8h"), ("v29", "xtn v28.8b, v25.8h"), ("v27", "shrn v28.8b, v25.8h, #8")):
+        e(f"sub {wd}.8b, {ws}.8b, {sa}.8b"); e(f"bic {wd}.8b, {wd}.8b, v28.8b"); e(f"bif {ws}.8b, {sa}.8b, v28.8b")
+        for c, o, d in ((cb, "v31", "xtn v28.8b, v24.8h"), (cr, "v29", "xtn v28.8b, v25.8h"), (cg, "v27", "shrn v28.8b, v25.8h, #8")):
             e(d); e(f"ushll v24.8h, {c}.8b, #0"); e(f"umlal v24.8h, {c}.8b, {ws}.8b"); e(f"umlal v24.8h, v28.8b, {wd}.8b")
-            e(f"shrn {c}.8b, v24.8h, #5")
-        e("1:")                                                                  # cr v29, cg v27, cb v31
-        e("umax v24.8b, v30.8b, v26.8b")                                         # a' = max(sa, dal)
+            e(f"shrn {o}.8b, v24.8h, #5")
+        moves = [(o, c) for c, o in ((cr, "v29"), (cg, "v27"), (cb, "v31")) if c != o]
+        if moves:
+            e("b 2f"); e("1:")
+            for o, c in moves: e(f"mov {o}.8b, {c}.8b")
+            e("2:")
+        else: e("1:")                                                            # cr v29, cg v27, cb v31
+        e(f"umax v24.8b, {sa}.8b, v26.8b")                                       # a' = max(sa, dal)
         e("zip1 v29.16b, v29.16b, v27.16b"); e("zip1 v25.16b, v31.16b, v24.16b")
         e("zip1 v27.8h, v29.8h, v25.8h"); e("zip2 v29.8h, v29.8h, v25.8h")       # c.l v27, c.h v29
         e("fmov d28, x8"); e("ldr d31, [x3, x4]")                                # m8, dst ids
     else:
+        assert cols == ("v29", "v27", "v31", "v30")
         e("stp d27, d31, [sp, #96]")                                             # cg, cb
         e("str d30, [sp, #112]")                                                 # sa (m8 is in x8)
         e("ldp q25, q26, [x1]")
@@ -606,7 +641,7 @@ def trans_store(D):
         e("zip1 v29.16b, v29.16b, v31.16b"); e("zip1 v25.16b, v25.16b, v24.16b")
         e("zip1 v27.8h, v29.8h, v25.8h"); e("zip2 v29.8h, v29.8h, v25.8h")       # c.l v27, c.h v29
         e("fmov d28, x8"); e("ldr d31, [x3, x4]")                                # m8, dst ids
-    e("movi v24.8b, #0x1f"); e("cmeq v24.8b, v30.8b, v24.8b")                   # op = sa == 31
+    e("movi v24.8b, #0x1f"); e(f"cmeq v24.8b, {sa}.8b, v24.8b")                 # op = sa == 31
     if "pid" in RL: p = RL["pid"][0]
     else: e("dup v25.8b, v23.b[3]"); p = "v25"                                  # pid
     e(f"cmeq v26.8b, v31.8b, {p}.8b"); e("bic v26.8b, v26.8b, v24.8b"); e("bic v28.8b, v28.8b, v26.8b")  # drop: same id, not opaque
@@ -648,22 +683,24 @@ def latch(D, M=0, st=True, R=0):
     if st: steps_affine(D)
 
 def vis_store(D):
-    """visibility: the attribute words (as store()) and the polygon index into the owner line (x1)"""
-    e("str d28, [x3], #8"); e("orr x0, x0, x8")
+    """visibility: the attribute words (as store()) and the polygon index into the owner line (x1); returns the
+    out-of-line partial group"""
+    e("orr x0, x0, x8")
     d0, d1 = dep_words(D)
     if "idx" in RL: ix = RL["idx"][0]
     else: e(f"ldr q27, [x19, #{K['idx16']}]"); ix = "v27"
     e("cmn x8, #1"); e("b.ne 1f")
     e(f"stp {q(d0)}, {q(d1)}, [x2]"); e(f"str {q(ix)}, [x1]")
-    e("b 7f")
-    e("1:")
-    e("sshll v28.8h, v28.8b, #0")
-    e(f"ldr q24, [x1]"); e(f"bit v24.16b, {ix}.16b, v28.16b"); e("str q24, [x1]")
-    e("sshll v30.4s, v28.4h, #0"); e("sshll2 v31.4s, v28.8h, #0")
-    e(f"ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
-    e("b 7f")
     e("8:"); e("str d28, [x3], #8")
     e("7:")
+    def ool():
+        e("1:"); e("str d28, [x3], #8")
+        e("sshll v28.8h, v28.8b, #0")
+        e(f"ldr q24, [x1]"); e(f"bit v24.16b, {ix}.16b, v28.16b"); e("str q24, [x1]")
+        e("sshll v30.4s, v28.4h, #0"); e("sshll2 v31.4s, v28.8h, #0")
+        e(f"ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
+        e("b 7b")
+    return ool
 
 def owner_test(fail="8f"):
     """the pixels of the group this polygon owns (owner line x2 == kargs.idx16): m8 -> v28; none -> `fail`"""
@@ -675,35 +712,45 @@ def owner_test(fail="8f"):
 
 def lazy_loop(D, T, R, F, M):
     """the group loop until the line's first group with a passing pixel (20:): the depth (or owner) test and the
-    pointer and depth steps only; then (27:) the line's weights and interpolants, and on into the full loop at the
-    weights (28:)"""
+    attribute pointer and depth steps only (the colour pointer, the id index and the pass masks catch up at the
+    first pass: no pass mask before it is set, and a line without one skips the edge marking); then (27:) the
+    line's weights and interpolants (v28, x8: the pass mask kept), and on into the full loop at the weights (28:)"""
     e("20:")
     if M == 2: owner_test("21f")
     else: depth(D); test(D, "21f", 34)
     e("b 27f")
     e("21:")
-    if R == 0 and M != 2: e("str d28, [x3], #8")                                 # mask 0 (edge marking)
-    e("subs x5, x5, #8"); e("b.ls 9f")
-    e(f"add x1, x1, #{16 if M == 1 else 32}"); e(f"add x2, x2, #{16 if M == 2 else 32}")
-    if R: e("add x4, x4, #8")
+    e("subs x5, x5, #8"); e(f"b.ls {'9f' if R or M == 2 else '15f'}")
+    if M: e(f"add x1, x1, #{16 if M == 1 else 32}")
+    e(f"add x2, x2, #{16 if M == 2 else 32}")
     if D == 0: e("add v6.2d, v6.2d, v9.2d"); e("add v7.2d, v7.2d, v9.2d")
     e("b 20b")
     if M != 2: test_equal(D, 34)
     e("27:")
-    line_setup(D, T, F, M, True)
-    e("fmov d28, x8")                                                            # the pass mask again
+    steps_setup(D, True)                                                         # (w9 = C)
+    if M == 0:                                                                   # the colour line pointer
+        if HR: e(f"ldr w16, [x19, #{K['attr_off']}]"); e("sub x1, x2, x16")
+        else: e("sub x1, x2, #0x10, lsl #12")
+    if R: e("sub x4, x9, x5")                                                    # the id index
+    elif M != 2:                                                                 # edge marking: the pass masks
+        e("tbz w27, #6, 1f"); e("sub x4, x9, x5"); e("add x3, x3, x4"); e("1:")  # start at the first passing pixel
+    interpolants_setup(T, F, M)
+    if T and not F and M != 1: white_test()
     e("b 28f")
 
 def shade_store(cols):
-    """shade: pack, fog bit, store the colour words (all 8 straight when the polygon owns them all)"""
+    """shade: pack, fog bit, store the colour words (all 8 straight when the polygon owns them all); the latch at
+    8: (the owner test's none); returns the out-of-line partial group"""
     cl, ch = pack(cols)
     e("cmn x8, #1"); e("b.ne 1f")
     e(f"stp {q(cl)}, {q(ch)}, [x1]")
-    e("b 8f")
-    e("1:")
-    e("sshll v28.8h, v28.8b, #0"); e("sshll v30.4s, v28.4h, #0"); e("sshll2 v31.4s, v28.8h, #0")
-    e(f"ldp q24, q28, [x1]"); e(f"bit v24.16b, {cl}.16b, v30.16b"); e(f"bit v28.16b, {ch}.16b, v31.16b"); e("stp q24, q28, [x1]")
     e("8:")
+    def ool():
+        e("1:")
+        e("sshll v28.8h, v28.8b, #0"); e("sshll v30.4s, v28.4h, #0"); e("sshll2 v31.4s, v28.8h, #0")
+        e(f"ldp q24, q28, [x1]"); e(f"bit v24.16b, {cl}.16b, v30.16b"); e(f"bit v28.16b, {ch}.16b, v31.16b"); e("stp q24, q28, [x1]")
+        e("b 8b")
+    return ool
 
 def kernel_vis(D, T):
     """visibility pass of a deferred opaque polygon; T only for textures whose alpha test can fail"""
@@ -720,11 +767,12 @@ def kernel_vis(D, T):
     group_st(D, st, False)
     if T:
         texture(T); modulate_alpha("1f"); e("1:"); alpha_test()
-    vis_store(D)
+    ool = vis_store(D)
     latch(D, 1, st)
-    test_equal(D)
+    ool()
+    test_equal(D); depth_ool(D)
     e("9:")
-    line_end(0)
+    line_end(0, lazy(D, st))
     epilogue()
     e(f".size {name}, .-{name}")
     e()
@@ -741,8 +789,9 @@ def kernel_shade(T, F, B):
     owner_test()
     e("28:")
     group_st(2, st, False)
-    shade_store(colour(T, F, B, 2))
+    ool = shade_store(colour(T, F, B, 2))
     latch(2, 2, st)
+    ool()
     e("9:")
     e("add x22, x22, #4"); e("add w24, w24, #1"); e("subs w23, w23, #1"); e("b.ne 10b")
     epilogue()
@@ -762,12 +811,12 @@ def kernel(D, T, R, F, B):
     e("28:")
     group_st(D, st, False)
     cols = colour(T, F, B)
-    if R: trans_store(D)
-    else: store(D, cols)
+    ool = trans_store(D, cols) if R else store(D, cols)
     latch(D, 0, st, R)
-    test_equal(D)
+    if ool: ool()
+    test_equal(D); depth_ool(D)
     e("9:")
-    line_end(R)
+    line_end(R, lazy(D, st))
     epilogue()
     e(f".size {name}, .-{name}")
     e()
