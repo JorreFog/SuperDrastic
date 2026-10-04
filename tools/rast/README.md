@@ -57,6 +57,41 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   in four NEON registers and look texels up with `tbl` instead of a dependent load per texel; exact. The
   instruction count hardly changes; the gain is the removed load latency on the handheld's in-order cores.
 
+## The 2D compositor's 3D visibility step (`src/rast/comp.c`, exact)
+
+DraStic composites the 3D screen on the emulation thread, per DS line in four quarters of 256 pixels (the two
+output rows' even and odd pixels). For each quarter `render_scanline_set_3d_visibility` turns the 3D pixels' alpha
+bytes into BG0's visibility bitmap (bit = alpha != 0) and a flag (2: some alpha not 0 or 31, which selects the
+blending path; 0x10: visible and all opaque; 0: nothing visible): ~425 instructions, 768 calls a frame. With the
+renderer hooked (`RAST=ours`/`diff`, `DSFLIP_RAST=1`):
+
+- **NEON replacement** (`DSFLIP_RAST_COMP` / `RAST_COMP=1`): the same 32 bytes and return value in ~140
+  instructions a call (the kernel 124, `src/rast/compvis.h`: `ld4` for the alpha bytes, `cmtst` + bit weights + an `addp` tree for the
+  bitmap, `umin(a, a ^ 31)` for the flag), for any pointer DraStic passes (the 2x frame, the 1x line, a
+  BG0HOFS-shifted copy on its stack).
+- **Per-bin table** (`RAST_COMP=2`, the default): the result depends only on the 1 KiB half-row the pointer
+  addresses, so the render threads compute all 64 half-rows of a bin right after its output block is written, into
+  a table per output frame; the hook copies the entry (~28 instructions) when the pointer is a half-row of a frame
+  whose table is current. Wrappers on `update_frame_3d_4x` (re-marked gap rows, the frame copy when nothing is
+  rendered with `threaded_3d`, the unpublished frame), `update_frame_3d_1x` and `reset_video_3d` keep the tables in
+  step with every write DraStic makes to the two output frames (the rule is in comp.c's header).
+- Exactness: `spec/composite.c` is the C port, unit-tested against the originals (`tools/rast/ut/t_composite.c`,
+  which also tests the NEON version); `RAST_COMPCHECK=1` checks every call in the running emulator against the C
+  port, and every table when it becomes valid (`[comp] check:` every 2 s, `[compcheck]` lines for differences).
+  The test ROMs' 3D layer is opaque nearly everywhere, so a stale table entry mostly gives the right answer anyway:
+  the check mode catches a missing gap-row update (S4: 172 differing calls in 30 s with it removed) but hardly a
+  missing table copy (a frame-skipping S4 with `threaded_3d=1` flags only its first copy). `tools/rast/ut/t_comp_hook.c`
+  covers that bookkeeping on random frames: the hook's lookup and the wrappers' validity rule (rendered with
+  re-marked gap rows, copied, unchanged, 1x, reset; `threaded_3d` on and off) against the original, with stubs that
+  write the frames as the disassembly of `update_frame_3d_4x` shows.
+- Cost per frame, simulator instruction counts (stress ROM L4 and the field scene S7, 90 s each): DraStic's
+  function and its gather 0.326 M (425 a call); NEON 0.108 M (139 a call); table 0.024 M in the compositor (28 a
+  call) plus 0.100 M on the render threads (`comp_bin`, 130 a half-row) and 0.006 M for the gap rows. On the
+  emulation thread's critical path: with `threaded_3d=1` 0.024 M against 0.108 M for NEON alone; with
+  `threaded_3d=0` the emulation thread renders a third of the bins and waits for the rest, so about 0.063 M against
+  0.108 M. (The block profiler keys blocks by start ^ length; two of hook_vis's blocks collide there, so its
+  report undercounts the NEON path as 99 a call: the figures here are the static path lengths.)
+
 ## How it works
 
 `src/rast/spec/`: DraStic's ~85 raster routines ported to exact C, each unit-tested bit for bit against the
