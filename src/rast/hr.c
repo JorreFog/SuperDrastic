@@ -358,69 +358,101 @@ static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint
  * A 2x2 block of output pixels from a 3x3 block of 3x pixels: horizontally the left output is 2a + b and the right
  * b + 2c of each triple (a b c), vertically the top output 2 r0 + r1 and the bottom r1 + 2 r2 of the three rows,
  * so each output is a weighted sum of 9 (weights summing to 9). Colours are weighted by alpha as well (so the
- * clear colour of transparent pixels does not darken polygon edges): colour = sum(w a c) / sum(w a), alpha =
- * sum(w a) / 9, both rounded; a pixel whose sum(w a) is 0 is fully transparent and gets the clear colour (as the 2x
- * output has there in the common case; the compositor does not show it).
- * NEON, two triples (four output pixels) at a time: ld3 gives the a, b and c pixels of the triples as vectors;
- * the four channels of a pixel are u16 lanes (sums fit: 9 x 31 x 63 < 65536); the alpha of each pixel is spread
- * over its four lanes with tbl to be the per-channel divisor. The division is a float reciprocal (frecpe plus one
- * Newton step, exact enough for these ranges) scaled to 16 bits and applied with umull. The even output pixels of
- * a row are the left outputs and the odd ones the right outputs, which is the output block's layout. */
+ * clear colour of transparent pixels does not darken polygon edges): with the 5-bit alphas a (the resolve may leave
+ * flag bits 5-7 in byte 3), A = sum(w a) and P = sum(w a c) per channel, colour = (P K + 2^15) >> 16 with
+ * K = 65536 / A (floor, saturated to 65535 for A = 1) and alpha = (A 7282 + 2^15) >> 16 (A / 9, 7282 / 65536 = 1 / 9);
+ * an output whose alpha is 0 (A <= 4) is (nearly) transparent and gets the clear colour (as the 2x output has there
+ * in the common case; the compositor does not show it).
+ * NEON, four triples (four left and four right outputs in each of the two output rows) at a time: ld3 gives the a,
+ * b and c pixels of the triples as vectors. Each of the 9 input vectors has one weight w: a0 4, b0 2, c0 4, a1 2,
+ * b1 1, c1 2, a2 4, b2 2, c2 4 (top left: a0 b0 a1 b1, top right: c0 b0 c1 b1, bottom left: a1 b1 a2 b2, bottom
+ * right: c1 b1 c2 b2). Three cases by the 36 alphas:
+ *  - all 31 (the opaque interior, by far the most common): A = 279 and K = 234 everywhere, so colour =
+ *    (31 S 234 + 2^15) >> 16 = (7254 S + 2^15) >> 16 with S = sum(w c), which is sqrdmulh(S, 3627); alpha = 31.
+ *    S = 2X + b1 with X = 2a0 + b0 + a1 for the top left output (the others alike), X as u8 (<= 252 for 6-bit
+ *    channels), S as u16 (<= 567).
+ *  - all 0: every output is the clear colour.
+ *  - otherwise the general case: w a of each pixel spread over its four bytes with tbl (<= 124), the pixel's byte 3
+ *    replaced by 1, and umull/umlal chains sum an output's four products in u16 lanes: P in the colour lanes and A
+ *    in the alpha lane (sums fit: 9 x 31 x 63 < 65536). K per pixel from the alpha lanes (uzp2 and a shift give
+ *    four pixels' A in u32 lanes): a float reciprocal (frecpe plus two Newton steps) truncated to 16 fraction bits,
+ *    which is floor(65536 / A) for every A <= 279, saturated to u16. tbl spreads K over the pixel's colour lanes and
+ *    7282 into its alpha lane, so one umull and rounding narrow give the colours and the alpha (A = 0: P = 0, any K).
+ * The left outputs of a row go to the first 0x400 bytes of the output line and the right ones to the second (the
+ * even and the odd pixels: the output block's layout). */
 #include <arm_neon.h>
 static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out, uint32_t clear) {
     static const uint8_t alpha_idx[16] = { 3, 3, 3, 3, 7, 7, 7, 7, 11, 11, 11, 11, 15, 15, 15, 15 };
-    const uint8x16_t aidx = vld1q_u8(alpha_idx);
-    const uint8x8_t amask = vreinterpret_u8_u32(vdup_n_u32(0xff000000));
-    const uint8x16_t a5 = vdupq_n_u8(0x1f);     /* the 5-bit alpha only: the resolve may leave flag bits 5-7 in byte 3 */
-    const uint32x2_t clr = vdup_n_u32(clear & 0xffffff);    /* fully transparent outputs carry the clear colour, as at 2x */
-    const uint32x4_t zero = vdupq_n_u32(0), k9 = vdupq_n_u32(7282);           /* 7282 / 65536 = 1 / 9 */
+    /* the K spread: 7282 in bytes 0-7 and K of pixels 0-3 in bytes 8-15 (u16 lanes) -> two pixels' four lanes each */
+    static const uint8_t k_idx[32] = { 8, 9, 8, 9, 8, 9, 0, 1, 10, 11, 10, 11, 10, 11, 0, 1,
+                                       12, 13, 12, 13, 12, 13, 0, 1, 14, 15, 14, 15, 14, 15, 0, 1 };
+    const uint8x16_t aidx = vld1q_u8(alpha_idx), kidx0 = vld1q_u8(k_idx), kidx1 = vld1q_u8(k_idx + 16);
+    const uint8x16_t a5 = vdupq_n_u8(0x1f);
+    const uint32x4_t a5m = vdupq_n_u32(0x1f000000), amask = vdupq_n_u32(0xff000000), ones = vdupq_n_u32(1);
+    const uint32x4_t clr = vdupq_n_u32(clear & 0xffffff);   /* fully transparent outputs carry the clear colour, as at 2x */
+    const uint16x4_t k9 = vdup_n_u16(7282);
+    uint8x16_t two = vdupq_n_u8(2);
+    __asm__("" : "+w"(two));                /* (an opaque 2: mla, not add + shl, for b + 2a) */
     for (unsigned by = 0; by < HR_BL / 3; by++) {
         const uint32_t *r0 = in + 3 * by * HR_W, *r1 = r0 + HR_W, *r2 = r1 + HR_W;
-        uint8_t *o0 = out + (2 * by) * 0x800, *o1 = o0 + 0x800;
-        for (unsigned bx = 0; bx < HR_W / 3; bx += 2, r0 += 6, r1 += 6, r2 += 6, o0 += 8, o1 += 8) {
-            /* per row: the left (2a + b) and right (b + 2c) sums of the two triples, premultiplied colours (P) and
-             * alpha weights spread over the channels (A); then top = 2 H(r0) + H(r1), bottom = H(r1) + 2 H(r2) */
-            uint16x8_t pt, at, prt, art, pb, ab, prb, arb, p2, a2, pr2, ar2;
-#define ROW(r, PL, AL, PR, AR) do { \
-                uint32x2x3_t t = vld3_u32(r); \
-                uint8x16_t ab16 = vcombine_u8(vreinterpret_u8_u32(t.val[0]), vreinterpret_u8_u32(t.val[1])); \
-                uint8x16_t cb16 = vcombine_u8(vreinterpret_u8_u32(t.val[2]), vreinterpret_u8_u32(t.val[1])); \
-                uint8x16_t aa = vandq_u8(vqtbl1q_u8(ab16, aidx), a5), ca = vandq_u8(vqtbl1q_u8(cb16, aidx), a5); \
-                uint16x8_t pa = vmull_u8(vget_low_u8(ab16), vget_low_u8(aa)), pbb = vmull_u8(vget_high_u8(ab16), vget_high_u8(aa)); \
-                uint16x8_t pc = vmull_u8(vget_low_u8(cb16), vget_low_u8(ca)); \
-                uint16x8_t wa = vmovl_u8(vget_low_u8(aa)), wb = vmovl_u8(vget_high_u8(aa)), wc = vmovl_u8(vget_low_u8(ca)); \
-                PL = vaddq_u16(vaddq_u16(pa, pa), pbb); PR = vaddq_u16(vaddq_u16(pc, pc), pbb); \
-                AL = vaddq_u16(vaddq_u16(wa, wa), wb); AR = vaddq_u16(vaddq_u16(wc, wc), wb); \
-            } while (0)
-            ROW(r0, pt, at, prt, art);
-            pt = vaddq_u16(pt, pt); at = vaddq_u16(at, at); prt = vaddq_u16(prt, prt); art = vaddq_u16(art, art);
-            ROW(r1, pb, ab, prb, arb);
-            pt = vaddq_u16(pt, pb); at = vaddq_u16(at, ab); prt = vaddq_u16(prt, prb); art = vaddq_u16(art, arb);
-            ROW(r2, p2, a2, pr2, ar2);
-            pb = vaddq_u16(pb, vaddq_u16(p2, p2)); ab = vaddq_u16(ab, vaddq_u16(a2, a2));
-            prb = vaddq_u16(prb, vaddq_u16(pr2, pr2)); arb = vaddq_u16(arb, vaddq_u16(ar2, ar2));
-#undef ROW
-            /* colour = P / A per lane (K = 65536 / A as u16, 0 for A = 0; c = (P K + 2^15) >> 16), alpha = A / 9 */
-#define DIV(P, A, OUT) do { \
-                uint32x4_t al32 = vmovl_u16(vget_low_u16(A)), ah32 = vmovl_u16(vget_high_u16(A)); \
-                float32x4_t fl = vcvtq_f32_u32(al32), fh = vcvtq_f32_u32(ah32); \
-                float32x4_t rl = vrecpeq_f32(fl), rh = vrecpeq_f32(fh); \
-                rl = vmulq_f32(rl, vrecpsq_f32(rl, fl)); rh = vmulq_f32(rh, vrecpsq_f32(rh, fh)); \
-                rl = vmulq_f32(rl, vrecpsq_f32(rl, fl)); rh = vmulq_f32(rh, vrecpsq_f32(rh, fh)); \
-                uint32x4_t kl = vbicq_u32(vcvtq_n_u32_f32(rl, 16), vceqq_u32(al32, zero)); \
-                uint32x4_t kh = vbicq_u32(vcvtq_n_u32_f32(rh, 16), vceqq_u32(ah32, zero)); \
-                uint16x8_t k = vcombine_u16(vqmovn_u32(kl), vqmovn_u32(kh)); \
-                uint32x4_t cl = vmull_u16(vget_low_u16(P), vget_low_u16(k)), ch = vmull_u16(vget_high_u16(P), vget_high_u16(k)); \
-                uint16x8_t c = vcombine_u16(vrshrn_n_u32(cl, 16), vrshrn_n_u32(ch, 16)); \
-                uint16x8_t a9 = vcombine_u16(vrshrn_n_u32(vmulq_u32(al32, k9), 16), vrshrn_n_u32(vmulq_u32(ah32, k9), 16)); \
-                uint32x2_t px = vreinterpret_u32_u8(vbsl_u8(amask, vmovn_u16(a9), vmovn_u16(c))); \
-                OUT = vbsl_u32(vceq_u32(px & vdup_n_u32(0xff000000), vdup_n_u32(0)), clr, px); \
-            } while (0)
-            uint32x2_t out00, out01, out10, out11;
-            DIV(pt, at, out00); DIV(prt, art, out01); DIV(pb, ab, out10); DIV(prb, arb, out11);
+        uint8_t *o0 = out + (2 * by) * 0x800, *oe = o0 + 0x400;
+        for (; o0 != oe; o0 += 16) {
+            __asm__("" : "+r"(r0), "+r"(r1), "+r"(r2), "+r"(o0));     /* (four pointers, post-incremented by the accesses) */
+            uint32x4x3_t t0 = vld3q_u32(r0), t1 = vld3q_u32(r1), t2 = vld3q_u32(r2);
+            r0 += 12; r1 += 12; r2 += 12;
+            uint8x16_t a0 = vreinterpretq_u8_u32(t0.val[0]), b0 = vreinterpretq_u8_u32(t0.val[1]), c0 = vreinterpretq_u8_u32(t0.val[2]);
+            uint8x16_t a1 = vreinterpretq_u8_u32(t1.val[0]), b1 = vreinterpretq_u8_u32(t1.val[1]), c1 = vreinterpretq_u8_u32(t1.val[2]);
+            uint8x16_t a2 = vreinterpretq_u8_u32(t2.val[0]), b2 = vreinterpretq_u8_u32(t2.val[1]), c2 = vreinterpretq_u8_u32(t2.val[2]);
+            uint32x4_t all = vandq_u32(vandq_u32(vandq_u32(t0.val[0], t0.val[1]), vandq_u32(t0.val[2], t1.val[0])),
+                                       vandq_u32(vandq_u32(t1.val[1], t1.val[2]), vandq_u32(t2.val[0], t2.val[1])));
+            uint32x4_t tl, tr, bl, br;          /* the outputs: top left, top right, bottom left, bottom right */
+            if (!vmaxvq_u32(vbicq_u32(a5m, vandq_u32(all, t2.val[2])))) {
+                /* all opaque: S = 2X + b1 with X = 2a0 + b0 + a1 (top left), 2c0 + b0 + c1, 2a2 + b2 + a1, 2c2 + b2 + c1
+                 * (u8: <= 252), so the u8 stage is an add and an mla per output and the u16 stage a shift and an add;
+                 * sli puts 31 (a5's low byte) into byte 3 */
+                uint8x16_t xtl = vmlaq_u8(vaddq_u8(b0, a1), a0, two), xtr = vmlaq_u8(vaddq_u8(b0, c1), c0, two);
+                uint8x16_t xbl = vmlaq_u8(vaddq_u8(b2, a1), a2, two), xbr = vmlaq_u8(vaddq_u8(b2, c1), c2, two);
+#define DIV9(X) vsliq_n_u32(vreinterpretq_u32_u8(vuzp1q_u8( \
+                    vreinterpretq_u8_s16(vqrdmulhq_n_s16(vreinterpretq_s16_u16(vaddw_u8(vshll_n_u8(vget_low_u8(X), 1), vget_low_u8(b1))), 3627)), \
+                    vreinterpretq_u8_s16(vqrdmulhq_n_s16(vreinterpretq_s16_u16(vaddw_high_u8(vshll_high_n_u8(X, 1), b1)), 3627)))), vreinterpretq_u32_u8(a5), 24)
+                tl = DIV9(xtl); tr = DIV9(xtr); bl = DIV9(xbl); br = DIV9(xbr);
+#undef DIV9
+            } else if (!vmaxvq_u32(vandq_u32(a5m, vorrq_u32(vorrq_u32(vorrq_u32(vorrq_u32(t0.val[0], t0.val[1]), vorrq_u32(t0.val[2], t1.val[0])),
+                                                                     vorrq_u32(vorrq_u32(t1.val[1], t1.val[2]), vorrq_u32(t2.val[0], t2.val[1]))), t2.val[2])))) {
+                tl = tr = bl = br = clr;        /* all transparent */
+            } else {
+#define WA(v, s) vshlq_n_u8(vandq_u8(vqtbl1q_u8(v, aidx), a5), s)
+                uint8x16_t wa0 = WA(a0, 2), wb0 = WA(b0, 1), wc0 = WA(c0, 2), wa1 = WA(a1, 1), wb1 = vandq_u8(vqtbl1q_u8(b1, aidx), a5);
+                uint8x16_t wc1 = WA(c1, 1), wa2 = WA(a2, 2), wb2 = WA(b2, 1), wc2 = WA(c2, 2);
+#undef WA
+#define ONE(v) v = vreinterpretq_u8_u32(vsliq_n_u32(vreinterpretq_u32_u8(v), ones, 24))
+                ONE(a0); ONE(b0); ONE(c0); ONE(a1); ONE(b1); ONE(c1); ONE(a2); ONE(b2); ONE(c2);
+#undef ONE
+#define MAC4(X0, W0, X1, W1, X2, W2, X3, W3) \
+                vmlal_u8(vmlal_u8(vmlal_u8(vmull_u8(vget_low_u8(X0), vget_low_u8(W0)), vget_low_u8(X1), vget_low_u8(W1)), \
+                                  vget_low_u8(X2), vget_low_u8(W2)), vget_low_u8(X3), vget_low_u8(W3)), \
+                vmlal_high_u8(vmlal_high_u8(vmlal_high_u8(vmull_high_u8(X0, W0), X1, W1), X2, W2), X3, W3)
+                uint16x8_t ptl[2] = { MAC4(a0, wa0, b0, wb0, a1, wa1, b1, wb1) }, ptr[2] = { MAC4(c0, wc0, b0, wb0, c1, wc1, b1, wb1) };
+                uint16x8_t pbl[2] = { MAC4(a1, wa1, b1, wb1, a2, wa2, b2, wb2) }, pbr[2] = { MAC4(c1, wc1, b1, wb1, c2, wc2, b2, wb2) };
+#undef MAC4
+#define DIV(P, OUT) do { \
+                    float32x4_t f = vcvtq_f32_u32(vshrq_n_u32(vuzp2q_u32(vreinterpretq_u32_u16(P[0]), vreinterpretq_u32_u16(P[1])), 16)); \
+                    float32x4_t r = vrecpeq_f32(f); \
+                    r = vmulq_f32(r, vrecpsq_f32(r, f)); r = vmulq_f32(r, vrecpsq_f32(r, f)); \
+                    uint8x16_t k = vreinterpretq_u8_u16(vqmovn_high_u32(k9, vcvtq_n_u32_f32(r, 16))); \
+                    uint16x8_t k01 = vreinterpretq_u16_u8(vqtbl1q_u8(k, kidx0)), k23 = vreinterpretq_u16_u8(vqtbl1q_u8(k, kidx1)); \
+                    uint16x8_t c01 = vcombine_u16(vrshrn_n_u32(vmull_u16(vget_low_u16(P[0]), vget_low_u16(k01)), 16), \
+                                                  vrshrn_n_u32(vmull_high_u16(P[0], k01), 16)); \
+                    uint16x8_t c23 = vcombine_u16(vrshrn_n_u32(vmull_u16(vget_low_u16(P[1]), vget_low_u16(k23)), 16), \
+                                                  vrshrn_n_u32(vmull_high_u16(P[1], k23), 16)); \
+                    uint32x4_t px = vreinterpretq_u32_u8(vuzp1q_u8(vreinterpretq_u8_u16(c01), vreinterpretq_u8_u16(c23))); \
+                    OUT = vbslq_u32(vtstq_u32(px, amask), px, clr); \
+                } while (0)
+                DIV(ptl, tl); DIV(ptr, tr); DIV(pbl, bl); DIV(pbr, br);
 #undef DIV
-            vst1_u32((uint32_t *)o0, out00); vst1_u32((uint32_t *)(o0 + 0x400), out01);
-            vst1_u32((uint32_t *)o1, out10); vst1_u32((uint32_t *)(o1 + 0x400), out11);
+            }
+            vst1q_u32((uint32_t *)o0, tl); vst1q_u32((uint32_t *)(o0 + 0x400), tr);
+            vst1q_u32((uint32_t *)(o0 + 0x800), bl); vst1q_u32((uint32_t *)(o0 + 0xc00), br);
         }
     }
 }
