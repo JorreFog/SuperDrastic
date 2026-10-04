@@ -14,9 +14,16 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   what earlier polygons left behind. About one pixel in a thousand 32-line bins of the stress ROM; invisible
   unless a later translucent polygon with the same id covers the pixel.
 - **Faster than DraStic in the simulator.** Instruction counts under qemu, stress ROM L4 at 2x: the stage costs
-  13.5 M instructions a frame against DraStic's 16.5 M (a full frame 20.3 M against 22.9 M). Device timings are
-  the open question: the kernel's texel gather is scalar like DraStic's, the rest is NEON without DraStic's
-  trips through scratch memory between stages.
+  11.3 M instructions a frame against DraStic's 16.5 M (0.3.0-rast3: 12.2 M; the kernels' exact shortcuts of
+  rast4, see below). The field scene S7 1.53 M (was 1.65), deferred shading on L4 9.8 M (was 13.1); at 3x S7 5.0 M
+  (was 12.2) and the fog and edge-marking scene S4 13.1 M (was 28.0), after the NEON downsample, edge marking and
+  fog of rast4. Device timings are the open question: the kernel's texel gather is scalar like DraStic's, the
+  rest is NEON without DraStic's trips through scratch memory between stages.
+- **Less on the emulation thread.** DraStic's 2x compositor asks, per half-row, which 3D pixels are visible
+  (`render_scanline_set_3d_visibility`, 0.33 M instructions a frame on the emulation thread); the render threads
+  now fill that table as they finish each bin and the hook answers from it (0.02 M on the emulation thread;
+  `RAST_COMP` 0 off, 1 the NEON replacement only, 2 the table, the default; `RAST_COMPCHECK=1` checks every
+  answer against a C port of DraStic's routine).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -121,8 +128,15 @@ they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flag
 
 ## Next
 
-- Device A/B: the same game with the option off and on, from the performance logs.
-- TBL palette lookups for 4- and 16-colour textures (saves the second gather); 64-bit texel-pair loads in the
-  bilinear gathers.
-- 3x: the top vertex at 3x for tied vertices; cheaper edge marking and downsample; later the hi-res 3D layer
-  presented through the dsflip shader instead of downsampled.
+- Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
+- The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
+  the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
+- The fused 3D + backdrop composite (`render_scanline_2d_composite`'s 3D part) on the render threads, like the
+  visibility table.
+- 3x: the polygon walker's hot spots in NEON (interpolate_edges, setup_spans: ~1.4 M a frame on S4); the top vertex
+  at 3x for tied vertices; later the hi-res 3D layer presented through the dsflip shader instead of downsampled.
+- The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
+  assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
+  content signature in the key would make it certain.
+- In the simulator, dsscenes-cycle.nds dies at its scene 2 -> 3 transition (a SIGILL in DraStic's JIT cache, also with
+  our hooks off, since 2026-10-03); regress.sh checks the later scenes one ROM at a time until that is understood.
