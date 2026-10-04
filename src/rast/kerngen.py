@@ -18,10 +18,10 @@ bit 9 the kernels set it per line), bit 6 edge marking, bit 7 a palette of at mo
 nearest-filtering paletted kernels then look the texels up with tbl in v18-v21 instead of loading them), bit 8 no
 alpha test (the texture's lowest alpha passes it), bit 9 look for white lines (the batch's first line is white and
 A is 31; other batches never take the white shortcut, which gives the same bits), bit 10 A is 31 (the alpha
-modulate is the identity), bits 11 and 12 the s and t axes clamp (textures not wrapped on both), bit 13 (set by the
-kernels per line, w depth) dW fits in s16; translucent only: bit 3 alpha
-blending (DISP3DCNT bit 3), bit 4 fog (attr bit 15), bit 5 depth update (attr bit 11). Translucent kernels store
-each line's first id in id0[].
+modulate is the identity), bits 11 and 12 the s and t axes clamp (textures not wrapped on both); translucent only:
+bit 3 alpha blending (DISP3DCNT bit 3), bit 4 fog (attr bit 15), bit 5 depth update (attr bit 11). The kernels set
+bit 13 (w depth: dW fits in s16) and bit 14 (no colour delta is -32768) per line. Translucent kernels store each
+line's first id in id0[].
 The per-pixel math is that of fused_neon.c's batch_neon (opaque path), lane for lane: see there and spec/ for
 the derivation of every operation. The point of generating assembly is register allocation: the group loop keeps
 ~20 constants and ~8 temporaries live, and clang spills and shuffles about 40 instructions per 8 pixels.
@@ -30,7 +30,7 @@ Register use in the group loop:
   v0-v3   num_l num_h den_l den_h (perspective steps); affine: v0 Rwc, v1 8 Rwc splats
   v4 v5   E0 E1 splats (8 W0, 8 dW), or the affine lanes' products i * Rwc (st = their high halves)
   v6-v9   z: za zb zs4 z8 (u64 pairs)   w: dW W0 splats   const: K splat (per batch)
-  v10-v14 rb gb bb ub vb (s32 splats)   v15  deltas (h lanes) dr dg - db du dv tw (tw per batch)
+  v10-v14 r0 g0 b0 (u16 splats) ub vb (s32 splats)   v15  deltas (h lanes) dr dg - db du dv tw (tw per batch)
   v16 v17 texture s and t masks (W-1, H-1)   v18-v21 bilinear or the tbl palette   v22 pid<<24 splat
   v23 bytes A aref fog pid fr fg fb   v24-v31 temporaries
   Where a variant leaves some of v10-v14, v16-v21 unused, they hold per-batch constants instead (roles()).
@@ -39,9 +39,11 @@ Register use in the group loop:
   x5 the line's pixels left  x6 texels  x7 flags  x8 scratch  x9-x16 gather  x17 Rwc  x19 kargs
   x20 tail-mask table  x21 palette  x22 span entry  x23 lines left  x24 bin line  x25 ctx  x26 id0  x27 batch flags
   x28 the texel buffer (sp + 32)  x0 anypass (nonzero: some pixel passed)
-The group loop at 0:: depth test, then (unless the depth is w, which needs them first) the perspective weights, so a
-group that fails the test skips them; the affine weights and the depth-equal test are out of line (6:, 24:) so the
-common path has no taken branch besides the loop's.
+The group loop (0:): the depth test, then (unless the depth is w, which needs them first) the perspective weights,
+so a group that fails the test skips them. With z or constant depth a line starts in a reduced loop (20:) that
+only tests, until its first passing group sets up the weights and interpolants (27:). Rare paths are out of line
+after the latch (the affine weights 6:, the depth-equal test 24:, the 64-bit w products 23:, the 32-bit vertex
+colour 37:, the partial-group store 1:) so the common path has no taken branch besides the loop's.
 Stack: [sp] 8 texel addresses, [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
 (bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
 (512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
@@ -71,6 +73,7 @@ out = []
 def e(s=""): out.append("\t" + s if s and not s.endswith(":") and not s.startswith(".") else s)
 
 RL = {}         # the current kernel's per-batch constants in otherwise unused registers: roles()
+OOLS = []       # out-of-line blocks of the group loop, emitted after its latch
 
 def uses_st(D, T, F, M):
     """the perspective weights are needed: w depth, texture or vertex colour (not flat; the visibility pass has none)"""
@@ -109,6 +112,11 @@ def roles(D, T, R, F, B, M):
     return r
 
 def q(v): return "q" + v[1:]
+
+def flush_ools():
+    for f in OOLS:
+        if f: f()
+    OOLS.clear()
 
 def roles_setup(D):
     r = RL
@@ -230,11 +238,14 @@ def depth_setup_z():
 def interpolants_setup(T, F, M):
     """the line's vertex colour (not flat, not visibility) and texture coordinate bases (Q15 + rounding) and deltas"""
     if not F and M != 1:
-        # r g b << 15 from the u16 halves of the span's rg0 and xb words (x0 b)
-        e(f"ldr s10, [x22, #{SP['rg0']}]"); e("ushll v10.4s, v10.4h, #15"); e("dup v11.4s, v10.s[1]"); e("dup v10.4s, v10.s[0]")
-        e(f"ldr s12, [x22, #{SP['xb']}]"); e("ushll v12.4s, v12.4h, #15"); e("dup v12.4s, v12.s[1]")
+        # r g b (u16 splats) from the halves of the span's rg0 and xb words (x0 b)
+        e(f"ldr s10, [x22, #{SP['rg0']}]"); e("dup v11.8h, v10.h[1]"); e("dup v10.8h, v10.h[0]")
+        e(f"ldr s12, [x22, #{SP['xb']}]"); e("dup v12.8h, v12.h[1]")
         e(f"ldr w10, [x22, #{SP['drg']}]"); e(f"ldr w12, [x22, #{SP['cdb']}]")
         e("mov v15.s[0], w10"); e("mov v15.s[1], w12")                           # dr dg, C db
+        # bit 14: no colour delta is -32768 (vertex_colour's 16-bit products cannot saturate)
+        e("mov w16, #0x8000"); e("cmp w16, w10, uxth"); e("lsr w15, w10, #16"); e("ccmp w15, w16, #4, ne")
+        e("lsr w15, w12, #16"); e("ccmp w15, w16, #4, ne"); e("cset w15, ne"); e("bfi w7, w15, #14, #1")
     if T:
         # u0 = s0 << 15, + 0x400 where du > 0 (0 - (du << 16) < 0); v0 = t0 << 15, + 0x400 where dv > 0 (dst >= 0x10000)
         e(f"ldr w13, [x22, #{SP['st0']}]"); e(f"ldr w14, [x22, #{SP['dst']}]")
@@ -501,15 +512,21 @@ def texture_bilinear(T):
     e("ldr q24, [sp, #96]"); e("ldp q10, q11, [sp, #112]"); e("ldp q12, q13, [sp, #144]"); e("ldr q14, [sp, #176]")
 
 
-def vertex_colour(ch, F, dst):
-    """vertex colour channel ch (0 r, 1 g, 2 b) -> dst (8 x u8); v26 scratch"""
+def vertex_colour(ch, F, dst, slow=False):
+    """vertex colour channel ch (0 r, 1 g, 2 b) -> dst (8 x u8): ((c0 << 15) + d * st) >> 18 with the base c0 (u16
+    splat v10-v12) and the delta d (v15) of the line. That is (c0 + floor(d * st / 2^15)) >> 3 in 16 bits (bits 18-25
+    of the 32-bit sum are bits 3-10 of c0 + its high part), and sqdmulh gives floor(d * st / 2^15) unless it
+    saturates (d = st = -32768: flag bit 14 clear, slow: the 32-bit sums). v26 scratch"""
     if F:
         e(f"dup {dst}.8b, v23.b[{4 + ch}]")
+        return
+    l = (L_DR, L_DG, L_DB)[ch]
+    if not slow:
+        e(f"sqdmulh {dst}.8h, v24.8h, v15.h[{l}]"); e(f"add {dst}.8h, {dst}.8h, v{10 + ch}.8h"); e(f"shrn {dst}.8b, {dst}.8h, #3")
     else:
-        l = (L_DR, L_DG, L_DB)[ch]
-        e(f"smull {dst}.4s, v24.4h, v15.h[{l}]"); e(f"smull2 v26.4s, v24.8h, v15.h[{l}]")
-        e(f"addhn {dst}.4h, {dst}.4s, v{10 + ch}.4s"); e(f"addhn2 {dst}.8h, v26.4s, v{10 + ch}.4s")
-        e(f"shrn {dst}.8b, {dst}.8h, #2")
+        e(f"ushll {dst}.4s, v{10 + ch}.4h, #15"); e(f"mov v26.16b, {dst}.16b")
+        e(f"smlal {dst}.4s, v24.4h, v15.h[{l}]"); e(f"smlal2 v26.4s, v24.8h, v15.h[{l}]")
+        e(f"uzp2 {dst}.8h, {dst}.8h, v26.8h"); e(f"shrn {dst}.8b, {dst}.8h, #2")
 
 def modulate(v, t, sh):
     """t = ((v+1)*(t+1)-1) >> sh, bytes; v26 scratch"""
@@ -536,10 +553,17 @@ def colour(T, F, B, M=0):
         if B: texture_bilinear(T)
         else: texture(T)
         e("tbnz w7, #2, 1f")                        # white vertex colour, alpha 31: the texel is the colour
-        for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")):
-            if F and "flat" in RL: v = RL["flat"][ch]
-            else: v = "v25"; vertex_colour(ch, F, v)
-            modulate(v, t, 6)
+        def rgb(slow=False):
+            for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")):
+                if F and "flat" in RL: v = RL["flat"][ch]
+                else: v = "v25"; vertex_colour(ch, F, v, slow)
+                modulate(v, t, 6)
+        if not F:
+            e("tbz w7, #14, 37f")
+            rgb(); e("38:")
+            def ool(): e("37:"); rgb(True); e("b 38b")
+            OOLS.append(ool)
+        else: rgb()
         modulate_alpha("1f")
         e("1:")
         if M != 2:
@@ -549,7 +573,17 @@ def colour(T, F, B, M=0):
     if "flat" in RL: c = RL["flat"]
     else:
         c = ("v29", "v27", "v31")
-        for ch in range(3): vertex_colour(ch, F, c[ch])
+        if not F:
+            e("tbz w7, #14, 37f")
+            for ch in range(3): vertex_colour(ch, F, c[ch])
+            e("38:")
+            def ool():
+                e("37:")
+                for ch in range(3): vertex_colour(ch, F, c[ch], True)
+                e("b 38b")
+            OOLS.append(ool)
+        else:
+            for ch in range(3): vertex_colour(ch, F, c[ch])
     if "caf" in RL: return (*c, RL["caf"][0])
     if "a" in RL: return (*c, RL["a"][0])
     e("dup v30.8b, v23.b[0]")
@@ -767,9 +801,9 @@ def kernel_vis(D, T):
     group_st(D, st, False)
     if T:
         texture(T); modulate_alpha("1f"); e("1:"); alpha_test()
-    ool = vis_store(D)
+    OOLS.append(vis_store(D))
     latch(D, 1, st)
-    ool()
+    flush_ools()
     test_equal(D); depth_ool(D)
     e("9:")
     line_end(0, lazy(D, st))
@@ -789,9 +823,9 @@ def kernel_shade(T, F, B):
     owner_test()
     e("28:")
     group_st(2, st, False)
-    ool = shade_store(colour(T, F, B, 2))
+    OOLS.append(shade_store(colour(T, F, B, 2)))
     latch(2, 2, st)
-    ool()
+    flush_ools()
     e("9:")
     e("add x22, x22, #4"); e("add w24, w24, #1"); e("subs w23, w23, #1"); e("b.ne 10b")
     epilogue()
@@ -811,9 +845,9 @@ def kernel(D, T, R, F, B):
     e("28:")
     group_st(D, st, False)
     cols = colour(T, F, B)
-    ool = trans_store(D, cols) if R else store(D, cols)
+    OOLS.append(trans_store(D, cols) if R else store(D, cols))
     latch(D, 0, st, R)
-    if ool: ool()
+    flush_ools()
     test_equal(D); depth_ool(D)
     e("9:")
     line_end(R, lazy(D, st))

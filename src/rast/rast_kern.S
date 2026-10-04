@@ -147,16 +147,22 @@ rast_kern_00000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -202,21 +208,17 @@ rast_kern_00000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -249,6 +251,26 @@ rast_kern_00000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -664,16 +686,22 @@ rast_kern_00100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -719,21 +747,17 @@ rast_kern_00100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -832,6 +856,26 @@ rast_kern_00100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -1215,16 +1259,22 @@ rast_kern_01000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -1355,30 +1405,26 @@ rast_kern_01000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -1424,6 +1470,35 @@ rast_kern_01000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -1658,16 +1733,22 @@ rast_kern_01001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -2012,30 +2093,26 @@ rast_kern_01001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -2086,6 +2163,35 @@ rast_kern_01001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -3358,16 +3464,22 @@ rast_kern_01100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -3498,30 +3610,26 @@ rast_kern_01100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -3634,6 +3742,35 @@ rast_kern_01100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -3810,16 +3947,22 @@ rast_kern_01101:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -4164,30 +4307,26 @@ rast_kern_01101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -4316,6 +4455,35 @@ rast_kern_01101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -5561,16 +5729,22 @@ rast_kern_02000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -5681,30 +5855,26 @@ rast_kern_02000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -5750,6 +5920,35 @@ rast_kern_02000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -5984,16 +6183,22 @@ rast_kern_02001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -6298,30 +6503,26 @@ rast_kern_02001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -6372,6 +6573,35 @@ rast_kern_02001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -7584,16 +7814,22 @@ rast_kern_02100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -7704,30 +7940,26 @@ rast_kern_02100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -7840,6 +8072,35 @@ rast_kern_02100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -8016,16 +8277,22 @@ rast_kern_02101:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -8330,30 +8597,26 @@ rast_kern_02101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -8482,6 +8745,35 @@ rast_kern_02101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -9668,16 +9960,22 @@ rast_kern_03000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -9829,30 +10127,26 @@ rast_kern_03000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -9903,6 +10197,35 @@ rast_kern_03000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -10137,16 +10460,22 @@ rast_kern_03001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -10523,30 +10852,26 @@ rast_kern_03001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -10597,6 +10922,35 @@ rast_kern_03001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -11930,16 +12284,22 @@ rast_kern_03100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -12091,30 +12451,26 @@ rast_kern_03100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -12243,6 +12599,35 @@ rast_kern_03100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -12419,16 +12804,22 @@ rast_kern_03101:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -12805,30 +13196,26 @@ rast_kern_03101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -12957,6 +13344,35 @@ rast_kern_03101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -14262,16 +14678,22 @@ rast_kern_04000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -14403,30 +14825,26 @@ rast_kern_04000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -14477,6 +14895,35 @@ rast_kern_04000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -14711,16 +15158,22 @@ rast_kern_04001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -15057,30 +15510,26 @@ rast_kern_04001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -15131,6 +15580,35 @@ rast_kern_04001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -16404,16 +16882,22 @@ rast_kern_04100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -16545,30 +17029,26 @@ rast_kern_04100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -16697,6 +17177,35 @@ rast_kern_04100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -16873,16 +17382,22 @@ rast_kern_04101:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -17219,30 +17734,26 @@ rast_kern_04101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -17371,6 +17882,35 @@ rast_kern_04101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -18541,16 +19081,22 @@ rast_kern_10000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -18597,21 +19143,17 @@ rast_kern_10000:
 	orr v14.16b, v25.16b, v22.16b
 	orr v16.16b, v26.16b, v22.16b
 28:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -18640,6 +19182,26 @@ rast_kern_10000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -19067,16 +19629,22 @@ rast_kern_10100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -19123,21 +19691,17 @@ rast_kern_10100:
 	orr v16.16b, v25.16b, v22.16b
 	orr v17.16b, v26.16b, v22.16b
 28:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -19232,6 +19796,26 @@ rast_kern_10100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -19625,16 +20209,22 @@ rast_kern_11000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -19766,30 +20356,26 @@ rast_kern_11000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -19831,6 +20417,35 @@ rast_kern_11000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -20008,16 +20623,22 @@ rast_kern_11001:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -20363,30 +20984,26 @@ rast_kern_11001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -20433,6 +21050,35 @@ rast_kern_11001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -21530,16 +22176,22 @@ rast_kern_11100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -21671,30 +22323,26 @@ rast_kern_11100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -21803,6 +22451,35 @@ rast_kern_11100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -21928,16 +22605,22 @@ rast_kern_11101:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -22283,30 +22966,26 @@ rast_kern_11101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -22431,6 +23110,35 @@ rast_kern_11101:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -23511,16 +24219,22 @@ rast_kern_12000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -23632,30 +24346,26 @@ rast_kern_12000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -23697,6 +24407,35 @@ rast_kern_12000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -23874,16 +24613,22 @@ rast_kern_12001:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -24189,30 +24934,26 @@ rast_kern_12001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -24259,6 +25000,35 @@ rast_kern_12001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -25296,16 +26066,22 @@ rast_kern_12100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -25417,30 +26193,26 @@ rast_kern_12100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -25549,6 +26321,35 @@ rast_kern_12100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -25674,16 +26475,22 @@ rast_kern_12101:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -25989,30 +26796,26 @@ rast_kern_12101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -26137,6 +26940,35 @@ rast_kern_12101:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -27159,16 +27991,22 @@ rast_kern_13000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -27321,30 +28159,26 @@ rast_kern_13000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -27391,6 +28225,35 @@ rast_kern_13000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -27568,16 +28431,22 @@ rast_kern_13001:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -27955,30 +28824,26 @@ rast_kern_13001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -28025,6 +28890,35 @@ rast_kern_13001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -29184,16 +30078,22 @@ rast_kern_13100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -29346,30 +30246,26 @@ rast_kern_13100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -29494,6 +30390,35 @@ rast_kern_13100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -29619,16 +30544,22 @@ rast_kern_13101:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -30006,30 +30937,26 @@ rast_kern_13101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -30154,6 +31081,35 @@ rast_kern_13101:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -31296,16 +32252,22 @@ rast_kern_14000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -31438,30 +32400,26 @@ rast_kern_14000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -31508,6 +32466,35 @@ rast_kern_14000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -31685,16 +32672,22 @@ rast_kern_14001:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -32032,30 +33025,26 @@ rast_kern_14001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -32102,6 +33091,35 @@ rast_kern_14001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -33201,16 +34219,22 @@ rast_kern_14100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -33343,30 +34367,26 @@ rast_kern_14100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -33491,6 +34511,35 @@ rast_kern_14100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -33616,16 +34665,22 @@ rast_kern_14101:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -33963,30 +35018,26 @@ rast_kern_14101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -34111,6 +35162,35 @@ rast_kern_14101:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -35234,16 +36314,22 @@ rast_kern_20000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -35281,21 +36367,17 @@ rast_kern_20000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -35326,6 +36408,26 @@ rast_kern_20000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -35695,16 +36797,22 @@ rast_kern_20100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -35742,21 +36850,17 @@ rast_kern_20100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -35853,6 +36957,26 @@ rast_kern_20100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -36191,16 +37315,22 @@ rast_kern_21000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -36323,30 +37453,26 @@ rast_kern_21000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v20.8b, v30.8b
 	umlal v26.8h, v20.8b, v30.8b
@@ -36389,6 +37515,35 @@ rast_kern_21000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -36600,16 +37755,22 @@ rast_kern_21001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -36947,30 +38108,26 @@ rast_kern_21001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -37017,6 +38174,35 @@ rast_kern_21001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -38200,16 +39386,22 @@ rast_kern_21100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -38332,30 +39524,26 @@ rast_kern_21100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -38465,6 +39653,35 @@ rast_kern_21100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -38618,16 +39835,22 @@ rast_kern_21101:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -38965,30 +40188,26 @@ rast_kern_21101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -39113,6 +40332,35 @@ rast_kern_21101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -40269,16 +41517,22 @@ rast_kern_22000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -40381,30 +41635,26 @@ rast_kern_22000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v20.8b, v30.8b
 	umlal v26.8h, v20.8b, v30.8b
@@ -40447,6 +41697,35 @@ rast_kern_22000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -40658,16 +41937,22 @@ rast_kern_22001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -40965,30 +42250,26 @@ rast_kern_22001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -41035,6 +42316,35 @@ rast_kern_22001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -42158,16 +43468,22 @@ rast_kern_22100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -42270,30 +43586,26 @@ rast_kern_22100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -42403,6 +43715,35 @@ rast_kern_22100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -42556,16 +43897,22 @@ rast_kern_22101:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -42863,30 +44210,26 @@ rast_kern_22101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -43011,6 +44354,35 @@ rast_kern_22101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -44107,16 +45479,22 @@ rast_kern_23000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -44261,30 +45639,26 @@ rast_kern_23000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -44331,6 +45705,35 @@ rast_kern_23000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -44542,16 +45945,22 @@ rast_kern_23001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -44921,30 +46330,26 @@ rast_kern_23001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -44991,6 +46396,35 @@ rast_kern_23001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -46234,16 +47668,22 @@ rast_kern_23100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -46388,30 +47828,26 @@ rast_kern_23100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -46536,6 +47972,35 @@ rast_kern_23100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -46689,16 +48154,22 @@ rast_kern_23101:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -47068,30 +48539,26 @@ rast_kern_23101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -47216,6 +48683,35 @@ rast_kern_23101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -48430,16 +49926,22 @@ rast_kern_24000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -48564,30 +50066,26 @@ rast_kern_24000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -48634,6 +50132,35 @@ rast_kern_24000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -48845,16 +50372,22 @@ rast_kern_24001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -49184,30 +50717,26 @@ rast_kern_24001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -49254,6 +50783,35 @@ rast_kern_24001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -50437,16 +51995,22 @@ rast_kern_24100:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -50571,30 +52135,26 @@ rast_kern_24100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -50719,6 +52279,35 @@ rast_kern_24100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -50872,16 +52461,22 @@ rast_kern_24101:
 	sub x1, x2, #0x10, lsl #12
 	sub x4, x9, x5
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -51211,30 +52806,26 @@ rast_kern_24101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -51359,6 +52950,35 @@ rast_kern_24101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -57441,16 +59061,22 @@ rast_kern_s000:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	ldr q27, [x2]
@@ -57482,21 +59108,17 @@ rast_kern_s000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
 	zip1 v27.8h, v29.8h, v31.8h
@@ -57523,6 +59145,26 @@ rast_kern_s000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -57751,16 +59393,22 @@ rast_kern_s100:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -57877,30 +59525,26 @@ rast_kern_s100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v20.8b, v30.8b
 	umlal v26.8h, v20.8b, v30.8b
@@ -57933,6 +59577,35 @@ rast_kern_s100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -58066,16 +59739,22 @@ rast_kern_s101:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -58408,30 +60087,26 @@ rast_kern_s101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -58466,6 +60141,35 @@ rast_kern_s101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -59381,16 +61085,22 @@ rast_kern_s200:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -59487,30 +61197,26 @@ rast_kern_s200:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v20.8b, v30.8b
 	umlal v26.8h, v20.8b, v30.8b
@@ -59543,6 +61249,35 @@ rast_kern_s200:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -59676,16 +61411,22 @@ rast_kern_s201:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -59978,30 +61719,26 @@ rast_kern_s201:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -60036,6 +61773,35 @@ rast_kern_s201:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -60893,16 +62659,22 @@ rast_kern_s300:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -61042,30 +62814,26 @@ rast_kern_s300:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -61100,6 +62868,35 @@ rast_kern_s300:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -61233,16 +63030,22 @@ rast_kern_s301:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -61607,30 +63410,26 @@ rast_kern_s301:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -61665,6 +63464,35 @@ rast_kern_s301:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -62640,16 +64468,22 @@ rast_kern_s400:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -62769,30 +64603,26 @@ rast_kern_s400:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -62827,6 +64657,35 @@ rast_kern_s400:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -62960,16 +64819,22 @@ rast_kern_s401:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1056]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #1408]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1232]
 	ldr w12, [x22, #1584]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #704]
 	ldr w14, [x22, #880]
 	sbfiz w15, w13, #15, #16
@@ -63294,30 +65159,26 @@ rast_kern_s401:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -63352,6 +65213,35 @@ rast_kern_s401:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -64308,16 +66198,22 @@ rast_kern_h00000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -64363,21 +66259,17 @@ rast_kern_h00000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -64410,6 +66302,26 @@ rast_kern_h00000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -64835,16 +66747,22 @@ rast_kern_h00100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	shrn v25.2s, v6.2d, #30
@@ -64890,21 +66808,17 @@ rast_kern_h00100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -65003,6 +66917,26 @@ rast_kern_h00100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -65396,16 +67330,22 @@ rast_kern_h01000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -65536,30 +67476,26 @@ rast_kern_h01000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -65605,6 +67541,35 @@ rast_kern_h01000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -65843,16 +67808,22 @@ rast_kern_h01001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -66197,30 +68168,26 @@ rast_kern_h01001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -66271,6 +68238,35 @@ rast_kern_h01001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -67558,16 +69554,22 @@ rast_kern_h01100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -67698,30 +69700,26 @@ rast_kern_h01100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -67834,6 +69832,35 @@ rast_kern_h01100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -68017,16 +70044,22 @@ rast_kern_h01101:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -68371,30 +70404,26 @@ rast_kern_h01101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -68523,6 +70552,35 @@ rast_kern_h01101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -69786,16 +71844,22 @@ rast_kern_h02000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -69906,30 +71970,26 @@ rast_kern_h02000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -69975,6 +72035,35 @@ rast_kern_h02000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -70213,16 +72302,22 @@ rast_kern_h02001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -70527,30 +72622,26 @@ rast_kern_h02001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -70601,6 +72692,35 @@ rast_kern_h02001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -71828,16 +73948,22 @@ rast_kern_h02100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -71948,30 +74074,26 @@ rast_kern_h02100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -72084,6 +74206,35 @@ rast_kern_h02100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -72267,16 +74418,22 @@ rast_kern_h02101:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -72581,30 +74738,26 @@ rast_kern_h02101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -72733,6 +74886,35 @@ rast_kern_h02101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -73937,16 +76119,22 @@ rast_kern_h03000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -74098,30 +76286,26 @@ rast_kern_h03000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -74172,6 +76356,35 @@ rast_kern_h03000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -74410,16 +76623,22 @@ rast_kern_h03001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -74796,30 +77015,26 @@ rast_kern_h03001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -74870,6 +77085,35 @@ rast_kern_h03001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -76218,16 +78462,22 @@ rast_kern_h03100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -76379,30 +78629,26 @@ rast_kern_h03100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -76531,6 +78777,35 @@ rast_kern_h03100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -76714,16 +78989,22 @@ rast_kern_h03101:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -77100,30 +79381,26 @@ rast_kern_h03101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -77252,6 +79529,35 @@ rast_kern_h03101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -78575,16 +80881,22 @@ rast_kern_h04000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -78716,30 +81028,26 @@ rast_kern_h04000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -78790,6 +81098,35 @@ rast_kern_h04000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -79028,16 +81365,22 @@ rast_kern_h04001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -79374,30 +81717,26 @@ rast_kern_h04001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -79448,6 +81787,35 @@ rast_kern_h04001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -80736,16 +83104,22 @@ rast_kern_h04100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -80877,30 +83251,26 @@ rast_kern_h04100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -81029,6 +83399,35 @@ rast_kern_h04100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -81212,16 +83611,22 @@ rast_kern_h04101:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -81558,30 +83963,26 @@ rast_kern_h04101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -81710,6 +84111,35 @@ rast_kern_h04101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -82897,16 +85327,22 @@ rast_kern_h10000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -82953,21 +85389,17 @@ rast_kern_h10000:
 	orr v14.16b, v25.16b, v22.16b
 	orr v16.16b, v26.16b, v22.16b
 28:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -82996,6 +85428,26 @@ rast_kern_h10000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -83432,16 +85884,22 @@ rast_kern_h10100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	tbnz w7, #0, 6f
 0:
 	frecpe v24.4s, v2.4s
@@ -83488,21 +85946,17 @@ rast_kern_h10100:
 	orr v16.16b, v25.16b, v22.16b
 	orr v17.16b, v26.16b, v22.16b
 28:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -83597,6 +86051,26 @@ rast_kern_h10100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -83999,16 +86473,22 @@ rast_kern_h11000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -84140,30 +86620,26 @@ rast_kern_h11000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -84205,6 +86681,35 @@ rast_kern_h11000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -84385,16 +86890,22 @@ rast_kern_h11001:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -84740,30 +87251,26 @@ rast_kern_h11001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -84810,6 +87317,35 @@ rast_kern_h11001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -85919,16 +88455,22 @@ rast_kern_h11100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -86060,30 +88602,26 @@ rast_kern_h11100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -86192,6 +88730,35 @@ rast_kern_h11100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -86323,16 +88890,22 @@ rast_kern_h11101:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -86678,30 +89251,26 @@ rast_kern_h11101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -86826,6 +89395,35 @@ rast_kern_h11101:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -87921,16 +90519,22 @@ rast_kern_h12000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -88042,30 +90646,26 @@ rast_kern_h12000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -88107,6 +90707,35 @@ rast_kern_h12000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -88287,16 +90916,22 @@ rast_kern_h12001:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -88602,30 +91237,26 @@ rast_kern_h12001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -88672,6 +91303,35 @@ rast_kern_h12001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -89721,16 +92381,22 @@ rast_kern_h12100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -89842,30 +92508,26 @@ rast_kern_h12100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -89974,6 +92636,35 @@ rast_kern_h12100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -90105,16 +92796,22 @@ rast_kern_h12101:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -90420,30 +93117,26 @@ rast_kern_h12101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -90568,6 +93261,35 @@ rast_kern_h12101:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -91605,16 +94327,22 @@ rast_kern_h13000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -91767,30 +94495,26 @@ rast_kern_h13000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -91837,6 +94561,35 @@ rast_kern_h13000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -92017,16 +94770,22 @@ rast_kern_h13001:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -92404,30 +95163,26 @@ rast_kern_h13001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -92474,6 +95229,35 @@ rast_kern_h13001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -93645,16 +96429,22 @@ rast_kern_h13100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -93807,30 +96597,26 @@ rast_kern_h13100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -93955,6 +96741,35 @@ rast_kern_h13100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -94086,16 +96901,22 @@ rast_kern_h13101:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -94473,30 +97294,26 @@ rast_kern_h13101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -94621,6 +97438,35 @@ rast_kern_h13101:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -95778,16 +98624,22 @@ rast_kern_h14000:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -95920,30 +98772,26 @@ rast_kern_h14000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -95990,6 +98838,35 @@ rast_kern_h14000:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -96170,16 +99047,22 @@ rast_kern_h14001:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -96517,30 +99400,26 @@ rast_kern_h14001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -96587,6 +99466,35 @@ rast_kern_h14001:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -97698,16 +100606,22 @@ rast_kern_h14100:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -97840,30 +100754,26 @@ rast_kern_h14100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -97988,6 +100898,35 @@ rast_kern_h14100:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -98119,16 +101058,22 @@ rast_kern_h14101:
 	cset w16, eq
 	bfi w7, w16, #13, #1
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -98466,30 +101411,26 @@ rast_kern_h14101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -98614,6 +101555,35 @@ rast_kern_h14101:
 	add v4.4s, v4.4s, v1.4s
 	add v5.4s, v5.4s, v1.4s
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v25.4s, v27.4s
 	sub v28.4s, v26.4s, v28.4s
@@ -99753,16 +102723,22 @@ rast_kern_h20000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -99800,21 +102776,17 @@ rast_kern_h20000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
@@ -99845,6 +102817,26 @@ rast_kern_h20000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -100224,16 +103216,22 @@ rast_kern_h20100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	ldp q27, q28, [x2]
@@ -100271,21 +103269,17 @@ rast_kern_h20100:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	orr x0, x0, x8
 	ldp q25, q26, [x1]
 	uzp2 v24.8h, v25.8h, v26.8h
@@ -100382,6 +103376,26 @@ rast_kern_h20100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -100730,16 +103744,22 @@ rast_kern_h21000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -100862,30 +103882,26 @@ rast_kern_h21000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v20.8b, v30.8b
 	umlal v26.8h, v20.8b, v30.8b
@@ -100928,6 +103944,35 @@ rast_kern_h21000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -101143,16 +104188,22 @@ rast_kern_h21001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -101490,30 +104541,26 @@ rast_kern_h21001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -101560,6 +104607,35 @@ rast_kern_h21001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -102758,16 +105834,22 @@ rast_kern_h21100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -102890,30 +105972,26 @@ rast_kern_h21100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -103023,6 +106101,35 @@ rast_kern_h21100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -103183,16 +106290,22 @@ rast_kern_h21101:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -103530,30 +106643,26 @@ rast_kern_h21101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -103678,6 +106787,35 @@ rast_kern_h21101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -104852,16 +107990,22 @@ rast_kern_h22000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -104964,30 +108108,26 @@ rast_kern_h22000:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v20.8b, v30.8b
 	umlal v26.8h, v20.8b, v30.8b
@@ -105030,6 +108170,35 @@ rast_kern_h22000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -105245,16 +108414,22 @@ rast_kern_h22001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -105552,30 +108727,26 @@ rast_kern_h22001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -105622,6 +108793,35 @@ rast_kern_h22001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -106760,16 +109960,22 @@ rast_kern_h22100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -106872,30 +110078,26 @@ rast_kern_h22100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v21.8b, v30.8b
 	umlal v26.8h, v21.8b, v30.8b
@@ -107005,6 +110207,35 @@ rast_kern_h22100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -107165,16 +110396,22 @@ rast_kern_h22101:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -107472,30 +110709,26 @@ rast_kern_h22101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -107620,6 +110853,35 @@ rast_kern_h22101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -108734,16 +111996,22 @@ rast_kern_h23000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -108888,30 +112156,26 @@ rast_kern_h23000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -108958,6 +112222,35 @@ rast_kern_h23000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -109173,16 +112466,22 @@ rast_kern_h23001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -109552,30 +112851,26 @@ rast_kern_h23001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -109622,6 +112917,35 @@ rast_kern_h23001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -110880,16 +114204,22 @@ rast_kern_h23100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -111034,30 +114364,26 @@ rast_kern_h23100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -111182,6 +114508,35 @@ rast_kern_h23100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -111342,16 +114697,22 @@ rast_kern_h23101:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -111721,30 +115082,26 @@ rast_kern_h23101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -111869,6 +115226,35 @@ rast_kern_h23101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -113101,16 +116487,22 @@ rast_kern_h24000:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -113235,30 +116627,26 @@ rast_kern_h24000:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -113305,6 +116693,35 @@ rast_kern_h24000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -113520,16 +116937,22 @@ rast_kern_h24001:
 	add x3, x3, x4
 1:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -113859,30 +117282,26 @@ rast_kern_h24001:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -113929,6 +117348,35 @@ rast_kern_h24001:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
@@ -115127,16 +118575,22 @@ rast_kern_h24100:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -115261,30 +118715,26 @@ rast_kern_h24100:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -115409,6 +118859,35 @@ rast_kern_h24100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -115569,16 +119048,22 @@ rast_kern_h24101:
 	sub x1, x2, x16
 	sub x4, x9, x5
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -115908,30 +119393,26 @@ rast_kern_h24101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -116056,6 +119537,35 @@ rast_kern_h24101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 24:
 	sub v27.4s, v6.4s, v27.4s
 	sub v28.4s, v6.4s, v28.4s
@@ -122231,16 +125741,22 @@ rast_kern_hs000:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	b 28f
 0:
 	ldr q27, [x2]
@@ -122272,21 +125788,17 @@ rast_kern_hs000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 5:
-	smull v29.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v29.4h, v29.4s, v10.4s
-	addhn2 v29.8h, v26.4s, v10.4s
-	shrn v29.8b, v29.8h, #2
-	smull v27.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v27.4h, v27.4s, v11.4s
-	addhn2 v27.8h, v26.4s, v11.4s
-	shrn v27.8b, v27.8h, #2
-	smull v31.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v31.4h, v31.4s, v12.4s
-	addhn2 v31.8h, v26.4s, v12.4s
-	shrn v31.8b, v31.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v29.8h, v24.8h, v15.h[0]
+	add v29.8h, v29.8h, v10.8h
+	shrn v29.8b, v29.8h, #3
+	sqdmulh v27.8h, v24.8h, v15.h[1]
+	add v27.8h, v27.8h, v11.8h
+	shrn v27.8b, v27.8h, #3
+	sqdmulh v31.8h, v24.8h, v15.h[3]
+	add v31.8h, v31.8h, v12.8h
+	shrn v31.8b, v31.8h, #3
+38:
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v31.16b, v31.16b, v13.16b
 	zip1 v27.8h, v29.8h, v31.8h
@@ -122313,6 +125825,26 @@ rast_kern_hs000:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v29.4s, v10.4h, #15
+	mov v26.16b, v29.16b
+	smlal v29.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v29.8h, v29.8h, v26.8h
+	shrn v29.8b, v29.8h, #2
+	ushll v27.4s, v11.4h, #15
+	mov v26.16b, v27.16b
+	smlal v27.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v27.8h, v27.8h, v26.8h
+	shrn v27.8b, v27.8h, #2
+	ushll v31.4s, v12.4h, #15
+	mov v26.16b, v31.16b
+	smlal v31.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v31.8h, v31.8h, v26.8h
+	shrn v31.8b, v31.8h, #2
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -122549,16 +126081,22 @@ rast_kern_hs100:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -122675,30 +126213,26 @@ rast_kern_hs100:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v20.8b, v30.8b
 	umlal v26.8h, v20.8b, v30.8b
@@ -122731,6 +126265,35 @@ rast_kern_hs100:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -122868,16 +126431,22 @@ rast_kern_hs101:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -123210,30 +126779,26 @@ rast_kern_hs101:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -123268,6 +126833,35 @@ rast_kern_hs101:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -124195,16 +127789,22 @@ rast_kern_hs200:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -124301,30 +127901,26 @@ rast_kern_hs200:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	uaddl v26.8h, v20.8b, v30.8b
 	umlal v26.8h, v20.8b, v30.8b
@@ -124357,6 +127953,35 @@ rast_kern_hs200:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -124494,16 +128119,22 @@ rast_kern_hs201:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -124796,30 +128427,26 @@ rast_kern_hs201:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -124854,6 +128481,35 @@ rast_kern_hs201:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -125723,16 +129379,22 @@ rast_kern_hs300:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -125872,30 +129534,26 @@ rast_kern_hs300:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -125930,6 +129588,35 @@ rast_kern_hs300:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -126067,16 +129754,22 @@ rast_kern_hs301:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -126441,30 +130134,26 @@ rast_kern_hs301:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -126499,6 +130188,35 @@ rast_kern_hs301:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -127486,16 +131204,22 @@ rast_kern_hs400:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -127615,30 +131339,26 @@ rast_kern_hs400:
 	shrn v30.8b, v30.8h, #8
 2:
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -127673,6 +131393,35 @@ rast_kern_hs400:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
@@ -127810,16 +131559,22 @@ rast_kern_hs401:
 	dup v1.4s, w17
 2:
 	ldr s10, [x22, #1536]
-	ushll v10.4s, v10.4h, #15
-	dup v11.4s, v10.s[1]
-	dup v10.4s, v10.s[0]
+	dup v11.8h, v10.h[1]
+	dup v10.8h, v10.h[0]
 	ldr s12, [x22, #2048]
-	ushll v12.4s, v12.4h, #15
-	dup v12.4s, v12.s[1]
+	dup v12.8h, v12.h[1]
 	ldr w10, [x22, #1792]
 	ldr w12, [x22, #2304]
 	mov v15.s[0], w10
 	mov v15.s[1], w12
+	mov w16, #0x8000
+	cmp w16, w10, uxth
+	lsr w15, w10, #16
+	ccmp w15, w16, #4, ne
+	lsr w15, w12, #16
+	ccmp w15, w16, #4, ne
+	cset w15, ne
+	bfi w7, w15, #14, #1
 	ldr w13, [x22, #1024]
 	ldr w14, [x22, #1280]
 	sbfiz w15, w13, #15, #16
@@ -128144,30 +131899,26 @@ rast_kern_hs401:
 	ldp q12, q13, [sp, #144]
 	ldr q14, [sp, #176]
 	tbnz w7, #2, 1f
-	smull v25.4s, v24.4h, v15.h[0]
-	smull2 v26.4s, v24.8h, v15.h[0]
-	addhn v25.4h, v25.4s, v10.4s
-	addhn2 v25.8h, v26.4s, v10.4s
-	shrn v25.8b, v25.8h, #2
+	tbz w7, #14, 37f
+	sqdmulh v25.8h, v24.8h, v15.h[0]
+	add v25.8h, v25.8h, v10.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v29.8b
 	umlal v26.8h, v25.8b, v29.8b
 	shrn v29.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[1]
-	smull2 v26.4s, v24.8h, v15.h[1]
-	addhn v25.4h, v25.4s, v11.4s
-	addhn2 v25.8h, v26.4s, v11.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[1]
+	add v25.8h, v25.8h, v11.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v27.8b
 	umlal v26.8h, v25.8b, v27.8b
 	shrn v27.8b, v26.8h, #6
-	smull v25.4s, v24.4h, v15.h[3]
-	smull2 v26.4s, v24.8h, v15.h[3]
-	addhn v25.4h, v25.4s, v12.4s
-	addhn2 v25.8h, v26.4s, v12.4s
-	shrn v25.8b, v25.8h, #2
+	sqdmulh v25.8h, v24.8h, v15.h[3]
+	add v25.8h, v25.8h, v12.8h
+	shrn v25.8b, v25.8h, #3
 	uaddl v26.8h, v25.8b, v31.8b
 	umlal v26.8h, v25.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
+38:
 	tbnz w7, #10, 1f
 	dup v25.8b, v23.b[0]
 	uaddl v26.8h, v25.8b, v30.8b
@@ -128202,6 +131953,35 @@ rast_kern_hs401:
 	shrn v24.4h, v4.4s, #16
 	shrn2 v24.8h, v5.4s, #16
 	b 5b
+37:
+	ushll v25.4s, v10.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[0]
+	smlal2 v26.4s, v24.8h, v15.h[0]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v29.8b
+	umlal v26.8h, v25.8b, v29.8b
+	shrn v29.8b, v26.8h, #6
+	ushll v25.4s, v11.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[1]
+	smlal2 v26.4s, v24.8h, v15.h[1]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v27.8b
+	umlal v26.8h, v25.8b, v27.8b
+	shrn v27.8b, v26.8h, #6
+	ushll v25.4s, v12.4h, #15
+	mov v26.16b, v25.16b
+	smlal v25.4s, v24.4h, v15.h[3]
+	smlal2 v26.4s, v24.8h, v15.h[3]
+	uzp2 v25.8h, v25.8h, v26.8h
+	shrn v25.8b, v25.8h, #2
+	uaddl v26.8h, v25.8b, v31.8b
+	umlal v26.8h, v25.8b, v31.8b
+	shrn v31.8b, v26.8h, #6
+	b 38b
 1:
 	sshll v28.8h, v28.8b, #0
 	sshll v30.4s, v28.4h, #0
