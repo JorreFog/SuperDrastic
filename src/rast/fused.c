@@ -247,9 +247,9 @@ void b0_flush(uint8_t *ctx, uint8_t *spans, uint8_t *poly, unsigned line0, unsig
  * ones (spec/texture.c: formats 2/3/4 have 4/16/256 entries, A3I5 and A5I3 256). */
 typedef struct { const uint8_t *tex; uint32_t gen; uint8_t min_a; } texinfo_t;
 #define TEXINFO_N 1024
-static __thread texinfo_t texinfo[TEXINFO_N];
-static __thread uint32_t tex_gen = 1;
-void f_begin_frame(void) { tex_gen++; }
+/* one thread-local block (one TLS lookup per call); gen is 1 and up from the first frame's f_begin_frame */
+static __thread struct { uint32_t gen; texinfo_t e[TEXINFO_N]; } texinfo;
+void f_begin_frame(void) { texinfo.gen++; }
 
 static unsigned tex_min_alpha_scan(const poly_t *P) {
     unsigned m = 255;
@@ -268,17 +268,21 @@ static unsigned tex_min_alpha_scan(const poly_t *P) {
     return m;
 }
 
-static unsigned tex_min_alpha(const poly_t *P) {
+/* cap: a direct or compressed texture of more texels that this frame has not scanned yet is not scanned (returns 0,
+ * "can fail"): for the one-pass kernels' flag a scan of a large texture can cost more than the alpha tests it saves */
+static unsigned tex_min_alpha(const poly_t *P, unsigned cap) {
     unsigned h = (unsigned)((uintptr_t)P->tex >> 4) & (TEXINFO_N - 1);
+    int scan = P->paletted || (unsigned)P->tw * P->th <= cap;
     for (unsigned n = 0; n < TEXINFO_N; n++, h = (h + 1) & (TEXINFO_N - 1)) {
-        texinfo_t *t = &texinfo[h];
-        if (t->gen == tex_gen && t->tex == P->tex) return t->min_a;
-        if (t->gen != tex_gen) {
-            t->tex = P->tex; t->gen = tex_gen; t->min_a = (uint8_t)tex_min_alpha_scan(P);
+        texinfo_t *t = &texinfo.e[h];
+        if (t->gen == texinfo.gen && t->tex == P->tex) return t->min_a;
+        if (t->gen != texinfo.gen) {
+            if (!scan) return 0;
+            t->tex = P->tex; t->gen = texinfo.gen; t->min_a = (uint8_t)tex_min_alpha_scan(P);
             return t->min_a;
         }
     }
-    return tex_min_alpha_scan(P);
+    return scan ? tex_min_alpha_scan(P) : 0;
 }
 
 #undef PP
@@ -320,11 +324,14 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
         P.paletted = P.tex[0x4a];
         P.texels32 = (const uint32_t *)PTR(P.tex, 0x10); P.idx8 = PTR(P.tex, 0x10); P.pal = (const uint32_t *)PTR(P.tex, 0x18);
     }
-    P.fogused = 0; P.pass = 0;
-    if (dmode == 1 && (flags & 2)) {
-        /* the visibility pass needs the texture only when its alpha test can fail: ca = modulate(A, ta) <= aref */
-        unsigned ta = tex_min_alpha(&P), ca = ((P.A + 1) * (ta + 1) - 1) >> 5;
-        if (ca > P.aref) P.flags &= ~2u;
+    P.fogused = 0; P.pass = 0; P.noat = 0;
+    if (flags & 2) {
+        /* can the alpha test fail? ca = modulate(A, ta) <= aref (the kernels compare its low byte); ca grows with ta,
+         * so not when the lowest texel alpha passes. Then the visibility pass needs no texture and the one-pass
+         * kernels skip the test (fused_asm.c, flag bit 8) */
+        unsigned ta = tex_min_alpha(&P, dmode == 1 ? ~0u : 128 * 128), ca = ((P.A + 1) * (ta + 1) - 1) >> 5;
+        P.noat = ca > (P.aref & 0xff);
+        if (dmode == 1 && P.noat) P.flags &= ~2u;
     }
     if (flags & 2) {
         /* texcoord() as clamp-and-mask (fused_neon.c): clamp [0, W-1]; wrap: & (W-1); flip: invert where x & W */

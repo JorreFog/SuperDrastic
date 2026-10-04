@@ -66,7 +66,10 @@ stages at once; `fused_neon.c` is that in C NEON (8 pixels a step), and `kerngen
 same in assembly with a fixed register allocation, one kernel per variant (depth source x texture x translucency
 x flat colour), which is what runs. Shortcuts that give the same bits: a white vertex colour with alpha 31 makes
 modulate the identity, so the texel is the colour; a group of 8 pixels that all fail the depth test stops at the
-test; one that all pass is stored straight.
+test; one that all pass is stored straight; a texture whose lowest alpha passes the alpha test skips it, and A = 31
+skips the alpha modulate; with z or constant depth the perspective weights wait for the depth test, and a line's
+weights and interpolants for its first passing pixel; the vertex colour and the w depth use 16-bit products where
+they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flags and the register use.
 
 ## Simulator usage (see `tools/sim/` for setup; `dev/` holds the scripts used during development)
 
