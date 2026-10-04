@@ -15,6 +15,7 @@
  *     (clear) pixels do not darken polygon edges; the averaged alpha gives anti-aliased edges over the 2D layers.
  * Not rendered at 3x yet: shadow polygons (mode 3). DraStic's sprite path (axis-aligned textured quads, polygon
  * flag bit 14) goes through the general walker here. */
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -259,47 +260,58 @@ static int32_t sqshl16(int32_t v, int8_t s) {
     if (n >= 16) return v < 0 ? -1 : 0;
     return v >> n;
 }
-/* fog weights of a line (spec/resolve.c's fog_calculate_weights), NEON over 8 pixels: d = sat(((attr >> 9) & 0x7fff)
- * - off), v = sqshl16(d, shift), i = v >> 10, f = v & 0x3ff, w = table[i] + ((s8)table[32 + i] * f) >> 10 */
-static __attribute__((noinline)) void fog_weights(const uint32_t *attr, uint8_t *w, const uint8_t *table, uint32_t params) {
-    const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16)), m15 = vdupq_n_u16(0x7fff), m10 = vdupq_n_u16(0x3ff);
+/* fog of a line in place: spec/resolve.c's fog_calculate_weights and fog_modulate_full/alpha_intermediate in one
+ * pass, NEON over 16 pixels with colours and attributes split into byte planes (ld4), so a pixel's weight is one
+ * byte lane and the weights never go to memory.
+ * Weight: d = sat(((attr >> 9) & 0x7fff) - off) (attr bytes 1 and 2 zipped to u16 lanes, >> 1), v = sqshl16(d,
+ * shift), i = v >> 10, f = v & 0x3ff, w = table[i] + (u8)(((s8)table[32 + i] * f) >> 10). With v = f + 1024 i the
+ * product is floor(dl v / 1024) - dl i, the first as sqdmulh(32 dl, v) = (64 dl v) >> 16 (exact: |32 dl| <= 4096,
+ * v <= 0x7fff), the second folded into the table: -w = (dl i - table[i]) - (u8)floor(dl v / 1024) from a per-call
+ * table of dl i - table[i]. The factor k = -w (and -128 for 127, i.e. -w = 0x81) where the pixel's fog flag (alpha
+ * bit 7) is set, else 0: a clear flag sets the index's top bits, so both tbl lookups give 0 and k = 0.
+ * Per byte c += ((s8)(c - F) * k) >> 7 (smull, then shrn #7 keeps product bits 7-14); the flag is cleared;
+ * alpha-only fog leaves r, g, b. A group of 16 without any fog flag is unchanged (k = 0) and skipped. */
+static inline __attribute__((always_inline)) uint8x16_t fog_ch16(uint8x16_t c, uint8x16_t f, int8x16_t k) {
+    int8x16_t d = vreinterpretq_s8_u8(vsubq_u8(c, f));
+    int16x8_t lo = vmull_s8(vget_low_s8(d), vget_low_s8(k)), hi = vmull_high_s8(d, k);
+    return vaddq_u8(c, vreinterpretq_u8_s8(vshrn_high_n_s16(vshrn_n_s16(lo, 7), hi, 7)));
+}
+static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
+                                                             uint32_t fogc, int full) {
+    static const uint8_t idx[32] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                                     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
+    const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16));
     const int16x8_t sh = vdupq_n_s16((int8_t)(params & 0xff));
-    const uint8x16x2_t tab = { { vld1q_u8(table), vld1q_u8(table + 16) } }, dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
-    for (int x = 0; x < HR_W; x += 8) {
-        uint32x4_t a0 = vld1q_u32(attr + x), a1 = vld1q_u32(attr + x + 4);
-        uint16x8_t d = vandq_u16(vcombine_u16(vshrn_n_u32(a0, 9), vshrn_n_u32(a1, 9)), m15);
-        d = vqsubq_u16(d, off);
-        uint16x8_t v = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(d), sh));
-        uint8x8_t i = vmovn_u16(vshrq_n_u16(v, 10));
-        uint8x8_t t = vqtbl2_u8(tab, i), dl = vqtbl2_u8(dlt, i);
-        int16x8_t f = vreinterpretq_s16_u16(vandq_u16(v, m10)), dl16 = vmovl_s8(vreinterpret_s8_u8(dl));
-        int32x4_t p0 = vmull_s16(vget_low_s16(dl16), vget_low_s16(f)), p1 = vmull_s16(vget_high_s16(dl16), vget_high_s16(f));
-        int16x8_t p = vcombine_s16(vshrn_n_s32(p0, 10), vshrn_n_s32(p1, 10));
-        vst1_u8(w + x, vadd_u8(t, vmovn_u16(vreinterpretq_u16_s16(p))));
+    const uint8x16x2_t dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
+    const uint8x16x2_t ntab = { { vsubq_u8(vmulq_u8(dlt.val[0], vld1q_u8(idx)), vld1q_u8(table)),
+                                  vsubq_u8(vmulq_u8(dlt.val[1], vld1q_u8(idx + 16)), vld1q_u8(table + 16)) } };
+    const uint8x16_t fr = vdupq_n_u8((uint8_t)fogc), fg = vdupq_n_u8((uint8_t)(fogc >> 8)), fb = vdupq_n_u8((uint8_t)(fogc >> 16));
+    const uint8x16_t fa = vdupq_n_u8((uint8_t)(fogc >> 24)), x81 = vdupq_n_u8(0x81), x7f = vdupq_n_u8(0x7f);
+    uint8_t *c8 = (uint8_t *)c, *end = c8 + 4 * HR_W;
+    const ptrdiff_t ad = (const uint8_t *)attr - c8;                        /* one pointer: attr at c8 + ad */
+    for (; c8 != end; c8 += 64) {
+        uint8x16x4_t px = vld4q_u8(c8);
+        if (__builtin_expect(vmaxvq_u8(px.val[3]) < 0x80, 0)) continue;     /* no fog flag in the group */
+        uint8x16x4_t a = vld4q_u8(c8 + ad);
+        uint16x8_t d0 = vshrq_n_u16(vreinterpretq_u16_u8(vzip1q_u8(a.val[1], a.val[2])), 1);
+        uint16x8_t d1 = vshrq_n_u16(vreinterpretq_u16_u8(vzip2q_u8(a.val[1], a.val[2])), 1);
+        uint16x8_t v0 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d0, off)), sh));
+        uint16x8_t v1 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d1, off)), sh));
+        /* i = v >> 10 (the high bytes >> 2), or >= 0xc0 without the fog flag (tbl gives 0) */
+        uint8x16_t i = vsriq_n_u8(vcgezq_s8(vreinterpretq_s8_u8(px.val[3])), vuzp2q_u8(vreinterpretq_u8_u16(v0), vreinterpretq_u8_u16(v1)), 2);
+        int8x16_t dl = vreinterpretq_s8_u8(vqtbl2q_u8(dlt, i));
+        int16x8_t p0 = vqdmulhq_s16(vshll_n_s8(vget_low_s8(dl), 5), vreinterpretq_s16_u16(v0));
+        int16x8_t p1 = vqdmulhq_s16(vshll_high_n_s8(dl, 5), vreinterpretq_s16_u16(v1));
+        uint8x16_t k = vsubq_u8(vqtbl2q_u8(ntab, i), vuzp1q_u8(vreinterpretq_u8_s16(p0), vreinterpretq_u8_s16(p1)));   /* -w */
+        int8x16_t ks = vreinterpretq_s8_u8(vaddq_u8(k, vceqq_u8(k, x81)));  /* -128 for w = 127 */
+        px.val[3] = fog_ch16(vandq_u8(px.val[3], x7f), fa, ks);
+        if (full) px.val[0] = fog_ch16(px.val[0], fr, ks), px.val[1] = fog_ch16(px.val[1], fg, ks), px.val[2] = fog_ch16(px.val[2], fb, ks);
+        vst4q_u8(c8, px);
     }
 }
-/* fog of a line in place (fog_modulate_full/alpha_intermediate), NEON over 4 pixels: per byte c += ((s8)(c - F) *
- * k) >> 7 with k = -w (and -128 for 127) where the pixel's fog flag (bit 31) is set, else 0; the flag is cleared;
- * alpha-only fog leaves r, g, b */
-static __attribute__((noinline)) void fog_line(uint32_t *c, const uint8_t *w, uint32_t fogc, int full) {
-    static const uint8_t kidx[16] = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3 };
-    const uint8x16_t ki = vld1q_u8(kidx), fcol = vreinterpretq_u8_u32(vdupq_n_u32(fogc)), x7f = vdupq_n_u8(0x7f);
-    const uint8x16_t chmask = vreinterpretq_u8_u32(vdupq_n_u32(full ? 0xffffffffu : 0xff000000u));
-    for (int x = 0; x < HR_W; x += 4) {
-        uint8x16_t px = vreinterpretq_u8_u32(vld1q_u32(c + x));
-        uint8x8_t w8 = vreinterpret_u8_u32(vdup_n_u32(*(const uint32_t *)(w + x)));
-        uint8x8_t k8 = vsub_u8(vdup_n_u8(0), vsub_u8(w8, vceq_u8(w8, vdup_n_u8(0x7f))));   /* -w, -128 for 127 */
-        uint8x16_t k = vqtbl1q_u8(vcombine_u8(k8, k8), ki);                                 /* per pixel, 4 lanes */
-        uint8x16_t flag = vreinterpretq_u8_u32(vcgtq_u32(vreinterpretq_u32_u8(px), vdupq_n_u32(0x7fffffff)));
-        k = vandq_u8(vandq_u8(k, flag), chmask);
-        px = vandq_u8(px, vreinterpretq_u8_u32(vdupq_n_u32(0x7fffffff)));
-        int8x16_t diff = vreinterpretq_s8_u8(vsubq_u8(px, fcol));
-        int16x8_t lo = vmulq_s16(vmovl_s8(vget_low_s8(diff)), vmovl_s8(vget_low_s8(vreinterpretq_s8_u8(k))));
-        int16x8_t hi = vmulq_s16(vmovl_s8(vget_high_s8(diff)), vmovl_s8(vget_high_s8(vreinterpretq_s8_u8(k))));
-        uint8x16_t add = vcombine_u8(vmovn_u16(vreinterpretq_u16_s16(vshrq_n_s16(lo, 7))), vmovn_u16(vreinterpretq_u16_s16(vshrq_n_s16(hi, 7))));
-        vst1q_u32(c + x, vreinterpretq_u32_u8(vaddq_u8(px, add)));
-    }
-    (void)x7f;
+static __attribute__((noinline)) void fog_line(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc, int full) {
+    if (full) fog_line16(c, attr, table, params, fogc, 1);
+    else fog_line16(c, attr, table, params, fogc, 0);
 }
 /* edge marking (spec/resolve.c's edge_identify + edge_mark): a pixel C is an edge against a neighbour N (left, right,
  * above, below; the clear attribute beyond the line's ends) when N's 24-bit key is larger and the polygon ids differ
@@ -401,14 +413,13 @@ static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
     uint32_t params = 0, fogc = U32(geom, 0x9a9c), clear = U32(sys, SYS_CLEAR_ATTR);
     if (fog) { uint32_t sh = (d3 >> 8) & 0xf; params = sh | ((U16(geom, 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16; }
-    uint8_t w[HR_W];
     (void)bin;
 #define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
 #define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
     _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
     for (int l = 1; l <= HR_BL; l += 2) {               /* two lines a step: the edge marking shares their compares */
         uint32_t *o = H->out + (l - 1) * HR_W;
-        if (fog) for (int k = l; k <= l + 1; k++) { fog_weights(ATT(k), w, geom + 0x9974, params); fog_line(COL(k), w, fogc, fog == 1); }
+        if (fog) for (int k = l; k <= l + 1; k++) fog_line(COL(k), ATT(k), geom + 0x9974, params, fogc, fog == 1);
         if (edges) edge_lines(o, o + HR_W, COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), clear, geom + 0x99b4);
         else for (int x = 0; x < 2 * HR_W; x++) o[x] = COL(l)[x] & 0x1fffffff;
     }
