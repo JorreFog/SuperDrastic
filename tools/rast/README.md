@@ -82,5 +82,5 @@ test; one that all pass is stored straight.
 - Device A/B: the same game with the option off and on, from the performance logs.
 - TBL palette lookups for 4- and 16-colour textures (saves the second gather); 64-bit texel-pair loads in the
   bilinear gathers.
-- 3x: the top vertex at 3x for tied vertices; cheaper edge marking and downsample; later the hi-res 3D layer
-  presented through the dsflip shader instead of downsampled.
+- 3x: the top vertex at 3x for tied vertices; a cheaper downsample; later the hi-res 3D layer presented through
+  the dsflip shader instead of downsampled.

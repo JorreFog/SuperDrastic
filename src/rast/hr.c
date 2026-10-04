@@ -322,8 +322,9 @@ static __attribute__((noinline)) void fog_line(uint32_t *c, const uint8_t *w, ui
  * clear) and by 31 where there is no edge: out-of-range indices keep the pixel's colour. */
 static inline __attribute__((always_inline)) uint8x16_t edge_sel(uint8x16_t m, uint8x16_t t, uint8x16_t f) {
     /* m ? t : f as one bif (the bsl intrinsic becomes and/orr pairs when the compiler sees that the operands of the
-     * compare chains are exclusive). f must not be an all-ones constant when testing under qemu: 9.2's TCG folds a
-     * bit select whose false operand is a known -1 to -1 (fold_bitsel_vec's orc case swaps the wrong operands). */
+     * compare chains are exclusive). f must not be an all-ones constant when testing under an unpatched qemu 9.2:
+     * its TCG folds a bit select whose false operand is a known -1 to -1 (fold_bitsel_vec's orc case swaps the wrong
+     * operands; tools/sim/setup.sh applies the fix to the simulator's qemu). */
     __asm__("bif %0.16b, %1.16b, %2.16b" : "+w"(t) : "w"(f), "w"(m));
     return t;
 }
