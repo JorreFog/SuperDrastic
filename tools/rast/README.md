@@ -78,6 +78,12 @@ renderer hooked (`RAST=ours`/`diff`, `DSFLIP_RAST=1`):
 - Exactness: `spec/composite.c` is the C port, unit-tested against the originals (`tools/rast/ut/t_composite.c`,
   which also tests the NEON version); `RAST_COMPCHECK=1` checks every call in the running emulator against the C
   port, and every table when it becomes valid (`[comp] check:` every 2 s, `[compcheck]` lines for differences).
+  The test ROMs' 3D layer is opaque nearly everywhere, so a stale table entry mostly gives the right answer anyway:
+  the check mode catches a missing gap-row update (S4: 172 differing calls in 30 s with it removed) but hardly a
+  missing table copy (a frame-skipping S4 with `threaded_3d=1` flags only its first copy). `tools/rast/ut/t_comp_hook.c`
+  covers that bookkeeping on random frames: the hook's lookup and the wrappers' validity rule (rendered with
+  re-marked gap rows, copied, unchanged, 1x, reset; `threaded_3d` on and off) against the original, with stubs that
+  write the frames as the disassembly of `update_frame_3d_4x` shows.
 - Cost per frame, simulator instruction counts (stress ROM L4 and the field scene S7, 90 s each): DraStic's
   function and its gather 0.326 M (425 a call); NEON 0.108 M (139 a call); table 0.024 M in the compositor (28 a
   call) plus 0.100 M on the render threads (`comp_bin`, 130 a half-row) and 0.006 M for the gap rows. On the
