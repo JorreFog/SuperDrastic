@@ -153,6 +153,8 @@ int menu_event(void *e); void menu_frame(void); int menu_touch_event(int down_ch
 volatile int dsflip_hold;               /* menu.c: DraStic's frames are dropped, not shown (a load runs behind the menu's screen) */
 static int st_drop_src, st_drop_q, st_drop_buf;
 static volatile int drops_total, shown_total;   /* frames dropped (any cause) / new frames on the top panel, since start */
+static int hash_every, hash_from, hash_to = 0x7fffffff;   /* DSFLIP_HASH=N[:from[:to]]: see SDL_RenderPresent */
+static int direct_on, st_direct, st_dcopy;  /* direct rendering (see hook_update_screen): on; screens drawn in place and copied, per 10 s */
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
 const char *shader_name(void);
@@ -810,6 +812,7 @@ static void *presenter(void *a) {
                     st_late_mask[1], st_late_mask[2], st_late_mask[3], st_late_unf, st_safety, ph);
             }
             if (st_unfenced) LOG("[fence] %d commits showed a frame the GPU hadn't finished\n", st_unfenced);
+            if (direct_on) { LOG("[direct] %d screens drawn in place, %d copied\n", st_direct, st_dcopy); st_direct = st_dcopy = 0; }
             memset(st_late_src, 0, sizeof st_late_src); memset(st_late_mask, 0, sizeof st_late_mask);
             st_safety = 0; st_late_n = 0; st_late_unf = 0; st_unfenced = 0;
             audio_pump_log();
@@ -1312,6 +1315,7 @@ int SDL_PollEvent(void *e) {
     return r;
 }
 
+static void direct_install(void);
 /* ---------- init ---------- */
 /* The verdict for session.sh: DSFLIP_STATE (default /tmp/dsflip-state) gets "ready" once libdsflip has both panels,
  * or "passthrough: <reason>" when it gives up. session.sh deletes the file before starting DraStic and waits for
@@ -1533,8 +1537,10 @@ __attribute__((constructor)) static void init(void) {
     const char *tp = getenv("DSFLIP_TOUCH");
     if (!pthread_create(&th, 0, touch_thread, (void *)(tp ? tp : "fe5e0000.i2c"))) pthread_setname_np(th, "dsf-touch");
     cursor_log = getenv("DSFLIP_CURSOR_LOG") != 0;
+    if (getenv("DSFLIP_HASH")) sscanf(getenv("DSFLIP_HASH"), "%d:%d:%d", &hash_every, &hash_from, &hash_to);
     if (getenv("DSFLIP_TAP_FIFO")) pthread_create(&th, 0, tap_fifo_thread, 0);
     ok = 1;
+    direct_install();
     LOG("[dsflip] ready: top plane %u, bottom plane %u (init %lld ms)\n", P[0].plane, P[1].plane, (now_us() - t_init) / 1000);
     verdict("ready");
     cpugov_start();
@@ -1625,8 +1631,10 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
     return t;
 }
 
+static void direct_release(void *t);
 void SDL_DestroyTexture(void *t) {
     REAL(void, SDL_DestroyTexture, void *);
+    direct_release(t);
     lock(&mu);
     stex *s = find(t);
     if (s) s->tex = 0;
@@ -1654,6 +1662,125 @@ int SDL_LockTexture(void *t, const SDL_Rect *rc, void **px, int *pitch) {
 static void finish_write(stex *s) {    /* with mu held */
     if (s->written >= 0 && s->b[s->written].state == WRITTEN) s->b[s->written].state = FREE;  /* never presented */
     s->b[s->writing].state = WRITTEN; s->written = s->writing; s->writing = -1;
+}
+
+/* ---------- direct rendering ----------
+ * DraStic keeps a memory image of each DS screen and, once a frame, update_screen() copies it into the screen's
+ * texture: SDL_LockTexture, memcpy (786 KiB per screen at 2x), SDL_UnlockTexture. Lock hands it one of our scanout
+ * buffers, so that copy was the only one left, and on these handhelds it costs more than its own time: 1.5 MiB a
+ * frame through the 512 KiB cache that DraStic's main thread shares with every other thread. Measured on the RG DS
+ * Plus (HeartGold 2x at 1104 MHz, 2026-10-05): the two copies were 3.5% of the process's CPU time and 9% of its
+ * cache misses, all of it on the main thread, whose 0.49 instructions a cycle are mostly waits for memory.
+ *
+ * So update_screen is replaced. DraStic's pointer to a screen's image (start_frame hands it to the 2D engines at
+ * the start of every frame) is set to the buffer the NEXT frame will be shown from, and at update_screen that
+ * buffer is simply finished. This works because DraStic's renderer only ever writes the image: render_scanline
+ * ends in one of the colour conversions (render_scanline_color_convert_*), which store whole rows, both rows of
+ * a 2x line from the line's colour planes, never one row from the other. That is what scanout memory wants: it is
+ * mapped write-combined, where writes cost what they cost on cached memory and reads 60 times more (measured:
+ * 786 KiB written in 0.5 ms, read in 31 ms).
+ *
+ * What reads or owns the image is handled here:
+ *  - screen_copy16 (the savestate thumbnail, and DraStic's own menu's background) reads the last frame out of the
+ *    image: for its call the pointer is the last finished frame's buffer, which holds what the image would;
+ *  - set_screen_hires_mode destroys the texture, creates the new one and then realloc()s the image: the destroy
+ *    hook puts DraStic's own memory back first (dr_heap), and the frame DraStic then draws into it is copied the
+ *    old way (as is the very first frame), after which the next goes direct again;
+ *  - a screen that an engine did not draw this frame (frame skip, a screen switched off) gets no update_screen
+ *    call, here as before: its buffer waits.
+ * DSFLIP_DIRECT=0 leaves update_screen alone. */
+#include "rast/rast.h"
+#define DS_SCREENS       0x15fef8       /* u64: DraStic's screen table: two entries of 0x28 bytes, see ds_screen() */
+#define DS_UPDATE_SCREEN 0x8a120        /* update_screen(int screen) */
+#define DS_SCREEN_COPY16 0x88290        /* screen_copy16(u16 *dst, int screen) */
+static void (*orig_update_screen)(int);
+static void (*orig_screen_copy16)(void *, int);
+static void *dr_heap[2];                /* DraStic's own image of each screen, while its pointer is on a buffer of ours */
+static dbuf *dr_last[2];                /* the buffer holding each screen's last finished frame */
+
+/* entry i of DraStic's screen table: +0 the SDL texture, +8 the image, +0x20 u8 enabled, +0x21 u8 hires (2x);
+ * after the two entries: +0xac u32 screens swapped, +0xb8 u32 DraStic's menu is up */
+static uint8_t *ds_screen(int i) { return *(uint8_t **)(ds_base + DS_SCREENS) + 0x28 * i; }
+static int dr_ours(const stex *s, const void *p) { for (int k = 0; k < s->nb; k++) if (s->b[k].map == p) return k; return -1; }
+/* with mu held: a buffer for DraStic to draw the next frame into; not the one with the last finished frame while
+ * another is free (a frame that was never shown, or was replaced, leaves its buffer free but still the last) */
+static int dr_take(stex *s, const dbuf *last) {
+    for (int k = 0; k < s->nb; k++) if (s->b[k].state == FREE && &s->b[k] != last) return k;
+    return take_free(s);
+}
+
+static void hook_update_screen(int i) {
+    uint8_t *sc = ds_screen(i & 1);
+    void **img = (void **)(sc + 8);
+    stex *s = (ok && sc[0x20] && *img) ? find(*(void **)sc) : 0;
+    if (!s || s->kind != K_SCREEN || s->nb < 2 || s->b[0].pitch != (uint32_t)s->w * 4) { orig_update_screen(i); return; }
+    i &= 1;
+    lock(&mu);
+    int k = dr_ours(s, *img);
+    if (k >= 0 && s->writing == k && s->b[k].state == WRITING) {
+        finish_write(s); st_direct++;                   /* DraStic drew this frame straight into it */
+    } else {
+        /* its own image (the first frame, the first after it reallocated the image), or a buffer that isn't the
+         * one it was given: copy the frame as update_screen does */
+        const void *src = *img;
+        if (k < 0) dr_heap[i] = *img;
+        k = take_free(s); s->b[k].state = WRITING; s->writing = k;
+        unlock(&mu);
+        memcpy(s->b[k].map, src, (size_t)s->b[k].pitch * s->h);
+        lock(&mu);
+        finish_write(s); st_dcopy++;
+    }
+    dr_last[i] = &s->b[s->written];
+    k = dr_take(s, dr_last[i]);
+    s->b[k].state = WRITING; s->writing = k;
+    *img = s->b[k].map;                                 /* the next frame's lines go straight into it */
+    unlock(&mu);
+}
+
+/* DraStic is about to destroy this screen texture (and then reallocate the screen's image): its own memory back */
+static void direct_release(void *t) {
+    if (!direct_on || !t) return;
+    for (int i = 0; i < 2; i++) {
+        uint8_t *sc = ds_screen(i);
+        if (*(void **)sc != t) continue;
+        lock(&mu);
+        stex *s = find(t);
+        if (s && dr_heap[i] && dr_ours(s, *(void **)(sc + 8)) >= 0) {
+            *(void **)(sc + 8) = dr_heap[i];
+            if (s->writing >= 0 && s->b[s->writing].state == WRITING) { s->b[s->writing].state = FREE; s->writing = -1; }
+        }
+        dr_heap[i] = 0; dr_last[i] = 0;
+        unlock(&mu);
+    }
+}
+
+static void hook_screen_copy16(void *dst, int screen) {
+    uint8_t *tab = ds_screen(0);
+    int i = (screen ^ (int)*(uint32_t *)(tab + 0xac)) & 1;     /* as get_screen_ptr picks the entry */
+    void **img = (void **)(ds_screen(i) + 8), *save = *img;
+    dbuf *last = dr_last[i];
+    stex *s = find(*(void **)ds_screen(i));
+    if (!*(uint32_t *)(tab + 0xb8) && last && last->map && s && dr_ours(s, save) >= 0) {
+        *img = last->map;               /* the last finished frame, where DraStic's own image would have it */
+        orig_screen_copy16(dst, screen);
+        *img = save;
+    } else orig_screen_copy16(dst, screen);
+}
+
+static void direct_install(void) {
+    static const uint32_t expect_us[4] = { 0xa9b87bfd, 0x910003fd, 0xa9025bf5, 0x2a0003f5 };
+    static const uint32_t expect_sc[4] = { 0xa9bc7bfd, 0x910003fd, 0xa90153f3, 0x2a0103f4 };
+    const char *e = getenv("DSFLIP_DIRECT");
+    if (e && *e == '0') { LOG("[dsflip] direct rendering: off (DSFLIP_DIRECT=0)\n"); return; }
+    if (!ds_find_base()) return;
+    /* both or neither: without the thumbnail hook a savestate's picture would be a frame from a moment ago */
+    uint32_t *sc16 = (uint32_t *)(ds_base + DS_SCREEN_COPY16);
+    if (memcmp(sc16, expect_sc, 16)) { LOG("[dsflip] direct rendering: off (not the DraStic build it knows)\n"); return; }
+    orig_update_screen = (void (*)(int))rast_hook(DS_UPDATE_SCREEN, expect_us, (void *)hook_update_screen);
+    if (!orig_update_screen) { LOG("[dsflip] direct rendering: off (not the DraStic build it knows)\n"); return; }
+    orig_screen_copy16 = (void (*)(void *, int))rast_hook(DS_SCREEN_COPY16, expect_sc, (void *)hook_screen_copy16);
+    direct_on = 1;
+    LOG("[dsflip] direct rendering: DraStic draws into the scanout buffers\n");
 }
 
 void SDL_UnlockTexture(void *t) {
@@ -1838,6 +1965,23 @@ void SDL_RenderPresent(void *rn) {
     if (pending_route[1]) menu_touch = pending_route[1]->kind == K_MENU;
     int menu_opened = menu_touch && !menu_was;
 
+    if (hash_every && dsflip_presents >= hash_from && dsflip_presents <= hash_to && (dsflip_presents - hash_from) % hash_every == 0) {
+        /* DSFLIP_HASH=N[:from[:to]] (tests): every N-th presented frame's two screens as hashes in the log, from
+         * frame `from` to frame `to`. The emulation does
+         * not depend on the host's timing, so two runs from the same savestate without input log the same hashes
+         * for the same frame numbers, whatever the display path or the 3D renderer's internals do. (Reads the
+         * frames back from scanout memory: tens of milliseconds, on the frames it hashes only.) */
+        uint64_t h[2] = { 0, 0 };
+        for (int i = 0; i < 2; i++) {
+            stex *s = pending_route[i];
+            if (!s || s->kind != K_SCREEN || s->written < 0 || s->b[s->written].state != WRITTEN) continue;
+            const uint64_t *w = s->b[s->written].map; size_t n = (size_t)s->b[s->written].pitch * s->h / 8;
+            uint64_t x = 0xcbf29ce484222325ull;
+            for (size_t k = 0; k < n; k++) x = (x ^ (w[k] & 0x00ffffff00ffffffull)) * 0x100000001b3ull;   /* (not the unused alpha bytes) */
+            h[i] = x;
+        }
+        LOG("[hash] frame %d top %016llx bottom %016llx\n", dsflip_presents, (unsigned long long)h[0], (unsigned long long)h[1]);
+    }
     for (int i = 0; i < 2; i++) {
         stex *s = pending_route[i]; pending_route[i] = 0;
         if (!s) continue;

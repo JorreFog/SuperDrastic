@@ -50,7 +50,7 @@ void defer_flush(const layout_t *L, uint8_t *ctx);
 /* hr.c: the 3x pipeline */
 void hr_render_bins(uint8_t *ctx);
 void hr_vertices(uint8_t *geom, const uint32_t *recips, const uint32_t *shifts);
-extern int hr_vcheck, hr_check;
+extern int hr_vcheck, hr_check, hr_ipcheck, hr_edges;
 void hr_check_frame(uint8_t *sys);
 extern uint32_t *hr_frame;
 enum { CLAMP, WRAP, FLIP };

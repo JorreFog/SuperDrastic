@@ -65,6 +65,10 @@ K = dict(recip=0x00, recip_u=0x08, tex=0x10, pal=0x18, pid24=0x20, bytes=0x30, K
 # pipeline's 48-line bins use 0x100), HR = the hi-res kernel set: buffer strides from kargs instead of DraStic's
 # context layout (line 0x800 bytes, attributes at +0x10000, ids at +0x20000 with 0x200 per line, owners 0x400)
 SPS, HR, PFX = 0xb0, False, "rast_kern_"
+# the hi-res context's layout as far as the kernels' prefetches need it (hr.c: HR_LSTRIDE, HR_ATTR; checked there
+# against rast_kern_h_layout) and how many lines down they ask (0: no prefetch)
+HR_LSTRIDE, HR_ATTR = 768 * 4, 50 * 768 * 4
+PF_LINES = int(__import__("os").environ.get("KERN_PF_LINES", "2"))
 FRAME = 784             # the stack frame: [sp,#256] holds a line's pass masks (512 pixels; 768 in the hi-res set)
 def span_layout(stride):
     global SPS, SP
@@ -407,11 +411,28 @@ def tail(r, free=False):
 
 def depth_regs(D): return ("v6", "v6") if D == 2 else ("v25", "v26")
 
-def test(D, fail="8f", eq=24):
+def prefetch(colour=True):
+    """The pixels of this group PF_LINES lines down, attributes and (unless the kernel writes none) colours: a
+    polygon's next lines start near this one's pixels, and the render context does not stay in the handheld's cache
+    between polygons (512 KiB for four cores; a 2x bin's context is 144 KiB, a 3x one 345 KiB per thread). Measured
+    on the RG DS Plus, HeartGold: 22% (2x) and 41% (3x) of the hot kernel's time was the wait for this group's
+    attribute and colour words. Past the context's last line the prefetch reads whatever follows it (it cannot fault).
+    x18 scratch."""
+    if not PF_LINES: return
+    ls, ao = (HR_LSTRIDE, HR_ATTR) if HR else (0x800, 0x10000)
+    d = PF_LINES * ls
+    e(f"prfm pldl1keep, [x2, #{d}]")
+    if colour:
+        back = ao - d                               # the colour words: x2 - attr_off + d
+        sub = (back + 0xfff) & ~0xfff
+        e(f"sub x18, x2, #{sub >> 12}, lsl #12"); e(f"prfm pstl1keep, [x18, #{sub - back}]")
+
+def test(D, fail="8f", eq=24, pf_colour=True):
     """depth test against the attribute words: m8 -> v28 (and x8); the group's attribute words (dep | pid << 24) into
     the dep registers, or dep spilled to [sp,#64]; fails to `fail`; the depth-equal test out of line at `eq`"""
     dl, dh = depth_regs(D)
     e("ldp q27, q28, [x2]")
+    prefetch(pf_colour)
     e("bic v27.4s, #0xff, lsl #24"); e("bic v28.4s, #0xff, lsl #24")
     e(f"tbnz w7, #1, {eq}f")                                                    # depth equal: out of line
     e(f"cmhi v27.4s, v27.4s, {dl}.4s"); e(f"cmhi v28.4s, v28.4s, {dh}.4s")
@@ -443,7 +464,7 @@ def head(D, M):
     def ool():
         e("6:"); head_block(D, M, lambda: advance(1), "8b"); e("b 5b")
         if M != 2:
-            e("24:"); depth(D); test(D, "39f", 30); e("b 28b")
+            e("24:"); depth(D); test(D, "39f", 30, M != 1); e("b 28b")
             test_equal(D, 30)
             e("39:"); advance(); e("b 8b")
     OOLS.append(ool)
@@ -456,6 +477,7 @@ def head_w(M):
     e("tbnz w7, #1, 24f"); e("tbnz w7, #0, 24f"); e("tbz w7, #13, 24f")
     steps(("v24", "v29", "v30", "v31"))
     e("ldp q27, q28, [x2]")
+    prefetch(M != 1)
     e("bic v27.4s, #0xff, lsl #24"); e("bic v28.4s, #0xff, lsl #24")
     e("smull v25.4s, v24.4h, v6.h[0]"); e("smull2 v26.4s, v24.8h, v6.h[0]")
     e("sshr v25.4s, v25.4s, #15"); e("sshr v26.4s, v26.4s, #15")
@@ -479,12 +501,14 @@ def head_block(D, M, st, fail):
     """head(): the depth (or owner) test with st() beside it, one block; fails to `fail`"""
     if M == 2:
         e("ldr q27, [x2]")
+        prefetch()
         if "idx" in RL: e(f"cmeq v27.8h, v27.8h, {RL['idx'][0]}.8h")
         else: e(f"ldr q25, [x19, #{K['idx16']}]"); e("cmeq v27.8h, v27.8h, v25.8h")
     else:
         dl, dh = depth_regs(D)
         depth(D)
         e("ldp q27, q28, [x2]")
+        prefetch(M != 1)
         e("bic v27.4s, #0xff, lsl #24"); e("bic v28.4s, #0xff, lsl #24")
         e(f"cmhi v27.4s, v27.4s, {dl}.4s"); e(f"cmhi v28.4s, v28.4s, {dh}.4s")
         e("uzp1 v27.8h, v27.8h, v28.8h")
@@ -1009,7 +1033,7 @@ def lazy_loop(D, T, R, F, M):
     line's weights and interpolants (v28, x8: the pass mask kept), and on into the full loop at the weights (28:)"""
     e("20:")
     if M == 2: owner_test("21f")
-    else: depth(D); test(D, "21f", 34)
+    else: depth(D); test(D, "21f", 34, M != 1)
     e("b 27f")
     e("21:")
     e("subs x5, x5, #8"); e(f"b.ls {'9f' if R or M == 2 else '15f'}")
@@ -1057,7 +1081,7 @@ def kernel_vis(D, T):
     e("0:")
     if D == 1: head_w(1)
     elif lazy(D, st): head(D, 1)
-    else: depth(D); test(D)
+    else: depth(D); test(D, pf_colour=False)
     if T:
         texture(T); modulate_alpha("1f"); e("1:"); alpha_test()
     OOLS.append(vis_store(D))
@@ -1139,6 +1163,7 @@ for n in range(9): e(".hword " + ", ".join("0xffff" if i < n else "0" for i in r
 e(".float 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0")
 e(".word 0, 1, 2, 3, 4, 5, 6, 7")
 e(".float 8.0, 8.0, 8.0, 8.0")
+e(".globl rast_kern_h_layout"); e("rast_kern_h_layout:"); e(f".word {HR_LSTRIDE}, {HR_ATTR}")
 e('.section .note.GNU-stack,"",%progbits')
 # the scheduler's memory facts (kernsched.py): the registers' roles, the same in every kernel. x6 x21 the texture and
 # the palette, x19 the kernel arguments, x20 the constant tables, x22 the span entries: read-only. x1 x2 two distinct

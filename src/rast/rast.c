@@ -19,7 +19,6 @@
 #include "comp.h"
 #include "res2.h"
 
-uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
 static void (*orig_render_bins)(uint8_t *ctx);
 static __thread int in_ours;
@@ -229,33 +228,6 @@ static void hook_entry(uint8_t *ctx) {
 
 /* ---- install ---- */
 
-static int cb(struct dl_phdr_info *i, size_t s, void *d) { if (!i->dlpi_name[0] && !ds_base) ds_base = i->dlpi_addr; return 0; }
-
-static void patch_jump(uint32_t *at, void *to) {
-    at[0] = 0x58000050;                   /* ldr x16, #8 */
-    at[1] = 0xd61f0200;                   /* br x16 */
-    memcpy(at + 2, &to, 8);
-}
-
-/* patch DraStic's function at `off` (whose first 4 instructions must be `expect`) to jump to `to`; returns a
- * trampoline that runs the original (valid only when those 4 instructions are position independent), or 0 */
-void *rast_hook(uintptr_t off, const uint32_t expect[4], void *to) {
-    uint32_t *entry = (uint32_t *)(ds_base + off);
-    if (memcmp(entry, expect, 16)) return 0;
-    static uint32_t *tramp; static int used;
-    if (!tramp) tramp = mmap(0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    uint32_t *t = tramp + used; used += 8;
-    memcpy(t, entry, 16);
-    patch_jump(t + 4, entry + 4);
-    __builtin___clear_cache((char *)t, (char *)(t + 8));
-    uintptr_t pg = (uintptr_t)entry & ~4095ul;
-    mprotect((void *)pg, 8192, PROT_READ | PROT_WRITE | PROT_EXEC);
-    patch_jump(entry, to);
-    __builtin___clear_cache((char *)entry, (char *)(entry + 4));
-    mprotect((void *)pg, 8192, PROT_READ | PROT_EXEC);
-    return t;
-}
-
 static const uint32_t expect_bins[4] = { 0x91408001, 0xa9b17bfd, 0x52800183, 0x910003fd };
 static const uint32_t expect_setup[4] = { 0xd10243ff, 0xa9017bfd, 0x910043fd, 0xa90253f3 };
 
@@ -354,6 +326,8 @@ __attribute__((constructor)) static void rast_init(void) {
     { const char *t = getenv("DSFLIP_RAST_SCALE"); if (!t) t = getenv("RAST_SCALE"); if (t) rast_scale = atoi(t) == 3 ? 3 : 2; }
     if (mode == 2) rast_scale = 2;
     hr_vcheck = getenv("RAST_VCHECK") != 0;
+    hr_check = getenv("RAST_HRCHECK") != 0;
+    if (getenv("RAST_HR_EDGES")) hr_edges = atoi(getenv("RAST_HR_EDGES"));
     dump_dir = getenv("RAST_DUMP");
     rast_stats = getenv("RAST_STATS") != 0;
     print_frames = getenv("RAST_FRAMES") != 0;
@@ -364,7 +338,7 @@ __attribute__((constructor)) static void rast_init(void) {
     if (getenv("RAST_WALK")) walk = atoi(getenv("RAST_WALK"));
     { extern int use_neon; use_neon = pipe_sel >= 1 ? pipe_sel : 1; }
     if (getenv("RAST_DUMP_EVERY")) dump_every = atoi(getenv("RAST_DUMP_EVERY"));
-    dl_iterate_phdr(cb, 0);
+    ds_find_base();
     orig_render_bins = (void (*)(uint8_t *))rast_hook(DS_RENDER_BINS_4X, expect_bins, (void *)hook_entry);
     if (!orig_render_bins) { fprintf(stderr, "[rast] Gengis Engine: unknown DraStic build, not hooking\n"); return; }
     orig_setup = (setup_fn)rast_hook(DS_RENDER_POLYGON_SETUP_4X, expect_setup, (void *)hook_setup);

@@ -62,6 +62,14 @@ __attribute__((constructor)) static void hr_recip_init(void) { for (uint32_t i =
 #define U64(p, o) (*(uint64_t *)((uint8_t *)(p) + (o)))
 #define PTR(p, o) ((uint8_t *)U64(p, o))
 
+/* The handheld's cores share one 512 KiB cache and a bin's context is 345 KiB per render thread, so every pass over
+ * a bin reads from memory. Measured on the RG DS Plus (HeartGold at 3x, 2026-10-05): the edge-marking pass and the
+ * downsample spent nearly all their time waiting on their loads (the stride prefetcher does not follow these
+ * multi-stream structure loads), and the render threads ran at 0.28 instructions a cycle. The passes below ask for
+ * the lines they will read a pair or a triple ahead. */
+#define HR_PREFETCH(p)   __builtin_prefetch((const void *)(p), 0, 3)
+#define HR_PREFETCH_W(p) __builtin_prefetch((const void *)(p), 1, 3)
+
 const layout_t layout_3x = { HR_SPS, HR_LSTRIDE, HR_ATTR, HR_ID, HR_W, HR_W * 2, HR_W, HR_CL, 1, HR_HDR };
 
 typedef struct { uint16_t x, y; } hrv_t;
@@ -69,6 +77,9 @@ typedef struct { uint16_t x, y; } hrv_t;
 static hrv_t hr_vtx[2][HR_NVTX];        /* the vertices' 3x screen coordinates, per geometry buffer */
 static hrv_t hr_vtx2[2][HR_NVTX];       /* the 2x ones: the index mapping check against DraStic's records */
 int hr_vcheck;
+int hr_check;                           /* RAST_HRCHECK=1: see hr_resolve_bin */
+int hr_ipcheck;                         /* RAST_HRIPCHECK: not used by this resolve */
+int hr_edges = -1;                      /* RAST_HR_EDGES=0/1 (tests): edge marking whatever DraStic's setting says */
 uint32_t *hr_frame;                     /* RAST_DUMP: the resolved 3x frame (576 x 768) */
 
 #define HR_NPOLY    2048                /* polygons per list (GEOM_POLYS_BUF / 32) */
@@ -82,8 +93,12 @@ typedef struct {
 } hr_t;
 static __thread hr_t hr;
 
+extern const uint32_t rast_kern_h_layout[2];    /* the layout the hi-res kernels' prefetches were generated for */
 static hr_t *hr_get(void) {
     if (!hr.ctx) {
+        if (rast_kern_h_layout[0] != HR_LSTRIDE || rast_kern_h_layout[1] != HR_ATTR) {
+            fprintf(stderr, "[hr] kerngen.py's HR_LSTRIDE/HR_ATTR differ from hr.c's\n"); abort();
+        }
         hr.ctx = aligned_alloc(64, HR_CTX_SIZE + 64); memset(hr.ctx, 0, HR_CTX_SIZE + 64);
         hr.spans = aligned_alloc(64, HR_SPANS); memset(hr.spans, 0, HR_SPANS);
         hr.tp = aligned_alloc(64, HR_CL * HR_W + 64); memset(hr.tp, 0, HR_CL * HR_W + 64);
@@ -553,6 +568,7 @@ static __attribute__((noinline)) void edge_lines(uint32_t *col0, uint32_t *col1,
  * no_edge: DraStic's disable_edge_marking (render context byte CTX_NO_EDGE), as rast.c's resolve_bin. */
 static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin, int no_edge) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
+    if (hr_edges >= 0) no_edge = !hr_edges;            /* RAST_HR_EDGES=0/1 (tests) */
     int edges = (d3 >> 5) & 1 && !no_edge, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
     uint32_t params = 0, fogc = U32(geom, 0x9a9c), clear = U32(sys, SYS_CLEAR_ATTR);
@@ -597,7 +613,7 @@ static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t
  * The left outputs of a row go to the first 0x400 bytes of the output line and the right ones to the second (the
  * even and the odd pixels: the output block's layout). */
 #include <arm_neon.h>
-static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out, uint32_t clear) {
+static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out, uint32_t clear, unsigned triples) {
     static const uint8_t alpha_idx[16] = { 3, 3, 3, 3, 7, 7, 7, 7, 11, 11, 11, 11, 15, 15, 15, 15 };
     /* the K spread: 7282 in bytes 0-7 and K of pixels 0-3 in bytes 8-15 (u16 lanes) -> two pixels' four lanes each */
     static const uint8_t k_idx[32] = { 8, 9, 8, 9, 8, 9, 0, 1, 10, 11, 10, 11, 10, 11, 0, 1,
@@ -609,11 +625,12 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
     const uint16x4_t k9 = vdup_n_u16(7282);
     uint8x16_t two = vdupq_n_u8(2);
     __asm__("" : "+w"(two));                /* (an opaque 2: mla, not add + shl, for b + 2a) */
-    for (unsigned by = 0; by < HR_BL / 3; by++) {
+    for (unsigned by = 0; by < triples; by++) {
         const uint32_t *r0 = in + 3 * by * HR_W, *r1 = r0 + HR_W, *r2 = r1 + HR_W;
         uint8_t *o0 = out + (2 * by) * 0x800, *oe = o0 + 0x400;
         for (; o0 != oe; o0 += 16) {
             __asm__("" : "+r"(r0), "+r"(r1), "+r"(r2), "+r"(o0));     /* (four pointers, post-incremented by the accesses) */
+            HR_PREFETCH(r0 + 3 * HR_W); HR_PREFETCH(r1 + 3 * HR_W); HR_PREFETCH(r2 + 3 * HR_W);   /* the next triple */
             uint32x4x3_t t0 = vld3q_u32(r0), t1 = vld3q_u32(r1), t2 = vld3q_u32(r2);
             r0 += 12; r1 += 12; r2 += 12;
             uint8x16_t a0 = vreinterpretq_u8_u32(t0.val[0]), b0 = vreinterpretq_u8_u32(t0.val[1]), c0 = vreinterpretq_u8_u32(t0.val[2]);
@@ -745,7 +762,7 @@ void hr_render_bins(uint8_t *ctx) {
         }
         const uint32_t *res = hr_resolve_bin(H, sys, geom, bin, U8(ctx, CTX_NO_EDGE));
         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, res, HR_BL * HR_W * 4);
-        hr_downsample(res, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
+        hr_downsample(res, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR), HR_BL / 3);
         hr_gaps(sys, bin, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES);
         if (hr_check) hr_check_save(PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, bin);
         comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */

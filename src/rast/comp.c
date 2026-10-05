@@ -197,6 +197,29 @@ int comp_bin_table(uint8_t *sys, unsigned bin, uint8_t (**bits)[32], uint8_t **f
 void comp_bin_done(void) { __atomic_fetch_add(&bins_done, 1, __ATOMIC_RELAXED); }
 
 void (*comp_uf4_done)(uint8_t *sys);
+
+/* A frame without new geometry (every other frame of a game that draws its 3D at 30 fps, every frame of a still
+ * scene): with threaded_3d update_frame_3d_4x then makes the unpublished frame a copy of the last rendered one,
+ * memcpy(SYS_OUTPUT, SYS_LAST, 0xc0000) as its last act (a tail call), and video_3d_finish_rendering publishes
+ * SYS_OUTPUT. 768 KiB through a 512 KiB cache, 30 times a second in HeartGold (measured on the RG DS Plus), for a
+ * frame that already exists: here the copy is not made and SYS_OUTPUT is set to the last rendered frame instead, so
+ * that one is published again. The next update still picks "the frame that is not published" to render into, and
+ * nothing reads SYS_OUTPUT before that but video_3d_finish_rendering. Done through DraStic's GOT slot of memcpy:
+ * only this one call, recognised by its arguments inside hook_uf4's call, is not passed on. RAST_FRAMECOPY=1 (or
+ * DSFLIP_RAST_FRAMECOPY=1) keeps DraStic's copy. */
+static void *(*ds_memcpy_real)(void *, const void *, size_t);
+static __thread uint8_t *uf4_sys;       /* the system struct, while hook_uf4 is inside update_frame_3d_4x */
+static unsigned long copies_skipped;
+static void *ds_memcpy(void *d, const void *s, size_t n) {
+    uint8_t *sys = uf4_sys;
+    if (__builtin_expect(n == FRAME_BYTES && sys != 0, 0) && d == PTR(sys, SYS_OUTPUT) && s == PTR(sys, SYS_LAST)) {
+        U64(sys, SYS_OUTPUT) = (uint64_t)(uintptr_t)s;
+        __atomic_fetch_add(&copies_skipped, 1, __ATOMIC_RELAXED);
+        return d;
+    }
+    return ds_memcpy_real(d, s, n);
+}
+
 static void hook_uf4(uint8_t *sys, uint32_t skip) {
     uintptr_t b = (uintptr_t)sys + SYS_FRAMEBUF;
     if (__atomic_load_n(&fb0, __ATOMIC_RELAXED) != b) { invalidate_all(); __atomic_store_n(&fb0, b, __ATOMIC_RELAXED); }
@@ -207,7 +230,7 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
         for (int s = 0; s < 2; s++) if (s != p) set_valid(s, 0);
     }
     unsigned long n0 = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE);
-    orig_uf4(sys, skip);
+    uf4_sys = sys; orig_uf4(sys, skip); uf4_sys = 0;
     unsigned long n = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE) - n0;
     if (comp_uf4_done && n == NBINS) comp_uf4_done(sys);
     uint8_t *o = PTR(sys, SYS_OUTPUT), *last = PTR(sys, SYS_LAST);
@@ -392,6 +415,14 @@ void comp_init(void) {
         return;
     }
     use_tab = comp_mode >= 2;
+    if (use_tab) {
+        const char *k = getenv("DSFLIP_RAST_FRAMECOPY");
+        if (!k) k = getenv("RAST_FRAMECOPY");
+        if (!(k && atoi(k))) {
+            ds_memcpy_real = (void *(*)(void *, const void *, size_t))ds_got_patch(DS_GOT_MEMCPY, (void *)ds_memcpy);
+            if (ds_memcpy_real) fprintf(stderr, "[comp] a frame without new geometry publishes the last one again (no copy)\n");
+        }
+    }
     if (compcheck) { clock_gettime(CLOCK_MONOTONIC, &cc_last); cf_last = cc_last; }
     fprintf(stderr, "[comp] set_3d_visibility replaced (NEON%s)%s\n", use_tab ? " + per-bin table" : "",
             compcheck ? ", checking every call" : "");

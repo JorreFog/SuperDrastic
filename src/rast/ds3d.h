@@ -86,6 +86,7 @@
 #define DS_UPDATE_FRAME_3D_4X 0x58f10   /* update_frame_3d_4x(sys, u32 skip) */
 #define DS_UPDATE_FRAME_3D_1X 0x52870   /* update_frame_3d_1x(sys, u32 skip) */
 #define DS_RESET_VIDEO_3D     0x59a60   /* reset_video_3d(sys + SYS_FRAMEBUF) */
+#define DS_GOT_MEMCPY         0x15f528  /* DraStic's GOT slot of memcpy (R_AARCH64_JUMP_SLOT) */
 
 /* the 2D compositor's quarter (comp.c, spec/composite.c): render_scanline_2d_composite(eng, out, S, layers, p3d, alpha,
  * lmask, bldcnt, flags, line) and the two routines its simple path calls. S = render_scanline_2d's scratch area
