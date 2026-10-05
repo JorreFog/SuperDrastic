@@ -321,7 +321,7 @@ int resume_menu_load(const char *path, const char *backup, const char *msg, cons
 }
 /* quit to the menu, with a resume state when that is on: 1 if it saves first */
 int resume_quit(void) {
-    if (resume_on() && !saving) { want_save = 1; return 1; }
+    if (resume_on() && !saving) { if (!want_save) usr1_t = now_ms(); want_save = 1; return 1; }   /* (a hotkey press now is a repeat) */
     kill(getpid(), SIGKILL);
     return 0;
 }

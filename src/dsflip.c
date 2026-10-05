@@ -873,11 +873,15 @@ static void stall_dump(FILE *f) {       /* every thread: name, state, CPU time, 
 static void *stall_report(void *a) {    /* its own thread: the presenter never waits on files or the overlay */
     long long idle = (long long)(intptr_t)a;
     if (lg) { flockfile(lg); fprintf(lg, "[stall] no frame from DraStic for %.1f s (not in a menu): its threads\n", idle / 1e6); stall_dump(lg); funlockfile(lg); fflush(lg); fsync(fileno(lg)); }
-    dsflip_toast("The game stopped responding", stall_quit_s > 0 ? "Exit hotkey: back to the menu now (or wait)" : "Exit hotkey: back to the menu", 0xe04040, 600000);
     return 0;
 }
+/* the card: 15 s at a time (up to the default ending), again while the stall lasts; gone soon if frames come back */
+static void stall_card(void) {
+    dsflip_toast("The game stopped responding", stall_quit_s > 0 ? "Exit hotkey: back to the menu now (or wait)" : "Exit hotkey: back to the menu", 0xe04040, 15000);
+}
+static void *stall_card_thread(void *a) { (void)a; stall_card(); return 0; }
 static void stall_watch(long long t) {  /* the presenter, every wake-up (at least every 50 ms), mu not held */
-    static int seen;
+    static int seen; static long long card_at;
     int p = dsflip_presents;
     if (p != seen || !p || menu_touch || menu_is_open() || resume_saving()) {
         if (dsflip_stalled) LOG("[stall] DraStic shows frames again after %.1f s\n", (t - stall_t0) / 1e6);
@@ -889,6 +893,13 @@ static void stall_watch(long long t) {  /* the presenter, every wake-up (at leas
         dsflip_stalled = 1;
         pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
         if (!pthread_create(&th, &at, stall_report, (void *)(intptr_t)idle)) pthread_setname_np(th, "dsf-stall");
+        pthread_attr_destroy(&at);
+        card_at = 0;
+    }
+    if (dsflip_stalled && t - card_at >= 15000000LL) {   /* the card (ui.c may take a moment: its own thread) */
+        card_at = t;
+        pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+        if (!pthread_create(&th, &at, stall_card_thread, 0)) pthread_setname_np(th, "dsf-stallcard");
         pthread_attr_destroy(&at);
     }
     if (dsflip_stalled && stall_quit_s > 0 && idle >= stall_quit_s * 1000000LL) {
