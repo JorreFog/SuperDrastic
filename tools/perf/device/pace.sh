@@ -52,6 +52,13 @@ kill $WPID 2>/dev/null; WPID=
 cp $LOGF $O/$TAG.log; cp $D/last-session.log $O/$TAG.session 2>/dev/null
 W=$(grep "present/s" $O/$TAG.log | sed -n "$((n0 + 1)),${n1}p")
 echo "$W" > $O/$TAG.sec
+# a start that froze (nothing presented in the window): every thread's stack, and DraStic's load address
+if ! echo "$W" | grep -q "present/s=[1-9]"; then
+    echo "FROZEN: stacks in $O/$TAG.bt"
+    grep -m1 " r-xp .*drastic" /proc/$P/maps > $O/$TAG.bt; grep -m1 "libdsflip" /proc/$P/maps >> $O/$TAG.bt
+    for t in /proc/$P/task/[0-9]*; do echo "${t##*/} $(cat $t/comm) $(awk '{print $3}' $t/stat) $(cat $t/wchan 2>/dev/null)"; done >> $O/$TAG.bt
+    timeout 40 gdb -p $P -batch -ex "thread apply all bt 16" >> $O/$TAG.bt 2>&1
+fi
 FPS=$(echo "$W" | sed 's/.*present\/s=\([0-9.]*\).*/\1/' | awk '{s+=$1;n++} END {if(n) printf "%.2f", s/n; else print 0}')
 echo "$W" | awk -v tag=$TAG -v fps=$FPS '{ for (i = 1; i <= NF; i++) { split($i, a, "="); if (a[1] == "dropped") d += a[2]; if (a[1] == "repeat") { r += a[2]; if (a[2] > 0) rs++ }
         if (a[1] == "top" && $(i-1) == "max-iv") { if (a[2] > mx) mx = a[2]; if (a[2] > 25000) late++ } } n++ }
