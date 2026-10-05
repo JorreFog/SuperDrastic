@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 #include "ds3d.h"
 #include "rast.h"
@@ -205,8 +206,10 @@ static void dump_frame(uint8_t *ctx) {
 
 static int print_frames;         /* RAST_FRAMES=1: the frame count every 10 frames (profiling runs) */
 static void hook_entry(uint8_t *ctx) {
+    /* the performance log's per-thread CPU. Not DraStic's emulation thread, which renders the last bin group itself
+       (update_frame_3d_4x): its name is the process's, which ps, killall and perf-session.py's find_game_pid match */
     static __thread int named;
-    if (!named) { named = 1; pthread_setname_np(pthread_self(), "rast-3d"); }  /* the performance log's per-thread CPU */
+    if (!named) { named = 1; if (syscall(SYS_gettid) != getpid()) pthread_setname_np(pthread_self(), "rast-3d"); }
     comp_bins_begin(PTR(ctx, CTX_SYS));
     if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; (rast_scale == 3 ? hr_render_bins : render_bins)(ctx); in_ours = 0; }
     if (dump_dir) dump_frame(ctx);
