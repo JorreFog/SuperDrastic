@@ -88,7 +88,8 @@ typedef struct {                        /* one panel */
     dbuf *src;                          /* shader mode: DraStic's newest finished buffer, not yet shaded */
     long long src_t;                    /* ...and when DraStic presented it */
     int src_held;                       /* ...after a hold on a full queue (DSFLIP_QUEUE_WAIT): not a phase sample */
-    dbuf out[NOUT];                     /* shader mode: panel-sized buffers the shader draws into */
+    dbuf out[NOUT];                     /* shader mode: the buffers the shader draws into (the panel's size, or less:
+                                           shader_output_size; the display controller scales them to the panel) */
     dbuf *q[QMAX]; int nq;              /* frame queue: the frames after `ready`, oldest first (see enqueue) */
 } panel;
 
@@ -135,6 +136,7 @@ static int menu_touch;                                     /* DraStic's menu is 
 static int vp_x, vp_y, vp_w, vp_h;                         /* where a shader draws the DS screen on the panel (0x0: all of it) */
 static int touch_outside;                                  /* the current touch began outside that rectangle: ignore it */
 int shader_viewport(int *v, int pw, int ph);
+int shader_output_size(int *w, int *h, int pw, int ph);
 static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
@@ -661,8 +663,28 @@ static void shade_pending(void) {
 static int wfd = -1;
 static void *shader_worker(void *a) {
     (void)a;
-    shader_on = shader_init(fd, shader_nm);        /* GL lives on this thread; init() waits for the verdict */
+    int on = shader_init(fd, shader_nm);           /* GL lives on this thread; init() waits for the verdict */
+    if (on) {
+        /* the buffers it draws into, at the size the shader asked for (shader_output_size: the panel's unless its
+         * source says "dsflip-output: Nx"; a smaller buffer is scaled to the panel by the display controller, as
+         * DraStic's own buffers are without a shader). Under mu: mkbuf's generation counter is shared with
+         * SDL_CreateTexture on DraStic's thread. */
+        lock(&mu);
+        for (int i = 0; i < 2 && on; i++) {
+            int ow, oh, pw = P[i].mode.hdisplay, ph = P[i].mode.vdisplay;
+            int scaled = shader_output_size(&ow, &oh, pw, ph);
+            for (int k = 0; k < NOUT && on; k++)
+                if (mkbuf(&P[i].out[k], ow, oh, DRM_FORMAT_XRGB8888, 32)) { LOG("[dsflip] shader output buffers %dx%d: alloc failed\n", ow, oh); on = 0; }
+            if (on && (i == 0 || pw != P[0].mode.hdisplay || ph != P[0].mode.vdisplay)) {
+                if (scaled) LOG("[dsflip] shader output: %dx%d per panel, scaled to %dx%d by the display controller\n", ow, oh, pw, ph);
+                else LOG("[dsflip] shader output: %dx%d per panel\n", ow, oh);
+            }
+        }
+        unlock(&mu);
+    }
+    shader_on = on;
     if (!shader_on) LOG("[dsflip] shader \"%s\" unavailable: zero-copy\n", shader_nm);
+    __sync_synchronize();                          /* the output sizes and shader_on, before shader_done is seen */
     shader_done = 1;
     if (!shader_on) return 0;
     struct pollfd pw = { .fd = wfd, .events = POLLIN };
@@ -1233,11 +1255,7 @@ __attribute__((constructor)) static void init(void) {
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
-    if ((shader_nm = shader_name()))
-        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < NOUT; k++)
-            if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
-                LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
-            }
+    shader_nm = shader_name();          /* its output buffers are made by the shader worker, once it knows their size */
     /* shader input: DraStic's buffers imported as dma-bufs (default), or DSFLIP_SHADER_COPY=1: uploaded from memory.
      * Measured 2026-09-28: the upload was most of every shader's cost (ds-crisp 1.96 -> 0.75 ms per panel at 2x) and
      * 17% of a core on the shader thread (-> 5.5%); HeartGold 2x drops the same (0.04/s) either way. */

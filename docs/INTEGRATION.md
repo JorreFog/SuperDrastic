@@ -138,6 +138,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_DRASTIC_DIR` | DraStic's own folder | Where DraStic runs (and reads its configuration) |
 | `DSFLIP_SHADER` | none | A shader by name, e.g. `ds-crisp`; none = DraStic's frames go straight to the panels |
 | `DSFLIP_SHADER_DIR` | | Another folder of `.frag` shaders (checked first) |
+| `DSFLIP_SHADER_OUTPUT` | the shader's own line | The size of the buffer the shader draws into: `3x` (the DS screen times 3, 768x576), `WxH`, or `panel`; see *Shaders* |
 | `DSFLIP_CARD` | the first `/dev/dri/card*` with two connected DSI panels | The display device |
 | `DSFLIP_TOP` | `DSI-2` | The connector that shows the DS top screen |
 | `DSFLIP_TOUCH` | `fe5e0000.i2c` | A fragment of the bottom touchscreen's device path |
@@ -163,8 +164,13 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 
 **Shaders** are GLSL ES 1.0 fragment shaders with the inputs DraStic's stock shaders use (`u_texture`,
 `u_texture_size`, `u_output_size`, `v_texcoord`; see the top of `src/shader.c`). A shader that draws the DS screen
-into part of the panel declares where (`// dsflip-viewport: x y w h`), and touch follows it. On ROCKNIX, its
-built-in DraStic shaders (lcd3x, sharp-bilinear and the rest) are found in its `libdrastouch.so` by name.
+into part of the panel declares where (`// dsflip-viewport: x y w h`), and touch follows it. A shader may draw into
+a buffer smaller than the panel and leave the rest of the scaling to the display controller (`// dsflip-output: 3x`:
+three times the DS screen's 256x192, or `WxH`; never larger than the panel, and the panel itself where that doesn't
+fit): `ds-fsr` does, so on 1024x768 panels it upscales a 2x game to 3x and the scaler does the last step, at about
+half the GPU time of a panel-sized pass. `DSFLIP_SHADER_OUTPUT` (the same syntax, or `panel`) overrides the
+shader's line. On ROCKNIX, its built-in DraStic shaders (lcd3x, sharp-bilinear and the rest) are found in its
+`libdrastouch.so` by name.
 
 ## Examples
 

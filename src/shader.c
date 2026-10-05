@@ -3,9 +3,10 @@
 // ES passes the choice as DSHOOK_SHADER (what ROCKNIX's libdrastouch reads). "bilinear"/"none"/unset keeps
 // libdsflip's zero-copy path. Anything else: each DS screen buffer DraStic finished is drawn with that
 // fragment shader into a panel-sized (640x480) dumb buffer, which is then scanned out 1:1 instead of the
-// DraStic buffer. Same inputs as stock: u_texture (GL_LINEAR), u_texture_size = DS buffer size,
-// u_output_size = panel size, v_texcoord, SWIZ(); gl_FragCoord.y is flipped to count from the bottom,
-// as it does in stock's window, so pixel masks keep stock's phase.
+// DraStic buffer (or, for a shader that asks for a smaller buffer with a "dsflip-output:" line, see below, scaled up
+// to the panel by the display controller). Same inputs as stock: u_texture (GL_LINEAR), u_texture_size = DS buffer
+// size, u_output_size = the buffer's size (the panel's, unless the shader asked for less), v_texcoord, SWIZ();
+// gl_FragCoord.y is flipped to count from the bottom, as it does in stock's window, so pixel masks keep stock's phase.
 //
 // Shader sources: ROCKNIX's built-ins are read out of /usr/lib/libdrastouch.so at runtime (they are not
 // copied into this repo), recognised by their content. Other names load <name>.frag from DSFLIP_SHADER_DIR,
@@ -115,14 +116,45 @@ static GLuint prog; static GLint u_tex, u_tsize, u_osize, u_fch;
  * means the largest whole multiple of 256x192 that fits the panel, centred: 512x384 at 64,48 on the RG DS's 640x480,
  * all of it on the RG DS Plus's 1024x768 (4x) */
 static int vp[4], vp_integer;
+/* a shader may draw into a buffer smaller than the panel and leave the rest of the scaling to the display controller
+ * (the VOP2 scales any plane, bilinear, for free: DraStic's own 512x384 buffers reach the panel that way), with a line
+ * "dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH" in its source. The buffer is never
+ * larger than the panel. ds-fsr says 3x: on the RG DS Plus (1024x768, 4x) it draws 768x576, 56% of the panel's
+ * pixels, where a panel-sized pass would take ~2.6x the RG DS's GPU time (both panels: more than a frame); on the
+ * RG DS (640x480) 3x doesn't fit and the panel size stays. DSFLIP_SHADER_OUTPUT (the same syntax, or "panel")
+ * overrides the shader's line, for trying other sizes on a device. */
+static int out_num, out_req_w, out_req_h;       /* the shader's line: N, or an explicit WxH */
+static int out_w, out_h;                        /* the output buffer in use (shader_output_size) */
+static int parse_output(const char *s, int *n, int *w, int *h) {
+    int a, b; char c;
+    if (!strncmp(s, "panel", 5)) { *n = 0; *w = *h = 0; return 1; }
+    if (sscanf(s, "%dx%d", &a, &b) == 2 && a > 0 && b > 0) { *n = 0; *w = a; *h = b; return 1; }
+    if (sscanf(s, "%d%c", &a, &c) == 2 && c == 'x' && a > 0) { *n = a; *w = *h = 0; return 1; }
+    return 0;
+}
+/* the size of the buffers the shader draws into, for a pw x ph panel; 1 if smaller than the panel (scaled by the
+ * display controller). After shader_init; the viewport mapping below uses it too */
+int shader_output_size(int *w, int *h, int pw, int ph) {
+    int n = out_num, ow = out_req_w, oh = out_req_h;
+    const char *e = getenv("DSFLIP_SHADER_OUTPUT");
+    if (e && *e && !parse_output(e, &n, &ow, &oh)) SLOG("[shader] DSFLIP_SHADER_OUTPUT \"%s\" not understood (Nx, WxH or panel): ignored\n", e);
+    if (n > 0) { ow = 256 * n; oh = 192 * n; }
+    if (ow <= 0 || oh <= 0 || ow > pw || oh > ph) { ow = pw; oh = ph; }   /* no fit: the panel itself */
+    out_w = ow; out_h = oh;
+    *w = ow; *h = oh;
+    return ow != pw || oh != ph;
+}
 int shader_viewport(int *v, int pw, int ph) {
+    int ow = out_w > 0 ? out_w : pw, oh = out_h > 0 ? out_h : ph;   /* the shader's rectangle is in its buffer's pixels */
+    int r[4] = { vp[0], vp[1], vp[2], vp[3] };
     if (vp_integer) {
-        int k = pw / 256 < ph / 192 ? pw / 256 : ph / 192; if (k < 1) k = 1;
-        vp[2] = 256 * k; vp[3] = 192 * k; vp[0] = (pw - vp[2]) / 2; vp[1] = (ph - vp[3]) / 2;
-        if (vp[2] == pw && vp[3] == ph) return 0;       /* fills the panel: nothing to map */
+        int k = ow / 256 < oh / 192 ? ow / 256 : oh / 192; if (k < 1) k = 1;
+        r[2] = 256 * k; r[3] = 192 * k; r[0] = (ow - r[2]) / 2; r[1] = (oh - r[3]) / 2;
+        if (r[2] == ow && r[3] == oh) return 0;         /* fills the buffer, so the panel: nothing to map */
     }
-    if (vp[2] <= 0 || vp[3] <= 0) return 0;
-    for (int i = 0; i < 4; i++) v[i] = vp[i];
+    if (r[2] <= 0 || r[3] <= 0) return 0;
+    /* in panel pixels (a buffer smaller than the panel is scaled up to it) */
+    v[0] = r[0] * pw / ow; v[1] = r[1] * ph / oh; v[2] = r[2] * pw / ow; v[3] = r[3] * ph / oh;
     return 1;
 }
 static int drm_fd;
@@ -310,6 +342,13 @@ int shader_init(int fd, const char *name) {
       else if (m && sscanf(m + 16, "%15s", word) == 1 && !strcmp(word, "integer")) {
           vp_integer = 1; SLOG("[shader] draws the DS screen at a whole-number scale, centred (touch follows)\n");
       } else vp[2] = vp[3] = 0; }
+    { const char *m = strstr(fs, "dsflip-output:"); char word[32];
+      out_num = out_req_w = out_req_h = 0;
+      if (m && sscanf(m + 14, "%31s", word) == 1) {
+          if (!parse_output(word, &out_num, &out_req_w, &out_req_h)) SLOG("[shader] dsflip-output \"%s\" not understood (Nx or WxH): the panel size\n", word);
+          else if (out_num > 0) SLOG("[shader] draws %dx the DS screen (%dx%d) where the panel is larger; the display controller scales the rest\n", out_num, 256 * out_num, 192 * out_num);
+          else if (out_req_w > 0) SLOG("[shader] draws %dx%d where the panel is larger; the display controller scales the rest\n", out_req_w, out_req_h);
+      } }
     char *ffs = flip_fragcoord(fs);
     const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
                       "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
