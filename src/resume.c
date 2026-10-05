@@ -11,13 +11,15 @@
 // older in-game save).
 //
 // DSFLIP_RESUME_FILE: where the resume state goes (unset: SIGUSR1 just quits). DSFLIP_RESUME_LOAD=1: load it at start.
-// A second SIGUSR1 while saving, or no file within 5 s, quits at once. DSFLIP_RESUME_TRACE=1 logs DraStic's savestate
-// file calls.
+// A second SIGUSR1 (the hotkey pressed again), no file within 5 s, or DraStic not taking the request within 3 s (its
+// main thread stuck: dsflip.c's stall watch) quits at once, without a resume state. DSFLIP_RESUME_TRACE=1 logs
+// DraStic's savestate file calls.
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -34,6 +36,8 @@ void cpugov_boost(int ms);
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void audio_mute(int on);
 extern volatile int dsflip_hold;
+extern volatile int dsflip_stalled;      /* dsflip.c: DraStic hasn't shown a frame for a while (not in a menu) */
+int menu_is_open(void);
 
 static char resume_path[512];
 static int trace;
@@ -218,11 +222,35 @@ static void *save_thread(void *a) {
     kill(getpid(), SIGKILL);
     return 0;
 }
+/* The save runs on DraStic's main thread, at its next frame (resume_frame). Nothing else can make it: if that thread
+ * is stuck, a request that only waited for it was the hotkey doing nothing at all, the game frozen on screen and a
+ * hard reset the way out (2026-10-05). So a second press, a stalled game, or a request not taken within 3 s (5 s
+ * while the in-game menu, which closes itself for it, is up) quits at once, without the resume state. */
+static sem_t quit_sem; static int quit_watch_on;
+static void *quit_watch(void *a) {
+    (void)a;
+    for (;;) {
+        while (sem_wait(&quit_sem) && errno == EINTR) {}
+        long long t0 = now_ms();
+        while (!saving && now_ms() - t0 < (menu_is_open() ? 5000 : 3000)) usleep(20000);
+        if (saving) continue;
+        dsflip_log("[resume] quit requested, but DraStic didn't take it within %lld ms (it isn't running frames): quitting without a resume state\n", now_ms() - t0);
+        kill(getpid(), SIGKILL);
+    }
+    return 0;
+}
+static volatile long long usr1_t;                      /* when the request that is still waiting came */
 static void on_usr1(int sig) {
     (void)sig;
-    if (saving || !resume_path[0] || btn_save < 0) kill(getpid(), SIGKILL);   /* again, or nothing to save with */
+    long long t = now_ms();                              /* clock_gettime: async-signal-safe */
+    /* again (while saving, or a second after a request DraStic hasn't taken: not a key repeat), stalled, or nothing
+     * to save with: now */
+    if (saving || dsflip_stalled || !resume_path[0] || btn_save < 0 || (want_save && t - usr1_t >= 1000)) kill(getpid(), SIGKILL);
+    if (!want_save) usr1_t = t;
     want_save = 1;
+    if (quit_watch_on) sem_post(&quit_sem);              /* async-signal-safe */
 }
+int resume_saving(void) { return saving; }              /* dsflip.c's stall watch: the quit's save is DraStic's work now */
 
 /* every present (dsflip.c): starts a pending save or load on DraStic's own thread */
 void resume_frame(void) {
@@ -325,6 +353,10 @@ void resume_start(void) {
     const char *p = getenv("DSFLIP_RESUME_FILE");
     if (!p || !*p) return;
     snprintf(resume_path, sizeof resume_path, "%s", p);
+    if (sem_init(&quit_sem, 0, 0) == 0) {
+        pthread_t qt;
+        if (pthread_create(&qt, 0, quit_watch, 0) == 0) { pthread_detach(qt); pthread_setname_np(qt, "dsf-quitwatch"); quit_watch_on = 1; }
+    }
     struct sigaction sa; memset(&sa, 0, sizeof sa); sa.sa_handler = on_usr1; sigaction(SIGUSR1, &sa, 0);
     const char *l = getenv("DSFLIP_RESUME_LOAD");
     int have = access(resume_path, R_OK) == 0;

@@ -697,6 +697,7 @@ static void *shader_worker(void *a) {
     return 0;
 }
 
+static void stall_watch(long long t);
 static void *presenter(void *a) {
     (void)a;
     /* the presenter reacts to vblank events and the latch timer; its work per wake-up is tiny, but a late wake-up
@@ -750,6 +751,7 @@ static void *presenter(void *a) {
         if (toast_dirty && !pending_mask && !P[0].ready && !P[1].ready) {   /* an overlay change with no frame coming */
             lock(&mu); commit_src = 'T'; try_commit(); unlock(&mu);
         }
+        stall_watch(now_us());                                            /* DraStic still presenting? */
         if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
         if (tdump_n < touch_dumps && tdump_x >= 0) { lock(&mu); dump_touch(); unlock(&mu); tdump_n++; tdump_x = -1; }
         long long t = now_us();
@@ -816,6 +818,114 @@ static void *presenter(void *a) {
         }
     }
     return 0;
+}
+
+/* ---------- stall watch ----------
+ * DraStic's main thread presents the frames, and it is also what saves the resume state and quits on the exit hotkey
+ * (resume.c). When it stops, the panels keep the last frame, the hotkey does nothing and nothing else ends the game:
+ * on 2026-10-05 an RG DS Plus needed a hard reset (Black 2, just after its resume load). The presenter runs on
+ * regardless, so it watches. No frame for STALL_WARN_S while the game should be running (DraStic's own menu presents
+ * only when it changes, and the in-game menu holds DraStic on purpose: neither counts; nor does the quit's save)
+ * logs what every thread is doing, shows a card, and makes the exit hotkey quit at once (resume.c). After
+ * DSFLIP_STALL_QUIT seconds (20; 0: never) the game is ended here, with a notice for the menu (session.sh shows
+ * DSFLIP_NOTICE, default /tmp/dsflip-notice). */
+#define STALL_WARN_S 5
+volatile int dsflip_stalled;            /* no frame for STALL_WARN_S: resume.c's SIGUSR1 then quits at once */
+static int stall_quit_s = 20;
+static long long stall_t0;              /* since when no frame came (only while one is expected) */
+static char log_path[512];
+int menu_is_open(void);                 /* menu.c */
+int resume_saving(void);                /* resume.c: the quit's save is being written (DraStic's thread is busy) */
+static void stall_dump(FILE *f) {       /* every thread: name, state, CPU time, allowed CPUs, wait channel, kernel stack */
+    glob_t g;
+    if (glob("/proc/self/task/[0-9]*", 0, 0, &g)) return;
+    for (size_t i = 0; i < g.gl_pathc; i++) {
+        char p[300], comm[32] = "?", st[1024] = "", wchan[64] = "", cpus[64] = "?", sc[64] = "", line[256];
+        const char *tid = strrchr(g.gl_pathv[i], '/') + 1;
+        FILE *x;
+        snprintf(p, sizeof p, "%s/comm", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) { if (fgets(comm, sizeof comm, x)) comm[strcspn(comm, "\n")] = 0; fclose(x); }
+        snprintf(p, sizeof p, "%s/stat", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) { if (!fgets(st, sizeof st, x)) st[0] = 0; fclose(x); }
+        char state = '?'; unsigned long ut = 0, stt = 0; int cpu = -1;
+        { char *r = strrchr(st, ')');           /* after "(comm)": state, then field 14/15 utime/stime, 39 processor */
+          if (r && sscanf(r + 2, "%c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %*u %*u %*d %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*d %d",
+                             &state, &ut, &stt, &cpu) < 3) state = '?'; }
+        snprintf(p, sizeof p, "%s/wchan", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) { if (!fgets(wchan, sizeof wchan, x)) wchan[0] = 0; fclose(x); }
+        snprintf(p, sizeof p, "%s/syscall", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) { if (fgets(sc, sizeof sc, x)) sc[strcspn(sc, " \n")] = 0; fclose(x); }
+        snprintf(p, sizeof p, "%s/status", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) {
+            while (fgets(line, sizeof line, x)) if (!strncmp(line, "Cpus_allowed_list:", 18)) { snprintf(cpus, sizeof cpus, "%s", line + 18 + strspn(line + 18, " \t")); cpus[strcspn(cpus, "\n")] = 0; }
+            fclose(x);
+        }
+        fprintf(f, "[stall] thread %s %-15s %c cpu-time %lu ms, on CPU %d, allowed %s, syscall %s, waiting in %s\n", tid, comm,
+                state, (ut + stt) * 10, cpu, cpus, sc[0] ? sc : "-", wchan[0] && strcmp(wchan, "0") ? wchan : "-");
+        snprintf(p, sizeof p, "%s/stack", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) {                 /* the kernel side (root only): the first frames say enough */
+            for (int k = 0; k < 4 && fgets(line, sizeof line, x); k++) fprintf(f, "[stall]     %s", line);
+            fclose(x);
+        }
+    }
+    globfree(&g);
+}
+static void *stall_report(void *a) {    /* its own thread: the presenter never waits on files or the overlay */
+    long long idle = (long long)(intptr_t)a;
+    if (lg) { flockfile(lg); fprintf(lg, "[stall] no frame from DraStic for %.1f s (not in a menu): its threads\n", idle / 1e6); stall_dump(lg); funlockfile(lg); fflush(lg); fsync(fileno(lg)); }
+    dsflip_toast("The game stopped responding", stall_quit_s > 0 ? "Exit hotkey: back to the menu now (or wait)" : "Exit hotkey: back to the menu", 0xe04040, 600000);
+    return 0;
+}
+static void stall_watch(long long t) {  /* the presenter, every wake-up (at least every 50 ms), mu not held */
+    static int seen;
+    int p = dsflip_presents;
+    if (p != seen || !p || menu_touch || menu_is_open() || resume_saving()) {
+        if (dsflip_stalled) LOG("[stall] DraStic shows frames again after %.1f s\n", (t - stall_t0) / 1e6);
+        dsflip_stalled = 0; seen = p; stall_t0 = t;
+        return;
+    }
+    long long idle = t - stall_t0;
+    if (!dsflip_stalled && idle >= STALL_WARN_S * 1000000LL) {
+        dsflip_stalled = 1;
+        pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+        if (!pthread_create(&th, &at, stall_report, (void *)(intptr_t)idle)) pthread_setname_np(th, "dsf-stall");
+        pthread_attr_destroy(&at);
+    }
+    if (dsflip_stalled && stall_quit_s > 0 && idle >= stall_quit_s * 1000000LL) {
+        const char *np = getenv("DSFLIP_NOTICE"); if (!np || !*np) np = "/tmp/dsflip-notice";
+        FILE *f = fopen(np, "w");
+        if (f) { fprintf(f, "The game stopped responding (no picture for %d seconds) and was closed. Log: %s\n", stall_quit_s, log_path); fclose(f); }
+        LOG("[stall] still no frame after %d s: ending the game (DSFLIP_STALL_QUIT=0 keeps it)\n", stall_quit_s);
+        if (lg) { fflush(lg); fsync(fileno(lg)); }
+        kill(getpid(), SIGKILL);
+    }
+}
+
+/* Threads start on every CPU, not just their creator's. session.sh's CPU placement (the RG DS Plus) confines DraStic's
+ * main thread to CPU 3, and a thread created from a confined thread inherits that one CPU: DraStic's 3D helpers made
+ * that way never ran, missed their first hand-off and DraStic's main thread and the helpers waited on each other for
+ * good (68dfccd in ROCKNIXDS: 8 of 9 starts froze when the placement came too early). The placement only waits for the
+ * helpers that exist when it starts; whatever DraStic (or SDL, PipeWire, Mali, libcurl, libdsflip) creates later --
+ * after a state load, say -- started on CPU 3 alone until the next placement pass. glibc applies an attribute's CPU
+ * set before the new thread first runs. DSFLIP_SPREAD_THREADS=0: inherit as before. */
+static cpu_set_t all_cpus; static int spread_threads = -1;
+int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
+    static int (*real)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
+    if (!real) real = (int (*)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
+    if (spread_threads <= 0) return real(th, attr, fn, arg);
+    cpu_set_t cur;
+    if (sched_getaffinity(0, sizeof cur, &cur) || CPU_EQUAL(&cur, &all_cpus)) return real(th, attr, fn, arg);   /* creator not confined */
+    if (attr) {
+        cpu_set_t want;                 /* an attribute that names CPUs itself is left alone (unset reads as all bits) */
+        if (pthread_attr_getaffinity_np(attr, sizeof want, &want) == 0 && CPU_COUNT(&want) != CPU_SETSIZE) return real(th, attr, fn, arg);
+        pthread_attr_setaffinity_np((pthread_attr_t *)attr, sizeof all_cpus, &all_cpus);
+        return real(th, attr, fn, arg);
+    }
+    pthread_attr_t a; pthread_attr_init(&a);
+    pthread_attr_setaffinity_np(&a, sizeof all_cpus, &all_cpus);
+    int r = real(th, &a, fn, arg);
+    pthread_attr_destroy(&a);
+    return r;
 }
 
 /* ---------- the in-game menu's screens (menu.c) ---------- */
@@ -1127,6 +1237,10 @@ __attribute__((constructor)) static void init(void) {
        to become DRM master for 3 s, writing "passthrough" over the session's verdict. */
     if (getenv("DSFLIP_IN_GAME")) return;
     setenv("DSFLIP_IN_GAME", "1", 1);
+    {   /* the CPUs new threads start on (the pthread_create above): the whole set, before anything is confined */
+        const char *sp = getenv("DSFLIP_SPREAD_THREADS");
+        spread_threads = !(sp && *sp == '0') && sched_getaffinity(0, sizeof all_cpus, &all_cpus) == 0 && CPU_COUNT(&all_cpus) > 1;
+    }
     const char *lp = getenv("DSFLIP_LOG"); if (!lp) lp = "/storage/dsflip/logs/dsflip.log";
     {   /* keep the previous three sessions' logs (.1 = the last one): testers lost evidence to the overwrite */
         char a[512], b[512];
@@ -1136,6 +1250,7 @@ __attribute__((constructor)) static void init(void) {
             rename(a, b);
         }
     }
+    snprintf(log_path, sizeof log_path, "%s", lp);
     lg = fopen(lp, "w");
     if (lg) setvbuf(lg, 0, _IOLBF, 0);
     LOG("[dsflip] libdsflip %s\n", DSFLIP_VERSION);
@@ -1251,6 +1366,10 @@ __attribute__((constructor)) static void init(void) {
     LOG("[dsflip] toast plane: %u (%dx%d)\n", tp_plane, TOAST_W, TOAST_H);
     if (tp_plane) volume_start();           /* the volume keys' indicator (volume.c): mako is down with sway */
     signal(SIGUSR2, on_usr2);
+    { const char *sq = getenv("DSFLIP_STALL_QUIT"); if (sq && *sq) stall_quit_s = atoi(sq) > 0 ? atoi(sq) : 0; }
+    { LOG("[dsflip] stall watch: a card after %d s without a frame, the game ended after %d s%s; new threads start on %d CPUs%s\n",
+          STALL_WARN_S, stall_quit_s, stall_quit_s ? "" : " (never: DSFLIP_STALL_QUIT=0)", spread_threads > 0 ? CPU_COUNT(&all_cpus) : 0,
+          spread_threads > 0 ? "" : " (inherited: DSFLIP_SPREAD_THREADS=0)"); }
     { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q) { queue_depth = atoi(q); if (queue_depth < 0) queue_depth = 0; if (queue_depth > QMAX) queue_depth = QMAX; } }
     const char *pm = getenv("DSFLIP_PACING");
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;

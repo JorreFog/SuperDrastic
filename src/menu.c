@@ -1136,6 +1136,9 @@ int menu_event(void *ev) {
     return 0;
 }
 
+/* dsflip.c's stall watch: DraStic waits inside SDL_PollEvent while the menu is up, on purpose */
+int menu_is_open(void) { return open_; }
+
 /* every present (dsflip.c) */
 void menu_frame(void) {
     static int test = -1; static int frames;

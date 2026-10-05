@@ -157,6 +157,9 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_QUEUE_WAIT` | 0 (off) | Milliseconds DraStic is held when the queue is full, instead of dropping a frame (20 works; for capped clocks) |
 | `DSFLIP_LATCH_MARGIN` | 1300 | The shortest time (µs) before a vblank that a frame is committed at (diagnostics) |
 | `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD` | | See *Quitting with a save* |
+| `DSFLIP_STALL_QUIT` | 20 | Seconds without a frame from DraStic (outside its menu and the in-game menu) before the game is ended; 0 = never. After 5 s the log lists every thread's state and a card says so, and the exit hotkey quits at once |
+| `DSFLIP_NOTICE` | `/tmp/dsflip-notice` | Where that ending leaves a line for the launcher to show |
+| `DSFLIP_SPREAD_THREADS` | 1 | 0 = new threads inherit their creator's CPUs (with DraStic's main thread confined to one CPU, its new helper threads then share that CPU only) |
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
 | `DSFLIP_WFC` | off | Nintendo WFC online play (untested on hardware): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). Without the variable, `nds.wfc_dns` in ROCKNIX's `system.cfg` is read. `DSFLIP_WFC_DEBUG=1` logs every frame |
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
