@@ -1587,6 +1587,12 @@ int SDL_RenderClear(void *rn) {
 void SDL_RenderPresent(void *rn) {
     REAL(void, SDL_RenderPresent, void *);
     if (!ok) { real(rn); return; }
+    {   /* DSFLIP_STALL_TEST=<s>: that long after the first frame, DraStic's main thread stops here for good, as it did
+         * on 2026-10-05: tests the stall watch, the exit hotkey on a stuck game and the launcher's notice */
+        static long long stall_test_at = -1;
+        if (stall_test_at < 0) { const char *e = getenv("DSFLIP_STALL_TEST"); stall_test_at = e && atoi(e) > 0 ? now_us() + atoi(e) * 1000000LL : 0; }
+        if (stall_test_at && now_us() >= stall_test_at) { LOG("[stall] DSFLIP_STALL_TEST: DraStic's main thread stops here\n"); for (;;) pause(); }
+    }
     int held = 0;                       /* this present waited on a full queue */
     if (queue_wait_us && queue_depth && pacing_latch) {
         /* a full queue would drop its oldest frame for this one: hold DraStic until a commit makes room (it then

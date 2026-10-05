@@ -158,6 +158,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_LATCH_MARGIN` | 1300 | The shortest time (µs) before a vblank that a frame is committed at (diagnostics) |
 | `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD` | | See *Quitting with a save* |
 | `DSFLIP_STALL_QUIT` | 20 | Seconds without a frame from DraStic (outside its menu and the in-game menu) before the game is ended; 0 = never. After 5 s the log lists every thread's state and a card says so, and the exit hotkey quits at once |
+| `DSFLIP_STALL_TEST` | off | Seconds after the first frame at which DraStic's main thread stops for good (tests the stall watch) |
 | `DSFLIP_NOTICE` | `/tmp/dsflip-notice` | Where that ending leaves a line for the launcher to show |
 | `DSFLIP_SPREAD_THREADS` | 1 | 0 = new threads inherit their creator's CPUs (with DraStic's main thread confined to one CPU, its new helper threads then share that CPU only) |
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
