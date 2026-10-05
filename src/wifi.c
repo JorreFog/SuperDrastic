@@ -147,9 +147,17 @@ static void arm7_irq(void *mem) {
     if (pend) *(uint32_t *)(arm7 + ARM7_ALERT) |= 2;
 }
 
+/* W_IF (0x010) is written through DraStic's own 16-bit handler when the layout check found it stores the value as
+ * is; a handler that already clears the written bits (write-1-to-clear, what the hardware does) would turn our set
+ * into a clear, so the flags then go straight into the register memory */
+static int if_plain = 1;
+static void if_put(void *mem, uint16_t v) {
+    if (if_plain) orig_st16(mem, 0x0010, v);
+    else *(volatile uint16_t *)((uint8_t *)mem + REG_BASE + 0x10) = v;
+}
 static void wifi_if(void *mem, uint16_t bits) {
     uint16_t now = raw16(mem, 0x10) | bits;
-    orig_st16(mem, 0x0010, now);
+    if_put(mem, now);
     if (now & raw16(mem, 0x12)) arm7_irq(mem);
 }
 
@@ -158,14 +166,20 @@ static int layout_check(void *mem) {
     orig_st16(mem, 0x0012, 0x5a5a);
     int reg_ok = raw16(mem, 0x0012) == 0x5a5a;
     orig_st16(mem, 0x0012, old);
+    /* and whether the stock handler stores W_IF as is (then our set/clear go through it) or clears the written
+     * bits (then they go into the register memory directly); the probe is undone either way */
+    uint16_t iold = raw16(mem, 0x0010);
+    orig_st16(mem, 0x0010, 0x5a5a);
+    if_plain = raw16(mem, 0x0010) == 0x5a5a;
+    *(volatile uint16_t *)((uint8_t *)mem + REG_BASE + 0x10) = iold;
     uint16_t rold = orig_ld16(mem, 0x4000);
     orig_st16(mem, 0x4000, 0xbeef);
     /* load_wifi_16 indexes RAM with addr & 0x3fff, so 0x4000 lands at the base */
     uint16_t got = *(volatile uint16_t *)(mac_base(mem) + (0x4000u & 0x3fffu));
     orig_st16(mem, 0x4000, rold);
     if (!layout_logged) {
-        dsflip_log("[wfc] layout %s (reg %s, mac %s)\n", reg_ok && got == 0xbeef ? "ok" : "mismatch",
-                   reg_ok ? "ok" : "no", got == 0xbeef ? "ok" : "no");
+        dsflip_log("[wfc] layout %s (reg %s, mac %s, IF store %s)\n", reg_ok && got == 0xbeef ? "ok" : "mismatch",
+                   reg_ok ? "ok" : "no", got == 0xbeef ? "ok" : "no", if_plain ? "plain" : "write-1-to-clear");
         layout_logged = 1;
     }
     return reg_ok && got == 0xbeef;
@@ -182,9 +196,12 @@ static int bssid_match(void *mem, const uint8_t *frm, int len) {
 
 static void rx_queue(void *mem, const uint8_t *frm, int len) {
     if (!rx_on || !rx_latched || len <= 4) return;
-    len -= 4;                                         /* the RX header length excludes the FCS, and the FCS is not stored */
+    /* the record holds the frame with its FCS, as the hardware stores it; the header's length takes off what
+     * W_RXLEN_CROP says (the firmware sets 0x0602: the 4-byte FCS on plain frames, 12 bytes on WEP ones) */
+    uint16_t crop = raw16(mem, 0x0da), fc = (uint16_t)(frm[0] | (frm[1] << 8));
+    int cb = (fc & 0x4000) ? ((crop >> 7) & 0x1fe) : ((crop << 1) & 0x1fe);
     uint16_t wr = raw16(mem, 0x54), rd = raw16(mem, 0x5a);
-    if (!wififrame_rx_push(mac_base(mem), &wr, rd, rx_begin, rx_end, frm, len, bssid_match(mem, frm, len))) {
+    if (!wififrame_rx_push(mac_base(mem), &wr, rd, rx_begin, rx_end, frm, len, cb, bssid_match(mem, frm, len))) {
         if (debug) dsflip_log("[wfc] rx drop, %d bytes\n", len);
         return;
     }
@@ -424,7 +441,7 @@ static void hook_store16(void *mem, uint32_t addr, uint32_t val) {
         if (v & 0x8000 && net) wfcnet_reset(net);
         break;
     case 0x010:                                       /* write-1-to-clear */
-        orig_st16(mem, 0x0010, raw16(mem, 0x10) & ~v);
+        if_put(mem, raw16(mem, 0x10) & ~v);
         break;
     case 0x030:
         orig_st16(mem, addr, v);

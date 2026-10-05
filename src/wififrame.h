@@ -18,7 +18,10 @@ int wififrame_ie_ssid(const uint8_t *ies, int n, char *out, int cap);
 
 /* mac[] is the wifi address window: index with addr & 0x3fff (a 32 KiB buffer).
  * begin/end are byte addresses (0x4C00..0x5F60). wrcsr/readcsr are halfword indexes: byte = 0x4000 + reg*2.
- * frame is the IEEE header and body, without the FCS. bssid_match sets RX-header bit 15. Returns 1 if queued. */
+ * frame is the whole IEEE frame as received, FCS included (flen counts it), stored as the hardware stores it;
+ * the RX header's length is flen minus crop bytes, what W_RXLEN_CROP (0x0DA) takes off: ((crop << 1) & 0x1FE)
+ * for an unencrypted frame, ((crop >> 7) & 0x1FE) for a WEP one (0x0602, the usual setting, crops the 4-byte FCS).
+ * bssid_match sets RX-header bit 15. Returns 1 if queued. */
 int wififrame_rx_push(uint8_t *mac, uint16_t *wrcsr, uint16_t readcsr, uint16_t begin, uint16_t end,
-                      const uint8_t *frame, int flen, int bssid_match);
+                      const uint8_t *frame, int flen, int crop_bytes, int bssid_match);
 #endif

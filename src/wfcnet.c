@@ -411,11 +411,14 @@ static void dhcp_input(wfcnet *n, const uint8_t *udp, int len) {
 static void arp_input(wfcnet *n, const uint8_t src[6], const uint8_t *p, int len) {
     if (len < 28 || rd16(p) != 1 || rd16(p + 2) != 0x0800 || p[4] != 6 || p[5] != 4) return;
     if (rd16(p + 6) != 1) return;
+    /* only the gateway's own address: a DHCP client probes the address it was offered (RFC 2131 4.4.1) and declines
+     * the lease if anyone answers for it, and off-subnet addresses are the gateway's business, not an ARP's */
+    if (memcmp(p + 24, &n->cfg.gw_ip, 4) != 0) return;
     uint8_t reply[28];
     memset(reply, 0, sizeof reply);
     put16(reply, 1); put16(reply + 2, 0x0800); reply[4] = 6; reply[5] = 4; put16(reply + 6, 2);
     memcpy(reply + 8, n->cfg.gw_mac, 6);
-    memcpy(reply + 14, p + 24, 4);                /* the address they asked for, on our MAC */
+    memcpy(reply + 14, p + 24, 4);                /* the gateway, on our MAC */
     memcpy(reply + 18, src, 6);
     memcpy(reply + 24, p + 14, 4);
     inject(n, src, 0x0806, reply, 28);

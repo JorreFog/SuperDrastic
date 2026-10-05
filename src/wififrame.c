@@ -125,8 +125,9 @@ static uint16_t rx_flags(const uint8_t *frame, int flen) {
 }
 
 int wififrame_rx_push(uint8_t *mac, uint16_t *wrcsr, uint16_t readcsr, uint16_t begin, uint16_t end,
-                      const uint8_t *frame, int flen, int bssid_match) {
+                      const uint8_t *frame, int flen, int crop_bytes, int bssid_match) {
     if (!mac || !wrcsr || flen < 0 || flen > 2400) return 0;
+    int hlen = flen - crop_bytes; if (hlen < 0) hlen = 0;   /* what the header reports: the frame less the crop */
     if (begin < 0x4000 || end > 0x6000 || end <= begin || ((begin | end) & 1)) return 0;
     unsigned rec = (12u + (unsigned)flen + 3u) & ~3u;
     unsigned size = (unsigned)(end - begin);
@@ -143,7 +144,7 @@ int wififrame_rx_push(uint8_t *mac, uint16_t *wrcsr, uint16_t readcsr, uint16_t 
     hdr[0] = flags & 0xff; hdr[1] = flags >> 8;
     hdr[2] = 0x40;                                    /* normal reception */
     hdr[6] = 0x14;                                    /* 2 Mbit/s */
-    hdr[8] = flen & 0xff; hdr[9] = (flen >> 8) & 0xff; /* IEEE length, FCS not included */
+    hdr[8] = hlen & 0xff; hdr[9] = (hlen >> 8) & 0xff; /* IEEE length after W_RXLEN_CROP (the FCS, normally) */
     hdr[10] = 0x80; hdr[11] = 0x40;                   /* max / min RSSI */
     for (unsigned i = 0; i < rec; i++) {
         unsigned a = begin + (wr - begin + i) % size;

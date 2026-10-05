@@ -69,27 +69,29 @@ static void test_frames(void) {
     /* address 0x4000 is index 0: DraStic stores RAM at addr & 0x3fff. FC 0x0001 is management, so flags are 0x10. */
     uint16_t wr = 0, rd = 0;
     uint8_t one[4] = { 1, 2, 3, 4 };
-    expect(wififrame_rx_push(mac, &wr, rd, 0x4000, 0x4800, one, 4, 0) == 1, "rx push base");
+    expect(wififrame_rx_push(mac, &wr, rd, 0x4000, 0x4800, one, 4, 0, 0) == 1, "rx push base");
     expect(mac[0] == 0x10 && mac[2] == 0x40 && mac[6] == 0x14 && mac[8] == 4 && mac[12] == 1, "rx at index 0");
     /* firmware layout: BEGIN/END are byte addresses, the cursors are halfword indexes (0x4C00 -> 0x0600) */
     memset(mac, 0, sizeof mac);
     wr = rd = 0x0600;
     n = wififrame_beacon(frm, sizeof frm, bssid, "rocknixds", 1, 1, 0);
-    expect(n > 4 && wififrame_rx_push(mac, &wr, rd, 0x4c00, 0x5f60, frm, n - 4, 1) == 1, "rx firmware cursor");
+    /* the whole frame with its FCS is stored (n bytes); with the usual W_RXLEN_CROP 0x0602 the header says n - 4 */
+    expect(n > 4 && wififrame_rx_push(mac, &wr, rd, 0x4c00, 0x5f60, frm, n, 4, 1) == 1, "rx firmware cursor");
     expect(mac[0x0c00] == 0x11 && mac[0x0c01] == 0x80 && (mac[0x0c08] | (mac[0x0c09] << 8)) == n - 4, "beacon header");
-    expect(mac[0x0c0c] == 0x80 && wr == 0x0600 + (((12 + (n - 4) + 3) & ~3) / 2), "beacon body, cursor in halfwords");
+    expect(mac[0x0c0c] == 0x80 && wr == 0x0600 + (((12 + n + 3) & ~3) / 2), "beacon body, cursor in halfwords");
+    expect(mac[0x0c0c + n - 1] == frm[n - 1], "fcs stored after the frame");
     /* 64-byte fifo [0x5fc0, 0x6000). A 20-byte record starts 16 bytes before the end, so 4 bytes wrap to 0x5fc0. */
     memset(mac, 0, sizeof mac);
     wr = rd = (0x5ff0 - 0x4000) / 2;
     uint8_t frame[8];
     memset(frame, 0xab, sizeof frame);
-    expect(wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0) == 1, "rx push wrap");
+    expect(wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0, 0) == 1, "rx push wrap");
     expect(mac[0x5ff0 & 0x3fff] == 0x10 && mac[(0x5ff0 + 8) & 0x3fff] == 8, "rx header");
     expect(mac[(0x5ff0 + 12) & 0x3fff] == 0xab, "rx body");
     expect(mac[0x5fc0 & 0x3fff] == 0xab, "wrapped tail");
     expect(wr == (0x5fc4 - 0x4000) / 2, "cursor wrapped");
     int pushed = 1;
-    for (int i = 0; i < 8; i++) pushed += wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0);
+    for (int i = 0; i < 8; i++) pushed += wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0, 0);
     expect(pushed < 9 && mac[0x5ff0 & 0x3fff] == 0x10, "rx drop when full, first header kept");
 }
 
@@ -183,6 +185,12 @@ static void test_dhcp_arp_icmp(void) {
     wfcnet_input(n, gw_mac, ds_mac, 0x0806, arp, 28);
     expect(c.n == 1 && c.et[0] == 0x0806 && rd16(c.pkt[0] + 6) == 2, "arp reply");
     expect(!memcmp(c.pkt[0] + 8, gw_mac, 6) && !memcmp(c.pkt[0] + 14, &gw_ip, 4), "arp gw");
+    /* a probe for the DS's own address (a DHCP client checking its lease) must get no answer */
+    c.n = 0;
+    memcpy(arp + 24, &ds_ip, 4);
+    wfcnet_input(n, gw_mac, ds_mac, 0x0806, arp, 28);
+    expect(c.n == 0, "arp probe for the DS's address unanswered");
+    memcpy(arp + 24, &gw_ip, 4);
 
     c.n = 0;
     uint8_t echo[16]; memset(echo, 0, sizeof echo);
