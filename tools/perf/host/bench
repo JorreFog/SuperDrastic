@@ -1,0 +1,6 @@
+#!/bin/sh
+# bench <tag> <game> [NAME=value...]: one bench.sh run on the Plus, in its own systemd unit (survives the ssh
+# connection), waits for it and prints the summary and the thread table
+S=${PERF_WORK:-$HOME/.cache/superdrastic-perf}
+TAG=$1
+RGDS_HOST=${RGDS_HOST:?set RGDS_HOST} ${RGDS_RG:-$HOME/.cache/rgds/rg} "systemctl is-active -q dsflip-game && { echo 'GAME SESSION RUNNING: not benchmarking'; exit 3; }; systemctl reset-failed dsbench 2>/dev/null; systemd-run --unit=dsbench --collect --wait -q -p StandardOutput=file:/tmp/dsbench.out -p StandardError=file:/tmp/dsbench.err sh /storage/dsflip/opt/bench.sh $* ; cat /tmp/dsbench.out; head -c 600 /tmp/dsbench.err; echo '--- threads'; head -n ${THREADS:-14} /storage/dsflip/opt/runs/$TAG.threads 2>/dev/null"

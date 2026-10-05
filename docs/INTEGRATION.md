@@ -215,6 +215,10 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
 | `DSFLIP_WFC` | off | Nintendo WFC online play (parked: it does not get past the game's Wi-Fi setup yet): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). `nds.wfc_dns` in ROCKNIX's `system.cfg` is read only with `DSFLIP_WFC_CONFIG=1`. `DSFLIP_WFC_DEBUG=1` logs every frame |
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
+| `DSFLIP_AUDIO_DEVICE_RATE` | DraStic's rate (44100) | The rate (Hz) the sound device is opened at; SuperDrastic resamples to it. For a sound server that runs at another rate and can't be switched (RG DS Plus: PipeWire at 48000), where the server would otherwise resample inside the game's process |
+| `DSFLIP_AUDIO_LOCK` | off | Experimental: the panels' refresh rate in Hz (the log's `[pace] period`, e.g. `60.00492`). The game then runs at that frame rate instead of the DS's 59.83 (0.3% fast, sound resampled to match), which removes the repeated frame every ~6 s that the two rates beat out |
+| `DSFLIP_COLORS` | | A file with a colour correction per screen (gains, gamma, brightness, black level), set as the panels' lookup tables; see `colors_apply` in `src/dsflip.c` |
+| `DSFLIP_DIRECT` | 1 | 0 = DraStic's frames are copied into the scanout buffers (as before 0.6) instead of drawn in them |
 | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |
 | `DSFLIP_FALLBACK` | 1 | 0 = don't run DraStic without SuperDrastic when it can't take the display |
 

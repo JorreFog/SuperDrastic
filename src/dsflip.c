@@ -29,6 +29,7 @@
 //   DSFLIP_TOUCH=fe5e0000.i2c      bottom touchscreen (i2c-5; calibrated: raw == panel pixels)
 //   DSFLIP_TOUCH_INVERT=x/y/xy     axes to invert (default none)
 //   DSFLIP_LOG=path                stats log (default /storage/dsflip/logs/dsflip.log)
+//   DSFLIP_COLORS=file             per-screen colour correction (see colors_apply)
 //   DSHOOK_SHADER=name             ES's DraStic "shader" setting; anything but bilinear/none runs that shader on the
 //                                  GPU (shader.c). DSFLIP_SHADER overrides it
 #define _GNU_SOURCE
@@ -56,6 +57,7 @@
 #include <sys/syscall.h>
 #include <math.h>
 #include <sys/stat.h>
+#include "rast/rast.h"                  /* dshook.c: DraStic's load address, hooks, huge pages */
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
@@ -154,6 +156,7 @@ volatile int dsflip_hold;               /* menu.c: DraStic's frames are dropped,
 static int st_drop_src, st_drop_q, st_drop_buf;
 static volatile int drops_total, shown_total;   /* frames dropped (any cause) / new frames on the top panel, since start */
 static int hash_every, hash_from, hash_to = 0x7fffffff;   /* DSFLIP_HASH=N[:from[:to]]: see SDL_RenderPresent */
+static int dump_at[32], dump_n; static char dump_dir[160];  /* DSFLIP_DUMP=dir:frame[,frame...]: see SDL_RenderPresent */
 static int direct_on, st_direct, st_dcopy;  /* direct rendering (see hook_update_screen): on; screens drawn in place and copied, per 10 s */
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
@@ -1316,6 +1319,13 @@ int SDL_PollEvent(void *e) {
 }
 
 static void direct_install(void);
+/* DSFLIP_TEST_TIME=<unix seconds> (tests): what DraStic's time() calls return (through its GOT slot: nobody else's
+ * clock changes) is that time plus one second per 60 presented frames. DraStic reads the DS's real-time clock from
+ * time(), and games seed their random numbers from it: with the clock a function of the frame count, a run without
+ * input shows the same frames every time (Mario Kart's title demo picks its track from the clock), which is what
+ * the frame hashes (DSFLIP_HASH) need. */
+static long long test_time0;
+static long test_time(long *t) { long v = (long)(test_time0 + dsflip_presents / 60); if (t) *t = v; return v; }
 /* ---------- init ---------- */
 /* The verdict for session.sh: DSFLIP_STATE (default /tmp/dsflip-state) gets "ready" once libdsflip has both panels,
  * or "passthrough: <reason>" when it gives up. session.sh deletes the file before starting DraStic and waits for
@@ -1365,6 +1375,64 @@ static int open_card(void) {
     }
     globfree(&g);
     return found >= 0 ? found : open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+}
+
+/* ---------- screen colours ----------
+ * DSFLIP_COLORS=<file>: a colour correction per screen, set as the display controller's lookup tables (the CRTCs'
+ * GAMMA_LUT). Lines "top.<name>=<value>" and "bottom.<name>=<value>" with the names red, green, blue (gains,
+ * 0.5-1), gamma (0.6-1.6), brightness (0.4-1) and black (0-0.12); a channel's table is
+ *   out = black + (1 - black) * gain * brightness * in ^ gamma        (in and out 0..1).
+ * It is for matching a handheld's two panels (one is often warmer or darker than the other). A launcher's menus set
+ * the same tables through its compositor (ROCKNIXDS: rocknixds-colors, which also writes the file); here the
+ * compositor is not running, so the game sets them itself. Without a file, or for a screen with neutral values,
+ * the table is cleared: whoever had the display before may have left one. In commits of their own after the
+ * modeset, so a controller that refuses them costs the colours and not the game. */
+typedef struct { double v[6]; } scol;   /* red, green, blue, gamma, brightness, black */
+static void colors_apply(void) {
+    static const char *const scr[2] = { "top", "bottom" }, *const key[6] = { "red", "green", "blue", "gamma", "brightness", "black" };
+    static const double lo[6] = { 0.5, 0.5, 0.5, 0.6, 0.4, 0 }, hi[6] = { 1, 1, 1, 1.6, 1, 0.12 }, neutral[6] = { 1, 1, 1, 1, 1, 0 };
+    scol c[2]; for (int i = 0; i < 2; i++) memcpy(c[i].v, neutral, sizeof neutral);
+    const char *path = getenv("DSFLIP_COLORS");
+    FILE *f = path && *path ? fopen(path, "r") : 0;
+    if (f) {
+        char line[160];
+        while (fgets(line, sizeof line, f))
+            for (int i = 0; i < 2; i++) for (int k = 0; k < 6; k++) {
+                char name[40]; int n = snprintf(name, sizeof name, "%s.%s=", scr[i], key[k]);
+                if (!strncmp(line, name, (size_t)n)) { double v = strtod(line + n, 0); c[i].v[k] = !(v >= lo[k]) ? lo[k] : v > hi[k] ? hi[k] : v; }
+            }
+        fclose(f);
+    }
+    /* one screen: the RK3566's display controller has a single table, and the kernel refuses a commit that gives a
+     * second CRTC one (the top screen's values win if a file has both). First no table anywhere, then the one. */
+    int which = memcmp(c[0].v, neutral, sizeof neutral) ? 0 : memcmp(c[1].v, neutral, sizeof neutral) ? 1 : -1;
+    /* nothing wanted and nothing there (every start without a calibration): the display is not touched at all */
+    if (which < 0 && !propval(P[0].crtc, DRM_MODE_OBJECT_CRTC, "GAMMA_LUT") && !propval(P[1].crtc, DRM_MODE_OBJECT_CRTC, "GAMMA_LUT")) return;
+    uint32_t gp[2], blob = 0; int ret = 0;
+    drmModeAtomicReq *r = drmModeAtomicAlloc();
+    for (int i = 0; i < 2; i++) if ((gp[i] = prop(P[i].crtc, DRM_MODE_OBJECT_CRTC, "GAMMA_LUT"))) drmModeAtomicAddProperty(r, P[i].crtc, gp[i], 0);
+    if (gp[0] || gp[1]) ret = drmModeAtomicCommit(fd, r, 0, 0);
+    drmModeAtomicFree(r);
+    uint64_t n = which >= 0 && gp[which] ? propval(P[which].crtc, DRM_MODE_OBJECT_CRTC, "GAMMA_LUT_SIZE") : 0;
+    if (!ret && n >= 2 && n <= 4096) {
+        struct drm_color_lut *lut = calloc(n, sizeof *lut);
+        const double *v = c[which].v;
+        for (uint64_t x = 0; lut && x < n; x++) {
+            double in = pow((double)x / (double)(n - 1), v[3]) * v[4] * (1 - v[5]);
+            uint16_t *o[3] = { &lut[x].red, &lut[x].green, &lut[x].blue };
+            for (int ch = 0; ch < 3; ch++) { double y = v[5] + v[ch] * in; *o[ch] = (uint16_t)lrint((y < 0 ? 0 : y > 1 ? 1 : y) * 65535); }
+        }
+        if (lut && !drmModeCreatePropertyBlob(fd, lut, n * sizeof *lut, &blob)) {
+            r = drmModeAtomicAlloc();
+            drmModeAtomicAddProperty(r, P[which].crtc, gp[which], blob);
+            ret = drmModeAtomicCommit(fd, r, 0, 0);
+            drmModeAtomicFree(r);
+            drmModeDestroyPropertyBlob(fd, blob);       /* the CRTC keeps its own reference */
+        }
+        free(lut);
+    }
+    if (ret) LOG("[dsflip] screen colours: the display controller refused the table (%s)\n", strerror(-ret));
+    else if (blob) LOG("[dsflip] screen colours from %s: the %s screen corrected\n", path, which ? "bottom" : "top");
 }
 
 __attribute__((constructor)) static void init(void) {
@@ -1471,6 +1539,8 @@ __attribute__((constructor)) static void init(void) {
         drmModeAtomicFree(r);
     }
 
+    colors_apply();
+
     /* can the top plane scale the 800x480 menu down itself? */
     dbuf t; memset(&t, 0, sizeof t);
     if (!mkbuf(&t, 800, 480, DRM_FORMAT_RGB565, 16)) {
@@ -1538,6 +1608,15 @@ __attribute__((constructor)) static void init(void) {
     if (!pthread_create(&th, 0, touch_thread, (void *)(tp ? tp : "fe5e0000.i2c"))) pthread_setname_np(th, "dsf-touch");
     cursor_log = getenv("DSFLIP_CURSOR_LOG") != 0;
     if (getenv("DSFLIP_HASH")) sscanf(getenv("DSFLIP_HASH"), "%d:%d:%d", &hash_every, &hash_from, &hash_to);
+    if (getenv("DSFLIP_DUMP")) {
+        const char *d = getenv("DSFLIP_DUMP"), *c = strchr(d, ':');
+        if (c && c - d < (long)sizeof dump_dir) {
+            memcpy(dump_dir, d, (size_t)(c - d));
+            for (c++; *c && dump_n < 32; ) { dump_at[dump_n++] = atoi(c); c += strcspn(c, ","); if (*c) c++; }
+        }
+    }
+    if (getenv("DSFLIP_TEST_TIME") && (test_time0 = atoll(getenv("DSFLIP_TEST_TIME"))) > 0 && ds_got_patch(0x15fa90, (void *)test_time))
+        LOG("[dsflip] test: DraStic's calendar clock starts at %lld and follows its frames\n", test_time0);
     if (getenv("DSFLIP_TAP_FIFO")) pthread_create(&th, 0, tap_fifo_thread, 0);
     ok = 1;
     direct_install();
@@ -1550,6 +1629,8 @@ __attribute__((constructor)) static void init(void) {
 /* ---------- audio: the pump (audio.c); DSFLIP_AUDIO_PUMP=0 leaves DraStic's audio to SDL ---------- */
 struct SDL_AudioSpec_;
 int audio_pump_enabled(void);
+int audio_out_alsa(void);
+extern int audio_sdl_off;
 int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, int (*real)(struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *));
 void audio_pump_pause(int on);
 static int pump_on;
@@ -1557,6 +1638,15 @@ void SDL_PauseAudio(int on) {
     REAL(void, SDL_PauseAudio, int);
     if (pump_on) audio_pump_pause(on);
     real(on);
+}
+/* SDL_Init without SDL's audio subsystem while the pump plays through ALSA itself (audio.c). SDL's PulseAudio driver
+ * connects when the subsystem starts and keeps its 64 MB sample pool mapped for a device that is then never opened:
+ * 62 MB of resident memory (RG DS Plus, HeartGold, 2026-10-05: 239.8 -> 177.1 MB of 975). If the pump has to fall
+ * back to SDL's device, audio.c starts the subsystem then. */
+int SDL_Init(uint32_t flags) {
+    REAL(int, SDL_Init, uint32_t);
+    if (ok && (flags & 0x10 /* SDL_INIT_AUDIO */) && audio_pump_enabled() && audio_out_alsa()) { flags &= ~0x10u; audio_sdl_off = 1; }
+    return real(flags);
 }
 struct SDL_AudioSpec_ { int freq; unsigned short format; unsigned char channels, silence;
     unsigned short samples, padding; uint32_t size; void (*callback)(void *, unsigned char *, int); void *userdata; };
@@ -1689,7 +1779,6 @@ static void finish_write(stex *s) {    /* with mu held */
  *  - a screen that an engine did not draw this frame (frame skip, a screen switched off) gets no update_screen
  *    call, here as before: its buffer waits.
  * DSFLIP_DIRECT=0 leaves update_screen alone. */
-#include "rast/rast.h"
 #define DS_SCREENS       0x15fef8       /* u64: DraStic's screen table: two entries of 0x28 bytes, see ds_screen() */
 #define DS_UPDATE_SCREEN 0x8a120        /* update_screen(int screen) */
 #define DS_SCREEN_COPY16 0x88290        /* screen_copy16(u16 *dst, int screen) */
@@ -1982,6 +2071,18 @@ void SDL_RenderPresent(void *rn) {
         }
         LOG("[hash] frame %d top %016llx bottom %016llx\n", dsflip_presents, (unsigned long long)h[0], (unsigned long long)h[1]);
     }
+    for (int k = 0; k < dump_n; k++) if (dump_at[k] == dsflip_presents)
+        /* DSFLIP_DUMP=dir:frame[,frame...] (tests): those presented frames' two screens as dir/f<frame>-<0|1>.raw
+         * (XRGB8888, the screen's size), to compare renderers on the same emulated frame */
+        for (int i = 0; i < 2; i++) {
+            stex *s = pending_route[i];
+            if (!s || s->kind != K_SCREEN || s->written < 0 || s->b[s->written].state != WRITTEN) continue;
+            char fn[240]; snprintf(fn, sizeof fn, "%s/f%d-%d.raw", dump_dir, dsflip_presents, i);
+            FILE *f = fopen(fn, "wb"); if (!f) continue;
+            for (int y = 0; y < s->h; y++) fwrite((uint8_t *)s->b[s->written].map + (size_t)y * s->b[s->written].pitch, 4, (size_t)s->w, f);
+            fclose(f);
+            LOG("[dump] frame %d screen %d %dx%d\n", dsflip_presents, i, s->w, s->h);
+        }
     for (int i = 0; i < 2; i++) {
         stex *s = pending_route[i]; pending_route[i] = 0;
         if (!s) continue;

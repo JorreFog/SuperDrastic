@@ -21,9 +21,16 @@
 // samples/s (the device itself is exact: 20.00 s of audio took 19.99 s through ALSA), so locking the pump to it
 // ran DraStic 1.1% slow. With the ALSA writer the rate trim locks the pump to the true device clock.
 //
+// Output rate: DSFLIP_AUDIO_DEVICE_RATE=<Hz> opens the device at that rate and the writer resamples DraStic's 44.1 kHz itself
+// (see resample()). For a sound server that runs at another rate than DraStic's and cannot be switched: on the RG DS
+// Plus PipeWire must stay at 48 kHz (its speaker amp runs 48 kHz whatever it is given), and PipeWire then resampled
+// our stream inside this process, on its "data-loop" thread: measured 1.3 ms of CPU a frame at 0.1 instructions a
+// cycle (its filter bank falls out of the handheld's 512 KiB cache between wake-ups) and 9% of the process's cache
+// misses, which the emulation threads pay for too.
+//
 // Env: DSFLIP_AUDIO_PUMP=0 (off: SDL calls DraStic's callback as before), DSFLIP_PUMP_CHUNK (samples, 256),
 //      DSFLIP_PUMP_TARGET (ring level in samples, 1536), DSFLIP_AUDIO_OUT=sdl (drain via SDL instead of ALSA),
-//      DSFLIP_ALSA_LATENCY (us, 30000).
+//      DSFLIP_ALSA_LATENCY (us, 30000), DSFLIP_AUDIO_DEVICE_RATE (Hz; unset: DraStic's rate).
 #define _GNU_SOURCE
 #include <stdint.h>
 #include <stdlib.h>
@@ -181,6 +188,8 @@ static void ui_mix(unsigned char *buf, int frames) {
     __atomic_compare_exchange_n(&ui_pos, &p, next, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED);
 }
 
+static double lock_in;                   /* DraStic's rate as taken with DSFLIP_AUDIO_LOCK (see alsa_open), else 0: the pump's
+                                            nominal rate too, so its trim stays the few ppm it is without the lock */
 static void *pump(void *a) {             /* steady calls into DraStic's callback */
     (void)a;
     struct sched_param sp = { .sched_priority = 20 };   /* above DraStic (and its presenter), below PipeWire */
@@ -222,7 +231,7 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
             adj = 5e-4 * err + integ; if (adj > 2e-2) adj = 2e-2; if (adj < -2e-2) adj = -2e-2;
         }
         st_ppm = adj * 1e6;
-        next += (long long)(chunk * 1e9 / freq * (1 + adj));
+        next += (long long)(chunk * 1e9 / (lock_in ? lock_in : freq) * (1 + adj));
         long long now = mono_ns();
         if (next < now - 50000000LL) next = now;   /* fell far behind (stopped/suspended): don't burst */
         struct timespec ts = { next / 1000000000LL, next % 1000000000LL };
@@ -270,38 +279,136 @@ static int alsa_pcm(void **p, int stream, int channels, int rate, unsigned laten
     pthread_mutex_unlock(&alsa_mu);
     return e < 0 ? e : 0;
 }
+/* ---- the writer's resampler (DSFLIP_AUDIO_DEVICE_RATE) ----
+ * A polyphase FIR for the rational ratio out/in = L/M (48000/44100 = 160/147): the prototype low-pass g[] at L times
+ * the input rate (Kaiser-windowed sinc, RS_TAPS input samples long, cut-off just under the lower Nyquist rate) is
+ * stored by phase, and output m is sum over k of g[p + L k] x[n - k] with n = floor(m M / L), p = m M mod L: no
+ * interpolation between phases, every output sample is exact for its phase. 16 taps: flat to ~16 kHz, images down
+ * ~70 dB from ~26 kHz (the DS mixes at 32.7 kHz). Coefficients Q14, each phase normalised to unity gain; the table
+ * is L * RS_TAPS int16 (5 KiB for 160 phases), all the state the resampler has besides RS_TAPS - 1 frames of history. */
+#define RS_TAPS 16
+static int out_rate, rs_L, rs_M;         /* 0: the device runs at DraStic's rate */
+static int16_t *rs_coef;                 /* [rs_L][RS_TAPS] */
+static double rs_i0(double x) { double s = 1, t = 1; for (int k = 1; k < 30; k++) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; }
+static int rs_init(double ratio) {       /* ratio: output samples per input sample */
+    /* the closest L/M with a table of at most 640 phases (160/147 exactly for 44.1 -> 48 kHz) */
+    double best = 1e9;
+    for (int l = 1; l <= 640; l++) {
+        int m = (int)lrint(l / ratio); if (m < 1) m = 1;
+        double e = fabs((double)l / m - ratio);
+        if (e < best * (1 - 1e-12)) { best = e; rs_L = l; rs_M = m; }
+    }
+    if (best > ratio * 1e-4) return -1;
+    int n = rs_L * RS_TAPS; double *g = malloc((size_t)n * sizeof *g);
+    rs_coef = malloc((size_t)n * sizeof *rs_coef);
+    if (!g || !rs_coef) { free(g); return -1; }
+    /* cut-off as a fraction of the upsampled rate (in * L): 0.92 of the lower Nyquist rate */
+    double fc = 0.92 * 0.5 * (rs_L < rs_M ? (double)rs_L / rs_M : 1.0) / rs_L, beta = 7.0, c = (n - 1) / 2.0;
+    for (int i = 0; i < n; i++) {
+        double t = i - c, w = rs_i0(beta * sqrt(1 - (t / c) * (t / c))) / rs_i0(beta);
+        g[i] = (t == 0 ? 2 * fc : sin(2 * M_PI * fc * t) / (M_PI * t)) * w;
+    }
+    for (int p = 0; p < rs_L; p++) {
+        double sum = 0; for (int k = 0; k < RS_TAPS; k++) sum += g[p + rs_L * k];
+        int isum = 0, big = 0;
+        for (int k = 0; k < RS_TAPS; k++) {
+            int v = (int)lrint(g[p + rs_L * k] / sum * 16384);
+            rs_coef[p * RS_TAPS + k] = (int16_t)v; isum += v;
+            if (abs(v) > abs(rs_coef[p * RS_TAPS + big])) big = k;
+        }
+        rs_coef[p * RS_TAPS + big] += (int16_t)(16384 - isum);   /* the rounding's remainder: exactly unity at DC */
+    }
+    free(g);
+    return 0;
+}
+/* x: nin new frames after RS_TAPS - 1 frames of history (ch channels, interleaved); *np: the phase, carried over.
+ * Returns the frames written to out. */
+static int resample(const int16_t *x, int nin, int ch, int16_t *out, int *np) {
+    int n = RS_TAPS - 1, p = *np, o = 0;
+    while (n < RS_TAPS - 1 + nin) {
+        const int16_t *h = rs_coef + p * RS_TAPS, *xn = x + (size_t)n * ch;
+        for (int c = 0; c < ch; c++) {
+            int32_t acc = 8192;
+            for (int k = 0; k < RS_TAPS; k++) acc += h[k] * xn[c - k * ch];
+            acc >>= 14;
+            out[o * ch + c] = (int16_t)(acc > 32767 ? 32767 : acc < -32768 ? -32768 : acc);
+        }
+        o++;
+        p += rs_M; while (p >= rs_L) { p -= rs_L; n++; }
+    }
+    *np = p;
+    return o;
+}
+
+/* DSFLIP_AUDIO_LOCK=<the panels' refresh rate in Hz> (experimental): the game at the display's frame rate.
+ * DraStic paces its frames on its audio: at 44100 samples a second it runs the DS's 59.8261 frames a second, and
+ * against a 60.005 Hz panel one refresh in every ~5.6 s has no new frame and shows the last one again (the logs'
+ * "repeat": 0.13-0.24 a second in HeartGold, walking; seen as a hitch when the picture scrolls). Here the stream is
+ * taken for what it must be for refresh-rate frames, 44100 * refresh / 59.8261 Hz, and resampled from that to the
+ * device's rate: the writer then drains the ring that much faster, the pump's rate trim follows it, and DraStic runs
+ * 0.3% fast (pitch +5 cents). A fixed ratio: as exact as the refresh rate given (the log's [pace] period). */
+#define DS_FPS 59.8260982880808
 static int alsa_open(void) {
-    const char *l = getenv("DSFLIP_ALSA_LATENCY");
-    return alsa_pcm(&pcm, 0 /* SND_PCM_STREAM_PLAYBACK */, fb / 2, freq, l ? (unsigned)atoi(l) : 30000, "audio") < 0 ? -1 : 0;
+    const char *l = getenv("DSFLIP_ALSA_LATENCY"), *r = getenv("DSFLIP_AUDIO_DEVICE_RATE"), *k = getenv("DSFLIP_AUDIO_LOCK");
+    double hz = k ? strtod(k, 0) : 0;
+    lock_in = hz > 50 && hz < 70 ? freq * hz / DS_FPS : 0;
+    out_rate = r ? atoi(r) : 0;
+    if (out_rate < 8000 || out_rate > 192000) out_rate = lock_in ? freq : 0;
+    if (out_rate == freq && !lock_in) out_rate = 0;
+    int open_rate = out_rate ? out_rate : freq;
+    if (out_rate && rs_init(out_rate / (lock_in ? lock_in : (double)freq))) {   /* no table for it: the sound server resamples */
+        out_rate = 0; open_rate = lock_in ? (int)lrint(lock_in) : freq;
+    }
+    return alsa_pcm(&pcm, 0 /* SND_PCM_STREAM_PLAYBACK */, fb / 2, open_rate, l ? (unsigned)atoi(l) : 30000, "audio") < 0 ? -1 : 0;
 }
 static void *writer(void *a) {           /* blocking writes pace this thread at the device's true rate */
     (void)a;
     struct sched_param sp = { .sched_priority = 20 };
     pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
-    unsigned char *buf = malloc((size_t)chunk * fb);
+    const int ch = fb / 2;
+    /* the chunk from the ring behind RS_TAPS - 1 frames of history, and room for its resampled frames */
+    int16_t *in = calloc((size_t)(RS_TAPS - 1 + chunk) * ch, sizeof *in);
+    int16_t *out = out_rate ? malloc(((size_t)chunk * rs_L / rs_M + 2) * ch * sizeof *out) : 0;
+    unsigned char *buf = (unsigned char *)(in + (RS_TAPS - 1) * ch);
+    int phase = 0;
     for (;;) {
         sdl_cb(0, buf, chunk * fb);      /* the same ring drain (silence while priming or on underrun) */
-        long r = a_writei(pcm, buf, chunk);
+        long r;
+        if (out) {
+            int n = resample(in, chunk, ch, out, &phase);
+            memmove(in, in + (size_t)chunk * ch, (size_t)(RS_TAPS - 1) * ch * sizeof *in);
+            r = a_writei(pcm, out, n);
+        } else r = a_writei(pcm, buf, chunk);
         if (r < 0) { st_xrun++; a_recover(pcm, (int)r, 1); }
     }
     return 0;
 }
 
 int audio_pump_enabled(void) { const char *e = getenv("DSFLIP_AUDIO_PUMP"); return !(e && *e == '0'); }
+int audio_out_alsa(void) { const char *o = getenv("DSFLIP_AUDIO_OUT"); return !(o && !strcmp(o, "sdl")); }
+int audio_sdl_off;                       /* dsflip.c's SDL_Init left SDL's audio subsystem out: start it before SDL's device */
+static void sdl_audio_needed(void) {
+    if (!audio_sdl_off) return;
+    audio_sdl_off = 0;
+    int (*sub)(uint32_t) = (int (*)(uint32_t))dlsym(RTLD_DEFAULT, "SDL_InitSubSystem");
+    if (sub && sub(0x10 /* SDL_INIT_AUDIO */)) dsflip_log("[audio] SDL's audio subsystem did not start\n");
+}
 
 /* SDL_OpenAudio in pump mode. real: SDL's own SDL_OpenAudio. */
 int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, int (*real)(struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *)) {
-    if (!(want->format == 0x8010 || want->format == 0x0010) || want->channels < 1 || want->channels > 2 || !want->callback)
+    if (!(want->format == 0x8010 || want->format == 0x0010) || want->channels < 1 || want->channels > 2 || !want->callback) {
+        sdl_audio_needed();
         return real(want, have);         /* only 16-bit PCM (what DraStic uses) */
+    }
     const char *c = getenv("DSFLIP_PUMP_CHUNK"), *t = getenv("DSFLIP_PUMP_TARGET");
     if (c && atoi(c) >= 32) chunk = atoi(c);
     if (t && atoi(t) >= chunk) target = atoi(t);
     dcb = want->callback; dud = want->userdata;
     fb = 2 * want->channels; freq = want->freq; silence_byte = 0;
     ring = calloc(RING, fb);
-    const char *o = getenv("DSFLIP_AUDIO_OUT");
-    int use_alsa = !(o && !strcmp(o, "sdl")) && alsa_open() == 0;
+    int use_alsa = audio_out_alsa() && alsa_open() == 0;
     if (!use_alsa) {                     /* drain via SDL's device (our callback) */
+        sdl_audio_needed();
         struct SDL_AudioSpec_ w = *want;
         w.callback = sdl_cb; w.userdata = 0; w.samples = 512;
         int r = real(&w, 0);             /* obtained=NULL: SDL converts to exactly this format */
@@ -312,6 +419,9 @@ int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, in
     if (use_alsa && !pthread_create(&th, 0, writer, 0)) pthread_setname_np(th, "dsf-alsa");
     dsflip_log("[audio] pump: %d Hz, DraStic's callback every %d samples (%.2f ms), ring target %d (%.1f ms), output %s\n",
                freq, chunk, chunk * 1000.0 / freq, target, target * 1000.0 / freq, use_alsa ? "ALSA default" : "SDL");
+    if (use_alsa && out_rate) dsflip_log("[audio] the device runs at %d Hz: resampled here (%d/%d, %d taps)\n", out_rate, rs_L, rs_M, RS_TAPS);
+    if (use_alsa && lock_in) dsflip_log("[audio] locked to the display: DraStic's %d Hz taken as %.1f Hz (%.4f frames a second)\n", freq, lock_in,
+                                        (out_rate ? (double)out_rate * rs_M / rs_L : lrint(lock_in)) / freq * DS_FPS);
     return 0;
 }
 

@@ -1,0 +1,3 @@
+#!/bin/sh
+# rg <cmd...>: run on the RG DS Plus
+RGDS_HOST=${RGDS_HOST:?set RGDS_HOST} exec ${RGDS_RG:-$HOME/.cache/rgds/rg} "$@"

@@ -1,0 +1,16 @@
+#!/bin/sh
+# paceseries: the installed library against the new one in real sessions (HeartGold walking, the player's settings), alternating
+RG="env RGDS_HOST=${RGDS_HOST:?set RGDS_HOST} ${RGDS_RG:-$HOME/.cache/rgds/rg}"
+run() { tag=$1 lib=$2; shift 2
+  $RG "systemctl reset-failed pacetest 2>/dev/null; systemd-run --unit=pacetest --collect --wait -q -p StandardOutput=file:/tmp/pace.out -p StandardError=file:/tmp/pace.err sh /storage/dsflip/opt/pace.sh $tag $lib hg 60 $*; cat /tmp/pace.out; head -c 300 /tmp/pace.err; i=0; while [ \$i -lt 60 ]; do curl -s localhost:1234/isIdle 2>/dev/null | grep -q true && break; sleep 1; i=\$((i+1)); done; echo \"(menu back after \$i s)\""
+  echo
+}
+N=/storage/dsflip/opt/lib/cur4.so
+run p2-old-a installed
+run p2-new-a $N
+run p2-old-b installed
+run p2-new-b $N
+run p3-old installed DSFLIP_RAST_SCALE=3
+run p3-new $N DSFLIP_RAST_SCALE=3
+$RG "md5sum /storage/.config/drastic/dsflip/libdsflip.so | cut -c1-32; systemctl show-environment | grep -c DSFLIP; ls /tmp/rocknixds-testing 2>&1 | head -1; systemctl is-active sway essway dsflip-game"
+echo done

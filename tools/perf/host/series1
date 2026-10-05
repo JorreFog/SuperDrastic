@@ -1,0 +1,21 @@
+#!/bin/sh
+# series1: huge pages on/off (twice), 48 kHz resampling, SDL's dummy audio driver; HeartGold walking, 2x, 1104 MHz
+S=${PERF_WORK:-$HOME/.cache/superdrastic-perf}
+B=$S/bin/bench
+RG="env RGDS_HOST=${RGDS_HOST:?set RGDS_HOST} ${RGDS_RG:-$HOME/.cache/rgds/rg}"
+C="LIB=/storage/dsflip/opt/lib/cur.so EXE=/storage/dsflip/opt/drastic KEEP=1 PERF=stat EV=cycles,instructions,l2d_cache_refill,dtlb_walk,itlb_walk DSFLIP_RAST=1"
+run() { tag=$1; shift
+  ( sleep 26; $RG "python3 /storage/dsflip/opt/maps.py \$(cat /tmp/bench.pid) > /storage/dsflip/opt/runs/$tag.maps 2>&1; grep -E 'AnonHugePages|Rss' /proc/\$(cat /tmp/bench.pid)/smaps_rollup >> /storage/dsflip/opt/runs/$tag.maps" ) &
+  THREADS=12 $B $tag hg $C "$@" 2>&1 | sed 's/ temp=.*//'
+  wait
+  $RG "grep -E 'audio\]|hugepage|2 MB' /storage/dsflip/opt/runs/$tag.log | head -3; grep -E 'audio\] pump' /storage/dsflip/opt/runs/$tag.log | tail -2; grep -E 'dtlb_walk|itlb_walk' /storage/dsflip/opt/runs/$tag.stat | sort -k2 -rn | head -6; tail -3 /storage/dsflip/opt/runs/$tag.maps"
+  echo
+}
+run hp0a DSFLIP_HUGEPAGES=0
+run hp1a
+run hp0b DSFLIP_HUGEPAGES=0
+run hp1b
+run au48 DSFLIP_AUDIO_RATE=48000
+run sdld SDL_AUDIODRIVER=dummy
+run au48d DSFLIP_AUDIO_RATE=48000 SDL_AUDIODRIVER=dummy
+echo done
