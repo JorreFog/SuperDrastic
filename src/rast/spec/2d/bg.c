@@ -15,11 +15,16 @@
  *         bit 15 included. A slot is 8 + 256 + 8 u16; the original renderers scribble into the padding (text 4bpp
  *         and 8bpp ext: bytes -14..527 relative to buf; text 8bpp: the index line left at bytes 512..535, up to 8
  *         bytes into the next slot's padding; affine: 512..541; affine lines also get up to 7 junk entries past the
- *         drawn span). Nothing reads those bytes; the ports write buf[0..255] only, the same values the originals
- *         write there, and only where the original writes too.
+ *         drawn span). The composite never reads those bytes; the ports write buf[0..255] only, the same values the
+ *         originals write there, and only where the original writes too.
  *   vis = vis + n*32: 256 bits, bit x (byte x >> 3, bit x & 7) = pixel x is opaque (index != 0; 16-bit bitmap: bit 15).
- * Only buf[x] where vis bit x is set is observable downstream (the compositor selects by the bitmaps), and both are
- * exact. There is no BGR555 conversion, no 6-bit step and no "bit 15 = opaque" convention in BG lines.
+ * Only buf[x] where vis bit x is set is observable in the composite (it selects by the bitmaps), and both are exact.
+ * One reader takes whole slots, junk included (compose.md 7, hazards; 2d-engine.md 3.6): on a 1x line whose 3D layer
+ * is shifted by BG0HOFS, render_scanline_2d (0x400fc) points the 3D line at the shifted copy at S, and a 3D display
+ * capture in hi-res mode reads its quarters q1..q3 at that pointer + 0x400, + 0x800 and + 0xc00 (0x3f6ec..0x3f718),
+ * i.e. BG1..BG3's slots (padding and invisible pixels) and the OBJ and mask areas after them. There DraStic's
+ * scribbles and junk reach the hi-res capture data, and these ports, which do not write them, give other bytes.
+ * There is no BGR555 conversion, no 6-bit step and no "bit 15 = opaque" convention in BG lines.
  *
  * Inputs: the layer struct (bg.h's BGL_* offsets: the renderer at L+0x30 installed by video_2d_update_bg_mode, the
  * bases, sizes and registers set by the event replay), the render list eng+0x8c (count eng+0xb2: the enabled BGs in
@@ -73,7 +78,8 @@
  *     every affine render, wrap or clip; then stepped once per line the layer renders in CLIP mode (before any early
  *     exit). A line where the layer is not rendered, is in wrap mode or returns for a NULL ext slot leaves the edges
  *     behind while X / Y move on: the window lags until the next recompute (history-dependent output).
- *   - NULL ext slot (extended with ext palettes on): returns before anything, edges not stepped, buf / vis stale.
+ *   - NULL ext slot (extended with ext palettes on): returns right after the recompute above (a set L+0xae is
+ *     consumed), before stepping the edges or writing anything: buf / vis stale.
  *   - Degenerate axes (PA or PC = 0): integer line counts with truncating division, see setup_edges.
  *
  * ===================================================================================================================

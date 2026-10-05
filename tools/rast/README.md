@@ -163,8 +163,8 @@ Seeds 1, 7 and 23 pass (`UT: all passed`). Per seed:
 - t_obj2d: 200,000 span cases, then 1,500 frames, each a reorder, 192 lines and a mid-frame re-sort in half of them.
   Each frame has 128 random OBJs with every shape, mode and matrix kind, sometimes the full-screen image, and runs
   as engine A or B.
-- t_compose2d: 20,000 to 40,000 cases of each routine, the composite on every path, and 20,000 composites of
-  render_scanline_2d-shaped inputs where the closed form must equal DraStic's own planes.
+- t_compose2d: 5,000 to 40,000 cases of each routine (20,000 to 40,000 a group), the composite on every path, and
+  20,000 composites of render_scanline_2d-shaped inputs where the closed form must equal DraStic's own planes.
 
 One deliberate mutation per port is caught, each in a scratch copy:
 - bg.c: the clip edges' step truncated instead of rounded up.
@@ -174,8 +174,11 @@ One deliberate mutation per port is caught, each in a scratch copy:
 
 Two contract notes:
 - The BG port writes `buf[0..255]` only, the values DraStic writes there. DraStic's renderers also scribble into the
-  line buffers' padding and leave junk entries past an affine span, and nothing reads them: t_bg2d checks every
-  visible pixel and every u16 the port writes, and measures DraStic's padding extents (bytes -14..541 from `buf`).
+  line buffers' padding and leave junk entries past an affine span, which the composite never reads: t_bg2d checks
+  every visible pixel and every u16 the port writes, and measures DraStic's padding extents (bytes -14..541 from
+  `buf`). One reader does take those bytes: on a 1x line whose 3D layer is shifted by BG0HOFS, a 3D display capture
+  in hi-res mode reads its quarters 1..3 from the scratch area at S+0x400 onwards, BG1..BG3's whole line buffers
+  (`re2d/compose.md` 7). In that case (`2d-engine.md` 3.6) the port's bytes are not DraStic's.
 - A clip-mode bitmap whose degenerate axis (PA or PC = 0) has a huge reference overflows its edge arithmetic. This
   happens in DraStic as in the port, and the read lands anywhere within ±2 GiB of the VRAM alias. t_bg2d therefore
   reserves that range around its VRAM.

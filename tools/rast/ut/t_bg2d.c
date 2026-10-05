@@ -7,7 +7,8 @@
  * that the port writes nothing outside buf[0..255] (its side of the line buffers byte for byte); the engine's header
  * and layer structs (the clip edges and dirty flags the renderers step). The whole engine struct after every frame and
  * group.
- * DraStic's own padding scribbles (bytes outside buf[0..255], never read: bg.md 3, 4.6) are measured and printed.
+ * DraStic's own padding scribbles (bytes outside buf[0..255], which the composite never reads: bg.md 3, 4.6; bg.c's
+ * header names the one reader) are measured and printed.
  * Groups (the analysis' generators, re2d/bg.md 13): the blank-layer test; the edge math alone (setup_edges, and
  * update_affine_variables on whole layer structs); text BGs (4bpp, 8bpp, 8bpp with ext palettes, NULL ext slots);
  * single affine / extended / bitmap / large bitmap lines with fresh edges; whole frames through render_scanline_bg

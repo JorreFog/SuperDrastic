@@ -44,7 +44,8 @@
  *     hflip: off += (w/8 - 1) * tile bytes
  *   clipping of non-affine OBJs to whole tiles: x < -7: c = (-x) & ~7, x += c, width -= c, off moves c pixels (back
  *     with hflip); x + width > 256: width = (263 - x) & ~7. So x stays in -7..255 and 1..7 pixels may lie right of
- *     255: they are drawn into the line buffers' padding, which nothing reads.
+ *     255: they are drawn into the line buffers' padding, which the composite never reads (the port writes them as
+ *     DraStic does; bg.c's header names the one reader of whole slots, a hi-res 3D capture on a BG0HOFS-shifted line).
  *   E.vram = [eng+8] + objbase + off; palette 4bpp: pal + 0x200 + palbank*32; 8bpp: ext ? ext + palbank*0x200 : pal +
  *     0x200 (also computed for bitmap OBJs, unused); a registration start > 191 wraps: Y -= 256, start -= 256
  *   for l = start .. start + box height - 1: y = l & 0xff; if y <= 191: append i to list[list][y], flags[y] |= flag
@@ -85,7 +86,7 @@
  *   else: semi = bmp = 0 (alpha untouched)
  * draw, for every opaque texel at screen pixel p (-7 .. 263): buf[p] = index (bitmaps: colour >> 8), col[p] = the
  * colour (palette u16 as stored, or the bitmap u16), alpha[p] = E.attr. Pixels no OBJ covers keep their old col and
- * alpha bytes (never consumed: every consumer masks with this line's OBJ bitmaps).
+ * alpha bytes (the composite masks them with this line's OBJ bitmaps; the port keeps them as DraStic does).
  *   non-affine: row = E.vflip ? Y - line : line - Y (u32); whole tiles of 8 pixels:
  *     4bpp  u32 at vram + (row >> 3)*pitch + (row & 7)*4 +- t*32, nibble k (7-k with hflip); colour pal[index]
  *     8bpp  the 8 bytes at vram + (row >> 3)*pitch + (row & 7)*8 +- t*64, byte k (7-k with hflip)
