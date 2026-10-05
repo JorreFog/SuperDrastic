@@ -81,7 +81,7 @@
 #define DS_UPDATE_FRAME_3D_1X 0x52870   /* update_frame_3d_1x(sys, u32 skip) */
 #define DS_RESET_VIDEO_3D     0x59a60   /* reset_video_3d(sys + SYS_FRAMEBUF) */
 
-/* the 2D compositor's quarter (comp.c, spec/composite.c): render_scanline_2d_composite(eng, out, S, layers, p3d, alpha,
+/* the 2D compositor's quarter (comp.c, spec/2d/compose.c): render_scanline_2d_composite(eng, out, S, layers, p3d, alpha,
  * lmask, bldcnt, flags, line) and the two routines its simple path calls. S = render_scanline_2d's scratch area
  * (its stack frame + 0x180; the frame is 0x1d30 bytes). */
 #define DS_2D_COMPOSITE       0x3c6d0

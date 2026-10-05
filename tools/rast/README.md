@@ -108,7 +108,7 @@ renderer hooked (`RAST=ours`/`diff`, `DSFLIP_RAST=1`):
 After the visibility step, DraStic composites the quarter: `render_scanline_2d_composite` runs its priority encoder
 (which layer is on top per pixel: 256-bit masks per layer and for the backdrop) and `select_pixels`, which merges the
 layers' u16 lines, puts the backdrop in, expands the u16 line into 6-bit R/G/B planes, and then writes the 3D pixels'
-bytes over the planes where BG0 is on top (`spec/composite.c` documents every routine; ~620 instructions a quarter,
+bytes over the planes where BG0 is on top (`spec/2d/compose.c` documents every routine; ~620 instructions a quarter,
 768 quarters a frame on the emulation thread). The hook on `render_scanline_2d_composite` (`comp.c`) runs DraStic's
 own encoder, so the masks in the scratch area are its bytes, and reads them: when no other layer of the layer mask
 claims a pixel and every pixel is BG0's or the backdrop's, the planes are `mask ? 3D bytes : backdrop` for every
@@ -123,6 +123,62 @@ trampoline on the same input bytes) and compares the scratch frame, the planes, 
 (`[comp] composite:` counts every 2 s). Cost per frame (simulator instruction counts, 90 s each): the chain's
 functions on the stress ROM L4 0.81 M -> 0.39 M (the quarters of engine B, which has no 3D layer,
 stay with DraStic's chain), on the field scene S7 0.47 M -> 0.07 M; frame totals 16.6 M (was 17.8) and 3.5 M (was 3.4; the totals move by about 0.5 M between runs, the per-call costs are exact: about 620 instructions a quarter before, 45 / 30 / 150 after).
+
+## The 2D engine: reference ports (`src/rast/spec/2d/`)
+
+The next project replaces DraStic's 2D rendering of engine A (BGs, sprites, windows, colour effects, the composite
+with the 3D layer, capture, the scanout conversion) with our own renderer, exact to the pixel and off the emulation
+thread. The design and plan: `tools/rast/2d-engine.md`. The analyses it builds on: `tools/rast/re2d/` (`frame.md` the
+frame and line model, the register-write log and the threading; `bg.md`, `obj.md` and `compose.md` the stages;
+`compositing-2x.md` the 2x compositing of the 3D screen).
+
+Phase P1 is done: exact C ports of DraStic's 2D stages, on DraStic's own data layout (the engine and layer structs,
+the OBJ tables, `render_scanline_2d`'s scratch area) and with `spec_` names, as the reference for the fast and the
+deferred versions. They are built into the unit tests only, not into the library.
+
+- `bg.c`: `render_scanline_bg` with its mosaic, the text, affine, extended affine and bitmap renderers, the affine
+  clip edges, `disable_blank_layers`.
+- `obj.c`: the OBJ tables (`video_2d_reorder_obj`, with the 12-sprite full-screen image), the affine OBJ spans,
+  `render_scanline_obj_c`.
+- `compose.c`: the windows, the priority encoders and `select_pixels`, every path of `render_scanline_2d_composite`
+  (blending, brightness, per-pixel alpha), the 3D layer's horizontal shift, capture, the 32-bit conversions. The
+  simple path that was in `spec/composite.c` moved here; `composite.c` keeps the 3D visibility step `comp.c` uses.
+- `pixel.h`: the composite's per-pixel closed form, the contract for a fused version.
+
+Each file's header documents its routines: inputs, outputs, the per-pixel math, and the DraStic behaviours a
+replacement must keep (the general-path garbage map entries, history-dependent clip edges, OBJ order by priority
+first, BLDALPHA bit 7 in EVB, the 2x master-brighten bug, ...). The unit tests run DraStic's routine and the port on
+identical copies in DraStic's process, with the analyses' random generators. Every output is compared between guard
+bytes, and the whole engine struct afterwards:
+
+    cd tools/rast/ut
+    UT_SEED=1 sh run.sh t_bg2d.c ../../../src/rast/spec/2d/bg.c            # 15 s
+    UT_SEED=1 sh run.sh t_obj2d.c ../../../src/rast/spec/2d/obj.c          # 32 s
+    UT_SEED=1 sh run.sh t_compose2d.c ../../../src/rast/spec/2d/compose.c  # 15 s
+    UT_SEED=1 sh run.sh t_composite.c ../../../src/rast/spec/composite.c ../../../src/rast/spec/2d/compose.c
+
+Seeds 1, 7 and 23 pass (`UT: all passed`). Per seed:
+- t_bg2d: 150,000 edge cases, 12,000 text lines, 30,000 single affine and bitmap lines, 750 frames of 192 lines
+  through `render_scanline_bg` (stepping, mosaic, mid-frame writes), 30,000 large-scale clip lines.
+- t_obj2d: 200,000 span cases, then 1,500 frames, each a reorder, 192 lines and a mid-frame re-sort in half of them.
+  Each frame has 128 random OBJs with every shape, mode and matrix kind, sometimes the full-screen image, and runs
+  as engine A or B.
+- t_compose2d: 20,000 to 40,000 cases of each routine, the composite on every path, and 20,000 composites of
+  render_scanline_2d-shaped inputs where the closed form must equal DraStic's own planes.
+
+One deliberate mutation per port is caught, each in a scratch copy:
+- bg.c: the clip edges' step truncated instead of rounded up.
+- obj.c: OBJs of one list drawn lowest OAM number first.
+- compose.c: BLDALPHA bit 7 kept out of EVB.
+- pixel.h: translucent 3D also blended in BLDCNT's brightness modes.
+
+Two contract notes:
+- The BG port writes `buf[0..255]` only, the values DraStic writes there. DraStic's renderers also scribble into the
+  line buffers' padding and leave junk entries past an affine span, and nothing reads them: t_bg2d checks every
+  visible pixel and every u16 the port writes, and measures DraStic's padding extents (bytes -14..541 from `buf`).
+- A clip-mode bitmap whose degenerate axis (PA or PC = 0) has a huge reference overflows its edge arithmetic. This
+  happens in DraStic as in the port, and the read lands anywhere within ±2 GiB of the VRAM alias. t_bg2d therefore
+  reserves that range around its VRAM.
 
 ## How it works
 
@@ -153,6 +209,8 @@ they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flag
 
 ## Next
 
+- The 2D engine's next phases (`2d-engine.md` 4.1): P2, the synchronous line engine on a stage table of the
+  `spec/2d/` ports (`t_line.c`, `RAST2D_CHECK=line`); P5, the fast stages, each tested against its port.
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
 - The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.

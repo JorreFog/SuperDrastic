@@ -1,13 +1,14 @@
-/* t_composite.c: the scanline compositor routines of src/rast/spec/composite.c vs DraStic's originals: the 3D
- * visibility step (and the NEON version, src/rast/compvis.h, vs the C port), and the simple path of
- * render_scanline_2d_composite with everything under it (priority encoder, the select_pixels merges, the 6-bit
- * expansion, the 3D insertion, select_pixels, the composite itself); then the fused 3D + backdrop pass
- * (src/rast/compfuse.h: the kind decision against a per-pixel reference, the planes against DraStic's select_pixels
- * and the C port). Every output buffer sits between guard bytes; inputs are compared afterwards too (nothing else
- * may change).
- * run.sh t_composite.c ../../../src/rast/spec/composite.c */
+/* t_composite.c: the scanline compositor routines the 3D screen goes through vs DraStic's originals: the 3D
+ * visibility step (src/rast/spec/composite.c; and the NEON version, src/rast/compvis.h, vs the C port), and the simple
+ * path of render_scanline_2d_composite with everything under it (src/rast/spec/2d/compose.c: priority encoder, the
+ * select_pixels merges, the 6-bit expansion, the 3D insertion, select_pixels, the composite itself); then the fused
+ * 3D + backdrop pass (src/rast/compfuse.h: the kind decision against a per-pixel reference, the planes against
+ * DraStic's select_pixels and the C port). Every output buffer sits between guard bytes; inputs are compared
+ * afterwards too (nothing else may change). The composite's other paths: t_compose2d.c.
+ * run.sh t_composite.c ../../../src/rast/spec/composite.c ../../../src/rast/spec/2d/compose.c */
 #include "ut.h"
 #include "spec/composite.h"
+#include "spec/2d/compose.h"
 #include "compvis.h"
 #include "compfuse.h"
 #include <stddef.h>
@@ -335,7 +336,8 @@ static void test_composite(void) {
         copy_env();
         uint64_t bld = rnd64();
         DS(comp_fn, DS_COMP)(EA.eng, EA.out + G, S, EA.layers, p3, al, lmask, bld, flags, line);
-        spec_render_scanline_2d_composite_simple(EB.eng, EB.out + G, EB.frame + S_OFS, EB.layers, rel((void *)p3), lmask);
+        spec_render_scanline_2d_composite(EB.eng, EB.out + G, EB.frame + S_OFS, EB.layers, rel((void *)p3), rel(al), lmask,
+                                          (uint32_t)bld, (uint32_t)flags, (uint32_t)line);
         snprintf(what, sizeof what, "composite test %d (lmask %#x, p3d %s, flags %#llx)", t, lmask, p3 ? "yes" : "NULL",
                  (unsigned long long)flags);
         cmp_env(what);

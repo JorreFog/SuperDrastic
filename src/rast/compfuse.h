@@ -1,6 +1,6 @@
 /* compfuse.h: the planes of a "3D + backdrop" quarter of render_scanline_2d_composite's simple path in one NEON
  * pass, for comp.c's hook. Same bytes as DraStic's select_pixels -> binary_scalar -> expand_6bit_split -> binary32
- * chain (spec/composite.c) whenever comp_fused_kind() says the quarter qualifies; tools/rast/ut/t_composite.c tests
+ * chain (spec/2d/compose.c) whenever comp_fused_kind() says the quarter qualifies; tools/rast/ut/t_composite.c tests
  * it against the C port and the originals.
  *
  * The chain, for a quarter whose layer mask holds BG0 (the 3D layer) and whose masks from the priority encoder are
