@@ -34,39 +34,45 @@ static int mgmt(uint8_t *o, int cap, unsigned fc, const uint8_t *a1, const uint8
 
 static const uint8_t bcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
-/* ESS, short preamble, no privacy. Rates are 1/2/5.5/11, the two DS rates marked basic. */
+/* ESS, short preamble, no privacy. Rates are 1/2/5.5/11 with only the DS's own two, 1 and 2 Mbit/s, marked basic
+ * (bit 7): a DS cannot join a network whose basic rates it does not have. */
 static int put_ssid(uint8_t *p, const char *ssid) {
     if (!ssid || !ssid[0]) ssid = "rocknixds";
     int n = 0; while (ssid[n] && n < 32) n++;
     p[0] = 0; p[1] = n; memcpy(p + 2, ssid, n);
     return 2 + n;
 }
-static int put_ies(uint8_t *p, const char *ssid, int channel) {
+static int put_rates(uint8_t *p) {
+    p[0] = 1; p[1] = 4; p[2] = 0x82; p[3] = 0x84; p[4] = 0x0b; p[5] = 0x16;
+    return 6;
+}
+/* SSID, rates, the DS parameter set (the channel; left out when channel is 0) and, in beacons, the TIM */
+static int put_ies(uint8_t *p, const char *ssid, int channel, int tim) {
     int n = put_ssid(p, ssid);
-    p[n] = 1; p[n + 1] = 4; p[n + 2] = 0x82; p[n + 3] = 0x84; p[n + 4] = 0x8b; p[n + 5] = 0x96; n += 6;
-    p[n] = 3; p[n + 1] = 1; p[n + 2] = channel ? channel : 1; n += 3;
-    p[n] = 5; p[n + 1] = 4; p[n + 2] = 0; p[n + 3] = 1; p[n + 4] = 0; p[n + 5] = 0; n += 6; /* TIM */
+    n += put_rates(p + n);
+    if (channel > 0) { p[n] = 3; p[n + 1] = 1; p[n + 2] = (uint8_t)channel; n += 3; }
+    if (tim) { p[n] = 5; p[n + 1] = 4; p[n + 2] = 0; p[n + 3] = 1; p[n + 4] = 0; p[n + 5] = 0; n += 6; }
     return n;
 }
 
-static int beacon_body(uint8_t *o, int at, const char *ssid, int channel, uint64_t tsf) {
+static int beacon_body(uint8_t *o, int at, const char *ssid, int channel, uint64_t tsf, int tim) {
     for (int i = 0; i < 8; i++) o[at++] = (tsf >> (8 * i)) & 0xff;
     put16(o + at, 100); at += 2;          /* beacon interval, TU */
     put16(o + at, 0x0021); at += 2;       /* capability */
-    return at + put_ies(o + at, ssid, channel);
+    return at + put_ies(o + at, ssid, channel, tim);
 }
 
 int wififrame_beacon(uint8_t *o, int cap, const uint8_t bssid[6], const char *ssid, int channel, uint16_t seq, uint64_t tsf) {
     int n = mgmt(o, cap, 0x0080, bcast, bssid, bssid, seq);
     if (n < 0 || n + 64 > cap) return -1;
-    n = beacon_body(o, n, ssid, channel, tsf);
+    n = beacon_body(o, n, ssid, channel, tsf, 1);
     return finish(o, n, cap);
 }
 
 int wififrame_probe_resp(uint8_t *o, int cap, const uint8_t bssid[6], const uint8_t da[6], const char *ssid, int channel, uint16_t seq, uint64_t tsf) {
     int n = mgmt(o, cap, 0x0050, da, bssid, bssid, seq);
     if (n < 0 || n + 64 > cap) return -1;
-    n = beacon_body(o, n, ssid, channel, tsf);
+    n = beacon_body(o, n, ssid, channel, tsf, 0);
     return finish(o, n, cap);
 }
 
@@ -81,7 +87,8 @@ int wififrame_assoc_resp(uint8_t *o, int cap, const uint8_t bssid[6], const uint
     int n = mgmt(o, cap, 0x0010, da, bssid, bssid, seq);
     if (n < 0 || n + 48 > cap) return -1;
     put16(o + n, 0x0021); put16(o + n + 2, 0); put16(o + n + 4, 0xc001); n += 6; /* cap, status, AID 1 */
-    n += put_ies(o + n, ssid, 1);
+    (void)ssid;
+    n += put_rates(o + n);                /* an association response carries the rates and nothing else */
     return finish(o, n, cap);
 }
 

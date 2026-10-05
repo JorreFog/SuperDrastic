@@ -79,6 +79,14 @@ static uint16_t rnd = 1;
 static uint64_t us_base_mono, us_base_val;
 static int us_inited;
 static int rx_on, rx_latched, bc_armed, bc_left;
+static int mode_on;                     /* W_MODE_RST bit 0: the MAC is switched on */
+/* test switches (/tmp/wfc-knobs with DSFLIP_WFC_DEBUG=2): answer probes, send beacons, beacon after a wake-up (us, 0 off);
+ * old: the access point's beacon at the DS's own beacon time; gate: no reception while the MAC is off; txclr: LOC1..3
+ * taken back at the beacon time */
+static int k_old, k_gate = 1, k_txclr = 1, k_ack = 1;
+static int in_tx;                       /* inside do_tx: what is queued for the DS now is an answer to the frame being sent */
+static int k_probe = 1, k_bcn = 1, k_wake = 4000;
+static uint64_t ap_next;                /* when the access point's next beacon is due (its own clock, 100 TU apart) */
 static uint64_t bc_stamp, cmp_fired;
 static uint16_t rx_begin = 0x4000, rx_end = 0x4800;
 static uint16_t seqno;
@@ -87,6 +95,23 @@ static char joined_ssid[33];
 
 static uint32_t hook_load16(void *mem, uint32_t addr);
 static void hook_store16(void *mem, uint32_t addr, uint32_t val);
+
+/* DSFLIP_WFC_DEBUG=2: a register trace on top of the frame log, for finding out on a handheld where the game's
+ * driver stops: every register write ("w off=val", repeats folded), the first read of a register and every read
+ * that returns something new ("r off->val"), the ARM7 interrupts raised and a state line every 2 s. */
+static uint64_t mono_us(void);
+static int trace, trace_cfg, tr_lines;
+static uint64_t tr_t0;
+#define TR_MAX 20000
+#define TR(fmt, ...) do { if (trace && tr_lines < TR_MAX) { tr_lines++; dsflip_log("[wfc] %7.1f " fmt, (double)(mono_us() - tr_t0) / 1000.0, ##__VA_ARGS__); } } while (0)
+static uint8_t rd_seen[0x800];
+static uint16_t rd_last[0x800];
+static int n_beacon, n_rxq, n_rxdrop, n_rxoff, n_irq, n_tx;
+static int n_st8, n_st16, n_st32, n_ld8, n_ld16, n_ld32, raw_logged;
+static uintptr_t g_base;
+#define RAWTR(what, addr, val) do { if (trace && raw_logged < 40) { raw_logged++; dsflip_log("[wfc] raw %s %08x %08x\n", what, (unsigned)(addr), (unsigned)(val)); } } while (0)
+static uint16_t txreq;                  /* W_TXREQ_READ (0x0b0): the slots allowed to send, set and cleared through 0x0ae / 0x0ac */
+static int tx_more;
 
 static void wlock(void) { if (wmu_ok) pthread_mutex_lock(&wmu); }
 static void wunlock(void) { if (wmu_ok) pthread_mutex_unlock(&wmu); }
@@ -145,6 +170,8 @@ static void arm7_irq(void *mem) {
         *(uint32_t *)(arm7 + ARM7_PEND) = pend;
     }
     if (pend) *(uint32_t *)(arm7 + ARM7_ALERT) |= 2;
+    TR("irq7: IF %08x IE %08x IME %x halt %x pend %x (W_IF %04x W_IE %04x)\n", iff, *(uint32_t *)(io + IO_IE),
+       *(uint32_t *)(io + IO_IME), halt, pend, raw16(mem, 0x10), raw16(mem, 0x12));
 }
 
 /* W_IF (0x010) is written through DraStic's own 16-bit handler when the layout check found it stores the value as
@@ -156,9 +183,10 @@ static void if_put(void *mem, uint16_t v) {
     else *(volatile uint16_t *)((uint8_t *)mem + REG_BASE + 0x10) = v;
 }
 static void wifi_if(void *mem, uint16_t bits) {
-    uint16_t now = raw16(mem, 0x10) | bits;
+    uint16_t old = raw16(mem, 0x10), now = old | bits, ie = raw16(mem, 0x12);
     if_put(mem, now);
-    if (now & raw16(mem, 0x12)) arm7_irq(mem);
+    if (now & ie) arm7_irq(mem);
+    (void)old;
 }
 
 static int layout_check(void *mem) {
@@ -195,7 +223,7 @@ static int bssid_match(void *mem, const uint8_t *frm, int len) {
 }
 
 static void rx_queue(void *mem, const uint8_t *frm, int len) {
-    if (!rx_on || !rx_latched || len <= 4) return;
+    if ((!mode_on && k_gate) || !rx_on || !rx_latched || len <= 4) { n_rxoff++; return; }
     /* the record holds the frame with its FCS, as the hardware stores it; the header's length takes off what
      * W_RXLEN_CROP says (the firmware sets 0x0602: the 4-byte FCS on plain frames, 12 bytes on WEP ones) */
     uint16_t crop = raw16(mem, 0x0da), fc = (uint16_t)(frm[0] | (frm[1] << 8));
@@ -203,10 +231,52 @@ static void rx_queue(void *mem, const uint8_t *frm, int len) {
     uint16_t wr = raw16(mem, 0x54), rd = raw16(mem, 0x5a);
     if (!wififrame_rx_push(mac_base(mem), &wr, rd, rx_begin, rx_end, frm, len, cb, bssid_match(mem, frm, len))) {
         if (debug) dsflip_log("[wfc] rx drop, %d bytes\n", len);
+        n_rxdrop++;
         return;
     }
+    n_rxq++;
+    TR("rx fc %02x%02x len %d -> wrcsr %04x (rd %04x) hdr0 %s\n", frm[1], frm[0], len, wr, rd, bssid_match(mem, frm, len) ? "bssid" : "-");
     orig_st16(mem, 0x0054, wr);
     wifi_if(mem, 1);                                  /* RX complete */
+}
+
+/* What the access point sends in answer to the DS (probe, authentication and association responses, and the
+ * network's replies that are made while the DS's own frame is being taken: ARP, DHCP, ICMP) waits here for a moment.
+ * Delivered at once, an answer reached the driver in the same interrupt as the end of its own transmission, and
+ * before it: on real hardware nothing can arrive until the frame is out. DSFLIP_WFC_RXDELAY: the wait in
+ * microseconds (1500). The service thread hands the frames over, 1 ms apart at most. */
+#define RXQ_N 48
+static struct { uint64_t due; int len, answer; uint8_t frm[1700]; } rxq[RXQ_N];
+static int rxq_head, rxq_tail, rx_delay_us = 1500;
+static void rx_later(void *mem, const uint8_t *frm, int len) {
+    if (rx_delay_us <= 0) { rx_queue(mem, frm, len); return; }
+    int nx = (rxq_tail + 1) % RXQ_N;
+    if (len <= 0 || len > (int)sizeof rxq[0].frm || nx == rxq_head) { n_rxdrop++; return; }
+    rxq[rxq_tail].due = mono_us() + (uint64_t)rx_delay_us; rxq[rxq_tail].len = len; rxq[rxq_tail].answer = in_tx;
+    memcpy(rxq[rxq_tail].frm, frm, len);
+    rxq_tail = nx;
+}
+/* the driver has acknowledged the end of its transmission: its answers may come in now */
+static void rx_answers_due(void) {
+    for (int i = rxq_head; i != rxq_tail; i = (i + 1) % RXQ_N) if (rxq[i].answer) { rxq[i].due = 0; rxq[i].answer = 0; }
+}
+static void rx_due(void *mem) {
+    uint64_t now = mono_us();
+    while (rxq_head != rxq_tail && rxq[rxq_head].due <= now) {
+        rx_queue(mem, rxq[rxq_head].frm, rxq[rxq_head].len);
+        rxq_head = (rxq_head + 1) % RXQ_N;
+    }
+}
+/* The channel the access point names in its beacons and probe responses. DraStic's firmware image has no radio
+ * tables (every channel change writes zeros to the RF chip), so the channel the DS is on cannot be read from what
+ * the driver does. DSFLIP_WFC_CHANNEL: a channel (1..13), 0 to leave the DS parameter set out, "cycle" to name
+ * the next channel in every frame. */
+static int adv_ch = 1, adv_cycle;
+static int adv_channel(void) {
+    static int c;
+    if (!adv_cycle) return adv_ch;
+    c = c % 13 + 1;
+    return c;
 }
 
 static void inject_eth(void *ud, const uint8_t dst[6], const uint8_t src[6], uint16_t ethertype,
@@ -217,7 +287,7 @@ static void inject_eth(void *ud, const uint8_t dst[6], const uint8_t src[6], uin
     uint8_t frm[2048];
     const uint8_t *da = dst;
     int n = wififrame_fromds(frm, sizeof frm, da, BSSID, src, seqno++, ethertype, payload, len);
-    if (n > 0) rx_queue(mem, frm, n);
+    if (n > 0) rx_later(mem, frm, n);
 }
 static void net_log(void *ud, const char *line) { (void)ud; dsflip_log("[wfc] %s\n", line); }
 
@@ -239,10 +309,10 @@ static uint64_t tsf_now(void) { return us_now(); }
 static void reply_mgmt(void *mem, const uint8_t *da, int kind, const char *ssid) {
     uint8_t frm[320];
     int n = -1;
-    if (kind == 0) n = wififrame_probe_resp(frm, sizeof frm, BSSID, da, ssid, 1, seqno++, tsf_now());
+    if (kind == 0) n = wififrame_probe_resp(frm, sizeof frm, BSSID, da, ssid, adv_channel(), seqno++, tsf_now());
     else if (kind == 1) n = wififrame_auth(frm, sizeof frm, BSSID, da, seqno++);
     else n = wififrame_assoc_resp(frm, sizeof frm, BSSID, da, ssid, seqno++);
-    if (n > 0) rx_queue(mem, frm, n);
+    if (n > 0) rx_later(mem, frm, n);
 }
 
 static void on_assoc(const char *ssid) {
@@ -258,12 +328,12 @@ static void handle_frame(void *mem, const uint8_t *frm, int len) {
     int type = (fc >> 2) & 3, subtype = (fc >> 4) & 0xf;
     const uint8_t *sa = frm + 10;
     note_mac(sa);
-    if (debug) dsflip_log("[wfc] tx fc %04x len %d\n", fc, len);
+    if (trace) TR("tx fc %04x len %d\n", fc, len); else if (debug) dsflip_log("[wfc] tx fc %04x len %d\n", fc, len);
     if (type == 0) {
         char ssid[33]; ssid[0] = 0;
         if (subtype == 4) {                           /* probe request */
             int sl = len >= 24 ? wififrame_ie_ssid(frm + 24, len - 24, ssid, sizeof ssid) : -1;
-            reply_mgmt(mem, sa, 0, sl > 0 ? ssid : "rocknixds");
+            if (k_probe) reply_mgmt(mem, sa, 0, sl > 0 ? ssid : "rocknixds");
         } else if (subtype == 11) reply_mgmt(mem, sa, 1, 0);          /* auth */
         else if (subtype == 0 || subtype == 2) {                      /* assoc / reassoc: cap, listen, then IEs */
             if (len >= 28) wififrame_ie_ssid(frm + 28, len - 28, ssid, sizeof ssid);
@@ -283,33 +353,52 @@ static void handle_frame(void *mem, const uint8_t *frm, int len) {
     if (net) wfcnet_input(net, da, sa, et, llc + 8, len - hdr - 8);
 }
 
+/* Sends what the slots hold: a slot goes out when its W_TXBUF_LOCn has bit 15 and W_TXREQ_READ allows it (the
+ * driver sets W_TXREQ_SET once and then only writes the slot registers). One slot per call, LOC3 before LOC2 before
+ * LOC1 as the hardware orders them, each with its own W_TXSTAT and TX-end interrupt; the service thread sends the
+ * rest. The frame's TX header gets its status word (1: sent). */
 static void do_tx(void *mem, uint16_t mask) {
     static const uint16_t locreg[4] = { 0x00a0, 0x0090, 0x00a4, 0x00a8 }; /* LOC1, CMD, LOC2, LOC3 */
-    int any = 0;
-    for (int i = 0; i < 4; i++) {
+    static const int order[4] = { 3, 2, 0, 1 };
+    static const uint16_t stat[4] = { 0x0001, 0x0801, 0x1001, 0x2001 };
+    int sent = -1; tx_more = 0;
+    for (int k = 0; k < 4; k++) {
+        int i = order[k];
         if (!(mask & (1u << i))) continue;
         uint16_t loc = raw16(mem, locreg[i]);
         if (!(loc & 0x8000)) continue;
+        if (sent >= 0) { tx_more = 1; break; }
         unsigned byte = 0x4000u + (unsigned)(loc & 0x0fff) * 2u;
         uint8_t *p = mac_base(mem) + (byte & 0x3fff);
-        unsigned rate = p[8] | (p[9] << 8);
         unsigned flen = p[10] | (p[11] << 8);         /* includes the 4-byte FCS the hardware would add */
-        (void)rate;
+        TR("tx slot %d loc %04x len %u rate %02x fc %02x%02x\n", i, loc, flen, p[8], p[13], p[12]);
+        in_tx = 1;
         if (flen >= 4 && flen < 2400) handle_frame(mem, p + 12, (int)flen - 4);
+        in_tx = 0;
+        p[0] = 1; p[1] = 0; p[5] = 0;                 /* TX header: sent, no retries */
         orig_st16(mem, locreg[i], loc & (uint16_t)~0x8000);
-        any = 1;
+        sent = i; n_tx++;
     }
-    if (!any) return;
-    orig_st16(mem, 0x00b8, 0x0001);                   /* transmitted, not failed */
+    if (sent < 0) return;
+    orig_st16(mem, 0x00b8, stat[sent]);               /* which slot finished, not failed */
     orig_st16(mem, 0x00b6, 0);
     wifi_if(mem, (1u << 1) | (1u << 7));              /* TX end and TX start */
 }
 
-static void beacon(void *mem) {
+/* The access point's beacon: every 100 TU by the access point's own clock, and a few milliseconds after the driver
+ * wakes the radio, so a passive scan that stays ~30 ms on a channel hears one on every channel it visits. The DS's
+ * own beacon timer (W_BEACONCOUNT1, reloaded from W_BEACONINT: 500 while it scans) is a different thing and only
+ * raises its interrupt (svc_tick). */
+static void ap_beacon(void *mem) {
+    uint64_t now = mono_us();
+    if (!ap_next) ap_next = now + 102400;
+    if (now < ap_next) return;
+    ap_next = now + 102400;
+    if (!mode_on || !rx_on || !rx_latched || !k_bcn || k_old) return;
     uint8_t frm[256];
-    int n = wififrame_beacon(frm, sizeof frm, BSSID, "rocknixds", 1, seqno++, tsf_now());
+    int n = wififrame_beacon(frm, sizeof frm, BSSID, "rocknixds", adv_channel(), seqno++, tsf_now());
     if (n > 0) rx_queue(mem, frm, n);
-    wifi_if(mem, 1u << 14);
+    n_beacon++;
 }
 
 static uint16_t us_half(unsigned off) {
@@ -340,10 +429,12 @@ static int ensure(void *mem) {
 }
 
 static uint32_t hook_load8(void *mem, uint32_t addr) {
+    n_ld8++;
     uint32_t h = hook_load16(mem, addr & ~1u);
     return (addr & 1) ? (h >> 8) & 0xff : h & 0xff;
 }
 static uint32_t hook_load32(void *mem, uint32_t addr) {
+    n_ld32++;
     uint16_t o = regoff(addr);
     if (!is_ram(addr) && (o == 0xf8 || o == 0xfc)) {
         wlock();
@@ -355,6 +446,7 @@ static uint32_t hook_load32(void *mem, uint32_t addr) {
     return hook_load16(mem, addr) | (hook_load16(mem, addr + 2) << 16);
 }
 static void hook_store8(void *mem, uint32_t addr, uint32_t val) {
+    n_st8++; RAWTR("st8", addr, val);
     uint16_t o = regoff(addr);
     if (!is_ram(addr) && (o == 0x10 || o == 0x11)) {
         wlock();
@@ -372,6 +464,7 @@ static void hook_store8(void *mem, uint32_t addr, uint32_t val) {
     hook_store16(mem, addr & ~1u, h);
 }
 static void hook_store32(void *mem, uint32_t addr, uint32_t val) {
+    n_st32++; RAWTR("st32", addr, val);
     uint16_t o = regoff(addr);
     if (!is_ram(addr) && (o == 0xf8 || o == 0xfc)) {
         wlock();
@@ -389,6 +482,7 @@ static void hook_store32(void *mem, uint32_t addr, uint32_t val) {
 }
 
 static uint32_t hook_load16(void *mem, uint32_t addr) {
+    n_ld16++;
     if (!hooked) return orig_ld16(mem, addr);
     if (is_ram(addr)) { wlock(); ensure(mem); uint32_t r = orig_ld16(mem, fold_ram(addr)); wunlock(); return r; }
     uint16_t o = regoff(addr);
@@ -415,6 +509,7 @@ static uint32_t hook_load16(void *mem, uint32_t addr) {
         orig_st16(mem, 0x0058, (uint16_t)nxt);
         break;
     }
+    case 0x0b0: r = txreq; break;                     /* W_TXREQ_READ */
     case 0x0b6: r = 0; break;                         /* TX busy */
     case 0x0f8: case 0x0fa: case 0x0fc: case 0x0fe: r = us_half(o); break;
     case 0x11c: {
@@ -425,23 +520,49 @@ static uint32_t hook_load16(void *mem, uint32_t addr) {
     case 0x15e: case 0x180: r = 0; break;             /* BB / RF busy */
     default: r = orig_ld16(mem, addr); break;
     }
+    if (trace) {
+        unsigned i = (o & 0xfff) >> 1;
+        int vol = o == 0x044 || (o >= 0x0f8 && o <= 0x0fe) || o == 0x11c || o == 0x060;   /* change on every read */
+        if (!rd_seen[i] || (!vol && rd_last[i] != (uint16_t)r)) TR("r %03x->%04x\n", o, r & 0xffff);
+        rd_seen[i] = 1; rd_last[i] = (uint16_t)r;
+    }
     wunlock();
     return r;
 }
 
 static void hook_store16(void *mem, uint32_t addr, uint32_t val) {
+    n_st16++;
+    if (trace && !is_ram(addr) && raw_logged < 40) {
+        raw_logged++;
+        dsflip_log("[wfc] raw st16 %08x %08x from %p (binary at %lx)\n", addr, val, __builtin_return_address(0), (unsigned long)g_base);
+    }
     if (!hooked) { orig_st16(mem, addr, val); return; }
     if (is_ram(addr)) { wlock(); ensure(mem); orig_st16(mem, fold_ram(addr), val); wunlock(); return; }
     uint16_t o = regoff(addr), v = (uint16_t)val;
     wlock();
     if (!ensure(mem)) { orig_st16(mem, addr, val); wunlock(); return; }
+    if (trace) {
+        static unsigned lo = ~0u, lv = ~0u; static int reps;
+        if (o == lo && v == lv) reps++;
+        else {
+            if (reps) TR("  (%d more)\n", reps);
+            reps = 0; lo = o; lv = v;
+            TR("w %03x=%04x\n", o, v);
+        }
+    }
     switch (o) {
     case 0x004:
         orig_st16(mem, addr, v & (uint16_t)~0x8000);
         if (v & 0x8000 && net) wfcnet_reset(net);
+        mode_on = v & 1;
+        break;
+    case 0x03c:                                       /* W_POWERSTATE: bit 1 asks the radio to wake up (a scan does on every channel) */
+        orig_st16(mem, addr, v);
+        if ((v & 2) && mode_on && k_wake > 0) { uint64_t soon = mono_us() + (uint64_t)k_wake; if (!ap_next || soon < ap_next) ap_next = soon; }
         break;
     case 0x010:                                       /* write-1-to-clear */
         if_put(mem, raw16(mem, 0x10) & ~v);
+        if ((v & 2) && k_ack) { rx_answers_due(); rx_due(mem); }   /* TX end acknowledged: the answers to that frame */
         break;
     case 0x030:
         orig_st16(mem, addr, v);
@@ -449,10 +570,25 @@ static void hook_store16(void *mem, uint32_t addr, uint32_t val) {
         rx_on = (v & 0x8000) != 0;
         if (rx_on && !bc_armed) { bc_armed = 1; bc_left = 100; bc_stamp = us_now(); }
         break;
-    case 0x0ae:
+    case 0x0ac:                                       /* W_TXREQ_RESET */
+        txreq &= (uint16_t)~v;
         orig_st16(mem, addr, v);
-        do_tx(mem, v);
         break;
+    case 0x0ae:                                       /* W_TXREQ_SET */
+        txreq |= v;
+        orig_st16(mem, addr, v);
+        do_tx(mem, txreq);
+        break;
+    case 0x090: case 0x0a0: case 0x0a4: case 0x0a8:   /* W_TXBUF_CMD, LOC1..3: bit 15 queues the slot */
+        orig_st16(mem, addr, v);
+        if (v & 0x8000) do_tx(mem, txreq);
+        break;
+    case 0x0b4: {                                     /* W_TXBUF_RESET: takes queued slots back */
+        static const uint16_t rr[4] = { 0x00a0, 0x0090, 0x00a4, 0x00a8 };
+        for (int i = 0; i < 4; i++) if (v & (1u << i)) orig_st16(mem, rr[i], raw16(mem, rr[i]) & 0x7fff);
+        orig_st16(mem, addr, v);
+        break;
+    }
     case 0x0f8: case 0x0fa: case 0x0fc: case 0x0fe:
         us_store_half(o, v);
         break;
@@ -486,14 +622,64 @@ static void svc_tick(void) {
             if (period <= 0) period = 100;
             bc_left = period; bc_stamp = us_now();
             orig_st16(mem, 0x011c, (uint16_t)period);
-            beacon(mem);
             irq14 = 1;
+            if (k_old) {                              /* as before: the access point's beacon at the DS's own beacon time */
+                uint8_t frm[256];
+                int n = wififrame_beacon(frm, sizeof frm, BSSID, "rocknixds", adv_channel(), seqno++, tsf_now());
+                if (n > 0) rx_queue(mem, frm, n);
+                n_beacon++;
+            }
         }
         if (raw16(mem, 0xea) & 1) {
             uint64_t cmp = cmp_now(mem), now = us_now();
             if (cmp && now >= cmp && cmp_fired != cmp) { cmp_fired = cmp; irq14 = 1; }
         }
-        if (irq14 && left > 0) wifi_if(mem, 1u << 14); /* beacon() already raised it when the countdown elapsed */
+        if (irq14 && (mode_on || !k_gate)) {
+            if (k_txclr) txreq &= 0xfff2;                          /* the hardware takes LOC1..3 back at the beacon time; the driver sets them again */
+            wifi_if(mem, 1u << 14);
+        }
+    }
+    if (tx_more) do_tx(mem, txreq);
+    if (trace_cfg) {
+        static int chk;
+        if (++chk >= 10) {
+            chk = 0;
+            FILE *kf = fopen("/tmp/wfc-knobs", "r");
+            if (kf) {
+                char k[32]; int v; static char was[160]; char now_s[160];
+                while (fscanf(kf, " %31[a-z]=%d", k, &v) == 2) {
+                    if (!strcmp(k, "ch")) { adv_cycle = v < 0; if (v >= 0 && v <= 14) adv_ch = v; }
+                    else if (!strcmp(k, "delay")) rx_delay_us = v;
+                    else if (!strcmp(k, "probe")) k_probe = v;
+                    else if (!strcmp(k, "bcn")) k_bcn = v;
+                    else if (!strcmp(k, "wake")) k_wake = v;
+                    else if (!strcmp(k, "old")) k_old = v;
+                    else if (!strcmp(k, "gate")) k_gate = v;
+                    else if (!strcmp(k, "txclr")) k_txclr = v;
+                    else if (!strcmp(k, "ack")) k_ack = v;
+                }
+                fclose(kf);
+                snprintf(now_s, sizeof now_s, "ch %d%s delay %d probe %d bcn %d wake %d old %d gate %d txclr %d ack %d", adv_ch, adv_cycle ? " (cycling)" : "", rx_delay_us, k_probe, k_bcn, k_wake, k_old, k_gate, k_txclr, k_ack);
+                if (strcmp(now_s, was)) { dsflip_log("[wfc] knobs: %s\n", now_s); strcpy(was, now_s); }
+            }
+            int on = access("/tmp/wfc-trace", F_OK) == 0;
+            if (on && !trace) { tr_lines = 0; tr_t0 = mono_us(); memset(rd_seen, 0, sizeof rd_seen); dsflip_log("[wfc] trace on\n"); }
+            if (!on && trace) dsflip_log("[wfc] trace off (%d lines)\n", tr_lines);
+            trace = on;
+        }
+    }
+    if (trace_cfg) {
+        static int tick; static char last[320];
+        if (++tick >= 200) {
+            tick = 0;
+            char b[320];
+            snprintf(b, sizeof b, "mode %04x rxcnt %04x (on %d latched %d) IF %04x IE %04x pwr %04x/%04x/%04x txreq %04x buf %04x-%04x wr %04x rd %04x crop %04x filt %04x/%04x bssid %04x%04x%04x bcn %d (armed %d) rxq %d drop %d off %d tx %d calls ld %d/%d/%d st %d/%d/%d",
+                     raw16(mem, 0x04), raw16(mem, 0x30), rx_on, rx_latched, raw16(mem, 0x10), raw16(mem, 0x12), raw16(mem, 0x36),
+                     raw16(mem, 0x3c), raw16(mem, 0x40), txreq, rx_begin, rx_end, raw16(mem, 0x54), raw16(mem, 0x5a), raw16(mem, 0xda),
+                     raw16(mem, 0xd0), raw16(mem, 0xe0), raw16(mem, 0x20), raw16(mem, 0x22), raw16(mem, 0x24), n_beacon, bc_armed,
+                     n_rxq, n_rxdrop, n_rxoff, n_tx, n_ld8, n_ld16, n_ld32, n_st8, n_st16, n_st32);
+            if (strcmp(b, last)) { dsflip_log("[wfc] state: %s\n", b); strcpy(last, b); }
+        }
     }
     if (net) wfcnet_poll(net);
     if (want_toast && !toasted) {
@@ -502,15 +688,25 @@ static void svc_tick(void) {
     }
 }
 
+static uintptr_t load_bias(void);
 static void *svc(void *p) {
     (void)p;
     usleep(300000);                                   /* dsflip_log's file is opened by a later constructor */
     if (!active) { dsflip_log("[wfc] online left off: %s\n", fail_reason ? fail_reason : "not hooked"); return 0; }
     dsflip_log("[wfc] online via %s (%s)\n", srv_name, srv_ip);
-    while (active) {
-        usleep(10000);
+    if (debug) dsflip_log("[wfc] access point: channel %s%d, answers after %d us\n", adv_cycle ? "cycling, now " : "", adv_ch, rx_delay_us);
+    if (trace_cfg) {
+        uintptr_t base = load_bias();
+        uint64_t *ld = (uint64_t *)(base + WIFI_LOAD_TBL), *st = (uint64_t *)(base + WIFI_STORE_TBL);
+        dsflip_log("[wfc] tables at %p: ld %lx %lx %lx st %lx %lx %lx; hooks ld16 %p st16 %p; base %lx\n", (void *)ld, (unsigned long)ld[0],
+                   (unsigned long)ld[1], (unsigned long)ld[2], (unsigned long)st[0], (unsigned long)st[1], (unsigned long)st[2],
+                   (void *)hook_load16, (void *)hook_store16, (unsigned long)base);
+    }
+    for (int turn = 0; active; turn++) {
+        usleep(1000);
         wlock();
-        svc_tick();
+        if (g_mem && layout_ok) { rx_due(g_mem); ap_beacon(g_mem); }
+        if (turn % 10 == 9) svc_tick();
         wunlock();
     }
     return 0;
@@ -672,6 +868,59 @@ static int patch_tables(uintptr_t base) {
     return 1;
 }
 
+/* Writes do not come through those tables. DraStic's recompiled ARM7 code hands every store to 0x04xxxxxx to
+ * store_io_register_arm7_8/16/32 directly (the stub at 0x8d9b8: "bl store_io_register_arm7_16" with the address's low
+ * 24 bits), and those handlers carry their own inlined copy of the wifi store for addresses above 0x7fffff; the map's
+ * region-9 store pointers are only used by DraStic's C accessors. Seen on an RG DS Plus (2026-10-05): 15722 register
+ * reads reached the hooks during the driver's start-up test and not one write, so the game talked to DraStic's stub
+ * and never sent a frame. So the three I/O store handlers are patched in place: their first 16 bytes (four
+ * position-independent instructions, which move to a trampoline that jumps back behind the patch) become
+ * "ldr x16, #8; br x16; <wrapper>". x16 is the linker's scratch register, and the recompiler's stub saves its own
+ * w16/w17 before the call. The wrappers send wifi addresses to the hooks above and everything else to the handler. */
+enum { OFF_IOST8 = 0x10fa0, OFF_IOST16 = 0x117f0, OFF_IOST32 = 0x12120 };
+static wst_fn io_st8, io_st16, io_st32;
+static void io_store8(void *mem, uint32_t addr, uint32_t val) {
+    if (addr > 0x7fffffu) hook_store8(mem, addr, val); else io_st8(mem, addr, val);
+}
+static void io_store16(void *mem, uint32_t addr, uint32_t val) {
+    if (addr > 0x7fffffu) hook_store16(mem, addr, val); else io_st16(mem, addr, val);
+}
+static void io_store32(void *mem, uint32_t addr, uint32_t val) {
+    if (addr > 0x7fffffu) hook_store32(mem, addr, val); else io_st32(mem, addr, val);
+}
+static void *patch_code(uintptr_t fn, const uint32_t expect[4], void *hook) {
+    long ps = sysconf(_SC_PAGESIZE);
+    uint32_t *code = (uint32_t *)fn, jump[4] = { 0x58000050u /* ldr x16, #8 */, 0xd61f0200u /* br x16 */ };
+    if (memcmp(code, expect, 16)) return 0;
+    uint32_t *t = mmap(0, ps, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (t == MAP_FAILED) return 0;
+    uint64_t back = fn + 16;
+    memcpy(t, code, 16); memcpy(t + 4, jump, 8); memcpy(t + 6, &back, 8);
+    __builtin___clear_cache((char *)t, (char *)(t + 8));
+    uint64_t h = (uint64_t)(uintptr_t)hook; memcpy(jump + 2, &h, 8);
+    uintptr_t page = fn & ~(uintptr_t)(ps - 1);
+    size_t len = ((fn + 16 + ps - 1) & ~(uintptr_t)(ps - 1)) - page;
+    if (mprotect((void *)page, len, PROT_READ | PROT_WRITE | PROT_EXEC)) { munmap(t, ps); return 0; }
+    memcpy(code, jump, 16);
+    mprotect((void *)page, len, PROT_READ | PROT_EXEC);
+    __builtin___clear_cache((char *)code, (char *)(code + 4));
+    return t;
+}
+static int patch_io_stores(uintptr_t base) {
+    /* stp x29, x30, [sp, #-N]!; cmp / sub on the address; mov x29, sp; stp x19, x20, [sp, #0x10] */
+    static const uint32_t e8[4] = { 0xa9bd7bfdu, 0x71085c3fu, 0x910003fdu, 0xa90153f3u }, e16[4] = { 0xa9bb7bfdu, 0x5102e824u, 0x910003fdu, 0xa90153f3u }, e32[4] = { 0xa9bb7bfdu, 0x7106203fu, 0x910003fdu, 0xa90153f3u };
+    /* all three or none: check first, patch after */
+    if (memcmp((void *)(base + OFF_IOST8), e8, 16) || memcmp((void *)(base + OFF_IOST16), e16, 16) ||
+        memcmp((void *)(base + OFF_IOST32), e32, 16)) return 0;
+    void *t8 = patch_code(base + OFF_IOST8, e8, io_store8); if (!t8) return 0;
+    io_st8 = (wst_fn)t8;
+    void *t16 = patch_code(base + OFF_IOST16, e16, io_store16); if (!t16) return 0;
+    io_st16 = (wst_fn)t16;
+    void *t32 = patch_code(base + OFF_IOST32, e32, io_store32); if (!t32) return 0;
+    io_st32 = (wst_fn)t32;
+    return 1;
+}
+
 /* Runs after dsflip.c's init_locks (101) and before its unprioritised init(), i.e. before DraStic's main.
  * DraStic's children (`sh -c pactl subscribe`) inherit the preload; init() marks the game process with
  * DSFLIP_IN_GAME, so in a child that variable is already set and there is nothing to hook. */
@@ -683,10 +932,16 @@ __attribute__((constructor(102))) static void wifi_init(void) {
     pthread_mutexattr_destroy(&a);
     wmu_ok = 1;
     debug = getenv("DSFLIP_WFC_DEBUG") && strcmp(getenv("DSFLIP_WFC_DEBUG"), "0");
+    { const char *e = getenv("DSFLIP_WFC_RXDELAY"); if (e && *e) rx_delay_us = atoi(e); }
+    { const char *e = getenv("DSFLIP_WFC_CHANNEL");
+      if (e && !strcmp(e, "cycle")) adv_cycle = 1; else if (e && *e) { adv_ch = atoi(e); if (adv_ch < 0 || adv_ch > 14) adv_ch = 1; } }
+    trace_cfg = debug && atoi(getenv("DSFLIP_WFC_DEBUG")) >= 2;   /* /tmp/wfc-trace then switches the trace on and off */
     if (!setting_on()) return;
     if (!build_ok()) { fail_reason = "DraStic build id is not r2.5.2.2"; goto thread; }
     uintptr_t base = load_bias();
     if (!base || !patch_tables(base)) { fail_reason = "wifi handler table was not where r2.5.2.2 keeps it"; goto thread; }
+    g_base = base;
+    if (!patch_io_stores(base)) { fail_reason = "the ARM7 I/O store handlers do not start as r2.5.2.2's do"; goto thread; }
     wfcnet_cfg cfg; memset(&cfg, 0, sizeof cfg);
     cfg.ds_ip = htonl(0x0a0d2514u);               /* 10.13.37.20 */
     cfg.gw_ip = htonl(0x0a0d2501u);               /* 10.13.37.1 */
