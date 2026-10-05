@@ -148,11 +148,12 @@ they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flag
   frame count every 10 frames (for per-frame figures from a block profile).
 - `DSFLIP_PROF=<seconds> DSFLIP_PROF_OUT=<dir>` (`src/prof.c`, in the library too) writes the sampling profiler's
   report: CPU time by thread and function, the JIT included. The block profile counts instructions instead, of all
-  threads together; under qemu a NEON or floating-point instruction costs far more time than a scalar one, so the
-  NEON kernels' share of the time is about 1.5 times their share of the instructions and plain C's about a third
-  (S7: `rast_kern_14010` 45.0% of the samples, 27.5% of the instructions, `render_bins` 1.0% and 3.6%; L4:
-  `rast_kern_02000` 35.3% and 24.3%; DraStic's `render_polygon_edge_perspective_steps_asm` 6.5 times). `run.sh` ends
-  with a SIGKILL: only the reports written every period are left.
+  threads together, and under qemu an instruction's time depends on its kind: a function's share of the samples can
+  be several times its share of the instructions or a fraction of it, even between two of our NEON kernels (S7:
+  `rast_kern_14010` 45.6% of the samples and 27.0% of the instructions, the translucent `rast_kern_23110` 3.2% and
+  7.7%, `render_bins` 1.0% and 3.6%; L4: `rast_kern_02000` 35.3% and 24.3%; DraStic's
+  `render_polygon_edge_perspective_steps_asm` 6.5-6.8 times). `run.sh` ends with a SIGKILL: only the reports written
+  every period are left.
 - The simulator's qemu 9.2.0 needs `tools/sim/qemu-9.2.0-fold_bitsel_vec.patch` (setup.sh applies it): unpatched, its
   TCG optimizer folds a vector bit-select with a constant all-ones false operand to all-ones, so NEON C code using
   `vbslq` with such a constant computes the wrong thing under the simulator only. The generated kernels use runtime

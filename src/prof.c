@@ -388,7 +388,8 @@ static uintptr_t hexval(const char **p) {
     uintptr_t v = 0;
     for (;; (*p)++) { char c = **p; int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1; if (d < 0) return v; v = v * 16 + d; }
 }
-static void reg_line(const char *l) {
+static void cat_s(char *out, size_t n, const char *s);
+static void reg_line(const char *l) {   /* in every report, the signal handlers' too: no snprintf */
     const char *q = l; uintptr_t lo = hexval(&q); if (*q != '-') return;
     q++; uintptr_t hi = hexval(&q); if (*q != ' ' || q[3] != 'x' || nregs >= MAXREG) return;
     int w = q[2] == 'w';
@@ -396,7 +397,7 @@ static void reg_line(const char *l) {
     if (lo < jit_hi && hi > jit_lo) return;
     for (int f = 0; f < 5 && *q; ) { if (*q == ' ') { f++; while (*q == ' ') q++; } else q++; }   /* perms .. inode */
     struct reg *r = &regs[nregs++]; r->lo = lo; r->hi = hi;
-    snprintf(r->name, sizeof r->name, "%s", *q ? base_name(q) : w ? "anonymous rwx" : "anonymous r-x");
+    r->name[0] = 0; cat_s(r->name, sizeof r->name, *q ? base_name(q) : w ? "anonymous rwx" : "anonymous r-x");
 }
 static void scan_regions(void) {      /* async-signal-safe: read(2) into a stack buffer, line by line */
     nregs = 0;
@@ -560,7 +561,7 @@ static void slot_label(int s, char *out, size_t n) {
     struct slot *sl = &slots[s]; char tmp[96];
     out[0] = 0;
     if (s == MAXSLOT) { cat_s(out, n, "other threads"); return; }
-    if (s == 1) { cat_s(out, n, "main (emulation)"); return; }   /* whatever its name: the rasterizer renames it */
+    if (s == 1) { cat_s(out, n, "main (emulation)"); return; }   /* by its role: its name is the process's */
     if (__atomic_load_n(&sl->live, __ATOMIC_ACQUIRE)) {     /* its name now (rast-3d names itself on its first frame) */
         char p[64], c[24]; task_path(p, sizeof p, sl->tid, "comm");
         if (read_small(p, c, 17) && strcmp(c, proc_comm)) memcpy(sl->name, c, 17);
