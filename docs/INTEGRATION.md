@@ -99,9 +99,23 @@ with: don't load a resume state older than the game's `.dsv` (ROCKNIXDS drops it
 save when `DSFLIP_RESUME_FILE` is set, else at once), like ROCKNIX's gptokeyb did for DraStic. The buttons are the
 ones `drastic.cfg` maps to `START`, `SELECT` and `MENU` (either control set). `DSFLIP_EXIT_COMBO=0` turns them off.
 
+## The in-game menu
+
+DraStic's menu button (the controls `drastic.cfg` maps to `MENU`, L3 and the mode key on the RG DS) opens
+SuperDrastic's own menu instead of DraStic's (`src/menu.c`), drawn in ROCKNIXDS Pixel's look with the theme's font and
+sounds when the theme is installed. The game, its sound and its clock stop while it is open. Bottom screen: Resume,
+Save and Load (8 slots with the picture each savestate holds), Quick settings (volume, brightness, and a Microphone
+page: a live meter of the real mic against ES's sensitivity, and a 3 s fake blow),
+DraStic's own menu (cheats, controls, firmware) and Quit (with a resume save when that is on). Top screen: the game,
+this session's play time, the last save and the latest RetroAchievements unlocks with their badges. D-pad, left stick
+and touch all work. Saves and loads press DraStic's own save/load state controls, so those must be joystick buttons;
+a load first saves the game to `/tmp/dsflip-undo.dss`, which "Undo last load" (Y on the Load page) puts back.
+`DSFLIP_MENU=0` brings back DraStic's menu. The exit hotkey also works while the menu is open. The pop-ups on the top screen
+(achievements, volume, saves) use the same look.
+
 ## DraStic's menu
 
-Opening DraStic's menu shows a card on the top screen with the time and the battery (red at 15% or less, unless
+Opening DraStic's menu (from the in-game menu, or with `DSFLIP_MENU=0`) shows a card on the top screen with the time and the battery (red at 15% or less, unless
 charging) for 3 seconds. `DSFLIP_STATUS_CARD=0` turns it off.
 
 ## What SuperDrastic tells you
@@ -134,6 +148,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_FONT` | DejaVu Sans / Liberation Sans | Font for the pop-ups (TTF/OTF) |
 | `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low. The mic is opened after DraStic's audio output, never at the same time |
 | `DSFLIP_EXIT_COMBO`, `DSFLIP_STATUS_CARD` | 1, 1 | 0 = no Start+Select / Menu+Start exit; no time and battery card in DraStic's menu |
+| `DSFLIP_MENU` | 1 | 0 = the menu button opens DraStic's own menu instead of the in-game menu |
 | `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz). A `DSFLIP_CPU_MAX` below the top holds from the first moment |
 | `DSFLIP_CPU_MAX_SOFT` | 0 | 1 = `DSFLIP_CPU_MAX` is passed while the game is below full speed with real work going on (for a "balanced" profile: a heavy game gets the clock it needs instead of running slow at the bound) |
 | `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |

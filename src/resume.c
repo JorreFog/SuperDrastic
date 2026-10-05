@@ -32,6 +32,8 @@
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
+void audio_mute(int on);
+extern volatile int dsflip_hold;
 
 static char resume_path[512];
 static int trace;
@@ -40,6 +42,14 @@ static volatile int btn_press, btn_release;          /* joystick button to press
 static long long release_at;                          /* the frame to release it at: DraStic ignores a tap, it wants it held */
 static int btn_save = -1, btn_load = -1;
 static int joy_id = -1;                               /* the SDL instance id of DraStic's joystick */
+static int pq[4], pqn;                                /* presses waiting for the one before to be released */
+/* the in-game menu's save and load (menu.c): the slot file DraStic renames its save to goes to m_save_to, and its
+ * slot lookups during a load read m_load_from */
+static char m_save_to[600], m_load_from[600], m_load_next[600], m_msg[96], m_msg2[160];
+static volatile int m_saving, m_saved, m_loading, m_redirs;
+static long long m_t, m_first_redir;
+void resume_press(int b);
+static void menu_jobs(void);
 static long long load_at_frame, loaded_frame;
 static long long frames;
 
@@ -70,6 +80,7 @@ static int move_file(const char *a, const char *b) {
 static const char *redirect_load(const char *p, const char *call) {
     if (trace && p && strstr(p, ".dss")) dsflip_log("[resume] %s %s\n", call, p);
     if (p && strstr(p, ".dss")) cpugov_boost(2000);   /* a savestate being written or read: full clock (cpugov.c) */
+    if (m_loading && is_slot(p)) { if (!m_redirs++) dsflip_log("[menu] loading %s instead of %s\n", m_load_from, p); return m_load_from; }
     if (!loading || !is_slot(p)) return p;
     if (!load_redirects++) dsflip_log("[resume] loading the resume state instead of %s\n", strrchr(p, '/') ? strrchr(p, '/') + 1 : p);
     return resume_path;
@@ -77,6 +88,13 @@ static const char *redirect_load(const char *p, const char *call) {
 int rename(const char *a, const char *b) {
     NEXT(int, "rename", const char *, const char *);
     if (trace && b && strstr(b, ".dss")) dsflip_log("[resume] rename %s -> %s\n", a, b);
+    if (m_saving && is_slot(b)) {
+        int r = real(a, m_save_to);
+        if (r && errno == EXDEV) r = move_file(a, m_save_to);
+        dsflip_log("[menu] saved to %s%s\n", m_save_to, r ? " (failed)" : "");
+        m_saved = r ? -1 : 1;
+        return r;
+    }
     if (saving && is_slot(b)) {
         int r = real(a, resume_path);
         if (r && errno == EXDEV) r = move_file(a, resume_path);   /* another filesystem: copy it over */
@@ -89,12 +107,12 @@ int rename(const char *a, const char *b) {
 /* DraStic deletes the slot's old file before renaming the new one in: not while the save goes to the resume file */
 int unlink(const char *p) {
     NEXT(int, "unlink", const char *);
-    if (saving && is_slot(p)) { if (trace) dsflip_log("[resume] kept %s (DraStic deletes it before saving)\n", p); return 0; }
+    if ((saving || m_saving) && is_slot(p)) { if (trace) dsflip_log("[resume] kept %s (DraStic deletes it before saving)\n", p); return 0; }
     return real(p);
 }
 int remove(const char *p) {
     NEXT(int, "remove", const char *);
-    if (saving && is_slot(p)) { if (trace) dsflip_log("[resume] kept %s (DraStic deletes it before saving)\n", p); return 0; }
+    if ((saving || m_saving) && is_slot(p)) { if (trace) dsflip_log("[resume] kept %s (DraStic deletes it before saving)\n", p); return 0; }
     return real(p);
 }
 FILE *fopen(const char *p, const char *m) { NEXT(FILE *, "fopen", const char *, const char *); return real(redirect_load(p, "fopen"), m); }
@@ -141,7 +159,11 @@ void *SDL_JoystickOpen(int i) {
 /* SDL_PollEvent (dsflip.c) asks this first: a pressed or released control button, as SDL delivers them */
 int resume_poll(void *ev) {
     int b = -1, down = 0;
-    if (btn_release >= 0 && frames >= release_at) { b = btn_release; btn_release = -1; }
+    if (btn_press < 0 && pqn) { btn_press = pq[0]; memmove(pq, pq + 1, (size_t)--pqn * sizeof pq[0]); }
+    if (btn_release >= 0) {              /* one button at a time: the next press waits for this release */
+        if (frames < release_at) return 0;
+        b = btn_release; btn_release = -1;
+    }
     else if (btn_press >= 0) { b = btn_press; btn_press = -1; btn_release = b; release_at = frames + 40; down = 1; }
     else return 0;
     uint8_t *e = ev; memset(e, 0, 56);
@@ -194,6 +216,7 @@ static void on_usr1(int sig) {
 /* every present (dsflip.c): starts a pending save or load on DraStic's own thread */
 void resume_frame(void) {
     frames++;
+    menu_jobs();
     if (combo_since && now_ms() - combo_since >= EXIT_HOLD_MS) {
         combo_since = 0; held_btns = 0;
         dsflip_log("[resume] exit combo held: quitting\n");
@@ -203,13 +226,13 @@ void resume_frame(void) {
         saving = 1; want_save = 0;
         dsflip_log("[resume] quit requested: saving a resume state\n");
         unlink(resume_path);
-        btn_press = btn_save;
+        resume_press(btn_save);
         pthread_t t; if (pthread_create(&t, 0, save_thread, 0)) kill(getpid(), SIGKILL);
         pthread_setname_np(t, "dsf-resume");
     }
     if (want_load && frames >= load_at_frame && !loading) {
         loading = 1; want_load = 0; loaded_frame = frames;
-        btn_press = btn_load;
+        resume_press(btn_load);
     }
     if (loading && frames - loaded_frame > 150) {     /* 2.5 s later (0.7 s held): DraStic has read it (or never will) */
         loading = 0;
@@ -218,6 +241,66 @@ void resume_frame(void) {
             dsflip_log("[resume] resumed\n");
             dsflip_toast("Resumed where you left off", "Quit with the exit hotkey to save your place again", 0x3aa0ff, 3500);
         } else dsflip_log("[resume] DraStic didn't load the state (control not handled?): kept %s\n", resume_path);
+    }
+}
+
+/* ---- the in-game menu (menu.c) ---- */
+int resume_control_button(const char *name) { return control_button_any(name); }
+int resume_on(void) { return resume_path[0] && btn_save >= 0; }
+int resume_quit_pending(void) { return want_save; }   /* the exit hotkey came while the menu was open */
+int resume_menu_busy(void) { return m_saving || m_loading || m_load_next[0] || saving; }
+/* press a DraStic control's button (held 40 frames, after any press before it) */
+void resume_press(int b) {
+    if (b < 0) return;
+    if (btn_press < 0 && btn_release < 0) btn_press = b;
+    else if (pqn < 4) pq[pqn++] = b;
+}
+/* save the game to path (one of the slot files); msg is the toast once it is written */
+int resume_menu_save(const char *path, const char *msg, const char *msg2) {
+    if (btn_save < 0 || resume_menu_busy()) return -1;
+    snprintf(m_save_to, sizeof m_save_to, "%s", path); snprintf(m_msg, sizeof m_msg, "%s", msg ? msg : ""); snprintf(m_msg2, sizeof m_msg2, "%s", msg2 ? msg2 : "");
+    m_saved = 0; m_saving = 1; m_t = frames;
+    resume_press(btn_save);
+    return 0;
+}
+static void start_load(void) {
+    snprintf(m_load_from, sizeof m_load_from, "%s", m_load_next); m_load_next[0] = 0;
+    m_redirs = 0; m_first_redir = 0; m_loading = 1; m_t = frames;
+    resume_press(btn_load);
+}
+/* load path; with backup, the game as it is goes there first (the menu's undo). dsflip_hold and audio_mute are
+ * cleared once the state is in. */
+int resume_menu_load(const char *path, const char *backup, const char *msg, const char *msg2) {
+    if (btn_load < 0 || resume_menu_busy()) return -1;
+    snprintf(m_load_next, sizeof m_load_next, "%s", path); snprintf(m_msg, sizeof m_msg, "%s", msg ? msg : ""); snprintf(m_msg2, sizeof m_msg2, "%s", msg2 ? msg2 : "");
+    if (backup && btn_save >= 0) {
+        snprintf(m_save_to, sizeof m_save_to, "%s", backup);
+        m_saved = 0; m_saving = 1; m_t = frames;
+        resume_press(btn_save);
+    } else start_load();
+    return 0;
+}
+/* quit to the menu, with a resume state when that is on: 1 if it saves first */
+int resume_quit(void) {
+    if (resume_on() && !saving) { want_save = 1; return 1; }
+    kill(getpid(), SIGKILL);
+    return 0;
+}
+static void menu_jobs(void) {
+    if (m_saving && (m_saved || frames - m_t > 300)) {          /* written, failed, or nothing after 5 s */
+        int ok = m_saved == 1; m_saving = 0;
+        if (m_load_next[0]) {                                     /* that was the undo copy: now the load */
+            if (!ok) dsflip_log("[menu] the undo copy couldn't be saved: loading anyway\n");
+            start_load();
+        } else dsflip_toast(ok ? m_msg : "Couldn't save", ok ? m_msg2 : "DraStic didn't write the savestate", ok ? 0x3aa0ff : 0xff7a4a, 2500);
+    }
+    if (m_loading) {
+        if (m_redirs && !m_first_redir) m_first_redir = frames;
+        if ((m_first_redir && frames - m_first_redir >= 20) || frames - m_t > 240) {   /* read in, or not within 4 s */
+            int ok = m_redirs > 0; m_loading = 0;
+            dsflip_hold = 0; audio_mute(0);
+            dsflip_toast(ok ? m_msg : "Couldn't load", ok ? m_msg2 : "DraStic didn't read the savestate", ok ? 0x3aa0ff : 0xff7a4a, 2500);
+        }
     }
 }
 

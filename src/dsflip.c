@@ -146,6 +146,8 @@ volatile int dsflip_queue_drops;        /* frames dropped from the queue since s
 volatile int dsflip_screen_w;           /* DraStic's screen texture width, 256 or 512 (cpugov.c: 1x or 2x) */
 void cpugov_start(void);
 void resume_start(void); void resume_frame(void); int resume_poll(void *e); void resume_saw_event(const void *e);   /* resume.c */
+int menu_event(void *e); void menu_frame(void); int menu_touch_event(int down_change, int down, int x, int y, int xmax, int ymax);   /* menu.c */
+volatile int dsflip_hold;               /* menu.c: DraStic's frames are dropped, not shown (a load runs behind the menu's screen) */
 static int st_drop_src, st_drop_q, st_drop_buf;
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
@@ -794,6 +796,62 @@ static void *presenter(void *a) {
     return 0;
 }
 
+/* ---------- the in-game menu's screens (menu.c) ---------- */
+/* two panel-sized XRGB8888 buffers per panel; the menu draws into one that isn't on screen or on its way there and
+ * puts it up in place of whatever frames were waiting. DraStic's next frame after the menu replaces them. */
+static dbuf mscr[2][2]; static int mscr_ok = -1;
+int dsflip_drastic_menu(void) { return menu_touch; }
+int dsflip_battery(int *charging) { return battery_pct(charging); }
+int dsflip_menu_canvas(int i, uint32_t **px, int *pitch, int *w, int *h) {
+    if (!ok || i < 0 || i > 1) return -1;
+    if (mscr_ok < 0) {
+        mscr_ok = 1;
+        for (int p = 0; p < 2 && mscr_ok; p++) for (int k = 0; k < 2; k++)
+            if (mkbuf(&mscr[p][k], P[p].mode.hdisplay, P[p].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) { mscr_ok = 0; break; }
+        LOG("[menu] screen buffers: %s\n", mscr_ok ? "ok" : "alloc failed");
+    }
+    if (!mscr_ok) return -1;
+    for (int tries = 0; tries < 100; tries++) {   /* both busy: one is on screen, the other's flip is pending */
+        lock(&mu);
+        for (int k = 0; k < 2; k++) {
+            dbuf *b = &mscr[i][k];
+            int busy = P[i].scan == b || P[i].queued == b || P[i].ready == b;
+            for (int j = 0; j < P[i].nq; j++) busy |= P[i].q[j] == b;
+            if (!busy) { unlock(&mu); *px = b->map; *pitch = (int)b->pitch; *w = (int)b->w; *h = (int)b->h; return k; }
+        }
+        unlock(&mu);
+        usleep(2000);
+    }
+    return -1;
+}
+void dsflip_menu_show(int i, int k) {
+    lock(&mu);
+    dbuf *b = &mscr[i][k];
+    while (P[i].nq) release(P[i].q[--P[i].nq]);
+    if (P[i].ready) release(P[i].ready);
+    if (P[i].src) { release(P[i].src); P[i].src = 0; }   /* shader mode: a frame not shaded yet */
+    b->state = READY; P[i].ready = b; ready_since = now_us();
+    unlock(&mu);
+    uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
+}
+/* the top panel's current picture (the game), scaled to w x h; 0 if there is none to take */
+int dsflip_menu_grab_top(uint32_t *dst, int dpitch, int w, int h) {
+    lock(&mu);
+    dbuf *b = P[0].scan;
+    int okb = b && b->map && b != &blk.b[0] && b->pitch >= b->w * 4 && b != &mscr[0][0] && b != &mscr[0][1];
+    if (okb) {
+        static uint32_t row[4096]; int last = -1;
+        for (int y = 0; y < h; y++) {
+            int sy = (int)((long long)y * b->h / h);
+            if (sy != last) { memcpy(row, (char *)b->map + (size_t)sy * b->pitch, (size_t)(b->w < 4096 ? b->w : 4096) * 4); last = sy; }
+            uint32_t *d = (uint32_t *)((char *)dst + (size_t)y * dpitch);
+            for (int x = 0; x < w; x++) d[x] = row[(long long)x * b->w / w];
+        }
+    }
+    unlock(&mu);
+    return okb;
+}
+
 /* ---------- touch ---------- */
 /* SDL2 event layouts (SDL_events.h): motion {type,timestamp,windowID,which,state,x,y,xrel,yrel},
  * button {type,timestamp,windowID,which,u8 button,state,clicks,pad,x,y}. SDL_Event is 56 bytes. */
@@ -817,12 +875,14 @@ static void push_ev(sdl_ev *e) {
 }
 
 /* microphone (audio.c): hold/release DraStic's fake-mic key, Scroll Lock (control 327 = 256 + scancode 71) */
-void dsflip_mic_key(int down) {
+/* a key DraStic has a control on (control = 256 + scancode), pressed or released */
+static void dsflip_key(int scancode, int down) {
     sdl_ev e; memset(&e, 0, sizeof e);
     e.k.type = down ? 0x300 : 0x301; e.k.ts = SDL_GetTicks(); e.k.win = window ? SDL_GetWindowID(window) : 1;
-    e.k.state = down ? 1 : 0; e.k.scancode = 71; e.k.sym = 0x40000047;
+    e.k.state = down ? 1 : 0; e.k.scancode = (uint32_t)scancode; e.k.sym = 0x40000000 | scancode;
     push_ev(&e);
 }
+void dsflip_mic_key(int down) { dsflip_key(71, down); }
 /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
  * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
@@ -848,6 +908,7 @@ static void touch_emit(int down_change, int down, int x, int y, int xmax, int ym
     int rx = x, ry = y;
     if (touch_inv_x) x = xmax - x;      /* raw touch is already aligned with the panel on the RG DS */
     if (touch_inv_y) y = ymax - y;
+    if (menu_touch_event(down_change, down, x, y, xmax, ymax)) return;   /* the in-game menu is up (menu.c) */
     /* the bottom panel shows exactly the bottom DS screen: panel pixels -> DS pixels is a straight rescale.
      * DraStic's menu (also on the bottom panel) takes no touch: its input loop (r2.5.2.2, aarch64) handles only
      * SDL key, joystick axis/hat/button events, never mouse or finger events, so taps in it go nowhere. */
@@ -969,7 +1030,10 @@ int SDL_PollEvent(void *e) {
         unlock(&tmu);
     }
     int r = real(e);
-    if (r && e && ok) resume_saw_event(e);           /* a save/load state press: CPU boost (resume.c, cpugov.c) */
+    if (r && e && ok) {
+        resume_saw_event(e);                         /* a save/load state press: CPU boost (resume.c, cpugov.c) */
+        if (menu_event(e)) return 0;                 /* the menu button: the in-game menu (menu.c), not DraStic's */
+    }
     return r;
 }
 
@@ -1421,6 +1485,11 @@ void SDL_RenderPresent(void *rn) {
         stex *s = pending_route[i]; pending_route[i] = 0;
         if (!s) continue;
         dbuf *b;
+        if (dsflip_hold && s->kind == K_SCREEN) {    /* the menu's screen stays up: this frame is dropped */
+            if (s->written >= 0 && s->b[s->written].state == WRITTEN) s->b[s->written].state = FREE;
+            s->written = -1;
+            continue;
+        }
         if (s->kind == K_BLACK) {
             b = &blk.b[0];
             int held = P[i].scan == b || P[i].queued == b || P[i].ready == b;
@@ -1442,4 +1511,5 @@ void SDL_RenderPresent(void *rn) {
     if (menu_opened) status_card();
     ra_frame();
     resume_frame();
+    menu_frame();
 }

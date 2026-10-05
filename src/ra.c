@@ -44,6 +44,9 @@ static char TOKEN_FILE[512], BADGE_DIR[512];      /* BADGE_DIR: achievement badg
 #define HDR_OFF 0x3FFE00u
 
 static rc_client_t *rc;
+/* the server's warnings ("Warning: Unknown Emulator": no hardcore with this emulator) come as achievements with ids
+ * from 101000001 up that unlock at once; rcheevos leaves them out of its counts, and so do our pop-ups and lists */
+#define WARNING_ACH(a) ((a)->id >= 101000001u)
 static volatile uint8_t *ram;           /* DS main RAM inside DraStic, once found */
 /* DTCM (the ARM9's 16 KB data TCM; RA addresses 0x1000000-0x1003FFF). DraStic backs the whole DS address space with
  * one shared-memory file (/dev/shm/drastic_mapped_memory.dat, kept open, unlinked) mapped view by view at a fixed
@@ -308,6 +311,7 @@ static void on_event(const rc_client_event_t *e, rc_client_t *c) {
     char l2[160];
     switch (e->type) {
     case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED: {
+        if (WARNING_ACH(e->achievement)) { dsflip_log("[ra] warning from the server: %s\n", e->achievement->title); break; }
         unlock_msg *m = calloc(1, sizeof *m);
         dsflip_log("[ra] unlocked: %s (%u)\n", e->achievement->title, e->achievement->points);
         if (!m) break;
@@ -671,6 +675,37 @@ static void ra_do_frame(void) {
 }
 
 /* called from every SDL_RenderPresent */
+/* the menu's progress line (menu.c): 1 with the counts once a game with achievements is loaded */
+int ra_progress(unsigned *unlocked, unsigned *total) {
+    if (!rc || !game_loaded) return 0;
+    rc_client_user_game_summary_t s; rc_client_get_user_game_summary(rc, &s);
+    *unlocked = s.num_unlocked_achievements; *total = s.num_core_achievements;
+    return 1;
+}
+
+/* the menu's latest achievements (menu.c): the n most recently unlocked, newest first, with their cached badges */
+typedef struct { char title[96], desc[200], badge[600]; unsigned points; long long when; } ra_recent_t;
+int ra_recent(ra_recent_t *out, int max) {
+    if (!rc || !game_loaded || max <= 0) return 0;
+    rc_client_achievement_list_t *l = rc_client_create_achievement_list(rc, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE);
+    int n = 0;
+    for (uint32_t b = 0; l && b < l->num_buckets; b++)
+        for (uint32_t i = 0; i < l->buckets[b].num_achievements; i++) {
+            const rc_client_achievement_t *a = l->buckets[b].achievements[i];
+            if (!a->unlocked || WARNING_ACH(a)) continue;
+            int k = n < max ? n++ : max;               /* insertion by unlock time, newest first */
+            while (k > 0 && (long long)a->unlock_time > out[k - 1].when) { if (k < max) out[k] = out[k - 1]; k--; }
+            if (k >= max) continue;
+            ra_recent_t *r = &out[k];
+            snprintf(r->title, sizeof r->title, "%s", a->title ? a->title : "");
+            snprintf(r->desc, sizeof r->desc, "%s", a->description ? a->description : "");
+            badge_file(a, r->badge, sizeof r->badge);
+            r->points = a->points; r->when = (long long)a->unlock_time;
+        }
+    if (l) rc_client_destroy_achievement_list(l);
+    return n;
+}
+
 void ra_frame(void) {
     frames++;
     if (frames == 1) ra_start();

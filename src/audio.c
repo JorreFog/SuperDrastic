@@ -138,6 +138,48 @@ static void sfx_mix(unsigned char *buf, int frames) {
     __atomic_compare_exchange_n(&sfx_pos, &p, next, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED);   /* unless restarted */
 }
 
+/* ---- the in-game menu's sounds (menu.c): mixed like the sound effect, and played while DraStic is paused too ---- */
+#define UI_N 4
+static int16_t *ui_snd[UI_N]; static int ui_len[UI_N];
+static volatile int ui_cur = -1, ui_pos = -1, mute;
+/* a sound, converted now to the pump's rate and channels (the pump must be running). 0 on success. */
+int audio_ui_load(int id, const int16_t *pcm, int frames, int rate, int ch) {
+    if (id < 0 || id >= UI_N || !dcb || !pcm || frames < 2 || rate < 8000 || ch < 1) return -1;
+    int och = fb / 2, n = (int)((long long)frames * freq / rate);
+    int16_t *o = malloc((size_t)n * och * sizeof *o);
+    if (!o) return -1;
+    for (int i = 0; i < n; i++) {
+        double x = (double)i * rate / freq; int j = (int)x; double f = x - j;
+        if (j + 1 >= frames) { j = frames - 2; f = 1; }
+        for (int c = 0; c < och; c++) {
+            int sc = ch >= och ? c : 0;
+            o[i * och + c] = (int16_t)(pcm[j * ch + sc] * (1 - f) + pcm[(j + 1) * ch + sc] * f);
+        }
+    }
+    ui_snd[id] = o; ui_len[id] = n;
+    return 0;
+}
+void audio_ui_play(int id) {
+    if (id < 0 || id >= UI_N || !ui_snd[id]) return;
+    __atomic_store_n(&ui_pos, -1, __ATOMIC_RELEASE);
+    __atomic_store_n(&ui_cur, id, __ATOMIC_RELEASE);
+    __atomic_store_n(&ui_pos, 0, __ATOMIC_RELEASE);
+}
+/* DraStic's own output silenced (a load runs behind the menu's "Loading" screen) */
+void audio_mute(int on) { mute = on; }
+static void ui_mix(unsigned char *buf, int frames) {
+    int p = __atomic_load_n(&ui_pos, __ATOMIC_ACQUIRE), id = __atomic_load_n(&ui_cur, __ATOMIC_ACQUIRE);
+    if (p < 0 || id < 0) return;
+    int16_t *d = (int16_t *)buf; const int och = fb / 2; const int16_t *src = ui_snd[id];
+    int n = ui_len[id] - p < frames ? ui_len[id] - p : frames;
+    for (int i = 0; i < n * och; i++) {
+        int v = d[i] + src[p * och + i] * 3 / 5;
+        d[i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+    }
+    int next = p + n >= ui_len[id] ? -1 : p + n;
+    __atomic_compare_exchange_n(&ui_pos, &p, next, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED);
+}
+
 static void *pump(void *a) {             /* steady calls into DraStic's callback */
     (void)a;
     struct sched_param sp = { .sched_priority = 20 };   /* above DraStic (and its presenter), below PipeWire */
@@ -146,12 +188,14 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
     double integ = 0;
     long long next = mono_ns();
     for (;;) {
-        if (paused) {                     /* DraStic paused audio: its callback isn't called, like with SDL */
+        if (paused && ui_pos < 0) {       /* DraStic paused audio: its callback isn't called, like with SDL */
             struct timespec d = { 0, 5000000 }; nanosleep(&d, 0);
             next = mono_ns(); continue;
         }
-        dcb(dud, tmp, chunk * fb);
+        if (paused) memset(tmp, 0, (size_t)chunk * fb);   /* the menu's sounds over silence (16-bit samples) */
+        else { dcb(dud, tmp, chunk * fb); if (mute) memset(tmp, 0, (size_t)chunk * fb); }
         sfx_mix(tmp, chunk);
+        ui_mix(tmp, chunk);
         st_pump++; st_pumped += chunk;
         { const int16_t *sm = (const int16_t *)tmp; int ns = chunk * fb / 2; double acc = 0;
           for (int i = 0; i < ns; i++) { float v = sm[i] * (1.0f / 32768); acc += v * v; }
@@ -194,6 +238,7 @@ static long (*a_writei)(void *, const void *, unsigned long);
 static long (*a_readi)(void *, void *, unsigned long);
 static int (*a_recover)(void *, int, int);
 static const char *(*a_strerror)(int);
+static int (*a_close)(void *);
 static volatile int st_xrun;
 /* Opening and configuring PCMs is serialized: the output and the mic used to be opened at the same moment from two
  * threads (DraStic's, in SDL_OpenAudio, and the mic's), and PipeWire's ALSA plugin sets itself up on each open
@@ -208,7 +253,7 @@ static void alsa_load(void) {
     *(void **)&a_open = dlsym(h, "snd_pcm_open"); *(void **)&a_set_params = dlsym(h, "snd_pcm_set_params");
     *(void **)&a_writei = dlsym(h, "snd_pcm_writei"); *(void **)&a_recover = dlsym(h, "snd_pcm_recover");
     *(void **)&a_strerror = dlsym(h, "snd_strerror");
-    *(void **)&a_readi = dlsym(h, "snd_pcm_readi");
+    *(void **)&a_readi = dlsym(h, "snd_pcm_readi"); *(void **)&a_close = dlsym(h, "snd_pcm_close");
     alsa_ok = a_open && a_set_params && a_writei && a_readi && a_recover;
 }
 static int alsa_syms(void) { pthread_once(&alsa_once, alsa_load); return alsa_ok ? 0 : -1; }
@@ -289,13 +334,24 @@ void audio_pump_log(void) {
  * The threshold is ES's "microphone sensitivity" (DSHOOK_MIC_THRESH: high 0.03, medium 0.15, low 0.3; off 0).
  * Capture goes straight through ALSA (PipeWire's mic source). */
 void dsflip_mic_key(int down);
+/* the in-game menu's mic meter (menu.c): the last block's level and the noise floor, published by the mic thread.
+ * Without ES's mic sensitivity there is no mic thread; the meter then starts one that only measures (thresh 0) and
+ * stops it once the meter hasn't been looked at for 2 s. While the menu is open the mic presses no key. */
+static volatile float mic_lvl, mic_flr;
+static volatile int mic_state, mic_quiet;            /* 0 none, 1 listening, -1 no capture device */
+static volatile long long meter_until;               /* monitor-only thread: runs until then (ns, monotonic) */
+static volatile int monitor_running;
+static float mic_thr;                                /* ES's threshold (0: off) */
 static void *mic_thread(void *a) {
     float thresh = *(float *)a;
     void *cap = 0;
     if (alsa_pcm(&cap, 1 /* SND_PCM_STREAM_CAPTURE */, 1, 44100, 100000, "mic") < 0) {
         dsflip_log("[mic] no capture device\n");
+        mic_state = -1; if (thresh <= 0) monitor_running = 0;
         return 0;
     }
+    mic_state = 1;
+    if (thresh <= 0) dsflip_log("[mic] the menu's meter is listening\n"); else
     dsflip_log("[mic] listening, threshold %.3f, echo gate %s\n", thresh, dcb ? "on" : "off (no audio pump)");
     float coup = 0; int coup_n = 0;     /* how much speaker output leaks into the mic (mic rms / output rms) */
     int16_t buf[1024];
@@ -313,15 +369,22 @@ static void *mic_thread(void *a) {
         double acc = 0;
         for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; }
         float level = (float)sqrt(acc / r);
-        if (n < 60) { floor_ = (floor_ * n + level) / (n + 1); n++; continue; }
-        floor_ = floor_ * 0.999f + level * 0.001f;
+        mic_lvl = level;
+        if (thresh <= 0) {                /* the menu's meter only */
+            if (n < 60) { floor_ = (floor_ * n + level) / (n + 1); n++; } else floor_ = floor_ * 0.999f + level * 0.001f;
+            mic_flr = floor_;
+            if (mono_ns() > meter_until) break;
+            continue;
+        }
+        if (n < 60) { floor_ = (floor_ * n + level) / (n + 1); n++; mic_flr = floor_; continue; }
+        floor_ = floor_ * 0.999f + level * 0.001f; mic_flr = floor_;
         /* echo gate: the mic hears the game's own sound from the speaker (measured: bleed peaks 0.13-0.23, far
          * above the "high" threshold 0.03, so the key fired constantly with nobody talking). The pump knows what
          * is played: learn the leak (mic/output ratio while not triggered) and require the mic to be clearly above
          * the expected bleed. out: the loudest output chunk of the last ~186 ms (covers the output latency). */
         float out = 0; for (int i = 0; i < 32; i++) if (out_hist[i] > out) out = out_hist[i];
         float bleed = coup * out;
-        int loud = level > floor_ + thresh && (!dcb || level > 3 * bleed + thresh);
+        int loud = level > floor_ + thresh && (!dcb || level > 3 * bleed + thresh) && !mic_quiet;
         if (!loud && out > 0.01f) {      /* learn the coupling only from blocks that aren't a real blow */
             float r = level / out; if (r > 4) r = 4;
             coup = coup_n < 50 ? (coup * coup_n + r) / (coup_n + 1) : coup * 0.99f + r * 0.01f; coup_n++;
@@ -333,8 +396,25 @@ static void *mic_thread(void *a) {
             blocks = presses = 0; peak = 0;
         }
     }
+    if (a_close) a_close(cap);            /* the meter's own thread, no longer looked at */
+    mic_state = 0; monitor_running = 0;
+    dsflip_log("[mic] the menu's meter stopped\n");
     return 0;
 }
+/* the meter (menu.c, each redraw): 1 with the level, noise floor and ES's threshold (0: off), 0 while it starts,
+ * -1 without a capture device */
+int audio_mic_meter(float *level, float *floor_, float *thresh) {
+    meter_until = mono_ns() + 2000000000LL;
+    if (!mic_thr && !monitor_running && mic_state >= 0) {
+        static float zero = 0; monitor_running = 1;
+        pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+        if (pthread_create(&th, &at, mic_thread, &zero)) monitor_running = 0; else pthread_setname_np(th, "dsf-micmeter");
+        pthread_attr_destroy(&at);
+    }
+    *level = mic_lvl; *floor_ = mic_flr; *thresh = mic_thr;
+    return mic_state;
+}
+void audio_mic_quiet(int on) { mic_quiet = on; }
 /* called once DraStic's audio is open (SDL_OpenAudio returned), so the output is set up before the mic is */
 void audio_mic_start(void) {
     const char *t = getenv("DSHOOK_MIC_THRESH");
@@ -342,5 +422,6 @@ void audio_mic_start(void) {
     thresh = t ? (float)strtod(t, 0) : 0;
     if (thresh != thresh || thresh > 1) thresh = 0;    /* not a number, or nothing could reach it */
     if (thresh <= 0) { dsflip_log("[mic] off (ES: microphone sensitivity)\n"); return; }
+    mic_thr = thresh;
     pthread_t th; if (!pthread_create(&th, 0, mic_thread, &thresh)) pthread_setname_np(th, "dsf-mic");
 }

@@ -5,7 +5,9 @@
 // alpha. The layouts are designed at 72 rows (a 640 px wide panel) and scale with the plane's height (115 rows on the
 // RG DS Plus's 1024x768 panels). The volume indicator (volume.c feeds it) shows over everything for 1.5 s. DRM's default blend mode is premultiplied, so everything here is drawn premultiplied. Pop-ups queue up
 // (several achievements can unlock in one frame) and show one after another; the progress pill shows whenever no
-// pop-up does. Font: the dii-ess-aye theme's DSi font if installed, else Liberation Sans (stb_truetype reads both);
+// pop-up does. Look: ROCKNIXDS Pixel's, like the in-game menu (menu.c): Pixelify Sans, the theme's dark dotted card
+// with a light border, its cyan / gold / red accents. Font: Pixelify Sans if that theme is installed, else the
+// dii-ess-aye theme's DSi font, else Liberation Sans (stb_truetype reads them all);
 // badges: PNG files (stb_image), drawn with rounded corners.
 #define _GNU_SOURCE
 #include <math.h>
@@ -30,14 +32,17 @@ void dsflip_log(const char *fmt, ...);
 
 static const char *font_paths[] = {
     0,                                                  /* DSFLIP_FONT, if set */
+    "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf",
     "/storage/.config/emulationstation/themes/dii-ess-aye/assets/fonts/dsi_font.otf",
     "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",   /* other firmwares' usual fonts */
     "/usr/share/fonts/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/TTF/DejaVuSans.ttf",
 };
-static stbtt_fontinfo font;
+static stbtt_fontinfo font, font_reg;          /* the titles' font; the second lines' (Pixelify Sans Regular, or font) */
+static stbtt_fontinfo *fnt = &font;             /* the one text_width and draw_text use */
 static int font_ok;
+#define REG_FONT "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf"
 
 typedef struct { char l1[128], l2[192]; uint32_t accent; int ms; uint8_t *badge; int bw, bh; } popup;
 #define QMAX 8
@@ -130,11 +135,11 @@ static int utf8_next(const char **s) {
 }
 
 static float text_width(const char *t, float px, int max_cp) {
-    float sc = stbtt_ScaleForPixelHeight(&font, px), w = 0; int prev = 0, n = 0;
+    float sc = stbtt_ScaleForPixelHeight(fnt, px), w = 0; int prev = 0, n = 0;
     for (const char *s = t; *s && n < max_cp; n++) {
         int cp = utf8_next(&s), adv, lsb;
-        stbtt_GetCodepointHMetrics(&font, cp, &adv, &lsb);
-        if (prev) w += stbtt_GetCodepointKernAdvance(&font, prev, cp) * sc;
+        stbtt_GetCodepointHMetrics(fnt, cp, &adv, &lsb);
+        if (prev) w += stbtt_GetCodepointKernAdvance(fnt, prev, cp) * sc;
         w += adv * sc; prev = cp;
     }
     return w;
@@ -149,19 +154,19 @@ static void draw_text(canvas *c, const char *t, float x, int y, float px, uint32
         while (keep > 0 && text_width(t, px, keep) + dw > maxw) keep--;
         dots = 1;
     }
-    float sc = stbtt_ScaleForPixelHeight(&font, px);
+    float sc = stbtt_ScaleForPixelHeight(fnt, px);
     int prev = 0; const char *s = t;
     for (int i = 0; i < keep + (dots ? 3 : 0); i++) {
         int cp = i < keep ? utf8_next(&s) : '.';
-        if (prev) x += stbtt_GetCodepointKernAdvance(&font, prev, cp) * sc;
+        if (prev) x += stbtt_GetCodepointKernAdvance(fnt, prev, cp) * sc;
         int adv, lsb, x0, y0, x1, y1;
-        stbtt_GetCodepointHMetrics(&font, cp, &adv, &lsb);
+        stbtt_GetCodepointHMetrics(fnt, cp, &adv, &lsb);
         float sub = x - floorf(x);
-        stbtt_GetCodepointBitmapBoxSubpixel(&font, cp, sc, sc, sub, 0, &x0, &y0, &x1, &y1);
+        stbtt_GetCodepointBitmapBoxSubpixel(fnt, cp, sc, sc, sub, 0, &x0, &y0, &x1, &y1);
         int gw = x1 - x0, gh = y1 - y0;
         if (gw > 0 && gh > 0 && gw < 256 && gh < 256) {
             static unsigned char g[256 * 256];
-            stbtt_MakeCodepointBitmapSubpixel(&font, g, gw, gh, gw, sc, sc, sub, 0, cp);
+            stbtt_MakeCodepointBitmapSubpixel(fnt, g, gw, gh, gw, sc, sc, sub, 0, cp);
             for (int yy = 0; yy < gh; yy++)
                 for (int xx = 0; xx < gw; xx++)
                     if (g[yy * gw + xx]) blend(c, (int)floorf(x) + x0 + xx, y + y0 + yy, rgb, g[yy * gw + xx] / 255.0f);
@@ -170,53 +175,82 @@ static void draw_text(canvas *c, const char *t, float x, int y, float px, uint32
     }
 }
 
-/* ---------- the two layouts ---------- */
+/* ---------- the layouts (ROCKNIXDS Pixel) ---------- */
+#define P_PANEL 0x1a222c
+#define P_DOT   0x232d39
+#define P_LIGHT 0xe7eef6
+#define P_GREY  0xa9b4c2
+#define P_LINE  0x2e3a49
+/* the theme's card: a light border, the dark panel with its dot pattern */
+static void card(canvas *c, int x0, int y0, int x1, int y1, float rad, uint32_t border) {
+    fill_rrect(c, x0, y0, x1, y1, rad, border, 1.0f);
+    int bw = S(2) < 2 ? 2 : S(2);
+    fill_rrect(c, x0 + bw, y0 + bw, x1 - bw, y1 - bw, rad - bw, P_PANEL, 1.0f);
+    int step = S(5) < 3 ? 3 : S(5), d = S(1) < 1 ? 1 : S(1), in = bw + (int)(rad * 0.4f);
+    for (int y = y0 + in + step / 2; y + d <= y1 - in; y += step)
+        for (int x = x0 + in + step / 2; x + d <= x1 - in; x += step)
+            for (int yy = 0; yy < d; yy++) for (int xx = 0; xx < d; xx++) blend(c, x + xx, y + yy, P_DOT, 1.0f);
+}
+/* a badge in the menu's frame: light border, rounded */
+static void framed(canvas *c, const uint8_t *img, int iw, int ih, int x, int y, int size) {
+    int bw = S(2) < 2 ? 2 : S(2);
+    fill_rrect(c, x, y, x + size, y + size, SF(6), P_LIGHT, 1.0f);
+    draw_image(c, img, iw, ih, x + bw, y + bw, size - 2 * bw, SF(4));
+}
+/* pixel art rows ('#'), scaled by k */
+static void pix(canvas *c, const char *const *rows, int n, int x, int y, int k, uint32_t rgb) {
+    for (int r = 0; r < n; r++) for (int col = 0; rows[r][col]; col++)
+        if (rows[r][col] == '#') for (int yy = 0; yy < k; yy++) for (int xx = 0; xx < k; xx++) blend(c, x + col * k + xx, y + r * k + yy, rgb, 1.0f);
+}
+static const char *const PX_STAR[9] = { "....#....", "...###...", "#########", ".#######.", "..#####..", "..##.##..", ".##...##.", "##.....##", "........." };
+static const char *const PX_INFO[9] = { "...###...", "..#####..", "..##.##..", "....##...", "...##....", "...##....", ".........", "...##....", "...##...." };
+static const char *const PX_VOL[12] = { "............", ".....#......", "....##...#..", "...###....#.", "####.#..#..#", "#..#.#...#.#",
+    "#..#.#...#.#", "####.#..#..#", "...###....#.", "....##...#..", ".....#......", "............" };
+static const char *const PX_MUTE[12] = { "............", ".....#......", "....##......", "...###.#...#", "####.#..#.#.", "#..#.#...#..",
+    "#..#.#...#..", "####.#..#.#.", "...###.#...#", "....##......", ".....#......", "............" };
+
 static void render_popup(canvas *c, const popup *p) {
-    int x0 = S(8), y0 = S(4), x1 = c->w - S(8), y1 = c->h - S(4);
-    fill_rrect(c, x0, y0, x1, y1, SF(12), 0x1b1d21, 0.95f);
-    stroke_rrect(c, x0, y0, x1, y1, SF(12), 0x464a52, 1.0f);
-    int tx = x0 + S(18);
-    if (p->badge) { draw_image(c, p->badge, p->bw, p->bh, x0 + S(6), y0 + S(6), (y1 - y0) - S(12), SF(8)); tx = x0 + (y1 - y0) + S(8); }
-    else fill_rrect(c, x0 + S(6), y0 + S(10), x0 + S(10), y1 - S(10), SF(2), p->accent, 1.0f);   /* accent bar */
+    int x0 = S(8), y0 = S(4), x1 = c->w - S(8), y1 = c->h - S(4), h = y1 - y0;
+    card(c, x0, y0, x1, y1, SF(10), P_LIGHT);
+    int tx, bs = h - S(16);
+    if (p->badge) { framed(c, p->badge, p->bw, p->bh, x0 + S(8), y0 + S(8), bs); tx = x0 + S(8) + bs + S(12); }
+    else {                                              /* no badge: an icon tile in the accent colour */
+        fill_rrect(c, x0 + S(8), y0 + S(8), x0 + S(8) + bs, y0 + S(8) + bs, SF(6), p->accent, 1.0f);
+        int k = bs / 14 > 0 ? bs / 14 : 1;
+        pix(c, p->accent == 0xffd84a ? PX_STAR : PX_INFO, 9, x0 + S(8) + (bs - 9 * k) / 2, y0 + S(8) + (bs - 9 * k) / 2, k, 0x12181f);
+        tx = x0 + S(8) + bs + S(12);
+    }
     float maxw = (float)(x1 - S(14) - tx);
-    draw_text(c, p->l1, (float)tx, y0 + S(25), SF(19), p->accent, maxw);
-    draw_text(c, p->l2, (float)tx, y0 + S(52), SF(22), 0xf2f3f5, maxw);
+    fnt = &font;     draw_text(c, p->l1, (float)tx, y0 + S(26), SF(17), p->accent, maxw);
+    fnt = &font_reg; draw_text(c, p->l2, (float)tx, y0 + S(52), SF(20), P_LIGHT, maxw);
+    fnt = &font;
 }
 
 static void render_pill(canvas *c) {
-    float tw = text_width(prog_text, SF(20), 64);
-    int h = S(40), bs = prog_badge ? S(30) : 0, w = S(14) + bs + (bs ? S(8) : 0) + (int)ceilf(tw) + S(14);
+    float tw = text_width(prog_text, SF(19), 64);
+    int h = S(40), bs = prog_badge ? S(30) : 0, w = S(14) + bs + (bs ? S(10) : 0) + (int)ceilf(tw) + S(16);
     int x1 = c->w - S(8), x0 = x1 - w, y0 = S(4), y1 = y0 + h;
-    fill_rrect(c, x0, y0, x1, y1, SF(20), 0x1b1d21, 0.92f);
-    stroke_rrect(c, x0, y0, x1, y1, SF(20), 0x464a52, 1.0f);
-    if (prog_badge) draw_image(c, prog_badge, prog_bw, prog_bh, x0 + S(8), y0 + S(5), bs, SF(6));
-    draw_text(c, prog_text, (float)(x0 + S(14) + bs + (bs ? S(2) : 0)), y0 + S(27), SF(20), 0xf2f3f5, tw + 2);
+    card(c, x0, y0, x1, y1, SF(10), P_LIGHT);
+    if (prog_badge) framed(c, prog_badge, prog_bw, prog_bh, x0 + S(6), y0 + S(5), bs);
+    draw_text(c, prog_text, (float)(x0 + S(12) + bs + (bs ? S(4) : 0)), y0 + S(27), SF(19), P_LIGHT, tw + 2);
 }
 
-/* the volume indicator: a centred card with a speaker mark, a level bar and the percentage */
+/* the volume indicator: a speaker, the menu's 10-segment bar and the percentage */
 static void render_volume(canvas *c, int pct) {
-    int w = S(300), h = S(40), x0 = (c->w - w) / 2, y0 = S(4), x1 = x0 + w, y1 = y0 + h;
-    fill_rrect(c, x0, y0, x1, y1, SF(20), 0x1b1d21, 0.92f);
-    stroke_rrect(c, x0, y0, x1, y1, SF(20), 0x464a52, 1.0f);
-    /* speaker: a box and a wedge */
-    int sx = x0 + S(18), cy = (y0 + y1) / 2;
-    fill_rrect(c, sx, cy - S(5), sx + S(6), cy + S(5), SF(1), 0xf2f3f5, 1.0f);
-    for (int i = 0; i < S(8); i++) {
-        float t = (float)i / (float)(S(8) > 1 ? S(8) - 1 : 1);
-        int hh = S(5) + (int)(t * S(6));
-        for (int y = cy - hh; y <= cy + hh; y++) blend(c, sx + S(6) + i, y, 0xf2f3f5, 1.0f);
-    }
-    if (pct <= 0) {                                                   /* muted: a slash */
-        for (int i = 0; i < S(14); i++) blend(c, sx + S(2) + i, cy + S(7) - i, 0xff5c5c, 1.0f);
-    }
+    int w = S(310), h = S(42), x0 = (c->w - w) / 2, y0 = S(4), x1 = x0 + w, y1 = y0 + h, cy = (y0 + y1) / 2;
+    card(c, x0, y0, x1, y1, SF(10), P_LIGHT);
+    int k = S(2) < 2 ? 2 : S(2);
+    pix(c, pct <= 0 ? PX_MUTE : PX_VOL, 12, x0 + S(14), cy - 6 * k, k, pct <= 0 ? 0xff8a96 : P_LIGHT);
     char t[8]; snprintf(t, sizeof t, "%d%%", pct);
-    float tw = text_width(t, SF(20), 8);
-    int tx1 = x1 - S(18), bx0 = sx + S(26), bx1 = tx1 - (int)ceilf(tw) - S(12);
-    draw_text(c, t, (float)tx1 - tw, y0 + S(27), SF(20), 0xf2f3f5, tw + 2);
-    int by0 = cy - S(4), by1 = cy + S(4);
-    fill_rrect(c, bx0, by0, bx1, by1, SF(4), 0x33363c, 1.0f);
-    int fill = bx0 + (int)((bx1 - bx0) * (pct > 100 ? 100 : pct) / 100.0f + 0.5f);
-    if (fill > bx0 + S(4)) fill_rrect(c, bx0, by0, fill, by1, SF(4), 0x58a6ff, 1.0f);
+    float tw = text_width(t, SF(19), 8);
+    draw_text(c, t, (float)(x1 - S(14)) - tw, y0 + S(28), SF(19), 0x7ec8ee, tw + 2);
+    int bx0 = x0 + S(14) + 12 * k + S(12), bx1 = x1 - S(14) - (int)ceilf(text_width("100%", SF(19), 8)) - S(10);
+    float seg = (bx1 - bx0) / 10.0f; int gap = S(3) < 2 ? 2 : S(3);
+    for (int i = 0; i < 10; i++) {
+        int sx = bx0 + (int)(i * seg), ex = bx0 + (int)((i + 1) * seg) - gap;
+        uint32_t col = i < (pct + 5) / 10 ? 0x7ec8ee : P_LINE;
+        for (int y = cy - S(8); y < cy + S(8); y++) for (int x = sx; x < ex; x++) blend(c, x, y, col, 1.0f);
+    }
 }
 
 static void render(void) {                            /* with mx held */
@@ -272,6 +306,14 @@ static int ui_start(void) {                           /* with mx held */
         fclose(f);
     }
     if (!font_ok) { dsflip_log("[ui] no font: pop-ups off\n"); return 0; }
+    font_reg = font;                                 /* Pixelify Sans Regular for second lines, when the theme has it */
+    {   FILE *f = fopen(REG_FONT, "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+            unsigned char *d = n > 0 ? malloc((size_t)n) : 0;
+            if (!(d && fread(d, 1, (size_t)n, f) == (size_t)n && stbtt_InitFont(&font_reg, d, stbtt_GetFontOffsetForIndex(d, 0)))) { free(d); font_reg = font; }
+            fclose(f);
+        } }
     pthread_t t; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
     if (!pthread_create(&t, &at, ui_thread, 0)) pthread_setname_np(t, "dsf-ui");
     pthread_attr_destroy(&at);
@@ -293,7 +335,13 @@ void ui_popup(const char *l1, const char *l2, const char *badge_png, uint32_t ac
     if (qn == QMAX) { free(q[QMAX - 1].badge); qn--; }  /* keep the newest */
     popup *p = &q[qn++]; memset(p, 0, sizeof *p);
     snprintf(p->l1, sizeof p->l1, "%s", l1 ? l1 : ""); snprintf(p->l2, sizeof p->l2, "%s", l2 ? l2 : "");
-    p->accent = accent & 0xffffff; p->ms = ms;
+    /* the theme's accents: gold for achievements, cyan for news, red for trouble */
+    accent &= 0xffffff;
+    if (accent != 0xffd84a) {
+        int r = accent >> 16, b = accent & 255;
+        accent = r > b ? 0xff8a96 : 0x7ec8ee;
+    }
+    p->accent = accent; p->ms = ms;
     p->badge = load_png(badge_png, &p->bw, &p->bh);
     dirty = 1;
     pthread_cond_signal(&cv);

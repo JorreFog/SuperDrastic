@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 mkdir -p build
 RC=src/third_party/rcheevos
 # src/rast: our 3D rasterizer for DraStic's hi-res mode (off unless DSFLIP_RAST=1; see src/rast/README.md)
-SRCS="src/dsflip.c src/shader.c src/audio.c src/ra.c src/ui.c src/volume.c src/cpugov.c src/resume.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c \
+SRCS="src/dsflip.c src/shader.c src/audio.c src/ra.c src/ui.c src/volume.c src/cpugov.c src/resume.c src/menu.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c \
       $RC/src/rc_util.c $RC/src/rc_version.c $RC/src/rcheevos/*.c $RC/src/rapi/*.c $RC/src/rhash/*.c) \
       src/rast/rast.c src/rast/b0.c src/rast/fused.c src/rast/fused_neon.c src/rast/fused_asm.c src/rast/defer.c src/rast/hr.c src/rast/comp.c src/rast/rast_kern.S $(ls src/rast/spec/*.c)"
 python3 src/rast/kerngen.py src/rast/rast_kern.S
