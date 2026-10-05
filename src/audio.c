@@ -362,6 +362,25 @@ int resume_control_code(const char *set, const char *name);   /* resume.c: a dra
  *                             else the button when controls_b has one, else the key with a warning (ROCKNIX's
  *                             drastic.cfg for the RG DS maps 327 in both sets since 2026-02-04; older copies 65535) */
 static float envf(const char *name, float dflt) { const char *e = getenv(name); return e && *e ? (float)strtod(e, 0) : dflt; }
+/* how DraStic's fake microphone is pressed: DraStic reads keyboard controls as 256 + the key's code (Scroll Lock = 327)
+ * and joystick buttons as 1024 + the button; the setting it has decides which of ours can reach it. The joystick button
+ * (>= 0), or -1 for the key. *code_a / *code_b: the two control sets' codes, for the log. */
+static int mic_button(int *code_a, int *code_b) {
+    const char *how = getenv("DSFLIP_MIC_KEY"); if (!how || !*how) how = "auto";
+    int a = resume_control_code("a", "FAKE_MICROPHONE"), b = resume_control_code("b", "FAKE_MICROPHONE");
+    if (code_a) *code_a = a;
+    if (code_b) *code_b = b;
+    if (!strcmp(how, "button")) return b >= 1024 && b < 1024 + 64 ? b - 1024 : (a >= 1024 && a < 1024 + 64 ? a - 1024 : -1);
+    if (strcmp(how, "key") && a != 327 && b != 327 && b >= 1024 && b < 1024 + 64) return b - 1024;
+    return -1;
+}
+/* the in-game menu's Blow (menu.c): DraStic's fake microphone held, the way the mic thread presses it (it pressed only
+ * the key, which a drastic.cfg with the joystick binding alone never sees: ROCKNIXDS issue 26) */
+void audio_mic_hold(int down) {
+    static int btn = -2;
+    if (btn == -2) btn = mic_button(0, 0);
+    if (btn >= 0) dsflip_mic_button(btn, down); else dsflip_mic_key(down);
+}
 static void *mic_thread(void *a) {
     float thresh = *(float *)a;
     void *cap = 0;
@@ -373,13 +392,7 @@ static void *mic_thread(void *a) {
     if (coup_max < 0.1f) coup_max = 0.1f;
     if (hold_ms < 0) hold_ms = 0;
     if (lf_k < 0) lf_k = 0;
-    /* how the fake microphone is pressed: DraStic reads keyboard controls as 256 + the key's code (Scroll Lock = 327)
-     * and joystick buttons as 1024 + the button; the setting it has decides which of ours can reach it */
-    const char *how = getenv("DSFLIP_MIC_KEY"); if (!how || !*how) how = "auto";
-    int code_a = resume_control_code("a", "FAKE_MICROPHONE"), code_b = resume_control_code("b", "FAKE_MICROPHONE");
-    int use_button = -1;
-    if (!strcmp(how, "button")) use_button = code_b >= 1024 && code_b < 1024 + 64 ? code_b - 1024 : (code_a >= 1024 && code_a < 1024 + 64 ? code_a - 1024 : -1);
-    else if (strcmp(how, "key") && code_a != 327 && code_b != 327 && code_b >= 1024 && code_b < 1024 + 64) use_button = code_b - 1024;
+    int code_a, code_b, use_button = mic_button(&code_a, &code_b);
     if (alsa_pcm(&cap, 1 /* SND_PCM_STREAM_CAPTURE */, 1, 44100, 100000, "mic") < 0) {
         dsflip_log("[mic] no capture device\n");
         mic_state = -1; if (thresh <= 0) monitor_running = 0;

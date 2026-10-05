@@ -46,7 +46,7 @@ int dsflip_menu_grab_top(uint32_t *dst, int pitch, int w, int h);
 int dsflip_battery(int *charging);
 int dsflip_drastic_menu(void);
 extern volatile int dsflip_hold;
-void dsflip_mic_key(int down);
+void audio_mic_hold(int down);                  /* audio.c: DraStic's fake microphone, key or button */
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
@@ -1094,7 +1094,7 @@ static void menu_run(int start) {
         usleep(8000);
     }
     if (bri_changed) want(-1, bri);
-    if (mic_until) dsflip_mic_key(1);
+    if (mic_until) audio_mic_hold(1);
     SDL_PauseAudio(0);
     audio_mic_quiet(0);
     dsflip_log("[menu] closed\n");
@@ -1144,7 +1144,7 @@ void menu_frame(void) {
     static int test = -1; static int frames;
     if (test < 0) { const char *t = getenv("DSFLIP_MENU_TEST"); test = t ? atoi(t) + 1 : 0; }
     if (!frames++) session_t0 = now_ms();
-    if (mic_until && now_ms() >= mic_until) { mic_until = 0; dsflip_mic_key(0); }
+    if (mic_until && now_ms() >= mic_until) { mic_until = 0; audio_mic_hold(0); }
 
     if (test && frames == 180) {
         if (enabled < 0) menu_event(0);
