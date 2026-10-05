@@ -145,6 +145,17 @@ static int control_button_in(const char *set, const char *name) {
     return b;
 }
 static int control_button(const char *name) { return control_button_in("a", name); }
+/* the raw code of controls_<set>[CONTROL_INDEX_<name>] (keyboard: 256 + key, joystick: 1024 + button, 65535 unbound),
+ * -1 when the config has no such line (audio.c: how the fake microphone is bound) */
+int resume_control_code(const char *set, const char *name) {
+    FILE *f = fopen("config/drastic.cfg", "r"); if (!f) return -1;
+    char key[96], line[256]; int v = -1;
+    snprintf(key, sizeof key, "controls_%s[CONTROL_INDEX_%s] = ", set, name);
+    while (fgets(line, sizeof line, f)) if (!strncmp(line, key, strlen(key))) { v = atoi(line + strlen(key)); break; }
+    fclose(f);
+    return v;
+}
+int resume_joy_id(void) { return joy_id >= 0 ? joy_id : 0; }   /* the joystick SDL opened first (dsflip.c's mic button) */
 /* either set (ROCKNIX maps START and SELECT in controls_b) */
 static int control_button_any(const char *name) { int b = control_button_in("a", name); return b >= 0 ? b : control_button_in("b", name); }
 

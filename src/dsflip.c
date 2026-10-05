@@ -905,6 +905,16 @@ static void dsflip_key(int scancode, int down) {
     push_ev(&e);
 }
 void dsflip_mic_key(int down) { dsflip_key(71, down); }
+/* the same through a joystick button (SDL_JOYBUTTONDOWN/UP, as resume.c presses DraStic's save/load controls): for a
+ * drastic.cfg whose keyboard set has no fake microphone but whose joystick set does (DSFLIP_MIC_KEY, audio.c) */
+int resume_joy_id(void);
+void dsflip_mic_button(int button, int down) {
+    sdl_ev e; memset(&e, 0, sizeof e);
+    uint32_t type = down ? 0x603 : 0x604, ts = SDL_GetTicks(); int32_t which = resume_joy_id();
+    memcpy(e.pad, &type, 4); memcpy(e.pad + 4, &ts, 4); memcpy(e.pad + 8, &which, 4);
+    e.pad[12] = (uint8_t)button; e.pad[13] = down ? 1 : 0;
+    push_ev(&e);
+}
 /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
  * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
