@@ -161,7 +161,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_NOTICE` | `/tmp/dsflip-notice` | Where that ending leaves a line for the launcher to show |
 | `DSFLIP_SPREAD_THREADS` | 1 | 0 = new threads inherit their creator's CPUs (with DraStic's main thread confined to one CPU, its new helper threads then share that CPU only) |
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
-| `DSFLIP_WFC` | off | Nintendo WFC online play (untested on hardware): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). Without the variable, `nds.wfc_dns` in ROCKNIX's `system.cfg` is read. `DSFLIP_WFC_DEBUG=1` logs every frame |
+| `DSFLIP_WFC` | off | Nintendo WFC online play (parked: it does not get past the game's Wi-Fi setup yet): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). `nds.wfc_dns` in ROCKNIX's `system.cfg` is read only with `DSFLIP_WFC_CONFIG=1`. `DSFLIP_WFC_DEBUG=1` logs every frame |
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
 | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |
 | `DSFLIP_FALLBACK` | 1 | 0 = don't run DraStic without SuperDrastic when it can't take the display |

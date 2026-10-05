@@ -12,11 +12,11 @@
  *
  * Offsets below are for BuildID 7a5e0e5fc6e52e6e8f5499c3d4d667ef51db0748. `add Xd, Xn, #imm,
  * lsl #12` adds imm<<12. The hook checks that id and the register/RAM layout, and does nothing
- * if this is a different DraStic. The feature stays off until ES's "wfc dns" (nds.wfc_dns) or
- * DSFLIP_WFC says otherwise, so an unmodified config behaves exactly as stock DraStic.
+ * if this is a different DraStic. The feature stays off unless DSFLIP_WFC says otherwise (and, with
+ * DSFLIP_WFC_CONFIG=1, ES's "wfc dns" / nds.wfc_dns), so an unmodified config behaves exactly as stock DraStic.
  *
  * Setting: DSFLIP_WFC = off | kaeru | altwfc | wiilink | <dotted ip> wins (superdrastic-run users);
- * otherwise nds.wfc_dns from the per-ROM config, then /storage/.config/system/configs/system.cfg.
+ * with DSFLIP_WFC_CONFIG=1 also nds.wfc_dns from the per-ROM config, then system.cfg (parked for 1.6).
  * DSFLIP_WFC_DEBUG=1 logs every frame. Beacons, the TSF compare and the NAT sockets are driven by
  * the "dsf-wfc" service thread (10 ms), not by the display path, so dsflip.c needs no per-frame hook.
  */
@@ -564,10 +564,14 @@ static int known_server(const char *s, uint32_t *ip, char *name, size_t nn) {
     if (parse_ip(s, ip)) { snprintf(name, nn, "%s", s); return 1; }
     return 0;
 }
+/* Online play is parked for ROCKNIXDS 1.6 (it does not get past the game's own Wi-Fi setup yet): only the test
+ * switch DSFLIP_WFC turns it on. ES's "wfc dns" (nds.wfc_dns), which 1.5.13 test builds offered, is ignored unless
+ * DSFLIP_WFC_CONFIG=1, so a value left in system.cfg can't switch the hook on behind a hidden option. */
 static int setting_on(void) {
     char v[64]; v[0] = 0;
-    const char *e = getenv("DSFLIP_WFC");
+    const char *e = getenv("DSFLIP_WFC"), *cf = getenv("DSFLIP_WFC_CONFIG");
     if (e && e[0]) snprintf(v, sizeof v, "%s", e);
+    else if (!(cf && *cf == '1')) return 0;
     else {
         char rom[256], path[512];
         int have_rom = rom_base(rom, sizeof rom);
