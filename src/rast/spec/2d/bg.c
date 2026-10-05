@@ -14,9 +14,11 @@
  *   buf = lines + n*0x220 + 0x10: u16[256], the palette RAM entry (or the VRAM pixel of a 16-bit bitmap) AS STORED,
  *         bit 15 included. A slot is 8 + 256 + 8 u16; the original renderers scribble into the padding (text 4bpp
  *         and 8bpp ext: bytes -14..527 relative to buf; text 8bpp: the index line left at bytes 512..535, up to 8
- *         bytes into the next slot's padding; affine: 512..541; affine lines also get up to 7 junk entries past the
- *         drawn span). The composite never reads those bytes; the ports write buf[0..255] only, the same values the
- *         originals write there, and only where the original writes too.
+ *         bytes into the next slot's padding; affine: 512..541; clip-mode affine lines also get junk entries in buf
+ *         past the drawn span: more than 7 on most lines with |PA| or |PC| > 2047, up to 135 with t_bg2d's
+ *         generators, never left of the span; text BGs and bitmaps write no such entries). The composite never reads
+ *         those bytes; the ports write buf[0..255] only, the same values the originals write there, and only where
+ *         the original writes too.
  *   vis = vis + n*32: 256 bits, bit x (byte x >> 3, bit x & 7) = pixel x is opaque (index != 0; 16-bit bitmap: bit 15).
  * Only buf[x] where vis bit x is set is observable in the composite (it selects by the bitmaps), and both are exact.
  * One reader takes whole slots, junk included (compose.md 7, hazards; 2d-engine.md 3.6): on a 1x line whose 3D layer

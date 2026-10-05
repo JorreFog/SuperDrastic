@@ -173,7 +173,9 @@ static void test_frames(int iters) {
         int image = rnd(4) == 0;
         if (image) {                                   /* the full-screen bitmap image */
             dc = (dc & ~0x60u) | 0x20;
-            fullscreen_oam(rnd(1024), rnd(4), rnd(3) ? 0 : (int)rnd(116), rnd(4) == 0);
+            /* base tile 256 puts the image at w1 = 0x800, the edge of the hi-res data rule (w1*8 <= 0x4000), 257
+             * just past it: rare with a uniform tile */
+            fullscreen_oam(rnd(8) ? (int)rnd(1024) : 256 + (int)rnd(2), rnd(4), rnd(3) ? 0 : (int)rnd(116), rnd(4) == 0);
             memset(video, 0, 0x100);
             int bank = rnd(5);
             uint32_t objbase = index ? 0x600000 : 0x400000;
