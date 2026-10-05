@@ -176,18 +176,20 @@ void resume_saw_event(const void *ev) {
 }
 
 /* ---- quitting with a save ---- */
+void dsflip_prof_report(void) __attribute__((weak));   /* prof.c: the profile would be lost with the kill */
+static void die(void) { if (dsflip_prof_report) dsflip_prof_report(); kill(getpid(), SIGKILL); }
 static void *save_thread(void *a) {
     (void)a;
     long long t0 = now_ms();
     while (!saved && now_ms() - t0 < 5000) usleep(20000);
     if (saved == 1) dsflip_log("[resume] saved in %lld ms: quitting\n", now_ms() - t0);
     else dsflip_log("[resume] %s: quitting without one\n", saved ? "the resume state couldn't be written" : "no savestate within 5 s");
-    kill(getpid(), SIGKILL);
+    die();
     return 0;
 }
 static void on_usr1(int sig) {
     (void)sig;
-    if (saving || !resume_path[0] || btn_save < 0) kill(getpid(), SIGKILL);   /* again, or nothing to save with */
+    if (saving || !resume_path[0] || btn_save < 0) die();   /* again, or nothing to save with */
     want_save = 1;
 }
 
@@ -204,7 +206,7 @@ void resume_frame(void) {
         dsflip_log("[resume] quit requested: saving a resume state\n");
         unlink(resume_path);
         btn_press = btn_save;
-        pthread_t t; if (pthread_create(&t, 0, save_thread, 0)) kill(getpid(), SIGKILL);
+        pthread_t t; if (pthread_create(&t, 0, save_thread, 0)) die();
         pthread_setname_np(t, "dsf-resume");
     }
     if (want_load && frames >= load_at_frame && !loading) {

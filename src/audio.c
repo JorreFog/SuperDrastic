@@ -33,6 +33,7 @@
 #include <sched.h>
 #include <pthread.h>
 #include <dlfcn.h>
+#include <errno.h>
 #include <math.h>
 
 void dsflip_log(const char *fmt, ...);
@@ -181,7 +182,7 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
         long long now = mono_ns();
         if (next < now - 50000000LL) next = now;   /* fell far behind (stopped/suspended): don't burst */
         struct timespec ts = { next / 1000000000LL, next % 1000000000LL };
-        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, 0);
+        while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, 0) == EINTR) ;   /* a signal (the profiler's) */
     }
     return 0;
 }

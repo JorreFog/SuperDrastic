@@ -112,6 +112,17 @@ charging) for 3 seconds. `DSFLIP_STATUS_CARD=0` turns it off.
 - **The log**, `DSFLIP_LOG` (default `logs/superdrastic.log`): one per session, the previous three kept as `.1`..`.3`.
   Frame pacing, drops, the shader, audio, the CPU governor and RetroAchievements. `logs/run.log` is the launcher's
   own.
+- **A profile**, with `DSFLIP_PROF=1`: `prof-<pid>.txt` next to the log (or in `DSFLIP_PROF_OUT`), for finding what a
+  slow game spends its time on. Every thread samples its own CPU time (up to `DSFLIP_PROF_HZ` a second; the kernel's
+  tick caps it, the `/s` column shows the real rate), and the report lists the threads (samples, CPU seconds, % of a
+  core; `main (emulation)` is DraStic's emulation thread, `rast-3d` the 3D threads, DraStic's other threads go by
+  their start routine), the modules, the top 60 functions and each busy thread's own. `jit` is DraStic's translated
+  DS code, split into its translation cache's main, itcm and alternate parts; `<plt>` is calls on their way into a
+  library; `libfoo.so+0x1234` is a library function without a symbol (an offset for `objdump`). Time in the kernel
+  counts at the system call that spent it (`ioctl`, `clock_nanosleep` ...). A thread that blocks SIGPROF (SDL's do)
+  is listed with its CPU time and no samples. The file is rewritten every 10 s, at exit, on SIGTERM and before a
+  quit-with-save's kill, so the last one survives a `kill -9`. Its cost is the kernel's signal delivery, about
+  1.5 us a sample on a PC (0.04% of a busy thread at a 250 Hz tick).
 
 ## Settings
 
@@ -145,6 +156,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
 | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |
 | `DSFLIP_FALLBACK` | 1 | 0 = don't run DraStic without SuperDrastic when it can't take the display |
+| `DSFLIP_PROF`, `DSFLIP_PROF_OUT`, `DSFLIP_PROF_HZ` | off, the log's directory, 1000 | `1` (or the seconds between reports, default 10) runs the built-in sampling profiler (see *What SuperDrastic tells you*); `DSFLIP_PROF_HZ` is samples per second of each thread's CPU time |
 
 **Shaders** are GLSL ES 1.0 fragment shaders with the inputs DraStic's stock shaders use (`u_texture`,
 `u_texture_size`, `u_output_size`, `v_texcoord`; see the top of `src/shader.c`). A shader that draws the DS screen

@@ -11,15 +11,17 @@ cd "$(dirname "$0")"
 mkdir -p build
 RC=src/third_party/rcheevos
 # src/rast: our 3D rasterizer for DraStic's hi-res mode (off unless DSFLIP_RAST=1; see src/rast/README.md)
+# src/prof.c: the sampling profiler (DSFLIP_PROF=1). Its report names this library's static functions from .symtab, so
+# the library is only stripped of debug info (+100 KB)
 SRCS="src/dsflip.c src/shader.c src/audio.c src/ra.c src/ui.c src/volume.c src/cpugov.c src/resume.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c \
       $RC/src/rc_util.c $RC/src/rc_version.c $RC/src/rcheevos/*.c $RC/src/rapi/*.c $RC/src/rhash/*.c) \
-      src/rast/rast.c src/rast/b0.c src/rast/fused.c src/rast/fused_neon.c src/rast/fused_asm.c src/rast/defer.c src/rast/hr.c src/rast/comp.c src/rast/rast_kern.S $(ls src/rast/spec/*.c)"
+      src/rast/rast.c src/rast/b0.c src/rast/fused.c src/rast/fused_neon.c src/rast/fused_asm.c src/rast/defer.c src/rast/hr.c src/rast/comp.c src/rast/rast_kern.S $(ls src/rast/spec/*.c) src/prof.c"
 python3 src/rast/kerngen.py src/rast/rast_kern.S
 V=$(cat VERSION 2>/dev/null || echo dev)
 CC="clang --target=aarch64-linux-gnu --sysroot=$SR -fuse-ld=lld -O2 -Wall -Wno-unused-function"
 $CC -shared -fPIC -DDSFLIP_VERSION="\"$V\"" -DRC_DISABLE_LUA -DRC_CLIENT_SUPPORTS_HASH -I"$SR/usr/include/libdrm" \
     -I$RC/include -I$RC/src -Isrc/third_party/stb -o build/libsuperdrastic.so $SRCS -ldrm -lpthread -lm
-llvm-strip --strip-unneeded build/libsuperdrastic.so
+llvm-strip --strip-debug build/libsuperdrastic.so
 ls -l build/libsuperdrastic.so
 if [ "$2" = shtest ]; then       # the shader benchmark (tools/shtest.c): runs a shader on a frame without DraStic
     $CC -I"$SR/usr/include/libdrm" -o build/shtest tools/shtest.c src/shader.c -ldrm -ldl
