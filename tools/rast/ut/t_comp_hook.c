@@ -17,11 +17,12 @@
  * function is patched as comp_init() patches it (a copy of rast.c's rast_hook) and called through its entry: the
  * jump to the hook, the arguments as a caller leaves them, and the trampoline back into the original, against the
  * C port.
- * run.sh t_comp_hook.c ../../../src/rast/spec/composite.c */
+ * run.sh t_comp_hook.c ../../../src/rast/spec/composite.c ../../../src/rast/spec/2d/compose.c */
 #include "ut.h"
 #include <stddef.h>
 #include <sys/mman.h>
 #include "comp.c"
+#include "spec/2d/compose.h"
 
 uintptr_t ds_base;
 /* rast.c's rast_hook(), copied (rast.c is not linked here): the 4 original words into an executable buffer with a jump
@@ -330,7 +331,8 @@ static void test_patched_entry(void) {
             slot = kind == CF_KIND_NONE ? CF_SELECT : kind - 1;
         }
         DS(comp_fn, DS_COMP)(EA.eng, EA.out + G, S, EA.layers, p3, al, lm64, bld, flags, line);   /* the patched entry */
-        spec_render_scanline_2d_composite_simple(EB.eng, EB.out + G, EB.frame + S_OFS, EB.layers, rel((void *)p3), lmask);
+        spec_render_scanline_2d_composite(EB.eng, EB.out + G, EB.frame + S_OFS, EB.layers, rel((void *)p3), rel(al), lmask,
+                                          (uint32_t)bld, (uint32_t)flags, (uint32_t)line);
         n_pe[slot]++;
         snprintf(what, sizeof what, "patched entry test %d (slot %d, lmask %#x, p3d %s, flags %#llx, check %d)", tt, slot, lmask,
                  p3 ? (hofs ? "in S" : "yes") : "NULL", (unsigned long long)flags, compcheck);

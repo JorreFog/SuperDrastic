@@ -35,7 +35,7 @@
  *    step render_scanline_2d calls render_scanline_2d_composite (0x3c6d0) for the quarter. With (flags & 0xf) == 0
  *    (no blending, no brightness) that is DraStic's priority encoder, then select_pixels: the layers' u16 lines
  *    merged, the backdrop, the 6-bit expansion into the planes, then the 3D pixels' bytes over them where BG0 is on
- *    top (spec/composite.c), ~620 instructions a quarter. hook_composite() runs the same priority encoder (DraStic's
+ *    top (spec/2d/compose.c), ~620 instructions a quarter. hook_composite() runs the same priority encoder (DraStic's
  *    own function, so the masks in S are its bytes) and, when the masks say the quarter is BG0's and the backdrop's
  *    alone (compfuse.h: no other layer of the mask claims a pixel, and every pixel is BG0's or the backdrop's), writes
  *    the planes in one NEON pass: ~45 instructions for a quarter that is all 3D, ~30 all backdrop, ~150 mixed.
