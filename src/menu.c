@@ -208,20 +208,33 @@ static int utf8_next(const char **s) {
     *s = (const char *)p;
     return cp;
 }
+/* Pixelify Sans is drawn on a grid of ~92 of its 1200 units (its zero is 5 x 7 of them, from 12 units under the
+ * baseline): at 13.04 px a design pixel is one screen pixel, at 26.09 px two. On 640x480 panels (setup) sizes within
+ * 15% of those are drawn at them and on the grid (whole-pixel advances, each glyph's ink from a pixel edge, a ~1 px
+ * gap after it, the grid's bottom on a pixel edge): crisp, where 14 px smears every stem over two pixels. Other
+ * sizes, and wider panels (the RG DS Plus), draw as before. */
+static int grid_fit;
+static float grid_px(float px) {
+    for (int k = 1; grid_fit && k <= 2; k++) { float g = k * 1200.0f / 92.0f; if (fabsf(px - g) <= 0.15f * g) return g; }
+    return 0;
+}
 static float text_w(font *F, const char *t, float px, int max_cp) {
     if (!F->ok) return 0;
+    float g = grid_px(px); if (g) px = g;
     float sc = stbtt_ScaleForPixelHeight(&F->f, px), w = 0; int prev = 0, n = 0;
     for (const char *s = t; *s && n < max_cp; n++) {
         int cp = utf8_next(&s), adv, lsb;
         stbtt_GetCodepointHMetrics(&F->f, cp, &adv, &lsb);
-        if (prev) w += stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc;
-        w += adv * sc; prev = cp;
+        float k = prev ? stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc : 0;
+        w += g ? roundf(k) : k; w += g ? roundf(adv * sc) : adv * sc; prev = cp;
     }
     return w;
 }
 /* text whose box starts at y (top), aligned left (0), centred (1) or right (2) on x; cut with "..." past maxw */
 static void text(canvas *c, font *F, const char *t, float x, float y, float px, uint32_t rgb, float maxw, int align) {
     if (!F->ok || !*t) return;
+    float g = grid_px(px);
+    if (g) { y += (px - g) * 0.5f; px = g; }       /* the caps' middle stays where it was */
     int n = 0; for (const char *s = t; *s; n++) utf8_next(&s);
     int keep = n, dots3 = 0;
     float w = text_w(F, t, px, n);
@@ -231,25 +244,28 @@ static void text(canvas *c, font *F, const char *t, float x, float y, float px, 
         dots3 = 1; w = text_w(F, t, px, keep) + dw;
     }
     if (align == 1) x -= w / 2; else if (align == 2) x -= w;
+    if (g) x = roundf(x);
     float sc = stbtt_ScaleForPixelHeight(&F->f, px), pen = x;
     int base = (int)lroundf(y + F->asc * px);
     static unsigned char gb[256 * 256];
     int prev = 0; const char *s = t;
     for (int i = 0; i < keep + (dots3 ? 3 : 0); i++) {
         int cp = i < keep ? utf8_next(&s) : '.';
-        if (prev) pen += stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc;
+        float k = prev ? stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc : 0;
+        pen += g ? roundf(k) : k;
         int adv, lsb; stbtt_GetCodepointHMetrics(&F->f, cp, &adv, &lsb);
-        int x0, y0, x1, y1; float fx = pen - floorf(pen);
-        stbtt_GetCodepointBitmapBoxSubpixel(&F->f, cp, sc, sc, fx, 0, &x0, &y0, &x1, &y1);
+        int x0, y0, x1, y1; float fx = pen - floorf(pen), fy = 0;
+        if (g) { fx = floorf(lsb * sc) - lsb * sc; fy = roundf(12 * sc) - 12 * sc; }
+        stbtt_GetCodepointBitmapBoxSubpixel(&F->f, cp, sc, sc, fx, fy, &x0, &y0, &x1, &y1);
         int gw = x1 - x0, gh = y1 - y0;
         if (gw > 0 && gh > 0 && gw <= 256 && gh <= 256) {
-            stbtt_MakeCodepointBitmapSubpixel(&F->f, gb, gw, gh, gw, sc, sc, fx, 0, cp);
+            stbtt_MakeCodepointBitmapSubpixel(&F->f, gb, gw, gh, gw, sc, sc, fx, fy, cp);
             int ox = (int)floorf(pen) + x0, oy = base + y0;
             for (int yy = 0; yy < gh; yy++) for (int xx = 0; xx < gw; xx++) {
                 int v = gb[yy * gw + xx]; if (v) blendpx(c, ox + xx, oy + yy, rgb, v / 255.0f);
             }
         }
-        pen += adv * sc; prev = cp;
+        pen += g ? roundf(adv * sc) : adv * sc; prev = cp;
     }
 }
 /* split t into at most two lines that fit maxw (the second cut with "..." if needed); returns the line count */
@@ -375,7 +391,7 @@ static void when_text(time_t t, char *out, size_t n) {
                        mktime(&(struct tm){ .tm_year = a.tm_year, .tm_mon = a.tm_mon, .tm_mday = a.tm_mday, .tm_isdst = -1 })) / 86400;
     if (days == 0) snprintf(out, n, "Today %s", hm);
     else if (days == 1) snprintf(out, n, "Yesterday %s", hm);
-    else { char d[16]; strftime(d, sizeof d, "%b %e", &a); snprintf(out, n, "%s %s", d, hm); }
+    else { char d[16]; strftime(d, sizeof d, "%b %-d", &a); snprintf(out, n, "%s %s", d, hm); }   /* "Oct 3", not "Oct  3" */
 }
 
 /* ---------- settings: volume and brightness, as ROCKNIX keeps them ---------- */
@@ -486,6 +502,8 @@ static int setup(void) {
         "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
     if (!font_load(&F_MED, med, 7) || !font_load(&F_REG, reg, 6)) { dsflip_log("[menu] no font: DraStic's menu instead\n"); return 0; }
+    { int a, d, l; stbtt_GetFontVMetrics(&F_MED.f, &a, &d, &l);    /* Pixelify Sans (920 / -280) on the RG DS's panels */
+      grid_fit = CV[0].s < 1.3f && a == 920 && d == -280; }
     const char *snd[SND_N] = { "scroll.wav", "select.wav", "back.wav" };
     for (int k = 0; k < SND_N; k++) {
         char p[300];
@@ -751,7 +769,7 @@ static void draw_bottom(void) {
         int gap = S(10), cw = (gx1 - gx0 - 3 * gap) / 4, ch = (gy1 - gy0 - gap) / 2, nb = newest_slot();
         for (int n = 0; n < NSLOT; n++) {
             slot *sl = &SL[n];
-            int x = gx0 + (n % 4) * (cw + gap), y = gy0 + (n / 4) * (ch + gap), sel = n == sel_slot, dim = s == SC_LOAD && !sl->used;
+            int x = gx0 + (n % 4) * (cw + gap), y = gy0 + (n / 4) * (ch + gap), sel = n == sel_slot, dim = s == SC_LOAD && !sl->used && !sel;   /* selected: readable on the blue */
             R_SLOT[n] = (rect){ x, y, x + cw, y + ch };
             box(c, x, y, x + cw, y + ch, S(10), bw, sel ? C_LIGHT : dim ? 0x2a3442 : C_BORDER, sel ? C_BLUE : dim ? 0x161d26 : C_PANEL);
             int k = S(3) < 2 ? 2 : S(3);
