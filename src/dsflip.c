@@ -41,6 +41,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <dlfcn.h>
+#include <link.h>
 #include <errno.h>
 #include <glob.h>
 #include <signal.h>
@@ -920,7 +921,7 @@ static void stall_watch(long long t) {  /* the presenter, every wake-up (at leas
  * after a state load, say -- started on CPU 3 alone until the next placement pass. glibc applies an attribute's CPU
  * set before the new thread first runs. DSFLIP_SPREAD_THREADS=0: inherit as before. */
 static cpu_set_t all_cpus; static int spread_threads = -1;
-int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
+static int create_spread(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
     static int (*real)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
     if (!real) real = (int (*)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
     if (spread_threads <= 0) return real(th, attr, fn, arg);
@@ -936,6 +937,79 @@ int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *
     pthread_attr_setaffinity_np(&a, sizeof all_cpus, &all_cpus);
     int r = real(th, &a, fn, arg);
     pthread_attr_destroy(&a);
+    return r;
+}
+
+/* DraStic's helper threads wait at a door until the locks they wait on exist.
+ *
+ * DraStic r2.5.2.2 (aarch64, build id 7a5e0e5f...0748) starts four of its helper threads before it initialises what
+ * each of them waits on: pthread_create, then pthread_mutex_init twice and pthread_cond_init twice. That is at
+ * +0x312ac for the thread that starts at +0x2fa50 (a screen's lines), and at +0x597b4, three times over, for the
+ * three that start at +0x58e50 (the 3D bins; the thread at +0x59430 that hands them their work is created after its
+ * locks, as it should be). A helper that is quick is already inside pthread_cond_wait when its creator wipes that
+ * condition variable. glibc (2.25 on) keeps a condition variable's waiters in the variable itself, so the
+ * pthread_cond_signal of the first hand-off finds no waiter and wakes nobody, and whoever handed the work over waits
+ * for the answer for good: the game shows no frame at all, or none from the first frame that needs that helper (the
+ * first 3D frame after a state load: the freeze of 2026-10-05 on an RG DS Plus).
+ * Measured on an RG DS Plus on 2026-10-06, 1.6's library: 4 of 25 starts of Pokemon HeartGold showed no frame. gdb:
+ * three with a 3D helper still in the pthread_cond_wait at +0x58eb8 after its hand-off, the 3D thread waiting for it
+ * in the one at +0x592f8 and the main thread in the one at +0x596a8; one with the lines helper in the one at +0x2faf0
+ * and the main thread waiting for it in the one at +0x30d30. Every thread was allowed on all four CPUs: session.sh's
+ * CPU placement was not the cause; placed too early it made the creator late more often (68dfccd in ROCKNIXDS: 8 of
+ * 9 starts).
+ *
+ * So the pthread_create below starts these four through helper_start, where a helper's first act is to wait until
+ * its creator has made its second pthread_cond_init call since the pthread_create: the last of the four
+ * initialisations, counted in the pthread_cond_init below. A door opens by itself after 2 s (with a line in the log),
+ * so nothing waits here for good, and a DraStic whose code is elsewhere is started as before.
+ * DSFLIP_HELPER_DOOR=0: start them as DraStic does. DSFLIP_HELPER_RACE=<ms>: the creator sleeps that long right after
+ * each of the four pthread_create calls, which is the freeze at every start without the door and changes nothing with
+ * it: the test on a handheld. */
+#define DS_HELPER_LINES 0x2fa50
+#define DS_HELPER_BINS  0x58e50
+typedef struct { void *(*fn)(void *); void *arg; unsigned off; int open; long long t0; } door_t;
+#define DOORS 64
+static door_t doors[DOORS]; static unsigned door_n;
+static __thread door_t *door_mine; static __thread int door_inits;     /* the creator's: the helper it started last */
+static int helper_door = -1, helper_race_ms; static uintptr_t exe_base;
+static int exe_base_cb(struct dl_phdr_info *i, size_t n, void *u) { (void)n; (void)u; exe_base = i->dlpi_addr; return 1; }   /* the first is the program */
+
+static void *helper_start(void *p) {
+    door_t *d = p; void *(*fn)(void *) = d->fn; void *arg = d->arg; unsigned off = d->off; long long t0 = d->t0;
+    int i = 0;
+    for (; i < 20000 && !__atomic_load_n(&d->open, __ATOMIC_ACQUIRE); i++) { struct timespec t = { 0, 100000 }; nanosleep(&t, 0); }
+    if (i == 20000) LOG("[dsflip] DraStic's helper +0x%x waited 2 s for its locks and starts all the same\n", off);
+    else LOG("[dsflip] DraStic's helper +0x%x waited %lld us for its locks\n", off, now_us() - t0);
+    return fn(arg);
+}
+
+int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
+    if (helper_door < 0) {
+        const char *e = getenv("DSFLIP_HELPER_DOOR"); int on = !(e && *e == '0');
+        e = getenv("DSFLIP_HELPER_RACE"); helper_race_ms = e ? atoi(e) : 0;
+        dl_iterate_phdr(exe_base_cb, 0);
+        helper_door = on;
+    }
+    uintptr_t off = (uintptr_t)fn - exe_base;
+    int helper = exe_base && (off == DS_HELPER_LINES || off == DS_HELPER_BINS);
+    door_t *d = 0;
+    if (helper && helper_door) {
+        if (door_mine) __atomic_store_n(&door_mine->open, 1, __ATOMIC_RELEASE);     /* the one before: never left waiting */
+        d = &doors[__atomic_fetch_add(&door_n, 1, __ATOMIC_RELAXED) % DOORS];
+        d->fn = fn; d->arg = arg; d->off = (unsigned)off; d->t0 = now_us(); __atomic_store_n(&d->open, 0, __ATOMIC_RELEASE);
+        door_mine = d; door_inits = 0;
+    }
+    int r = d ? create_spread(th, attr, helper_start, d) : create_spread(th, attr, fn, arg);
+    if (r && d) door_mine = 0;                                          /* no thread: nobody at this door */
+    if (helper && helper_race_ms > 0) { struct timespec t = { helper_race_ms / 1000, (helper_race_ms % 1000) * 1000000L }; nanosleep(&t, 0); }
+    return r;
+}
+
+int pthread_cond_init(pthread_cond_t *c, const pthread_condattr_t *a) {
+    static int (*real)(pthread_cond_t *, const pthread_condattr_t *);
+    if (!real) real = (int (*)(pthread_cond_t *, const pthread_condattr_t *))dlsym(RTLD_NEXT, "pthread_cond_init");
+    int r = real(c, a);
+    if (door_mine && ++door_inits == 2) { __atomic_store_n(&door_mine->open, 1, __ATOMIC_RELEASE); door_mine = 0; }
     return r;
 }
 
