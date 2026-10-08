@@ -944,12 +944,14 @@ rast_kern_00100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v19.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v18.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q13, q14, [x1]
 	bsl v30.8b, v19.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -973,19 +975,17 @@ rast_kern_00100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v16.16b, v30.16b
-	bit v28.16b, v17.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v13.16b, v27.16b, v25.16b
+	bit v14.16b, v29.16b, v26.16b
+	bit v20.16b, v16.16b, v30.16b
+	bit v21.16b, v17.16b, v31.16b
+	stp q13, q14, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -1243,12 +1243,14 @@ rast_kern_00110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v19.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v14.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v19.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -1272,19 +1274,17 @@ rast_kern_00110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v12.16b, v30.16b
-	bit v28.16b, v13.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v20.16b, v12.16b, v30.16b
+	bit v21.16b, v13.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -4415,22 +4415,26 @@ rast_kern_01100:
 	shrn v27.8b, v24.8h, #5
 1:
 	umax v24.8b, v30.8b, v26.8b
-	fmov d28, x8
-	zip1 v29.16b, v29.16b, v27.16b
+	ldp q20, q21, [sp, #64]
 	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov d28, x8
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
+	ldp q18, q19, [x1]
 	cmeq v24.8b, v30.8b, v24.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v20.16b, v20.16b, v22.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
+	orr v21.16b, v21.16b, v22.16b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v25.4s, v30.4h, #0
@@ -4450,21 +4454,17 @@ rast_kern_01100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v22.16b
-	orr v26.16b, v26.16b, v22.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v24.16b, v20.16b, v30.16b
+	bit v28.16b, v21.16b, v31.16b
+	stp q18, q19, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -5810,10 +5810,12 @@ rast_kern_01110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q18, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -5840,19 +5842,17 @@ rast_kern_01110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v20.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v20.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -9616,22 +9616,26 @@ rast_kern_02100:
 	shrn v27.8b, v24.8h, #5
 1:
 	umax v24.8b, v30.8b, v26.8b
-	fmov d28, x8
-	zip1 v29.16b, v29.16b, v27.16b
+	ldp q20, q21, [sp, #64]
 	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov d28, x8
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
+	ldp q18, q19, [x1]
 	cmeq v24.8b, v30.8b, v24.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v20.16b, v20.16b, v22.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
+	orr v21.16b, v21.16b, v22.16b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v25.4s, v30.4h, #0
@@ -9651,21 +9655,17 @@ rast_kern_02100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v22.16b
-	orr v26.16b, v26.16b, v22.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v24.16b, v20.16b, v30.16b
+	bit v28.16b, v21.16b, v31.16b
+	stp q18, q19, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -10931,10 +10931,12 @@ rast_kern_02110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q18, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -10961,19 +10963,17 @@ rast_kern_02110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v20.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v20.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -15042,19 +15042,24 @@ rast_kern_03100:
 1:
 	umax v24.8b, v30.8b, v26.8b
 	fmov d28, x8
+	ldr q9, [x19, #32]
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q16, q17, [sp, #64]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	orr v16.16b, v16.16b, v9.16b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v17.16b, v17.16b, v9.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q9, q22, [x1]
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
 	str d30, [x3, x4]
@@ -15076,22 +15081,17 @@ rast_kern_03100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldr q24, [x19, #32]
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v24.16b
-	orr v26.16b, v26.16b, v24.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v9.16b, v27.16b, v25.16b
+	bit v22.16b, v29.16b, v26.16b
+	bit v24.16b, v16.16b, v30.16b
+	bit v28.16b, v17.16b, v31.16b
+	stp q9, q22, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -16503,10 +16503,12 @@ rast_kern_03110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q9, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -16533,19 +16535,17 @@ rast_kern_03110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v22.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v22.16b, v30.16b
+	bit v9.16b, v16.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q9, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -20494,19 +20494,24 @@ rast_kern_04100:
 1:
 	umax v24.8b, v30.8b, v26.8b
 	fmov d28, x8
+	ldr q9, [x19, #32]
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q16, q17, [sp, #64]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	orr v16.16b, v16.16b, v9.16b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v17.16b, v17.16b, v9.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q9, q22, [x1]
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
 	str d30, [x3, x4]
@@ -20528,22 +20533,17 @@ rast_kern_04100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldr q24, [x19, #32]
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v24.16b
-	orr v26.16b, v26.16b, v24.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v9.16b, v27.16b, v25.16b
+	bit v22.16b, v29.16b, v26.16b
+	bit v24.16b, v16.16b, v30.16b
+	bit v28.16b, v17.16b, v31.16b
+	stp q9, q22, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -21871,10 +21871,12 @@ rast_kern_04110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q9, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -21901,19 +21903,17 @@ rast_kern_04110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v22.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v22.16b, v30.16b
+	bit v9.16b, v16.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q9, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -23626,12 +23626,14 @@ rast_kern_10100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v19.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v18.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q13, q14, [x1]
 	bsl v30.8b, v19.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -23655,19 +23657,17 @@ rast_kern_10100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v16.16b, v30.16b
-	bit v28.16b, v17.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v13.16b, v27.16b, v25.16b
+	bit v14.16b, v29.16b, v26.16b
+	bit v20.16b, v16.16b, v30.16b
+	bit v21.16b, v17.16b, v31.16b
+	stp q13, q14, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -23977,12 +23977,14 @@ rast_kern_10110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v19.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v14.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v19.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -24006,19 +24008,17 @@ rast_kern_10110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v12.16b, v30.16b
-	bit v28.16b, v13.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v20.16b, v12.16b, v30.16b
+	bit v21.16b, v13.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -26673,10 +26673,12 @@ rast_kern_11100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q20, q21, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q18, q19, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -26703,19 +26705,17 @@ rast_kern_11100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v8.16b, v30.16b
-	bit v28.16b, v9.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v20.16b, v8.16b, v30.16b
+	bit v21.16b, v9.16b, v31.16b
+	stp q18, q19, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -27850,10 +27850,12 @@ rast_kern_11110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q18, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -27880,19 +27882,17 @@ rast_kern_11110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v20.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v20.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -31035,10 +31035,12 @@ rast_kern_12100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q20, q21, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q18, q19, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -31065,19 +31067,17 @@ rast_kern_12100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v8.16b, v30.16b
-	bit v28.16b, v9.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v20.16b, v8.16b, v30.16b
+	bit v21.16b, v9.16b, v31.16b
+	stp q18, q19, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -32142,10 +32142,12 @@ rast_kern_12110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q18, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -32172,19 +32174,17 @@ rast_kern_12110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v20.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v20.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -35587,22 +35587,26 @@ rast_kern_13100:
 	shrn v27.8b, v24.8h, #5
 1:
 	umax v24.8b, v30.8b, v26.8b
-	fmov d28, x8
-	zip1 v29.16b, v29.16b, v27.16b
+	ldp q16, q17, [sp, #64]
 	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov d28, x8
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
+	ldp q8, q9, [x1]
 	cmeq v24.8b, v30.8b, v24.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v16.16b, v16.16b, v22.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
+	orr v17.16b, v17.16b, v22.16b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v25.4s, v30.4h, #0
@@ -35622,21 +35626,17 @@ rast_kern_13100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v22.16b
-	orr v26.16b, v26.16b, v22.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v8.16b, v27.16b, v25.16b
+	bit v9.16b, v29.16b, v26.16b
+	bit v24.16b, v16.16b, v30.16b
+	bit v28.16b, v17.16b, v31.16b
+	stp q8, q9, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -36831,10 +36831,12 @@ rast_kern_13110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q8, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -36861,19 +36863,17 @@ rast_kern_13110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v9.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v9.16b, v30.16b
+	bit v8.16b, v16.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q8, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -40186,22 +40186,26 @@ rast_kern_14100:
 	shrn v27.8b, v24.8h, #5
 1:
 	umax v24.8b, v30.8b, v26.8b
-	fmov d28, x8
-	zip1 v29.16b, v29.16b, v27.16b
+	ldp q16, q17, [sp, #64]
 	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov d28, x8
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
+	ldp q8, q9, [x1]
 	cmeq v24.8b, v30.8b, v24.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v16.16b, v16.16b, v22.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
+	orr v17.16b, v17.16b, v22.16b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v25.4s, v30.4h, #0
@@ -40221,21 +40225,17 @@ rast_kern_14100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v22.16b
-	orr v26.16b, v26.16b, v22.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v8.16b, v27.16b, v25.16b
+	bit v9.16b, v29.16b, v26.16b
+	bit v24.16b, v16.16b, v30.16b
+	bit v28.16b, v17.16b, v31.16b
+	stp q8, q9, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -41358,10 +41358,12 @@ rast_kern_14110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q8, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -41388,19 +41390,17 @@ rast_kern_14110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v9.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v9.16b, v30.16b
+	bit v8.16b, v16.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q8, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -42988,12 +42988,14 @@ rast_kern_20100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v18.8b
+	ldp q19, q20, [x2]
 	cmeq v24.8b, v17.8b, v24.8b
+	cmeq v26.8b, v31.8b, v18.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q13, q14, [x1]
 	bsl v30.8b, v18.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -43017,19 +43019,17 @@ rast_kern_20100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v16.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v13.16b, v27.16b, v25.16b
+	bit v14.16b, v29.16b, v26.16b
+	bit v19.16b, v16.16b, v30.16b
+	bit v20.16b, v16.16b, v31.16b
+	stp q13, q14, [x1]
+	stp q19, q20, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -43248,12 +43248,14 @@ rast_kern_20110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v18.8b
+	ldp q19, q20, [x2]
 	cmeq v24.8b, v13.8b, v24.8b
+	cmeq v26.8b, v31.8b, v18.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v18.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -43277,19 +43279,17 @@ rast_kern_20110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v12.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v19.16b, v12.16b, v30.16b
+	bit v20.16b, v12.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q19, q20, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -46172,12 +46172,14 @@ rast_kern_21100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v9.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v30.8b, v24.8b
+	cmeq v26.8b, v31.8b, v9.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q18, q19, [x1]
 	bsl v30.8b, v9.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -46201,19 +46203,17 @@ rast_kern_21100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v7.16b, v30.16b
-	bit v28.16b, v7.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v20.16b, v7.16b, v30.16b
+	bit v21.16b, v7.16b, v31.16b
+	stp q18, q19, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -47452,12 +47452,14 @@ rast_kern_21110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v9.8b
+	ldp q12, q18, [x2]
 	cmeq v24.8b, v30.8b, v24.8b
+	cmeq v26.8b, v31.8b, v9.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v9.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -47481,19 +47483,17 @@ rast_kern_21110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v19.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -50939,12 +50939,14 @@ rast_kern_22100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v9.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v30.8b, v24.8b
+	cmeq v26.8b, v31.8b, v9.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q18, q19, [x1]
 	bsl v30.8b, v9.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -50968,19 +50970,17 @@ rast_kern_22100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v7.16b, v30.16b
-	bit v28.16b, v7.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v20.16b, v7.16b, v30.16b
+	bit v21.16b, v7.16b, v31.16b
+	stp q18, q19, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -52139,12 +52139,14 @@ rast_kern_22110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v9.8b
+	ldp q12, q18, [x2]
 	cmeq v24.8b, v30.8b, v24.8b
+	cmeq v26.8b, v31.8b, v9.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v9.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -52168,19 +52170,17 @@ rast_kern_22110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v19.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -55924,10 +55924,12 @@ rast_kern_23100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q9, q16, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q7, q8, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -55954,19 +55956,17 @@ rast_kern_23100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v17.16b, v30.16b
-	bit v28.16b, v17.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v7.16b, v27.16b, v25.16b
+	bit v8.16b, v29.16b, v26.16b
+	bit v9.16b, v17.16b, v30.16b
+	bit v16.16b, v17.16b, v31.16b
+	stp q7, q8, [x1]
+	stp q9, q16, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -57266,10 +57266,12 @@ rast_kern_23110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q7, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -57296,19 +57298,17 @@ rast_kern_23110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v8.16b, v30.16b
-	bit v28.16b, v8.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v8.16b, v30.16b
+	bit v7.16b, v8.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q7, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -60928,10 +60928,12 @@ rast_kern_24100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q9, q16, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q7, q8, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -60958,19 +60960,17 @@ rast_kern_24100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v17.16b, v30.16b
-	bit v28.16b, v17.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v7.16b, v27.16b, v25.16b
+	bit v8.16b, v29.16b, v26.16b
+	bit v9.16b, v17.16b, v30.16b
+	bit v16.16b, v17.16b, v31.16b
+	stp q7, q8, [x1]
+	stp q9, q16, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -62186,10 +62186,12 @@ rast_kern_24110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q7, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -62216,19 +62218,17 @@ rast_kern_24110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v8.16b, v30.16b
-	bit v28.16b, v8.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v8.16b, v30.16b
+	bit v7.16b, v8.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q7, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -78000,12 +78000,14 @@ rast_kern_h00100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v19.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v18.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q13, q14, [x1]
 	bsl v30.8b, v19.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -78029,19 +78031,17 @@ rast_kern_h00100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v16.16b, v30.16b
-	bit v28.16b, v17.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v13.16b, v27.16b, v25.16b
+	bit v14.16b, v29.16b, v26.16b
+	bit v20.16b, v16.16b, v30.16b
+	bit v21.16b, v17.16b, v31.16b
+	stp q13, q14, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -78305,12 +78305,14 @@ rast_kern_h00110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v19.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v14.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v19.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -78334,19 +78336,17 @@ rast_kern_h00110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v12.16b, v30.16b
-	bit v28.16b, v13.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v20.16b, v12.16b, v30.16b
+	bit v21.16b, v13.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -81500,22 +81500,26 @@ rast_kern_h01100:
 	shrn v27.8b, v24.8h, #5
 1:
 	umax v24.8b, v30.8b, v26.8b
-	fmov d28, x8
-	zip1 v29.16b, v29.16b, v27.16b
+	ldp q20, q21, [sp, #64]
 	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov d28, x8
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
+	ldp q18, q19, [x1]
 	cmeq v24.8b, v30.8b, v24.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v20.16b, v20.16b, v22.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
+	orr v21.16b, v21.16b, v22.16b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v25.4s, v30.4h, #0
@@ -81535,21 +81539,17 @@ rast_kern_h01100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v22.16b
-	orr v26.16b, v26.16b, v22.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v24.16b, v20.16b, v30.16b
+	bit v28.16b, v21.16b, v31.16b
+	stp q18, q19, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -82909,10 +82909,12 @@ rast_kern_h01110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q18, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -82939,19 +82941,17 @@ rast_kern_h01110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v20.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v20.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -86745,22 +86745,26 @@ rast_kern_h02100:
 	shrn v27.8b, v24.8h, #5
 1:
 	umax v24.8b, v30.8b, v26.8b
-	fmov d28, x8
-	zip1 v29.16b, v29.16b, v27.16b
+	ldp q20, q21, [sp, #64]
 	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov d28, x8
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
+	ldp q18, q19, [x1]
 	cmeq v24.8b, v30.8b, v24.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v20.16b, v20.16b, v22.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
+	orr v21.16b, v21.16b, v22.16b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v25.4s, v30.4h, #0
@@ -86780,21 +86784,17 @@ rast_kern_h02100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v22.16b
-	orr v26.16b, v26.16b, v22.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v24.16b, v20.16b, v30.16b
+	bit v28.16b, v21.16b, v31.16b
+	stp q18, q19, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -88074,10 +88074,12 @@ rast_kern_h02110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q18, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -88104,19 +88106,17 @@ rast_kern_h02110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v20.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v20.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -92215,19 +92215,24 @@ rast_kern_h03100:
 1:
 	umax v24.8b, v30.8b, v26.8b
 	fmov d28, x8
+	ldr q9, [x19, #32]
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q16, q17, [sp, #64]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	orr v16.16b, v16.16b, v9.16b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v17.16b, v17.16b, v9.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q9, q22, [x1]
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
 	str d30, [x3, x4]
@@ -92249,22 +92254,17 @@ rast_kern_h03100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldr q24, [x19, #32]
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v24.16b
-	orr v26.16b, v26.16b, v24.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v9.16b, v27.16b, v25.16b
+	bit v22.16b, v29.16b, v26.16b
+	bit v24.16b, v16.16b, v30.16b
+	bit v28.16b, v17.16b, v31.16b
+	stp q9, q22, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -93690,10 +93690,12 @@ rast_kern_h03110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q9, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -93720,19 +93722,17 @@ rast_kern_h03110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v22.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v22.16b, v30.16b
+	bit v9.16b, v16.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q9, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -97711,19 +97711,24 @@ rast_kern_h04100:
 1:
 	umax v24.8b, v30.8b, v26.8b
 	fmov d28, x8
+	ldr q9, [x19, #32]
 	zip1 v29.16b, v29.16b, v27.16b
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q16, q17, [sp, #64]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	orr v16.16b, v16.16b, v9.16b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v17.16b, v17.16b, v9.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q9, q22, [x1]
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
 	str d30, [x3, x4]
@@ -97745,22 +97750,17 @@ rast_kern_h04100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldr q24, [x19, #32]
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v24.16b
-	orr v26.16b, v26.16b, v24.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v9.16b, v27.16b, v25.16b
+	bit v22.16b, v29.16b, v26.16b
+	bit v24.16b, v16.16b, v30.16b
+	bit v28.16b, v17.16b, v31.16b
+	stp q9, q22, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -99102,10 +99102,12 @@ rast_kern_h04110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q9, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -99132,19 +99134,17 @@ rast_kern_h04110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v22.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v22.16b, v30.16b
+	bit v9.16b, v16.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q9, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -100876,12 +100876,14 @@ rast_kern_h10100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v19.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v18.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q13, q14, [x1]
 	bsl v30.8b, v19.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -100905,19 +100907,17 @@ rast_kern_h10100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v16.16b, v30.16b
-	bit v28.16b, v17.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v13.16b, v27.16b, v25.16b
+	bit v14.16b, v29.16b, v26.16b
+	bit v20.16b, v16.16b, v30.16b
+	bit v21.16b, v17.16b, v31.16b
+	stp q13, q14, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -101233,12 +101233,14 @@ rast_kern_h10110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v19.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v14.8b, v24.8b
+	cmeq v26.8b, v31.8b, v19.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v19.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -101262,19 +101264,17 @@ rast_kern_h10110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v12.16b, v30.16b
-	bit v28.16b, v13.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v20.16b, v12.16b, v30.16b
+	bit v21.16b, v13.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -103947,10 +103947,12 @@ rast_kern_h11100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q20, q21, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q18, q19, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -103977,19 +103979,17 @@ rast_kern_h11100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v8.16b, v30.16b
-	bit v28.16b, v9.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v20.16b, v8.16b, v30.16b
+	bit v21.16b, v9.16b, v31.16b
+	stp q18, q19, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -105136,10 +105136,12 @@ rast_kern_h11110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q18, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -105166,19 +105168,17 @@ rast_kern_h11110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v20.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v20.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -108345,10 +108345,12 @@ rast_kern_h12100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q20, q21, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q18, q19, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -108375,19 +108377,17 @@ rast_kern_h12100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v8.16b, v30.16b
-	bit v28.16b, v9.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v20.16b, v8.16b, v30.16b
+	bit v21.16b, v9.16b, v31.16b
+	stp q18, q19, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -109464,10 +109464,12 @@ rast_kern_h12110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q18, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -109494,19 +109496,17 @@ rast_kern_h12110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v20.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v20.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -112933,22 +112933,26 @@ rast_kern_h13100:
 	shrn v27.8b, v24.8h, #5
 1:
 	umax v24.8b, v30.8b, v26.8b
-	fmov d28, x8
-	zip1 v29.16b, v29.16b, v27.16b
+	ldp q16, q17, [sp, #64]
 	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov d28, x8
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
+	ldp q8, q9, [x1]
 	cmeq v24.8b, v30.8b, v24.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v16.16b, v16.16b, v22.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
+	orr v17.16b, v17.16b, v22.16b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v25.4s, v30.4h, #0
@@ -112968,21 +112972,17 @@ rast_kern_h13100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v22.16b
-	orr v26.16b, v26.16b, v22.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v8.16b, v27.16b, v25.16b
+	bit v9.16b, v29.16b, v26.16b
+	bit v24.16b, v16.16b, v30.16b
+	bit v28.16b, v17.16b, v31.16b
+	stp q8, q9, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -114189,10 +114189,12 @@ rast_kern_h13110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q8, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -114219,19 +114221,17 @@ rast_kern_h13110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v9.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v9.16b, v30.16b
+	bit v8.16b, v16.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q8, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -117568,22 +117568,26 @@ rast_kern_h14100:
 	shrn v27.8b, v24.8h, #5
 1:
 	umax v24.8b, v30.8b, v26.8b
-	fmov d28, x8
-	zip1 v29.16b, v29.16b, v27.16b
+	ldp q16, q17, [sp, #64]
 	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov d28, x8
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
+	ldp q8, q9, [x1]
 	cmeq v24.8b, v30.8b, v24.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v16.16b, v16.16b, v22.16b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
 	sshll v31.8h, v26.8b, #0
+	orr v17.16b, v17.16b, v22.16b
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v25.4s, v30.4h, #0
@@ -117603,21 +117607,17 @@ rast_kern_h14100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q25, q26, [sp, #64]
-	orr v25.16b, v25.16b, v22.16b
-	orr v26.16b, v26.16b, v22.16b
 	ldp q24, q28, [x2]
-	bit v24.16b, v25.16b, v30.16b
-	bit v28.16b, v26.16b, v31.16b
+	bit v8.16b, v27.16b, v25.16b
+	bit v9.16b, v29.16b, v26.16b
+	bit v24.16b, v16.16b, v30.16b
+	bit v28.16b, v17.16b, v31.16b
+	stp q8, q9, [x1]
 	stp q24, q28, [x2]
 8:
 	subs x5, x5, #8
@@ -118752,10 +118752,12 @@ rast_kern_h14110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q8, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -118782,19 +118784,17 @@ rast_kern_h14110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v9.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v9.16b, v30.16b
+	bit v8.16b, v16.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q8, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -120402,12 +120402,14 @@ rast_kern_h20100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v18.8b
+	ldp q19, q20, [x2]
 	cmeq v24.8b, v17.8b, v24.8b
+	cmeq v26.8b, v31.8b, v18.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q13, q14, [x1]
 	bsl v30.8b, v18.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -120431,19 +120433,17 @@ rast_kern_h20100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v16.16b, v30.16b
-	bit v28.16b, v16.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v13.16b, v27.16b, v25.16b
+	bit v14.16b, v29.16b, v26.16b
+	bit v19.16b, v16.16b, v30.16b
+	bit v20.16b, v16.16b, v31.16b
+	stp q13, q14, [x1]
+	stp q19, q20, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -120668,12 +120668,14 @@ rast_kern_h20110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v18.8b
+	ldp q19, q20, [x2]
 	cmeq v24.8b, v13.8b, v24.8b
+	cmeq v26.8b, v31.8b, v18.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v18.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -120697,19 +120699,17 @@ rast_kern_h20110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v12.16b, v30.16b
-	bit v28.16b, v12.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v19.16b, v12.16b, v30.16b
+	bit v20.16b, v12.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q19, q20, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -123615,12 +123615,14 @@ rast_kern_h21100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v9.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v30.8b, v24.8b
+	cmeq v26.8b, v31.8b, v9.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q18, q19, [x1]
 	bsl v30.8b, v9.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -123644,19 +123646,17 @@ rast_kern_h21100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v7.16b, v30.16b
-	bit v28.16b, v7.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v20.16b, v7.16b, v30.16b
+	bit v21.16b, v7.16b, v31.16b
+	stp q18, q19, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -124909,12 +124909,14 @@ rast_kern_h21110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v9.8b
+	ldp q12, q18, [x2]
 	cmeq v24.8b, v30.8b, v24.8b
+	cmeq v26.8b, v31.8b, v9.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v9.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -124938,19 +124940,17 @@ rast_kern_h21110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v19.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -128426,12 +128426,14 @@ rast_kern_h22100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v9.8b
+	ldp q20, q21, [x2]
 	cmeq v24.8b, v30.8b, v24.8b
+	cmeq v26.8b, v31.8b, v9.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q18, q19, [x1]
 	bsl v30.8b, v9.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -128455,19 +128457,17 @@ rast_kern_h22100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v7.16b, v30.16b
-	bit v28.16b, v7.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v18.16b, v27.16b, v25.16b
+	bit v19.16b, v29.16b, v26.16b
+	bit v20.16b, v7.16b, v30.16b
+	bit v21.16b, v7.16b, v31.16b
+	stp q18, q19, [x1]
+	stp q20, q21, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -129640,12 +129640,14 @@ rast_kern_h22110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
-	cmeq v26.8b, v31.8b, v9.8b
+	ldp q12, q18, [x2]
 	cmeq v24.8b, v30.8b, v24.8b
+	cmeq v26.8b, v31.8b, v9.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	ldp q10, q11, [x1]
 	bsl v30.8b, v9.8b, v31.8b
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
@@ -129669,19 +129671,17 @@ rast_kern_h22110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v19.16b, v30.16b
-	bit v28.16b, v19.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v19.16b, v30.16b
+	bit v18.16b, v19.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q18, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -133455,10 +133455,12 @@ rast_kern_h23100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q9, q16, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q7, q8, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -133485,19 +133487,17 @@ rast_kern_h23100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v17.16b, v30.16b
-	bit v28.16b, v17.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v7.16b, v27.16b, v25.16b
+	bit v8.16b, v29.16b, v26.16b
+	bit v9.16b, v17.16b, v30.16b
+	bit v16.16b, v17.16b, v31.16b
+	stp q7, q8, [x1]
+	stp q9, q16, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -134811,10 +134811,12 @@ rast_kern_h23110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q7, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -134841,19 +134843,17 @@ rast_kern_h23110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v8.16b, v30.16b
-	bit v28.16b, v8.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v8.16b, v30.16b
+	bit v7.16b, v8.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q7, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -138503,10 +138503,12 @@ rast_kern_h24100:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q9, q16, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q7, q8, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -138533,19 +138535,17 @@ rast_kern_h24100:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v17.16b, v30.16b
-	bit v28.16b, v17.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v7.16b, v27.16b, v25.16b
+	bit v8.16b, v29.16b, v26.16b
+	bit v9.16b, v17.16b, v30.16b
+	bit v16.16b, v17.16b, v31.16b
+	stp q7, q8, [x1]
+	stp q9, q16, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f
@@ -139775,10 +139775,12 @@ rast_kern_h24110:
 	zip1 v25.16b, v31.16b, v24.16b
 	ldr d31, [x3, x4]
 	movi v24.8b, #0x1f
+	ldp q12, q7, [x2]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	dup v25.8b, v23.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	ldp q10, q11, [x1]
 	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
 	bic v28.8b, v28.8b, v26.8b
@@ -139805,19 +139807,17 @@ rast_kern_h24110:
 	bic v25.16b, v25.16b, v28.16b
 	bic v26.16b, v26.16b, v24.16b
 3:
-	ldp q24, q28, [x1]
-	bit v24.16b, v27.16b, v25.16b
-	bit v28.16b, v29.16b, v26.16b
-	stp q24, q28, [x1]
 	tbz w7, #5, 4f
 	mvni v24.4s, #0xff, lsl #24
 	bit v30.16b, v25.16b, v24.16b
 	bit v31.16b, v26.16b, v24.16b
 4:
-	ldp q24, q28, [x2]
-	bit v24.16b, v8.16b, v30.16b
-	bit v28.16b, v8.16b, v31.16b
-	stp q24, q28, [x2]
+	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v12.16b, v8.16b, v30.16b
+	bit v7.16b, v8.16b, v31.16b
+	stp q10, q11, [x1]
+	stp q12, q7, [x2]
 8:
 	subs x5, x5, #8
 	b.ls 9f

@@ -91,14 +91,15 @@ def roles(D, T, R, F, B, M):
     bit included), caf (untextured: alpha | fog bit), trans (two registers for the translucent blend weights, which
     keeps the blend free of stack spills), idx (the polygon's index, deferred passes), dep (the group's attribute
     words dep | pid << 24, computed at the depth test; constant depth: K | pid), fog (the fog bit byte), flat (fr fg
-    fb), a (A, for the alpha modulate), pid (the translucent id test), aref (the alpha test). The bilinear kernels use
-    every register. For the in-order core (kernsched.py interleaves only what uses distinct registers) some kernels
-    trade those for registers that let independent chains overlap: vc + vs (lit direct-textured opaque: the vertex
-    colour, computed among the texel gather's loads, and a second modulate scratch), flat + vs (textured flat: the
-    three modulates side by side), ex (textured translucent: with the blend weights' registers, which are free until
-    the blend, the colour's channels and the modulates' scratch, and a second blend channel). The pool: v10-v12
-    without a vertex colour, the texture's registers without a texture or a palette, and the depth's unused ones
-    (w depth v8 v9, constant depth v7-v9, the shade pass v6-v9)."""
+    fb), a (A, for the alpha modulate), pid (the translucent id test), aref (the alpha test), late (untextured
+    translucent: two registers for trans_store()'s tail, which the ex registers give the textured ones). The bilinear
+    kernels use every register. For the in-order core (kernsched.py interleaves only what uses distinct registers)
+    some kernels trade those for registers that let independent chains overlap: vc + vs (lit direct-textured opaque:
+    the vertex colour, computed among the texel gather's loads, and a second modulate scratch), flat + vs (textured
+    flat: the three modulates side by side), ex (textured translucent: with the blend weights' registers, which are
+    free until the blend, the colour's channels and the modulates' scratch, and a second blend channel). The pool:
+    v10-v12 without a vertex colour, the texture's registers without a texture or a palette, and the depth's unused
+    ones (w depth v8 v9, constant depth v7-v9, the shade pass v6-v9)."""
     if B: return {}
     if T in (1, 2) and not F and R == 0 and M == 0:
         # lit, direct textures (the pool is v18-v21): the vertex colour in three registers and a second modulate scratch,
@@ -140,6 +141,7 @@ def roles(D, T, R, F, B, M):
         if F: want.append(("flat", 3))
     if R: want.append(("pid", 1))
     if T and M != 2: want.append(("aref", 1))
+    if R and not T: want.append(("late", 2))    # untextured translucent: trans_store()'s tail as with the ex registers
     r = {}
     for name, n in want:
         if len(pool) >= n: r[name], pool = pool[:n], pool[n:]
@@ -862,6 +864,18 @@ def trans_store(D, cols):
     e("sshll v30.8h, v28.8b, #0"); e("sshll v31.8h, v26.8b, #0")
     e("sshll v25.4s, v30.4h, #0"); e("sshll2 v26.4s, v30.8h, #0")               # M32 v25 v26
     e("sshll v30.4s, v31.4h, #0"); e("sshll2 v31.4s, v31.8h, #0")               # O32 v30 v31
+    late = "trans" in RL and ("ex" in RL or "late" in RL)
+    if late:
+        # the blend's four registers are free from here: the destination colours and the depth words (or, with
+        # them in a role, the attribute words) load here, before the fog and depth-update branches, and both
+        # stores come after them in one block (kernsched.py then interleaves the two read-modify-writes)
+        (c0, c1), (a0, a1) = RL["trans"], RL["ex"] if "ex" in RL else RL["late"]
+        if "dep" in RL: d0, d1 = dep_words(D); e(f"ldp {q(a0)}, {q(a1)}, [x2]")
+        else:
+            e(f"ldp {q(a0)}, {q(a1)}, [sp, #64]"); p = pid24(c0)
+            e(f"orr {a0}.16b, {a0}.16b, {p}.16b"); e(f"orr {a1}.16b, {a1}.16b, {p}.16b")
+            d0, d1 = a0, a1
+        e(f"ldp {q(c0)}, {q(c1)}, [x1]")
     e("tbz w7, #4, 3f")
     # fog: colour bit 31 set; the colour mask keeps the destination's bit 31 where the pixel is not opaque
     # (op32 is 0 or -1: (op32 == 0) << 31 is the bit to keep)
@@ -870,13 +884,22 @@ def trans_store(D, cols):
     e("cmeq v28.4s, v28.4s, #0"); e("shl v28.4s, v28.4s, #31"); e("bic v25.16b, v25.16b, v28.16b")
     e("cmeq v24.4s, v24.4s, #0"); e("shl v24.4s, v24.4s, #31"); e("bic v26.16b, v26.16b, v24.16b")
     e("3:")
-    e("ldp q24, q28, [x1]"); e("bit v24.16b, v27.16b, v25.16b"); e("bit v28.16b, v29.16b, v26.16b"); e("stp q24, q28, [x1]")
+    if not late:
+        e("ldp q24, q28, [x1]"); e("bit v24.16b, v27.16b, v25.16b"); e("bit v28.16b, v29.16b, v26.16b"); e("stp q24, q28, [x1]")
     e("tbz w7, #5, 4f")
-    # depth update: the attribute's depth bits follow the whole mask, its id byte only the opaque pixels
+    # depth update: the attribute's depth bits follow the whole mask, its id byte only the opaque pixels (the colour
+    # store's masks v25 v26 lose only bit 31 to the fog, so this may come before or after it)
     e("mvni v24.4s, #0xff, lsl #24"); e("bit v30.16b, v25.16b, v24.16b"); e("bit v31.16b, v26.16b, v24.16b")
     e("4:")
-    d0, d1 = dep_words(D)
-    e("ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
+    if late:
+        e(f"bit {c0}.16b, v27.16b, v25.16b"); e(f"bit {c1}.16b, v29.16b, v26.16b"); e(f"stp {q(c0)}, {q(c1)}, [x1]")
+        if "dep" in RL:
+            e(f"bit {a0}.16b, {d0}.16b, v30.16b"); e(f"bit {a1}.16b, {d1}.16b, v31.16b"); e(f"stp {q(a0)}, {q(a1)}, [x2]")
+        else:
+            e("ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
+    else:
+        d0, d1 = dep_words(D)
+        e("ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
     e("8:")
 
 def latch(D, M=0, R=0):

@@ -71,6 +71,11 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   kpath over 59 kernel paths: 10116 -> 9670 cycles (-4.4%). The combined build: the scene cycle's differing bins
   as DraStic's renderer's at all 28 checkpoints to 67200 bins, deferred shading to 81600, the compositor's tables
   checked against the C port (5657, 0 differ), the stress ROM's 6 bins in 4800 as before.
+  Then across blocks (`kerngen.py`'s layout; kpath, cycles a group): the translucent kernels load the destination
+  colours and the depth words (or the attribute words) into the blend's registers, free by then, before the fog and
+  depth-update branches, and store colours and attribute words after them in one block, so that the two
+  read-modify-writes interleave: 02100 184 -> 170 (with blending 212 -> 197), 02110 178 -> 168, 04100 (16 colours)
+  193 -> 178, 23110 198 -> 188, 00100 114 -> 104.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
