@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """kpath.py <rast_kern.S> <kernel> [bit=0|1 ...]: a kernel's group loop for full groups that all pass (from its 0:
 label back to `b 0b`), the runtime flag tests (tbz/tbnz on w7) resolved by the given flag bits (default: perspective,
-not depth-equal, not white, fast vertex colour, A = 31, no alpha test, the fast w-depth products), through llvm-mca's
-Cortex-A55 model as a loop of 200 iterations: cycles per group of 8 pixels. Branches count as an issue slot.
-Compare KERNSCHED=0 and scheduled kernels, or two generators."""
+not depth-equal, not white, fast vertex colour, A = 31, no alpha test, the fast w-depth products; bit 15 follows bits 8
+and 10 unless given), through llvm-mca's Cortex-A55 model as a loop of 200 iterations: cycles per group of 8 pixels.
+Branches count as an issue slot. Compare KERNSCHED=0 and scheduled kernels, or two generators."""
 import re, subprocess, sys, tempfile
 
 f, name = sys.argv[1], sys.argv[2]
 bits = {0: 0, 1: 0, 2: 0, 8: 1, 10: 1, 13: 1, 14: 1, 11: 0, 12: 0, 7: 0}
 for a in sys.argv[3:]:
     k, v = a.split("="); bits[int(k)] = int(v)
+bits.setdefault(15, bits[8] & bits[10])     # the kernels' bit 15: bits 8 and 10 (kerngen.py's fused_alpha())
 lines, on = [], False
 for l in open(f):
     l = l.rstrip("\n")
