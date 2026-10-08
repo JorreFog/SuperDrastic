@@ -330,6 +330,16 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_interpolate_edges)(void *unused, uint
     uint32_t n = 0, total = 0, skip0 = 0;
     vtx_t *prev = vptr[0];
     uint32_t yp = rd16(prev + 6);
+#ifdef EDGES_LINE_CAP
+    /* (the hi-res instantiation) at most y_end - y_start lines a chain, the most that the span setup and the kernels
+     * read. A chain that goes down, up and down again (a self-intersecting polygon, or the repeated vertices of 9 and
+     * 10) covers lines twice, and its lines run on in the arrays: past 64 entries the right chain's arrays overwrite
+     * the next arrays' (the left chain's) first entries, past 128 lines its perspective coefficients run past the end
+     * of the span block. DraStic's walker does the same with its 44-entry arrays (the spec_ instantiations keep it:
+     * t_edges.c compares them with DraStic's); at 3x the chain stops at the window instead: the lines within it are
+     * the same, what used to be overwritten is the chain's own. */
+    const int32_t cap = (int32_t)y_end - (int32_t)y_start;
+#endif
     if (y_end > yp) {
         vtx_t **q = vptr + dir;
         do {
@@ -339,6 +349,9 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_interpolate_edges)(void *unused, uint
             uint32_t sk = 0;
             if (y_start > yp) { len += (int32_t)(yp - y_start); sk = y_start - yp; }
             if (y1 > y_end) len += (int32_t)(y_end - y1);
+#ifdef EDGES_LINE_CAP
+            if (len > cap - (int32_t)total) { len = cap - (int32_t)total; if (len <= 0) break; }
+#endif
             if (len > 0) {
                 if (n == 16) break;                     /* the arrays hold 16 edges (never reached by DraStic's polygons) */
                 counts[n] = (uint8_t)len;

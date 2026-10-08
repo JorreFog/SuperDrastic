@@ -6,7 +6,7 @@
  *   - the vertices' 3x screen coordinates, computed by hr_vertices() from the same clip-space values and viewport as
  *     DraStic's geometry_perspective_apply_hires_asm (hooked in rast.c; its math in the comment there);
  *   - our own polygon walker, hr_polygon(): render_polygon_4x's edge walks and span setup from spec/edges.c, with
- *     the line width 768 and span arrays of 64 entries;
+ *     the line width 768 and span arrays of 64 entries, a chain's lines stopped at the window (EDGES_LINE_CAP);
  *   - the pixel kernels of fused_asm.c in their hi-res instantiation (rast_kern_h*, strides from the kernel
  *     arguments) through f_run() with layout_3x, including deferred shading and bilinear filtering;
  *   - the bin resolve (edge marking, fog) as spec/resolve.c's, over 768-pixel lines, into a 48 x 768 buffer;
@@ -49,6 +49,7 @@
 static uint32_t hr_recip[1024];
 __attribute__((constructor)) static void hr_recip_init(void) { for (uint32_t i = 1; i < 1024; i++) hr_recip[i] = (0x3fffffffu + i) / i; }
 #define EDGES_RECIP_TABLE hr_recip
+#define EDGES_LINE_CAP 1                /* a chain's lines stop at the window (edges_impl.h, interpolate_edges) */
 #include "spec/edges_impl.h"
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))

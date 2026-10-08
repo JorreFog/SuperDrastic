@@ -76,6 +76,13 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   blocks in the edge-marking scene S4), the ids read from byte planes of the attribute lines' top bytes made once per
   bin (edge_tplanes, ldr q and uzp2). Modeled A55 cycles a frame, S4 at 3x: the edge marking 2.38 M -> 0.95 M
   (edge_lines 0.63 M + edge_tplanes 0.32 M), the frame 20.98 M -> 19.11 M; `ut/hr_ab` against e02a298: the same output.
+  The 3x walker stops a chain at its window (`EDGES_LINE_CAP` in `spec/edges_impl.h`, hr.c only): a chain that goes
+  down, up and down again (a self-intersecting polygon) covered lines twice and ran on in the span arrays, past 64
+  entries the right chain's overwrote the left chain's first entries and past 128 lines its perspective coefficients
+  ran out of the span block (into the heap: what made `ut/hr_ab`'s two copies of the same hr.c hand the kernels
+  different spans for a few polygons in 5000). The lines within the window are the same; convex polygons never have
+  such chains, so real scenes render as before. `ut/hr_ab` counts the polygons with such chains apart against a base
+  without the cap: against e02a298 0 of the others differ (and ~40% of the ~19% random polygons with one do).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -261,9 +268,7 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
   leave by umov), which the model cannot price (store-to-load forwarding).
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
-  layer presented through the dsflip shader instead of downsampled. `ut/hr_ab`'s walker test: two copies of the same
-  hr.c, each with its own heap span block holding the previous polygon's spans, hand the kernels different spans
-  for a few polygons in 5000 (8 to 10 vertices); with a private zeroed block they agree. Find out what is read.
+  layer presented through the dsflip shader instead of downsampled.
   Polygons of 9 and 10 vertices: DraStic's render_polygon_4x takes the walk's ninth vertex as base + 0 and never
   writes a tenth's slot (it walks a stale stack slot; walk.c leaves 10 to DraStic). hr.c's vertex indices for them
   are nibbles 0 and 1 of the group's base sequence (`4 * (k & 7)`: what its former `seq >> (4 * k)`, undefined
