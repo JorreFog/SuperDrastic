@@ -17,6 +17,7 @@
 #include "rast.h"
 #include "fused.h"
 #include "comp.h"
+#include "res2.h"
 
 uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
@@ -62,6 +63,9 @@ static void clear_bin(uint8_t *ctx, uint8_t *sys, uint8_t *geom, unsigned y0) {
     }
 }
 
+/* the bin's resolve into its output block, then the compositor's visibility table entries for it (comp_bin(), while
+ * the block is in cache); without fog and edge marking both in one NEON pass (res2.c: DraStic's
+ * video_3d_resolve_bin_asm_4x and the table from the same registers) */
 static void resolve_bin(uint8_t *ctx, uint8_t *sys, unsigned bin) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
     uint8_t *out = PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES;
@@ -74,8 +78,18 @@ static void resolve_bin(uint8_t *ctx, uint8_t *sys, unsigned bin) {
     case 4: case 5: DSFN(rfn, DS_RESOLVE_EDGE_4X)(ctx, out, bin); break;
     case 6: DSFN(rfn, DS_RESOLVE_EDGE_FOG_FULL_4X)(ctx, out, bin); break;
     case 7: DSFN(rfn, DS_RESOLVE_EDGE_FOG_ALPHA_4X)(ctx, out, bin); break;
-    default: DSFN(void (*)(void *, void *), DS_RESOLVE_BIN_ASM_4X)(out, ctx); break;
+    default: {
+        uint8_t (*bits)[32], *flags;
+        if (comp_bin_table(sys, bin, &bits, &flags)) {
+            res2_resolve(out, (const uint32_t *)(ctx + CTX_COLOR), bits, flags);
+            comp_bin_done();
+            return;
+        }
+        res2_resolve(out, (const uint32_t *)(ctx + CTX_COLOR), 0, 0);
+        break;
     }
+    }
+    comp_bin(sys, bin, 1);
 }
 
 static __thread int in_defer;    /* hook_setup: the polygon goes to the deferred queue */
@@ -125,8 +139,7 @@ static void render_bins(uint8_t *ctx) {
             memset(ctx + CTX_IDBUF, 0xff, 0x4000);
             render_list(ctx, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, y0, 0);
         }
-        resolve_bin(ctx, sys, bin);
-        comp_bin(sys, bin, 1);          /* the compositor's visibility table, while the block is in cache */
+        resolve_bin(ctx, sys, bin);     /* and the compositor's visibility table, while the block is in cache */
     }
 }
 
