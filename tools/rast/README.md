@@ -35,17 +35,18 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   registers so that independent chains can overlap (the vertex colour among the texel gather's loads, the three
   colour channels' modulates side by side), and the polygon walker is NEON (`spec/edges_impl.h`), at 2x too
   (`walk.c`, our own render_polygon_4x). Modeled A55 cycles a frame, whole emulated frames (CPU emulation and 2D
-  included; `dev/cycles.py`), DraStic's renderer (RAST=off), 0.5.0-beta.1 and 2026-10-08 (the paletted kernels'
-  registers, measured per kernel only, come on top: -3 to -14% on their groups):
+  included; `dev/cycles.py`), DraStic's renderer (RAST=off), 0.5.0-beta.1, the scheduling and NEON walker of
+  2026-10-08, and with everything below too (the group head, the fused 2x walker, the scheduler's A55 model, the
+  fused resolve and the 3x walker's steps; profiles of 90 s):
 
-  | | DraStic's renderer | 0.5.0-beta.1 | 2026-10-08 |
-  |---|---|---|---|
-  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) |
-  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) |
-  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) |
-  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) |
-  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) |
-  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) |
+  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of 2026-10-08 |
+  |---|---|---|---|---|
+  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) |
+  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) |
+  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) |
+  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) |
+  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) |
+  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) |
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins. Since then each group starts with one basic block (`kerngen.py`'s head()): the
@@ -62,6 +63,14 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   cycles a frame; the edge-marking scene S4 0.76 M -> 0.44 M (its frame 12.59 M -> 12.21 M). With `batch_asm`'s kernel and flags chosen once per polygon, `f_run`'s batch
   loop two lines a step and walk.c calling the setup without rast.c's hook, the per-polygon setup 1.19 M -> 1.05 M:
   the whole frame 21.83 M -> 20.81 M (-4.7%), the same differing bins at all 43 checkpoints of the scene cycle.
+  `kernsched.py`'s machine model is now llvm-mca's in-order A55 as measured (128-bit and widening NEON operations
+  hold a pipe two cycles and issue first in their group, `ldp q` holds the load pipe 6 cycles, results write back in
+  program order), each block scheduled several ways (the list scheduler, the original order, seven model-driven
+  rankings) and the one that reaches its branch soonest from the state the previous block leaves kept; an
+  out-of-line block's return takes a copy of the code after its join, so the blocks around the join become one.
+  kpath over 59 kernel paths: 10116 -> 9670 cycles (-4.4%). The combined build: the scene cycle's differing bins
+  as DraStic's renderer's at all 28 checkpoints to 67200 bins, deferred shading to 81600, the compositor's tables
+  checked against the C port (5657, 0 differ), the stress ROM's 6 bins in 4800 as before.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
