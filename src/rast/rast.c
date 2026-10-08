@@ -331,6 +331,10 @@ static void hook_setup(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf
     }
 }
 
+/* the 3D resolution Gengis Engine draws at (2 or 3), 0 when it isn't drawing (off, or an unknown DraStic build);
+ * cpugov.c keeps 3x's clock memory apart from 2x's */
+int rast_active_scale(void) { return mode == 1 && orig_render_bins ? rast_scale : 0; }
+
 __attribute__((constructor)) static void rast_init(void) {
     /* DSFLIP_RAST=1 (the handheld) or RAST=ours|diff (the simulator); off otherwise */
     const char *e = getenv("RAST"), *d = getenv("DSFLIP_RAST");
