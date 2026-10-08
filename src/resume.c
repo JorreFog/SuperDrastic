@@ -288,6 +288,7 @@ int resume_control_button(const char *name) { return control_button_any(name); }
 int resume_on(void) { return resume_path[0] && btn_save >= 0; }
 int resume_quit_pending(void) { return want_save; }   /* the exit hotkey came while the menu was open */
 int resume_menu_busy(void) { return m_saving || m_loading || m_load_next[0] || saving; }
+int resume_loading(void) { return want_load || loading; }   /* the resume state is due or going in (the menu waits) */
 /* press a DraStic control's button (held 40 frames, after any press before it) */
 void resume_press(int b) {
     if (b < 0) return;

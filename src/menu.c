@@ -12,7 +12,7 @@
 // wrong slot never costs progress ("Undo last load", Y on the Load page). While a load runs DraStic's frames and
 // sound are held back (dsflip_hold, audio_mute) and the menu's "Loading" screen stays up. Slot pictures come from the
 // savestates themselves: a DraStic .dss starts (after a 0x44-byte header) with a zlib stream whose first 196,608
-// bytes are both DS screens, 256x384 RGB565.
+// bytes are both DS screens, 256x384 RGB565; L / R on the Save and Load pages switch between the top and the bottom.
 //
 // DSFLIP_MENU=0: DraStic's own menu, as before. DSFLIP_MENU_TEST=<n> opens the menu 3 s in, on the main page (1),
 // Save (2), Load (3), Quick settings (4) or the quit question (5), for tests.
@@ -70,6 +70,7 @@ void resume_press(int b);
 int resume_quit(void);
 int resume_on(void);
 int resume_quit_pending(void);
+int resume_loading(void);
 
 static long long now_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
 
@@ -285,12 +286,14 @@ static int wrap2(font *F, const char *t, float px, float maxw, char *l1, char *l
 
 /* ---------- the game, its saves ---------- */
 #define NSLOT 8
-typedef struct { int used; time_t mt; uint16_t *pic; int pic_tried; } slot;
+typedef struct { int used; time_t mt; off_t size; ino_t ino; uint16_t *pic; int pic_tried; } slot;   /* pic: both screens */
 static slot SL[NSLOT];
 static char rom[512], gbase[256], gtitle[200], ggenre[100], sdir[512], undo_path[600];
 static int undo_ok;                 /* the undo file holds the game from before this session's last menu load */
 static long long session_t0;
 static int last_slot = -1;          /* the slot this session saved to or loaded last */
+static int saved_slot = -1;         /* the slot this session saved to last: "LAST" whatever the files' clocks say */
+static int pic_bottom;              /* the slot pictures show the bottom screen (L / R on the Save and Load pages) */
 
 static void game_info(void) {
     FILE *f = fopen("/proc/self/cmdline", "rb");
@@ -346,19 +349,29 @@ typedef struct {
 } zs_t;
 static int (*z_init)(zs_t *, const char *, int), (*z_inflate)(zs_t *, int), (*z_end)(zs_t *);
 #define PIC_BYTES (256 * 192 * 2)
-/* the top DS screen saved in a .dss: 256x192 RGB565, or 0 */
+/* both DS screens saved in a .dss (DraStic's snapshot: top, then bottom, 256x192 RGB565 each), or 0. Read with libc's
+ * own fopen: ours (resume.c) points every slot file at the state being loaded while a load runs, and a picture read
+ * then (the menu opened during the resume load at a game's start) was that state's, for every slot, and stayed in
+ * the cache for the session (SuperDrastic issue 4) */
 static uint16_t *read_pic(const char *path) {
+    static FILE *(*fopen_libc)(const char *, const char *);
+    if (!fopen_libc && !(*(void **)&fopen_libc = dlsym(RTLD_NEXT, "fopen"))) return 0;
     if (!z_init) {
         void *h = dlopen("libz.so.1", RTLD_NOW | RTLD_LOCAL); if (!h) return 0;
         *(void **)&z_init = dlsym(h, "inflateInit_"); *(void **)&z_inflate = dlsym(h, "inflate"); *(void **)&z_end = dlsym(h, "inflateEnd");
         if (!z_init || !z_inflate || !z_end) { z_init = 0; return 0; }
     }
-    FILE *f = fopen(path, "rb"); if (!f) return 0;
+    FILE *f = fopen_libc(path, "rb"); if (!f) return 0;
     uint8_t hdr[0x44], in[32768]; uint16_t *out = 0;
-    if (fread(hdr, 1, sizeof hdr, f) == sizeof hdr && !memcmp(hdr, "DraStic-SaveState", 17) && (out = malloc(PIC_BYTES))) {
+    /* the header's flags (byte 0x24): bit 0 compressed (a 4-byte length, then zlib), bit 1 a snapshot of the screens
+     * comes first */
+    int hdr_ok = fread(hdr, 1, sizeof hdr, f) == sizeof hdr && !memcmp(hdr, "DraStic-SaveState", 17) && (hdr[0x24] & 2);
+    if (hdr_ok && !(hdr[0x24] & 1) && (out = malloc(2 * PIC_BYTES))) {    /* stored as it is, from byte 0x40 */
+        if (fseek(f, 0x40, SEEK_SET) || fread(out, 1, 2 * PIC_BYTES, f) != 2 * PIC_BYTES) { free(out); out = 0; }
+    } else if (hdr_ok && (out = malloc(2 * PIC_BYTES))) {
         zs_t z; memset(&z, 0, sizeof z);
         if (z_init(&z, "1.2.11", (int)sizeof z) == 0) {
-            z.next_out = (uint8_t *)out; z.avail_out = PIC_BYTES;
+            z.next_out = (uint8_t *)out; z.avail_out = 2 * PIC_BYTES;
             int r = 0;
             while (z.avail_out && r == 0) {
                 if (!z.avail_in) { size_t n = fread(in, 1, sizeof in, f); if (!n) break; z.next_in = in; z.avail_in = (unsigned)n; }
@@ -375,12 +388,14 @@ static void scan_slots(int pics) {
     for (int n = 0; n < NSLOT; n++) {
         char p[700]; slot_path(n, p, sizeof p); struct stat st;
         int used = !stat(p, &st) && st.st_size > 0x44;
-        if (!used || st.st_mtime != SL[n].mt) { free(SL[n].pic); SL[n].pic = 0; SL[n].pic_tried = 0; }
-        SL[n].used = used; SL[n].mt = used ? st.st_mtime : 0;
+        if (!used || st.st_mtime != SL[n].mt || st.st_size != SL[n].size || st.st_ino != SL[n].ino) { free(SL[n].pic); SL[n].pic = 0; SL[n].pic_tried = 0; }
+        SL[n].used = used; SL[n].mt = used ? st.st_mtime : 0; SL[n].size = used ? st.st_size : 0; SL[n].ino = used ? st.st_ino : 0;
         if (pics && used && !SL[n].pic_tried) { SL[n].pic_tried = 1; SL[n].pic = read_pic(p); }
     }
 }
 static int newest_slot(void) {
+    if (saved_slot >= 0 && SL[saved_slot].used) return saved_slot;   /* saved this session: newest, even if a file's
+                                                                          time says otherwise (a clock set back) */
     int b = -1; for (int n = 0; n < NSLOT; n++) if (SL[n].used && (b < 0 || SL[n].mt > SL[b].mt)) b = n;
     return b;
 }
@@ -558,6 +573,8 @@ static void draw_pic(canvas *c, const uint16_t *pic, int x0, int y0, int w, int 
         }
     }
 }
+/* the screen of a slot's picture that the Save and Load pages show (L / R switch) */
+static const uint16_t *slot_pic(const slot *s) { return s->pic ? s->pic + (pic_bottom ? 256 * 192 : 0) : 0; }
 static void hatch(canvas *c, int x0, int y0, int x1, int y1, uint32_t a, uint32_t b) {   /* an empty slot */
     int k = S(6) > 1 ? S(6) : 2;
     for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) blendpx(c, x, y, ((x + y) / k) & 1 ? a : b, 1.0f);
@@ -608,7 +625,7 @@ static void draw_top(void) {
         slot *s = &SL[sel_slot];
         int pw_ = S(384), ph_ = S(288), px = (c->w - pw_) / 2, py = S(68);
         box(c, px - S(3), py - S(3), px + pw_ + S(3), py + ph_ + S(3), S(6), S(3), C_LIGHT, C_DARK);
-        if (s->used && s->pic) draw_pic(c, s->pic, px, py, pw_, ph_);
+        if (s->used && s->pic) draw_pic(c, slot_pic(s), px, py, pw_, ph_);
         else if (s->used) { fill(c, px, py, px + pw_, py + ph_, C_PANEL, 1.0f); text(c, &F_REG, "No picture in this save", c->w / 2.0f, py + ph_ / 2 - S(10), S(18), C_GREY, 0, 1); }
         else { hatch(c, px, py, px + pw_, py + ph_, 0x1a222c, 0x202a36); text(c, &F_MED, "Empty slot", c->w / 2.0f, py + ph_ / 2 - S(12), S(22), C_GREY, 0, 1); }
         char t[48]; snprintf(t, sizeof t, "Slot %d", sel_slot + 1);
@@ -764,7 +781,7 @@ static void draw_bottom(void) {
             text(c, &F_REG, h, x + tw / 2.0f, y + S(118), S(14), sub2, tw - S(16), 1);
         }
     } else if (s == SC_SAVE || s == SC_LOAD) {
-        char sub[48]; snprintf(sub, sizeof sub, "Slot %d of %d", sel_slot + 1, NSLOT);
+        char sub[48]; snprintf(sub, sizeof sub, "Slot %d of %d, L/R: %s screen", sel_slot + 1, NSLOT, pic_bottom ? "bottom" : "top");
         draw_header(c, s == SC_SAVE ? "Save" : "Load", sub, 1);
         int gap = S(10), cw = (gx1 - gx0 - 3 * gap) / 4, ch = (gy1 - gy0 - gap) / 2, nb = newest_slot();
         for (int n = 0; n < NSLOT; n++) {
@@ -777,7 +794,7 @@ static void draw_bottom(void) {
             const char *tag = n == nb ? "LAST" : "";
             if (*tag) text(c, &F_MED, tag, x + cw - S(10), y + S(10), S(13), sel ? 0xffffff : C_CYAN, 0, 2);
             int tx0 = x + S(8), tx1 = x + cw - S(8), tth = (tx1 - tx0) * 3 / 4, ty0 = y + S(36);
-            if (sl->used && sl->pic) draw_pic(c, sl->pic, tx0, ty0, tx1 - tx0, tth);
+            if (sl->used && sl->pic) draw_pic(c, slot_pic(sl), tx0, ty0, tx1 - tx0, tth);
             else if (sl->used) fill(c, tx0, ty0, tx1, ty0 + tth, 0x2c3a4c, 1.0f);
             else hatch(c, tx0, ty0, tx1, ty0 + tth, dim ? 0x161d26 : 0x1a222c, dim ? 0x1a222c : 0x202a36);
             char w[48]; if (sl->used) when_text(sl->mt, w, sizeof w); else snprintf(w, sizeof w, "Empty");
@@ -899,7 +916,7 @@ static void busy(const char *msg) {
 static void do_save(int n) {
     char p[700], m[64]; slot_path(n, p, sizeof p); snprintf(m, sizeof m, "Saved to slot %d", n + 1);
     if (resume_menu_save(p, m, gtitle)) { dsflip_toast("Couldn't save", "DraStic's Save state control has no button", 0xff7a4a, 4000); }
-    else last_slot = n;
+    else last_slot = saved_slot = n;
     play(SND_SELECT); close_menu();
 }
 static void do_load(int n) {
@@ -1055,6 +1072,9 @@ static void handle_sdl(const uint8_t *e) {
         else if (b == b_up) dir_press(0, -1); else if (b == b_down) dir_press(0, 1);
         else if (b == b_left) dir_press(-1, 0); else if (b == b_right) dir_press(1, 0);
         else if (b == b_l && scr == SC_SET) adjust(-1); else if (b == b_r && scr == SC_SET) adjust(1);
+        else if ((b == b_l || b == b_r) && (scr == SC_SAVE || scr == SC_LOAD)) {   /* the pictures: top / bottom screen */
+            pic_bottom = !pic_bottom; play(SND_MOVE); dirty_top = dirty_bot = 1;
+        }
     } else if (type == 0x602) {                     /* SDL_JOYHATMOTION */
         int v = e[13];
         if (!v) { dir_release(); return; }
@@ -1145,6 +1165,7 @@ int menu_event(void *ev) {
     int b = e[12], down = type == 0x603;
     if (is_menu_btn(b)) {
         if (dsflip_drastic_menu() || resume_menu_busy()) return 0;   /* DraStic's own menu is up: its button */
+        if (resume_loading()) { pending = 0; return 1; }             /* the resume state is going in: a moment */
         if (down) { pending = 1; other = 0; return 1; }
         int go = pending && !other; pending = 0;
         if (go) menu_run(SC_MAIN);
