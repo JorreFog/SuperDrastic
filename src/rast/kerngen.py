@@ -47,7 +47,9 @@ colour 37:, the partial-group store 1:) so the common path has no taken branch b
 Stack: [sp] 8 texel addresses, [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
 (bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
 (512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
-import sys
+import os, sys
+import kernsched
+from kernsched import schedule
 
 # kargs_t layout (fused_asm.c mirrors it): the per-polygon constants; everything per line comes from the span entry
 K = dict(recip=0x00, recip_u=0x08, tex=0x10, pal=0x18, pid24=0x20, bytes=0x30, K=0x38, tw=0x3c,
@@ -880,4 +882,11 @@ e(".float 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0")
 e(".word 0, 1, 2, 3, 4, 5, 6, 7")
 e(".float 8.0, 8.0, 8.0, 8.0")
 e('.section .note.GNU-stack,"",%progbits')
+# the scheduler's memory facts (kernsched.py): the registers' roles, the same in every kernel. x6 x21 the texture and
+# the palette, x19 the kernel arguments, x20 the constant tables, x22 the span entries: read-only. x1 x2 two distinct
+# lines (colour and attributes; the deferred kernels' owner line in x1 or x2). x3 the pass masks (the frame's bytes
+# from 256 on: every sp + offset access is below) or a line of ids. x28 = sp + 32.
+kernsched.REGIONS.update({"x6": "ro", "x21": "ro", "x19": "ro", "x20": "ro", "x22": "ro", "x1": ("buf", "x1"),
+                          "x2": ("buf", "x2"), "x3": ("window", 256, 1 << 20), "x28": ("stack", 32)})
+if os.environ.get("KERNSCHED", "1") != "0": out = schedule(out)    # (KERNSCHED=0: in the order written, to compare)
 open(sys.argv[1] if len(sys.argv) > 1 else "rast_kern.S", "w").write("\n".join(out) + "\n")

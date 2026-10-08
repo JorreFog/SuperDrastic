@@ -16,7 +16,8 @@ SRCS="src/dsflip.c src/shader.c src/audio.c src/ra.c src/ui.c src/volume.c src/c
       src/rast/rast.c src/rast/b0.c src/rast/fused.c src/rast/fused_neon.c src/rast/fused_asm.c src/rast/defer.c src/rast/hr.c src/rast/comp.c src/rast/rast_kern.S $(ls src/rast/spec/*.c)"
 python3 src/rast/kerngen.py src/rast/rast_kern.S
 V=$(cat VERSION 2>/dev/null || echo dev)
-CC="clang --target=aarch64-linux-gnu --sysroot=$SR -fuse-ld=lld -O2 -Wall -Wno-unused-function"
+# -mtune=cortex-a55: scheduled for the handhelds' in-order cores (the RG DS and RG DS Plus); still plain ARMv8.0 code
+CC="clang --target=aarch64-linux-gnu --sysroot=$SR -fuse-ld=lld -O2 -mtune=cortex-a55 -Wall -Wno-unused-function"
 $CC -shared -fPIC -DDSFLIP_VERSION="\"$V\"" -DRC_DISABLE_LUA -DRC_CLIENT_SUPPORTS_HASH -I"$SR/usr/include/libdrm" \
     -I$RC/include -I$RC/src -Isrc/third_party/stb -o build/libsuperdrastic.so $SRCS -ldrm -lpthread -lm
 llvm-strip --strip-unneeded build/libsuperdrastic.so
