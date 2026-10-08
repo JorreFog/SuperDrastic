@@ -188,14 +188,22 @@ static inline __attribute__((always_inline)) void walk_chain(uint8_t *spans, vtx
 /* render_polygon_setup_spans_4x (spec/edges.c section 4, edges_impl.h's NEON form) over the lines walk_polygon_4x
  * uses: 4 lines a step instead of DraStic's 8 (the lines past them are its overrun, which nothing reads). With adjust
  * (edge marking) render_polygon_4x's fix-up comes first, on the loaded x halves: per line l = x_left & 0x7fff,
- * r = x_right & 0x7fff, the larger (r when equal) + 1 unless that x has bit 15 (vertical) or bit 9 (>= 512) set */
+ * r = x_right & 0x7fff, the larger (r when equal) + 1 unless that x has bit 15 (vertical) or bit 9 (>= 512) set.
+ * The swap (left x >= right x) is the same on all 4 lines of most steps (the winding decides which chain is left; the
+ * lines where the chains meet differ): such a step skips the per-line selects and, when no line swaps, the stores of
+ * the 4 left arrays besides x, which keep their values (stress ROM L4: 58 -> 36 modeled A55 cycles a step) */
 static inline __attribute__((always_inline)) void walk_spans(uint8_t *s, int32_t lines, const int adjust) {
     const uint32_t ARR = SPAN_ARR;
     const uint32x4_t m15 = vdupq_n_u32(0x7fff), xmax = vdupq_n_u32(0x200), hi = vdupq_n_u32(0xffff0000u);
     const uint32x4_t mvx = vdupq_n_u32(0x8200);
     uint8_t *p = s;
+#define LD(k) vld1q_u32((const uint32_t *)(p + (k) * ARR))
+#define ST(k, v) vst1q_u32((uint32_t *)(p + (k) * ARR), (v))
+#define SUB16(a, b) vreinterpretq_u32_u16(vsubq_u16(vreinterpretq_u16_u32(a), vreinterpretq_u16_u32(b)))
+#define XCLAMP(v) vbslq_u32(hi, (v), vminq_u32(vandq_u32((v), m15), xmax))
     do {
-        uint32x4_t xl = vld1q_u32((const uint32_t *)(p + 8 * ARR)), xr = vld1q_u32((const uint32_t *)(p + 9 * ARR));
+        uint32x4_t xl = LD(8), xr = LD(9);
+        uint32x4_t sl0 = LD(4), sr0 = LD(5), wl0 = LD(0), wr0 = LD(1), rl0 = LD(6), rr0 = LD(7), zl0 = LD(2), zr0 = LD(3);
         if (adjust) {
             uint32x4_t l = vandq_u32(xl, m15), r = vandq_u32(xr, m15), gt = vcgtq_u32(l, r);
             /* mask - 1 = + 1: l where l > r and neither bit, r where l <= r and neither bit (no carry into b) */
@@ -204,24 +212,34 @@ static inline __attribute__((always_inline)) void walk_spans(uint8_t *s, int32_t
             xl = vbslq_u32(hi, xl, l); xr = vbslq_u32(hi, xr, r);
         }
         uint32x4_t sw = vcgeq_u32(vandq_u32(xl, m15), vandq_u32(xr, m15));
-#define PAIR(k, L, R) uint32x4_t L##0 = vld1q_u32((const uint32_t *)(p + (k) * ARR)), R##0 = vld1q_u32((const uint32_t *)(p + (k + 1) * ARR)); \
-                      uint32x4_t L = vbslq_u32(sw, R##0, L##0), R = vbslq_u32(sw, L##0, R##0)
-        PAIR(4, sl, sr); PAIR(0, wl, wr); PAIR(6, rl, rr); PAIR(2, zl, zr);
+        uint64_t sm = vget_lane_u64(vreinterpret_u64_u16(vmovn_u32(sw)), 0);
+        if (sm == 0) {                      /* no line swaps: the left arrays but x keep their values */
+            uint32x4_t L = XCLAMP(xl), R = XCLAMP(xr);
+            ST(8, L); ST(9, SUB16(R, L));
+            ST(5, SUB16(sr0, sl0)); ST(1, vsubq_u32(wr0, wl0)); ST(7, SUB16(rr0, rl0)); ST(3, vsubq_u32(zr0, zl0));
+        } else if (sm == ~(uint64_t)0) {    /* every line swaps */
+            uint32x4_t L = XCLAMP(xr), R = XCLAMP(xl);
+            ST(8, L); ST(9, SUB16(R, L));
+            ST(4, sr0); ST(5, SUB16(sl0, sr0)); ST(0, wr0); ST(1, vsubq_u32(wl0, wr0));
+            ST(6, rr0); ST(7, SUB16(rl0, rr0)); ST(2, zr0); ST(3, vsubq_u32(zl0, zr0));
+        } else {
+#define PAIR(L, R) uint32x4_t L = vbslq_u32(sw, R##0, L##0), R = vbslq_u32(sw, L##0, R##0)
+            PAIR(sl, sr); PAIR(wl, wr); PAIR(rl, rr); PAIR(zl, zr);
 #undef PAIR
-        uint32x4_t L = vbslq_u32(sw, xr, xl), R = vbslq_u32(sw, xl, xr);
-        L = vbslq_u32(hi, L, vminq_u32(vandq_u32(L, m15), xmax));
-        R = vbslq_u32(hi, R, vminq_u32(vandq_u32(R, m15), xmax));
-        vst1q_u32((uint32_t *)(p + 8 * ARR), L);
-        vst1q_u32((uint32_t *)(p + 9 * ARR), vreinterpretq_u32_u16(vsubq_u16(vreinterpretq_u16_u32(R), vreinterpretq_u16_u32(L))));
-        vst1q_u32((uint32_t *)(p + 4 * ARR), sl);
-        vst1q_u32((uint32_t *)(p + 5 * ARR), vreinterpretq_u32_u16(vsubq_u16(vreinterpretq_u16_u32(sr), vreinterpretq_u16_u32(sl))));
-        vst1q_u32((uint32_t *)p, wl); vst1q_u32((uint32_t *)(p + ARR), vsubq_u32(wr, wl));
-        vst1q_u32((uint32_t *)(p + 6 * ARR), rl);
-        vst1q_u32((uint32_t *)(p + 7 * ARR), vreinterpretq_u32_u16(vsubq_u16(vreinterpretq_u16_u32(rr), vreinterpretq_u16_u32(rl))));
-        vst1q_u32((uint32_t *)(p + 2 * ARR), zl); vst1q_u32((uint32_t *)(p + 3 * ARR), vsubq_u32(zr, zl));
+            uint32x4_t L = XCLAMP(vbslq_u32(sw, xr, xl)), R = XCLAMP(vbslq_u32(sw, xl, xr));
+            ST(8, L); ST(9, SUB16(R, L));
+            ST(4, sl); ST(5, SUB16(sr, sl));
+            ST(0, wl); ST(1, vsubq_u32(wr, wl));
+            ST(6, rl); ST(7, SUB16(rr, rl));
+            ST(2, zl); ST(3, vsubq_u32(zr, zl));
+        }
         p += 16;
         lines -= 4;
     } while (lines > 0);
+#undef LD
+#undef ST
+#undef SUB16
+#undef XCLAMP
 }
 
 /* render_polygon_setup_edge_markers_c (spec/edges.c section 4) in NEON, 4 lines a step: line i's markers depend only

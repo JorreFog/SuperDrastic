@@ -71,6 +71,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   kpath over 59 kernel paths: 10116 -> 9670 cycles (-4.4%). The combined build: the scene cycle's differing bins
   as DraStic's renderer's at all 28 checkpoints to 67200 bins, deferred shading to 81600, the compositor's tables
   checked against the C port (5657, 0 differ), the stress ROM's 6 bins in 4800 as before.
+  The 2x walker's span setup (`walk.c`'s walk_spans) then takes the left/right swap a step of 4 lines at a time when
+  all 4 agree (the winding decides which chain is left; only the lines where the chains meet differ): no selects,
+  and without a swap no stores of the left arrays besides x. Stress ROM L4 at 2x: walk_polygon_4x 1.75 M -> 1.62 M
+  cycles a frame (its costliest block, the span setup's step of 4 lines, 58 -> 36 cycles; 4% of the steps mix).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
