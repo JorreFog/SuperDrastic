@@ -33,7 +33,8 @@ Register use in the group loop:
   v10-v14 r0 g0 b0 (u16 splats) ub vb (s32 splats)   v15  deltas (h lanes) dr dg - db du dv tw (tw per batch)
   v16 v17 texture s and t masks (W-1, H-1)   v18-v21 bilinear or the tbl palette   v22 pid<<24 splat
   v23 bytes A aref fog pid fr fg fb   v24-v31 temporaries
-  Where a variant leaves some of v10-v14, v16-v21 unused, they hold per-batch constants instead (roles()).
+  Where a variant leaves some of v7-v14, v16-v21 unused, they hold per-batch constants or more scratch instead
+  (roles()). kernsched.py then reorders every basic block for the in-order Cortex-A55.
   x1 colour ptr  x2 attribute ptr (both advance per group)  x3 pass masks (opaque, post-incremented) / id line
   (translucent, x4 the index)  (visibility kernels: x1 the owner line; shade kernels: x2 the owner line)
   x5 the line's pixels left  x6 texels  x7 flags  x8 scratch  x9-x16 gather  x17 Rwc  x19 kargs
@@ -88,7 +89,13 @@ def roles(D, T, R, F, B, M):
     keeps the blend free of stack spills), idx (the polygon's index, deferred passes), dep (the group's attribute
     words dep | pid << 24, computed at the depth test; constant depth: K | pid), fog (the fog bit byte), flat (fr fg
     fb), a (A, for the alpha modulate), pid (the translucent id test), aref (the alpha test). The bilinear kernels use
-    every register."""
+    every register. For the in-order core (kernsched.py interleaves only what uses distinct registers) some kernels
+    trade those for registers that let independent chains overlap: vc + vs (lit direct-textured opaque: the vertex
+    colour, computed among the texel gather's loads, and a second modulate scratch), flat + vs (textured flat: the
+    three modulates side by side), ex (textured translucent: with the blend weights' registers, which are free until
+    the blend, the colour's channels and the modulates' scratch, and a second blend channel). The pool: v10-v12
+    without a vertex colour, the texture's registers without a texture or a palette, and the depth's unused ones
+    (w depth v8 v9, constant depth v7-v9, the shade pass v6-v9)."""
     if B: return {}
     if T in (1, 2) and not F and R == 0 and M == 0:
         # lit, direct textures (the pool is v18-v21): the vertex colour in three registers and a second modulate scratch,

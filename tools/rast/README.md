@@ -27,6 +27,25 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   written in one NEON pass instead of DraStic's five-stage chain (`render_scanline_2d_composite` hooked,
   `RAST_COMPFUSE=0` off): on the stress ROM the chain's 0.81 M a frame become 0.39 M, on the field
   scene 0.47 M become 0.07 M, checked byte for byte against the original in the running emulator.
+- **Scheduled for the handhelds' in-order core.** The RG DS and RG DS Plus run Cortex-A55 cores, which issue in
+  program order, at most two instructions a cycle, and stall on every operand that is not ready: instruction counts
+  miss that. `tools/rast/dev/cycles.py` models it (every executed block of a simulator profile through llvm-mca's
+  Cortex-A55 model): the kernels issued at an IPC of about 0.6, each group of 8 pixels a chain of dependent stages.
+  `kernsched.py` list-schedules every basic block of the generated kernels for that core, the kernels hold more in
+  registers so that independent chains can overlap (the vertex colour among the texel gather's loads, the three
+  colour channels' modulates side by side), and the polygon walker is NEON (`spec/edges_impl.h`), at 2x too
+  (`walk.c`, our own render_polygon_4x). Modeled A55 cycles a frame, whole emulated frames (CPU emulation and 2D
+  included), 0.5.0-beta.1 -> the scheduling, the NEON walker and the lit direct-textured kernels (profiled before
+  the flat and translucent kernels' changes, which take 2-11% more off those kernels' groups):
+
+  | | 2x | 3x |
+  |---|---|---|
+  | stress ROM L4 | 24.7 M -> 22.5 M (-9.0%) | 48.5 M -> 39.5 M (-18.5%) |
+  | field scene S7 | 5.33 M -> 5.18 M (-2.8%) | 9.65 M -> 8.41 M (-12.9%) |
+  | fog and edge marking S4 | 13.6 M -> 13.0 M (-4.3%) | 27.0 M -> 24.8 M (-8.2%) |
+
+  The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
+  the scene cycle to 91200 bins.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -128,7 +147,11 @@ stay with DraStic's chain), on the field scene S7 0.47 M -> 0.07 M; frame totals
 
 `src/rast/spec/`: DraStic's ~85 raster routines ported to exact C, each unit-tested bit for bit against the
 original inside DraStic's process (`tools/rast/ut/`). `src/rast/b0.c` rebuilds DraStic's per-polygon pipeline from
-them (the reference, and still the path for shadow polygons). `src/rast/fused.c` runs every pixel through all
+them (the reference, and still the path for shadow polygons). The polygon walker's routines (`spec/edges_impl.h`, a
+template: DraStic's layout and the 3x one) also exist in NEON (`EDGES_NEON`, the same bytes, DraStic's overruns
+included: `t_edges.c` tests both forms); `src/rast/walk.c` is render_polygon_4x on them for the 2x bins (sprites,
+shadow polygons and odd vertex counts stay with DraStic's; `RAST_WALK=0` all of them; `t_walk.c` compares it with
+DraStic's on random polygons). `src/rast/fused.c` runs every pixel through all
 stages at once; `fused_neon.c` is that in C NEON (8 pixels a step), and `kerngen.py` generates `rast_kern.S`, the
 same in assembly with a fixed register allocation, one kernel per variant (depth source x texture x translucency
 x flat colour), which is what runs. Shortcuts that give the same bits: a white vertex colour with alpha 31 makes
@@ -137,6 +160,9 @@ test; one that all pass is stored straight; a texture whose lowest alpha passes 
 skips the alpha modulate; with z or constant depth the perspective weights wait for the depth test, and a line's
 weights and interpolants for its first passing pixel; the vertex colour and the w depth use 16-bit products where
 they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flags and the register use.
+`kernsched.py` then reorders each basic block of the generated code for the A55 (its docstring has the rules: every
+register, NZCV and memory access tracked, the base registers' roles telling read-only memory, the lines and the
+stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py` writes the kernels unscheduled.
 
 ## Simulator usage (see `tools/sim/` for setup; `dev/` holds the scripts used during development)
 
@@ -146,6 +172,11 @@ they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flag
 - `RAST_PIPE` selects the pipeline: 0 = b0 (stage by stage), 1 = fused scalar, 2 = fused C NEON, 3 = assembly.
 - `RAST_DUMP=<dir>` writes frames as PPM; `RAST_STATS=1` prints the opaque overdraw; `RAST_FRAMES=1` prints the
   frame count every 10 frames (for per-frame figures from a block profile).
+- `dev/prof.sh` profiles a run block by block; `dev/cycles.py <prof.txt> <log> <librast.so>` reports instructions and
+  modeled Cortex-A55 cycles a frame per function, DraStic's and ours (`BLOCKS=<function>` lists its costliest
+  blocks); `dev/kpath.py rast_kern.S <kernel>` a kernel's cycles per group of 8 pixels. Both need llvm-mca. The
+  profiler plugin keyed blocks by pc ^ length until 2026-10-08 (colliding blocks were counted as one): figures from
+  before then can be off by a few percent per function.
 - The simulator's qemu 9.2.0 needs `tools/sim/qemu-9.2.0-fold_bitsel_vec.patch` (setup.sh applies it): unpatched, its
   TCG optimizer folds a vector bit-select with a constant all-ones false operand to all-ones, so NEON C code using
   `vbslq` with such a constant computes the wrong thing under the simulator only. The generated kernels use runtime
@@ -158,10 +189,19 @@ they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flag
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
   into the scanout and skip the planes (~0.08 M a frame; needs the convert hook keyed by plane pointer).
-- 3x: the polygon walker's hot spots in NEON (interpolate_edges, setup_spans: ~1.4 M a frame on S4); the top vertex
-  at 3x for tied vertices; later the hi-res 3D layer presented through the dsflip shader instead of downsampled.
+- The paletted kernels with z depth have no spare register (the palette holds v18-v21, the z steps v6-v9), so their
+  colour channels still queue on one scratch register, and the lit paletted ones compute the vertex colour after the
+  gather: free some (the z step v9 from v8 in the latch, the texture masks or pid << 24 from the arguments).
+- A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
+  of the texel gather's two trips through the stack, which the model cannot price (store-to-load forwarding).
+- 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
+  layer presented through the dsflip shader instead of downsampled.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
   assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
   content signature in the key would make it certain.
-- In the simulator, dsscenes-cycle.nds dies at its scene 2 -> 3 transition (a SIGILL in DraStic's JIT cache, also with
-  our hooks off, since 2026-10-03); regress.sh checks the later scenes one ROM at a time until that is understood.
+- In the simulator, dsscenes-cycle.nds died at its scene 2 -> 3 transition (a SIGILL in DraStic's JIT cache, also
+  with our hooks off, since 2026-10-03); regress.sh checks the later scenes one ROM at a time until that is
+  understood. In a simulator set up afresh on 2026-10-08 it ran through every scene seven times without it (RAST=diff
+  to 91200 bins, the same differing bins as DraStic's renderer at every checkpoint: 47 at 7200, 662 at 14400, 1919
+  at 72000). A rare startup hang is DraStic's own (helpers waiting on locks not yet initialised, ROCKNIXDS
+  docs/handoff-local.md); the simulator does not preload libdsflip, which works around it: run again.
