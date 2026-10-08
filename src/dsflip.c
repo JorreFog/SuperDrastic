@@ -510,8 +510,10 @@ static int battery_pct(int *charging) {
     }
     return pct;
 }
+int menu_opened_drastic(void);
 static void status_card(void) {
     const char *e = getenv("DSFLIP_STATUS_CARD"); if (e && *e == '0') return;
+    if (menu_opened_drastic()) return;             /* from the in-game menu (menu.c), which showed them already */
     char l1[64], l2[96]; time_t t = time(0); struct tm lt; localtime_r(&t, &lt);
     strftime(l1, sizeof l1, "%H:%M", &lt);
     int chg, pct = battery_pct(&chg);

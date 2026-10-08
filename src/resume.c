@@ -38,6 +38,7 @@ void audio_mute(int on);
 extern volatile int dsflip_hold;
 extern volatile int dsflip_stalled;      /* dsflip.c: DraStic hasn't shown a frame for a while (not in a menu) */
 int menu_is_open(void);
+int menu_hint(const char *name, int times);
 
 static char resume_path[512];
 static int trace;
@@ -278,7 +279,8 @@ void resume_frame(void) {
         if (load_redirects) {
             unlink(resume_path);
             dsflip_log("[resume] resumed\n");
-            dsflip_toast("Resumed where you left off", "Quit with the exit hotkey to save your place again", 0x3aa0ff, 3500);
+            if (menu_hint("resumed", 3))           /* a tip: the first three times (menu.c), never with tips off */
+                dsflip_toast("Resumed where you left off", "Quit with the exit hotkey to save your place again", 0x3aa0ff, 3500);
         } else dsflip_log("[resume] DraStic didn't load the state (control not handled?): kept %s\n", resume_path);
     }
 }
