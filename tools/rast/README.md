@@ -35,14 +35,17 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   registers so that independent chains can overlap (the vertex colour among the texel gather's loads, the three
   colour channels' modulates side by side), and the polygon walker is NEON (`spec/edges_impl.h`), at 2x too
   (`walk.c`, our own render_polygon_4x). Modeled A55 cycles a frame, whole emulated frames (CPU emulation and 2D
-  included), 0.5.0-beta.1 -> the scheduling, the NEON walker and the lit direct-textured kernels (profiled before
-  the flat and translucent kernels' changes, which take 2-11% more off those kernels' groups):
+  included; `dev/cycles.py`), DraStic's renderer (RAST=off), 0.5.0-beta.1 and 2026-10-08 (the paletted kernels'
+  registers, measured per kernel only, come on top: -3 to -14% on their groups):
 
-  | | 2x | 3x |
-  |---|---|---|
-  | stress ROM L4 | 24.7 M -> 22.5 M (-9.0%) | 48.5 M -> 39.5 M (-18.5%) |
-  | field scene S7 | 5.33 M -> 5.18 M (-2.8%) | 9.65 M -> 8.41 M (-12.9%) |
-  | fog and edge marking S4 | 13.6 M -> 13.0 M (-4.3%) | 27.0 M -> 24.8 M (-8.2%) |
+  | | DraStic's renderer | 0.5.0-beta.1 | 2026-10-08 |
+  |---|---|---|---|
+  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) |
+  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) |
+  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) |
+  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) |
+  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) |
+  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) |
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins.
@@ -189,9 +192,9 @@ stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py`
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
   into the scanout and skip the planes (~0.08 M a frame; needs the convert hook keyed by plane pointer).
-- The paletted kernels with z depth have no spare register (the palette holds v18-v21, the z steps v6-v9), so their
-  colour channels still queue on one scratch register, and the lit paletted ones compute the vertex colour after the
-  gather: free some (the z step v9 from v8 in the latch, the texture masks or pid << 24 from the arguments).
+- The group loop is still latency-bound (IPC ~0.75-0.8 in the model): the texel gather's two trips through the
+  stack, the pack-and-store tail and the depth test's mask chain; overlapping consecutive groups needs registers the
+  kernels do not have (the bilinear kernels use them all).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's two trips through the stack, which the model cannot price (store-to-load forwarding).
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
