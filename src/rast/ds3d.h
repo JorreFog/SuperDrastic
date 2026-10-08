@@ -55,6 +55,7 @@
 #define GEOM_VIEWPORT   0x9ab6      /* u16 width, height, x1, y1 */
 #define DS_PERSP_APPLY_HIRES 0x9e648    /* geometry_perspective_apply_hires_asm(geom, recips, shifts) */
 #define DS_VERTEX_ORDERS 0x11df90       /* u32[128]: vertex walk orders, nibbles; entry count*8 + top vertex */
+#define DS_RECIP_TABLE  0x3f27120       /* u32[1024] reciprocal_table: (0x3fffffff + i) / i for 1..512, else 0 */
 #define GEOM_CLRIMG_OFS 0x9aa8      /* u16: CLRIMAGE_OFFSET */
 #define GEOM_VERTS      0x9ad4      /* + buf * 0x18004: vertex[] (16 bytes each) */
 #define GEOM_VERTS_BUF  0x18004

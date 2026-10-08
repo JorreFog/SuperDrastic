@@ -24,6 +24,7 @@
 #define EDGES_XMAX 0x200
 #define EDGES_LINKAGE static
 #define EDGES_NEON 1
+#define EDGES_RECIP_TABLE ((const uint32_t *)(ds_base + DS_RECIP_TABLE))   /* (initialize_video_3d fills it) */
 #include "spec/edges_impl.h"
 
 #define U16(p, o) (*(uint16_t *)((uint8_t *)(p) + (o)))

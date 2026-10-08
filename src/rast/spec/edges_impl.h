@@ -26,10 +26,16 @@ static inline void wr16(uint8_t *p, uint32_t v) { uint16_t t = (uint16_t)v; memc
 static inline void wr32(uint8_t *p, uint32_t v) { memcpy(p, &v, 4); }
 static inline void wrf(uint8_t *p, float v) { memcpy(p, &v, 4); }
 
+#ifdef EDGES_RECIP_TABLE
+/* the edge heights' reciprocals from a u32[1024] table (EDGES_RECIP_TABLE, an expression): DraStic's own
+ * reciprocal_table (the same values as below), or the hi-res pipeline's, which goes on past 512 lines */
+EDGES_LINKAGE uint32_t EDGES_FN(edges_reciprocal)(int32_t i) { return (uint32_t)i < 1024 ? (EDGES_RECIP_TABLE)[i] : 0; }
+#else
 EDGES_LINKAGE uint32_t EDGES_FN(edges_reciprocal)(int32_t i) {
     if (i >= 1 && i <= 512) return (uint32_t)(0x3fffffffu + (uint32_t)i) / (uint32_t)i;
     return 0;   /* 0 and 513..1023 are zero in DraStic; outside 0..1023 DraStic reads past the table */
 }
+#endif
 
 /* ---------------------------------------------------------------------------------------------------------------- */
 EDGES_LINKAGE void EDGES_FN(render_polygon_edge_perspective_coefficients)(float *outf, vtx_t **pairs, const uint8_t *counts, uint32_t n,

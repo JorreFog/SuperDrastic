@@ -44,6 +44,11 @@
 #define EDGES_XMAX HR_W
 #define EDGES_LINKAGE static
 #define EDGES_NEON 1
+/* the edge heights' reciprocals (0x3fffffff + i) / i: DraStic's table stops at 512 lines (its 2x frame has 384), a 3x
+ * edge can be 575 lines tall */
+static uint32_t hr_recip[1024];
+__attribute__((constructor)) static void hr_recip_init(void) { for (uint32_t i = 1; i < 1024; i++) hr_recip[i] = (0x3fffffffu + i) / i; }
+#define EDGES_RECIP_TABLE hr_recip
 #include "spec/edges_impl.h"
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
