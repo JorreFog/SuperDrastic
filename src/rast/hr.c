@@ -6,13 +6,16 @@
  *   - the vertices' 3x screen coordinates, computed by hr_vertices() from the same clip-space values and viewport as
  *     DraStic's geometry_perspective_apply_hires_asm (hooked in rast.c; its math in the comment there);
  *   - our own polygon walker, hr_polygon(): render_polygon_4x's edge walks and span setup from spec/edges.c, with
- *     the line width 768 and span arrays of 64 entries;
+ *     the line width 768 and span arrays of 64 entries, over the polygons of DraStic's list for the bin and those of
+ *     its two neighbours' lists, in DraStic's order (hr_lists: the 3x lines at a bin's edges can belong to them);
  *   - the pixel kernels of fused_asm.c in their hi-res instantiation (rast_kern_h*, strides from the kernel
  *     arguments) through f_run() with layout_3x, including deferred shading and bilinear filtering;
  *   - the bin resolve (edge marking, fog) as spec/resolve.c's, over 768-pixel lines, into a 48 x 768 buffer;
  *   - a 3:2 box downsample of that buffer into the bin's 32 x 512 output block (DraStic's compositing then sees a
  *     normal 2x frame): each output pixel averages a 1.5 x 1.5 block, colour weighted by alpha so transparent
- *     (clear) pixels do not darken polygon edges; the averaged alpha gives anti-aliased edges over the 2D layers.
+ *     (clear) pixels do not darken polygon edges; the averaged alpha gives anti-aliased edges over the 2D layers;
+ *   - the edge marking gap buffers filled so that DraStic's gap passes, which re-mark the rows at the bin boundaries
+ *     after all bins, leave the rows as the bins wrote them (hr_gaps).
  * Not rendered at 3x yet: shadow polygons (mode 3). DraStic's sprite path (axis-aligned textured quads, polygon
  * flag bit 14) goes through the general walker here. */
 #include <stddef.h>
@@ -60,10 +63,14 @@ static hrv_t hr_vtx2[2][HR_NVTX];       /* the 2x ones: the index mapping check 
 int hr_vcheck;
 uint32_t *hr_frame;                     /* RAST_DUMP: the resolved 3x frame (576 x 768) */
 
+#define HR_NPOLY    2048                /* polygons per list (GEOM_POLYS_BUF / 32) */
+#define HR_EXTRA    0x8000              /* a list entry from a neighbour bin's list (hr_lists) */
 typedef struct {
     uint8_t *ctx;                       /* colour | attr | ids | header (sys, geom, line mask, fog used) */
     uint8_t *spans;
     uint32_t *out;                      /* the resolved bin, 48 x 768 */
+    uint16_t *list;                     /* the bin's polygons with its neighbours' (hr_lists), 3 x HR_NPOLY */
+    uint32_t *in, gen;                  /* hr_lists' membership stamps: in[0][p] (this bin), in[1][p] (the one below) */
 } hr_t;
 static __thread hr_t hr;
 
@@ -72,6 +79,8 @@ static hr_t *hr_get(void) {
         hr.ctx = aligned_alloc(64, HR_CTX_SIZE + 64); memset(hr.ctx, 0, HR_CTX_SIZE + 64);
         hr.spans = aligned_alloc(64, HR_SPANS); memset(hr.spans, 0, HR_SPANS);
         hr.out = aligned_alloc(64, HR_BL * HR_W * 4);
+        hr.list = malloc(3 * HR_NPOLY * 2);
+        hr.in = calloc(2 * HR_NPOLY, 4);
     }
     return &hr;
 }
@@ -111,8 +120,9 @@ void hr_vertices(uint8_t *p, const uint32_t *recips, const uint32_t *shifts) {
 }
 
 /* ---- the polygon walker: render_polygon_4x (spec/edges.c section 1) at 3x ---- */
+static unsigned long hc_extra, hc_own;  /* RAST_HRCHECK: neighbours' polygons that drew lines of a bin, of its own lines */
 static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, const hrv_t *hv2, unsigned bin_top,
-                       unsigned bin_bot, int lb, uint32_t d3, int defer) {
+                       unsigned bin_bot, int lb, uint32_t d3, int defer, int extra) {
     uint32_t a8 = U32(poly, 8);
     unsigned count = a8 & 15, flags = (a8 >> 8) & 0xff, oi = (a8 >> 16) & 0x7f, base = U16(poly, 0x1a);
     if (count < 1 || count > 10) return;             /* DraStic walks 1 and 2 vertices too (points, lines) */
@@ -130,6 +140,16 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
         if (ys[k] < ymin) ymin = ys[k];
     }
     if (ys[t] != ymin) for (unsigned k = 0; k < count; k++) if (ys[k] == ymin) { top = k; break; }
+    if (extra) {
+        /* a neighbour bin's polygon (most end or start well outside this bin's lines): out if no vertex, with either
+         * of the y the loop below may take, is past the bin's top line or above its bottom line */
+        unsigned lo = 0xffff, hi = 0;
+        for (unsigned k = 0; k < count; k++) {
+            unsigned a = ys[k], b = (3u * U16(verts + 16 * idx[k], 6) + 1) / 2;
+            if (a < lo) lo = a; if (b < lo) lo = b; if (a > hi) hi = a; if (b > hi) hi = b;
+        }
+        if (hi <= bin_top || lo >= bin_bot) return;
+    }
     uint8_t vbuf[10][16]; vtx_t *vptr[12];
     unsigned ybot = 0, bad = 0;
     for (unsigned k = 0; k < count; k++) {
@@ -166,6 +186,10 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     unsigned y_end = ybot < bin_bot ? ybot : bin_bot;
     int lines = (int)y_end - (int)(y_top > bin_top ? y_top : bin_top);
     if (lines <= 0) return;
+    if (extra && hr_check) {
+        __atomic_fetch_add(&hc_extra, 1, __ATOMIC_RELAXED);
+        if ((int)y_end > lb + 1 && (int)(y_top > bin_top ? y_top : bin_top) < lb + 1 + HR_BL) __atomic_fetch_add(&hc_own, 1, __ATOMIC_RELAXED);
+    }
     uint8_t *span = H->spans, *scratch = span + 10 * HR_SPS, *sp = span;
     if ((d3 >> 5) & 1) {
         unsigned ys0 = bin_top - top_clip, ye = y_end + bot_clip, nl = lines + top_clip + bot_clip;
@@ -205,14 +229,58 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     else f_run(&layout_3x, H->ctx, sp, poly, 0, line0, (unsigned)lines, flags, vptr[0], 0, 0);
 }
 
-static void hr_render_list(hr_t *H, const uint8_t *list, uint8_t *polys, uint8_t *verts, const hrv_t *hv, const hrv_t *hv2,
+/* ---- the polygons of a bin at 3x ----
+ * DraStic bins polygons by their 2x lines (video_3d_bin_polygons_*_4x: bins ytop >> 5 to (ybot - 1) >> 5, ybot
+ * exclusive). The 3x coordinates are rounded on their own, so a polygon whose 2x lines end at 32k can still cover 3x
+ * line 48k, the first of bin k, and the edge marking reads the lines just above and below the bin (48k - 1, 48k + 48),
+ * where polygons of bin k - 1 or k + 1 alone may lie. With the bin's own list only, such a line had holes (the clear
+ * colour) and false edges wherever rows of vertices fall on a bin boundary: a line flickering as the scene moves. So
+ * a bin renders its neighbours' polygons as well (marked HR_EXTRA; the walker skips those that miss its lines), in
+ * DraStic's order: every list is the frame's one polygon sequence filtered by bin, sorted
+ *   - by the 2x bottom line, ascending (video_3d_bin_polygons_y_sort_4x: opaque polygons, and translucent ones
+ *     without manual sorting): then the polygons of bin k - 1 that are not in bin k end at or above line 32k, before
+ *     all of bin k's, and bin k's that are not in bin k + 1 end at or above 32k + 32, before all of bin k + 1's, so the
+ *     sequence is (k - 1 without k) (k without k + 1) (k + 1);
+ *   - by index (translucent polygons with manual sorting, geometry state byte 0x9acc bit 0): a merge. */
+static unsigned hr_lists(hr_t *H, const uint8_t *lists, unsigned bin, int by_index) {
+    const uint16_t *L[3]; uint32_t n[3];
+    for (int j = 0; j < 3; j++) {
+        unsigned b = bin + j - 1;
+        L[j] = (const uint16_t *)(lists + b * BIN_LIST_SIZE);
+        n[j] = b < NBINS ? U32(L[j], 0x1000) : 0;
+        if (n[j] > HR_NPOLY) n[j] = HR_NPOLY;
+    }
+    uint16_t *m = H->list;
+    unsigned c = 0;
+    if (by_index) {
+        uint32_t i[3] = { 0, 0, 0 };
+        for (;;) {
+            unsigned p = 0xffff;
+            for (int j = 0; j < 3; j++) if (i[j] < n[j] && L[j][i[j]] < p) p = L[j][i[j]];
+            if (p == 0xffff) break;
+            int own = i[1] < n[1] && L[1][i[1]] == p;
+            for (int j = 0; j < 3; j++) if (i[j] < n[j] && L[j][i[j]] == p) i[j]++;
+            m[c++] = (uint16_t)(p | (own ? 0 : HR_EXTRA));
+        }
+        return c;
+    }
+    uint32_t g = ++H->gen, *in0 = H->in, *in1 = H->in + HR_NPOLY;
+    for (uint32_t i = 0; i < n[1]; i++) if (L[1][i] < HR_NPOLY) in0[L[1][i]] = g;
+    for (uint32_t i = 0; i < n[2]; i++) if (L[2][i] < HR_NPOLY) in1[L[2][i]] = g;
+    for (uint32_t i = 0; i < n[0]; i++) if (L[0][i] < HR_NPOLY && in0[L[0][i]] != g) m[c++] = L[0][i] | HR_EXTRA;
+    for (uint32_t i = 0; i < n[1]; i++) if (L[1][i] >= HR_NPOLY || in1[L[1][i]] != g) m[c++] = L[1][i];
+    for (uint32_t i = 0; i < n[2]; i++) if (L[2][i] < HR_NPOLY) m[c++] = (uint16_t)(L[2][i] | (in0[L[2][i]] == g ? 0 : HR_EXTRA));
+    return c;
+}
+
+static void hr_render_list(hr_t *H, unsigned n, uint8_t *polys, uint8_t *verts, const hrv_t *hv, const hrv_t *hv2,
                            unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer) {
-    uint32_t n = U32(list, 0x1000);
-    for (uint32_t i = 0; i < n; i++) {
-        uint8_t *poly = polys + 32 * (size_t)((const uint16_t *)list)[i];
+    for (unsigned i = 0; i < n; i++) {
+        unsigned e = H->list[i];
+        uint8_t *poly = polys + 32 * (size_t)(e & ~HR_EXTRA);
         int d = defer && !((U32(poly, 4) >> 4) & 3);
         if (defer && !d) defer_flush(&layout_3x, H->ctx);
-        hr_polygon(H, poly, verts, hv, hv2, bin_top, bin_bot, lb, d3, d);
+        hr_polygon(H, poly, verts, hv, hv2, bin_top, bin_bot, lb, d3, d, (e & HR_EXTRA) != 0);
     }
     if (defer) defer_flush(&layout_3x, H->ctx);
 }
@@ -409,13 +477,13 @@ static __attribute__((noinline)) void edge_lines(uint32_t *out0, uint32_t *out1,
         edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 0, k, &lp0, &lp1, er, eg, eb);
     edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
 }
-static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
+/* no_edge: DraStic's disable_edge_marking (render context byte CTX_NO_EDGE), as rast.c's resolve_bin */
+static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, int no_edge) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
-    int edges = (d3 >> 5) & 1, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
+    int edges = (d3 >> 5) & 1 && !no_edge, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
     uint32_t params = 0, fogc = U32(geom, 0x9a9c), clear = U32(sys, SYS_CLEAR_ATTR);
     if (fog) { uint32_t sh = (d3 >> 8) & 0xf; params = sh | ((U16(geom, 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16; }
-    (void)bin;
 #define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
 #define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
     _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
@@ -532,6 +600,50 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
     }
 }
 
+/* ---- DraStic's edge marking gap passes ----
+ * With edge marking on (DISP3DCNT bit 5, and not turned off in DraStic's settings) update_frame_3d_4x re-marks rows
+ * 32k-1 and 32k of the output frame after all bins are done (k = 1..11, the gap passes of spec/resolve.c), from gap
+ * buffers that DraStic's bin resolve fills and ours never did: every bin boundary got two rows of whatever the buffers
+ * held (zeros or a 2x frame's leftovers: the black or coloured lines every 32 rows at 3x, ROCKNIXDS issue 47). Our
+ * edges are marked at 3x already, so each bin leaves its own output rows there (in the line order of the colour
+ * buffers: pixel x at word x), with attributes that make the passes an identity: all 0, so no pixel has bit 30 (its
+ * edge byte is 8 or 0xff: no edge colour) and no output colour has the fog flag (fog factor 0); both passes keep the
+ * colour bytes and alpha & 0x1f, which is what the downsample wrote. */
+static void hr_gap_line(uint32_t *g, const uint8_t *row) {
+    const uint32_t *ev = (const uint32_t *)row, *od = (const uint32_t *)(row + 0x400);
+    for (int i = 0; i < 256; i++) g[2 * i] = ev[i], g[2 * i + 1] = od[i];
+}
+static void hr_gaps(uint8_t *sys, unsigned bin, const uint8_t *blk) {
+    if (bin) {                                                  /* lines 0, 1 of this bin: slot bin - 1 */
+        memset(sys + SYS_ATTR_GAPS + (bin - 1) * 0x2000 + 0x1000, 0, 0x1000);
+        hr_gap_line((uint32_t *)(sys + SYS_COLOR_GAPS + (bin - 1) * 0x1000 + 0x800), blk);
+    }
+    if (bin < NBINS - 1) {                                      /* lines 30, 31: slot bin */
+        memset(sys + SYS_ATTR_GAPS + bin * 0x2000, 0, 0x1000);
+        hr_gap_line((uint32_t *)(sys + SYS_COLOR_GAPS + bin * 0x1000), blk + 31 * 0x800);
+    }
+}
+
+/* ---- RAST_HRCHECK: the rows each bin wrote against the frame DraStic's update_frame_3d_4x leaves (its edge marking
+ * gap passes re-mark rows 32k-1 and 32k after the bins: those must come out as the bins wrote them) ---- */
+int hr_check;
+static uint8_t hr_rows[NBINS][2][0x800];        /* each bin's rows 0 and 31 as written */
+static unsigned long hc_frames, hc_bad, hc_rows;
+static void hr_check_save(const uint8_t *blk, unsigned bin) {
+    memcpy(hr_rows[bin][0], blk, 0x800); memcpy(hr_rows[bin][1], blk + 31 * 0x800, 0x800);
+}
+void hr_check_frame(uint8_t *sys) {             /* comp.c's hook_uf4, after a call that rendered all 12 bins */
+    const uint8_t *o = PTR(sys, SYS_OUTPUT);
+    unsigned rows = 0;
+    for (unsigned b = 0; b < NBINS; b++)
+        for (unsigned h = 0; h < 2; h++) rows += memcmp(o + b * BIN_BYTES + h * 31 * 0x800, hr_rows[b][h], 0x800) != 0;
+    hc_frames++; hc_bad += rows != 0; hc_rows += rows;
+    if (hc_frames % 120 == 0)
+        fprintf(stderr, "[hr] check: %lu frames, %lu with rows changed after the bins (%lu rows); %lu polygons of neighbour bins drew lines "
+                "(%lu on the bin's own lines)\n", hc_frames, hc_bad, hc_rows, __atomic_load_n(&hc_extra, __ATOMIC_RELAXED),
+                __atomic_load_n(&hc_own, __ATOMIC_RELAXED));
+}
+
 /* ---- the bin loop (in place of rast.c's render_bins when the scale is 3) ---- */
 void hr_render_bins(uint8_t *ctx) {
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
@@ -553,14 +665,16 @@ void hr_render_bins(uint8_t *ctx) {
         hr_clear_bin(H, sys, geom, hy0);
         U32(H->ctx, HR_HDR + 0x10) = 0xffffffffu; U32(H->ctx, HR_HDR + 0x14) = 0;
         U64(H->ctx, HR_HDR + 0x18) = ~0ull;             /* the shadow line mask (fused.c line_px): all lines clean */
-        hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, rast_defer);
+        hr_render_list(H, hr_lists(H, sys + SYS_BINS_OPAQUE, bin, 0), opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, rast_defer);
         if (ntrl) {
             memset(H->ctx + HR_ID, 0xff, HR_CL * HR_W);
-            hr_render_list(H, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);
+            hr_render_list(H, hr_lists(H, sys + SYS_BINS_TRANSL, bin, U8(geom, GEOM_SORT_MODE) & 1), trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);
         }
-        hr_resolve_bin(H, sys, geom, bin);
+        hr_resolve_bin(H, sys, geom, U8(ctx, CTX_NO_EDGE));
         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, H->out, HR_BL * HR_W * 4);
         hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
+        hr_gaps(sys, bin, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES);
+        if (hr_check) hr_check_save(PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, bin);
         comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */
     }
 }
