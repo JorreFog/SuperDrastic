@@ -185,7 +185,11 @@ weights and interpolants for its first passing pixel; the vertex colour and the 
 they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flags and the register use.
 `kernsched.py` then reorders each basic block of the generated code for the A55 (its docstring has the rules: every
 register, NZCV and memory access tracked, the base registers' roles telling read-only memory, the lines and the
-stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py` writes the kernels unscheduled.
+stack apart; the branches stay where they are, but an out-of-line block's jump back to the common path takes a copy
+of the instructions after its join, which makes one block of the code on both sides of the join): of several
+candidate orders it keeps the one that runs fastest on its model of llvm-mca's in-order Cortex-A55 (issue groups, the
+FP and load pipes' occupancy, the in-order writeback; it matches llvm-mca's cycles on the group loops within a
+cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py` writes the kernels unscheduled.
 
 ## Simulator usage (see `tools/sim/` for setup; `dev/` holds the scripts used during development)
 
@@ -212,9 +216,14 @@ stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py`
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
   into the scanout and skip the planes (~0.08 M a frame; needs the convert hook keyed by plane pointer).
-- The group loop is still latency-bound (IPC ~0.75-0.8 in the model): the texel gather's two trips through the
-  stack, the pack-and-store tail and the depth test's mask chain; overlapping consecutive groups needs registers the
-  kernels do not have (the bilinear kernels use them all).
+- The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate; IPC
+  ~0.75-0.8 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
+  finds 0.1% more). What is left is across blocks, which is kerngen.py's layout: the depth test overlapped with the
+  reciprocal's Newton steps (both stall 3-5 cycles a step; today the reciprocal waits for the test's cbz and the 28:
+  entry label), or the next group's depth test with this group's tail; the texel gather's two trips through the
+  stack and the pack-and-store tail. Overlapping consecutive groups needs registers the kernels do not have (the
+  bilinear kernels use them all). Hoisting the fall-through code over the w7 flag branches does not pay (llvm-mca:
+  +1-8% on most kernels, the hoisted work lands above taken branches; -4-6% on the bilinear ones).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
   leave by umov), which the model cannot price (store-to-load forwarding).
