@@ -95,7 +95,7 @@ With DraStic's `backup_in_savestates` on (its default), loading a state also put
 with: don't load a resume state older than the game's `.dsv` (ROCKNIXDS drops it then). On ROCKNIX the hotkey runs
 `killall $(cat /tmp/.process-kill-data)`, so writing `-USR1 drastic` there after `start_drastic.sh` has set it is enough.
 
-**Exit combos.** Holding **Start + Select** or **Menu + Start** for half a second quits the same way (with a resume
+**Exit combos.** Holding **Start + Select** or **Menu + Start** for 0.3 seconds quits the same way (with a resume
 save when `DSFLIP_RESUME_FILE` is set, else at once), like ROCKNIX's gptokeyb did for DraStic. The buttons are the
 ones `drastic.cfg` maps to `START`, `SELECT` and `MENU` (either control set). `DSFLIP_EXIT_COMBO=0` turns them off.
 
@@ -104,19 +104,65 @@ ones `drastic.cfg` maps to `START`, `SELECT` and `MENU` (either control set). `D
 DraStic's menu button (the controls `drastic.cfg` maps to `MENU`, L3 and the mode key on the RG DS) opens
 SuperDrastic's own menu instead of DraStic's (`src/menu.c`), drawn in ROCKNIXDS Pixel's look with the theme's font and
 sounds when the theme is installed. The game, its sound and its clock stop while it is open. Bottom screen: Resume,
-Save and Load (8 slots with the picture each savestate holds), Quick settings (volume, brightness, and a Microphone
-page: a live meter of the real mic against ES's sensitivity, and a 3 s fake blow),
-DraStic's own menu (cheats, controls, firmware) and Quit (with a resume save when that is on). Top screen: the game,
-this session's play time, the last save and the latest RetroAchievements unlocks with their badges. D-pad, left stick
-and touch all work. Saves and loads press DraStic's own save/load state controls, so those must be joystick buttons;
-a load first saves the game to `/tmp/dsflip-undo.dss`, which "Undo last load" (Y on the Load page) puts back.
-`DSFLIP_MENU=0` brings back DraStic's menu. The exit hotkey also works while the menu is open. The pop-ups on the top screen
-(achievements, volume, saves) use the same look.
+Save and Load, Quick settings, DraStic's own menu (cheats, controls, firmware) and Quit (with a resume save when that
+is on). Top screen: the game, this session's play time, the last save and the latest RetroAchievements unlocks with
+their badges. D-pad, left stick and touch all work. `DSFLIP_MENU=0` brings back DraStic's menu. The exit hotkey also
+works while the menu is open. The pop-ups on the top screen (achievements, volume, saves) use the same look.
+
+- **Save and Load**: 8 slots with the picture each savestate holds (DraStic keeps both screens in it: **L / R** switch
+  every picture between the top and the bottom screen). "LAST" marks the slot saved to this session, else the newest
+  file. Saves and loads press DraStic's own save/load state controls, so those must be joystick buttons. A load first
+  saves the game to `/tmp/dsflip-undo.dss`, which **Y on the Load page** ("Undo last load") puts back. The menu
+  doesn't open while the resume state is going in at a game's start (2-4.5 s in).
+- **Quick settings** (the page scrolls): volume; brightness, one slider per screen where the device has a backlight
+  per panel (ROCKNIX's `brightness set <n> <pct>`; the top panel is the screen numbered like `DSFLIP_TOP`'s connector,
+  DSI-2 = screen 2, or `DSFLIP_BACKLIGHT_TOP`), else one for both; Microphone (a live meter of the real mic against
+  ES's sensitivity, and a fake blow of 1, 3 or 10 s); Shader; Performance (an overlay: Off, FPS, Detailed with frame
+  time and drops, Advanced with the CPU and GPU clocks and the internal resolution); Menu sounds; Tips.
+- **Shader**: Off, ROCKNIX's built-in shaders (when `/usr/lib/libdrastouch.so` is there) and every `.frag` in the
+  shader folders. In a session that started with a shader the new one is used as the menu closes, if it draws into
+  buffers of the same size (`dsflip-output:`); otherwise (a session without a shader, or ds-fsr's 3x on the RG DS
+  Plus) from the next start of the game, and a pop-up says so. "Off" in a session with a shader is a plain copy
+  until the next start. The GPU's clock is the launcher's (below), so it follows the shader the session started with.
+- **Tips** are the tutorial pop-ups: "Resumed where you left off" and the undo tip after a load, each shown the first
+  three times only.
+
+**The menu's settings** live in `<DSFLIP_DATA>/menu.cfg`, one `key=value` a line:
+
+| Key | |
+|---|---|
+| `sounds`, `hints` | `<0 or 1> <the environment's DSFLIP_MENU_SOUNDS / DSFLIP_MENU_HINTS when it was set>` |
+| `shader.<game>` | `<picked> <the shader the session had when it was picked>` (`none` for none); `<game>` is the ROM's file name without its extension |
+| `perf` | the overlay: 0 off, 1 FPS, 2 detailed, 3 advanced |
+| `preview` | 1: the slot pictures show the bottom screen |
+| `seen.resumed`, `seen.undo` | how often a tip was shown |
+
+Precedence: `DSFLIP_MENU_SOUNDS` and `DSFLIP_MENU_HINTS` (default 1) are the starting values. Switching one in the menu
+holds until the environment's value changes (the frontend's own setting was changed after it); then the environment
+wins again. The per-game shader works the same way: the pick holds while the frontend still asks for the shader it was
+picked over (`DSFLIP_SHADER`, else `DSHOOK_SHADER`; `bilinear` counts as `none`).
+
+**A launcher that sets the GPU's clock by the shader** should resolve the per-game pick the same way before it does,
+or a game picked to ds-fsr in the menu would run it at the clock for no shader. `superdrastic-run` does:
+
+```sh
+G=$(basename "$ROM"); G=${G%.*}; B=$SHADER; [ "$B" = bilinear ] && B=none
+PICK=$(awk -v k="shader.$G=" 'index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' "$DSFLIP_DATA/menu.cfg" 2>/dev/null)
+[ -n "$PICK" ] && [ "${PICK#* }" = "$B" ] && SHADER=${PICK%% *}
+```
 
 ## DraStic's menu
 
-Opening DraStic's menu (from the in-game menu, or with `DSFLIP_MENU=0`) shows a card on the top screen with the time and the battery (red at 15% or less, unless
-charging) for 3 seconds. `DSFLIP_STATUS_CARD=0` turns it off.
+Opening DraStic's menu with `DSFLIP_MENU=0` shows a card on the top screen with the time and the battery (red at 15% or
+less, unless charging) for 3 seconds. `DSFLIP_STATUS_CARD=0` turns it off. Opened from the in-game menu, whose top
+screen had both already, it doesn't.
+
+## The volume keys
+
+While a game runs, the volume keys' indicator (the frontend's notifications are down with its compositor) shows the
+volume, or the brightness when ROCKNIX's function key (the gamepad's `BTN_MODE`, Menu on the RG DS) is held or the
+brightness is what changed, from `system.cfg`. The CPU runs at its top clock while the keys are in use: ROCKNIX runs
+its volume script in new processes for every step, which the governor doesn't see.
 
 ## What SuperDrastic tells you
 
@@ -150,6 +196,9 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low. The mic is opened after DraStic's audio output, never at the same time |
 | `DSFLIP_EXIT_COMBO`, `DSFLIP_STATUS_CARD` | 1, 1 | 0 = no Start+Select / Menu+Start exit; no time and battery card in DraStic's menu |
 | `DSFLIP_MENU` | 1 | 0 = the menu button opens DraStic's own menu instead of the in-game menu |
+| `DSFLIP_MENU_SOUNDS`, `DSFLIP_MENU_HINTS` | 1, 1 | The in-game menu's navigation sounds and its tips, until switched in the menu (see *The in-game menu*). ROCKNIXDS sets the sounds from ES's navigation sounds |
+| `DSFLIP_BACKLIGHT_TOP` | from `DSFLIP_TOP` | ROCKNIX's screen number (1 or 2) of the top panel's backlight, for the menu's per-screen brightness |
+| `DSFLIP_MIC_HOLD_MS` | 120 | Once a blow presses the fake microphone, it stays down at least this long (see `src/audio.c` for the other mic tunables) |
 | `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz). A `DSFLIP_CPU_MAX` below the top holds from the first moment |
 | `DSFLIP_CPU_MAX_SOFT` | 0 | 1 = `DSFLIP_CPU_MAX` is passed while the game is below full speed with real work going on (for a "balanced" profile: a heavy game gets the clock it needs instead of running slow at the bound) |
 | `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |
