@@ -13,8 +13,8 @@
  *    the 2x path that is a half-row of the 3D output frame (frame + line*0x1000 + q*0x400). So the render threads
  *    compute it once per finished bin (comp_bin(), called by rast.c's and hr.c's bin loops right after the bin's
  *    output block is written: 64 half-rows of 0x400 bytes, rows y at +y*0x800, parity p at +p*0x400; res2.c's
- *    res2_vis_bin(), compvis.h's results scheduled for the A55; or, without fog and edge marking, res2_resolve()
- *    while it writes the block, through comp_bin_table()) into a table per output frame; the hook copies the table
+ *    res2_vis_bin(), compvis.h's results scheduled for the A55; or, but for the fog-only resolve, res2.c's resolves
+ *    while they write the block, through comp_bin_table()) into a table per output frame; the hook copies the table
  *    entry when the pointer is a half-row of a frame whose table is valid, and computes with NEON otherwise.
  *
  * The table's validity rule: tvalid[slot] is set only while the frame's bytes are the ones the table was computed

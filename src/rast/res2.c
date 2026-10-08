@@ -1,5 +1,6 @@
-/* res2.c: the 2x bin resolve without fog or edge marking (DraStic's video_3d_resolve_bin_asm_4x, spec/resolve.c's
- * spec_video_3d_resolve_bin_4x) in NEON, fused with the compositor's visibility table (comp.c's comp_bin()).
+/* res2.c: the 2x bin resolve (DraStic's video_3d_resolve_bin_asm_4x, spec/resolve.c's spec_video_3d_resolve_bin_4x)
+ * in NEON, fused with the compositor's visibility table (comp.c's comp_bin()); and the resolves with fog and / or edge
+ * marking on it (res2_resolve_fx(), at the end of the file).
  *
  * The resolve: output line y = colour line y & 0x1fffffff, the 256 even pixels at +0, the 256 odd ones at +0x400.
  * DraStic's loop is the minimal one (ld2.4s, and, st1 per 8 pixels) but issues its four ld2 back to back and each
@@ -20,9 +21,11 @@
  * bytes and value as compvis.h on the written half-row (spec/composite.c's port for any input; t_resolve.c checks
  * these against DraStic's resolve and the port). Without a table (RAST_COMP < 2, or the output frame not one of
  * the two the table follows) only the resolve runs. res2_vis_bin() computes the same entries from a block written
- * by DraStic's fog and edge-marking resolves (comp_bin(); also the 3x pipeline's). */
+ * otherwise (comp_bin(): the fog-only resolve's, the 3x pipeline's). */
 #include <arm_neon.h>
 #include <stdint.h>
+#include <stddef.h>
+#include <string.h>
 #include "res2.h"
 
 /* 32 pixels of a colour line: masked to the even (e) and odd (o) half-rows (the path without a table) */
@@ -41,7 +44,7 @@ static inline __attribute__((always_inline)) void px32(const uint32_t *s, uint32
  * (b, b + 32) and returns the translucency accumulators' low 5 bits, moved to the top, even | odd << 8 (non-zero:
  * some 0 < a < 31). */
 uint32_t res2_line_asm(const uint32_t *s, uint32_t *e, uint32_t *o, uint8_t *b, const uint8_t *wts);
-/* the same bitmaps of an output line already written (comp_bin() after DraStic's fog and edge-marking resolves):
+/* the same bitmaps of an output line already written (comp_bin() after the fog-only resolve, and at 3x):
  * ldr q + uzp2 for the alphas instead of compvis.h's ld4 (latency 11), umin(a, a ^ 31) for the translucency as
  * compvis.h (bits 5-7 of the alpha byte may be set there); 468 modeled cycles a line against compvis.h's ~610 */
 uint32_t comp_vis_line_asm(const uint32_t *line, uint8_t *b, const uint8_t *wts);
@@ -78,4 +81,241 @@ void res2_vis_bin(const uint8_t *blk, uint8_t (*bits)[32], uint8_t *flags) {
         flags[2 * y] = vis_flag(bits[2 * y], t & 0xff);
         flags[2 * y + 1] = vis_flag(bits[2 * y + 1], t >> 8);
     }
+}
+
+/* ---- the 2x bin resolve with fog and / or edge marking (DraStic's video_3d_resolve_bin_fog_{full,alpha}_4x and
+ * video_3d_resolve_bin_edge_mark[_fog_{full,alpha}]_4x, spec/resolve.c's drivers) ----
+ * DraStic's drivers call one leaf routine per stage and line: fog weights (into a byte array), fog modulate (the
+ * colour line in place, or into the output line), edge identify (an edge byte array), edge mark (into the output
+ * line), each a pass over memory with its own loads, and the compositor's table pass reads the block back (S4 at 2x,
+ * llvm-mca's A55: ~2.8 M + 0.18 M cycles a frame at IPCs of 0.45-0.72). Here the stages are hr.c's NEON forms of the
+ * same arithmetic (hr.c documents them; the copies below differ in the line width, 512, and the edge marking's skip
+ * of steps without an id edge), applied to the context's colour lines in place, then the block is written by
+ * res2_line_asm with the table entries:
+ *   fog: weights and modulate in one pass over byte planes, 32 pixels a step, the weights never in memory, a step
+ *        without a fog flag skipped (fog_line2x); the fogged line's alpha keeps bits 5 and 6 and clears 7 (the fog
+ *        flag), which is what the fog drivers' modulate_*_resolve write, so the fog-only resolve then splits the
+ *        lines unmasked (split_line) and the table comes from the block (comp_bin()'s res2_vis_bin);
+ *   edge marking: identify and mark in one pass over two lines at once (the pair's compares shared, a step of 16
+ *        pixels of both lines without a marked pixel neither loads nor stores colours, and one in which no pixel's
+ *        polygon id differs from a neighbour's skips the depth-key compares, edge_lines2x); a marked pixel
+ *        takes the edge colour's r, g, b in place and keeps its alpha byte, so the resolve's & 0x1fffffff then gives
+ *        edge_mark's output (its alpha is c3 & 0x1f; unmarked pixels keep r, g, b): res2_line_asm writes the lines
+ *        and their table entries in the same pass as the plain resolve.
+ * The driver's line structure is DraStic's (spec/resolve.c): bin 0's line 0 against the clear attribute above,
+ * bin 11's line 31 with line 30's attributes (its weights too: DraStic's bug, kept), the other bins' lines 0 and 31
+ * copied unfogged to the gap buffers (DraStic's gap passes write them after the bins) and not written. Lines are
+ * marked in pairs; bin 0 (lines 0..30) marks line 29 twice, which changes nothing (the marks depend only on the
+ * attributes and the pixel's own colour bytes are replaced by the same values), and bin 11's line 31 is paired with
+ * a scratch line. The context's colour lines end fogged and marked (DraStic's edge drivers leave them fogged; the
+ * next bin clears them). t_resolve.c compares the block, the gap buffers and the table entries with DraStic's drivers
+ * and the visibility port on random contexts. */
+#define W2 512
+static inline __attribute__((always_inline)) uint8x16_t fog_ch16(uint8x16_t c, uint8x16_t f, int8x16_t k) {
+    int8x16_t d = vreinterpretq_s8_u8(vsubq_u8(c, f));
+    int16x8_t lo = vmull_s8(vget_low_s8(d), vget_low_s8(k)), hi = vmull_high_s8(d, k);
+    return vaddq_u8(c, vreinterpretq_u8_s8(vshrn_high_n_s16(vshrn_n_s16(lo, 7), hi, 7)));
+}
+static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
+                                                             uint32_t fogc, int full) {
+    static const uint8_t idx[32] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                                     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
+    const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16));
+    const int16x8_t sh = vdupq_n_s16((int8_t)(params & 0xff));
+    const uint8x16x2_t dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
+    const uint8x16x2_t ntab = { { vsubq_u8(vmulq_u8(dlt.val[0], vld1q_u8(idx)), vld1q_u8(table)),
+                                  vsubq_u8(vmulq_u8(dlt.val[1], vld1q_u8(idx + 16)), vld1q_u8(table + 16)) } };
+    const uint8x16_t fr = vdupq_n_u8((uint8_t)fogc), fg = vdupq_n_u8((uint8_t)(fogc >> 8)), fb = vdupq_n_u8((uint8_t)(fogc >> 16));
+    const uint8x16_t fa = vdupq_n_u8((uint8_t)(fogc >> 24)), x81 = vdupq_n_u8(0x81), x7f = vdupq_n_u8(0x7f);
+    uint8_t *c8 = (uint8_t *)c, *end = c8 + 4 * W2;
+    const ptrdiff_t ad = (const uint8_t *)attr - c8;
+#define FOG_K(t, at) ({ \
+        uint8x16x4_t a = vld4q_u8(at); \
+        uint16x8_t d0 = vshrq_n_u16(vreinterpretq_u16_u8(vzip1q_u8(a.val[1], a.val[2])), 1); \
+        uint16x8_t d1 = vshrq_n_u16(vreinterpretq_u16_u8(vzip2q_u8(a.val[1], a.val[2])), 1); \
+        uint16x8_t v0 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d0, off)), sh)); \
+        uint16x8_t v1 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d1, off)), sh)); \
+        uint8x16_t i = vsriq_n_u8(vcgezq_s8(vreinterpretq_s8_u8(t)), vuzp2q_u8(vreinterpretq_u8_u16(v0), vreinterpretq_u8_u16(v1)), 2); \
+        int8x16_t dl = vreinterpretq_s8_u8(vqtbl2q_u8(dlt, i)); \
+        int16x8_t p0 = vqdmulhq_s16(vshll_n_s8(vget_low_s8(dl), 5), vreinterpretq_s16_u16(v0)); \
+        int16x8_t p1 = vqdmulhq_s16(vshll_high_n_s8(dl, 5), vreinterpretq_s16_u16(v1)); \
+        uint8x16_t k = vsubq_u8(vqtbl2q_u8(ntab, i), vuzp1q_u8(vreinterpretq_u8_s16(p0), vreinterpretq_u8_s16(p1))); \
+        vreinterpretq_s8_u8(vaddq_u8(k, vceqq_u8(k, x81))); \
+    })
+    for (; c8 != end; c8 += 128) {
+        uint8x16x4_t px = vld4q_u8(c8), py = vld4q_u8(c8 + 64);
+        if (__builtin_expect(vmaxvq_u8(vorrq_u8(px.val[3], py.val[3])) < 0x80, 0)) continue;     /* no fog flag in the step */
+        int8x16_t kx = FOG_K(px.val[3], c8 + ad), ky = FOG_K(py.val[3], c8 + 64 + ad);
+        px.val[3] = fog_ch16(vandq_u8(px.val[3], x7f), fa, kx);
+        py.val[3] = fog_ch16(vandq_u8(py.val[3], x7f), fa, ky);
+        if (full) {
+            px.val[0] = fog_ch16(px.val[0], fr, kx), px.val[1] = fog_ch16(px.val[1], fg, kx), px.val[2] = fog_ch16(px.val[2], fb, kx);
+            py.val[0] = fog_ch16(py.val[0], fr, ky), py.val[1] = fog_ch16(py.val[1], fg, ky), py.val[2] = fog_ch16(py.val[2], fb, ky);
+        }
+        vst4q_u8(c8, px); vst4q_u8(c8 + 64, py);
+    }
+#undef FOG_K
+}
+/* fog of a colour line in place with the weights of the attribute line attr (full: r, g, b and alpha; else alpha) */
+static __attribute__((noinline)) void fog_line2x(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
+                                                 uint32_t fogc, int full) {
+    if (full) fog_line16(c, attr, table, params, fogc, 1);
+    else fog_line16(c, attr, table, params, fogc, 0);
+}
+static inline __attribute__((always_inline)) uint8x16_t edge_sel(uint8x16_t m, uint8x16_t t, uint8x16_t f) {
+    __asm__("bif %0.16b, %1.16b, %2.16b" : "+w"(t) : "w"(f), "w"(m));      /* m ? t : f (hr.c's note on bif) */
+    return t;
+}
+static inline __attribute__((always_inline)) uint8x16_t edge_gt(uint8x16x4_t n, uint8x16x4_t c) {
+    return edge_sel(vceqq_u8(n.val[2], c.val[2]), edge_sel(vceqq_u8(n.val[1], c.val[1]), vcgtq_u8(n.val[0], c.val[0]),
+                                                         vcgtq_u8(n.val[1], c.val[1])), vcgtq_u8(n.val[2], c.val[2]));
+}
+static inline __attribute__((always_inline)) uint8x16_t edge_pair(uint8x16x4_t n, uint8x16x4_t c, uint8x16_t *nc) {
+    uint8x16_t e1 = vceqq_u8(n.val[1], c.val[1]), e2 = vceqq_u8(n.val[2], c.val[2]), g1 = vcgtq_u8(n.val[1], c.val[1]);
+    uint8x16_t g2 = vcgtq_u8(n.val[2], c.val[2]), xid = veorq_u8(n.val[3], c.val[3]);
+    uint8x16_t gt = edge_sel(e2, edge_sel(e1, vcgtq_u8(n.val[0], c.val[0]), g1), g2);        /* N > C */
+    uint8x16_t ge = edge_sel(e2, edge_sel(e1, vcgeq_u8(n.val[0], c.val[0]), g1), g2);        /* N >= C */
+    *nc = vandq_u8(gt, xid);
+    return vbicq_u8(xid, ge);
+}
+static inline __attribute__((always_inline)) void edge_mark16(uint32_t *col, uint8x16_t t, uint8x16_t e, uint8x16_t er,
+                                                              uint8x16_t eg, uint8x16_t eb) {
+    const uint8x16_t m1f = vdupq_n_u8(0x1f);
+    uint8x16_t idx = edge_sel(e, vbicq_u8(m1f, vshrq_n_u8(t, 2)), m1f);
+    uint8x16x4_t p = vld4q_u8((const uint8_t *)col);
+    p.val[0] = vqtbx1q_u8(p.val[0], er, idx); p.val[1] = vqtbx1q_u8(p.val[1], eg, idx); p.val[2] = vqtbx1q_u8(p.val[2], eb, idx);
+    vst4q_u8((uint8_t *)col, p);
+}
+static inline __attribute__((always_inline)) void edge_block(uint32_t *col0, uint32_t *col1, const uint32_t *a, const uint32_t *c0,
+                                                             const uint32_t *c1, const uint32_t *b, int last, uint8x16x4_t k,
+                                                             uint8x16_t *lp0, uint8x16_t *lp1, uint8x16_t er, uint8x16_t eg, uint8x16_t eb) {
+    const uint8x16_t m3f = vdupq_n_u8(0x3f), m40 = vdupq_n_u8(0x40);
+    uint8x16x4_t p0 = vld4q_u8((const uint8_t *)c0), p1 = vld4q_u8((const uint8_t *)c1), r0, r1, n0, n1;
+    uint8x16_t y0, y1, v, lt;
+    if (!last) r0 = vld4q_u8((const uint8_t *)(c0 + 1)), r1 = vld4q_u8((const uint8_t *)(c1 + 1));
+    else for (int i = 0; i < 4; i++) r0.val[i] = vextq_u8(p0.val[i], k.val[i], 1), r1.val[i] = vextq_u8(p1.val[i], k.val[i], 1);
+    n0 = vld4q_u8((const uint8_t *)a); n1 = vld4q_u8((const uint8_t *)b);
+    /* a test is an edge only where the polygon ids differ (bits 0-5 of the top bytes' xor): when no pixel of either
+     * line differs in id from any neighbour, and the previous step's left tests (lane 15: this step's pixel 0) are
+     * clear, no pixel of the step is an edge and its left tests for the next step are clear too (only their bits 0-5
+     * are ever read). Most steps of a frame are inside polygons or the clear area: they skip the key compares. */
+    uint8x16_t x = vorrq_u8(vorrq_u8(veorq_u8(r0.val[3], p0.val[3]), veorq_u8(n0.val[3], p0.val[3])),
+                            vorrq_u8(veorq_u8(p1.val[3], p0.val[3]), veorq_u8(r1.val[3], p1.val[3])));
+    x = vorrq_u8(vorrq_u8(x, veorq_u8(n1.val[3], p1.val[3])), vorrq_u8(*lp0, *lp1));
+    if (!vmaxvq_u8(vandq_u8(x, m3f))) { *lp0 = *lp1 = vdupq_n_u8(0); return; }
+    lt = edge_pair(r0, p0, &y0);
+    y0 = vorrq_u8(y0, vextq_u8(*lp0, lt, 15)); *lp0 = lt;
+    y0 = vorrq_u8(y0, vandq_u8(edge_gt(n0, p0), veorq_u8(n0.val[3], p0.val[3])));
+    y1 = edge_pair(p1, p0, &v);
+    y0 = vorrq_u8(y0, v);
+    lt = edge_pair(r1, p1, &v);
+    y1 = vorrq_u8(vorrq_u8(y1, v), vextq_u8(*lp1, lt, 15)); *lp1 = lt;
+    y1 = vorrq_u8(y1, vandq_u8(edge_gt(n1, p1), veorq_u8(n1.val[3], p1.val[3])));
+    uint8x16_t e0 = vtstq_u8(y0, m3f), e1 = vtstq_u8(y1, m3f);
+    uint8x16_t m = vorrq_u8(vandq_u8(e0, p0.val[3]), vandq_u8(e1, p1.val[3]));   /* bit 6: a marked pixel */
+    if (__builtin_expect(!vmaxvq_u8(vandq_u8(m, m40)), 1)) return;
+    edge_mark16(col0, p0.val[3], e0, er, eg, eb);
+    edge_mark16(col1, p1.val[3], e1, er, eg, eb);
+}
+/* two lines marked in place: colour col0 with attributes c0, col1 / c1 the line below it; a = the attributes above
+ * c0, b = those below c1 (hr.c's edge_lines over 512 pixels) */
+static __attribute__((noinline)) void edge_lines2x(uint32_t *col0, uint32_t *col1, const uint32_t *a, const uint32_t *c0,
+                                                   const uint32_t *c1, const uint32_t *b, uint32_t clear, const uint8_t *ec) {
+    uint8x8_t ecr = vrev64_u8(vld1_u8(ec)), ecg = vrev64_u8(vld1_u8(ec + 8)), ecb = vrev64_u8(vld1_u8(ec + 16));
+    uint8x16_t er = vcombine_u8(ecr, ecr), eg = vcombine_u8(ecg, ecg), eb = vcombine_u8(ecb, ecb);
+    er = vzip1q_u8(er, er); eg = vzip1q_u8(eg, eg); eb = vzip1q_u8(eb, eb);       /* entries 2i, 2i+1 = ec[7 - i] */
+    uint8x16_t lp0 = vsetq_lane_u8((clear & 0xffffff) > (c0[0] & 0xffffff) ? (uint8_t)((clear ^ c0[0]) >> 24) : 0, vdupq_n_u8(0), 15);
+    uint8x16_t lp1 = vsetq_lane_u8((clear & 0xffffff) > (c1[0] & 0xffffff) ? (uint8_t)((clear ^ c1[0]) >> 24) : 0, vdupq_n_u8(0), 15);
+    const uint8x16x4_t k = { { vdupq_n_u8((uint8_t)clear), vdupq_n_u8((uint8_t)(clear >> 8)), vdupq_n_u8((uint8_t)(clear >> 16)),
+                               vdupq_n_u8((uint8_t)(clear >> 24)) } };
+    int x = 0;
+    for (; x < W2 - 16; x += 16)
+        edge_block(col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 0, k, &lp0, &lp1, er, eg, eb);
+    edge_block(col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
+}
+/* a fogged colour line into an output line, unmasked (modulate_*_resolve's layout: even pixels, then odd) */
+static void split_line(uint32_t *e, const uint32_t *s) {
+    for (int x = 0; x < W2; x += 16, s += 16, e += 8) {
+        uint32x4_t a = vld1q_u32(s), b = vld1q_u32(s + 4), c = vld1q_u32(s + 8), d = vld1q_u32(s + 12);
+        vst1q_u32(e, vuzp1q_u32(a, b)); vst1q_u32(e + 4, vuzp1q_u32(c, d));
+        vst1q_u32(e + 256, vuzp2q_u32(a, b)); vst1q_u32(e + 260, vuzp2q_u32(c, d));
+    }
+}
+/* lines y0..y1-1 of the fused resolve (res2_resolve) */
+static void res2_lines(uint8_t *out, const uint32_t *col, uint8_t (*bits)[32], uint8_t *flags, int y0, int y1) {
+    for (int y = y0; y < y1; y++) {
+        uint32_t *e = (uint32_t *)(out + y * 0x800);
+        uint32_t t = res2_line_asm(col + y * 512, e, e + 256, bits[2 * y], w8);
+        flags[2 * y] = vis_flag(bits[2 * y], t & 0xff);
+        flags[2 * y + 1] = vis_flag(bits[2 * y + 1], t >> 8);
+    }
+}
+static void res2_lines_notab(uint8_t *out, const uint32_t *col, int y0, int y1) {
+    const uint32x4_t m = vdupq_n_u32(0x1fffffff);
+    for (int y = y0; y < y1; y++) {
+        const uint32_t *s = col + y * 512;
+        uint32_t *e = (uint32_t *)(out + y * 0x800), *o = e + 256;
+        for (int x = 0; x < 512; x += 32, s += 32, e += 16, o += 16) px32(s, e, o, m);
+    }
+}
+
+#define RD32(p, o) (*(const uint32_t *)((const uint8_t *)(p) + (o)))
+#define RDPTR(p, o) ((uint8_t *)*(uint64_t *const *)((const uint8_t *)(p) + (o)))
+int res2_resolve_fx(uint8_t *ctx, uint8_t *out, unsigned bin, unsigned m, uint8_t (*bits)[32], uint8_t *flags) {
+    uint8_t *sys = RDPTR(ctx, 0x24000), *geom = RDPTR(ctx, 0x24008);
+    int fog = (m & 2) ? 1 + (m & 1) : 0;                         /* 1 full, 2 alpha only */
+    if (fog && !(RD32(ctx, 0x24014) && RD32(sys, 0x34eb50))) fog = 0;
+    uint32_t params = 0, fogc = RD32(geom, 0x9a9c);
+    if (fog) {
+        uint32_t sh = (RD32(sys, 0x34eb40) >> 8) & 0xf;
+        params = sh | ((*(const uint16_t *)(geom + 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16;
+    }
+    const uint8_t *table = geom + 0x9974;
+#define COL(y) ((uint32_t *)(ctx + (y) * 0x800))
+#define ATT(y) ((const uint32_t *)(ctx + 0x10000 + (y) * 0x800))
+    if (!(m & 4)) {
+        if (!fog) {                                              /* DraStic's fog drivers fall back to the resolve */
+            if (bits) res2_lines(out, COL(0), bits, flags, 0, 32);
+            else res2_lines_notab(out, COL(0), 0, 32);
+            return 1;
+        }
+        for (int y = 0; y < 32; y++) {
+            fog_line2x(COL(y), ATT(y), table, params, fogc, fog == 1);
+            split_line((uint32_t *)(out + y * 0x800), COL(y));
+        }
+        return 0;
+    }
+    uint32_t clear = RD32(sys, 0x34eb4c);
+    const uint8_t *ec = geom + 0x99b4;
+    if (bin != 0) {
+        memcpy(sys + 0x32db40 + (bin - 1) * 0x2000 + 0x1000, ATT(0), 0x1000);
+        memcpy(sys + 0x343b40 + (bin - 1) * 0x1000 + 0x800, COL(0), 0x800);
+    }
+    if (bin != 11) {
+        memcpy(sys + 0x32db40 + bin * 0x2000, ATT(30), 0x1000);
+        memcpy(sys + 0x343b40 + bin * 0x1000, COL(31), 0x800);
+    }
+    int y0 = bin == 0 ? 0 : 1, y1 = bin == 11 ? 32 : 31;         /* the lines written */
+    uint32_t cl[2][W2];                                          /* bins 0 and 11: the clear attribute; a scratch line */
+    if (bin == 0 || bin == 11) {
+        uint32x4_t c4 = vdupq_n_u32(clear);
+        for (int x = 0; x < W2; x += 4) vst1q_u32(&cl[0][x], c4), vst1q_u32(&cl[1][x], c4);
+    }
+    if (fog) {
+        for (int y = y0; y < 31; y++) fog_line2x(COL(y), ATT(y), table, params, fogc, fog == 1);
+        if (bin == 11) fog_line2x(COL(31), ATT(30), table, params, fogc, fog == 1);
+    }
+    int l = 1;
+    if (bin == 0) {
+        edge_lines2x(COL(0), COL(1), cl[0], ATT(0), ATT(1), ATT(2), clear, ec);
+        l = 2;
+    }
+    for (; l < 30; l += 2) edge_lines2x(COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), clear, ec);
+    if (bin == 0) edge_lines2x(COL(29), COL(30), ATT(28), ATT(29), ATT(30), ATT(31), clear, ec);
+    if (bin == 11) edge_lines2x(COL(31), cl[1], cl[0], ATT(30), ATT(31), cl[0], clear, ec);
+    if (bits) res2_lines(out, COL(0), bits, flags, y0, y1);
+    else res2_lines_notab(out, COL(0), y0, y1);
+    return 1;
+#undef COL
+#undef ATT
 }
