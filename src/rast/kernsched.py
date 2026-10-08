@@ -19,10 +19,25 @@ as late as its latency asks, without changing what the block computes:
     are independent); any other base register may address anything;
   - the block's branch stays its last instruction, and anything that is not understood (or that moves sp) ends a
     block, so it keeps its place.
-The machine model is a greedy list scheduler: each cycle up to two instructions issue, at most one load or store,
-NEON work up to two 64-bit halves (a 128-bit operation takes both) and one NEON multiply; among the instructions
-whose operands are ready it takes the one with the longest latency path to the end of the block (ties: program
-order). Latencies follow LLVM's Cortex-A55 model (llvm-mca -mcpu=cortex-a55). The result is checked by running the
+Every order of the block that keeps those dependences computes the same; schedule_block() makes several and keeps
+the one a machine model runs fastest. The model (Machine, machine()) is llvm-mca's Cortex-A55 model as its in-order
+issue runs it (llvm-mca -mcpu=cortex-a55; it reproduces llvm-mca's cycles on the kernels' group loops within a cycle):
+  - in program order, at most two micro-ops a cycle (ldp, and a load or store that writes its base back: two);
+  - a result is ready after its latency (3 for integer ALU work, LLVM's figures; an ldp's first register after 4);
+  - units, each busy for some cycles: two ALUs, the integer multiplier, two FP/NEON pipes, the load pipe, the store
+    pipe. A 128-bit NEON operation, and a widening one (umull, uaddl, ushll, addhn...), holds one FP pipe for two
+    cycles and must open its issue group (be the first of its cycle); shifts, narrows, dup, tbl, conversions, fmov
+    and the by-element fmul hold one for a cycle at any width. ldp q holds the load pipe 6 cycles, ld2 4, ldp d/x 2;
+  - results are written back in program order (stores excepted): an instruction whose result would be written
+    before an earlier one's waits, so a load or a multiply delays the short operations behind it, and a branch
+    (an issue slot) waits for the block's last results to be written.
+The candidates: the cycle-driven list schedule of earlier versions (each cycle two instructions, one load or store,
+two 64-bit NEON halves and one NEON multiply; the longest latency path first), the order written, and list
+schedules on the model under several rankings of the instructions it could issue next (the soonest to issue, the
+longest latency path, the soonest result, the most successors, in combinations). The machine state carries over
+from the block before on the fall-through path, and the winner is the one whose branch issues soonest; ties go to
+the one that gets through the next block (as written) soonest, then to the order of the list above. Identical
+blocks in the same state (the 2x and 3x kernel sets) are scheduled once. The result is checked by running the
 kernels: RAST=diff and the per-polygon diff compare every pixel with DraStic's (tools/rast/dev/regress.sh)."""
 import re
 
@@ -118,7 +133,8 @@ def reg_bytes(op, mn):
     return None
 
 class Ins:
-    __slots__ = ("text", "mn", "defs", "uses", "mem", "lat", "kind", "width", "mul", "order")
+    __slots__ = ("text", "mn", "defs", "uses", "mem", "lat", "kind", "width", "mul", "order", "uops", "unit", "occ",
+                 "bg", "wb", "wlat", "dlat")
 
 def parse(text, order):
     """an instruction line -> Ins, or None when it is not understood (it then ends the block)"""
@@ -184,6 +200,7 @@ def parse(text, order):
     I.mul = base in ("mul", "mla", "mls", "umull", "umull2", "smull", "smull2", "umlal", "umlal2", "smlal", "smlal2",
                      "sqdmulh", "sqrdmulh", "sqdmull") and I.kind == "vec"
     I.lat = latency(base, rest, q, I)
+    machine(I, base, rest, q, ops)
     return I
 
 def latency(b, rest, q, I):
@@ -191,9 +208,10 @@ def latency(b, rest, q, I):
     if I.mem:
         if I.mem[0] == "st": return 1
         if b in ("ld2", "ld3", "ld4"): return 7
-        if b == "ld1": return 4 if "}[" in rest or len(re.findall(r"v\d+", rest)) == 1 else 7
+        if b == "ld1": return 4 if "}[" in rest else {1: 4, 2: 5, 3: 6}.get(len(re.findall(r"v\d+", rest)), 11)
         if b == "ldp" and q: return 6
-        if b == "ldp": return 5 if re.match(r"\s*[dsq]", rest) else 4
+        if b == "ldp": return 5 if re.match(r"\s*[dsqx]", rest) else 4
+        if b == "ld1r": return 4
         return 4 if re.search(r"\[\w+,\s*[wx]\d+", rest) else 3
     if I.kind == "int":
         return 4 if b in ("mul", "madd", "msub") else 3
@@ -204,22 +222,118 @@ def latency(b, rest, q, I):
              "movi"): return 4
     if b == "dup": return 2 if q else 4
     if b in ("fmov", "umov", "smov"): return 3
-    if b in ("mov", "ins") and re.search(r"\]\s*,\s*[wx]", rest): return 3        # insert from a general register
+    if b in ("mov", "ins") and re.search(r"\]\s*,\s*[wx]", rest): return 4        # insert from a general register
     if b in ("and", "orr", "eor", "bic", "orn", "mov", "mvn", "mvni", "not"): return 1
     if b in ("uaddl", "uaddl2", "saddl", "uaddw", "uaddw2", "saddw", "addhn", "addhn2", "raddhn", "subhn", "abs",
              "cmtst", "rshrn", "rshrn2", "uabd", "sabd"): return 3
     return 2
 
-def schedule_block(ins):
-    """ins: [Ins] of one block (no branch) -> the issue order"""
+# NEON forms that hold an FP pipe for one cycle however wide their operands (the model's 64-bit class), and forms
+# that hold it for two with 64-bit operands (they widen); everything else holds it two cycles when 128 bits wide
+VD = {"shl", "sshr", "ushr", "srshr", "urshr", "shrn", "shrn2", "rshrn", "rshrn2", "sqshrn", "uqshrn", "sqrshrn",
+      "uqrshrn", "sqshrun", "xtn", "xtn2", "sqxtn", "uqxtn", "sqxtun", "fcvtzs", "fcvtzu", "scvtf", "ucvtf", "dup",
+      "tbl", "tbx", "fmov", "umov", "smov", "ins"}
+WIDE = {"umull", "umull2", "smull", "smull2", "umlal", "umlal2", "smlal", "smlal2", "uaddl", "uaddl2", "saddl",
+        "saddl2", "uaddw", "uaddw2", "saddw", "saddw2", "usubl", "ssubl", "usubw", "ssubw", "ushll", "ushll2", "sshll",
+        "sshll2", "uxtl", "uxtl2", "sxtl", "sxtl2", "sqdmull", "addhn", "addhn2", "raddhn", "subhn"}
+
+def machine(I, b, rest, q, ops):
+    """the resources of llvm-mca's Cortex-A55 model (in-order issue, two micro-ops a cycle): I.uops micro-ops, the
+    unit (alu x2, imac, fp x2, mac x2, ld, st) held for I.occ cycles, I.bg when it must open an issue group (the
+    128-bit NEON class), I.wb when it takes part in the in-order writeback (every result written in program order:
+    stores are exempt), I.wlat the latency of its first result (a base register's writeback: 1), I.dlat per
+    register written"""
+    I.uops, I.occ, I.bg, I.wb = 1, 1, False, True
+    wbase = bool(I.mem) and (ops[-1].endswith("!") or not ops[-1].startswith("["))
+    I.dlat = {d: I.lat for d in I.defs}
+    if I.mem:
+        if I.mem[0] == "st":
+            I.unit, I.wb = "st", False
+            if wbase: I.uops = 2
+        else:
+            I.unit = "ld"
+            if b == "ldp":
+                I.uops = 2
+                if q: I.occ = 6
+                elif re.match(r"\s*[dx]", rest): I.occ = 2
+            elif b in ("ld2", "ld3", "ld4"): I.occ = {"ld2": 4, "ld3": 6, "ld4": 8}[b]
+            elif b == "ld1": I.occ = 1 if "}[" in rest else {1: 1, 2: 2, 3: 3}.get(len(re.findall(r"v\d+", rest)), 8)
+            if wbase: I.uops += 1
+        if b == "ldp" and I.defs: I.dlat[regs(ops[0])[0]] = 4                  # (the pair's first register)
+        if wbase:
+            m = re.match(r"\[(\w+)", next(o for o in ops if o.startswith("[")))
+            if m and regs(m.group(1)): I.dlat[regs(m.group(1))[0]] = 1
+    elif I.kind == "int": I.unit = "imac" if b in ("mul", "madd", "msub") else "alu"
+    else:
+        I.unit = "fp"
+        if b in ("fmls", "fmla") and "[" in rest or re.match(r"fmul\s+s", I.mn + " " + rest.strip()): I.unit = "mac"
+        elif b in VD or (b == "fmul" and "[" in rest) or (b in ("mov", "ins") and "[" in rest): pass
+        elif q or b in WIDE: I.occ, I.bg = 2, True
+    I.wlat = min(I.dlat.values()) if I.dlat else I.lat
+    I.dlat, I.unit, I.uops = tuple(I.dlat.items()), UNITS[I.unit], min(I.uops, 2)
+
+UNITS = {"alu": (0, 1), "imac": (2,), "fp": (3, 4), "mac": (5, 6), "ld": (7,), "st": (8,), "b": (9,)}
+
+class Machine:
+    """the in-order issue state: the current cycle and its issued micro-ops, when each unit and register is free, the
+    last writeback"""
+    __slots__ = ("cycle", "used", "free", "ready", "lastwb")
+    def __init__(self):
+        self.cycle, self.used, self.lastwb = 0, 0, 0
+        self.free = [0] * 10
+        self.ready = {}
+    def copy(self):
+        m = Machine.__new__(Machine)
+        m.cycle, m.used, m.lastwb = self.cycle, self.used, self.lastwb
+        m.free, m.ready = list(self.free), dict(self.ready)
+        return m
+    def when(self, I):
+        """the cycle I would issue in"""
+        t = self.cycle
+        ready = self.ready
+        for r in I.uses:
+            x = ready.get(r, 0)
+            if x > t: t = x
+        if I.wb and self.lastwb - I.wlat > t: t = self.lastwb - I.wlat
+        f = self.free
+        u = min(f[k] for k in I.unit)
+        if u > t: t = u
+        if t == self.cycle and (self.used + I.uops > 2 or (I.bg and self.used)): t += 1
+        return t
+    def issue(self, I, t=None):
+        if t is None: t = self.when(I)
+        if t > self.cycle: self.cycle, self.used = t, 0
+        self.used += I.uops
+        f = self.free
+        k = min(I.unit, key=f.__getitem__); f[k] = t + I.occ
+        for d, l in I.dlat: self.ready[d] = t + l
+        if I.wb: self.lastwb = t + I.lat
+        return t
+    def key(self, regs):
+        """the state relative to the current cycle, as far as instructions reading regs can tell"""
+        c = self.cycle
+        return (self.used, max(self.lastwb - c, 1), tuple(max(x - c, 0) for x in self.free),
+                tuple(max(self.ready.get(r, 0) - c, 0) for r in regs))
+
+BR = Ins(); BR.uses, BR.defs, BR.dlat, BR.uops, BR.unit, BR.occ, BR.bg, BR.wb, BR.lat, BR.wlat, BR.text = (
+    [], [], (), 1, UNITS["b"], 1, False, True, 1, 1, "")          # a branch (an issue slot, in the writeback order)
+
+def cost(m, order):
+    """issue order on a copy of the machine state -> (the cycle the block's branch issues in, the cycle its last result
+    is ready)"""
+    m = m.copy()
+    for I in order: m.issue(I)
+    return (m.when(BR), max(m.ready.values(), default=0)), m
+
+def dag(ins):
+    """the dependence graph of a block: (preds, succs) as (index, latency) lists, the latency path to the block's end"""
     n = len(ins)
-    if n < 2: return ins
     preds = [[] for _ in range(n)]                    # (pred index, latency)
     last_def, readers = {}, {}
     mems = []
     for i, I in enumerate(ins):
         for r in I.uses:
-            if r in last_def: preds[i].append((last_def[r], ins[last_def[r]].lat))
+            if r in last_def: preds[i].append((last_def[r], dict(ins[last_def[r]].dlat).get(r, ins[last_def[r]].lat)))
         for r in I.defs:
             for j in readers.get(r, ()):
                 if j != i: preds[i].append((j, 0))
@@ -240,6 +354,12 @@ def schedule_block(ins):
     prio = [0] * n
     for i in range(n - 1, -1, -1):
         prio[i] = max([ins[i].lat] + [l + prio[j] for j, l in succs[i] if l]) if succs[i] else ins[i].lat
+    return preds, succs, prio
+
+def list_cycles(ins, preds, succs, prio):
+    """the cycle-driven list scheduler: each cycle up to two instructions, at most one load or store, NEON work up to
+    two 64-bit halves and one NEON multiply; among the ready ones the longest latency path first"""
+    n = len(ins)
     npred = [len(p) for p in preds]
     ready_at = [0] * n
     avail = [i for i in range(n) if not npred[i]]
@@ -272,16 +392,89 @@ def schedule_block(ins):
         cycle += 1
     return [ins[i] for i in done]
 
+def list_machine(ins, preds, succs, prio, m, key):
+    """the list scheduler on the machine model: from the state m, each step issues the instruction that key ranks
+    first among those whose predecessors have issued (key(i, cycle it would issue in))"""
+    m = m.copy()
+    n = len(ins)
+    npred = [len(p) for p in preds]
+    avail = [i for i in range(n) if not npred[i]]
+    done = []
+    while avail:
+        best = min(avail, key=lambda i: key(i, m.when(ins[i])))
+        m.issue(ins[best])
+        avail.remove(best); done.append(best)
+        for j, l in succs[best]:
+            npred[j] -= 1
+            if not npred[j]: avail.append(j)
+    if len(done) < n: raise AssertionError("schedule: cycle in the dependence graph")
+    return [ins[i] for i in done]
+
+MEMO = {}
+
+def schedule_block(ins, m=None, after=()):
+    """ins: [Ins] of one block (no branch), m: the machine state it starts in, after: what follows (the branch and the
+    next block, as they stand) -> the issue order: of the candidates (the cycle-driven list schedule, the order written,
+    the machine list schedules under several rankings) the one whose branch issues soonest on the model, then the one
+    that gets through the next block soonest"""
+    if m is None: m = Machine()
+    if len(ins) < 2: return ins
+    after = list(after) + [BR]
+    memo = (tuple(I.text for I in ins), tuple(I.text for I in after),
+            m.key(sorted({r for I in ins + after for r in I.uses})))
+    if memo in MEMO: return [ins[i] for i in MEMO[memo]]
+    preds, succs, prio = dag(ins)
+    lat = [I.lat for I in ins]
+    keys = (lambda i, t: (t, -prio[i], i),                    # the soonest to issue, the longest path first
+            lambda i, t: (t - prio[i], t, i),                 # the latest start the path allows
+            lambda i, t: (2 * t - prio[i], t, i),
+            lambda i, t: (t, -len(succs[i]), -prio[i], i),    # the most successors
+            lambda i, t: (t + lat[i], -prio[i], i),           # the soonest result (the in-order writeback)
+            lambda i, t: (t + lat[i] - prio[i], t, i),
+            lambda i, t: (t, t + lat[i], -prio[i], i))
+    cands, seen = [], set()
+    for o in [ins, list_cycles(ins, preds, succs, prio)] + [list_machine(ins, preds, succs, prio, m, k) for k in keys]:
+        ids = tuple(I.order for I in o)
+        if ids not in seen: seen.add(ids); cands.append(o)
+    if len(cands) > 1:
+        c = [cost(m, o + [BR])[0] for o in cands]
+        best = min(c)
+        cands = [o for o, x in zip(cands, c) if x == best]
+    if len(cands) > 1: cands.sort(key=lambda o: cost(m, o + after)[0])
+    pos = {I.order: k for k, I in enumerate(ins)}
+    MEMO[memo] = [pos[I.order] for I in cands[0]]
+    return cands[0]
+
 def schedule(lines):
     """the kernel file's lines, each basic block reordered"""
-    out, block = [], []
-    def flush():
-        if block: out.extend(I.text for I in schedule_block(block))
-        block.clear()
-    for k, l in enumerate(lines):
-        I = parse(l, k)
-        if I is None:
-            flush(); out.append(l)
-        else: block.append(I)
-    flush()
+    items = [parse(l, k) for k, l in enumerate(lines)]
+    out, m, k = [], Machine(), 0
+    while k < len(lines):
+        if items[k] is None:
+            l = lines[k]; out.append(l); k += 1
+            t = l.strip()
+            mn = t.split(" ")[0].lower()
+            if mn.split(".")[0] in BRANCH:
+                m.issue(BR)
+                if mn in ("b", "br", "ret"): m = Machine()               # no fall-through: the next block starts afresh
+            elif t and not t.endswith(":"): m = Machine()               # (directives, functions)
+            continue
+        e = k
+        while e < len(lines) and items[e] is not None: e += 1
+        block = items[k:e]
+        # what follows on the fall-through path: the branch (if any), then the next block as it stands
+        after, j = [], e
+        while j < len(lines) and items[j] is None:
+            t = lines[j].strip(); mn = t.split(" ")[0].lower()
+            if mn.split(".")[0] in BRANCH:
+                after.append(BR)
+                if mn in ("b", "br", "ret"): j = None; break
+            elif t and not t.endswith(":"): j = None; break
+            j += 1
+        if j is not None:
+            while j < len(lines) and items[j] is not None: after.append(items[j]); j += 1
+        order = schedule_block(block, m, after)
+        out.extend(I.text for I in order)
+        for I in order: m.issue(I)
+        k = e
     return out

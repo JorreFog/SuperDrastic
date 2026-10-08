@@ -162,7 +162,10 @@ weights and interpolants for its first passing pixel; the vertex colour and the 
 they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flags and the register use.
 `kernsched.py` then reorders each basic block of the generated code for the A55 (its docstring has the rules: every
 register, NZCV and memory access tracked, the base registers' roles telling read-only memory, the lines and the
-stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py` writes the kernels unscheduled.
+stack apart; the branches stay where they are): of several candidate orders it keeps the one that runs fastest on
+its model of llvm-mca's in-order Cortex-A55 (issue groups, the FP and load pipes' occupancy, the in-order writeback;
+it matches llvm-mca's cycles on the group loops within a cycle), with the state the block before leaves;
+`KERNSCHED=0 python3 kerngen.py` writes the kernels unscheduled.
 
 ## Simulator usage (see `tools/sim/` for setup; `dev/` holds the scripts used during development)
 
@@ -192,6 +195,12 @@ stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py`
 - The paletted kernels with z depth have no spare register (the palette holds v18-v21, the z steps v6-v9), so their
   colour channels still queue on one scratch register, and the lit paletted ones compute the vertex colour after the
   gather: free some (the z step v9 from v8 in the latch, the texture masks or pid << 24 from the arguments).
+- The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate): within
+  its blocks the scheduler is near the model's optimum (a hill climb over its orders finds 0.1% more). What is left is
+  across blocks, which is kerngen.py's layout: the depth test overlapped with the reciprocal's Newton steps (both
+  stall 3-5 cycles a step; today the reciprocal waits for the test's cbz and the 28: entry label), or the next
+  group's depth test with this group's tail. Hoisting the fall-through code over the w7 flag branches does not pay
+  (llvm-mca: +1-8% on most kernels, the hoisted work lands above taken branches; -4-6% on the bilinear ones).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's two trips through the stack, which the model cannot price (store-to-load forwarding).
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
