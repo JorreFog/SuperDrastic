@@ -6,9 +6,11 @@
 // overlay (ui.c) as the setting changes. The value shown is ROCKNIX's own, so it matches the menus' indicator.
 //
 // The same keys with ROCKNIX's function key held change the brightness instead (input_sense: "brightness up/down"):
-// display.brightness is followed too, and the indicator shows whichever setting the press changed (it showed the
-// volume, unchanged, while the brightness went up: ROCKNIXDS issue 49). Nothing shows until one of them has changed,
-// or for 400 ms (a press at the end of the scale changes nothing: the volume, as before).
+// display.brightness is followed too, and the indicator shows the brightness when the gamepad's Menu (BTN_MODE, read
+// with EVIOCGKEY at the press) is held or the brightness setting is what changed, else the volume (it showed the
+// volume, unchanged, while the brightness went up: ROCKNIXDS issue 49). Nothing shows until a setting has changed,
+// or for 400 ms (a press at the end of the scale changes nothing: the volume, as before). Reading system.cfg is all
+// this does per press; nothing here touches the audio.
 //
 // While the keys are in use the CPU runs at its top clock (cpugov_boost): input_sense runs ROCKNIX's volume script
 // (a shell, pactl, sed on system.cfg) for every press and every 100 ms of a held key, in processes the governor
@@ -58,6 +60,26 @@ static int open_dev(char *name, size_t nlen) {
     return -1;
 }
 
+/* ROCKNIX's function key (input_sense's key.function.a, the RG DS's Menu / mode button, BTN_MODE) held right now on
+ * the gamepad: EVIOCGKEY reads the key state without taking events from anyone. -1: no gamepad found */
+static int pad_fd = -2;
+static int modifier_held(void) {
+    if (pad_fd == -2) {
+        pad_fd = -1;
+        for (int i = 0; i < 32 && pad_fd < 0; i++) {
+            char path[32]; snprintf(path, sizeof path, "/dev/input/event%d", i);
+            int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC); if (fd < 0) continue;
+            unsigned long bits[(KEY_MAX + 8 * sizeof(long)) / (8 * sizeof(long))]; memset(bits, 0, sizeof bits);
+            if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof bits), bits) >= 0 && has_bit(bits, BTN_SOUTH) && has_bit(bits, BTN_MODE)) pad_fd = fd;
+            else close(fd);
+        }
+    }
+    if (pad_fd < 0) return -1;
+    unsigned long st[(KEY_MAX + 8 * sizeof(long)) / (8 * sizeof(long))]; memset(st, 0, sizeof st);
+    if (ioctl(pad_fd, EVIOCGKEY(sizeof st), st) < 0) { close(pad_fd); pad_fd = -2; return -1; }
+    return has_bit(st, BTN_MODE);
+}
+
 static void read_settings(int *vol, int *bri) {
     *vol = *bri = -1;
     FILE *f = fopen(CFG, "r"); if (!f) return;
@@ -92,13 +114,14 @@ static void *vol_thread(void *a) {
                 if (ev[k].type == EV_KEY && (ev[k].code == KEY_VOLUMEUP || ev[k].code == KEY_VOLUMEDOWN)) {
                     long long t = now_ms();
                     if (!until) { shown = -1; kind = 0; next = t; pressed = t; read_settings(&base_v, &base_b); }   /* a new press: follow */
+                    if (ev[k].value == 1 && modifier_held() == 1) kind = 2;   /* Menu held: input_sense changes the brightness */
                     until = t + FOLLOW_MS;
                     cpugov_boost(FOLLOW_MS + 300);
                 }
         }
         if (until && now_ms() >= next) {
             int v, b; read_settings(&v, &b);
-            if (b >= 0 && b != base_b) kind = 2;                         /* the function key: brightness */
+            if (kind == 2 || (b >= 0 && b != base_b)) kind = 2;          /* the function key: brightness */
             else if (v >= 0 && v != base_v) kind = 1;
             else if (!kind && now_ms() - pressed >= GUESS_MS) kind = 1;
             int val = kind == 2 ? b : v;
