@@ -4774,12 +4774,12 @@ rast_kern_01110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v19.8b, v29.8b
+	uaddl v25.8h, v20.8b, v27.8b
 	umlal v26.8h, v19.8b, v29.8b
+	umlal v25.8h, v20.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v20.8b, v27.8b
-	umlal v26.8h, v20.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v21.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v21.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -9036,12 +9036,12 @@ rast_kern_02110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v19.8b, v29.8b
+	uaddl v25.8h, v20.8b, v27.8b
 	umlal v26.8h, v19.8b, v29.8b
+	umlal v25.8h, v20.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v20.8b, v27.8b
-	umlal v26.8h, v20.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v21.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v21.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -11315,12 +11315,12 @@ rast_kern_03010:
 2:
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v10.8b, v29.8b
+	uaddl v25.8h, v11.8b, v27.8b
 	umlal v26.8h, v10.8b, v29.8b
+	umlal v25.8h, v11.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v11.8b, v27.8b
-	umlal v26.8h, v11.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v12.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v12.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -15954,12 +15954,12 @@ rast_kern_04010:
 2:
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v10.8b, v29.8b
+	uaddl v25.8h, v11.8b, v27.8b
 	umlal v26.8h, v10.8b, v29.8b
+	umlal v25.8h, v11.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v11.8b, v27.8b
-	umlal v26.8h, v11.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v12.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v12.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -23367,12 +23367,12 @@ rast_kern_11110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v19.8b, v29.8b
+	uaddl v25.8h, v20.8b, v27.8b
 	umlal v26.8h, v19.8b, v29.8b
+	umlal v25.8h, v20.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v20.8b, v27.8b
-	umlal v26.8h, v20.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v21.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v21.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -27170,12 +27170,12 @@ rast_kern_12110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v19.8b, v29.8b
+	uaddl v25.8h, v20.8b, v27.8b
 	umlal v26.8h, v19.8b, v29.8b
+	umlal v25.8h, v20.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v20.8b, v27.8b
-	umlal v26.8h, v20.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v21.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v21.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -40564,12 +40564,12 @@ rast_kern_21110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v18.8b, v29.8b
+	uaddl v25.8h, v19.8b, v27.8b
 	umlal v26.8h, v18.8b, v29.8b
+	umlal v25.8h, v19.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v19.8b, v27.8b
-	umlal v26.8h, v19.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v20.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v20.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -44557,12 +44557,12 @@ rast_kern_22110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v18.8b, v29.8b
+	uaddl v25.8h, v19.8b, v27.8b
 	umlal v26.8h, v18.8b, v29.8b
+	umlal v25.8h, v19.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v19.8b, v27.8b
-	umlal v26.8h, v19.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v20.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v20.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -48916,12 +48916,12 @@ rast_kern_23110:
 2:
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v7.8b, v29.8b
+	uaddl v25.8h, v8.8b, v27.8b
 	umlal v26.8h, v7.8b, v29.8b
+	umlal v25.8h, v8.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v8.8b, v27.8b
-	umlal v26.8h, v8.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v9.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v9.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -53150,12 +53150,12 @@ rast_kern_24110:
 2:
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v7.8b, v29.8b
+	uaddl v25.8h, v8.8b, v27.8b
 	umlal v26.8h, v7.8b, v29.8b
+	umlal v25.8h, v8.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v8.8b, v27.8b
-	umlal v26.8h, v8.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v9.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v9.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -70774,12 +70774,12 @@ rast_kern_h01110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v19.8b, v29.8b
+	uaddl v25.8h, v20.8b, v27.8b
 	umlal v26.8h, v19.8b, v29.8b
+	umlal v25.8h, v20.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v20.8b, v27.8b
-	umlal v26.8h, v20.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v21.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v21.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -75080,12 +75080,12 @@ rast_kern_h02110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v19.8b, v29.8b
+	uaddl v25.8h, v20.8b, v27.8b
 	umlal v26.8h, v19.8b, v29.8b
+	umlal v25.8h, v20.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v20.8b, v27.8b
-	umlal v26.8h, v20.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v21.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v21.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -77378,12 +77378,12 @@ rast_kern_h03010:
 2:
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v10.8b, v29.8b
+	uaddl v25.8h, v11.8b, v27.8b
 	umlal v26.8h, v10.8b, v29.8b
+	umlal v25.8h, v11.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v11.8b, v27.8b
-	umlal v26.8h, v11.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v12.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v12.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -82061,12 +82061,12 @@ rast_kern_h04010:
 2:
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v10.8b, v29.8b
+	uaddl v25.8h, v11.8b, v27.8b
 	umlal v26.8h, v10.8b, v29.8b
+	umlal v25.8h, v11.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v11.8b, v27.8b
-	umlal v26.8h, v11.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v12.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v12.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -89554,12 +89554,12 @@ rast_kern_h11110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v19.8b, v29.8b
+	uaddl v25.8h, v20.8b, v27.8b
 	umlal v26.8h, v19.8b, v29.8b
+	umlal v25.8h, v20.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v20.8b, v27.8b
-	umlal v26.8h, v20.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v21.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v21.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -93393,12 +93393,12 @@ rast_kern_h12110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v19.8b, v29.8b
+	uaddl v25.8h, v20.8b, v27.8b
 	umlal v26.8h, v19.8b, v29.8b
+	umlal v25.8h, v20.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v20.8b, v27.8b
-	umlal v26.8h, v20.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v21.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v21.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -106922,12 +106922,12 @@ rast_kern_h21110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v18.8b, v29.8b
+	uaddl v25.8h, v19.8b, v27.8b
 	umlal v26.8h, v18.8b, v29.8b
+	umlal v25.8h, v19.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v19.8b, v27.8b
-	umlal v26.8h, v19.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v20.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v20.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -110959,12 +110959,12 @@ rast_kern_h22110:
 	shrn v30.8b, v30.8h, #8
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v18.8b, v29.8b
+	uaddl v25.8h, v19.8b, v27.8b
 	umlal v26.8h, v18.8b, v29.8b
+	umlal v25.8h, v19.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v19.8b, v27.8b
-	umlal v26.8h, v19.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v20.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v20.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -115362,12 +115362,12 @@ rast_kern_h23110:
 2:
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v7.8b, v29.8b
+	uaddl v25.8h, v8.8b, v27.8b
 	umlal v26.8h, v7.8b, v29.8b
+	umlal v25.8h, v8.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v8.8b, v27.8b
-	umlal v26.8h, v8.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v9.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v9.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f
@@ -119640,12 +119640,12 @@ rast_kern_h24110:
 2:
 	tbnz w7, #2, 1f
 	uaddl v26.8h, v7.8b, v29.8b
+	uaddl v25.8h, v8.8b, v27.8b
 	umlal v26.8h, v7.8b, v29.8b
+	umlal v25.8h, v8.8b, v27.8b
 	shrn v29.8b, v26.8h, #6
-	uaddl v26.8h, v8.8b, v27.8b
-	umlal v26.8h, v8.8b, v27.8b
-	shrn v27.8b, v26.8h, #6
 	uaddl v26.8h, v9.8b, v31.8b
+	shrn v27.8b, v25.8h, #6
 	umlal v26.8h, v9.8b, v31.8b
 	shrn v31.8b, v26.8h, #6
 	tbnz w7, #10, 1f

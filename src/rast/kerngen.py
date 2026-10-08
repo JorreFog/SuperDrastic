@@ -586,7 +586,10 @@ def colour(T, F, B, M=0):
         else: texture(T)
         e("tbnz w7, #2, 1f")                        # white vertex colour, alpha 31: the texel is the colour
         def rgb(slow=False):
-            ws = ["v26", *RL["vs"]] if F and "flat" in RL and len(RL.get("vs", ())) == 2 else ["v26"] * 3
+            # modulate scratch registers: with the flat colour in its registers v25 is free too (two side by side),
+            # with the two vs registers all three
+            vs = RL.get("vs", ())
+            ws = (["v26", *vs] if len(vs) == 2 else ["v26", "v25", "v26"]) if F and "flat" in RL else ["v26"] * 3
             for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")):
                 if F and "flat" in RL: v = RL["flat"][ch]
                 else: v = "v25"; vertex_colour(ch, F, v, slow)
