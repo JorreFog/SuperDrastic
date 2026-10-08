@@ -83,6 +83,9 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   different spans for a few polygons in 5000). The lines within the window are the same; convex polygons never have
   such chains, so real scenes render as before. `ut/hr_ab` counts the polygons with such chains apart against a base
   without the cap: against e02a298 0 of the others differ (and ~40% of the ~19% random polygons with one do).
+  The NEON walker's interpolate_parameters stores its interleaved halfwords with zip1 and str q instead of st2 (38 ->
+  28 modeled cycles a step of 4 lines): stress ROM L4 at 3x, hr_render_polygon_interpolate_edges 2.11 M -> 1.94 M
+  cycles a frame (the frame 35.88 M -> 35.37 M); the same bytes (t_edges.c against DraStic's, `ut/hr_ab`).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
