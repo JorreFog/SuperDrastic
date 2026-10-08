@@ -49,7 +49,7 @@ typedef struct { char l1[128], l2[192]; uint32_t accent; int ms; uint8_t *badge;
 static popup q[QMAX]; static int qn;                  /* pending pop-ups, q[0] is the one showing */
 static long long q_until;                              /* when q[0] goes away (0: not shown yet) */
 static char prog_text[48]; static uint8_t *prog_badge; static int prog_bw, prog_bh, prog_on;
-static int vol_pct, vol_on; static long long vol_until;    /* the volume indicator: percent, showing, until when */
+static int vol_pct, vol_on, vol_bri; static long long vol_until;   /* the volume (or brightness) indicator: percent, showing, which, until when */
 static float sc_ = 1.0f;                                    /* layout scale: plane height / 72 */
 #define S(v) ((int)((v) * sc_ + 0.5f))
 #define SF(v) ((v) * sc_)
@@ -206,6 +206,8 @@ static const char *const PX_STAR[9] = { "....#....", "...###...", "#########", "
 static const char *const PX_INFO[9] = { "...###...", "..#####..", "..##.##..", "....##...", "...##....", "...##....", ".........", "...##....", "...##...." };
 static const char *const PX_VOL[12] = { "............", ".....#......", "....##...#..", "...###....#.", "####.#..#..#", "#..#.#...#.#",
     "#..#.#...#.#", "####.#..#..#", "...###....#.", "....##...#..", ".....#......", "............" };
+static const char *const PX_SUN[12] = { ".....##.....", ".#...##...#.", "..#......#..", "....####....", "...######...", "##.######.##",
+    "##.######.##", "...######...", "....####....", "..#......#..", ".#...##...#.", ".....##....." };
 static const char *const PX_MUTE[12] = { "............", ".....#......", "....##......", "...###.#...#", "####.#..#.#.", "#..#.#...#..",
     "#..#.#...#..", "####.#..#.#.", "...###.#...#", "....##......", ".....#......", "............" };
 
@@ -235,12 +237,13 @@ static void render_pill(canvas *c) {
     draw_text(c, prog_text, (float)(x0 + S(12) + bs + (bs ? S(4) : 0)), y0 + S(27), SF(19), P_LIGHT, tw + 2);
 }
 
-/* the volume indicator: a speaker, the menu's 10-segment bar and the percentage */
-static void render_volume(canvas *c, int pct) {
+/* the volume indicator: a speaker, the menu's 10-segment bar and the percentage (bri: the brightness, with a sun) */
+static void render_volume(canvas *c, int pct, int bri) {
     int w = S(310), h = S(42), x0 = (c->w - w) / 2, y0 = S(4), x1 = x0 + w, y1 = y0 + h, cy = (y0 + y1) / 2;
     card(c, x0, y0, x1, y1, SF(10), P_LIGHT);
     int k = S(2) < 2 ? 2 : S(2);
-    pix(c, pct <= 0 ? PX_MUTE : PX_VOL, 12, x0 + S(14), cy - 6 * k, k, pct <= 0 ? 0xff8a96 : P_LIGHT);
+    if (bri) pix(c, PX_SUN, 12, x0 + S(14), cy - 6 * k, k, P_LIGHT);
+    else pix(c, pct <= 0 ? PX_MUTE : PX_VOL, 12, x0 + S(14), cy - 6 * k, k, pct <= 0 ? 0xff8a96 : P_LIGHT);
     char t[8]; snprintf(t, sizeof t, "%d%%", pct);
     float tw = text_width(t, SF(19), 8);
     draw_text(c, t, (float)(x1 - S(14)) - tw, y0 + S(28), SF(19), 0x7ec8ee, tw + 2);
@@ -262,10 +265,10 @@ static void render(void) {                            /* with mx held */
         for (int y = 0; y < h; y++) memset((char *)px + y * pitch, 0, (size_t)w * 4);
         canvas c = { px, pitch, w, h };
         sc_ = h / 72.0f;
-        if (vol_on) render_volume(&c, vol_pct); else if (qn) render_popup(&c, &q[0]); else render_pill(&c);
+        if (vol_on) render_volume(&c, vol_pct, vol_bri); else if (qn) render_popup(&c, &q[0]); else render_pill(&c);
     }
     dsflip_overlay_end(show);
-    if (vol_on) dsflip_log("[ui] overlay: volume %d%%\n", vol_pct);
+    if (vol_on) dsflip_log("[ui] overlay: %s %d%%\n", vol_bri ? "brightness" : "volume", vol_pct);
     else dsflip_log("[ui] overlay: %s\n", qn ? q[0].l2 : prog_on ? prog_text : "hidden");
 }
 
@@ -361,11 +364,14 @@ void ui_progress(const char *text, const char *badge_png) {
 }
 
 /* show the volume indicator at pct for 1.5 s (again: refreshed, the time restarts). Thread-safe. */
-void ui_volume(int pct) {
+static void indicator(int pct, int bri) {
     pthread_mutex_lock(&mx);
     if (!ui_start()) { pthread_mutex_unlock(&mx); return; }
-    vol_pct = pct; vol_on = 1; vol_until = now_ms() + 1500;
+    vol_pct = pct; vol_bri = bri; vol_on = 1; vol_until = now_ms() + 1500;
     dirty = 1;
     pthread_cond_signal(&cv);
     pthread_mutex_unlock(&mx);
 }
+void ui_volume(int pct) { indicator(pct, 0); }
+/* the same for the brightness (volume.c: the volume keys with ROCKNIX's function key held) */
+void ui_brightness(int pct) { indicator(pct, 1); }

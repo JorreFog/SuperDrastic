@@ -5,6 +5,7 @@ Test and measurement tools, run on the device unless noted.
 | Tool | |
 |---|---|
 | `shtest.c` | Runs one shader on a frame without DraStic and times it (`sh build.sh <sysroot> shtest`) |
+| `wfc_test.c` | Host test for the Wi-Fi code in `src/wififrame.c` and `src/wfcnet.c` (`sh build.sh wfc_test`; runs on the PC) |
 | `touchtap.py` | Injects a real tap or swipe into the touchscreen (evdev write) |
 | `padkey.py` | Presses a gamepad button the same way |
 | `touchcal.c` | Draws crosshairs on the panels to calibrate the touchscreen (KMS) |

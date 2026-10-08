@@ -41,6 +41,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <dlfcn.h>
+#include <link.h>
 #include <errno.h>
 #include <glob.h>
 #include <signal.h>
@@ -88,7 +89,8 @@ typedef struct {                        /* one panel */
     dbuf *src;                          /* shader mode: DraStic's newest finished buffer, not yet shaded */
     long long src_t;                    /* ...and when DraStic presented it */
     int src_held;                       /* ...after a hold on a full queue (DSFLIP_QUEUE_WAIT): not a phase sample */
-    dbuf out[NOUT];                     /* shader mode: panel-sized buffers the shader draws into */
+    dbuf out[NOUT];                     /* shader mode: the buffers the shader draws into (the panel's size, or less:
+                                           shader_output_size; the display controller scales them to the panel) */
     dbuf *q[QMAX]; int nq;              /* frame queue: the frames after `ready`, oldest first (see enqueue) */
 } panel;
 
@@ -135,6 +137,7 @@ static int menu_touch;                                     /* DraStic's menu is 
 static int vp_x, vp_y, vp_w, vp_h;                         /* where a shader draws the DS screen on the panel (0x0: all of it) */
 static int touch_outside;                                  /* the current touch began outside that rectangle: ignore it */
 int shader_viewport(int *v, int pw, int ph);
+int shader_output_size(int *w, int *h, int pw, int ph);
 static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
@@ -149,6 +152,7 @@ void resume_start(void); void resume_frame(void); int resume_poll(void *e); void
 int menu_event(void *e); void menu_frame(void); int menu_touch_event(int down_change, int down, int x, int y, int xmax, int ymax);   /* menu.c */
 volatile int dsflip_hold;               /* menu.c: DraStic's frames are dropped, not shown (a load runs behind the menu's screen) */
 static int st_drop_src, st_drop_q, st_drop_buf;
+static volatile int drops_total, shown_total;   /* frames dropped (any cause) / new frames on the top panel, since start */
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
 const char *shader_name(void);
@@ -440,7 +444,7 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         }
         if (!P[i].queued) continue;     /* toast-only flip on this CRTC */
         if (P[i].last_flip && t - P[i].last_flip > st_iv_max[i]) st_iv_max[i] = t - P[i].last_flip;
-        P[i].last_flip = t; st_flips[i]++;
+        P[i].last_flip = t; st_flips[i]++; if (!i) shown_total++;
         if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
     }
@@ -507,8 +511,10 @@ static int battery_pct(int *charging) {
     }
     return pct;
 }
+int menu_opened_drastic(void);
 static void status_card(void) {
     const char *e = getenv("DSFLIP_STATUS_CARD"); if (e && *e == '0') return;
+    if (menu_opened_drastic()) return;             /* from the in-game menu (menu.c), which showed them already */
     char l1[64], l2[96]; time_t t = time(0); struct tm lt; localtime_r(&t, &lt);
     strftime(l1, sizeof l1, "%H:%M", &lt);
     int chg, pct = battery_pct(&chg);
@@ -606,7 +612,7 @@ static void note_phase(long long tp) {  /* with mu held: where in the refresh cy
 static void enqueue(int i, dbuf *b, long long t) {
     if (!P[i].ready) { if (!P[0].ready && !P[1].ready) ready_since = t; P[i].ready = b; return; }
     if (P[i].nq < queue_depth) { P[i].q[P[i].nq++] = b; return; }
-    release(P[i].ready); st_drop++; st_drop_q++; dsflip_queue_drops++;
+    release(P[i].ready); st_drop++; drops_total++; st_drop_q++; dsflip_queue_drops++;
     if (queue_depth) { P[i].ready = dequeue(i); P[i].q[P[i].nq++] = b; } else P[i].ready = b;
 }
 
@@ -618,7 +624,7 @@ static void shade_pending(void) {
         st[i] = P[i].src_t; held_any |= P[i].src_held;
         P[i].src = 0;
         for (int k = 0; k < NOUT && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
-        if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; st_drop_buf++; continue; }
+        if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; drops_total++; st_drop_buf++; continue; }
         dst[i]->state = WRITING;
     }
     unlock(&mu);
@@ -647,7 +653,7 @@ static void shade_pending(void) {
     }
     for (int i = 0; i < 2; i++) if (src[i]) {
         release(src[i]);
-        if (bad[i]) { dst[i]->state = FREE; st_drop++; continue; }
+        if (bad[i]) { dst[i]->state = FREE; st_drop++; drops_total++; continue; }
         dst[i]->state = READY;
         enqueue(i, dst[i], tr);
     }
@@ -659,22 +665,78 @@ static void shade_pending(void) {
  * "still pending" and the display fell into 30 fps bursts. The presenter now only handles DRM events, the latch
  * timer and commits; this worker shades each frame DraStic presents (woken via wfd) and then wakes the presenter. */
 static int wfd = -1;
+/* the in-game menu's shader switch (menu.c): a request for the worker, which answers between two frames */
+int shader_switch(const char *name);
+static char sw_name[64]; static volatile int sw_req, sw_done, sw_result;
+static pthread_mutex_t sw_mu = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_t sw_cv = PTHREAD_COND_INITIALIZER;
+static void shader_switch_now(void) {          /* on the worker */
+    if (sw_req == sw_done) return;
+    pthread_mutex_lock(&sw_mu);
+    char nm[64]; snprintf(nm, sizeof nm, "%s", sw_name); int req = sw_req;
+    pthread_mutex_unlock(&sw_mu);
+    int r = shader_switch(*nm ? nm : 0);
+    if (!r) {                                   /* touch follows a shader that draws the DS screen into part of the panel */
+        int v[4] = { 0, 0, 0, 0 }, pw = P[1].mode.hdisplay, ph = P[1].mode.vdisplay;
+        if (!shader_viewport(v, pw, ph)) v[0] = v[1] = v[2] = v[3] = 0;
+        lock(&tmu); vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; unlock(&tmu);
+        LOG("[dsflip] shader switched to %s\n", *nm ? nm : "a plain copy (off)");
+    }
+    pthread_mutex_lock(&sw_mu); sw_result = r; sw_done = req; pthread_cond_broadcast(&sw_cv); pthread_mutex_unlock(&sw_mu);
+}
+/* menu.c: switch to shader name (0: off) while the game runs. 0 done, -1 it doesn't compile (the old one stays), -2 it
+ * needs another buffer size (next start), -3 this session has no shader (zero-copy: next start), -4 no answer */
+int dsflip_shader_switch(const char *name) {
+    if (!ok || !shader_on) return -3;
+    pthread_mutex_lock(&sw_mu);
+    snprintf(sw_name, sizeof sw_name, "%s", name ? name : "");
+    int req = ++sw_req;
+    uint64_t one = 1; if (write(wfd, &one, 8) < 0) {}
+    struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts); ts.tv_sec += 2;
+    while (sw_done != req) if (pthread_cond_timedwait(&sw_cv, &sw_mu, &ts)) break;
+    int r = sw_done == req ? sw_result : -4;
+    pthread_mutex_unlock(&sw_mu);
+    return r;
+}
+int dsflip_shader_on(void) { return ok && shader_on; }
 static void *shader_worker(void *a) {
     (void)a;
-    shader_on = shader_init(fd, shader_nm);        /* GL lives on this thread; init() waits for the verdict */
+    int on = shader_init(fd, shader_nm);           /* GL lives on this thread; init() waits for the verdict */
+    if (on) {
+        /* the buffers it draws into, at the size the shader asked for (shader_output_size: the panel's unless its
+         * source says "dsflip-output: Nx"; a smaller buffer is scaled to the panel by the display controller, as
+         * DraStic's own buffers are without a shader). Under mu: mkbuf's generation counter is shared with
+         * SDL_CreateTexture on DraStic's thread. */
+        lock(&mu);
+        for (int i = 0; i < 2 && on; i++) {
+            int ow, oh, pw = P[i].mode.hdisplay, ph = P[i].mode.vdisplay;
+            int scaled = shader_output_size(&ow, &oh, pw, ph);
+            for (int k = 0; k < NOUT && on; k++)
+                if (mkbuf(&P[i].out[k], ow, oh, DRM_FORMAT_XRGB8888, 32)) { LOG("[dsflip] shader output buffers %dx%d: alloc failed\n", ow, oh); on = 0; }
+            if (on && (i == 0 || pw != P[0].mode.hdisplay || ph != P[0].mode.vdisplay)) {
+                if (scaled) LOG("[dsflip] shader output: %dx%d per panel, scaled to %dx%d by the display controller\n", ow, oh, pw, ph);
+                else LOG("[dsflip] shader output: %dx%d per panel\n", ow, oh);
+            }
+        }
+        unlock(&mu);
+    }
+    shader_on = on;
     if (!shader_on) LOG("[dsflip] shader \"%s\" unavailable: zero-copy\n", shader_nm);
+    __sync_synchronize();                          /* the output sizes and shader_on, before shader_done is seen */
     shader_done = 1;
     if (!shader_on) return 0;
     struct pollfd pw = { .fd = wfd, .events = POLLIN };
     for (;;) {
+        shader_switch_now();
         if (poll(&pw, 1, 100) <= 0) continue;
         uint64_t v; if (read(wfd, &v, 8) < 0) {}
+        shader_switch_now();
         shade_pending();
         uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
     }
     return 0;
 }
 
+static void stall_watch(long long t);
 static void *presenter(void *a) {
     (void)a;
     /* the presenter reacts to vblank events and the latch timer; its work per wake-up is tiny, but a late wake-up
@@ -728,6 +790,7 @@ static void *presenter(void *a) {
         if (toast_dirty && !pending_mask && !P[0].ready && !P[1].ready) {   /* an overlay change with no frame coming */
             lock(&mu); commit_src = 'T'; try_commit(); unlock(&mu);
         }
+        stall_watch(now_us());                                            /* DraStic still presenting? */
         if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
         if (tdump_n < touch_dumps && tdump_x >= 0) { lock(&mu); dump_touch(); unlock(&mu); tdump_n++; tdump_x = -1; }
         long long t = now_us();
@@ -794,6 +857,198 @@ static void *presenter(void *a) {
         }
     }
     return 0;
+}
+
+/* ---------- stall watch ----------
+ * DraStic's main thread presents the frames, and it is also what saves the resume state and quits on the exit hotkey
+ * (resume.c). When it stops, the panels keep the last frame, the hotkey does nothing and nothing else ends the game:
+ * on 2026-10-05 an RG DS Plus needed a hard reset (Black 2, just after its resume load). The presenter runs on
+ * regardless, so it watches. No frame for STALL_WARN_S while the game should be running (DraStic's own menu presents
+ * only when it changes, and the in-game menu holds DraStic on purpose: neither counts; nor does the quit's save)
+ * logs what every thread is doing, shows a card, and makes the exit hotkey quit at once (resume.c). After
+ * DSFLIP_STALL_QUIT seconds (20; 0: never) the game is ended here, with a notice for the menu (session.sh shows
+ * DSFLIP_NOTICE, default /tmp/dsflip-notice). */
+#define STALL_WARN_S 5
+volatile int dsflip_stalled;            /* no frame for STALL_WARN_S: resume.c's SIGUSR1 then quits at once */
+static int stall_quit_s = 20;
+static long long stall_t0;              /* since when no frame came (only while one is expected) */
+static char log_path[512];
+int menu_is_open(void);                 /* menu.c */
+int resume_saving(void);                /* resume.c: the quit's save is being written (DraStic's thread is busy) */
+static void stall_dump(FILE *f) {       /* every thread: name, state, CPU time, allowed CPUs, wait channel, kernel stack */
+    glob_t g;
+    if (glob("/proc/self/task/[0-9]*", 0, 0, &g)) return;
+    for (size_t i = 0; i < g.gl_pathc; i++) {
+        char p[300], comm[32] = "?", st[1024] = "", wchan[64] = "", cpus[64] = "?", sc[64] = "", line[256];
+        const char *tid = strrchr(g.gl_pathv[i], '/') + 1;
+        FILE *x;
+        snprintf(p, sizeof p, "%s/comm", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) { if (fgets(comm, sizeof comm, x)) comm[strcspn(comm, "\n")] = 0; fclose(x); }
+        snprintf(p, sizeof p, "%s/stat", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) { if (!fgets(st, sizeof st, x)) st[0] = 0; fclose(x); }
+        char state = '?'; unsigned long ut = 0, stt = 0; int cpu = -1;
+        { char *r = strrchr(st, ')');           /* after "(comm)": state, then field 14/15 utime/stime, 39 processor */
+          if (r && sscanf(r + 2, "%c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %*u %*u %*d %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*d %d",
+                             &state, &ut, &stt, &cpu) < 3) state = '?'; }
+        snprintf(p, sizeof p, "%s/wchan", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) { if (!fgets(wchan, sizeof wchan, x)) wchan[0] = 0; fclose(x); }
+        snprintf(p, sizeof p, "%s/syscall", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) { if (fgets(sc, sizeof sc, x)) sc[strcspn(sc, " \n")] = 0; fclose(x); }
+        snprintf(p, sizeof p, "%s/status", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) {
+            while (fgets(line, sizeof line, x)) if (!strncmp(line, "Cpus_allowed_list:", 18)) { snprintf(cpus, sizeof cpus, "%s", line + 18 + strspn(line + 18, " \t")); cpus[strcspn(cpus, "\n")] = 0; }
+            fclose(x);
+        }
+        fprintf(f, "[stall] thread %s %-15s %c cpu-time %lu ms, on CPU %d, allowed %s, syscall %s, waiting in %s\n", tid, comm,
+                state, (ut + stt) * 10, cpu, cpus, sc[0] ? sc : "-", wchan[0] && strcmp(wchan, "0") ? wchan : "-");
+        snprintf(p, sizeof p, "%s/stack", g.gl_pathv[i]);
+        if ((x = fopen(p, "r"))) {                 /* the kernel side (root only): the first frames say enough */
+            for (int k = 0; k < 4 && fgets(line, sizeof line, x); k++) fprintf(f, "[stall]     %s", line);
+            fclose(x);
+        }
+    }
+    globfree(&g);
+}
+static void *stall_report(void *a) {    /* its own thread: the presenter never waits on files or the overlay */
+    long long idle = (long long)(intptr_t)a;
+    if (lg) { flockfile(lg); fprintf(lg, "[stall] no frame from DraStic for %.1f s (not in a menu): its threads\n", idle / 1e6); stall_dump(lg); funlockfile(lg); fflush(lg); fsync(fileno(lg)); }
+    return 0;
+}
+/* the card: 15 s at a time (up to the default ending), again while the stall lasts; gone soon if frames come back */
+static void stall_card(void) {
+    dsflip_toast("The game stopped responding", stall_quit_s > 0 ? "Exit hotkey: back to the menu now (or wait)" : "Exit hotkey: back to the menu", 0xe04040, 15000);
+}
+static void *stall_card_thread(void *a) { (void)a; stall_card(); return 0; }
+static void stall_watch(long long t) {  /* the presenter, every wake-up (at least every 50 ms), mu not held */
+    static int seen; static long long card_at;
+    int p = dsflip_presents;
+    if (p != seen || !p || menu_touch || menu_is_open() || resume_saving()) {
+        if (dsflip_stalled) LOG("[stall] DraStic shows frames again after %.1f s\n", (t - stall_t0) / 1e6);
+        dsflip_stalled = 0; seen = p; stall_t0 = t;
+        return;
+    }
+    long long idle = t - stall_t0;
+    if (!dsflip_stalled && idle >= STALL_WARN_S * 1000000LL) {
+        dsflip_stalled = 1;
+        pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+        if (!pthread_create(&th, &at, stall_report, (void *)(intptr_t)idle)) pthread_setname_np(th, "dsf-stall");
+        pthread_attr_destroy(&at);
+        card_at = 0;
+    }
+    if (dsflip_stalled && t - card_at >= 15000000LL) {   /* the card (ui.c may take a moment: its own thread) */
+        card_at = t;
+        pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+        if (!pthread_create(&th, &at, stall_card_thread, 0)) pthread_setname_np(th, "dsf-stallcard");
+        pthread_attr_destroy(&at);
+    }
+    if (dsflip_stalled && stall_quit_s > 0 && idle >= stall_quit_s * 1000000LL) {
+        const char *np = getenv("DSFLIP_NOTICE"); if (!np || !*np) np = "/tmp/dsflip-notice";
+        FILE *f = fopen(np, "w");
+        if (f) { fprintf(f, "The game stopped responding (no picture for %d seconds) and was closed. Log: %s\n", stall_quit_s, log_path); fclose(f); }
+        LOG("[stall] still no frame after %d s: ending the game (DSFLIP_STALL_QUIT=0 keeps it)\n", stall_quit_s);
+        if (lg) { fflush(lg); fsync(fileno(lg)); }
+        kill(getpid(), SIGKILL);
+    }
+}
+
+/* Threads start on every CPU, not just their creator's. session.sh's CPU placement (the RG DS Plus) confines DraStic's
+ * main thread to CPU 3, and a thread created from a confined thread inherits that one CPU: DraStic's 3D helpers made
+ * that way never ran, missed their first hand-off and DraStic's main thread and the helpers waited on each other for
+ * good (68dfccd in ROCKNIXDS: 8 of 9 starts froze when the placement came too early). The placement only waits for the
+ * helpers that exist when it starts; whatever DraStic (or SDL, PipeWire, Mali, libcurl, libdsflip) creates later --
+ * after a state load, say -- started on CPU 3 alone until the next placement pass. glibc applies an attribute's CPU
+ * set before the new thread first runs. DSFLIP_SPREAD_THREADS=0: inherit as before. */
+static cpu_set_t all_cpus; static int spread_threads = -1;
+static int create_spread(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
+    static int (*real)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
+    if (!real) real = (int (*)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
+    if (spread_threads <= 0) return real(th, attr, fn, arg);
+    cpu_set_t cur;
+    if (sched_getaffinity(0, sizeof cur, &cur) || CPU_EQUAL(&cur, &all_cpus)) return real(th, attr, fn, arg);   /* creator not confined */
+    if (attr) {
+        cpu_set_t want;                 /* an attribute that names CPUs itself is left alone (unset reads as all bits) */
+        if (pthread_attr_getaffinity_np(attr, sizeof want, &want) == 0 && CPU_COUNT(&want) != CPU_SETSIZE) return real(th, attr, fn, arg);
+        pthread_attr_setaffinity_np((pthread_attr_t *)attr, sizeof all_cpus, &all_cpus);
+        return real(th, attr, fn, arg);
+    }
+    pthread_attr_t a; pthread_attr_init(&a);
+    pthread_attr_setaffinity_np(&a, sizeof all_cpus, &all_cpus);
+    int r = real(th, &a, fn, arg);
+    pthread_attr_destroy(&a);
+    return r;
+}
+
+/* DraStic's helper threads wait at a door until the locks they wait on exist.
+ *
+ * DraStic r2.5.2.2 (aarch64, build id 7a5e0e5f...0748) starts four of its helper threads before it initialises what
+ * each of them waits on: pthread_create, then pthread_mutex_init twice and pthread_cond_init twice. That is at
+ * +0x312ac for the thread that starts at +0x2fa50 (a screen's lines), and at +0x597b4, three times over, for the
+ * three that start at +0x58e50 (the 3D bins; the thread at +0x59430 that hands them their work is created after its
+ * locks, as it should be). A helper that is quick is already inside pthread_cond_wait when its creator wipes that
+ * condition variable. glibc (2.25 on) keeps a condition variable's waiters in the variable itself, so the
+ * pthread_cond_signal of the first hand-off finds no waiter and wakes nobody, and whoever handed the work over waits
+ * for the answer for good: the game shows no frame at all, or none from the first frame that needs that helper (the
+ * first 3D frame after a state load: the freeze of 2026-10-05 on an RG DS Plus).
+ * Measured on an RG DS Plus on 2026-10-06, 1.6's library: 4 of 25 starts of Pokemon HeartGold showed no frame. gdb:
+ * three with a 3D helper still in the pthread_cond_wait at +0x58eb8 after its hand-off, the 3D thread waiting for it
+ * in the one at +0x592f8 and the main thread in the one at +0x596a8; one with the lines helper in the one at +0x2faf0
+ * and the main thread waiting for it in the one at +0x30d30. Every thread was allowed on all four CPUs: session.sh's
+ * CPU placement was not the cause; placed too early it made the creator late more often (68dfccd in ROCKNIXDS: 8 of
+ * 9 starts).
+ *
+ * So the pthread_create below starts these four through helper_start, where a helper's first act is to wait until
+ * its creator has made its second pthread_cond_init call since the pthread_create: the last of the four
+ * initialisations, counted in the pthread_cond_init below. A door opens by itself after 2 s (with a line in the log),
+ * so nothing waits here for good, and a DraStic whose code is elsewhere is started as before.
+ * DSFLIP_HELPER_DOOR=0: start them as DraStic does. DSFLIP_HELPER_RACE=<ms>: the creator sleeps that long right after
+ * each of the four pthread_create calls, which is the freeze at every start without the door and changes nothing with
+ * it: the test on a handheld. */
+#define DS_HELPER_LINES 0x2fa50
+#define DS_HELPER_BINS  0x58e50
+typedef struct { void *(*fn)(void *); void *arg; unsigned off; int open; long long t0; } door_t;
+#define DOORS 64
+static door_t doors[DOORS]; static unsigned door_n;
+static __thread door_t *door_mine; static __thread int door_inits;     /* the creator's: the helper it started last */
+static int helper_door = -1, helper_race_ms; static uintptr_t exe_base;
+static int exe_base_cb(struct dl_phdr_info *i, size_t n, void *u) { (void)n; (void)u; exe_base = i->dlpi_addr; return 1; }   /* the first is the program */
+
+static void *helper_start(void *p) {
+    door_t *d = p; void *(*fn)(void *) = d->fn; void *arg = d->arg; unsigned off = d->off; long long t0 = d->t0;
+    int i = 0;
+    for (; i < 20000 && !__atomic_load_n(&d->open, __ATOMIC_ACQUIRE); i++) { struct timespec t = { 0, 100000 }; nanosleep(&t, 0); }
+    if (i == 20000) LOG("[dsflip] DraStic's helper +0x%x waited 2 s for its locks and starts all the same\n", off);
+    else LOG("[dsflip] DraStic's helper +0x%x waited %lld us for its locks\n", off, now_us() - t0);
+    return fn(arg);
+}
+
+int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
+    if (helper_door < 0) {
+        const char *e = getenv("DSFLIP_HELPER_DOOR"); int on = !(e && *e == '0');
+        e = getenv("DSFLIP_HELPER_RACE"); helper_race_ms = e ? atoi(e) : 0;
+        dl_iterate_phdr(exe_base_cb, 0);
+        helper_door = on;
+    }
+    uintptr_t off = (uintptr_t)fn - exe_base;
+    int helper = exe_base && (off == DS_HELPER_LINES || off == DS_HELPER_BINS);
+    door_t *d = 0;
+    if (helper && helper_door) {
+        if (door_mine) __atomic_store_n(&door_mine->open, 1, __ATOMIC_RELEASE);     /* the one before: never left waiting */
+        d = &doors[__atomic_fetch_add(&door_n, 1, __ATOMIC_RELAXED) % DOORS];
+        d->fn = fn; d->arg = arg; d->off = (unsigned)off; d->t0 = now_us(); __atomic_store_n(&d->open, 0, __ATOMIC_RELEASE);
+        door_mine = d; door_inits = 0;
+    }
+    int r = d ? create_spread(th, attr, helper_start, d) : create_spread(th, attr, fn, arg);
+    if (r && d) door_mine = 0;                                          /* no thread: nobody at this door */
+    if (helper && helper_race_ms > 0) { struct timespec t = { helper_race_ms / 1000, (helper_race_ms % 1000) * 1000000L }; nanosleep(&t, 0); }
+    return r;
+}
+
+int pthread_cond_init(pthread_cond_t *c, const pthread_condattr_t *a) {
+    static int (*real)(pthread_cond_t *, const pthread_condattr_t *);
+    if (!real) real = (int (*)(pthread_cond_t *, const pthread_condattr_t *))dlsym(RTLD_NEXT, "pthread_cond_init");
+    int r = real(c, a);
+    if (door_mine && ++door_inits == 2) { __atomic_store_n(&door_mine->open, 1, __ATOMIC_RELEASE); door_mine = 0; }
+    return r;
 }
 
 /* ---------- the in-game menu's screens (menu.c) ---------- */
@@ -883,6 +1138,26 @@ static void dsflip_key(int scancode, int down) {
     push_ev(&e);
 }
 void dsflip_mic_key(int down) { dsflip_key(71, down); }
+/* the same through a joystick button (SDL_JOYBUTTONDOWN/UP, as resume.c presses DraStic's save/load controls): for a
+ * drastic.cfg whose keyboard set has no fake microphone but whose joystick set does (DSFLIP_MIC_KEY, audio.c) */
+int resume_joy_id(void);
+void dsflip_mic_button(int button, int down) {
+    sdl_ev e; memset(&e, 0, sizeof e);
+    uint32_t type = down ? 0x603 : 0x604, ts = SDL_GetTicks(); int32_t which = resume_joy_id();
+    memcpy(e.pad, &type, 4); memcpy(e.pad + 4, &ts, 4); memcpy(e.pad + 8, &which, 4);
+    e.pad[12] = (uint8_t)button; e.pad[13] = down ? 1 : 0;
+    push_ev(&e);
+}
+/* DraStic's fake microphone plays its sample (microphone/<game>.wav or microphone.wav, read once at the game's
+ * start) from the beginning at each press and then gives silence until the next one, whatever the hold (r2.5.2.2's
+ * spu_fake_microphone_start keeps the press time, spu_get_microphone_sample plays from there and returns 0 past the
+ * sample's end). A blow held longer than the sample is re-pressed: released in one of DraStic's event loops and
+ * pressed in the next (a barrier between them), so DraStic sees both and starts the sample over. button < 0: the key */
+void dsflip_mic_restart(int button) {
+    if (button >= 0) dsflip_mic_button(button, 0); else dsflip_mic_key(0);
+    sdl_ev e; memset(&e, 0, sizeof e); e.type = EV_BARRIER; push_ev(&e);
+    if (button >= 0) dsflip_mic_button(button, 1); else dsflip_mic_key(1);
+}
 /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
  * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
@@ -1095,6 +1370,10 @@ __attribute__((constructor)) static void init(void) {
        to become DRM master for 3 s, writing "passthrough" over the session's verdict. */
     if (getenv("DSFLIP_IN_GAME")) return;
     setenv("DSFLIP_IN_GAME", "1", 1);
+    {   /* the CPUs new threads start on (the pthread_create above): the whole set, before anything is confined */
+        const char *sp = getenv("DSFLIP_SPREAD_THREADS");
+        spread_threads = !(sp && *sp == '0') && sched_getaffinity(0, sizeof all_cpus, &all_cpus) == 0 && CPU_COUNT(&all_cpus) > 1;
+    }
     const char *lp = getenv("DSFLIP_LOG"); if (!lp) lp = "/storage/dsflip/logs/dsflip.log";
     {   /* keep the previous three sessions' logs (.1 = the last one): testers lost evidence to the overwrite */
         char a[512], b[512];
@@ -1104,6 +1383,7 @@ __attribute__((constructor)) static void init(void) {
             rename(a, b);
         }
     }
+    snprintf(log_path, sizeof log_path, "%s", lp);
     lg = fopen(lp, "w");
     if (lg) setvbuf(lg, 0, _IOLBF, 0);
     LOG("[dsflip] libdsflip %s\n", DSFLIP_VERSION);
@@ -1219,6 +1499,10 @@ __attribute__((constructor)) static void init(void) {
     LOG("[dsflip] toast plane: %u (%dx%d)\n", tp_plane, TOAST_W, TOAST_H);
     if (tp_plane) volume_start();           /* the volume keys' indicator (volume.c): mako is down with sway */
     signal(SIGUSR2, on_usr2);
+    { const char *sq = getenv("DSFLIP_STALL_QUIT"); if (sq && *sq) stall_quit_s = atoi(sq) > 0 ? atoi(sq) : 0; }
+    { LOG("[dsflip] stall watch: a card after %d s without a frame, the game ended after %d s%s; new threads start on %d CPUs%s\n",
+          STALL_WARN_S, stall_quit_s, stall_quit_s ? "" : " (never: DSFLIP_STALL_QUIT=0)", spread_threads > 0 ? CPU_COUNT(&all_cpus) : 0,
+          spread_threads > 0 ? "" : " (inherited: DSFLIP_SPREAD_THREADS=0)"); }
     { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q) { queue_depth = atoi(q); if (queue_depth < 0) queue_depth = 0; if (queue_depth > QMAX) queue_depth = QMAX; } }
     const char *pm = getenv("DSFLIP_PACING");
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
@@ -1233,11 +1517,7 @@ __attribute__((constructor)) static void init(void) {
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
-    if ((shader_nm = shader_name()))
-        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < NOUT; k++)
-            if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
-                LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
-            }
+    shader_nm = shader_name();          /* its output buffers are made by the shader worker, once it knows their size */
     /* shader input: DraStic's buffers imported as dma-bufs (default), or DSFLIP_SHADER_COPY=1: uploaded from memory.
      * Measured 2026-09-28: the upload was most of every shader's cost (ds-crisp 1.96 -> 0.75 ms per panel at 2x) and
      * 17% of a core on the shader thread (-> 5.5%); HeartGold 2x drops the same (0.04/s) either way. */
@@ -1437,9 +1717,82 @@ int SDL_RenderClear(void *rn) {
     return ok ? 0 : real(rn);
 }
 
+/* ---------- performance overlay (the in-game menu's Quick settings: menu.c) ----------
+ * A few lines of 3x5 pixel text in the top screen's corner, drawn into DraStic's finished frame before it is shown
+ * (or shaded): no plane, no thread, ~1-3 thousand pixel writes a frame. 1 FPS: the frames the top panel showed in
+ * the last second. 2 detailed: + DraStic's frame time (the average and the longest gap between its frames) and the
+ * frames dropped in the last second. 3 advanced: + the CPU's and the GPU's clocks and DraStic's internal resolution.
+ * The numbers are taken once a second. */
+static volatile int perf_mode;
+void dsflip_perf_mode(int m) { perf_mode = m < 0 || m > 3 ? 0 : m; }
+static const char PF_CH[] = "0123456789./ FPSMDROCUGXEHZ";
+static const char *const PF_GL[][5] = {
+    { "###", "#.#", "#.#", "#.#", "###" }, { ".#.", "##.", ".#.", ".#.", "###" }, { "###", "..#", "###", "#..", "###" },
+    { "###", "..#", ".##", "..#", "###" }, { "#.#", "#.#", "###", "..#", "..#" }, { "###", "#..", "###", "..#", "###" },
+    { "###", "#..", "###", "#.#", "###" }, { "###", "..#", "..#", ".#.", ".#." }, { "###", "#.#", "###", "#.#", "###" },
+    { "###", "#.#", "###", "..#", "###" }, { "...", "...", "...", "...", ".#." }, { "..#", "..#", ".#.", "#..", "#.." },
+    { "...", "...", "...", "...", "..." }, { "###", "#..", "##.", "#..", "#.." }, { "##.", "#.#", "##.", "#..", "#.." },
+    { ".##", "#..", ".#.", "..#", "##." }, { "#.#", "###", "###", "#.#", "#.#" }, { "##.", "#.#", "#.#", "#.#", "##." },
+    { "##.", "#.#", "##.", "#.#", "#.#" }, { ".#.", "#.#", "#.#", "#.#", ".#." }, { ".##", "#..", "#..", "#..", ".##" },
+    { "#.#", "#.#", "#.#", "#.#", "###" }, { ".##", "#..", "#.#", "#.#", ".##" }, { "#.#", "#.#", ".#.", "#.#", "#.#" },
+    { "###", "#..", "##.", "#..", "###" }, { "#.#", "#.#", "###", "#.#", "#.#" }, { "###", "..#", ".#.", "#..", "###" } };
+static int rd_khz(const char *path) { int v = -1; FILE *f = fopen(path, "r"); if (f) { if (fscanf(f, "%d", &v) != 1) v = -1; fclose(f); } return v; }
+static void perf_draw(dbuf *b, long long tp) {
+    static long long t0, last, gap_sum, gap_max; static int gaps, shown0, drops0, lines;
+    static char txt[6][16]; static char gpu_path[300]; static int gpu_tried;
+    if (last) { long long g = tp - last; gap_sum += g; gaps++; if (g > gap_max) gap_max = g; }
+    last = tp;
+    if (!t0 || tp - t0 >= 1000000) {                        /* once a second: the numbers */
+        double el = t0 ? (tp - t0) / 1e6 : 0; int sh = shown_total, dr = drops_total;
+        int fps = el > 0 ? (int)((sh - shown0) / el + 0.5) : 0;
+        lines = 0;
+        snprintf(txt[lines++], 16, "%d FPS", fps);
+        if (perf_mode >= 2) {
+            double avg = gaps ? gap_sum / 1000.0 / gaps : 0;
+            snprintf(txt[lines++], 16, "%.1f/%.0f MS", avg, gap_max / 1000.0);
+            snprintf(txt[lines++], 16, "%d DROP", t0 ? dr - drops0 : 0);
+        }
+        if (perf_mode >= 3) {
+            if (!gpu_tried) {
+                gpu_tried = 1; glob_t g;
+                if (!glob("/sys/class/devfreq/*gpu*/cur_freq", 0, 0, &g)) { snprintf(gpu_path, sizeof gpu_path, "%s", g.gl_pathv[0]); globfree(&g); }
+            }
+            int c = rd_khz("/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq"), gf = gpu_path[0] ? rd_khz(gpu_path) : -1;
+            if (c > 0) snprintf(txt[lines++], 16, "CPU %d", c / 1000); else snprintf(txt[lines++], 16, "CPU .");
+            if (gf > 0) snprintf(txt[lines++], 16, "GPU %d", gf / 1000000); else snprintf(txt[lines++], 16, "GPU .");
+            const char *rs = getenv("DSFLIP_RAST_SCALE");
+            int res = dsflip_screen_w >= 512 ? (getenv("DSFLIP_RAST") && rs && atoi(rs) == 3 ? 3 : 2) : 1;
+            snprintf(txt[lines++], 16, "RES %dX", res);
+        }
+        t0 = tp; shown0 = sh; drops0 = dr; gaps = 0; gap_sum = gap_max = 0;
+    }
+    if (!b->map || b->pitch < b->w * 4) return;
+    int k = b->w >= 512 ? 2 : 1, cw = 4 * k, lh = 6 * k, wmax = 0;
+    for (int l = 0; l < lines; l++) { int w = (int)strlen(txt[l]) * cw; if (w > wmax) wmax = w; }
+    int x0 = k, y0 = k, x1 = x0 + wmax + 2 * k, y1 = y0 + lines * lh + k;
+    if (x1 > (int)b->w || y1 > (int)b->h) return;
+    for (int y = y0; y < y1; y++) { uint32_t *d = (uint32_t *)((uint8_t *)b->map + (size_t)y * b->pitch); for (int x = x0; x < x1; x++) d[x] = 0x101418; }
+    for (int l = 0; l < lines; l++)
+        for (int i = 0; txt[l][i]; i++) {
+            const char *p = strchr(PF_CH, txt[l][i]); if (!p) continue;
+            const char *const *gl = PF_GL[p - PF_CH];
+            for (int r = 0; r < 5; r++) for (int col = 0; col < 3; col++) if (gl[r][col] == '#')
+                for (int yy = 0; yy < k; yy++) {
+                    uint32_t *d = (uint32_t *)((uint8_t *)b->map + (size_t)(y0 + k + l * lh + r * k + yy) * b->pitch);
+                    for (int xx = 0; xx < k; xx++) d[x0 + k + i * cw + col * k + xx] = l ? 0xe7eef6 : 0x7ec8ee;
+                }
+        }
+}
+
 void SDL_RenderPresent(void *rn) {
     REAL(void, SDL_RenderPresent, void *);
     if (!ok) { real(rn); return; }
+    {   /* DSFLIP_STALL_TEST=<s>: that long after the first frame, DraStic's main thread stops here for good, as it did
+         * on 2026-10-05: tests the stall watch, the exit hotkey on a stuck game and the launcher's notice */
+        static long long stall_test_at = -1;
+        if (stall_test_at < 0) { const char *e = getenv("DSFLIP_STALL_TEST"); stall_test_at = e && atoi(e) > 0 ? now_us() + atoi(e) * 1000000LL : 0; }
+        if (stall_test_at && now_us() >= stall_test_at) { LOG("[stall] DSFLIP_STALL_TEST: DraStic's main thread stops here\n"); for (;;) pause(); }
+    }
     int held = 0;                       /* this present waited on a full queue */
     if (queue_wait_us && queue_depth && pacing_latch) {
         /* a full queue would drop its oldest frame for this one: hold DraStic until a commit makes room (it then
@@ -1465,6 +1818,10 @@ void SDL_RenderPresent(void *rn) {
         unlock(&mu);
     }
     long long tp = now_us();
+    if (perf_mode && !dsflip_hold) {                /* the performance overlay, into the top screen's new frame */
+        stex *s = pending_route[0];
+        if (s && s->kind == K_SCREEN && s->written >= 0 && s->b[s->written].state == WRITTEN) perf_draw(&s->b[s->written], tp);
+    }
     {   /* this frame's CPU time on DraStic's main thread (the one presenting) */
         static long long last; struct timespec ct; clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct);
         long long c = ct.tv_sec * 1000000000LL + ct.tv_nsec, w = last ? c - last : 0; last = c;
@@ -1499,7 +1856,7 @@ void SDL_RenderPresent(void *rn) {
             if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
             b = &s->b[s->written]; s->written = -1; b->state = READY;
             if (shader_on && s->kind == K_SCREEN) {   /* the presenter shades it into a panel buffer */
-                if (P[i].src) { release(P[i].src); st_drop++; st_drop_src++; }
+                if (P[i].src) { release(P[i].src); st_drop++; drops_total++; st_drop_src++; }
                 P[i].src = b; P[i].src_t = tp; P[i].src_held = held;
                 continue;
             }

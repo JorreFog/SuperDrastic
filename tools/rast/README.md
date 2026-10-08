@@ -64,6 +64,15 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the downsample 0.66 M (four
   triples a step; groups whose 36 alphas are all 31 or all 0 take fast paths, the same bits as the general case),
   the rest the clear and the resolve over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
+  Two things at the bin boundaries (ROCKNIXDS issue 47: black or coloured lines every 32 rows at 3x, and a line
+  flickering while the scene moves): with edge marking on, DraStic's `update_frame_3d_4x` re-marks rows 32k-1 and 32k
+  after the bins from gap buffers that only its own bin resolve filled, so each 3x bin now fills them with its own
+  rows and attributes that make that pass an identity (`RAST_HRCHECK=1` compares those rows after the update: 22
+  rows a frame changed on the fog and edge-marking scene S4 before, 0 after); and DraStic's bin lists are made from
+  the 2x lines, while a polygon of bin k - 1 alone can cover 3x line 48k (the field scene S7: one polygon in about
+  every frame, a missing row of the clear colour in 10 of 69 sampled frames) and the edge marking's neighbour lines,
+  so a 3x bin also renders its neighbours' polygons, in DraStic's order (`hr_lists`). DraStic's "disable edge
+  marking" setting now turns the 3x edge marking off too.
 - **Palette lookups with tbl.** 4- and 16-colour textures (the common DS formats I2 and I4) keep their palette
   in four NEON registers and look texels up with `tbl` instead of a dependent load per texel; exact. The
   instruction count hardly changes; the gain is the removed load latency on the handheld's in-order cores.

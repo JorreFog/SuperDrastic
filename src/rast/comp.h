@@ -7,4 +7,5 @@
 void comp_init(void);                                   /* rast_init, renderer hooked: installs per RAST_COMP */
 void comp_bins_begin(uint8_t *sys);                     /* a render thread starts on the output frame */
 void comp_bin(uint8_t *sys, unsigned bin, int count);   /* the bin's output block is final: its 64 table entries */
+extern void (*comp_uf4_done)(uint8_t *sys);             /* after an update_frame_3d_4x that rendered all bins (RAST_HRCHECK) */
 #endif
