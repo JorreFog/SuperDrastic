@@ -128,7 +128,7 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     unsigned idx[10]; uint16_t ys[10];
     unsigned ymin = 0xffff;
     for (unsigned k = 0; k < count; k++) {
-        idx[k] = base + ((seq >> (4 * k)) & 15);
+        idx[k] = base + ((seq >> (4 * (k & 7))) & 15);  /* 9 and 10 vertices: nibbles 0, 1 (README, Next) */
         if (idx[k] >= HR_NVTX) return;
         ys[k] = hv[idx[k]].y;
         if (ys[k] < ymin) ymin = ys[k];

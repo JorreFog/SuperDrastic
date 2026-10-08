@@ -259,6 +259,10 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   layer presented through the dsflip shader instead of downsampled. `ut/hr_ab`'s walker test: two copies of the same
   hr.c, each with its own heap span block holding the previous polygon's spans, hand the kernels different spans
   for a few polygons in 5000 (8 to 10 vertices); with a private zeroed block they agree. Find out what is read.
+  Polygons of 9 and 10 vertices: DraStic's render_polygon_4x takes the walk's ninth vertex as base + 0 and never
+  writes a tenth's slot (it walks a stale stack slot; walk.c leaves 10 to DraStic). hr.c's vertex indices for them
+  are nibbles 0 and 1 of the group's base sequence (`4 * (k & 7)`: what its former `seq >> (4 * k)`, undefined
+  from k = 8, compiled to; ut/hr_ab: the same output on 1.5 M polygons): decide what 3x should walk there.
   The downsample is bound by its loads and the alpha test in the cycle model: two groups a step, the opaque outputs
   computed before the test and the loads a group ahead all modeled within 3% of the current loop.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
