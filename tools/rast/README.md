@@ -79,7 +79,11 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   points and lines (1- and 2-vertex polygons) walk like DraStic's. The vertex table holds the DS's 6144 vertices
   (an earlier 1568 limit skipped polygons with higher vertex indices: a black sky and missing sparkles behind
   Ho-Oh in HG/SS). The downsample, the edge marking and the fog of the resolve are NEON (unit-tested against the
-  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage. The field scene costs 4.9 M
+  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage.
+  The edge marking works in place on the colour lines and loads and stores only groups with a marked pixel (bits
+  29-31, which the 2x resolve clears, are ignored by the downsample); the fog takes two groups a step, two
+  independent chains for the in-order core. Changes to these stages are checked against an earlier hr.c by
+  `ut/hr_ab/run.sh` (both versions on the same random bins, the output blocks compared). The field scene costs 4.9 M
   instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the downsample 0.66 M (four
   triples a step; groups whose 36 alphas are all 31 or all 0 take fast paths, the same bits as the general case),
   the rest the clear and the resolve over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
