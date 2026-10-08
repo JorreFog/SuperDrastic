@@ -80,7 +80,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   one flag test (bit 15, set per batch: no alpha test and A is 31), both out of line, so the modulates and the store
   are one block with no taken branch (the model does not price taken branches: 1 cycle less; two taken branches a
   group fewer); the lit direct-textured opaque kernels store a full group with st4 from the modulates' bytes instead
-  of four zips and stp (with the flag test 02000 129 -> 125, white lines 117 -> 115).
+  of four zips and stp (with the flag test 02000 129 -> 125, white lines 117 -> 115), and so do the flat textured
+  ones whose depth words are in registers, through v24-v27 (02010 128 -> 122, 22010 119 -> 114). cycles.py, 90 s
+  profiles against e02a298's: stress ROM L4 at 2x, librast 14.75 M -> 14.38 M cycles a frame (02000 4.69 -> 4.58,
+  02100 2.86 -> 2.72, 02010 2.31 -> 2.24, 02110 1.46 -> 1.41); fog and edge marking S4 at 2x, 04010 3.42 -> 3.30.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -256,12 +259,12 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   hooked in (rast_hook to a function in librast) and a unit test against the original.
 - The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate; IPC
   ~0.8-0.98 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
-  finds 0.1% more). Across blocks the translucent tail, the alpha stages and 02000's store are done (Status); the
+  finds 0.1% more). Across blocks the translucent tail, the alpha stages and the st4 stores are done (Status); the
   reciprocal runs beside the depth test in the group head (head()), only the lazy loop's entry (28:) waits for the
   test. Left: the opaque store reloads the depth words from the stack (ldp q and the pid orr, ~6 cycles a group
   exposed on 02000: no two registers are free across the modulates; ORing pid in before the spill costs the head 1-3
-  cycles); the flat textured kernels (02010, 04010) could store with st4 as 02000 does if the modulates' outputs found
-  four registers in a row (04010's depth words spill through v25 v26); the texel gather's ld2 (7 cycles with nothing
+  cycles); the z-depth paletted flat kernels (04010, S4's) could store with st4 as 02010 does if their depth words,
+  spilled, came back into registers outside v24-v27; the texel gather's ld2 (7 cycles with nothing
   independent left; ldr q and uzp model 2 worse); the 16-colour gather's bytes through the stack (stp w and ld2 to
   assemble 8 bytes). Overlapping consecutive groups needs registers the kernels do not have (the bilinear kernels use
   them all). Hoisting the fall-through code over the w7 flag branches does not pay (llvm-mca:

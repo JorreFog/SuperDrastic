@@ -668,22 +668,31 @@ def modulate(v, t, sh, w="v26", o=None):
     e(f"uaddl {w}.8h, {v}.8b, {t}.8b"); e(f"umlal {w}.8h, {v}.8b, {t}.8b"); e(f"shrn {o or t}.8b, {w}.8h, #{sh}")
 
 def st4_store():
-    """the opaque lit direct-textured kernels (vc v18-v20 and vs v21, four registers in a row) store a full group's
-    colours with st4 from the channels' bytes (the modulates write them into the vertex colour's registers): no zips
-    for the common case (in llvm-mca's A55 model the pack-and-store 14 -> 6 cycles); the partial group zips them"""
-    return RL.get("vc") == ["v18", "v19", "v20"] and RL.get("vs") == ["v21"]
+    """the opaque textured kernels with four registers in a row free for the colour bytes (st4_quad()) store a full
+    group's colours with st4 from the channels' bytes (the modulates write them there): no zips for the common case
+    (in llvm-mca's A55 model the pack-and-store 14 -> 6 cycles); the partial group zips them"""
+    return st4_quad() is not None
 
-def modulate_alpha(skip):
-    """ta (v30) -> ca = modulate(A, ta); with flag bit 10 (A is 31) ca = (32 (ta + 1) - 1) >> 5 = ta: to skip"""
+def st4_quad():
+    """the four registers in a row the st4 kernels' colour bytes go to: lit direct-textured opaque v18-v21 (vc, vs);
+    flat textured opaque with its depth words in registers v24-v27 (free after the modulates' inputs)"""
+    if RL.get("vc") == ["v18", "v19", "v20"] and RL.get("vs") == ["v21"]: return ["v18", "v19", "v20", "v21"]
+    if "flat" in RL and len(RL.get("vs", ())) == 2 and "dep" in RL and "trans" not in RL and "idx" not in RL:
+        return ["v24", "v25", "v26", "v27"]
+    return None
+
+def modulate_alpha(skip, s=("v25", "v26")):
+    """ta (v30) -> ca = modulate(A, ta); with flag bit 10 (A is 31) ca = (32 (ta + 1) - 1) >> 5 = ta: to skip;
+    s: the scratch registers"""
     e(f"tbnz w7, #10, {skip}")
-    if "a" in RL: modulate(RL["a"][0], "v30", 5)
-    else: e("dup v25.8b, v23.b[0]"); modulate("v25", "v30", 5)
+    if "a" in RL: modulate(RL["a"][0], "v30", 5, s[1])
+    else: e(f"dup {s[0]}.8b, v23.b[0]"); modulate(s[0], "v30", 5, s[1])
 
-def alpha_test(fail="8f"):
-    """ca v30 > aref -> narrows the mask v28; fails to `fail`"""
-    if "aref" in RL: e(f"cmhi v25.8b, v30.8b, {RL['aref'][0]}.8b")
-    else: e("dup v25.8b, v23.b[1]"); e("cmhi v25.8b, v30.8b, v25.8b")
-    e("and v28.8b, v28.8b, v25.8b")
+def alpha_test(fail="8f", s="v25"):
+    """ca v30 > aref -> narrows the mask v28; fails to `fail`; s: the scratch register"""
+    if "aref" in RL: e(f"cmhi {s}.8b, v30.8b, {RL['aref'][0]}.8b")
+    else: e(f"dup {s}.8b, v23.b[1]"); e(f"cmhi {s}.8b, v30.8b, {s}.8b")
+    e(f"and v28.8b, v28.8b, {s}.8b")
     e("fmov x8, d28"); e(f"cbz x8, {fail}")
 
 def fused_alpha(T, M, B):
@@ -708,12 +717,14 @@ def alpha_stage(T, M, B):
         return
     e("tbz w7, #15, 46f")
     e("47:")
+    # (the st4 kernels' colour bytes in v24-v27 keep the alpha stages' scratch in the texels' registers)
+    sc = ("v29", "v31") if st4_quad() == ["v24", "v25", "v26", "v27"] else ("v25", "v26")
     def ool():
-        e("46:"); modulate_alpha("45f")
+        e("46:"); modulate_alpha("45f", sc)
         if st4_store():
             e("b 45f")
-            e("44:"); e("mov v18.8b, v29.8b"); e("mov v19.8b, v27.8b"); e("mov v20.8b, v31.8b")
-        e("45:"); e("tbnz w7, #8, 47b"); alpha_test("8b"); e("b 47b")
+            qd = st4_quad(); e("44:"); e(f"mov {qd[0]}.8b, v29.8b"); e(f"mov {qd[1]}.8b, v27.8b"); e(f"mov {qd[2]}.8b, v31.8b")
+        e("45:"); e("tbnz w7, #8, 47b"); alpha_test("8b", sc[0]); e("b 47b")
     OOLS.append(ool)
 
 def colour(T, F, B, M=0):
@@ -765,10 +776,11 @@ def colour(T, F, B, M=0):
             # with the two vs registers all three
             vs = RL.get("vs", ())
             ws = (["v26", *vs] if len(vs) == 2 else ["v26", "v25", "v26"]) if F and "flat" in RL else ["v26"] * 3
+            o = st4_quad() if st4_store() and M == 0 else [None] * 3
             for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")):
                 if F and "flat" in RL: v = RL["flat"][ch]
                 else: v = "v25"; vertex_colour(ch, F, v, slow)
-                modulate(v, t, 6, ws[ch])
+                modulate(v, t, 6, ws[ch], o[ch])
         if not F:
             e("tbz w7, #14, 37f")
             rgb(); e("38:")
@@ -776,6 +788,7 @@ def colour(T, F, B, M=0):
             OOLS.append(ool)
         else: rgb()
         alpha_stage(T, M, B)
+        if st4_store() and M == 0: return (*st4_quad()[:3], "v30")
         return "v29", "v27", "v31", "v30"
     if "colw" in RL: return None
     if "flat" in RL: c = RL["flat"]
@@ -814,15 +827,19 @@ def store(D, cols):
     """opaque: pack, fog bit, store the group (all 8 lanes straight when they all pass) and its pass mask. The full
     group and a group without a pixel (8:) fall through into the latch (7:); returns the out-of-line partial group"""
     e("orr x0, x0, x8")
-    if st4_store() and cols == ("v18", "v19", "v20", "v30"):
-        # the bytes r g b (a | fog) in v18-v21: st4 interleaves them into the colour words; the partial group zips
-        e("dup v24.8b, v23.b[2]"); e("orr v21.8b, v30.8b, v24.8b")
+    if st4_store() and cols == (*st4_quad()[:3], "v30"):
+        # the bytes r g b (a | fog) in four registers in a row: st4 interleaves them into the colour words; the
+        # partial group zips
+        r, g, b, a = st4_quad(); t, u = ("v24", "v27") if r == "v18" else ("v29", "v25")
+        if "fog" in RL: f = RL["fog"][0]
+        else: e(f"dup {t}.8b, v23.b[2]"); f = t
+        e(f"orr {a}.8b, v30.8b, {f}.8b")
         d0, d1 = dep_words(D)
         e("cmn x8, #1"); e("b.ne 1f")
-        e("st4 {v18.8b, v19.8b, v20.8b, v21.8b}, [x1]"); e(f"stp {q(d0)}, {q(d1)}, [x2]")
-        cl, ch = "v29", "v27"
-        zips = lambda: (e("zip1 v24.16b, v18.16b, v19.16b"), e("zip1 v27.16b, v20.16b, v21.16b"),
-                        e("zip1 v29.8h, v24.8h, v27.8h"), e("zip2 v27.8h, v24.8h, v27.8h"))
+        e(f"st4 {{{r}.8b, {g}.8b, {b}.8b, {a}.8b}}, [x1]"); e(f"stp {q(d0)}, {q(d1)}, [x2]")
+        cl, ch = ("v29", "v27") if r == "v18" else ("v27", "v29")
+        zips = lambda: (e(f"zip1 {t}.16b, {r}.16b, {g}.16b"), e(f"zip1 {u}.16b, {b}.16b, {a}.16b"),
+                        e(f"zip1 {cl}.8h, {t}.8h, {u}.8h"), e(f"zip2 {ch}.8h, {t}.8h, {u}.8h"))
     else:
         cl, ch = pack(cols)
         d0, d1 = dep_words(D)

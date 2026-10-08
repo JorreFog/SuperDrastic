@@ -3065,29 +3065,25 @@ rast_kern_01010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	dup v25.8b, v23.b[2]
-	zip1 v29.16b, v29.16b, v27.16b
+	dup v29.8b, v23.b[2]
 	orr x0, x0, x8
 	cmn x8, #1
-	orr v30.8b, v30.8b, v25.8b
-	zip1 v31.16b, v31.16b, v30.16b
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
+	orr v27.8b, v30.8b, v29.8b
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q21, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -3184,25 +3180,34 @@ rast_kern_01010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	dup v25.8b, v23.b[0]
-	uaddl v26.8h, v25.8b, v30.8b
-	umlal v26.8h, v25.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	dup v29.8b, v23.b[0]
+	uaddl v31.8h, v29.8b, v30.8b
+	umlal v31.8h, v29.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -8371,29 +8376,25 @@ rast_kern_02010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	dup v25.8b, v23.b[2]
-	zip1 v29.16b, v29.16b, v27.16b
+	dup v29.8b, v23.b[2]
 	orr x0, x0, x8
 	cmn x8, #1
-	orr v30.8b, v30.8b, v25.8b
-	zip1 v31.16b, v31.16b, v30.16b
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
+	orr v27.8b, v30.8b, v29.8b
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q21, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -8485,25 +8486,34 @@ rast_kern_02010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	dup v25.8b, v23.b[0]
-	uaddl v26.8h, v25.8b, v30.8b
-	umlal v26.8h, v25.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	dup v29.8b, v23.b[0]
+	uaddl v31.8h, v29.8b, v30.8b
+	umlal v31.8h, v29.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -25622,28 +25632,24 @@ rast_kern_11010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	orr v30.8b, v30.8b, v8.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v31.16b, v31.16b, v30.16b
+	orr v27.8b, v30.8b, v8.8b
 	orr x0, x0, x8
 	cmn x8, #1
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q21, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -25726,24 +25732,33 @@ rast_kern_11010:
 	b 319b
 46:
 	tbnz w7, #10, 45f
-	uaddl v26.8h, v9.8b, v30.8b
-	umlal v26.8h, v9.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	uaddl v31.8h, v9.8b, v30.8b
+	umlal v31.8h, v9.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -30079,28 +30094,24 @@ rast_kern_12010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	orr v30.8b, v30.8b, v8.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v31.16b, v31.16b, v30.16b
+	orr v27.8b, v30.8b, v8.8b
 	orr x0, x0, x8
 	cmn x8, #1
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q21, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -30178,24 +30189,33 @@ rast_kern_12010:
 	b 353b
 46:
 	tbnz w7, #10, 45f
-	uaddl v26.8h, v9.8b, v30.8b
-	umlal v26.8h, v9.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	uaddl v31.8h, v9.8b, v30.8b
+	umlal v31.8h, v9.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -45095,28 +45115,24 @@ rast_kern_21010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	orr v30.8b, v30.8b, v21.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v31.16b, v31.16b, v30.16b
+	orr v27.8b, v30.8b, v21.8b
 	orr x0, x0, x8
 	cmn x8, #1
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q20, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -45195,23 +45211,32 @@ rast_kern_21010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	uaddl v26.8h, v7.8b, v30.8b
-	umlal v26.8h, v7.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	uaddl v31.8h, v7.8b, v30.8b
+	umlal v31.8h, v7.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	cmhi v25.8b, v30.8b, v8.8b
-	and v28.8b, v28.8b, v25.8b
+	cmhi v29.8b, v30.8b, v8.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -49967,28 +49992,24 @@ rast_kern_22010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	orr v30.8b, v30.8b, v21.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v31.16b, v31.16b, v30.16b
+	orr v27.8b, v30.8b, v21.8b
 	orr x0, x0, x8
 	cmn x8, #1
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q20, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -50062,23 +50083,32 @@ rast_kern_22010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	uaddl v26.8h, v7.8b, v30.8b
-	umlal v26.8h, v7.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	uaddl v31.8h, v7.8b, v30.8b
+	umlal v31.8h, v7.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	cmhi v25.8b, v30.8b, v8.8b
-	and v28.8b, v28.8b, v25.8b
+	cmhi v29.8b, v30.8b, v8.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -54829,29 +54859,25 @@ rast_kern_23010:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 2:
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v7.8h, v11.8b, v27.8b
 	uaddl v8.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v7.8h, v11.8b, v27.8b
 	umlal v8.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v7.8h, #6
-	shrn v31.8b, v8.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v7.8h, #6
+	shrn v26.8b, v8.8h, #6
 	tbz w7, #15, 46f
 47:
-	dup v25.8b, v23.b[2]
-	zip1 v29.16b, v29.16b, v27.16b
+	dup v29.8b, v23.b[2]
 	orr x0, x0, x8
 	cmn x8, #1
-	orr v30.8b, v30.8b, v25.8b
-	zip1 v31.16b, v31.16b, v30.16b
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
+	orr v27.8b, v30.8b, v29.8b
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q9, q9, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -54930,25 +54956,34 @@ rast_kern_23010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	dup v25.8b, v23.b[0]
-	uaddl v26.8h, v25.8b, v30.8b
-	umlal v26.8h, v25.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	dup v29.8b, v23.b[0]
+	uaddl v31.8h, v29.8b, v30.8b
+	umlal v31.8h, v29.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -59936,29 +59971,25 @@ rast_kern_24010:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 2:
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v7.8h, v11.8b, v27.8b
 	uaddl v8.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v7.8h, v11.8b, v27.8b
 	umlal v8.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v7.8h, #6
-	shrn v31.8b, v8.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v7.8h, #6
+	shrn v26.8b, v8.8h, #6
 	tbz w7, #15, 46f
 47:
-	dup v25.8b, v23.b[2]
-	zip1 v29.16b, v29.16b, v27.16b
+	dup v29.8b, v23.b[2]
 	orr x0, x0, x8
 	cmn x8, #1
-	orr v30.8b, v30.8b, v25.8b
-	zip1 v31.16b, v31.16b, v30.16b
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
+	orr v27.8b, v30.8b, v29.8b
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q9, q9, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -60032,25 +60063,34 @@ rast_kern_24010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	dup v25.8b, v23.b[0]
-	uaddl v26.8h, v25.8b, v30.8b
-	umlal v26.8h, v25.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	dup v29.8b, v23.b[0]
+	uaddl v31.8h, v29.8b, v30.8b
+	umlal v31.8h, v29.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -80393,29 +80433,25 @@ rast_kern_h01010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	dup v25.8b, v23.b[2]
-	zip1 v29.16b, v29.16b, v27.16b
+	dup v29.8b, v23.b[2]
 	orr x0, x0, x8
 	cmn x8, #1
-	orr v30.8b, v30.8b, v25.8b
-	zip1 v31.16b, v31.16b, v30.16b
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
+	orr v27.8b, v30.8b, v29.8b
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q21, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -80512,25 +80548,34 @@ rast_kern_h01010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	dup v25.8b, v23.b[0]
-	uaddl v26.8h, v25.8b, v30.8b
-	umlal v26.8h, v25.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	dup v29.8b, v23.b[0]
+	uaddl v31.8h, v29.8b, v30.8b
+	umlal v31.8h, v29.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -85743,29 +85788,25 @@ rast_kern_h02010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	dup v25.8b, v23.b[2]
-	zip1 v29.16b, v29.16b, v27.16b
+	dup v29.8b, v23.b[2]
 	orr x0, x0, x8
 	cmn x8, #1
-	orr v30.8b, v30.8b, v25.8b
-	zip1 v31.16b, v31.16b, v30.16b
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
+	orr v27.8b, v30.8b, v29.8b
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q21, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -85857,25 +85898,34 @@ rast_kern_h02010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	dup v25.8b, v23.b[0]
-	uaddl v26.8h, v25.8b, v30.8b
-	umlal v26.8h, v25.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	dup v29.8b, v23.b[0]
+	uaddl v31.8h, v29.8b, v30.8b
+	umlal v31.8h, v29.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -103141,28 +103191,24 @@ rast_kern_h11010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	orr v30.8b, v30.8b, v8.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v31.16b, v31.16b, v30.16b
+	orr v27.8b, v30.8b, v8.8b
 	orr x0, x0, x8
 	cmn x8, #1
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q21, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -103245,24 +103291,33 @@ rast_kern_h11010:
 	b 964b
 46:
 	tbnz w7, #10, 45f
-	uaddl v26.8h, v9.8b, v30.8b
-	umlal v26.8h, v9.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	uaddl v31.8h, v9.8b, v30.8b
+	umlal v31.8h, v9.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -107634,28 +107689,24 @@ rast_kern_h12010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	orr v30.8b, v30.8b, v8.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v31.16b, v31.16b, v30.16b
+	orr v27.8b, v30.8b, v8.8b
 	orr x0, x0, x8
 	cmn x8, #1
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q21, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -107733,24 +107784,33 @@ rast_kern_h12010:
 	b 998b
 46:
 	tbnz w7, #10, 45f
-	uaddl v26.8h, v9.8b, v30.8b
-	umlal v26.8h, v9.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	uaddl v31.8h, v9.8b, v30.8b
+	umlal v31.8h, v9.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -122781,28 +122841,24 @@ rast_kern_h21010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	orr v30.8b, v30.8b, v21.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v31.16b, v31.16b, v30.16b
+	orr v27.8b, v30.8b, v21.8b
 	orr x0, x0, x8
 	cmn x8, #1
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q20, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -122881,23 +122937,32 @@ rast_kern_h21010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	uaddl v26.8h, v7.8b, v30.8b
-	umlal v26.8h, v7.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	uaddl v31.8h, v7.8b, v30.8b
+	umlal v31.8h, v7.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	cmhi v25.8b, v30.8b, v8.8b
-	and v28.8b, v28.8b, v25.8b
+	cmhi v29.8b, v30.8b, v8.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -127697,28 +127762,24 @@ rast_kern_h22010:
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v18.8h, v11.8b, v27.8b
 	umlal v19.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v18.8h, #6
-	shrn v31.8b, v19.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v18.8h, #6
+	shrn v26.8b, v19.8h, #6
 	tbz w7, #15, 46f
 47:
-	orr v30.8b, v30.8b, v21.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v31.16b, v31.16b, v30.16b
+	orr v27.8b, v30.8b, v21.8b
 	orr x0, x0, x8
 	cmn x8, #1
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q20, q20, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -127792,23 +127853,32 @@ rast_kern_h22010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	uaddl v26.8h, v7.8b, v30.8b
-	umlal v26.8h, v7.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	uaddl v31.8h, v7.8b, v30.8b
+	umlal v31.8h, v7.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	cmhi v25.8b, v30.8b, v8.8b
-	and v28.8b, v28.8b, v25.8b
+	cmhi v29.8b, v30.8b, v8.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -132603,29 +132673,25 @@ rast_kern_h23010:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 2:
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v7.8h, v11.8b, v27.8b
 	uaddl v8.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v7.8h, v11.8b, v27.8b
 	umlal v8.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v7.8h, #6
-	shrn v31.8b, v8.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v7.8h, #6
+	shrn v26.8b, v8.8h, #6
 	tbz w7, #15, 46f
 47:
-	dup v25.8b, v23.b[2]
-	zip1 v29.16b, v29.16b, v27.16b
+	dup v29.8b, v23.b[2]
 	orr x0, x0, x8
 	cmn x8, #1
-	orr v30.8b, v30.8b, v25.8b
-	zip1 v31.16b, v31.16b, v30.16b
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
+	orr v27.8b, v30.8b, v29.8b
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q9, q9, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -132704,25 +132770,34 @@ rast_kern_h23010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	dup v25.8b, v23.b[0]
-	uaddl v26.8h, v25.8b, v30.8b
-	umlal v26.8h, v25.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	dup v29.8b, v23.b[0]
+	uaddl v31.8h, v29.8b, v30.8b
+	umlal v31.8h, v29.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
@@ -137754,29 +137829,25 @@ rast_kern_h24010:
 	xtn v31.8b, v30.8h
 	shrn v30.8b, v30.8h, #8
 2:
-	tbnz w7, #2, 45f
+	tbnz w7, #2, 44f
 	uaddl v26.8h, v10.8b, v29.8b
 	uaddl v7.8h, v11.8b, v27.8b
 	uaddl v8.8h, v12.8b, v31.8b
 	umlal v26.8h, v10.8b, v29.8b
 	umlal v7.8h, v11.8b, v27.8b
 	umlal v8.8h, v12.8b, v31.8b
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v7.8h, #6
-	shrn v31.8b, v8.8h, #6
+	shrn v24.8b, v26.8h, #6
+	shrn v25.8b, v7.8h, #6
+	shrn v26.8b, v8.8h, #6
 	tbz w7, #15, 46f
 47:
-	dup v25.8b, v23.b[2]
-	zip1 v29.16b, v29.16b, v27.16b
+	dup v29.8b, v23.b[2]
 	orr x0, x0, x8
 	cmn x8, #1
-	orr v30.8b, v30.8b, v25.8b
-	zip1 v31.16b, v31.16b, v30.16b
-	zip1 v27.8h, v29.8h, v31.8h
-	zip2 v29.8h, v29.8h, v31.8h
+	orr v27.8b, v30.8b, v29.8b
 	b.ne 1f
+	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
 	stp q9, q9, [x2]
-	stp q27, q29, [x1]
 8:
 	subs x5, x5, #8
 	str d28, [x3], #8
@@ -137850,25 +137921,34 @@ rast_kern_h24010:
 	b 8b
 46:
 	tbnz w7, #10, 45f
-	dup v25.8b, v23.b[0]
-	uaddl v26.8h, v25.8b, v30.8b
-	umlal v26.8h, v25.8b, v30.8b
-	shrn v30.8b, v26.8h, #5
+	dup v29.8b, v23.b[0]
+	uaddl v31.8h, v29.8b, v30.8b
+	umlal v31.8h, v29.8b, v30.8b
+	shrn v30.8b, v31.8h, #5
+	b 45f
+44:
+	mov v24.8b, v29.8b
+	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 45:
 	tbnz w7, #8, 47b
-	dup v25.8b, v23.b[1]
-	cmhi v25.8b, v30.8b, v25.8b
-	and v28.8b, v28.8b, v25.8b
+	dup v29.8b, v23.b[1]
+	cmhi v29.8b, v30.8b, v29.8b
+	and v28.8b, v28.8b, v29.8b
 	fmov x8, d28
 	cbz x8, 8b
 	b 47b
 1:
+	zip1 v29.16b, v24.16b, v25.16b
+	zip1 v25.16b, v26.16b, v27.16b
 	str d28, [x3], #8
 	sshll v28.8h, v28.8b, #0
 	subs x5, x5, #8
 	sshll v30.4s, v28.4h, #0
 	sshll2 v31.4s, v28.8h, #0
 	ldp q24, q28, [x1]
+	zip1 v27.8h, v29.8h, v25.8h
+	zip2 v29.8h, v29.8h, v25.8h
 	bit v24.16b, v27.16b, v30.16b
 	bit v28.16b, v29.16b, v31.16b
 	stp q24, q28, [x1]
