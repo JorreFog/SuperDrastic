@@ -47,10 +47,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins.
   Then the 2x walker fused (`walk.c`): each edge's five routines in one pass over its lines, 8 a step in registers
-  (the next 8 lines' reciprocal chain among this 8's stores), no float pairs and weights through scratch memory, no
-  per-routine reloads of the vertices; the span setup, with render_polygon_4x's edge-marking fix-up folded in, and
-  the edge markers 4 lines a step. Stress ROM L4 at 2x: the walk (edges, x/z, span setup, render_polygon_4x)
-  2.73 M -> 1.75 M cycles a frame. With `batch_asm`'s kernel and flags chosen once per polygon, `f_run`'s batch
+  (the first 8 in the edge setup's basic block), no float pairs and weights through scratch memory, no per-routine
+  reloads of the vertices; the span setup, with render_polygon_4x's edge-marking fix-up folded in, and the edge
+  markers 4 lines a step. Stress ROM L4 at 2x: the walk (edges, x/z, span setup, render_polygon_4x) 2.73 M -> 1.75 M
+  cycles a frame; the edge-marking scene S4 0.76 M -> 0.44 M (its frame 12.59 M -> 12.21 M). With `batch_asm`'s kernel and flags chosen once per polygon, `f_run`'s batch
   loop two lines a step and walk.c calling the setup without rast.c's hook, the per-polygon setup 1.19 M -> 1.05 M:
   the whole frame 21.83 M -> 20.81 M (-4.7%), the same differing bins at all 43 checkpoints of the scene cycle.
 - Not yet measured on a handheld.

@@ -67,9 +67,12 @@ static inline uint16_t wc6(uint32_t v) { return (uint16_t)(2 * v + (v != 0)); }
 
 /* one edge: lines line.. of the chain's arrays, cnt of them (8 a step), skip = the lines above y_start (edge 0's; 0 for
  * the others, which then add nothing: 0 * A to a zero numerator changes at most its sign, which no result sees).
- * In the A55's program order: each step computes the next 8 lines' weights (a chain of reciprocal steps: the
- * latency) among the stores of this 8's values, one basic block; the first 8's weights come with the setup. The
- * edge's five multipliers share a register (by-lane products), the rest are constants of the loop */
+ * For the A55's in-order issue the first 8 lines' weights (a chain of reciprocal steps: the latency) are computed
+ * among the edge's setup, one basic block with their stores. A step's source computes the next 8's weights before
+ * this 8's stores, but clang sinks them past the exit test, after the stores: forced before it (an empty asm on
+ * them), a step took 81 modeled cycles instead of 93, but every edge paid for a chain its last step does not use
+ * (2.3 steps an edge): +0.1 M a frame on the stress ROM. The edge's five multipliers share a register (by-lane
+ * products), the rest are constants of the loop */
 static inline __attribute__((always_inline)) void walk_edge(uint8_t *spans, const uint8_t *a, const uint8_t *b, unsigned line,
                                                             int32_t cnt, uint32_t skip, const int withz) {
     /* coefficients: (num, den) of line j = (j + skip) (A, D) + (0 B, B H), as DraStic's lanes accumulate them */
