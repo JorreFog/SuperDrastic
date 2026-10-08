@@ -119,7 +119,8 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   bin 11's bottom line with line 30's attributes, the gap copies). Fog and edge-marking scene S4 at 2x: DraStic's
   identify 1.42 M, weights 0.50, mark 0.38, modulates 0.51 and the table pass 0.18 M cycles a frame become fog 0.78 M
   (0.89 M without its skip), edge marking 0.57 M (1.02 M without its skip) and the resolve pass 0.26 M: the frame
-  11.54 M -> 9.82 M (-14.9%).
+  11.05 M -> 9.82 M (-11.1%; profiles of both builds from the same session. An older profile of the base build gave
+  11.54 M, of which 0.5 M was a block outside DraStic and librast that later profiles of either build do not show).
   `ut/t_resolve.c` compares the block, the gap buffers and the table entries with DraStic's drivers (all six modes,
   every bin, polygon ids in rectangles and zero fog tables for the skips; it fails mutants of either skip); S4's
   frame diff 0 bins in 12000 with the compositor's checks 0 differ, the stress ROM's 6 in 4800.
