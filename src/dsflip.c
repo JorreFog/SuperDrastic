@@ -665,6 +665,39 @@ static void shade_pending(void) {
  * "still pending" and the display fell into 30 fps bursts. The presenter now only handles DRM events, the latch
  * timer and commits; this worker shades each frame DraStic presents (woken via wfd) and then wakes the presenter. */
 static int wfd = -1;
+/* the in-game menu's shader switch (menu.c): a request for the worker, which answers between two frames */
+int shader_switch(const char *name);
+static char sw_name[64]; static volatile int sw_req, sw_done, sw_result;
+static pthread_mutex_t sw_mu = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_t sw_cv = PTHREAD_COND_INITIALIZER;
+static void shader_switch_now(void) {          /* on the worker */
+    if (sw_req == sw_done) return;
+    pthread_mutex_lock(&sw_mu);
+    char nm[64]; snprintf(nm, sizeof nm, "%s", sw_name); int req = sw_req;
+    pthread_mutex_unlock(&sw_mu);
+    int r = shader_switch(*nm ? nm : 0);
+    if (!r) {                                   /* touch follows a shader that draws the DS screen into part of the panel */
+        int v[4] = { 0, 0, 0, 0 }, pw = P[1].mode.hdisplay, ph = P[1].mode.vdisplay;
+        if (!shader_viewport(v, pw, ph)) v[0] = v[1] = v[2] = v[3] = 0;
+        lock(&tmu); vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; unlock(&tmu);
+        LOG("[dsflip] shader switched to %s\n", *nm ? nm : "a plain copy (off)");
+    }
+    pthread_mutex_lock(&sw_mu); sw_result = r; sw_done = req; pthread_cond_broadcast(&sw_cv); pthread_mutex_unlock(&sw_mu);
+}
+/* menu.c: switch to shader name (0: off) while the game runs. 0 done, -1 it doesn't compile (the old one stays), -2 it
+ * needs another buffer size (next start), -3 this session has no shader (zero-copy: next start), -4 no answer */
+int dsflip_shader_switch(const char *name) {
+    if (!ok || !shader_on) return -3;
+    pthread_mutex_lock(&sw_mu);
+    snprintf(sw_name, sizeof sw_name, "%s", name ? name : "");
+    int req = ++sw_req;
+    uint64_t one = 1; if (write(wfd, &one, 8) < 0) {}
+    struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts); ts.tv_sec += 2;
+    while (sw_done != req) if (pthread_cond_timedwait(&sw_cv, &sw_mu, &ts)) break;
+    int r = sw_done == req ? sw_result : -4;
+    pthread_mutex_unlock(&sw_mu);
+    return r;
+}
+int dsflip_shader_on(void) { return ok && shader_on; }
 static void *shader_worker(void *a) {
     (void)a;
     int on = shader_init(fd, shader_nm);           /* GL lives on this thread; init() waits for the verdict */
@@ -693,8 +726,10 @@ static void *shader_worker(void *a) {
     if (!shader_on) return 0;
     struct pollfd pw = { .fd = wfd, .events = POLLIN };
     for (;;) {
+        shader_switch_now();
         if (poll(&pw, 1, 100) <= 0) continue;
         uint64_t v; if (read(wfd, &v, 8) < 0) {}
+        shader_switch_now();
         shade_pending();
         uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
     }

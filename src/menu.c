@@ -52,6 +52,11 @@ void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
 void SDL_PauseAudio(int on);
 void dsflip_perf_mode(int m);
+int dsflip_shader_switch(const char *name);
+int dsflip_shader_on(void);
+/* shader.c */
+const char *shader_name(void);
+int shader_list(char (*names)[48], int max);
 /* audio.c */
 void audio_mute(int on);
 int audio_ui_load(int id, const int16_t *pcm, int frames, int rate, int ch);
@@ -180,6 +185,8 @@ static const char *const IC_NOTE[12] = { "............", "......#####.", "......
     "......#...#.", "...###..###.", "..####.####.", "..####.####.", "...##...##..", "............" };
 static const char *const IC_CHART[12] = { "............", "..........#.", "..........#.", "......#...#.", "......#...#.", "......#...#.",
     "..#...#...#.", "..#...#...#.", "..#...#...#.", "..#...#...#.", "############", "............" };
+static const char *const IC_GRID[12] = { "............", ".##.##.##.#.", ".##.##.##.#.", "............", ".##.##.##.#.", ".##.##.##.#.",
+    "............", ".##.##.##.#.", ".##.##.##.#.", "............", ".##.##.##.#.", "............" };
 static const char *const IC_TIP[12] = { "....####....", "...#....#...", "..#......#..", "..#......#..", "...#....#...", "....#..#....",
     "....#..#....", ".....##.....", "....####....", "....####....", ".....##.....", "............" };
 /* the slot numbers' 5x7 face (the same shapes as ROCKNIXDS's Pixelify Sans after its issue #34 fix) */
@@ -462,6 +469,24 @@ static void prefs_load(void) {
     if (mcfg_get("perf", v, sizeof v)) perf = atoi(v) < 0 || atoi(v) > 3 ? 0 : atoi(v);
     dsflip_perf_mode(perf);
 }
+/* the shader, per game: shader.<game>=<picked> <the frontend's shader when it was picked> ("none" for none). The pick
+ * holds while the frontend's setting is unchanged; changed there since, the frontend's wins again. shader.c asks
+ * at the start (shader_name); a launcher that sets the GPU's clock by the shader reads the same line. */
+static char shader_base[48];                    /* this start's shader as the frontend named it ("none": none) */
+const char *menu_shader_pick(const char *frontend) {
+    static char pick[48];
+    snprintf(shader_base, sizeof shader_base, "%s", frontend && *frontend && strcmp(frontend, "bilinear") ? frontend : "none");
+    if (!gbase[0]) game_info();
+    char key[300], v[120], chosen[48], was[48];
+    snprintf(key, sizeof key, "shader.%s", gbase);
+    if (mcfg_get(key, v, sizeof v) && sscanf(v, "%47s %47s", chosen, was) == 2 && !strcmp(was, shader_base)) {
+        if (strcmp(chosen, shader_base)) dsflip_log("[menu] shader for this game: %s (picked in the menu over %s)\n", chosen, shader_base);
+        snprintf(pick, sizeof pick, "%s", chosen);
+        return pick;
+    }
+    return frontend;
+}
+
 /* a tip (resume.c's "Resumed where you left off", the menu's undo tip): 1 = show it, the first `times` times only,
  * never with the tips off */
 int menu_hint(const char *name, int times) {
@@ -577,7 +602,9 @@ static canvas CV[2];
 static int pw[2], ph[2];
 
 /* rows of Quick settings that exist on this setup; ROWS_SHOWN fit the page, the rest scroll */
-enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_PERF, ROW_SOUNDS, ROW_HINTS };
+enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_SHADER, ROW_PERF, ROW_SOUNDS, ROW_HINTS };
+#define NSH 40
+static char shn[NSH][48]; static int nsh = -1, sh_active, sh_sel;   /* shn[0]: "Off"; the one in use; the one picked */
 static const char *const PERF_NAME[4] = { "Off", "FPS", "Detailed", "Advanced" };
 #define MAXROWS 10
 #define ROWS_SHOWN 5
@@ -586,12 +613,24 @@ static void make_rows(void) {
     bl_map();
     nrows = 0; rows[nrows++] = ROW_VOL;
     if (bl_scr[0]) { rows[nrows++] = ROW_BRI_TOP; rows[nrows++] = ROW_BRI_BOT; } else rows[nrows++] = ROW_BRI;
-    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_PERF; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
+    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_SHADER; rows[nrows++] = ROW_PERF; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
 }
 static int is_slider(int id) { return id == ROW_VOL || id == ROW_BRI || id == ROW_BRI_TOP || id == ROW_BRI_BOT; }
 static int is_toggle(int id) { return id == ROW_SOUNDS || id == ROW_HINTS; }
-static int is_choice(int id) { return id == ROW_PERF; }            /* left / right (or A) steps through values */
+static int is_choice(int id) { return id == ROW_PERF || id == ROW_SHADER; }   /* left / right (or A) steps through values */
+static void shaders_load(void) {
+    if (nsh >= 0) return;
+    snprintf(shn[0], sizeof shn[0], "Off");
+    nsh = 1 + shader_list(shn + 1, NSH - 1);
+    const char *cur = shader_name(); sh_active = 0;
+    if (cur) {
+        for (int i = 1; i < nsh; i++) if (!strcmp(shn[i], cur)) sh_active = i;
+        if (!sh_active && nsh < NSH) { snprintf(shn[nsh], sizeof shn[0], "%s", cur); sh_active = nsh++; }
+    }
+    sh_sel = sh_active;
+}
 static void choose(int id, int d) {
+    if (id == ROW_SHADER) { sh_sel = (sh_sel + d + nsh) % nsh; return; }
     if (id == ROW_PERF) {
         perf = (perf + d + 4) % 4; dsflip_perf_mode(perf);
         char v[8]; snprintf(v, sizeof v, "%d", perf); mcfg_set("perf", v);
@@ -924,11 +963,11 @@ static void draw_bottom(void) {
             R_ROW[r] = (rect){ gx0, y, gx1, y + rh };
             box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
             const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_MIC ? IC_MIC : id == ROW_SOUNDS ? IC_NOTE : id == ROW_HINTS ? IC_TIP :
-                                    id == ROW_PERF ? IC_CHART : IC_SUN;
+                                    id == ROW_PERF ? IC_CHART : id == ROW_SHADER ? IC_GRID : IC_SUN;
             int k = S(2) < 2 ? 2 : S(2);
             bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? 0xffffff : C_LIGHT);
             const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : id == ROW_BRI_TOP ? "Top screen" :
-                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_PERF ? "Performance" :
+                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_PERF ? "Performance" : id == ROW_SHADER ? "Shader" :
                               id == ROW_SOUNDS ? "Menu sounds" : "Tips";
             text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_LIGHT, 0, 0);
             char v[32] = "";
@@ -939,6 +978,7 @@ static void draw_bottom(void) {
                 snprintf(v, sizeof v, "%d%%", val);
             } else if (is_toggle(id)) snprintf(v, sizeof v, "%s", (id == ROW_SOUNDS ? sounds_on : hints_on) ? "On" : "Off");
             else if (id == ROW_PERF) snprintf(v, sizeof v, "< %s >", PERF_NAME[perf]);
+            else if (id == ROW_SHADER) snprintf(v, sizeof v, "< %.24s >", shn[sh_sel]);
             else snprintf(v, sizeof v, "Test / blow");
             text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_CYAN, 0, 2);
             y += rh + gap;
@@ -956,6 +996,8 @@ static void draw_bottom(void) {
         case ROW_MIC: help = "A live meter of the mic, and a blow for games that ask for one"; break;
         case ROW_PERF: help = perf == 3 ? "+ CPU and GPU clocks, internal resolution" : perf == 2 ? "Frames a second, frame time (avg / longest), drops"
                               : perf == 1 ? "Frames a second, top left of the top screen" : "Left / right: FPS, Detailed, Advanced"; break;
+        case ROW_SHADER: help = dsflip_shader_on() ? "Changes when you resume; kept for this game"
+                                                   : "From the next start of this game (kept for it)"; break;
         case ROW_SOUNDS: help = "The menu's clicks and beeps"; break;
         case ROW_HINTS: help = "Tips like \"Resumed where you left off\" and the undo tip"; break;
         }
@@ -1230,6 +1272,21 @@ static void handle_sdl(const uint8_t *e) {
     }
 }
 
+/* the shader picked in Quick settings, as the menu closes: now where this session can (it started with one, and the
+ * new one draws into buffers of the same size), else from the next start; kept for this game either way */
+static void apply_shader(void) {
+    const char *nm = sh_sel ? shn[sh_sel] : 0;
+    int r = dsflip_shader_switch(nm);
+    dsflip_log("[menu] shader %s: %s\n", nm ? nm : "off", r == 0 ? "switched" : r == -1 ? "doesn't compile, kept the old one" :
+               r == -2 ? "another buffer size: from the next start" : r == -3 ? "zero-copy session: from the next start" : "no answer");
+    if (r == -1) { dsflip_toast("Couldn't use this shader", shn[sh_sel], 0xff7a4a, 3000); sh_sel = sh_active; return; }
+    char key[300], v[120]; snprintf(key, sizeof key, "shader.%s", gbase);
+    snprintf(v, sizeof v, "%s %s", nm ? nm : "none", shader_base[0] ? shader_base : "none");
+    mcfg_set(key, v);
+    sh_active = sh_sel;                        /* (from the next start, if not now: the menu shows the pick) */
+    if (r) dsflip_toast(nm ? "The new shader shows from the next start" : "No shader from the next start", "Quit and start the game again to see it", 0x3aa0ff, 3500);
+}
+
 static void menu_run(int start) {
     if (!setup()) { enabled = 0; return; }
     static int (*poll_real)(void *);
@@ -1241,7 +1298,7 @@ static void menu_run(int start) {
     audio_mic_quiet(1);             /* the real mic presses nothing while the game is paused */
     cpugov_boost(800);
     open_ = 1; scr = SC_MAIN; sel_main = 0; held_dir = 0; axis_dir[0] = axis_dir[1] = 0; tqn = 0;
-    bri_dirty = 0; make_rows();
+    bri_dirty = 0; make_rows(); shaders_load(); sh_sel = sh_active;
     scan_slots(0);
     load_recent();
     grab_background();
@@ -1268,6 +1325,7 @@ static void menu_run(int start) {
         if (open_) redraw();
         usleep(8000);
     }
+    if (sh_sel != sh_active) apply_shader();
     if (bri_dirty & 4) want(-1, 0, bri[0]);           /* ROCKNIX's settings, as its own scripts keep them */
     for (int k = 0; k < 2; k++) if (bri_dirty & (1 << k)) want(-1, bl_scr[k], bri[k]);
     if (mic_until) audio_mic_hold(1);
