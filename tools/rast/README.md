@@ -193,7 +193,8 @@ stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py`
   colour channels still queue on one scratch register, and the lit paletted ones compute the vertex colour after the
   gather: free some (the z step v9 from v8 in the latch, the texture masks or pid << 24 from the arguments).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
-  of the texel gather's two trips through the stack, which the model cannot price (store-to-load forwarding).
+  of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
+  leave by umov), which the model cannot price (store-to-load forwarding).
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
   layer presented through the dsflip shader instead of downsampled.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it

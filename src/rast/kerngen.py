@@ -45,7 +45,7 @@ so a group that fails the test skips them. With z or constant depth a line start
 only tests, until its first passing group sets up the weights and interpolants (27:). Rare paths are out of line
 after the latch (the affine weights 6:, the depth-equal test 24:, the 64-bit w products 23:, the 32-bit vertex
 colour 37:, the partial-group store 1:) so the common path has no taken branch besides the loop's.
-Stack: [sp] 8 texel addresses, [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
+Stack: [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
 (bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
 (512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
 import os, sys
@@ -460,13 +460,18 @@ def texcoord(axis, T, r):
         e(f"and {r}.16b, {r}.16b, {m}.16b")
         e("2:")
 
+def addrs(lo, hi):
+    """the 8 texel addresses (u32 lanes of lo, hi) -> w9-w16"""
+    for i in range(8): e(f"umov w{9 + i}, {lo if i < 4 else hi}.s[{i % 4}]")
+
 def gather(T):
     """8 texels at the u32 addresses in v29 (0-3) and v27 (4-7) -> channels tr v29, tg v27, tb v31, ta v30 (8 x u8).
     Paletted textures with a palette of at most 16 entries (flag bit 7) look the channels up with tbl from the
     palette held in v18-v21, one channel per register (kargs.pal16: r[16] g[16] b[16] a[16]), instead of loading
-    each texel's palette entry."""
-    e("stp q29, q27, [sp]")
-    e("ldp w9, w10, [sp]"); e("ldp w11, w12, [sp, #8]"); e("ldp w13, w14, [sp, #16]"); e("ldp w15, w16, [sp, #24]")
+    each texel's palette entry. The addresses go to w9-w16 with umov (not through the stack: a 128-bit store read
+    back as 32-bit words waits on the store's forwarding; the model also prefers umov), the texels back through
+    [sp,#32] and ld2 (lane inserts are a serial chain)."""
+    addrs("v29", "v27")
     if T in (3, 4):
         for r in range(9, 17): e(f"ldrb w{r}, [x6, w{r}, uxtw]")
         e("tbz w7, #7, 1f")
@@ -539,8 +544,7 @@ def texture_bilinear(T):
         e(f"umull v29.4s, {v}.4h, v15.h[{L_TW}]"); e(f"umull2 v30.4s, {v}.8h, v15.h[{L_TW}]")
         e(f"uaddw v29.4s, v29.4s, {u}.4h"); e(f"uaddw2 v30.4s, v30.4s, {u}.8h")
         # gather() wants the addresses in v29 and v27; v27 is an accumulator here, so inline it
-        e("stp q29, q30, [sp]")
-        e("ldp w9, w10, [sp]"); e("ldp w11, w12, [sp, #8]"); e("ldp w13, w14, [sp, #16]"); e("ldp w15, w16, [sp, #24]")
+        addrs("v29", "v30")
         if T in (3, 4):
             for r in range(9, 17): e(f"ldrb w{r}, [x6, w{r}, uxtw]")
             for r in range(9, 17): e(f"ldr w{r}, [x21, w{r}, uxtw #2]")

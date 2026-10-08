@@ -1381,23 +1381,26 @@ rast_kern_01000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v20.8h, v24.8h, v15.h[3]
-	add v18.8h, v18.8h, v10.8h
-	stp q29, q27, [sp]
-	add v19.8h, v19.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v18.8b, v18.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v20.8h, v20.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v19.8b, v19.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v20.8b, v20.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v18.8h, v18.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v19.8h, v19.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v20.8h, v20.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v20.8b, v20.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -1917,30 +1920,33 @@ rast_kern_01001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -1958,18 +1964,21 @@ rast_kern_01001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -1996,18 +2005,21 @@ rast_kern_01001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -2034,18 +2046,21 @@ rast_kern_01001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -2516,11 +2531,14 @@ rast_kern_01010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -2992,30 +3010,33 @@ rast_kern_01011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -3033,18 +3054,21 @@ rast_kern_01011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -3071,18 +3095,21 @@ rast_kern_01011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -3109,18 +3136,21 @@ rast_kern_01011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -3580,23 +3610,26 @@ rast_kern_01100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v19.8h, v24.8h, v15.h[3]
-	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v18.8h, v18.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v19.8h, v19.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v18.8b, v18.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v19.8b, v19.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v25.8h, v25.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v18.8h, v18.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v19.8h, v19.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v25.8b, v25.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -4123,30 +4156,33 @@ rast_kern_01101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -4164,18 +4200,21 @@ rast_kern_01101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -4202,18 +4241,21 @@ rast_kern_01101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -4240,18 +4282,21 @@ rast_kern_01101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -4743,11 +4788,14 @@ rast_kern_01110:
 	dup v11.8b, v23.b[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -5225,30 +5273,33 @@ rast_kern_01111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -5266,18 +5317,21 @@ rast_kern_01111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -5304,18 +5358,21 @@ rast_kern_01111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -5342,18 +5399,21 @@ rast_kern_01111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -5821,11 +5881,14 @@ rast_kern_02000:
 	shrn v20.8b, v20.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -6262,9 +6325,9 @@ rast_kern_02001:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -6276,9 +6339,9 @@ rast_kern_02001:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -6305,36 +6368,39 @@ rast_kern_02001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -6352,18 +6418,21 @@ rast_kern_02001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -6390,18 +6459,21 @@ rast_kern_02001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -6428,18 +6500,21 @@ rast_kern_02001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -6890,11 +6965,14 @@ rast_kern_02010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -7277,9 +7355,9 @@ rast_kern_02011:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -7291,9 +7369,9 @@ rast_kern_02011:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -7320,36 +7398,39 @@ rast_kern_02011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -7367,18 +7448,21 @@ rast_kern_02011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -7405,18 +7489,21 @@ rast_kern_02011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -7443,18 +7530,21 @@ rast_kern_02011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -7900,11 +7990,14 @@ rast_kern_02100:
 	shrn v19.8b, v19.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -8348,9 +8441,9 @@ rast_kern_02101:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -8362,9 +8455,9 @@ rast_kern_02101:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -8391,36 +8484,39 @@ rast_kern_02101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -8438,18 +8534,21 @@ rast_kern_02101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -8476,18 +8575,21 @@ rast_kern_02101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -8514,18 +8616,21 @@ rast_kern_02101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -8997,11 +9102,14 @@ rast_kern_02110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -9390,9 +9498,9 @@ rast_kern_02111:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -9404,9 +9512,9 @@ rast_kern_02111:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -9433,36 +9541,39 @@ rast_kern_02111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -9480,18 +9591,21 @@ rast_kern_02111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -9518,18 +9632,21 @@ rast_kern_02111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -9556,18 +9673,21 @@ rast_kern_02111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -10053,23 +10173,26 @@ rast_kern_03000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v9.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v16.8h, v16.8h, v10.8h
-	stp q29, q27, [sp]
-	add v17.8h, v17.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v16.8b, v16.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v9.8h, v9.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v17.8b, v17.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v9.8b, v9.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v17.8h, v17.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v9.8h, v9.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v16.8b, v16.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v17.8b, v17.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v9.8b, v9.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -10614,24 +10737,24 @@ rast_kern_03001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -10644,8 +10767,11 @@ rast_kern_03001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -10663,18 +10789,21 @@ rast_kern_03001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -10709,18 +10838,21 @@ rast_kern_03001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -10755,18 +10887,21 @@ rast_kern_03001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -11247,11 +11382,14 @@ rast_kern_03010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -11751,24 +11889,24 @@ rast_kern_03011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -11781,8 +11919,11 @@ rast_kern_03011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -11800,18 +11941,21 @@ rast_kern_03011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -11846,18 +11990,21 @@ rast_kern_03011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -11892,18 +12039,21 @@ rast_kern_03011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -12375,23 +12525,26 @@ rast_kern_03100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v22.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v9.8h, v9.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v22.8h, v22.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v9.8b, v9.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v22.8b, v22.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v9.8h, v9.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v22.8h, v22.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v9.8b, v9.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v22.8b, v22.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -12943,24 +13096,24 @@ rast_kern_03101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -12973,8 +13126,11 @@ rast_kern_03101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -12992,18 +13148,21 @@ rast_kern_03101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -13038,18 +13197,21 @@ rast_kern_03101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -13084,18 +13246,21 @@ rast_kern_03101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -13601,11 +13766,14 @@ rast_kern_03110:
 	dup v11.8b, v23.b[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -14107,24 +14275,24 @@ rast_kern_03111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -14137,8 +14305,11 @@ rast_kern_03111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -14156,18 +14327,21 @@ rast_kern_03111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -14202,18 +14376,21 @@ rast_kern_03111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -14248,18 +14425,21 @@ rast_kern_03111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -14739,11 +14919,14 @@ rast_kern_04000:
 	shrn v9.8b, v9.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -15248,29 +15431,25 @@ rast_kern_04001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -15283,9 +15462,16 @@ rast_kern_04001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -15303,18 +15489,21 @@ rast_kern_04001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -15349,18 +15538,21 @@ rast_kern_04001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -15395,18 +15587,21 @@ rast_kern_04001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -15867,11 +16062,14 @@ rast_kern_04010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -16325,29 +16523,25 @@ rast_kern_04011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -16360,9 +16554,16 @@ rast_kern_04011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -16380,18 +16581,21 @@ rast_kern_04011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -16426,18 +16630,21 @@ rast_kern_04011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -16472,18 +16679,21 @@ rast_kern_04011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -16940,13 +17150,16 @@ rast_kern_04100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
@@ -17457,29 +17670,25 @@ rast_kern_04101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -17492,9 +17701,16 @@ rast_kern_04101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -17512,18 +17728,21 @@ rast_kern_04101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -17558,18 +17777,21 @@ rast_kern_04101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -17604,18 +17826,21 @@ rast_kern_04101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -18101,11 +18326,14 @@ rast_kern_04110:
 	dup v25.8b, v23.b[4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -18561,29 +18789,25 @@ rast_kern_04111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -18596,9 +18820,16 @@ rast_kern_04111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -18616,18 +18847,21 @@ rast_kern_04111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -18662,18 +18896,21 @@ rast_kern_04111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -18708,18 +18945,21 @@ rast_kern_04111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -20265,23 +20505,26 @@ rast_kern_11000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v20.8h, v24.8h, v15.h[3]
-	add v18.8h, v18.8h, v10.8h
-	stp q29, q27, [sp]
-	add v19.8h, v19.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v18.8b, v18.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v20.8h, v20.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v19.8b, v19.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v20.8b, v20.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v18.8h, v18.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v19.8h, v19.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v20.8h, v20.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v20.8b, v20.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -20741,30 +20984,33 @@ rast_kern_11001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -20782,18 +21028,21 @@ rast_kern_11001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -20820,18 +21069,21 @@ rast_kern_11001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -20858,18 +21110,21 @@ rast_kern_11001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -21281,11 +21536,14 @@ rast_kern_11010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -21695,30 +21953,33 @@ rast_kern_11011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -21736,18 +21997,21 @@ rast_kern_11011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -21774,18 +22038,21 @@ rast_kern_11011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -21812,18 +22079,21 @@ rast_kern_11011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -22228,23 +22498,26 @@ rast_kern_11100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v19.8h, v24.8h, v15.h[3]
-	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v18.8h, v18.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v19.8h, v19.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v18.8b, v18.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v19.8b, v19.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v25.8h, v25.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v18.8h, v18.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v19.8h, v19.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v25.8b, v25.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -22714,30 +22987,33 @@ rast_kern_11101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -22755,18 +23031,21 @@ rast_kern_11101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -22793,18 +23072,21 @@ rast_kern_11101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -22831,18 +23113,21 @@ rast_kern_11101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -23278,11 +23563,14 @@ rast_kern_11110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -23707,30 +23995,33 @@ rast_kern_11111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -23748,18 +24039,21 @@ rast_kern_11111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -23786,18 +24080,21 @@ rast_kern_11111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -23824,18 +24121,21 @@ rast_kern_11111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -24245,11 +24545,14 @@ rast_kern_12000:
 	shrn v20.8b, v20.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -24626,9 +24929,9 @@ rast_kern_12001:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -24640,9 +24943,9 @@ rast_kern_12001:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -24669,36 +24972,39 @@ rast_kern_12001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -24716,18 +25022,21 @@ rast_kern_12001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -24754,18 +25063,21 @@ rast_kern_12001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -24792,18 +25104,21 @@ rast_kern_12001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -25195,11 +25510,14 @@ rast_kern_12010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -25520,9 +25838,9 @@ rast_kern_12011:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -25534,9 +25852,9 @@ rast_kern_12011:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -25563,36 +25881,39 @@ rast_kern_12011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -25610,18 +25931,21 @@ rast_kern_12011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -25648,18 +25972,21 @@ rast_kern_12011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -25686,18 +26013,21 @@ rast_kern_12011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -26088,11 +26418,14 @@ rast_kern_12100:
 	shrn v19.8b, v19.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -26479,9 +26812,9 @@ rast_kern_12101:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -26493,9 +26826,9 @@ rast_kern_12101:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -26522,36 +26855,39 @@ rast_kern_12101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -26569,18 +26905,21 @@ rast_kern_12101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -26607,18 +26946,21 @@ rast_kern_12101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -26645,18 +26987,21 @@ rast_kern_12101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -27072,11 +27417,14 @@ rast_kern_12110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -27412,9 +27760,9 @@ rast_kern_12111:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -27426,9 +27774,9 @@ rast_kern_12111:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -27455,36 +27803,39 @@ rast_kern_12111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -27502,18 +27853,21 @@ rast_kern_12111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -27540,18 +27894,21 @@ rast_kern_12111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -27578,18 +27935,21 @@ rast_kern_12111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -28017,23 +28377,26 @@ rast_kern_13000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v8.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v16.8h, v16.8h, v10.8h
-	stp q29, q27, [sp]
-	add v17.8h, v17.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v16.8b, v16.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v8.8h, v8.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v17.8b, v17.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v8.8b, v8.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v17.8h, v17.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v8.8h, v8.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v16.8b, v16.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v17.8b, v17.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v8.8b, v8.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -28515,24 +28878,24 @@ rast_kern_13001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -28545,8 +28908,11 @@ rast_kern_13001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -28564,18 +28930,21 @@ rast_kern_13001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -28610,18 +28979,21 @@ rast_kern_13001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -28656,18 +29028,21 @@ rast_kern_13001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -29088,11 +29463,14 @@ rast_kern_13010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -29529,24 +29907,24 @@ rast_kern_13011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -29559,8 +29937,11 @@ rast_kern_13011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -29578,18 +29959,21 @@ rast_kern_13011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -29624,18 +30008,21 @@ rast_kern_13011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -29670,18 +30057,21 @@ rast_kern_13011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -30097,23 +30487,26 @@ rast_kern_13100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v9.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v8.8h, v8.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v9.8h, v9.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v8.8b, v8.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v9.8b, v9.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v8.8h, v8.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v9.8h, v9.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v8.8b, v8.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v9.8b, v9.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -30608,24 +31001,24 @@ rast_kern_13101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -30638,8 +31031,11 @@ rast_kern_13101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -30657,18 +31053,21 @@ rast_kern_13101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -30703,18 +31102,21 @@ rast_kern_13101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -30749,18 +31151,21 @@ rast_kern_13101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -31209,11 +31614,14 @@ rast_kern_13110:
 	dup v11.8b, v23.b[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -31659,24 +32067,24 @@ rast_kern_13111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -31689,8 +32097,11 @@ rast_kern_13111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -31708,18 +32119,21 @@ rast_kern_13111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -31754,18 +32168,21 @@ rast_kern_13111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -31800,18 +32217,21 @@ rast_kern_13111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -32233,11 +32653,14 @@ rast_kern_14000:
 	shrn v8.8b, v8.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -32679,29 +33102,25 @@ rast_kern_14001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -32714,9 +33133,16 @@ rast_kern_14001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -32734,18 +33160,21 @@ rast_kern_14001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -32780,18 +33209,21 @@ rast_kern_14001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -32826,18 +33258,21 @@ rast_kern_14001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -33238,11 +33673,14 @@ rast_kern_14010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -33633,29 +34071,25 @@ rast_kern_14011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -33668,9 +34102,16 @@ rast_kern_14011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -33688,18 +34129,21 @@ rast_kern_14011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -33734,18 +34178,21 @@ rast_kern_14011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -33780,18 +34227,21 @@ rast_kern_14011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -34192,13 +34642,16 @@ rast_kern_14100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
@@ -34652,29 +35105,25 @@ rast_kern_14101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -34687,9 +35136,16 @@ rast_kern_14101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -34707,18 +35163,21 @@ rast_kern_14101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -34753,18 +35212,21 @@ rast_kern_14101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -34799,18 +35261,21 @@ rast_kern_14101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -35239,11 +35704,14 @@ rast_kern_14110:
 	dup v25.8b, v23.b[4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -35643,29 +36111,25 @@ rast_kern_14111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -35678,9 +36142,16 @@ rast_kern_14111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -35698,18 +36169,21 @@ rast_kern_14111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -35744,18 +36218,21 @@ rast_kern_14111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -35790,18 +36267,21 @@ rast_kern_14111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -37267,23 +37747,26 @@ rast_kern_21000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v20.8h, v24.8h, v15.h[3]
-	add v18.8h, v18.8h, v10.8h
-	stp q29, q27, [sp]
-	add v19.8h, v19.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v18.8b, v18.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v20.8h, v20.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v19.8b, v19.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v20.8b, v20.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v18.8h, v18.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v19.8h, v19.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v20.8h, v20.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v20.8b, v20.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -37769,30 +38252,33 @@ rast_kern_21001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -37810,18 +38296,21 @@ rast_kern_21001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -37848,18 +38337,21 @@ rast_kern_21001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -37886,18 +38378,21 @@ rast_kern_21001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -38336,11 +38831,14 @@ rast_kern_21010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -38777,30 +39275,33 @@ rast_kern_21011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -38818,18 +39319,21 @@ rast_kern_21011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -38856,18 +39360,21 @@ rast_kern_21011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -38894,18 +39401,21 @@ rast_kern_21011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -39334,23 +39844,26 @@ rast_kern_21100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v19.8h, v24.8h, v15.h[3]
-	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v18.8h, v18.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v19.8h, v19.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v18.8b, v18.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v19.8b, v19.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v25.8h, v25.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v18.8h, v18.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v19.8h, v19.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v25.8b, v25.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -39840,30 +40353,33 @@ rast_kern_21101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -39881,18 +40397,21 @@ rast_kern_21101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -39919,18 +40438,21 @@ rast_kern_21101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -39957,18 +40479,21 @@ rast_kern_21101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -40426,11 +40951,14 @@ rast_kern_21110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -40875,30 +41403,33 @@ rast_kern_21111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -40916,18 +41447,21 @@ rast_kern_21111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -40954,18 +41488,21 @@ rast_kern_21111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -40992,18 +41529,21 @@ rast_kern_21111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -41437,11 +41977,14 @@ rast_kern_22000:
 	shrn v20.8b, v20.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -41844,9 +42387,9 @@ rast_kern_22001:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -41858,9 +42401,9 @@ rast_kern_22001:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -41887,36 +42430,39 @@ rast_kern_22001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -41934,18 +42480,21 @@ rast_kern_22001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -41972,18 +42521,21 @@ rast_kern_22001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -42010,18 +42562,21 @@ rast_kern_22001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -42440,11 +42995,14 @@ rast_kern_22010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -42792,9 +43350,9 @@ rast_kern_22011:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -42806,9 +43364,9 @@ rast_kern_22011:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -42835,36 +43393,39 @@ rast_kern_22011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -42882,18 +43443,21 @@ rast_kern_22011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -42920,18 +43484,21 @@ rast_kern_22011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -42958,18 +43525,21 @@ rast_kern_22011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -43384,11 +43954,14 @@ rast_kern_22100:
 	shrn v19.8b, v19.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -43795,9 +44368,9 @@ rast_kern_22101:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -43809,9 +44382,9 @@ rast_kern_22101:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -43838,36 +44411,39 @@ rast_kern_22101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -43885,18 +44461,21 @@ rast_kern_22101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -43923,18 +44502,21 @@ rast_kern_22101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -43961,18 +44543,21 @@ rast_kern_22101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -44410,11 +44995,14 @@ rast_kern_22110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -44770,9 +45358,9 @@ rast_kern_22111:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -44784,9 +45372,9 @@ rast_kern_22111:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -44813,36 +45401,39 @@ rast_kern_22111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -44860,18 +45451,21 @@ rast_kern_22111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -44898,18 +45492,21 @@ rast_kern_22111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -44936,18 +45533,21 @@ rast_kern_22111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -45399,23 +45999,26 @@ rast_kern_23000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v7.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v16.8h, v16.8h, v10.8h
-	stp q29, q27, [sp]
-	add v17.8h, v17.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v16.8b, v16.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v7.8h, v7.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v17.8b, v17.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v7.8b, v7.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v17.8h, v17.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v7.8h, v7.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v16.8b, v16.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v17.8b, v17.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v7.8b, v7.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -45923,24 +46526,24 @@ rast_kern_23001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -45953,8 +46556,11 @@ rast_kern_23001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -45972,18 +46578,21 @@ rast_kern_23001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -46018,18 +46627,21 @@ rast_kern_23001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -46064,18 +46676,21 @@ rast_kern_23001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -46523,11 +47138,14 @@ rast_kern_23010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -46989,24 +47607,24 @@ rast_kern_23011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -47019,8 +47637,11 @@ rast_kern_23011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -47038,18 +47659,21 @@ rast_kern_23011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -47084,18 +47708,21 @@ rast_kern_23011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -47130,18 +47757,21 @@ rast_kern_23011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -47580,23 +48210,26 @@ rast_kern_23100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v8.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v7.8h, v7.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v8.8h, v8.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v7.8b, v7.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v8.8b, v8.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v7.8h, v7.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v8.8h, v8.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v7.8b, v7.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v8.8b, v8.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -48110,24 +48743,24 @@ rast_kern_23101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -48140,8 +48773,11 @@ rast_kern_23101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -48159,18 +48795,21 @@ rast_kern_23101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -48205,18 +48844,21 @@ rast_kern_23101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -48251,18 +48893,21 @@ rast_kern_23101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -48730,11 +49375,14 @@ rast_kern_23110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -49203,24 +49851,24 @@ rast_kern_23111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -49233,8 +49881,11 @@ rast_kern_23111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -49252,18 +49903,21 @@ rast_kern_23111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -49298,18 +49952,21 @@ rast_kern_23111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -49344,18 +50001,21 @@ rast_kern_23111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -49801,11 +50461,14 @@ rast_kern_24000:
 	shrn v7.8b, v7.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -50273,29 +50936,25 @@ rast_kern_24001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -50308,9 +50967,16 @@ rast_kern_24001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -50328,18 +50994,21 @@ rast_kern_24001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -50374,18 +51043,21 @@ rast_kern_24001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -50420,18 +51092,21 @@ rast_kern_24001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -50859,11 +51534,14 @@ rast_kern_24010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -51279,29 +51957,25 @@ rast_kern_24011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -51314,9 +51988,16 @@ rast_kern_24011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -51334,18 +52015,21 @@ rast_kern_24011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -51380,18 +52064,21 @@ rast_kern_24011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -51426,18 +52113,21 @@ rast_kern_24011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -51861,13 +52551,16 @@ rast_kern_24100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
@@ -52340,29 +53033,25 @@ rast_kern_24101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -52375,9 +53064,16 @@ rast_kern_24101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -52395,18 +53091,21 @@ rast_kern_24101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -52441,18 +53140,21 @@ rast_kern_24101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -52487,18 +53189,21 @@ rast_kern_24101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -52946,11 +53651,14 @@ rast_kern_24110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -53373,29 +54081,25 @@ rast_kern_24111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -53408,9 +54112,16 @@ rast_kern_24111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -53428,18 +54139,21 @@ rast_kern_24111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -53474,18 +54188,21 @@ rast_kern_24111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -53520,18 +54237,21 @@ rast_kern_24111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -54171,11 +54891,14 @@ rast_kern_v01:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -54544,11 +55267,14 @@ rast_kern_v02:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -54939,11 +55665,14 @@ rast_kern_v03:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -55338,11 +56067,14 @@ rast_kern_v04:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -55930,11 +56662,14 @@ rast_kern_v11:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -56242,11 +56977,14 @@ rast_kern_v12:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -56578,11 +57316,14 @@ rast_kern_v13:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -56916,11 +57657,14 @@ rast_kern_v14:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -57463,11 +58207,14 @@ rast_kern_v21:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -57803,11 +58550,14 @@ rast_kern_v22:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -58167,11 +58917,14 @@ rast_kern_v23:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -58533,11 +59286,14 @@ rast_kern_v24:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -59242,11 +59998,14 @@ rast_kern_s100:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -59659,30 +60418,33 @@ rast_kern_s101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -59700,18 +60462,21 @@ rast_kern_s101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -59738,18 +60503,21 @@ rast_kern_s101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -59776,18 +60544,21 @@ rast_kern_s101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -60128,11 +60899,14 @@ rast_kern_s110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -60476,30 +61250,33 @@ rast_kern_s111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -60517,18 +61294,21 @@ rast_kern_s111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -60555,18 +61335,21 @@ rast_kern_s111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -60593,18 +61376,21 @@ rast_kern_s111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -60914,11 +61700,14 @@ rast_kern_s200:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -61242,9 +62031,9 @@ rast_kern_s201:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -61256,9 +62045,9 @@ rast_kern_s201:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -61285,36 +62074,39 @@ rast_kern_s201:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -61332,18 +62124,21 @@ rast_kern_s201:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -61370,18 +62165,21 @@ rast_kern_s201:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -61408,18 +62206,21 @@ rast_kern_s201:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -61740,11 +62541,14 @@ rast_kern_s210:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -61999,9 +62803,9 @@ rast_kern_s211:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -62013,9 +62817,9 @@ rast_kern_s211:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -62042,36 +62846,39 @@ rast_kern_s211:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -62089,18 +62896,21 @@ rast_kern_s211:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -62127,18 +62937,21 @@ rast_kern_s211:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -62165,18 +62978,21 @@ rast_kern_s211:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -62510,11 +63326,14 @@ rast_kern_s300:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -62949,24 +63768,24 @@ rast_kern_s301:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -62979,8 +63798,11 @@ rast_kern_s301:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -62998,18 +63820,21 @@ rast_kern_s301:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -63044,18 +63869,21 @@ rast_kern_s301:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -63090,18 +63918,21 @@ rast_kern_s301:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -63453,11 +64284,14 @@ rast_kern_s310:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -63824,24 +64658,24 @@ rast_kern_s311:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -63854,8 +64688,11 @@ rast_kern_s311:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -63873,18 +64710,21 @@ rast_kern_s311:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -63919,18 +64759,21 @@ rast_kern_s311:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -63965,18 +64808,21 @@ rast_kern_s311:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -64298,11 +65144,14 @@ rast_kern_s400:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -64691,29 +65540,25 @@ rast_kern_s401:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -64726,9 +65571,16 @@ rast_kern_s401:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -64746,18 +65598,21 @@ rast_kern_s401:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -64792,18 +65647,21 @@ rast_kern_s401:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -64838,18 +65696,21 @@ rast_kern_s401:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -65181,11 +66042,14 @@ rast_kern_s410:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -65506,29 +66370,25 @@ rast_kern_s411:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -65541,9 +66401,16 @@ rast_kern_s411:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -65561,18 +66428,21 @@ rast_kern_s411:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -65607,18 +66477,21 @@ rast_kern_s411:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -65653,18 +66526,21 @@ rast_kern_s411:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -67190,23 +68066,26 @@ rast_kern_h01000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v20.8h, v24.8h, v15.h[3]
-	add v18.8h, v18.8h, v10.8h
-	stp q29, q27, [sp]
-	add v19.8h, v19.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v18.8b, v18.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v20.8h, v20.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v19.8b, v19.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v20.8b, v20.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v18.8h, v18.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v19.8h, v19.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v20.8h, v20.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v20.8b, v20.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -67730,30 +68609,33 @@ rast_kern_h01001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -67771,18 +68653,21 @@ rast_kern_h01001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -67809,18 +68694,21 @@ rast_kern_h01001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -67847,18 +68735,21 @@ rast_kern_h01001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -68333,11 +69224,14 @@ rast_kern_h01010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -68813,30 +69707,33 @@ rast_kern_h01011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -68854,18 +69751,21 @@ rast_kern_h01011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -68892,18 +69792,21 @@ rast_kern_h01011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -68930,18 +69833,21 @@ rast_kern_h01011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -69408,23 +70314,26 @@ rast_kern_h01100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v19.8h, v24.8h, v15.h[3]
-	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v18.8h, v18.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v19.8h, v19.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v18.8b, v18.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v19.8b, v19.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v25.8h, v25.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v18.8h, v18.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v19.8h, v19.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v25.8b, v25.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -69958,30 +70867,33 @@ rast_kern_h01101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -69999,18 +70911,21 @@ rast_kern_h01101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -70037,18 +70952,21 @@ rast_kern_h01101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -70075,18 +70993,21 @@ rast_kern_h01101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -70585,11 +71506,14 @@ rast_kern_h01110:
 	dup v11.8b, v23.b[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -71074,30 +71998,33 @@ rast_kern_h01111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -71115,18 +72042,21 @@ rast_kern_h01111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -71153,18 +72083,21 @@ rast_kern_h01111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -71191,18 +72124,21 @@ rast_kern_h01111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -71674,11 +72610,14 @@ rast_kern_h02000:
 	shrn v20.8b, v20.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -72119,9 +73058,9 @@ rast_kern_h02001:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -72133,9 +73072,9 @@ rast_kern_h02001:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -72162,36 +73101,39 @@ rast_kern_h02001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -72209,18 +73151,21 @@ rast_kern_h02001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -72247,18 +73192,21 @@ rast_kern_h02001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -72285,18 +73233,21 @@ rast_kern_h02001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -72751,11 +73702,14 @@ rast_kern_h02010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -73142,9 +74096,9 @@ rast_kern_h02011:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -73156,9 +74110,9 @@ rast_kern_h02011:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -73185,36 +74139,39 @@ rast_kern_h02011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -73232,18 +74189,21 @@ rast_kern_h02011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -73270,18 +74230,21 @@ rast_kern_h02011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -73308,18 +74271,21 @@ rast_kern_h02011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -73772,11 +74738,14 @@ rast_kern_h02100:
 	shrn v19.8b, v19.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -74227,9 +75196,9 @@ rast_kern_h02101:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -74241,9 +75210,9 @@ rast_kern_h02101:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -74270,36 +75239,39 @@ rast_kern_h02101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -74317,18 +75289,21 @@ rast_kern_h02101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -74355,18 +75330,21 @@ rast_kern_h02101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -74393,18 +75371,21 @@ rast_kern_h02101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -74883,11 +75864,14 @@ rast_kern_h02110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -75283,9 +76267,9 @@ rast_kern_h02111:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -75297,9 +76281,9 @@ rast_kern_h02111:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -75326,36 +76310,39 @@ rast_kern_h02111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -75373,18 +76360,21 @@ rast_kern_h02111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -75411,18 +76401,21 @@ rast_kern_h02111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -75449,18 +76442,21 @@ rast_kern_h02111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -75950,23 +76946,26 @@ rast_kern_h03000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v9.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v16.8h, v16.8h, v10.8h
-	stp q29, q27, [sp]
-	add v17.8h, v17.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v16.8b, v16.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v9.8h, v9.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v17.8b, v17.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v9.8b, v9.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v17.8h, v17.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v9.8h, v9.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v16.8b, v16.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v17.8b, v17.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v9.8b, v9.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -76515,24 +77514,24 @@ rast_kern_h03001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -76545,8 +77544,11 @@ rast_kern_h03001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -76564,18 +77566,21 @@ rast_kern_h03001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -76610,18 +77615,21 @@ rast_kern_h03001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -76656,18 +77664,21 @@ rast_kern_h03001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -77152,11 +78163,14 @@ rast_kern_h03010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -77660,24 +78674,24 @@ rast_kern_h03011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -77690,8 +78704,11 @@ rast_kern_h03011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -77709,18 +78726,21 @@ rast_kern_h03011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -77755,18 +78775,21 @@ rast_kern_h03011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -77801,18 +78824,21 @@ rast_kern_h03011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -78291,23 +79317,26 @@ rast_kern_h03100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v22.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v9.8h, v9.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v22.8h, v22.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v9.8b, v9.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v22.8b, v22.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v9.8h, v9.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v22.8h, v22.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v9.8b, v9.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v22.8b, v22.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -78866,24 +79895,24 @@ rast_kern_h03101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -78896,8 +79925,11 @@ rast_kern_h03101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -78915,18 +79947,21 @@ rast_kern_h03101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -78961,18 +79996,21 @@ rast_kern_h03101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -79007,18 +80045,21 @@ rast_kern_h03101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -79531,11 +80572,14 @@ rast_kern_h03110:
 	dup v11.8b, v23.b[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -80044,24 +81088,24 @@ rast_kern_h03111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -80074,8 +81118,11 @@ rast_kern_h03111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -80093,18 +81140,21 @@ rast_kern_h03111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -80139,18 +81189,21 @@ rast_kern_h03111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -80185,18 +81238,21 @@ rast_kern_h03111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -80680,11 +81736,14 @@ rast_kern_h04000:
 	shrn v9.8b, v9.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -81193,29 +82252,25 @@ rast_kern_h04001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -81228,9 +82283,16 @@ rast_kern_h04001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -81248,18 +82310,21 @@ rast_kern_h04001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -81294,18 +82359,21 @@ rast_kern_h04001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -81340,18 +82408,21 @@ rast_kern_h04001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -81816,11 +82887,14 @@ rast_kern_h04010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -82278,29 +83352,25 @@ rast_kern_h04011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -82313,9 +83383,16 @@ rast_kern_h04011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -82333,18 +83410,21 @@ rast_kern_h04011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -82379,18 +83459,21 @@ rast_kern_h04011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -82425,18 +83508,21 @@ rast_kern_h04011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -82900,13 +83986,16 @@ rast_kern_h04100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
@@ -83424,29 +84513,25 @@ rast_kern_h04101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -83459,9 +84544,16 @@ rast_kern_h04101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -83479,18 +84571,21 @@ rast_kern_h04101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -83525,18 +84620,21 @@ rast_kern_h04101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -83571,18 +84669,21 @@ rast_kern_h04101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -84075,11 +85176,14 @@ rast_kern_h04110:
 	dup v25.8b, v23.b[4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -84542,29 +85646,25 @@ rast_kern_h04111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -84577,9 +85677,16 @@ rast_kern_h04111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -84597,18 +85704,21 @@ rast_kern_h04111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -84643,18 +85753,21 @@ rast_kern_h04111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -84689,18 +85802,21 @@ rast_kern_h04111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -86267,23 +87383,26 @@ rast_kern_h11000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v20.8h, v24.8h, v15.h[3]
-	add v18.8h, v18.8h, v10.8h
-	stp q29, q27, [sp]
-	add v19.8h, v19.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v18.8b, v18.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v20.8h, v20.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v19.8b, v19.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v20.8b, v20.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v18.8h, v18.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v19.8h, v19.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v20.8h, v20.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v20.8b, v20.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -86746,30 +87865,33 @@ rast_kern_h11001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -86787,18 +87909,21 @@ rast_kern_h11001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -86825,18 +87950,21 @@ rast_kern_h11001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -86863,18 +87991,21 @@ rast_kern_h11001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -87289,11 +88420,14 @@ rast_kern_h11010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -87706,30 +88840,33 @@ rast_kern_h11011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -87747,18 +88884,21 @@ rast_kern_h11011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -87785,18 +88925,21 @@ rast_kern_h11011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -87823,18 +88966,21 @@ rast_kern_h11011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -88245,23 +89391,26 @@ rast_kern_h11100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v19.8h, v24.8h, v15.h[3]
-	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v18.8h, v18.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v19.8h, v19.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v18.8b, v18.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v19.8b, v19.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v25.8h, v25.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v18.8h, v18.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v19.8h, v19.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v25.8b, v25.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -88737,30 +89886,33 @@ rast_kern_h11101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -88778,18 +89930,21 @@ rast_kern_h11101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -88816,18 +89971,21 @@ rast_kern_h11101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -88854,18 +90012,21 @@ rast_kern_h11101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -89307,11 +90468,14 @@ rast_kern_h11110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -89742,30 +90906,33 @@ rast_kern_h11111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -89783,18 +90950,21 @@ rast_kern_h11111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -89821,18 +90991,21 @@ rast_kern_h11111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -89859,18 +91032,21 @@ rast_kern_h11111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -90283,11 +91459,14 @@ rast_kern_h12000:
 	shrn v20.8b, v20.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -90667,9 +91846,9 @@ rast_kern_h12001:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -90681,9 +91860,9 @@ rast_kern_h12001:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -90710,36 +91889,39 @@ rast_kern_h12001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -90757,18 +91939,21 @@ rast_kern_h12001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -90795,18 +91980,21 @@ rast_kern_h12001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -90833,18 +92021,21 @@ rast_kern_h12001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -91239,11 +92430,14 @@ rast_kern_h12010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -91567,9 +92761,9 @@ rast_kern_h12011:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -91581,9 +92775,9 @@ rast_kern_h12011:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -91610,36 +92804,39 @@ rast_kern_h12011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -91657,18 +92854,21 @@ rast_kern_h12011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -91695,18 +92895,21 @@ rast_kern_h12011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -91733,18 +92936,21 @@ rast_kern_h12011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -92141,11 +93347,14 @@ rast_kern_h12100:
 	shrn v19.8b, v19.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -92538,9 +93747,9 @@ rast_kern_h12101:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -92552,9 +93761,9 @@ rast_kern_h12101:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -92581,36 +93790,39 @@ rast_kern_h12101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -92628,18 +93840,21 @@ rast_kern_h12101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -92666,18 +93881,21 @@ rast_kern_h12101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -92704,18 +93922,21 @@ rast_kern_h12101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -93137,11 +94358,14 @@ rast_kern_h12110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -93483,9 +94707,9 @@ rast_kern_h12111:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -93497,9 +94721,9 @@ rast_kern_h12111:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -93526,36 +94750,39 @@ rast_kern_h12111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -93573,18 +94800,21 @@ rast_kern_h12111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -93611,18 +94841,21 @@ rast_kern_h12111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -93649,18 +94882,21 @@ rast_kern_h12111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -94091,23 +95327,26 @@ rast_kern_h13000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v8.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v16.8h, v16.8h, v10.8h
-	stp q29, q27, [sp]
-	add v17.8h, v17.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v16.8b, v16.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v8.8h, v8.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v17.8b, v17.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v8.8b, v8.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v17.8h, v17.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v8.8h, v8.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v16.8b, v16.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v17.8b, v17.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v8.8b, v8.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -94592,24 +95831,24 @@ rast_kern_h13001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -94622,8 +95861,11 @@ rast_kern_h13001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -94641,18 +95883,21 @@ rast_kern_h13001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -94687,18 +95932,21 @@ rast_kern_h13001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -94733,18 +95981,21 @@ rast_kern_h13001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -95168,11 +96419,14 @@ rast_kern_h13010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -95612,24 +96866,24 @@ rast_kern_h13011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -95642,8 +96896,11 @@ rast_kern_h13011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -95661,18 +96918,21 @@ rast_kern_h13011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -95707,18 +96967,21 @@ rast_kern_h13011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -95753,18 +97016,21 @@ rast_kern_h13011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -96186,23 +97452,26 @@ rast_kern_h13100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v9.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v8.8h, v8.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v9.8h, v9.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v8.8b, v8.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v9.8b, v9.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v8.8h, v8.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v9.8h, v9.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v8.8b, v8.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v9.8b, v9.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -96703,24 +97972,24 @@ rast_kern_h13101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -96733,8 +98002,11 @@ rast_kern_h13101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -96752,18 +98024,21 @@ rast_kern_h13101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -96798,18 +98073,21 @@ rast_kern_h13101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -96844,18 +98122,21 @@ rast_kern_h13101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -97310,11 +98591,14 @@ rast_kern_h13110:
 	dup v11.8b, v23.b[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -97766,24 +99050,24 @@ rast_kern_h13111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -97796,8 +99080,11 @@ rast_kern_h13111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -97815,18 +99102,21 @@ rast_kern_h13111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -97861,18 +99151,21 @@ rast_kern_h13111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -97907,18 +99200,21 @@ rast_kern_h13111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -98343,11 +99639,14 @@ rast_kern_h14000:
 	shrn v8.8b, v8.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -98792,29 +100091,25 @@ rast_kern_h14001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -98827,9 +100122,16 @@ rast_kern_h14001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -98847,18 +100149,21 @@ rast_kern_h14001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -98893,18 +100198,21 @@ rast_kern_h14001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -98939,18 +100247,21 @@ rast_kern_h14001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -99354,11 +100665,14 @@ rast_kern_h14010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -99752,29 +101066,25 @@ rast_kern_h14011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -99787,9 +101097,16 @@ rast_kern_h14011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -99807,18 +101124,21 @@ rast_kern_h14011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -99853,18 +101173,21 @@ rast_kern_h14011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -99899,18 +101222,21 @@ rast_kern_h14011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -100317,13 +101643,16 @@ rast_kern_h14100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
@@ -100783,29 +102112,25 @@ rast_kern_h14101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -100818,9 +102143,16 @@ rast_kern_h14101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -100838,18 +102170,21 @@ rast_kern_h14101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -100884,18 +102219,21 @@ rast_kern_h14101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -100930,18 +102268,21 @@ rast_kern_h14101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -101376,11 +102717,14 @@ rast_kern_h14110:
 	dup v25.8b, v23.b[4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -101786,29 +103130,25 @@ rast_kern_h14111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -101821,9 +103161,16 @@ rast_kern_h14111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -101841,18 +103188,21 @@ rast_kern_h14111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -101887,18 +103237,21 @@ rast_kern_h14111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -101933,18 +103286,21 @@ rast_kern_h14111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -103434,23 +104790,26 @@ rast_kern_h21000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v20.8h, v24.8h, v15.h[3]
-	add v18.8h, v18.8h, v10.8h
-	stp q29, q27, [sp]
-	add v19.8h, v19.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v18.8b, v18.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v20.8h, v20.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v19.8b, v19.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v20.8b, v20.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v18.8h, v18.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v19.8h, v19.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v20.8h, v20.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v20.8b, v20.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -103940,30 +105299,33 @@ rast_kern_h21001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -103981,18 +105343,21 @@ rast_kern_h21001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -104019,18 +105384,21 @@ rast_kern_h21001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -104057,18 +105425,21 @@ rast_kern_h21001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -104511,11 +105882,14 @@ rast_kern_h21010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -104956,30 +106330,33 @@ rast_kern_h21011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -104997,18 +106374,21 @@ rast_kern_h21011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -105035,18 +106415,21 @@ rast_kern_h21011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -105073,18 +106456,21 @@ rast_kern_h21011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -105520,23 +106906,26 @@ rast_kern_h21100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v19.8h, v24.8h, v15.h[3]
-	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v18.8h, v18.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v19.8h, v19.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v18.8b, v18.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v19.8b, v19.8h, #3
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	add v25.8h, v25.8h, v10.8h
 	ldr w10, [x6, w10, uxtw #2]
+	add v18.8h, v18.8h, v11.8h
 	ldr w11, [x6, w11, uxtw #2]
+	add v19.8h, v19.8h, v12.8h
 	ldr w12, [x6, w12, uxtw #2]
+	shrn v25.8b, v25.8h, #3
 	ldr w13, [x6, w13, uxtw #2]
+	shrn v18.8b, v18.8h, #3
 	ldr w14, [x6, w14, uxtw #2]
+	shrn v19.8b, v19.8h, #3
 	ldr w15, [x6, w15, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	stp w9, w10, [sp, #32]
@@ -106033,30 +107422,33 @@ rast_kern_h21101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -106074,18 +107466,21 @@ rast_kern_h21101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -106112,18 +107507,21 @@ rast_kern_h21101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -106150,18 +107548,21 @@ rast_kern_h21101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -106626,11 +108027,14 @@ rast_kern_h21110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -107082,30 +108486,33 @@ rast_kern_h21111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -107123,18 +108530,21 @@ rast_kern_h21111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -107161,18 +108571,21 @@ rast_kern_h21111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -107199,18 +108612,21 @@ rast_kern_h21111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -107648,11 +109064,14 @@ rast_kern_h22000:
 	shrn v20.8b, v20.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -108059,9 +109478,9 @@ rast_kern_h22001:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -108073,9 +109492,9 @@ rast_kern_h22001:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -108102,36 +109521,39 @@ rast_kern_h22001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -108149,18 +109571,21 @@ rast_kern_h22001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -108187,18 +109612,21 @@ rast_kern_h22001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -108225,18 +109653,21 @@ rast_kern_h22001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -108659,11 +110090,14 @@ rast_kern_h22010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -109015,9 +110449,9 @@ rast_kern_h22011:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -109029,9 +110463,9 @@ rast_kern_h22011:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -109058,36 +110492,39 @@ rast_kern_h22011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -109105,18 +110542,21 @@ rast_kern_h22011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -109143,18 +110583,21 @@ rast_kern_h22011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -109181,18 +110624,21 @@ rast_kern_h22011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -109614,11 +111060,14 @@ rast_kern_h22100:
 	shrn v19.8b, v19.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -110032,9 +111481,9 @@ rast_kern_h22101:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -110046,9 +111495,9 @@ rast_kern_h22101:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -110075,36 +111524,39 @@ rast_kern_h22101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -110122,18 +111574,21 @@ rast_kern_h22101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -110160,18 +111615,21 @@ rast_kern_h22101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -110198,18 +111656,21 @@ rast_kern_h22101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -110654,11 +112115,14 @@ rast_kern_h22110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -111021,9 +112485,9 @@ rast_kern_h22111:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -111035,9 +112499,9 @@ rast_kern_h22111:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -111064,36 +112528,39 @@ rast_kern_h22111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -111111,18 +112578,21 @@ rast_kern_h22111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -111149,18 +112619,21 @@ rast_kern_h22111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -111187,18 +112660,21 @@ rast_kern_h22111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -111654,23 +113130,26 @@ rast_kern_h23000:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v7.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v16.8h, v16.8h, v10.8h
-	stp q29, q27, [sp]
-	add v17.8h, v17.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v16.8b, v16.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v7.8h, v7.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v17.8b, v17.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v7.8b, v7.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v17.8h, v17.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v7.8h, v7.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v16.8b, v16.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v17.8b, v17.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v7.8b, v7.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -112182,24 +113661,24 @@ rast_kern_h23001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -112212,8 +113691,11 @@ rast_kern_h23001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -112231,18 +113713,21 @@ rast_kern_h23001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -112277,18 +113762,21 @@ rast_kern_h23001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -112323,18 +113811,21 @@ rast_kern_h23001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -112786,11 +114277,14 @@ rast_kern_h23010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -113256,24 +114750,24 @@ rast_kern_h23011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -113286,8 +114780,11 @@ rast_kern_h23011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -113305,18 +114802,21 @@ rast_kern_h23011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -113351,18 +114851,21 @@ rast_kern_h23011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -113397,18 +114900,21 @@ rast_kern_h23011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -113854,23 +115360,26 @@ rast_kern_h23100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	sqdmulh v8.8h, v24.8h, v15.h[3]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	add v7.8h, v7.8h, v11.8h
-	ldp w9, w10, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w11, w12, [sp, #8]
-	add v8.8h, v8.8h, v12.8h
-	ldp w13, w14, [sp, #16]
-	shrn v7.8b, v7.8h, #3
-	ldp w15, w16, [sp, #24]
-	shrn v8.8b, v8.8h, #3
 	ldrb w9, [x6, w9, uxtw]
+	add v7.8h, v7.8h, v11.8h
 	ldrb w10, [x6, w10, uxtw]
+	add v8.8h, v8.8h, v12.8h
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w13, [x6, w13, uxtw]
+	shrn v7.8b, v7.8h, #3
 	ldrb w14, [x6, w14, uxtw]
+	shrn v8.8b, v8.8h, #3
 	ldrb w15, [x6, w15, uxtw]
 	ldrb w16, [x6, w16, uxtw]
 	tbz w7, #7, 1f
@@ -114391,24 +115900,24 @@ rast_kern_h23101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -114421,8 +115930,11 @@ rast_kern_h23101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -114440,18 +115952,21 @@ rast_kern_h23101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -114486,18 +116001,21 @@ rast_kern_h23101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -114532,18 +116050,21 @@ rast_kern_h23101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -115018,11 +116539,14 @@ rast_kern_h23110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -115498,24 +117022,24 @@ rast_kern_h23111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -115528,8 +117052,11 @@ rast_kern_h23111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -115547,18 +117074,21 @@ rast_kern_h23111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -115593,18 +117123,21 @@ rast_kern_h23111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -115639,18 +117172,21 @@ rast_kern_h23111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -116100,11 +117636,14 @@ rast_kern_h24000:
 	shrn v7.8b, v7.8h, #3
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -116576,29 +118115,25 @@ rast_kern_h24001:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -116611,9 +118146,16 @@ rast_kern_h24001:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -116631,18 +118173,21 @@ rast_kern_h24001:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -116677,18 +118222,21 @@ rast_kern_h24001:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -116723,18 +118271,21 @@ rast_kern_h24001:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -117166,11 +118717,14 @@ rast_kern_h24010:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -117590,29 +119144,25 @@ rast_kern_h24011:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -117625,9 +119175,16 @@ rast_kern_h24011:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -117645,18 +119202,21 @@ rast_kern_h24011:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -117691,18 +119251,21 @@ rast_kern_h24011:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -117737,18 +119300,21 @@ rast_kern_h24011:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -118179,13 +119745,16 @@ rast_kern_h24100:
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	add v25.8h, v25.8h, v10.8h
-	stp q29, q27, [sp]
-	shrn v25.8b, v25.8h, #3
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	shrn v25.8b, v25.8h, #3
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
@@ -118665,29 +120234,25 @@ rast_kern_h24101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -118700,9 +120265,16 @@ rast_kern_h24101:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -118720,18 +120292,21 @@ rast_kern_h24101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -118766,18 +120341,21 @@ rast_kern_h24101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -118812,18 +120390,21 @@ rast_kern_h24101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -119278,11 +120859,14 @@ rast_kern_h24110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -119712,29 +121296,25 @@ rast_kern_h24111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -119747,9 +121327,16 @@ rast_kern_h24111:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -119767,18 +121354,21 @@ rast_kern_h24111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -119813,18 +121403,21 @@ rast_kern_h24111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -119859,18 +121452,21 @@ rast_kern_h24111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -120520,11 +122116,14 @@ rast_kern_hv01:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -120898,11 +122497,14 @@ rast_kern_hv02:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -121298,11 +122900,14 @@ rast_kern_hv03:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -121702,11 +123307,14 @@ rast_kern_hv04:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -122304,11 +123912,14 @@ rast_kern_hv11:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -122621,11 +124232,14 @@ rast_kern_hv12:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -122962,11 +124576,14 @@ rast_kern_hv13:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -123305,11 +124922,14 @@ rast_kern_hv14:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -123862,11 +125482,14 @@ rast_kern_hv21:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -124207,11 +125830,14 @@ rast_kern_hv22:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -124576,11 +126202,14 @@ rast_kern_hv23:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -124947,11 +126576,14 @@ rast_kern_hv24:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -125668,11 +127300,14 @@ rast_kern_hs100:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -126089,30 +127724,33 @@ rast_kern_hs101:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -126130,18 +127768,21 @@ rast_kern_hs101:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -126168,18 +127809,21 @@ rast_kern_hs101:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -126206,18 +127850,21 @@ rast_kern_hs101:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -126562,11 +128209,14 @@ rast_kern_hs110:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -126914,30 +128564,33 @@ rast_kern_hs111:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -126955,18 +128608,21 @@ rast_kern_hs111:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -126993,18 +128649,21 @@ rast_kern_hs111:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -127031,18 +128690,21 @@ rast_kern_hs111:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -127356,11 +129018,14 @@ rast_kern_hs200:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -127688,9 +129353,9 @@ rast_kern_hs201:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -127702,9 +129367,9 @@ rast_kern_hs201:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -127731,36 +129396,39 @@ rast_kern_hs201:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -127778,18 +129446,21 @@ rast_kern_hs201:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -127816,18 +129487,21 @@ rast_kern_hs201:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -127854,18 +129528,21 @@ rast_kern_hs201:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -128190,11 +129867,14 @@ rast_kern_hs210:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
@@ -128453,9 +130133,9 @@ rast_kern_hs211:
 	addhn2 v27.8h, v29.4s, v14.4s
 	sub v30.8h, v30.8h, v24.8h
 	sub v27.8h, v27.8h, v24.8h
-	sshr v12.8h, v30.8h, #3
-	sshr v13.8h, v27.8h, #3
 	movi v24.8h, #7
+	sshr v13.8h, v27.8h, #3
+	sshr v12.8h, v30.8h, #3
 	and v10.16b, v30.16b, v24.16b
 	and v11.16b, v27.16b, v24.16b
 	movi v24.8h, #1
@@ -128467,9 +130147,9 @@ rast_kern_hs211:
 	add v31.8h, v13.8h, v24.8h
 	ldr q24, [x19, #192]
 	and v13.16b, v13.16b, v17.16b
+	xtn v11.8b, v11.8h
 	and v14.16b, v14.16b, v16.16b
 	and v31.16b, v31.16b, v17.16b
-	xtn v11.8b, v11.8h
 	tbl v10.8b, {v24.16b}, v10.8b
 	tbl v11.8b, {v24.16b}, v11.8b
 	movi v24.8b, #8
@@ -128496,36 +130176,39 @@ rast_kern_hs211:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	xtn v24.8b, v24.8h
+	ldr w15, [x6, w15, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldr w16, [x6, w16, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
 	ldr w12, [x6, w12, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
+	stp w11, w12, [sp, #40]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -128543,18 +130226,21 @@ rast_kern_hs211:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -128581,18 +130267,21 @@ rast_kern_hs211:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -128619,18 +130308,21 @@ rast_kern_hs211:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldr w9, [x6, w9, uxtw #2]
+	sxtl v21.8h, v21.8b
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w11, [x6, w11, uxtw #2]
+	bit v19.16b, v10.16b, v21.16b
 	ldr w12, [x6, w12, uxtw #2]
+	bit v20.16b, v11.16b, v21.16b
 	ldr w13, [x6, w13, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
@@ -128968,11 +130660,14 @@ rast_kern_hs300:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -129411,24 +131106,24 @@ rast_kern_hs301:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -129441,8 +131136,11 @@ rast_kern_hs301:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -129460,18 +131158,21 @@ rast_kern_hs301:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -129506,18 +131207,21 @@ rast_kern_hs301:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -129552,18 +131256,21 @@ rast_kern_hs301:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -129919,11 +131626,14 @@ rast_kern_hs310:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -130294,24 +132004,24 @@ rast_kern_hs311:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v24.8b, v24.8h
 	uaddw v29.4s, v29.4s, v12.4h
-	str d24, [sp, #208]
-	umull v24.8h, v10.8b, v11.8b
-	stp q29, q30, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	xtn v24.8b, v24.8h
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -130324,8 +132034,11 @@ rast_kern_hs311:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -130343,18 +132056,21 @@ rast_kern_hs311:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -130389,18 +132105,21 @@ rast_kern_hs311:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -130435,18 +132154,21 @@ rast_kern_hs311:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -130772,11 +132494,14 @@ rast_kern_hs400:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -131169,29 +132894,25 @@ rast_kern_hs401:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -131204,9 +132925,16 @@ rast_kern_hs401:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -131224,18 +132952,21 @@ rast_kern_hs401:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -131270,18 +133001,21 @@ rast_kern_hs401:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -131316,18 +133050,21 @@ rast_kern_hs401:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -131663,11 +133400,14 @@ rast_kern_hs410:
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	stp q29, q27, [sp]
-	ldp w9, w10, [sp]
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
@@ -131992,29 +133732,25 @@ rast_kern_hs411:
 	str d24, [sp, #200]
 	umull v24.8h, v29.8b, v11.8b
 	umull v29.4s, v13.4h, v15.h[6]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	xtn v19.8b, v19.8h
-	xtn v24.8b, v24.8h
-	str d19, [sp, #240]
 	uaddw v29.4s, v29.4s, v12.4h
-	and v19.16b, v21.16b, v18.16b
-	str d24, [sp, #208]
-	xtn v19.8b, v19.8h
-	stp q29, q30, [sp]
-	umull v24.8h, v10.8b, v11.8b
-	ldp w9, w10, [sp]
-	movi v18.2d, #0
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
 	xtn v24.8b, v24.8h
+	ldrb w15, [x6, w15, uxtw]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w9, [x6, w9, uxtw]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
 	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w16, [x6, w16, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
@@ -132027,9 +133763,16 @@ rast_kern_hs411:
 	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
-	ld2 {v10.8h, v11.8h}, [x28]
 	ldr d29, [sp, #192]
+	str d19, [sp, #240]
+	and v19.16b, v21.16b, v18.16b
+	xtn v19.8b, v19.8h
+	str d24, [sp, #208]
+	umull v24.8h, v10.8b, v11.8b
+	ld2 {v10.8h, v11.8h}, [x28]
 	str d19, [sp, #248]
+	movi v18.2d, #0
+	xtn v24.8b, v24.8h
 	str d24, [sp, #216]
 	movi v24.2d, #0
 	xtn v30.8b, v10.8h
@@ -132047,18 +133790,21 @@ rast_kern_hs411:
 	ldr d21, [sp, #224]
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -132093,18 +133839,21 @@ rast_kern_hs411:
 	uaddw v29.4s, v29.4s, v12.4h
 	uaddw2 v30.4s, v30.4s, v12.8h
 	ldp q12, q13, [sp, #144]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
@@ -132139,18 +133888,21 @@ rast_kern_hs411:
 	uaddw v29.4s, v29.4s, v14.4h
 	uaddw2 v30.4s, v30.4s, v14.8h
 	ldr q14, [sp, #176]
-	sxtl v21.8h, v21.8b
-	stp q29, q30, [sp]
-	bit v19.16b, v10.16b, v21.16b
-	ldp w9, w10, [sp]
-	bit v20.16b, v11.16b, v21.16b
-	ldp w11, w12, [sp, #8]
-	ldp w13, w14, [sp, #16]
-	ldp w15, w16, [sp, #24]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w13, v30.s[0]
+	umov w14, v30.s[1]
+	umov w15, v30.s[2]
+	umov w16, v30.s[3]
 	ldrb w9, [x6, w9, uxtw]
+	sxtl v21.8h, v21.8b
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
+	bit v19.16b, v10.16b, v21.16b
 	ldrb w12, [x6, w12, uxtw]
+	bit v20.16b, v11.16b, v21.16b
 	ldrb w13, [x6, w13, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
