@@ -46,6 +46,11 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins.
+  Then the 2x walker fused (`walk.c`): each edge's five routines in one pass over its lines, 8 a step in registers
+  (the next 8 lines' reciprocal chain among this 8's stores), no float pairs and weights through scratch memory, no
+  per-routine reloads of the vertices; the span setup, with render_polygon_4x's edge-marking fix-up folded in, and
+  the edge markers 4 lines a step. Stress ROM L4 at 2x: the walk (edges, x/z, span setup, render_polygon_4x)
+  2.73 M -> 1.75 M cycles a frame.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -149,9 +154,10 @@ stay with DraStic's chain), on the field scene S7 0.47 M -> 0.07 M; frame totals
 original inside DraStic's process (`tools/rast/ut/`). `src/rast/b0.c` rebuilds DraStic's per-polygon pipeline from
 them (the reference, and still the path for shadow polygons). The polygon walker's routines (`spec/edges_impl.h`, a
 template: DraStic's layout and the 3x one) also exist in NEON (`EDGES_NEON`, the same bytes, DraStic's overruns
-included: `t_edges.c` tests both forms); `src/rast/walk.c` is render_polygon_4x on them for the 2x bins (sprites,
-shadow polygons and odd vertex counts stay with DraStic's; `RAST_WALK=0` all of them; `t_walk.c` compares it with
-DraStic's on random polygons). `src/rast/fused.c` runs every pixel through all
+included: `t_edges.c` tests both forms); `src/rast/walk.c` is render_polygon_4x for the 2x bins on fused NEON forms
+of them (an edge's five routines in one pass, DraStic's values on the lines the setup and the markers read; sprites,
+shadow polygons and odd vertex counts stay with DraStic's; `RAST_WALK=0` all of them; `t_walk.c` compares the span
+arrays with DraStic's walker's on random polygons). `src/rast/fused.c` runs every pixel through all
 stages at once; `fused_neon.c` is that in C NEON (8 pixels a step), and `kerngen.py` generates `rast_kern.S`, the
 same in assembly with a fixed register allocation, one kernel per variant (depth source x texture x translucency
 x flat colour), which is what runs. Shortcuts that give the same bits: a white vertex colour with alpha 31 makes
