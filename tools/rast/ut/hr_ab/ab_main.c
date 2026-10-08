@@ -143,6 +143,52 @@ static int test_rds(int iters) {
     return bad;
 }
 
+/* the same on polygon-like contexts: rectangles of one polygon id each over a background (keys a gradient and noise),
+ * so most blocks of 16 pixels have one id in all their neighbour pairs and edge_lines' id screen passes them, and its
+ * transitions between screened and full blocks (the left tests carried across, the forced block after a full one) and
+ * the rectangles' edges at and next to block boundaries are exercised; the random contexts above give few such blocks */
+static int test_rds_rect(int iters) {
+    int bad = 0;
+    unsigned csz = old_ctx_size();
+    uint8_t *ctx = malloc(csz), *sys = calloc(1, 0x350000), *geom = calloc(1, 0x10000);
+    for (int it = 0; it < iters; it++) {
+        uint32_t *colp = (uint32_t *)ctx, *attp = (uint32_t *)(ctx + 50 * W * 4);
+        for (unsigned i = 0; i < csz; i++) ctx[i] = rnd();
+        uint32_t bg = rnd();
+        for (int i = 0; i < 50 * W; i++) attp[i] = bg + (it & 1 ? (rnd() & 3) : 0);
+        for (int r = 0, nr = 1 + rnd() % 12; r < nr; r++) {
+            int x0 = rnd() % W, y0 = rnd() % 50, w = 1 + rnd() % (it & 2 ? 40 : 400), h = 1 + rnd() % 50;
+            if (rnd() % 4 == 0) x0 = (x0 & ~15) + (int)(rnd() % 3) - 1;                 /* at block boundaries */
+            if (x0 < 0) x0 = 0;
+            uint32_t top = (rnd() & 0xc0000000u) | (rnd() % 64) << 24 | (rnd() % 3 ? 0 : 0x40000000u);
+            uint32_t key = rnd() & 0xffffff;
+            int gx = (int)(rnd() % 7) - 3, gy = (int)(rnd() % 7) - 3;
+            for (int y = y0; y < y0 + h && y < 50; y++)
+                for (int x = x0; x < x0 + w && x < W; x++)
+                    attp[y * W + x] = top | ((key + (uint32_t)(gx * x + gy * y) + (rnd() & 1)) & 0xffffff);
+        }
+        for (int i = 0; i < 50 * W; i++) colp[i] = pix(rnd() % 3, 0);
+        uint32_t d3 = (rnd() & ~0xf0u) | 0x20;                                          /* edge marking */
+        d3 |= ((it / 4) % 3 == 0 ? 0 : (it / 4) % 3 == 1 ? 0x80 : 0xc0);               /* fog: off, full, alpha only */
+        *(uint32_t *)(sys + 0x34eb40) = d3;
+        *(uint32_t *)(sys + 0x34eb48) = rnd();
+        *(uint32_t *)(sys + 0x34eb4c) = it % 4 == 3 ? attp[W] : rnd() % 2 ? bg : rnd();
+        *(uint32_t *)(sys + 0x34eb50) = rnd() % 4;
+        *(uint32_t *)(ctx + 2 * 50 * W * 4 + 50 * W + 0x14) = rnd() % 4;
+        for (int i = 0x9900; i < 0x9b00; i++) geom[i] = rnd();
+        for (int i = 0x99b4; i < 0x99cc; i++) geom[i] = (geom[i] & 0x3f) | 1;          /* edge colours: 6-bit, not 0 */
+        memset(o1, 0x5a, sizeof o1); memset(o2, 0x5a, sizeof o2);
+        old_rds(ctx, sys, geom, o1); new_rds(ctx, sys, geom, o2);
+        if (memcmp(o1, o2, sizeof o1)) {
+            for (size_t i = 0; i < sizeof o1; i += 4)
+                if (memcmp(o1 + i, o2 + i, 4)) { if (bad < 5) printf("rds rect it %d d3 %08x: byte %zu old %08x new %08x\n", it, d3, i, *(uint32_t *)(o1 + i), *(uint32_t *)(o2 + i)); break; }
+            bad++;
+        }
+    }
+    printf("resolve + downsample, polygon-like contexts: %d cases, %d differ\n", iters, bad);
+    return bad;
+}
+
 /* 1 when one of the polygon's two chains, walked as hr_polygon and edges_impl.h's interpolate_edges walk them, covers
  * more lines than its window y_end - y_start: a chain that goes down, up and down again (these random polygons are
  * mostly self-intersecting) covers lines twice. hr.c's walker stops such a chain at the window (EDGES_LINE_CAP); before
@@ -254,7 +300,7 @@ static int test_poly(int iters) {
 int main(int argc, char **argv) {
     int n = argc > 1 ? atoi(argv[1]) : 200;
     if (argc > 2) rs ^= strtoull(argv[2], 0, 0) * 0x9e3779b97f4a7c15ull;
-    int bad = test_ds(n) + test_fog(n * 10) + test_rds(n) + test_poly(n * 50);
+    int bad = test_ds(n) + test_fog(n * 10) + test_rds(n) + test_poly(n * 50) + test_rds_rect(n);
     printf(bad ? "FAIL\n" : "PASS\n");
     return bad != 0;
 }

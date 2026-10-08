@@ -4,7 +4,8 @@
 # before: the base version (BASE, a git revision, default 450370b) and the worktree's hr.c are compiled side by side
 # (ab_tu.c prefixes each one's exported names, its static stage functions get wrappers), and ab_main.c runs both on
 # the same random inputs: the downsample alone, the fog alone, and hr_resolve_bin + hr_downsample on random bin
-# contexts (fog off/full/alpha-only, edge marking on/off), comparing the output blocks. A plain aarch64 program
+# contexts (fog off/full/alpha-only, edge marking on/off) and on polygon-like ones (rectangles of one id: edge_lines'
+# id screen), comparing the output blocks; and the polygon walker. A plain aarch64 program
 # under qemu-aarch64 (no DraStic needed), seconds a run. Env: SIM (simulator dir with rtsys/ and qemu-build/), BASE.
 HERE=$(cd "$(dirname "$0")" && pwd)
 SIM=${SIM:-/tmp/claude-0/-home-user/b019d7e4-f3cd-580d-8132-fb9570fcadd2/scratchpad/sim}
