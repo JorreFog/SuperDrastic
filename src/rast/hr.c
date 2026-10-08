@@ -339,8 +339,9 @@ static __attribute__((noinline)) void fog_line(uint32_t *c, const uint32_t *attr
  *   marked = bit 30 of C && some N with (N & 0xffffff) > (C & 0xffffff) and (N ^ C) & 0x3f000000,
  *   out = marked ? ec[(C >> 27) & 7] (r, g, b) | (px & 0x1f000000) : px & 0x1fffffff.
  * Bits 29-31 matter to nothing downstream (the downsample reads the alpha as & 0x1f), so the lines are marked in
- * place and keep them: a group of 16 pixels without a marked pixel is not loaded or stored at all, which is most
- * groups (S4 at 3x: edge_lines 3.03 -> 2.59 M modeled cycles a frame).
+ * place and keep them: the colours of a step (16 pixels of two lines) without a marked pixel are not loaded or stored
+ * at all, which is most steps (S4 at 3x: edge_lines 3.03 -> 2.59 M modeled cycles a frame; 2.38 M with both lines'
+ * tests before the one test for a marked pixel).
  * NEON over 16 pixels on byte planes: ld4 splits 16 attribute words into the key bytes k0, k1, k2 and the top byte t,
  * and 16 colours into r, g, b, a (st4 interleaves them back). N > C is lexicographic over the key planes,
  * k2 == ? (k1 == ? k0 > : k1 >) : k2 >, with cmeq/cmhi and two selects. The id test is folded in: (N > C) & (tN ^ tC)
@@ -374,14 +375,11 @@ static inline __attribute__((always_inline)) uint8x16_t edge_pair(uint8x16x4_t n
     *nc = vandq_u8(gt, xid);
     return vbicq_u8(xid, ge);
 }
-/* the marking of 16 pixels in place, with the top bytes t and the tests y: only a group with a marked pixel (an edge
- * and bit 30 set) is loaded and stored again. The other pixels' alpha bytes keep their flag bits 5-7 (the 2x path
- * clears them, ca & 0x1f): the downsample reads the alpha as & 0x1f, so the output frame is the same. */
-static inline __attribute__((always_inline)) void edge_mark(uint32_t *col, uint8x16_t t, uint8x16_t y, uint8x16_t er, uint8x16_t eg,
+/* the colours of 16 pixels in place, with the top bytes t and the tests' edge lanes e (cmtst of the tests against
+ * 0x3f): the alpha bytes keep their flag bits 5-7 (the 2x path clears them, ca & 0x1f), which the downsample ignores */
+static inline __attribute__((always_inline)) void edge_mark(uint32_t *col, uint8x16_t t, uint8x16_t e, uint8x16_t er, uint8x16_t eg,
                                                             uint8x16_t eb) {
-    const uint8x16_t m1f = vdupq_n_u8(0x1f), m3f = vdupq_n_u8(0x3f), m40 = vdupq_n_u8(0x40);
-    uint8x16_t e = vtstq_u8(y, m3f);
-    if (__builtin_expect(!vmaxvq_u8(vandq_u8(e, vtstq_u8(t, m40))), 1)) return;      /* no pixel marked */
+    const uint8x16_t m1f = vdupq_n_u8(0x1f);
     /* ~(t >> 2) & 0x1f = 15 - (id >> 2) + (bit 30 clear ? 16 : 0) where there is an edge, 31 where not */
     uint8x16_t idx = edge_sel(e, vbicq_u8(m1f, vshrq_n_u8(t, 2)), m1f);
     uint8x16x4_t p = vld4q_u8((const uint8_t *)col);
@@ -389,10 +387,13 @@ static inline __attribute__((always_inline)) void edge_mark(uint32_t *col, uint8
     vst4q_u8((uint8_t *)col, p);
 }
 /* 16 pixels of two lines (the last ones of the lines when last: the clear attribute to the right), lp0 and lp1 = the
- * previous block's left tests (lane 15 is the one for this block's pixel 0), replaced by this block's */
+ * previous block's left tests (lane 15 is the one for this block's pixel 0), replaced by this block's. Both lines'
+ * tests first, then one test for a marked pixel (an edge and bit 30 set) in either line: the colours of a block
+ * without one are not loaded or stored at all, and the two lines' compare chains share one basic block. */
 static inline __attribute__((always_inline)) void edge_block(uint32_t *col0, uint32_t *col1, const uint32_t *a, const uint32_t *c0, const uint32_t *c1, const uint32_t *b,
                                                              int last, uint8x16x4_t k, uint8x16_t *lp0, uint8x16_t *lp1,
                                                              uint8x16_t er, uint8x16_t eg, uint8x16_t eb) {
+    const uint8x16_t m3f = vdupq_n_u8(0x3f), m40 = vdupq_n_u8(0x40);
     uint8x16x4_t p0 = vld4q_u8((const uint8_t *)c0), p1 = vld4q_u8((const uint8_t *)c1), r, n;
     uint8x16_t y0, y1, v, lt;
     /* the right neighbours: the planes of an ld4 one pixel on */
@@ -403,14 +404,18 @@ static inline __attribute__((always_inline)) void edge_block(uint32_t *col0, uin
     n = vld4q_u8((const uint8_t *)a);
     y0 = vorrq_u8(y0, vandq_u8(edge_gt(n, p0), veorq_u8(n.val[3], p0.val[3])));
     y1 = edge_pair(p1, p0, &v);                                 /* line 1 against line 0 above it, and the reverse */
-    edge_mark(col0, p0.val[3], vorrq_u8(y0, v), er, eg, eb);
+    y0 = vorrq_u8(y0, v);
     if (!last) r = vld4q_u8((const uint8_t *)(c1 + 1));
     else for (int i = 0; i < 4; i++) r.val[i] = vextq_u8(p1.val[i], k.val[i], 1);
     lt = edge_pair(r, p1, &v);
     y1 = vorrq_u8(vorrq_u8(y1, v), vextq_u8(*lp1, lt, 15)); *lp1 = lt;
     n = vld4q_u8((const uint8_t *)b);
     y1 = vorrq_u8(y1, vandq_u8(edge_gt(n, p1), veorq_u8(n.val[3], p1.val[3])));
-    edge_mark(col1, p1.val[3], y1, er, eg, eb);
+    uint8x16_t e0 = vtstq_u8(y0, m3f), e1 = vtstq_u8(y1, m3f);
+    uint8x16_t m = vorrq_u8(vandq_u8(e0, p0.val[3]), vandq_u8(e1, p1.val[3]));   /* bit 6: a marked pixel */
+    if (__builtin_expect(!vmaxvq_u8(vandq_u8(m, m40)), 1)) return;
+    edge_mark(col0, p0.val[3], e0, er, eg, eb);
+    edge_mark(col1, p1.val[3], e1, er, eg, eb);
 }
 /* two lines of the bin, marked in place: col0/c0 and col1/c1 (the line below), a = the line above the first, b = the
  * line below the second */
