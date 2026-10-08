@@ -238,6 +238,12 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
   into the scanout and skip the planes (~0.08 M a frame; needs the convert hook keyed by plane pointer).
+- DraStic's 2x line conversion (`render_scanline_color_convert_direct_32_2x_asm`, called from render_scanline for
+  every output line: 768 calls a frame, 0.62 M cycles at IPC 0.45 in every game, 2x and 3x): its `ld1 {q}` loads
+  with writeback hold the A55's load pipe ~5 cycles each in llvm-mca's model. The same loop with `ldr q` at a
+  register offset (x3 as the offset, `cmp x3, #256` as the test; still 31 instructions and the same registers)
+  models at 28 cycles a group of 32 pixels instead of 50: ~0.25 M a frame (S7 at 2x: ~5%). Needs a replacement
+  hooked in (rast_hook to a function in librast) and a unit test against the original.
 - The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate; IPC
   ~0.75-0.8 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
   finds 0.1% more). What is left is across blocks, which is kerngen.py's layout: the depth test overlapped with the
