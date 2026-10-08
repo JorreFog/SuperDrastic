@@ -74,7 +74,8 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   The 2x walker's span setup (`walk.c`'s walk_spans) then takes the left/right swap a step of 4 lines at a time when
   all 4 agree (the winding decides which chain is left; only the lines where the chains meet differ): no selects,
   and without a swap no stores of the left arrays besides x. Stress ROM L4 at 2x: walk_polygon_4x 1.75 M -> 1.62 M
-  cycles a frame (its costliest block, the span setup's step of 4 lines, 58 -> 36 cycles; 4% of the steps mix).
+  cycles a frame (its costliest block, the span setup's step of 4 lines, 58 -> 36 cycles; 4% of the steps mix); an
+  edge's first coefficient lanes as one vector product and sum (the same bits, walk.c says why): 1.62 M -> 1.59 M.
   `f_run`'s batch splitting (runs of lines with pixels, at most 512 together; a chain of dependent loads and compares,
   ~10 cycles a line) is 8 lines a step as NEON prefix sums (`batch_end`, `ut/batch_end` checks it against the loop it
   replaced): f_run 0.70 M -> 0.64 M a frame, at 3x 0.83 M -> 0.68 M (the same batches).
@@ -272,8 +273,13 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   from k = 8, compiled to; ut/hr_ab: the same output on 1.5 M polygons): decide what 3x should walk there.
   The downsample is bound by its loads and the alpha test in the cycle model: two groups a step, the opaque outputs
   computed before the test and the loads a group ahead all modeled within 3% of the current loop.
-- `batch_end` (f_run's batch splitting) is latency-bound (38 cycles a step: ldp, uzp1, three ext + add, the compare,
-  fmov): a polygon's prefix sums in one pass, then a compare a batch.
+- The 2x walker (stress ROM L4, 1.59 M cycles a frame): an edge's step computes the next 8 lines' weights after its
+  exit test (29 instructions, 43 cycles, one reciprocal chain). With the test first and that chain in the stores'
+  block clang spills (13 stack accesses a step) and the step models at 99 cycles instead of 93: needs fewer live
+  vectors (z as two vectors and a step, the colour bases in one). The edge setup (120 instructions, 99 cycles)
+  starts the first weights' chain at its cycle ~49, behind the w loads and conversions. `batch_end` is latency-bound
+  (38 cycles a step: ldp, uzp1, three ext + add, the compare, fmov): a polygon's prefix sums in one pass, then a
+  compare a batch.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
   assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
   content signature in the key would make it certain.

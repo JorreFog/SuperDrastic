@@ -81,9 +81,14 @@ static inline __attribute__((always_inline)) void walk_edge(uint8_t *spans, cons
     float A = (float)wa, D = (float)(int32_t)((uint32_t)wa - (uint32_t)wb), B = (float)wb, H = (float)h, k = (float)skip;
     float n0 = 0.0f * B, d0 = B * H;
     n0 = n0 + k * A; d0 = d0 + k * D;
-    float A2 = A + A, D2 = D + D, A3 = A + A2, D3 = D + D2;
-    float32x4_t na = { n0, n0 + A, n0 + A2, n0 + A3 }, da = { d0, d0 + D, d0 + D2, d0 + D3 };
-    const float32x4_t n4 = vdupq_n_f32(A2 + A2), d4 = vdupq_n_f32(D2 + D2);
+    /* lanes {n0, n0 + A, n0 + (A + A), n0 + (A + (A + A))} as n0 + {0, 1, 2, 3} A, one product and one sum a vector,
+     * the same bits: j A is exact for j = 0..2, A + 2A rounds the same 3A as 3 A, and n0 + 0 A is n0, its zero's sign
+     * too (n0 = 0 B + k A is -0 only when k A is, so A < 0 and 0 A is -0; d0 is never -0: B H is +0 or not 0, and a
+     * sum to 0 is +0); 4 A is (A + A) + (A + A) */
+    static const float k0123[4] = { 0.0f, 1.0f, 2.0f, 3.0f };
+    const float32x4_t kk = vld1q_f32(k0123);
+    float32x4_t na = vaddq_f32(vdupq_n_f32(n0), vmulq_n_f32(kk, A)), da = vaddq_f32(vdupq_n_f32(d0), vmulq_n_f32(kk, D));
+    const float32x4_t n4 = vdupq_n_f32(4.0f * A), d4 = vdupq_n_f32(4.0f * D);
 #define WEIGHTS(q) do { \
         float32x4_t nb_ = vaddq_f32(na, n4), db_ = vaddq_f32(da, d4); \
         q = vcombine_s16(vmovn_s32(w_step(na, da)), vmovn_s32(w_step(nb_, db_))); \
