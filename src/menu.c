@@ -51,6 +51,7 @@ void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
 void SDL_PauseAudio(int on);
+void dsflip_perf_mode(int m);
 /* audio.c */
 void audio_mute(int on);
 int audio_ui_load(int id, const int16_t *pcm, int frames, int rate, int ch);
@@ -177,6 +178,8 @@ static const char *const IC_MIC[12] = { "....####....", "...######...", "...####
     ".#..####..#.", "..#......#..", "...######...", ".....##.....", ".....##.....", "...######..." };
 static const char *const IC_NOTE[12] = { "............", "......#####.", "......#...#.", "......#...#.", "......#...#.", "......#...#.",
     "......#...#.", "...###..###.", "..####.####.", "..####.####.", "...##...##..", "............" };
+static const char *const IC_CHART[12] = { "............", "..........#.", "..........#.", "......#...#.", "......#...#.", "......#...#.",
+    "..#...#...#.", "..#...#...#.", "..#...#...#.", "..#...#...#.", "############", "............" };
 static const char *const IC_TIP[12] = { "....####....", "...#....#...", "..#......#..", "..#......#..", "...#....#...", "....#..#....",
     "....#..#....", ".....##.....", "....####....", "....####....", ".....##.....", "............" };
 /* the slot numbers' 5x7 face (the same shapes as ROCKNIXDS's Pixelify Sans after its issue #34 fix) */
@@ -451,11 +454,13 @@ static int pref(const char *key, const char *env, int def) {
     return ev >= 0 ? ev : def;
 }
 static void pref_set(const char *key, const char *env, int v) { char b[32]; snprintf(b, sizeof b, "%d %d", v, env01(env)); mcfg_set(key, b); }
-static int sounds_on = -1, hints_on = -1;
+static int sounds_on = -1, hints_on = -1, perf = 0;   /* perf: the overlay, 0 off, 1 FPS, 2 detailed, 3 advanced */
 static void prefs_load(void) {
     if (sounds_on >= 0) return;
     sounds_on = pref("sounds", "DSFLIP_MENU_SOUNDS", 1); hints_on = pref("hints", "DSFLIP_MENU_HINTS", 1);
     char v[16]; if (mcfg_get("preview", v, sizeof v)) pic_bottom = atoi(v) == 1;
+    if (mcfg_get("perf", v, sizeof v)) perf = atoi(v) < 0 || atoi(v) > 3 ? 0 : atoi(v);
+    dsflip_perf_mode(perf);
 }
 /* a tip (resume.c's "Resumed where you left off", the menu's undo tip): 1 = show it, the first `times` times only,
  * never with the tips off */
@@ -572,7 +577,8 @@ static canvas CV[2];
 static int pw[2], ph[2];
 
 /* rows of Quick settings that exist on this setup; ROWS_SHOWN fit the page, the rest scroll */
-enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_SOUNDS, ROW_HINTS };
+enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_PERF, ROW_SOUNDS, ROW_HINTS };
+static const char *const PERF_NAME[4] = { "Off", "FPS", "Detailed", "Advanced" };
 #define MAXROWS 10
 #define ROWS_SHOWN 5
 static int rows[MAXROWS], nrows, set_first;
@@ -580,10 +586,17 @@ static void make_rows(void) {
     bl_map();
     nrows = 0; rows[nrows++] = ROW_VOL;
     if (bl_scr[0]) { rows[nrows++] = ROW_BRI_TOP; rows[nrows++] = ROW_BRI_BOT; } else rows[nrows++] = ROW_BRI;
-    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
+    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_PERF; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
 }
 static int is_slider(int id) { return id == ROW_VOL || id == ROW_BRI || id == ROW_BRI_TOP || id == ROW_BRI_BOT; }
 static int is_toggle(int id) { return id == ROW_SOUNDS || id == ROW_HINTS; }
+static int is_choice(int id) { return id == ROW_PERF; }            /* left / right (or A) steps through values */
+static void choose(int id, int d) {
+    if (id == ROW_PERF) {
+        perf = (perf + d + 4) % 4; dsflip_perf_mode(perf);
+        char v[8]; snprintf(v, sizeof v, "%d", perf); mcfg_set("perf", v);
+    }
+}
 static int slider_get(int id) { return id == ROW_VOL ? vol : id == ROW_BRI_BOT ? bri[1] : bri[0]; }
 static void slider_set(int id, int v) {         /* a new value, applied at once */
     if (id == ROW_VOL) { vol = v < 0 ? 0 : v > 100 ? 100 : v; want(vol, -1, -1); return; }
@@ -910,11 +923,13 @@ static void draw_bottom(void) {
             int sel = r == sel_set, id = rows[r];
             R_ROW[r] = (rect){ gx0, y, gx1, y + rh };
             box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
-            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_MIC ? IC_MIC : id == ROW_SOUNDS ? IC_NOTE : id == ROW_HINTS ? IC_TIP : IC_SUN;
+            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_MIC ? IC_MIC : id == ROW_SOUNDS ? IC_NOTE : id == ROW_HINTS ? IC_TIP :
+                                    id == ROW_PERF ? IC_CHART : IC_SUN;
             int k = S(2) < 2 ? 2 : S(2);
             bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? 0xffffff : C_LIGHT);
             const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : id == ROW_BRI_TOP ? "Top screen" :
-                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_SOUNDS ? "Menu sounds" : "Tips";
+                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_PERF ? "Performance" :
+                              id == ROW_SOUNDS ? "Menu sounds" : "Tips";
             text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_LIGHT, 0, 0);
             char v[32] = "";
             if (is_slider(id)) {
@@ -923,6 +938,7 @@ static void draw_bottom(void) {
                 R_BAR[r] = (rect){ bx - S(8), y, bx + S(150), y + rh };
                 snprintf(v, sizeof v, "%d%%", val);
             } else if (is_toggle(id)) snprintf(v, sizeof v, "%s", (id == ROW_SOUNDS ? sounds_on : hints_on) ? "On" : "Off");
+            else if (id == ROW_PERF) snprintf(v, sizeof v, "< %s >", PERF_NAME[perf]);
             else snprintf(v, sizeof v, "Test / blow");
             text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_CYAN, 0, 2);
             y += rh + gap;
@@ -938,6 +954,8 @@ static void draw_bottom(void) {
         case ROW_BRI: help = "Left / right to change, both screens"; break;
         case ROW_BRI_TOP: case ROW_BRI_BOT: help = "Left / right to change, each screen on its own"; break;
         case ROW_MIC: help = "A live meter of the mic, and a blow for games that ask for one"; break;
+        case ROW_PERF: help = perf == 3 ? "+ CPU and GPU clocks, internal resolution" : perf == 2 ? "Frames a second, frame time (avg / longest), drops"
+                              : perf == 1 ? "Frames a second, top left of the top screen" : "Left / right: FPS, Detailed, Advanced"; break;
         case ROW_SOUNDS: help = "The menu's clicks and beeps"; break;
         case ROW_HINTS: help = "Tips like \"Resumed where you left off\" and the undo tip"; break;
         }
@@ -991,7 +1009,7 @@ static void draw_bottom(void) {
     int fy = c->h - S(56);
     const char *bl = s == SC_MAIN ? "Resume" : "Back", *al = "Select", *mid = "";
     if (s == SC_SAVE) al = "Save"; else if (s == SC_LOAD) al = "Load";
-    else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : is_toggle(rows[sel_set]) ? "Switch" : "OK";
+    else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : is_toggle(rows[sel_set]) || is_choice(rows[sel_set]) ? "Switch" : "OK";
     else if (s == SC_MIC) al = "Blow for 3 s";
     if (s == SC_MAIN) mid = "D-pad or tap";
     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
@@ -1071,6 +1089,7 @@ static void activate(void) {
     case SC_SET:
         if (rows[sel_set] == ROW_MIC) { scr = SC_MIC; play(SND_SELECT); dirty_bot = 1; }
         else if (is_toggle(rows[sel_set])) { toggle(rows[sel_set]); play(SND_SELECT); dirty_bot = 1; }
+        else if (is_choice(rows[sel_set])) { choose(rows[sel_set], 1); play(SND_SELECT); dirty_bot = 1; }
         else play(SND_SELECT);
         break;
     case SC_MIC:
@@ -1099,6 +1118,7 @@ static void adjust(int d) {                     /* left/right on a Quick setting
     int id = rows[sel_set];
     if (is_slider(id)) { int old = slider_get(id); slider_set(id, old + d * 5); if (slider_get(id) != old) { play(SND_MOVE); dirty_bot = 1; } }
     else if (is_toggle(id)) { toggle(id); play(SND_MOVE); dirty_bot = 1; }
+    else if (is_choice(id)) { choose(id, d); play(SND_MOVE); dirty_bot = 1; }
 }
 static void nav(int dx, int dy) {
     int moved = 0;
@@ -1144,7 +1164,7 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
                 int v = (px - R_BAR[r].x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5;
                 slider_set(id, v);
                 play(SND_MOVE); dirty_bot = 1;
-            } else if (id == ROW_MIC || is_toggle(id)) activate();
+            } else if (id == ROW_MIC || is_toggle(id) || is_choice(id)) activate();
             else play(SND_MOVE);
             return;
         }
@@ -1304,7 +1324,7 @@ int menu_is_open(void) { return open_; }
 void menu_frame(void) {
     static int test = -1; static int frames;
     if (test < 0) { const char *t = getenv("DSFLIP_MENU_TEST"); test = t ? atoi(t) + 1 : 0; }
-    if (!frames++) session_t0 = now_ms();
+    if (!frames++) { session_t0 = now_ms(); prefs_load(); }   /* (the performance overlay starts as it was left) */
     if (mic_until && now_ms() >= mic_until) { mic_until = 0; audio_mic_hold(0); }
 
     if (test && frames == 180) {

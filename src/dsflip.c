@@ -152,6 +152,7 @@ void resume_start(void); void resume_frame(void); int resume_poll(void *e); void
 int menu_event(void *e); void menu_frame(void); int menu_touch_event(int down_change, int down, int x, int y, int xmax, int ymax);   /* menu.c */
 volatile int dsflip_hold;               /* menu.c: DraStic's frames are dropped, not shown (a load runs behind the menu's screen) */
 static int st_drop_src, st_drop_q, st_drop_buf;
+static volatile int drops_total, shown_total;   /* frames dropped (any cause) / new frames on the top panel, since start */
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
 const char *shader_name(void);
@@ -443,7 +444,7 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         }
         if (!P[i].queued) continue;     /* toast-only flip on this CRTC */
         if (P[i].last_flip && t - P[i].last_flip > st_iv_max[i]) st_iv_max[i] = t - P[i].last_flip;
-        P[i].last_flip = t; st_flips[i]++;
+        P[i].last_flip = t; st_flips[i]++; if (!i) shown_total++;
         if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
     }
@@ -611,7 +612,7 @@ static void note_phase(long long tp) {  /* with mu held: where in the refresh cy
 static void enqueue(int i, dbuf *b, long long t) {
     if (!P[i].ready) { if (!P[0].ready && !P[1].ready) ready_since = t; P[i].ready = b; return; }
     if (P[i].nq < queue_depth) { P[i].q[P[i].nq++] = b; return; }
-    release(P[i].ready); st_drop++; st_drop_q++; dsflip_queue_drops++;
+    release(P[i].ready); st_drop++; drops_total++; st_drop_q++; dsflip_queue_drops++;
     if (queue_depth) { P[i].ready = dequeue(i); P[i].q[P[i].nq++] = b; } else P[i].ready = b;
 }
 
@@ -623,7 +624,7 @@ static void shade_pending(void) {
         st[i] = P[i].src_t; held_any |= P[i].src_held;
         P[i].src = 0;
         for (int k = 0; k < NOUT && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
-        if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; st_drop_buf++; continue; }
+        if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; drops_total++; st_drop_buf++; continue; }
         dst[i]->state = WRITING;
     }
     unlock(&mu);
@@ -652,7 +653,7 @@ static void shade_pending(void) {
     }
     for (int i = 0; i < 2; i++) if (src[i]) {
         release(src[i]);
-        if (bad[i]) { dst[i]->state = FREE; st_drop++; continue; }
+        if (bad[i]) { dst[i]->state = FREE; st_drop++; drops_total++; continue; }
         dst[i]->state = READY;
         enqueue(i, dst[i], tr);
     }
@@ -1671,6 +1672,73 @@ int SDL_RenderClear(void *rn) {
     return ok ? 0 : real(rn);
 }
 
+/* ---------- performance overlay (the in-game menu's Quick settings: menu.c) ----------
+ * A few lines of 3x5 pixel text in the top screen's corner, drawn into DraStic's finished frame before it is shown
+ * (or shaded): no plane, no thread, ~1-3 thousand pixel writes a frame. 1 FPS: the frames the top panel showed in
+ * the last second. 2 detailed: + DraStic's frame time (the average and the longest gap between its frames) and the
+ * frames dropped in the last second. 3 advanced: + the CPU's and the GPU's clocks and DraStic's internal resolution.
+ * The numbers are taken once a second. */
+static volatile int perf_mode;
+void dsflip_perf_mode(int m) { perf_mode = m < 0 || m > 3 ? 0 : m; }
+static const char PF_CH[] = "0123456789./ FPSMDROCUGXEHZ";
+static const char *const PF_GL[][5] = {
+    { "###", "#.#", "#.#", "#.#", "###" }, { ".#.", "##.", ".#.", ".#.", "###" }, { "###", "..#", "###", "#..", "###" },
+    { "###", "..#", ".##", "..#", "###" }, { "#.#", "#.#", "###", "..#", "..#" }, { "###", "#..", "###", "..#", "###" },
+    { "###", "#..", "###", "#.#", "###" }, { "###", "..#", "..#", ".#.", ".#." }, { "###", "#.#", "###", "#.#", "###" },
+    { "###", "#.#", "###", "..#", "###" }, { "...", "...", "...", "...", ".#." }, { "..#", "..#", ".#.", "#..", "#.." },
+    { "...", "...", "...", "...", "..." }, { "###", "#..", "##.", "#..", "#.." }, { "##.", "#.#", "##.", "#..", "#.." },
+    { ".##", "#..", ".#.", "..#", "##." }, { "#.#", "###", "###", "#.#", "#.#" }, { "##.", "#.#", "#.#", "#.#", "##." },
+    { "##.", "#.#", "##.", "#.#", "#.#" }, { ".#.", "#.#", "#.#", "#.#", ".#." }, { ".##", "#..", "#..", "#..", ".##" },
+    { "#.#", "#.#", "#.#", "#.#", "###" }, { ".##", "#..", "#.#", "#.#", ".##" }, { "#.#", "#.#", ".#.", "#.#", "#.#" },
+    { "###", "#..", "##.", "#..", "###" }, { "#.#", "#.#", "###", "#.#", "#.#" }, { "###", "..#", ".#.", "#..", "###" } };
+static int rd_khz(const char *path) { int v = -1; FILE *f = fopen(path, "r"); if (f) { if (fscanf(f, "%d", &v) != 1) v = -1; fclose(f); } return v; }
+static void perf_draw(dbuf *b, long long tp) {
+    static long long t0, last, gap_sum, gap_max; static int gaps, shown0, drops0, lines;
+    static char txt[6][16]; static char gpu_path[300]; static int gpu_tried;
+    if (last) { long long g = tp - last; gap_sum += g; gaps++; if (g > gap_max) gap_max = g; }
+    last = tp;
+    if (!t0 || tp - t0 >= 1000000) {                        /* once a second: the numbers */
+        double el = t0 ? (tp - t0) / 1e6 : 0; int sh = shown_total, dr = drops_total;
+        int fps = el > 0 ? (int)((sh - shown0) / el + 0.5) : 0;
+        lines = 0;
+        snprintf(txt[lines++], 16, "%d FPS", fps);
+        if (perf_mode >= 2) {
+            double avg = gaps ? gap_sum / 1000.0 / gaps : 0;
+            snprintf(txt[lines++], 16, "%.1f/%.0f MS", avg, gap_max / 1000.0);
+            snprintf(txt[lines++], 16, "%d DROP", t0 ? dr - drops0 : 0);
+        }
+        if (perf_mode >= 3) {
+            if (!gpu_tried) {
+                gpu_tried = 1; glob_t g;
+                if (!glob("/sys/class/devfreq/*gpu*/cur_freq", 0, 0, &g)) { snprintf(gpu_path, sizeof gpu_path, "%s", g.gl_pathv[0]); globfree(&g); }
+            }
+            int c = rd_khz("/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq"), gf = gpu_path[0] ? rd_khz(gpu_path) : -1;
+            if (c > 0) snprintf(txt[lines++], 16, "CPU %d", c / 1000); else snprintf(txt[lines++], 16, "CPU .");
+            if (gf > 0) snprintf(txt[lines++], 16, "GPU %d", gf / 1000000); else snprintf(txt[lines++], 16, "GPU .");
+            const char *rs = getenv("DSFLIP_RAST_SCALE");
+            int res = dsflip_screen_w >= 512 ? (getenv("DSFLIP_RAST") && rs && atoi(rs) == 3 ? 3 : 2) : 1;
+            snprintf(txt[lines++], 16, "RES %dX", res);
+        }
+        t0 = tp; shown0 = sh; drops0 = dr; gaps = 0; gap_sum = gap_max = 0;
+    }
+    if (!b->map || b->pitch < b->w * 4) return;
+    int k = b->w >= 512 ? 2 : 1, cw = 4 * k, lh = 6 * k, wmax = 0;
+    for (int l = 0; l < lines; l++) { int w = (int)strlen(txt[l]) * cw; if (w > wmax) wmax = w; }
+    int x0 = k, y0 = k, x1 = x0 + wmax + 2 * k, y1 = y0 + lines * lh + k;
+    if (x1 > (int)b->w || y1 > (int)b->h) return;
+    for (int y = y0; y < y1; y++) { uint32_t *d = (uint32_t *)((uint8_t *)b->map + (size_t)y * b->pitch); for (int x = x0; x < x1; x++) d[x] = 0x101418; }
+    for (int l = 0; l < lines; l++)
+        for (int i = 0; txt[l][i]; i++) {
+            const char *p = strchr(PF_CH, txt[l][i]); if (!p) continue;
+            const char *const *gl = PF_GL[p - PF_CH];
+            for (int r = 0; r < 5; r++) for (int col = 0; col < 3; col++) if (gl[r][col] == '#')
+                for (int yy = 0; yy < k; yy++) {
+                    uint32_t *d = (uint32_t *)((uint8_t *)b->map + (size_t)(y0 + k + l * lh + r * k + yy) * b->pitch);
+                    for (int xx = 0; xx < k; xx++) d[x0 + k + i * cw + col * k + xx] = l ? 0xe7eef6 : 0x7ec8ee;
+                }
+        }
+}
+
 void SDL_RenderPresent(void *rn) {
     REAL(void, SDL_RenderPresent, void *);
     if (!ok) { real(rn); return; }
@@ -1705,6 +1773,10 @@ void SDL_RenderPresent(void *rn) {
         unlock(&mu);
     }
     long long tp = now_us();
+    if (perf_mode && !dsflip_hold) {                /* the performance overlay, into the top screen's new frame */
+        stex *s = pending_route[0];
+        if (s && s->kind == K_SCREEN && s->written >= 0 && s->b[s->written].state == WRITTEN) perf_draw(&s->b[s->written], tp);
+    }
     {   /* this frame's CPU time on DraStic's main thread (the one presenting) */
         static long long last; struct timespec ct; clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct);
         long long c = ct.tv_sec * 1000000000LL + ct.tv_nsec, w = last ? c - last : 0; last = c;
@@ -1739,7 +1811,7 @@ void SDL_RenderPresent(void *rn) {
             if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
             b = &s->b[s->written]; s->written = -1; b->state = READY;
             if (shader_on && s->kind == K_SCREEN) {   /* the presenter shades it into a panel buffer */
-                if (P[i].src) { release(P[i].src); st_drop++; st_drop_src++; }
+                if (P[i].src) { release(P[i].src); st_drop++; drops_total++; st_drop_src++; }
                 P[i].src = b; P[i].src_t = tp; P[i].src_held = held;
                 continue;
             }
