@@ -45,7 +45,13 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   | fog and edge marking S4 | 13.6 M -> 13.0 M (-4.3%) | 27.0 M -> 24.8 M (-8.2%) |
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
-  the scene cycle to 91200 bins.
+  the scene cycle to 91200 bins. Since then each group starts with one basic block (`kerngen.py`'s head()): the
+  depth test, the perspective weights beside it (computed for every group, so that the two chains overlap: the
+  in-order core overlaps only what interleaves in program order) and the next group's steps (no longer the latch's
+  last result); and the texel gather takes its addresses with umov instead of through the stack. kpath, cycles a
+  group of 8 pixels: 02000 156 -> 135, 02100 207 -> 186, 04010 165 -> 144, 14010 166 -> 158, 23110 219 -> 201;
+  cycles.py, stress ROM L4 at 2x: 21.85 M -> 20.98 M cycles a frame (-4.0%; librast 16.95 M -> 16.07 M), the
+  kernel 02000 5.29 M -> 4.84 M, 02010 2.59 M -> 2.34 M (instructions +4%: the weights of groups that fail).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
