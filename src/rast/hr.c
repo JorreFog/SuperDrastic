@@ -12,7 +12,9 @@
  *   - the bin resolve (edge marking, fog) as spec/resolve.c's, over 768-pixel lines, into a 48 x 768 buffer;
  *   - a 3:2 box downsample of that buffer into the bin's 32 x 512 output block (DraStic's compositing then sees a
  *     normal 2x frame): each output pixel averages a 1.5 x 1.5 block, colour weighted by alpha so transparent
- *     (clear) pixels do not darken polygon edges; the averaged alpha gives anti-aliased edges over the 2D layers.
+ *     (clear) pixels do not darken polygon edges; the averaged alpha gives anti-aliased edges over the 2D layers;
+ *   - the edge marking gap buffers filled so that DraStic's gap passes, which re-mark the rows at the bin boundaries
+ *     after all bins, leave the rows as the bins wrote them (hr_gaps).
  * Not rendered at 3x yet: shadow polygons (mode 3). DraStic's sprite path (axis-aligned textured quads, polygon
  * flag bit 14) goes through the general walker here. */
 #include <stddef.h>
@@ -532,6 +534,48 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
     }
 }
 
+/* ---- DraStic's edge marking gap passes ----
+ * With edge marking on (DISP3DCNT bit 5, and not turned off in DraStic's settings) update_frame_3d_4x re-marks rows
+ * 32k-1 and 32k of the output frame after all bins are done (k = 1..11, the gap passes of spec/resolve.c), from gap
+ * buffers that DraStic's bin resolve fills and ours never did: every bin boundary got two rows of whatever the buffers
+ * held (zeros or a 2x frame's leftovers: the black or coloured lines every 32 rows at 3x, ROCKNIXDS issue 47). Our
+ * edges are marked at 3x already, so each bin leaves its own output rows there (in the line order of the colour
+ * buffers: pixel x at word x), with attributes that make the passes an identity: all 0, so no pixel has bit 30 (its
+ * edge byte is 8 or 0xff: no edge colour) and no output colour has the fog flag (fog factor 0); both passes keep the
+ * colour bytes and alpha & 0x1f, which is what the downsample wrote. */
+static void hr_gap_line(uint32_t *g, const uint8_t *row) {
+    const uint32_t *ev = (const uint32_t *)row, *od = (const uint32_t *)(row + 0x400);
+    for (int i = 0; i < 256; i++) g[2 * i] = ev[i], g[2 * i + 1] = od[i];
+}
+static void hr_gaps(uint8_t *sys, unsigned bin, const uint8_t *blk) {
+    if (bin) {                                                  /* lines 0, 1 of this bin: slot bin - 1 */
+        memset(sys + SYS_ATTR_GAPS + (bin - 1) * 0x2000 + 0x1000, 0, 0x1000);
+        hr_gap_line((uint32_t *)(sys + SYS_COLOR_GAPS + (bin - 1) * 0x1000 + 0x800), blk);
+    }
+    if (bin < NBINS - 1) {                                      /* lines 30, 31: slot bin */
+        memset(sys + SYS_ATTR_GAPS + bin * 0x2000, 0, 0x1000);
+        hr_gap_line((uint32_t *)(sys + SYS_COLOR_GAPS + bin * 0x1000), blk + 31 * 0x800);
+    }
+}
+
+/* ---- RAST_HRCHECK: the rows each bin wrote against the frame DraStic's update_frame_3d_4x leaves (its edge marking
+ * gap passes re-mark rows 32k-1 and 32k after the bins: those must come out as the bins wrote them) ---- */
+int hr_check;
+static uint8_t hr_rows[NBINS][2][0x800];        /* each bin's rows 0 and 31 as written */
+static unsigned long hc_frames, hc_bad, hc_rows;
+static void hr_check_save(const uint8_t *blk, unsigned bin) {
+    memcpy(hr_rows[bin][0], blk, 0x800); memcpy(hr_rows[bin][1], blk + 31 * 0x800, 0x800);
+}
+void hr_check_frame(uint8_t *sys) {             /* comp.c's hook_uf4, after a call that rendered all 12 bins */
+    const uint8_t *o = PTR(sys, SYS_OUTPUT);
+    unsigned rows = 0;
+    for (unsigned b = 0; b < NBINS; b++)
+        for (unsigned h = 0; h < 2; h++) rows += memcmp(o + b * BIN_BYTES + h * 31 * 0x800, hr_rows[b][h], 0x800) != 0;
+    hc_frames++; hc_bad += rows != 0; hc_rows += rows;
+    if (hc_frames % 120 == 0)
+        fprintf(stderr, "[hr] check: %lu frames, %lu with rows changed after the bins (%lu rows)\n", hc_frames, hc_bad, hc_rows);
+}
+
 /* ---- the bin loop (in place of rast.c's render_bins when the scale is 3) ---- */
 void hr_render_bins(uint8_t *ctx) {
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
@@ -561,6 +605,8 @@ void hr_render_bins(uint8_t *ctx) {
         hr_resolve_bin(H, sys, geom, bin);
         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, H->out, HR_BL * HR_W * 4);
         hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
+        hr_gaps(sys, bin, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES);
+        if (hr_check) hr_check_save(PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, bin);
         comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */
     }
 }
