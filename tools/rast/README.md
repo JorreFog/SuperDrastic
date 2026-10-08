@@ -37,16 +37,23 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   (`walk.c`, our own render_polygon_4x). Modeled A55 cycles a frame, whole emulated frames (CPU emulation and 2D
   included; `dev/cycles.py`), DraStic's renderer (RAST=off), 0.5.0-beta.1, the scheduling and NEON walker of
   2026-10-08, and with everything below too (the group head, the fused 2x walker, the scheduler's A55 model, the
-  fused resolve and the 3x walker's steps; profiles of 90 s):
+  fused resolve and the 3x walker's steps; profiles of 90 s), and the second round below (the translucent tails and
+  st4 stores, the 2x fog and edge-marking resolves, the 3x edge marking's id screen and walker stores, the 2x span
+  setup and batch splitting):
 
-  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of 2026-10-08 |
-  |---|---|---|---|---|
-  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) |
-  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) |
-  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) |
-  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) |
-  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) |
-  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) |
+  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of the first round | second round |
+  |---|---|---|---|---|---|
+  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) | 18.1 M (-3.3%) |
+  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) | 4.08 M (0.0%) |
+  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) | 9.75 M (-11.7%) |
+  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) | 34.2 M (-3.3%) |
+  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) | 7.41 M (-2.3%) |
+  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) | 18.9 M (-7.5%) |
+
+  The totals include 0.07-0.83 M a frame of blocks outside DraStic and librast (cycles.py's `[other]`) that vary
+  from run to run: the second round's changes are against the first round's profiles with those taken out (L4 2x
+  18.42 -> 17.82 M, S7 4.00 -> 4.01, S4 10.90 -> 9.62, L4 3x 35.05 -> 33.89, S7 3x 7.51 -> 7.34, S4 3x 20.32 ->
+  18.80; S7 at 2x spends most of its 3D time in the kernel 14010, which did not change); the earlier columns include them.
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins. Since then each group starts with one basic block (`kerngen.py`'s head()): the
@@ -102,7 +109,7 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   entries the right chain's overwrote the left chain's first entries and past 128 lines its perspective coefficients
   ran out of the span block (into the heap: what made `ut/hr_ab`'s two copies of the same hr.c hand the kernels
   different spans for a few polygons in 5000). Within the window the spans the kernels read are the same (only span
-  array 10's scratch leftovers differ, read only with edge marking on); convex polygons never have such chains (9-
+  array 10's scratch leftovers differ, and only with edge marking off, when nothing reads it); convex polygons never have such chains (9-
   and 10-vertex polygons with repeated vertices may), so real scenes should render as before. `ut/hr_ab` counts the polygons with such chains apart against a base
   without the cap: against e02a298 0 of the others differ (and ~40% of the ~19% random polygons with one do).
   The NEON walker's interpolate_parameters stores its interleaved halfwords with zip1 and str q instead of st2 (38 ->
