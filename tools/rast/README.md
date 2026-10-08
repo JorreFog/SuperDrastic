@@ -71,6 +71,11 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   kpath over 59 kernel paths: 10116 -> 9670 cycles (-4.4%). The combined build: the scene cycle's differing bins
   as DraStic's renderer's at all 28 checkpoints to 67200 bins, deferred shading to 81600, the compositor's tables
   checked against the C port (5657, 0 differ), the stress ROM's 6 bins in 4800 as before.
+  The 3x resolve's edge marking (`hr.c` edge_lines) first screens each block of 16 pixels of its two lines on the
+  polygon ids alone: a block whose neighbour pairs all have the same id has no edge and is left as it is (96% of the
+  blocks in the edge-marking scene S4), the ids read from byte planes of the attribute lines' top bytes made once per
+  bin (edge_tplanes, ldr q and uzp2). Modeled A55 cycles a frame, S4 at 3x: the edge marking 2.38 M -> 0.95 M
+  (edge_lines 0.63 M + edge_tplanes 0.32 M), the frame 20.98 M -> 19.11 M; `ut/hr_ab` against e02a298: the same output.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
