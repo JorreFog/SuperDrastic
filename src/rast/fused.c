@@ -345,16 +345,25 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
     /* batches: runs of lines with pixels, at most 512 pixels (DraStic's batches: the flat colour and the id quirk
      * follow them); the hi-res pipeline, with lines of up to 768 pixels and no exactness to keep, batches longer */
     const unsigned bmax = L->hr ? 4096 : 512;
-    unsigned line = line0, left = nlines, i = 0;
-    while (left) {
-        while (left && !U16(spans, SPO(PP, 9) + 4 * i)) { i++; line++; left--; }
-        if (!left) break;
-        unsigned first = i, k = 0, n = 0;
-        while (left) {
-            unsigned c = U16(spans, SPO(PP, 9) + 4 * i);
-            if (!c || (k && n + c > bmax)) break;
-            n += c; k++; i++; left--;
+    const uint16_t *cnt = (const uint16_t *)(spans + SPO(PP, 9));   /* the lines' pixel counts: cnt[2 * line] */
+    unsigned i = 0;
+    while (i < nlines) {
+        unsigned n = cnt[2 * i];
+        if (!n) { i++; continue; }
+        /* a batch: this line, then the next ones while they have pixels and fit (c - 1 >= bmax - n: c == 0 too;
+         * n <= bmax, a line has at most bmax pixels); two lines a step, both counts loaded first (the A55 waits on
+         * a load's result) */
+        unsigned first = i++;
+        for (; i + 1 < nlines; i += 2) {
+            unsigned c0 = cnt[2 * i], c1 = cnt[2 * i + 2];
+            if (c0 - 1 >= bmax - n) goto batch;
+            n += c0;
+            if (c1 - 1 >= bmax - n) { i++; goto batch; }
+            n += c1;
         }
+        if (i < nlines && cnt[2 * i] - 1u < bmax - n) i++;
+    batch:;
+        unsigned k = i - first, line = line0 + first;
         uint8_t *bs = spans + 4 * first;
         if (0) {        } else if (flags & 1) {
             /* the quirk: a line with 5 mod 8 pixels gets the next line's first new id as its last id (the batch's
@@ -375,7 +384,6 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
             if (bf) bf(&P, bs, k, line, 0);
             else for (unsigned l = 0; l < k; l++) line_px(&P, bs + 4 * l, bs, line + l, 0);
         }
-        line += k;
     }
     if ((P.fogused & 1) && (((flags & 1) && (P.attr & (1u << 15))) || (!(flags & 1) && (P.attr & (1u << 15)))))
         U32(ctx, L->hdr_off + 0x14) = 1;

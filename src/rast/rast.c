@@ -84,12 +84,17 @@ static walk_setup_fn hook_setup;
 static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8_t *verts, unsigned y0, int defer) {
     typedef void (*pfn)(void *, void *, void *, unsigned long, unsigned long);
     uint32_t n = U32(list, 0x1000);
+    /* walk.c's setup: hook_setup's choice made once (it runs inside our bin loop, so in_ours is set) when nothing
+     * per polygon decides it (deferred queueing, RAST_PDIFF); DraStic's own render_polygon_4x calls the hook */
+    walk_setup_fn *setup = defer || pdiff ? hook_setup : pipe_sel ? f_setup_4x : b0_setup_4x;
     for (uint32_t i = 0; i < n; i++) {
         uint8_t *poly = polys + 32 * (size_t)((const uint16_t *)list)[i];
         /* deferred: modulate-shaded polygons queue up; the others (toon, highlight, shadow) flush and render now */
-        in_defer = defer && !((U32(poly, 4) >> 4) & 3);
-        if (defer && !in_defer) defer_flush(&layout_2x, ctx);
-        if (!walk || !walk_polygon_4x(ctx, poly, verts, y0, y0 + 32, hook_setup))
+        if (defer) {
+            in_defer = !((U32(poly, 4) >> 4) & 3);
+            if (!in_defer) defer_flush(&layout_2x, ctx);
+        }
+        if (!walk || !walk_polygon_4x(ctx, poly, verts, y0, y0 + 32, setup))
             DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
     }
     in_defer = 0;
