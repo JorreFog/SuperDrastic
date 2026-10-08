@@ -143,10 +143,65 @@ static int test_rds(int iters) {
     return bad;
 }
 
+/* the polygon walker (hr_polygon) on random polygons around random bins: what it hands the kernels compared */
+void old_poly(uint8_t *poly, uint8_t *verts, const void *hv, const void *hv2, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer);
+void new_poly(uint8_t *poly, uint8_t *verts, const void *hv, const void *hv2, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer);
+extern uint64_t ab_hash;
+extern unsigned ab_calls;
+extern uintptr_t ds_base;
+static int test_poly(int iters) {
+    enum { NV = 6144 };
+    static uint16_t hv[NV][2], hv2[NV][2];
+    static uint8_t verts[NV * 16], poly[32];
+    uint32_t *orders = calloc(1, 0x11df90 + 512);
+    ds_base = (uintptr_t)orders;                        /* the orders table at ds_base + DS_VERTEX_ORDERS */
+    orders = (uint32_t *)((uint8_t *)orders + 0x11df90);
+    int bad = 0, calls = 0;
+    for (int it = 0; it < iters; it++) {
+        unsigned bin = rnd() % 12, hy0 = bin * 48, bin_top = hy0 ? hy0 - 1 : 0, bin_bot = hy0 + 49 > 576 ? 576 : hy0 + 49;
+        unsigned count = it % 13 == 0 ? 1 + rnd() % 2 : 3 + rnd() % 8, base = rnd() % (NV - 16), t = rnd() % count;
+        /* the group's base order: a random permutation of 0..count-1 */
+        unsigned perm[10];
+        for (unsigned k = 0; k < count; k++) perm[k] = k;
+        for (unsigned k = count; k > 1; k--) { unsigned j = rnd() % k, x = perm[k - 1]; perm[k - 1] = perm[j]; perm[j] = x; }
+        uint32_t seq = 0;
+        for (unsigned k = 0; k < count; k++) seq |= perm[k] << (4 * k);
+        orders[count * 8] = seq;
+        int span = it % 4 == 0 ? 600 : it % 4 == 1 ? 120 : 30;             /* tall, medium and small polygons */
+        int yc = (int)hy0 + (int)(rnd() % 80) - 16, xc = (int)(rnd() % 768);
+        for (unsigned k = 0; k < 16; k++) {
+            unsigned vi = base + k;
+            int y = yc + (int)(rnd() % (unsigned)span) - span / 2, x = xc + (int)(rnd() % (unsigned)span) - span / 2;
+            if (it % 5 == 0 && k < 4) y = yc;                                     /* tied top vertices */
+            y = y < 0 ? 0 : y > 575 ? 575 : y; x = x < 0 ? 0 : x > 767 ? 767 : x;
+            hv[vi][0] = (uint16_t)x; hv[vi][1] = (uint16_t)y;
+            hv2[vi][0] = (uint16_t)(2 * x / 3); hv2[vi][1] = (uint16_t)(2 * y / 3);
+            for (int i = 0; i < 16; i++) verts[16 * vi + i] = rnd();
+            *(uint16_t *)(verts + 16 * vi + 4) = hv2[vi][0]; *(uint16_t *)(verts + 16 * vi + 6) = hv2[vi][1];
+            if (it % 7 == 0 && k == 1) *(uint16_t *)(verts + 16 * vi + 6) ^= 1;   /* a changed record: the fallback */
+        }
+        for (int i = 0; i < 32; i++) poly[i] = rnd();
+        *(uint32_t *)(poly + 8) = count | (rnd() & 0xff) << 8 | (count * 8 + t) << 16;
+        *(uint16_t *)(poly + 0x1a) = (uint16_t)base;
+        uint32_t d3 = rnd() & ~0x20u;
+        if (it & 1) d3 |= 0x20;                                                 /* edge marking */
+        int defer = (it >> 1) & 1;
+        uint64_t h0 = ab_hash = 14695981039346656037ull; unsigned c0 = ab_calls = 0;
+        old_poly(poly, verts, hv, hv2, bin_top, bin_bot, (int)hy0 - 1, d3, defer);
+        uint64_t h1 = ab_hash; unsigned c1 = ab_calls;
+        ab_hash = h0; ab_calls = c0;
+        new_poly(poly, verts, hv, hv2, bin_top, bin_bot, (int)hy0 - 1, d3, defer);
+        calls += c1;
+        if (h1 != ab_hash || c1 != ab_calls) { if (bad < 5) printf("poly it %d: count %u t %u bin %u calls %u/%u\n", it, count, t, bin, c1, ab_calls); bad++; }
+    }
+    printf("polygon walker: %d polygons (%d reaching the kernels), %d differ\n", iters, calls, bad);
+    return bad;
+}
+
 int main(int argc, char **argv) {
     int n = argc > 1 ? atoi(argv[1]) : 200;
     if (argc > 2) rs ^= strtoull(argv[2], 0, 0) * 0x9e3779b97f4a7c15ull;
-    int bad = test_ds(n) + test_fog(n * 10) + test_rds(n);
+    int bad = test_ds(n) + test_fog(n * 10) + test_rds(n) + test_poly(n * 50);
     printf(bad ? "FAIL\n" : "PASS\n");
     return bad != 0;
 }

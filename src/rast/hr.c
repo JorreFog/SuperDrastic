@@ -136,8 +136,10 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     if (ys[t] != ymin) for (unsigned k = 0; k < count; k++) if (ys[k] == ymin) { top = k; break; }
     uint8_t vbuf[10][16]; vtx_t *vptr[12];
     unsigned ybot = 0, bad = 0;
-    for (unsigned k = 0; k < count; k++) {
-        unsigned vi = idx[(top + k) % count];
+    /* vertex k is idx[(top + k) % count]: j steps through it with one division a polygon, not one a vertex (a udiv
+     * and an msub each, the in-order core waiting on the udiv) */
+    for (unsigned k = 0, j = top % count; k < count; k++, j = j + 1 < count ? j + 1 : 0) {
+        unsigned vi = idx[j];
         memcpy(vbuf[k], verts + 16 * vi, 16);
         unsigned x3 = hv[vi].x, y3 = hv[vi].y;
         if (U16(vbuf[k], 4) != hv2[vi].x || U16(vbuf[k], 6) != hv2[vi].y) {

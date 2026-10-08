@@ -201,7 +201,11 @@ stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py`
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's two trips through the stack, which the model cannot price (store-to-load forwarding).
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
-  layer presented through the dsflip shader instead of downsampled.
+  layer presented through the dsflip shader instead of downsampled. `ut/hr_ab`'s walker test: two copies of the same
+  hr.c, each with its own heap span block holding the previous polygon's spans, hand the kernels different spans
+  for a few polygons in 5000 (8 to 10 vertices); with a private zeroed block they agree. Find out what is read.
+  The downsample is bound by its loads and the alpha test in the cycle model: two groups a step, the opaque outputs
+  computed before the test and the loads a group ahead all modeled within 3% of the current loop.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
   assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
   content signature in the key would make it certain.
