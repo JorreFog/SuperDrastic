@@ -75,7 +75,12 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   colours and the depth words (or the attribute words) into the blend's registers, free by then, before the fog and
   depth-update branches, and store colours and attribute words after them in one block, so that the two
   read-modify-writes interleave: 02100 184 -> 170 (with blending 212 -> 197), 02110 178 -> 168, 04100 (16 colours)
-  193 -> 178, 23110 198 -> 188, 00100 114 -> 104.
+  193 -> 178, 23110 198 -> 188, 00100 114 -> 104. The destination's halves come split by ld2 (no ldp q and uzp
+  pair: 02100 170 -> 165, with blending 197 -> 189); the textured kernels' alpha modulate and alpha test sit behind
+  one flag test (bit 15, set per batch: no alpha test and A is 31), both out of line, so the modulates and the store
+  are one block with no taken branch (the model does not price taken branches: 1 cycle less; two taken branches a
+  group fewer); the lit direct-textured opaque kernels store a full group with st4 from the modulates' bytes instead
+  of four zips and stp (with the flag test 02000 129 -> 125, white lines 117 -> 115).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -250,12 +255,16 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   models at 28 cycles a group of 32 pixels instead of 50: ~0.25 M a frame (S7 at 2x: ~5%). Needs a replacement
   hooked in (rast_hook to a function in librast) and a unit test against the original.
 - The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate; IPC
-  ~0.75-0.8 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
-  finds 0.1% more). What is left is across blocks, which is kerngen.py's layout: the depth test overlapped with the
-  reciprocal's Newton steps (both stall 3-5 cycles a step; today the reciprocal waits for the test's cbz and the 28:
-  entry label), or the next group's depth test with this group's tail; the texel gather's two trips through the
-  stack and the pack-and-store tail. Overlapping consecutive groups needs registers the kernels do not have (the
-  bilinear kernels use them all). Hoisting the fall-through code over the w7 flag branches does not pay (llvm-mca:
+  ~0.8-0.98 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
+  finds 0.1% more). Across blocks the translucent tail, the alpha stages and 02000's store are done (Status); the
+  reciprocal runs beside the depth test in the group head (head()), only the lazy loop's entry (28:) waits for the
+  test. Left: the opaque store reloads the depth words from the stack (ldp q and the pid orr, ~6 cycles a group
+  exposed on 02000: no two registers are free across the modulates; ORing pid in before the spill costs the head 1-3
+  cycles); the flat textured kernels (02010, 04010) could store with st4 as 02000 does if the modulates' outputs found
+  four registers in a row (04010's depth words spill through v25 v26); the texel gather's ld2 (7 cycles with nothing
+  independent left; ldr q and uzp model 2 worse); the 16-colour gather's bytes through the stack (stp w and ld2 to
+  assemble 8 bytes). Overlapping consecutive groups needs registers the kernels do not have (the bilinear kernels use
+  them all). Hoisting the fall-through code over the w7 flag branches does not pay (llvm-mca:
   +1-8% on most kernels, the hoisted work lands above taken branches; -4-6% on the bilinear ones).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now

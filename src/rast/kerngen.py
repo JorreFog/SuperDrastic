@@ -20,7 +20,8 @@ alpha test (the texture's lowest alpha passes it), bit 9 look for white lines (t
 A is 31; other batches never take the white shortcut, which gives the same bits), bit 10 A is 31 (the alpha
 modulate is the identity), bits 11 and 12 the s and t axes clamp (textures not wrapped on both); translucent only:
 bit 3 alpha blending (DISP3DCNT bit 3), bit 4 fog (attr bit 15), bit 5 depth update (attr bit 11). The kernels set
-bit 13 (w depth: dW fits in s16) and bit 14 (no colour delta is -32768) per line. Translucent kernels store each
+bit 13 (w depth: dW fits in s16) and bit 14 (no colour delta is -32768) per line, and the textured nearest-filtering
+ones (not deferred) bit 15 per batch: bits 8 and 10 both, the alpha stages' one test (fused_alpha()). Translucent kernels store each
 line's first id in id0[].
 The per-pixel math is that of fused_neon.c's batch_neon (opaque path), lane for lane: see there and spec/ for
 the derivation of every operation. The point of generating assembly is register allocation: the group loop keeps
@@ -46,8 +47,8 @@ them first, the attribute words' load) and the next group's steps, so the latch 
 the next group. With z or constant depth a line starts in a reduced loop (20:) that only tests, until its first
 passing group sets up the weights and interpolants (27:, then the weights at 28:). Rare paths are out of line after
 the latch (the affine weights 6:, the depth-equal test 24:, which with w depth also takes the affine weights and the
-64-bit w products 23:, the 32-bit vertex colour 37:, the partial-group store 1:) so the common path has no taken
-branch besides the loop's.
+64-bit w products 23:, the 32-bit vertex colour 37:, the alpha modulate and alpha test 46: and the white lines' alpha
+test 45:, the partial-group store 1:) so the common path has no taken branch besides the loop's.
 Stack: [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
 (bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
 (512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
@@ -205,6 +206,8 @@ def prologue(name, D, T, R, F, M=0, B=0):
     if D == 2 and M != 2: e(f"add x8, x19, #{K['K']}"); e("ld1r {v6.4s}, [x8]")
     roles_setup(D)
     e("mov w7, w27"); e("mov x0, #0")
+    if fused_alpha(T, M, B):                                                     # bit 15: bits 8 and 10 (fused_alpha())
+        e("and w8, w27, w27, lsr #2"); e("ubfx w8, w8, #8, #1"); e("bfi w7, w8, #15, #1")
     # ---- per line ----
     e("10:")
     e(f"ldrh w5, [x22, #{SP['cdb']}]")                                          # C: x5 counts the pixels left
@@ -660,9 +663,15 @@ def vertex_colour(ch, F, dst, slow=False):
         e(f"smlal {dst}.4s, v24.4h, v15.h[{l}]"); e(f"smlal2 v26.4s, v24.8h, v15.h[{l}]")
         e(f"uzp2 {dst}.8h, {dst}.8h, v26.8h"); e(f"shrn {dst}.8b, {dst}.8h, #2")
 
-def modulate(v, t, sh, w="v26"):
-    """t = ((v+1)*(t+1)-1) >> sh, bytes; w (v26) scratch"""
-    e(f"uaddl {w}.8h, {v}.8b, {t}.8b"); e(f"umlal {w}.8h, {v}.8b, {t}.8b"); e(f"shrn {t}.8b, {w}.8h, #{sh}")
+def modulate(v, t, sh, w="v26", o=None):
+    """o (t) = ((v+1)*(t+1)-1) >> sh, bytes; w (v26) scratch"""
+    e(f"uaddl {w}.8h, {v}.8b, {t}.8b"); e(f"umlal {w}.8h, {v}.8b, {t}.8b"); e(f"shrn {o or t}.8b, {w}.8h, #{sh}")
+
+def st4_store():
+    """the opaque lit direct-textured kernels (vc v18-v20 and vs v21, four registers in a row) store a full group's
+    colours with st4 from the channels' bytes (the modulates write them into the vertex colour's registers): no zips
+    for the common case (in llvm-mca's A55 model the pack-and-store 14 -> 6 cycles); the partial group zips them"""
+    return RL.get("vc") == ["v18", "v19", "v20"] and RL.get("vs") == ["v21"]
 
 def modulate_alpha(skip):
     """ta (v30) -> ca = modulate(A, ta); with flag bit 10 (A is 31) ca = (32 (ta + 1) - 1) >> 5 = ta: to skip"""
@@ -670,12 +679,42 @@ def modulate_alpha(skip):
     if "a" in RL: modulate(RL["a"][0], "v30", 5)
     else: e("dup v25.8b, v23.b[0]"); modulate("v25", "v30", 5)
 
-def alpha_test():
-    """ca v30 > aref -> narrows the mask v28; fails to 8f"""
+def alpha_test(fail="8f"):
+    """ca v30 > aref -> narrows the mask v28; fails to `fail`"""
     if "aref" in RL: e(f"cmhi v25.8b, v30.8b, {RL['aref'][0]}.8b")
     else: e("dup v25.8b, v23.b[1]"); e("cmhi v25.8b, v30.8b, v25.8b")
     e("and v28.8b, v28.8b, v25.8b")
-    e("fmov x8, d28"); e("cbz x8, 8f")
+    e("fmov x8, d28"); e(f"cbz x8, {fail}")
+
+def fused_alpha(T, M, B):
+    """the textured kernels' alpha stages behind one flag test: bit 15 (set in the prologue) is bits 8 and 10 both
+    (no alpha test, A is 31), the common case; then the modulates and the store are one block. Otherwise the alpha
+    modulate and the alpha test, and the white lines' alpha test, out of line (46:, 45:, back to 47:)"""
+    return T and M == 0 and not B
+
+def white_branch(T, M, B):
+    """white vertex colour, alpha 31: the texel is the colour (the rgb modulates and the alpha modulate skipped; the
+    st4 kernels copy the texels into the colour's registers out of line, 44:)"""
+    e(("tbnz w7, #2, 44f" if st4_store() else "tbnz w7, #2, 45f") if fused_alpha(T, M, B) else "tbnz w7, #2, 1f")
+
+def alpha_stage(T, M, B):
+    """after the rgb modulates: the alpha modulate (flag bit 10 clear) and the alpha test (bit 8 clear); the white
+    branch joins before the test"""
+    if not fused_alpha(T, M, B):
+        modulate_alpha("1f")
+        e("1:")
+        if M != 2:
+            e("tbnz w7, #8, 2f"); alpha_test(); e("2:")
+        return
+    e("tbz w7, #15, 46f")
+    e("47:")
+    def ool():
+        e("46:"); modulate_alpha("45f")
+        if st4_store():
+            e("b 45f")
+            e("44:"); e("mov v18.8b, v29.8b"); e("mov v19.8b, v27.8b"); e("mov v20.8b, v31.8b")
+        e("45:"); e("tbnz w7, #8, 47b"); alpha_test("8b"); e("b 47b")
+    OOLS.append(ool)
 
 def colour(T, F, B, M=0):
     """shaded colour -> (cr, cg, cb, ca) registers, 8 x u8 (textured: v29 v27 v31 v30; untextured flat with its
@@ -688,7 +727,7 @@ def colour(T, F, B, M=0):
         cv = RL["flat"] if F and "flat" in RL else ["v25", tr[0], tr[1]]
         ws = ["v26", ex[0], ex[1]]
         texture(T, None if F and "flat" in RL else (lambda: [vertex_colour(ch, F, cv[ch]) for ch in range(3)]))
-        e("tbnz w7, #2, 1f")                        # white vertex colour, alpha 31: the texel is the colour
+        white_branch(T, M, B)
         if not F:
             e("tbz w7, #14, 37f")
             e("38:")
@@ -698,33 +737,29 @@ def colour(T, F, B, M=0):
                 e("b 38b")
             OOLS.append(ool)
         for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")): modulate(cv[ch], t, 6, ws[ch])
-        modulate_alpha("1f")
-        e("1:")
-        if M != 2:
-            e("tbnz w7, #8, 2f"); alpha_test(); e("2:")
+        alpha_stage(T, M, B)
         return "v29", "v27", "v31", "v30"
     if T and "vc" in RL:
         # the vertex colour among the gather's loads (the fast form; the out-of-line slow form replaces it), then the
         # three modulates with their own scratch registers
         vc = RL["vc"]
         texture(T, lambda: [vertex_colour(ch, F, vc[ch]) for ch in range(3)])
-        e("tbnz w7, #2, 1f")                        # white vertex colour, alpha 31: the texel is the colour
+        white_branch(T, M, B)
         e("tbz w7, #14, 37f")
         e("38:")
-        for ch, t, w in ((0, "v29", "v26"), (1, "v27", RL["vs"][0]), (2, "v31", "v25")): modulate(vc[ch], t, 6, w)
+        o = vc if st4_store() else [None] * 3
+        for ch, t, w in ((0, "v29", "v26"), (1, "v27", RL["vs"][0]), (2, "v31", "v25")): modulate(vc[ch], t, 6, w, o[ch])
         def ool():
             e("37:")
             for ch in range(3): vertex_colour(ch, F, vc[ch], True)
             e("b 38b")
         OOLS.append(ool)
-        modulate_alpha("1f")
-        e("1:")
-        e("tbnz w7, #8, 2f"); alpha_test(); e("2:")
-        return "v29", "v27", "v31", "v30"
+        alpha_stage(T, M, B)
+        return ("v18", "v19", "v20", "v30") if st4_store() else ("v29", "v27", "v31", "v30")
     if T:
         if B: texture_bilinear(T)
         else: texture(T)
-        e("tbnz w7, #2, 1f")                        # white vertex colour, alpha 31: the texel is the colour
+        white_branch(T, M, B)
         def rgb(slow=False):
             # modulate scratch registers: with the flat colour in its registers v25 is free too (two side by side),
             # with the two vs registers all three
@@ -740,10 +775,7 @@ def colour(T, F, B, M=0):
             def ool(): e("37:"); rgb(True); e("b 38b")
             OOLS.append(ool)
         else: rgb()
-        modulate_alpha("1f")
-        e("1:")
-        if M != 2:
-            e("tbnz w7, #8, 2f"); alpha_test(); e("2:")
+        alpha_stage(T, M, B)
         return "v29", "v27", "v31", "v30"
     if "colw" in RL: return None
     if "flat" in RL: c = RL["flat"]
@@ -782,14 +814,25 @@ def store(D, cols):
     """opaque: pack, fog bit, store the group (all 8 lanes straight when they all pass) and its pass mask. The full
     group and a group without a pixel (8:) fall through into the latch (7:); returns the out-of-line partial group"""
     e("orr x0, x0, x8")
-    cl, ch = pack(cols)
-    d0, d1 = dep_words(D)
-    e("cmn x8, #1"); e("b.ne 1f")
-    e(f"stp {q(cl)}, {q(ch)}, [x1]"); e(f"stp {q(d0)}, {q(d1)}, [x2]")
+    if st4_store() and cols == ("v18", "v19", "v20", "v30"):
+        # the bytes r g b (a | fog) in v18-v21: st4 interleaves them into the colour words; the partial group zips
+        e("dup v24.8b, v23.b[2]"); e("orr v21.8b, v30.8b, v24.8b")
+        d0, d1 = dep_words(D)
+        e("cmn x8, #1"); e("b.ne 1f")
+        e("st4 {v18.8b, v19.8b, v20.8b, v21.8b}, [x1]"); e(f"stp {q(d0)}, {q(d1)}, [x2]")
+        cl, ch = "v29", "v27"
+        zips = lambda: (e("zip1 v24.16b, v18.16b, v19.16b"), e("zip1 v27.16b, v20.16b, v21.16b"),
+                        e("zip1 v29.8h, v24.8h, v27.8h"), e("zip2 v27.8h, v24.8h, v27.8h"))
+    else:
+        cl, ch = pack(cols)
+        d0, d1 = dep_words(D)
+        e("cmn x8, #1"); e("b.ne 1f")
+        e(f"stp {q(cl)}, {q(ch)}, [x1]"); e(f"stp {q(d0)}, {q(d1)}, [x2]")
+        zips = lambda: None
     e("8:"); e("str d28, [x3], #8")                                              # the pass mask (edge marking)
     e("7:")
     def ool():
-        e("1:"); e("str d28, [x3], #8")
+        e("1:"); e("str d28, [x3], #8"); zips()
         e("sshll v28.8h, v28.8b, #0"); e("sshll v30.4s, v28.4h, #0"); e("sshll2 v31.4s, v28.8h, #0")
         e(f"ldp q24, q28, [x1]"); e(f"bit v24.16b, {cl}.16b, v30.16b"); e(f"bit v28.16b, {ch}.16b, v31.16b"); e("stp q24, q28, [x1]")
         e(f"ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
@@ -804,18 +847,21 @@ def trans_store(D, cols):
     e("orr x0, x0, x8")
     if "trans" in RL:
         ws, wd = RL["trans"]
-        e("ldp q25, q26, [x1]")
-        e("uzp2 v24.8h, v25.8h, v26.8h"); e("uzp1 v25.8h, v25.8h, v26.8h")       # dhi (b|a<<8), dlo (r|g<<8)
-        e(f"movi {ws}.8b, #0x1f"); e("shrn v26.8b, v24.8h, #8"); e(f"and v26.8b, v26.8b, {ws}.8b")   # dal = dst alpha & 0x1f
+        # the destination's halves split by the load (ld2: one load and no uzp pair; in llvm-mca's A55 model 3
+        # cycles a group less than ldp q and uzp1/uzp2): dlo (r|g<<8) v25, dhi (b|a<<8) v26, its b byte to v24
+        e("ld2 {v25.8h, v26.8h}, [x1]")
+        e(f"movi {ws}.8b, #0x1f"); e("xtn v24.8b, v26.8h")
+        e("shrn v26.8b, v26.8h, #8"); e(f"and v26.8b, v26.8b, {ws}.8b")       # dal = dst alpha & 0x1f
         e("tbz w7, #3, 1f")
         # blend: c' = (c + c*ws + d*wd) >> 5, ws = dal ? sa : 31, wd = dal ? 31 - sa : 0 (m8 is in x8), into v29 v27 v31
         e("cmeq v28.8b, v26.8b, #0")
         e(f"sub {wd}.8b, {ws}.8b, {sa}.8b"); e(f"bic {wd}.8b, {wd}.8b, v28.8b"); e(f"bif {ws}.8b, {sa}.8b, v28.8b")
         # (with the ex registers the r channel blends in them, beside b; g after b)
         xa, xd = RL["ex"] if "ex" in RL else ("v24", "v28")
-        for c, o, d, a, t in ((cb, "v31", "xtn v28.8b, v24.8h", "v24", "v28"), (cr, "v29", f"xtn {xd}.8b, v25.8h", xa, xd),
+        for c, o, d, a, t in ((cb, "v31", None, "v28", "v24"), (cr, "v29", f"xtn {xd}.8b, v25.8h", xa, xd),
                               (cg, "v27", "shrn v28.8b, v25.8h, #8", "v24", "v28")):
-            e(d); e(f"ushll {a}.8h, {c}.8b, #0"); e(f"umlal {a}.8h, {c}.8b, {ws}.8b"); e(f"umlal {a}.8h, {t}.8b, {wd}.8b")
+            if d: e(d)
+            e(f"ushll {a}.8h, {c}.8b, #0"); e(f"umlal {a}.8h, {c}.8b, {ws}.8b"); e(f"umlal {a}.8h, {t}.8b, {wd}.8b")
             e(f"shrn {o}.8b, {a}.8h, #5")
         moves = [(o, c) for c, o in ((cr, "v29"), (cg, "v27"), (cb, "v31")) if c != o]
         if moves:
