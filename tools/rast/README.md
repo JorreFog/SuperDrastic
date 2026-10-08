@@ -48,7 +48,13 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) |
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
-  the scene cycle to 91200 bins.
+  the scene cycle to 91200 bins. Since then each group starts with one basic block (`kerngen.py`'s head()): the
+  depth test, the perspective weights beside it (computed for every group, so that the two chains overlap: the
+  in-order core overlaps only what interleaves in program order) and the next group's steps (no longer the latch's
+  last result); and the texel gather takes its addresses with umov instead of through the stack. kpath, cycles a
+  group of 8 pixels: 02000 156 -> 135, 02100 207 -> 186, 04010 165 -> 144, 14010 166 -> 158, 23110 219 -> 201;
+  cycles.py, stress ROM L4 at 2x: 21.85 M -> 20.98 M cycles a frame (-4.0%; librast 16.95 M -> 16.07 M), the
+  kernel 02000 5.29 M -> 4.84 M, 02010 2.59 M -> 2.34 M (instructions +4%: the weights of groups that fail).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -196,7 +202,8 @@ stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py`
   stack, the pack-and-store tail and the depth test's mask chain; overlapping consecutive groups needs registers the
   kernels do not have (the bilinear kernels use them all).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
-  of the texel gather's two trips through the stack, which the model cannot price (store-to-load forwarding).
+  of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
+  leave by umov), which the model cannot price (store-to-load forwarding).
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
   layer presented through the dsflip shader instead of downsampled.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it

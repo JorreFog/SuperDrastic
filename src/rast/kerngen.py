@@ -40,12 +40,15 @@ Register use in the group loop:
   x5 the line's pixels left  x6 texels  x7 flags  x8 scratch  x9-x16 gather  x17 Rwc  x19 kargs
   x20 tail-mask table  x21 palette  x22 span entry  x23 lines left  x24 bin line  x25 ctx  x26 id0  x27 batch flags
   x28 the texel buffer (sp + 32)  x0 anypass (nonzero: some pixel passed)
-The group loop (0:): the depth test, then (unless the depth is w, which needs them first) the perspective weights,
-so a group that fails the test skips them. With z or constant depth a line starts in a reduced loop (20:) that
-only tests, until its first passing group sets up the weights and interpolants (27:). Rare paths are out of line
-after the latch (the affine weights 6:, the depth-equal test 24:, the 64-bit w products 23:, the 32-bit vertex
-colour 37:, the partial-group store 1:) so the common path has no taken branch besides the loop's.
-Stack: [sp] 8 texel addresses, [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
+The group loop (0:) starts with one basic block (head(), head_w()): the depth test, the perspective weights beside it
+(computed for every group: the in-order core overlaps the two chains only in one block; with w depth, which needs
+them first, the attribute words' load) and the next group's steps, so the latch carries no long-latency result into
+the next group. With z or constant depth a line starts in a reduced loop (20:) that only tests, until its first
+passing group sets up the weights and interpolants (27:, then the weights at 28:). Rare paths are out of line after
+the latch (the affine weights 6:, the depth-equal test 24:, which with w depth also takes the affine weights and the
+64-bit w products 23:, the 32-bit vertex colour 37:, the partial-group store 1:) so the common path has no taken
+branch besides the loop's.
+Stack: [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
 (bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
 (512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
 import os, sys
@@ -224,7 +227,6 @@ def prologue(name, D, T, R, F, M=0, B=0):
     if R and not lazy(D, st): e("mov x4, #0")
     if D == 0: depth_setup_z()
     if not lazy(D, st): line_setup(D, T, F, M)
-    if st and D == 1: e("tbnz w7, #0, 6f")                                      # affine: the group loop's entry
 
 def lazy(D, st):
     """the weights and interpolants are set up at the line's first group with a passing pixel (not needed by the
@@ -249,11 +251,11 @@ def steps_setup(D, lazy=False):
     e(f"ldr {w0}, [x22, #{SP['W0']}]"); e(f"ldr {dw}, [x22, #{SP['dW']}]")
     e(f"add {t}, {w0}, {dw}"); e(f"scvtf s24, {t}"); e(f"ucvtf s25, {c}"); e("fmul s24, s24, s25")
     e(f"scvtf s26, {w0}"); e(f"scvtf s27, {dw}")
-    e(f"ldp {q(ja)}, {q(jb)}, [x20, #128]")                                       # j = 0..7 as floats
+    e(f"ldp {q(ja)}, {q(jb)}, [x20, #144]")                                       # j = 0..7 as floats
     e(f"fmul v0.4s, {ja}.4s, v26.s[0]"); e(f"fmul v1.4s, {jb}.4s, v26.s[0]")
     e("dup v2.4s, v24.s[0]"); e("dup v3.4s, v24.s[0]")
     e(f"fmls v2.4s, {ja}.4s, v27.s[0]"); e(f"fmls v3.4s, {jb}.4s, v27.s[0]")
-    e(f"ldr {q(j8)}, [x20, #192]")                                                # 8.0
+    e(f"ldr {q(j8)}, [x20, #208]")                                                # 8.0
     e(f"fmul v4.4s, {j8}.4s, v26.s[0]"); e(f"fmul v5.4s, {j8}.4s, v27.s[0]")
     if D == 1: e(f"dup v6.4s, {dw}"); e(f"dup v7.4s, {w0}")
     if lazy:
@@ -263,7 +265,7 @@ def steps_setup(D, lazy=False):
     e("b 2f")
     e("1:")
     e(f"ldr {p}, [x19, #{K['recip_u']}]"); e(f"ldr w17, [{p}, {c}, uxtw #2]")
-    e("ldp q4, q5, [x20, #160]")
+    e("ldp q4, q5, [x20, #176]")
     if lazy: e("lsl w15, w15, #3"); e("dup v0.4s, w15"); e("add v4.4s, v4.4s, v0.4s"); e("add v5.4s, v5.4s, v0.4s")
     e("dup v0.4s, w17"); e("mul v4.4s, v4.4s, v0.4s"); e("mul v5.4s, v5.4s, v0.4s")
     e("lsl w17, w17, #3"); e("dup v1.4s, w17")
@@ -347,31 +349,18 @@ def epilogue():
     e("ldp d14, d15, [sp, #48]"); e("ldp d12, d13, [sp, #32]"); e("ldp d10, d11, [sp, #16]"); e("ldp d8, d9, [sp], #160")
     e("ret")
 
-def steps():
-    """perspective: st -> v24 (8 x s16 Q15 perspective weights)"""
-    e("frecpe v24.4s, v2.4s"); e("frecpe v25.4s, v3.4s")
-    e("frecps v26.4s, v24.4s, v2.4s"); e("frecps v27.4s, v25.4s, v3.4s")
-    e("fmul v24.4s, v24.4s, v26.4s"); e("fmul v25.4s, v25.4s, v27.4s")
-    e("frecps v26.4s, v24.4s, v2.4s"); e("frecps v27.4s, v25.4s, v3.4s")
-    e("fmul v24.4s, v24.4s, v26.4s"); e("fmul v25.4s, v25.4s, v27.4s")
-    e("fmul v24.4s, v0.4s, v24.4s"); e("fmul v25.4s, v1.4s, v25.4s")
-    e("fcvtzs v24.4s, v24.4s, #15"); e("fcvtzs v25.4s, v25.4s, #15")
-    e("xtn v24.4h, v24.4s"); e("xtn2 v24.8h, v25.4s")
-
-def steps_affine(D):
-    """out of line, flag bit 0: st -> v24 = the high halves of i * Rwc. D = 1 (st before the depth test): the group
-    loop's entry, and the lanes' products advance here; else they advance in the latch (26:)"""
-    e("6:")
-    e("shrn v24.4h, v4.4s, #16"); e("shrn2 v24.8h, v5.4s, #16")
-    if D == 1: e("add v4.4s, v4.4s, v1.4s"); e("add v5.4s, v5.4s, v1.4s")
-    e("b 5b")
-
-def group_st(D, st, early):
-    """the group's perspective weights: with w depth (D = 1) before the depth test (early), else after it, so a group
-    that fails the test does not compute them (the affine variant out of line at 6:)"""
-    if not st or early != (D == 1): return
-    if not early: e("tbnz w7, #0, 6f")
-    steps(); e("5:")
+def steps(r=("v24", "v25", "v26", "v27")):
+    """perspective: st -> v24 (8 x s16 Q15 perspective weights); r: v24 and the three scratch registers (the
+    group head's form, beside the depth test, uses v29-v31)"""
+    a, b, s, t = r
+    e(f"frecpe {a}.4s, v2.4s"); e(f"frecpe {b}.4s, v3.4s")
+    e(f"frecps {s}.4s, {a}.4s, v2.4s"); e(f"frecps {t}.4s, {b}.4s, v3.4s")
+    e(f"fmul {a}.4s, {a}.4s, {s}.4s"); e(f"fmul {b}.4s, {b}.4s, {t}.4s")
+    e(f"frecps {s}.4s, {a}.4s, v2.4s"); e(f"frecps {t}.4s, {b}.4s, v3.4s")
+    e(f"fmul {a}.4s, {a}.4s, {s}.4s"); e(f"fmul {b}.4s, {b}.4s, {t}.4s")
+    e(f"fmul {a}.4s, v0.4s, {a}.4s"); e(f"fmul {b}.4s, v1.4s, {b}.4s")
+    e(f"fcvtzs {a}.4s, {a}.4s, #15"); e(f"fcvtzs {b}.4s, {b}.4s, #15")
+    e(f"xtn {a}.4h, {a}.4s"); e(f"xtn2 {a}.8h, {b}.4s")
 
 def depth(D):
     """dep -> v25 (pixels 0-3), v26 (4-7); the constant variant reads v6"""
@@ -400,8 +389,13 @@ def depth_ool(D):
     e("add v26.4s, v26.4s, v7.4s")
     e("b 22b")
 
-def tail(r):
-    """the line's last group: only its x5 (< 8) pixels"""
+def tail(r, free=False):
+    """the line's last group: only its x5 (< 8) pixels. free: without a branch (the group head's single block), the
+    table's entry 8 (all ones) for the full groups"""
+    if free:
+        e("mov x9, #8"); e("cmp x5, #8"); e("csel x9, x5, x9, lo")
+        e("ldr q28, [x20, x9, lsl #4]"); e(f"and {r}.16b, {r}.16b, v28.16b")
+        return
     e("cmp x5, #8"); e("b.hs 3f")
     e("ldr q28, [x20, x5, lsl #4]"); e(f"and {r}.16b, {r}.16b, v28.16b")
     e("3:")
@@ -420,10 +414,92 @@ def test(D, fail="8f", eq=24):
     e("uzp1 v27.8h, v27.8h, v28.8h")
     tail("v27")
     e(f"xtn v28.8b, v27.8h"); e("fmov x8, d28"); e(f"cbz x8, {fail}")
+    dep_post(D)
+
+def dep_post(D):
+    """after a passing test: the group's attribute words dep | pid << 24 into the dep registers, or dep spilled"""
     if D != 2:
         if "dep" in RL:
             p = pid24("v27"); e(f"orr {RL['dep'][0]}.16b, v25.16b, {p}.16b"); e(f"orr {RL['dep'][1]}.16b, v26.16b, {p}.16b")
         else: e("stp q25, q26, [sp, #64]")
+
+def head(D, M):
+    """the group's start in the lazy kernels (z or constant depth; the shade pass's owner test): the test, the
+    perspective weights and the next group's steps (formerly the latch's) in one basic block, so that the
+    in-order core overlaps their chains (it overlaps only what interleaves in program order, and kernsched.py reorders
+    within a block). The weights are computed for every group, also one that fails the test; they use v29-v31 as
+    scratch, beside the test's v25-v28, and the tail mask comes without a branch. The affine steps (flag bit 0) take
+    an out-of-line copy of the head (6:), the depth-equal test (flag bit 1) one that joins the lazy loop's entry
+    (28:), which computes the weights and steps after the test."""
+    if M != 2: e("tbnz w7, #1, 24f")                                           # depth equal: out of line
+    e("tbnz w7, #0, 6f")                                                       # affine: out of line
+    head_block(D, M, lambda: (steps(("v24", "v29", "v30", "v31")), advance(0)), "8f")
+    e("5:")
+    def ool():
+        e("6:"); head_block(D, M, lambda: advance(1), "8b"); e("b 5b")
+        if M != 2:
+            e("24:"); depth(D); test(D, "39f", 30); e("b 28b")
+            test_equal(D, 30)
+            e("39:"); advance(); e("b 8b")
+    OOLS.append(ool)
+
+def head_w(M):
+    """the group's start with w depth (D = 1, the depth is W0 + (dW * st >> 15), so the weights come first): the
+    weights, the attribute words' load and the tail mask beside them, the depth test and the next group's steps, one
+    block (as head()); the affine steps, the 64-bit products (flag bit 13 clear) and the depth-equal test take the
+    former order, with its branches, out of line (24:)"""
+    e("tbnz w7, #1, 24f"); e("tbnz w7, #0, 24f"); e("tbz w7, #13, 24f")
+    steps(("v24", "v29", "v30", "v31"))
+    e("ldp q27, q28, [x2]")
+    e("bic v27.4s, #0xff, lsl #24"); e("bic v28.4s, #0xff, lsl #24")
+    e("smull v25.4s, v24.4h, v6.h[0]"); e("smull2 v26.4s, v24.8h, v6.h[0]")
+    e("sshr v25.4s, v25.4s, #15"); e("sshr v26.4s, v26.4s, #15")
+    e("add v25.4s, v25.4s, v7.4s"); e("add v26.4s, v26.4s, v7.4s")
+    e("cmhi v27.4s, v27.4s, v25.4s"); e("cmhi v28.4s, v28.4s, v26.4s")
+    e("uzp1 v27.8h, v27.8h, v28.8h")
+    tail("v27", True)
+    e("xtn v28.8b, v27.8h"); e("fmov x8, d28")
+    advance(0)
+    e("cbz x8, 8f")
+    dep_post(1)
+    e("5:")
+    def ool():
+        e("24:")
+        e("tbnz w7, #0, 40f"); steps(); advance(0); e("b 41f"); e("40:"); advance(1); e("41:")
+        depth(1); test(1, "8b", 30); e("b 5b")
+        test_equal(1, 30)
+    OOLS.append(ool)
+
+def head_block(D, M, st, fail):
+    """head(): the depth (or owner) test with st() beside it, one block; fails to `fail`"""
+    if M == 2:
+        e("ldr q27, [x2]")
+        if "idx" in RL: e(f"cmeq v27.8h, v27.8h, {RL['idx'][0]}.8h")
+        else: e(f"ldr q25, [x19, #{K['idx16']}]"); e("cmeq v27.8h, v27.8h, v25.8h")
+    else:
+        dl, dh = depth_regs(D)
+        depth(D)
+        e("ldp q27, q28, [x2]")
+        e("bic v27.4s, #0xff, lsl #24"); e("bic v28.4s, #0xff, lsl #24")
+        e(f"cmhi v27.4s, v27.4s, {dl}.4s"); e(f"cmhi v28.4s, v28.4s, {dh}.4s")
+        e("uzp1 v27.8h, v27.8h, v28.8h")
+    tail("v27", True)
+    e("xtn v28.8b, v27.8h"); e("fmov x8, d28")
+    st()
+    e(f"cbz x8, {fail}")
+    if M != 2: dep_post(D)
+
+def advance(affine=None):
+    """the per-group steps, in the group's head (head(), head_w(), the lazy loop's entry 28:): perspective (0) the
+    numerators and denominators by 8 W0, 8 dW; affine (1) st from the lanes' products i * Rwc and those by 8 Rwc;
+    None: the flag's (labels 40 41: out of line, these come before the partial-group store's 1:)"""
+    if affine is None:
+        e("tbnz w7, #0, 40f"); advance(0); e("b 41f"); e("40:"); advance(1); e("41:")
+    elif affine:
+        e("shrn v24.4h, v4.4s, #16"); e("shrn2 v24.8h, v5.4s, #16")
+        e("add v4.4s, v4.4s, v1.4s"); e("add v5.4s, v5.4s, v1.4s")
+    else:
+        e("fadd v0.4s, v0.4s, v4.4s"); e("fadd v1.4s, v1.4s, v4.4s"); e("fsub v2.4s, v2.4s, v5.4s"); e("fsub v3.4s, v3.4s, v5.4s")
 
 def test_equal(D, eq=24):
     """out of line: the depth-equal test (attribute bit 14), |dep - d| < 0x100"""
@@ -460,13 +536,18 @@ def texcoord(axis, T, r):
         e(f"and {r}.16b, {r}.16b, {m}.16b")
         e("2:")
 
+def addrs(lo, hi):
+    """the 8 texel addresses (u32 lanes of lo, hi) -> w9-w16"""
+    for i in range(8): e(f"umov w{9 + i}, {lo if i < 4 else hi}.s[{i % 4}]")
+
 def gather(T):
     """8 texels at the u32 addresses in v29 (0-3) and v27 (4-7) -> channels tr v29, tg v27, tb v31, ta v30 (8 x u8).
     Paletted textures with a palette of at most 16 entries (flag bit 7) look the channels up with tbl from the
     palette held in v18-v21, one channel per register (kargs.pal16: r[16] g[16] b[16] a[16]), instead of loading
-    each texel's palette entry."""
-    e("stp q29, q27, [sp]")
-    e("ldp w9, w10, [sp]"); e("ldp w11, w12, [sp, #8]"); e("ldp w13, w14, [sp, #16]"); e("ldp w15, w16, [sp, #24]")
+    each texel's palette entry. The addresses go to w9-w16 with umov (not through the stack: a 128-bit store read
+    back as 32-bit words waits on the store's forwarding; the model also prefers umov), the texels back through
+    [sp,#32] and ld2 (lane inserts are a serial chain)."""
+    addrs("v29", "v27")
     if T in (3, 4):
         for r in range(9, 17): e(f"ldrb w{r}, [x6, w{r}, uxtw]")
         e("tbz w7, #7, 1f")
@@ -539,8 +620,7 @@ def texture_bilinear(T):
         e(f"umull v29.4s, {v}.4h, v15.h[{L_TW}]"); e(f"umull2 v30.4s, {v}.8h, v15.h[{L_TW}]")
         e(f"uaddw v29.4s, v29.4s, {u}.4h"); e(f"uaddw2 v30.4s, v30.4s, {u}.8h")
         # gather() wants the addresses in v29 and v27; v27 is an accumulator here, so inline it
-        e("stp q29, q30, [sp]")
-        e("ldp w9, w10, [sp]"); e("ldp w11, w12, [sp, #8]"); e("ldp w13, w14, [sp, #16]"); e("ldp w15, w16, [sp, #24]")
+        addrs("v29", "v30")
         if T in (3, 4):
             for r in range(9, 17): e(f"ldrb w{r}, [x6, w{r}, uxtw]")
             for r in range(9, 17): e(f"ldr w{r}, [x21, w{r}, uxtw #2]")
@@ -799,19 +879,14 @@ def trans_store(D, cols):
     e("ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
     e("8:")
 
-def latch(D, M=0, st=True, R=0):
-    """the next group (x5 pixels left): pointers, the z DDA, the perspective steps or the affine lanes' products (with
-    D = 1 in the affine step); then the out-of-line affine step"""
+def latch(D, M=0, R=0):
+    """the next group (x5 pixels left): pointers, the z DDA (the perspective steps or the affine lanes' products
+    advance in the group's head)"""
     e("subs x5, x5, #8"); e("b.ls 9f")
     e(f"add x1, x1, #{16 if M == 1 else 32}"); e(f"add x2, x2, #{16 if M == 2 else 32}")
     if R: e("add x4, x4, #8")
     z_step8(D)
-    if st:
-        e(f"tbnz w7, #0, {'6f' if D == 1 else '26f'}")
-        e("fadd v0.4s, v0.4s, v4.4s"); e("fadd v1.4s, v1.4s, v4.4s"); e("fsub v2.4s, v2.4s, v5.4s"); e("fsub v3.4s, v3.4s, v5.4s")
     e("b 0b")
-    if st and D != 1: e("26:"); e("add v4.4s, v4.4s, v1.4s"); e("add v5.4s, v5.4s, v1.4s"); e("b 0b")
-    if st: steps_affine(D)
 
 def vis_store(D):
     """visibility: the attribute words (as store()) and the polygon index into the owner line (x1); returns the
@@ -867,7 +942,9 @@ def lazy_loop(D, T, R, F, M):
         e("tbz w27, #6, 1f"); e("sub x4, x9, x5"); e("add x3, x3, x4"); e("1:")  # start at the first passing pixel
     interpolants_setup(T, F, M)
     if T and not F and M != 1: white_test()
-    e("b 28f")
+    e("28:")                                                                     # (and the depth-equal head's)
+    e("tbnz w7, #0, 40f"); steps(); advance(0); e("b 5f")
+    e("40:"); advance(1); e("b 5f")
 
 def shade_store(cols):
     """shade: pack, fog bit, store the colour words (all 8 straight when the polygon owns them all); the latch at
@@ -892,16 +969,16 @@ def kernel_vis(D, T):
     prologue(name, D, T, 0, 0, 1)
     if lazy(D, st): lazy_loop(D, T, 0, 0, 1)
     e("0:")
-    group_st(D, st, True)
-    depth(D); test(D)
-    e("28:")
-    group_st(D, st, False)
+    if D == 1: head_w(1)
+    elif lazy(D, st): head(D, 1)
+    else: depth(D); test(D)
     if T:
         texture(T); modulate_alpha("1f"); e("1:"); alpha_test()
     OOLS.append(vis_store(D))
-    latch(D, 1, st)
+    latch(D, 1)
     flush_ools()
-    test_equal(D); depth_ool(D)
+    if not st: test_equal(D)
+    depth_ool(D)
     e("9:")
     line_end(0, lazy(D, st))
     epilogue()
@@ -917,11 +994,10 @@ def kernel_shade(T, F, B):
     prologue(name, 2, T, 0, F, 2, B)
     if lazy(2, st): lazy_loop(2, T, 0, F, 2)
     e("0:")
-    owner_test()
-    e("28:")
-    group_st(2, st, False)
+    if lazy(2, st): head(2, 2)
+    else: owner_test()
     OOLS.append(shade_store(colour(T, F, B, 2)))
-    latch(2, 2, st)
+    latch(2, 2)
     flush_ools()
     e("9:")
     e("add x22, x22, #4"); e("add w24, w24, #1"); e("subs w23, w23, #1"); e("b.ne 10b")
@@ -937,15 +1013,15 @@ def kernel(D, T, R, F, B):
     prologue(name, D, T, R, F, 0, B)
     if lazy(D, st): lazy_loop(D, T, R, F, 0)
     e("0:")
-    group_st(D, st, True)
-    depth(D); test(D)
-    e("28:")
-    group_st(D, st, False)
+    if D == 1: head_w(0)
+    elif lazy(D, st): head(D, 0)
+    else: depth(D); test(D)
     cols = colour(T, F, B)
     OOLS.append(trans_store(D, cols) if R else store(D, cols))
-    latch(D, 0, st, R)
+    latch(D, 0, R)
     flush_ools()
-    test_equal(D); depth_ool(D)
+    if not st: test_equal(D)
+    depth_ool(D)
     e("9:")
     line_end(R, lazy(D, st))
     epilogue()
@@ -972,7 +1048,8 @@ all_kernels()
 e(".section .rodata")
 e(".balign 16")
 e("rast_kern_tail:")
-for n in range(8): e(".hword " + ", ".join("0xffff" if i < n else "0" for i in range(8)))
+# the masks of n = 0..8 pixels (a line of C = 0 runs one group with an empty mask; 8: tail(free=True)'s full groups)
+for n in range(9): e(".hword " + ", ".join("0xffff" if i < n else "0" for i in range(8)))
 e(".float 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0")
 e(".word 0, 1, 2, 3, 4, 5, 6, 7")
 e(".float 8.0, 8.0, 8.0, 8.0")
