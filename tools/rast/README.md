@@ -76,13 +76,15 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   modulate, edge identify into an edge array, edge mark), each a pass over memory, and the table pass read the block
   back. Now hr.c's NEON fog (weights and modulate in one pass over byte planes) and edge marking (identify and mark,
   two lines a step sharing their compares) run on the context's colour lines in place, the edge marking skipping
-  the depth-key compares of steps in which no pixel's polygon id differs from a neighbour's, and the plain resolve's
+  the depth-key compares of steps in which no pixel's polygon id differs from a neighbour's and the fog the modulate
+  of steps whose factors are all 0, and the plain resolve's
   pass (res2_line_asm) writes the block and its table entries; DraStic's line structure is kept (bin 0's top line,
   bin 11's bottom line with line 30's attributes, the gap copies). Fog and edge-marking scene S4 at 2x: DraStic's
-  identify 1.42 M, weights 0.50, mark 0.38, modulates 0.51 and the table pass 0.18 M cycles a frame become fog 0.89 M,
-  edge marking 0.57 M (1.02 M without the skip) and the resolve pass 0.26 M: the frame 11.54 M -> 9.94 M (-13.9%).
+  identify 1.42 M, weights 0.50, mark 0.38, modulates 0.51 and the table pass 0.18 M cycles a frame become fog 0.78 M
+  (0.89 M without its skip), edge marking 0.57 M (1.02 M without its skip) and the resolve pass 0.26 M: the frame
+  11.54 M -> 9.82 M (-14.9%).
   `ut/t_resolve.c` compares the block, the gap buffers and the table entries with DraStic's drivers (all six modes,
-  every bin, polygon ids in rectangles for the skip; it fails a mutant that ignores the left tests in the skip); S4's
+  every bin, polygon ids in rectangles and zero fog tables for the skips; it fails mutants of either skip); S4's
   frame diff 0 bins in 12000 with the compositor's checks 0 differ, the stress ROM's 6 in 4800.
 - Not yet measured on a handheld.
 
@@ -248,10 +250,10 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 ## Next
 
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
-- The 2x fog (`res2.c` fog_line2x, 0.89 M cycles a frame on S4 at IPC 0.62) is bound by the FP pipe: four channels'
+- The 2x fog (`res2.c` fog_line2x, 0.78 M cycles a frame on S4 at IPC 0.57) is bound by the FP pipe: four channels'
   smull/smull2/shrn/shrn2 per 16 pixels and the weights' two tbl2. The attributes by ldr q + shrn instead of ld4 + zip
-  models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x edge marking
-  could take res2.c's id skip (S4 2x: edge marking 1.02 -> 0.57 M).
+  models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog and edge
+  marking could take res2.c's skips (S4 2x: edge marking 1.02 -> 0.57 M, fog 0.89 -> 0.78 M).
 - The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight

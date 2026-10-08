@@ -89,13 +89,14 @@ void res2_vis_bin(const uint8_t *blk, uint8_t (*bits)[32], uint8_t *flags) {
  * colour line in place, or into the output line), edge identify (an edge byte array), edge mark (into the output
  * line), each a pass over memory with its own loads, and the compositor's table pass reads the block back (S4 at 2x,
  * llvm-mca's A55: ~2.8 M + 0.18 M cycles a frame at IPCs of 0.45-0.72). Here the stages are hr.c's NEON forms of the
- * same arithmetic (hr.c documents them; the copies below differ in the line width, 512, and the edge marking's skip
- * of steps without an id edge), applied to the context's colour lines in place, then the block is written by
- * res2_line_asm with the table entries:
+ * same arithmetic (hr.c documents them; the copies below differ in the line width, 512, the fog's skip of steps whose
+ * factors are all 0 and the edge marking's skip of steps without an id edge), applied to the context's colour lines
+ * in place, then the block is written by res2_line_asm with the table entries:
  *   fog: weights and modulate in one pass over byte planes, 32 pixels a step, the weights never in memory, a step
- *        without a fog flag skipped (fog_line2x); the fogged line's alpha keeps bits 5 and 6 and clears 7 (the fog
- *        flag), which is what the fog drivers' modulate_*_resolve write, so the fog-only resolve then splits the
- *        lines unmasked (split_line) and the table comes from the block (comp_bin()'s res2_vis_bin);
+ *        without a fog flag skipped, one whose factors are all 0 only its flags cleared (fog_line2x); the fogged
+ *        line's alpha keeps bits 5 and 6 and clears 7 (the fog flag), which is what the fog drivers'
+ *        modulate_*_resolve write, so the fog-only resolve then splits the lines unmasked (split_line) and the
+ *        table comes from the block (comp_bin()'s res2_vis_bin);
  *   edge marking: identify and mark in one pass over two lines at once (the pair's compares shared, a step of 16
  *        pixels of both lines without a marked pixel neither loads nor stores colours, and one in which no pixel's
  *        polygon id differs from a neighbour's skips the depth-key compares, edge_lines2x); a marked pixel
@@ -146,6 +147,13 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
         uint8x16x4_t px = vld4q_u8(c8), py = vld4q_u8(c8 + 64);
         if (__builtin_expect(vmaxvq_u8(vorrq_u8(px.val[3], py.val[3])) < 0x80, 0)) continue;     /* no fog flag in the step */
         int8x16_t kx = FOG_K(px.val[3], c8 + ad), ky = FOG_K(py.val[3], c8 + 64 + ad);
+        /* a step whose factors are all 0 (weight 0, or no fog flag) is the colours with the flags cleared: the
+         * modulate of every channel adds 0 */
+        if (!vmaxvq_u8(vreinterpretq_u8_s8(vorrq_s8(kx, ky)))) {
+            px.val[3] = vandq_u8(px.val[3], x7f); py.val[3] = vandq_u8(py.val[3], x7f);
+            vst4q_u8(c8, px); vst4q_u8(c8 + 64, py);
+            continue;
+        }
         px.val[3] = fog_ch16(vandq_u8(px.val[3], x7f), fa, kx);
         py.val[3] = fog_ch16(vandq_u8(py.val[3], x7f), fa, ky);
         if (full) {

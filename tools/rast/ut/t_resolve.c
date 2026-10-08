@@ -248,7 +248,7 @@ static void test_res2(int n) {
  * buffers and the attribute lines (the colour lines are not compared: res2.c fogs and marks them in place), with and
  * without the table; the table entries of the written half-rows vs the visibility port. Random contexts as setup()'s
  * (attributes with ties, few ids and depths, or polygon ids in rectangles; the fog flag random, or clear in whole
- * 32-pixel steps; fog tables, fog
+ * 32-pixel steps; fog tables (zero at small depths or everywhere: steps whose weights are all 0), fog
  * colours and offsets, DISP3DCNT's fog shift, the clear attribute and the edge colours random; fog on or off by the
  * context and system flags), every bin (bin 0's top line, bin 11's bottom line, the gap copies of the others). */
 static void test_fx(int n) {
@@ -276,6 +276,10 @@ static void test_fx(int n) {
                     for (int x = 0; x < 512; x++)
                         a[y * 512 + x] = (a[y * 512 + x] & 0xffffff) | ids[(y >> ys) & 3][(x >> xs) & 3];
                 memcpy(ctx[1] + 0x10000, ctx[0] + 0x10000, 0x10000);
+            }
+            if (rnd(4) == 0) {                                  /* weights 0 at small depths, or everywhere */
+                int n0 = rnd(2) ? 64 : 1 + rnd(4);
+                for (int k = 0; k < 2; k++) memset(geom[k] + 0x9974, 0, n0), memset(geom[k] + 0x9994, 0, n0 < 32 ? n0 : 32);
             }
             uint32_t bin = rnd(12), ob = bin * 0x10000;
             int tab = rnd(4) != 0;
