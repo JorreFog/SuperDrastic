@@ -95,10 +95,16 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   points and lines (1- and 2-vertex polygons) walk like DraStic's. The vertex table holds the DS's 6144 vertices
   (an earlier 1568 limit skipped polygons with higher vertex indices: a black sky and missing sparkles behind
   Ho-Oh in HG/SS). The downsample, the edge marking and the fog of the resolve are NEON (unit-tested against the
-  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage. The field scene costs 4.9 M
-  instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the downsample 0.66 M (four
-  triples a step; groups whose 36 alphas are all 31 or all 0 take fast paths, the same bits as the general case),
-  the rest the clear and the resolve over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
+  scalar versions); fully transparent outputs carry the clear colour, and only the 5-bit alpha counts as coverage.
+  The edge marking works in place on the colour lines and loads and stores only steps with a marked pixel (bits
+  29-31, which the 2x resolve clears, are ignored by the downsample), both lines' tests of a step before the one
+  test; the fog takes two groups a step, two independent chains for the in-order core (S4 at 3x, modeled A55 cycles
+  a frame: the edge marking 3.03 -> 2.38 M, the fog 2.75 -> 2.12 M). Changes to these stages are checked against
+  an earlier hr.c by `ut/hr_ab/run.sh` (both versions on the same random bins, the output blocks compared).
+  The field scene costs 4.9 M instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the
+  downsample 0.66 M (four triples a step; groups whose 36 alphas are all 31 or all 0 take fast paths, the same bits
+  as the general case), the rest the clear and the resolve over 2.25x the pixels (`RAST_DUMP` also writes the 3x
+  frames as `hNNNNN.ppm`).
 - **Palette lookups with tbl.** 4- and 16-colour textures (the common DS formats I2 and I4) keep their palette
   in four NEON registers and look texels up with `tbl` instead of a dependent load per texel; exact. The
   instruction count hardly changes; the gain is the removed load latency on the handheld's in-order cores.
@@ -213,7 +219,11 @@ stack apart; the branches stay where they are); `KERNSCHED=0 python3 kerngen.py`
   of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
   leave by umov), which the model cannot price (store-to-load forwarding).
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
-  layer presented through the dsflip shader instead of downsampled.
+  layer presented through the dsflip shader instead of downsampled. `ut/hr_ab`'s walker test: two copies of the same
+  hr.c, each with its own heap span block holding the previous polygon's spans, hand the kernels different spans
+  for a few polygons in 5000 (8 to 10 vertices); with a private zeroed block they agree. Find out what is read.
+  The downsample is bound by its loads and the alpha test in the cycle model: two groups a step, the opaque outputs
+  computed before the test and the loads a group ahead all modeled within 3% of the current loop.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
   assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
   content signature in the key would make it certain.
