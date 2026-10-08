@@ -99,14 +99,20 @@ def roles(D, T, R, F, B, M):
     if F or M == 1: pool += ["v10", "v11", "v12"]                               # no vertex colour
     if T == 0: pool += ["v13", "v14", "v16", "v17", "v18", "v19", "v20", "v21"]  # no texture
     elif T in (1, 2): pool += ["v18", "v19", "v20", "v21"]                      # no palette
+    if M == 2: pool += ["v6", "v7", "v8", "v9"]                                 # no depth (the shade pass)
+    elif D == 1: pool += ["v8", "v9"]                                           # w depth: v6 v7 only
+    elif D == 2: pool += ["v7", "v8", "v9"]                                     # constant depth: v6 only
     want = []
+    if T and F and R == 0 and M != 1:
+        # textured flat: the flat colour and two more modulate scratches first (the three modulates side by side)
+        want += [("flat", 3), ("vs", 2)]
     if T == 0 and R == 0 and M != 1: want.append(("colw", 1) if F else ("caf", 1))
     if R: want.append(("trans", 2))
     if M: want.append(("idx", 1))
     if M != 2: want.append(("dep", 1 if D == 2 else 2))
     if T:
         if R == 0 and M != 1: want.append(("fog", 1))
-        if F and M != 1: want.append(("flat", 3))
+        if F and M != 1 and R: want.append(("flat", 3))
         want.append(("a", 1))
     elif R:                                                                      # (the colour stays in them)
         want.append(("a", 1))
@@ -580,10 +586,11 @@ def colour(T, F, B, M=0):
         else: texture(T)
         e("tbnz w7, #2, 1f")                        # white vertex colour, alpha 31: the texel is the colour
         def rgb(slow=False):
+            ws = ["v26", *RL["vs"]] if F and "flat" in RL and len(RL.get("vs", ())) == 2 else ["v26"] * 3
             for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")):
                 if F and "flat" in RL: v = RL["flat"][ch]
                 else: v = "v25"; vertex_colour(ch, F, v, slow)
-                modulate(v, t, 6)
+                modulate(v, t, 6, ws[ch])
         if not F:
             e("tbz w7, #14, 37f")
             rgb(); e("38:")
