@@ -47,6 +47,8 @@ int dsflip_battery(int *charging);
 int dsflip_drastic_menu(void);
 extern volatile int dsflip_hold;
 void audio_mic_hold(int down);                  /* audio.c: DraStic's fake microphone, key or button */
+void audio_mic_again(void);                     /* ...pressed again (its sample starts over) */
+int audio_mic_sample_ms(void);
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
@@ -352,6 +354,10 @@ static void game_info(void) {
     snprintf(undo_path, sizeof undo_path, "/tmp/dsflip-undo.dss");
     dsflip_log("[menu] game '%s' (%s), savestates in %s\n", gtitle, gbase, sdir);
 }
+static pthread_once_t gi_once = PTHREAD_ONCE_INIT;
+static void game_info_once(void) { pthread_once(&gi_once, game_info); }
+/* the game's name as DraStic names its files (audio.c: the fake microphone's sample) */
+const char *menu_game_base(void) { game_info_once(); return gbase; }
 static void slot_path(int n, char *out, size_t sz) { snprintf(out, sz, "%s/%s_%d.dss", sdir, gbase, n); }
 
 /* zlib, as ra.c loads it */
@@ -476,7 +482,7 @@ static char shader_base[48];                    /* this start's shader as the fr
 const char *menu_shader_pick(const char *frontend) {
     static char pick[48];
     snprintf(shader_base, sizeof shader_base, "%s", frontend && *frontend && strcmp(frontend, "bilinear") ? frontend : "none");
-    if (!gbase[0]) game_info();
+    game_info_once();
     char key[300], v[120], chosen[48], was[48];
     snprintf(key, sizeof key, "shader.%s", gbase);
     if (mcfg_get(key, v, sizeof v) && sscanf(v, "%47s %47s", chosen, was) == 2 && !strcmp(was, shader_base)) {
@@ -595,7 +601,9 @@ static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_
 static char busy_msg[96];
 static int btn_menu[2] = { -1, -1 }, b_a = -1, b_b = -1, b_y = -1, b_l = -1, b_r = -1, b_start = -1;
 static int b_up = -1, b_down = -1, b_left = -1, b_right = -1;
-static long long mic_until;
+static long long mic_until, mic_trig;          /* the menu's Blow: held until; last (re)pressed */
+static const int MIC_SECS[3] = { 1, 3, 10 };
+static int mic_len = 1;                         /* the Blow's length: MIC_SECS[mic_len] */
 static long long drastic_menu_t;                /* when "DraStic menu" was picked (dsflip.c then skips its status card) */
 static uint32_t *bgtop;                         /* the game's top frame, dimmed (panel size) */
 static canvas CV[2];
@@ -1045,14 +1053,15 @@ static void draw_bottom(void) {
         int n = wrap2(&F_REG, msg, S(16), x1 - x0 - S(44), l1, l2, sizeof l1);
         text(c, &F_REG, l1, x0 + S(22), my1 + S(26), S(16), 0xc2ccd8, x1 - x0 - S(44), 0);
         if (n > 1) text(c, &F_REG, l2, x0 + S(22), my1 + S(50), S(16), 0xc2ccd8, x1 - x0 - S(44), 0);
-        text(c, &F_REG, "A: blow for 3 s, for when the real mic isn't picked up", gx0 + S(4), y1 + S(16), S(16), C_GREY, gx1 - gx0, 0);
+        char bl[120]; snprintf(bl, sizeof bl, "A: blow for %d s (left / right: 1, 3 or 10 s), when the real mic isn't heard", MIC_SECS[mic_len]);
+        text(c, &F_REG, bl, gx0 + S(4), y1 + S(16), S(16), C_GREY, gx1 - gx0, 0);
     }
     /* footer */
     int fy = c->h - S(56);
     const char *bl = s == SC_MAIN ? "Resume" : "Back", *al = "Select", *mid = "";
     if (s == SC_SAVE) al = "Save"; else if (s == SC_LOAD) al = "Load";
     else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : is_toggle(rows[sel_set]) || is_choice(rows[sel_set]) ? "Switch" : "OK";
-    else if (s == SC_MIC) al = "Blow for 3 s";
+    else if (s == SC_MIC) al = mic_len == 0 ? "Blow for 1 s" : mic_len == 1 ? "Blow for 3 s" : "Blow for 10 s";
     if (s == SC_MAIN) mid = "D-pad or tap";
     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
     R_FOOT_R = pill(c, c->w - S(20), fy, 1, "A", al, C_CYAN, C_CYAN, C_DARK);
@@ -1136,8 +1145,9 @@ static void activate(void) {
         break;
     case SC_MIC:
         /* the game has to run to hear it: back to the game, with a pop-up for as long as it blows */
-        play(SND_SELECT); mic_until = now_ms() + 3000; close_menu();
-        dsflip_toast("Blowing into the mic...", "The game hears it for 3 seconds", 0x7ec8ee, 3000);
+        play(SND_SELECT); mic_until = now_ms() + MIC_SECS[mic_len] * 1000; close_menu();
+        { char t[64]; snprintf(t, sizeof t, "The game hears it for %d second%s", MIC_SECS[mic_len], MIC_SECS[mic_len] > 1 ? "s" : "");
+          dsflip_toast("Blowing into the mic...", t, 0x7ec8ee, MIC_SECS[mic_len] * 1000); }
         break;
     case SC_QUIT:
         play(SND_SELECT);
@@ -1178,6 +1188,8 @@ static void nav(int dx, int dy) {
     } else if (scr == SC_SET) {
         if (dy) { int n = sel_set + dy; if (n >= 0 && n < nrows) { sel_set = n; moved = 1; } }
         if (dx) { adjust(dx); return; }
+    } else if (scr == SC_MIC && dx) {
+        int n = mic_len + dx; if (n >= 0 && n < 3) { mic_len = n; moved = 1; }
     }
     if (moved) { play(SND_MOVE); dirty_bot = 1; }
 }
@@ -1291,7 +1303,7 @@ static void menu_run(int start) {
     if (!setup()) { enabled = 0; return; }
     static int (*poll_real)(void *);
     if (!poll_real) poll_real = (int (*)(void *))dlsym(RTLD_NEXT, "SDL_PollEvent");
-    if (!gbase[0]) game_info();
+    game_info_once();
     prefs_load();
     dsflip_log("[menu] open\n");
     SDL_PauseAudio(1);
@@ -1328,7 +1340,7 @@ static void menu_run(int start) {
     if (sh_sel != sh_active) apply_shader();
     if (bri_dirty & 4) want(-1, 0, bri[0]);           /* ROCKNIX's settings, as its own scripts keep them */
     for (int k = 0; k < 2; k++) if (bri_dirty & (1 << k)) want(-1, bl_scr[k], bri[k]);
-    if (mic_until) audio_mic_hold(1);
+    if (mic_until) { audio_mic_hold(1); mic_trig = now_ms(); }
     SDL_PauseAudio(0);
     audio_mic_quiet(0);
     dsflip_log("[menu] closed\n");
@@ -1384,6 +1396,10 @@ void menu_frame(void) {
     if (test < 0) { const char *t = getenv("DSFLIP_MENU_TEST"); test = t ? atoi(t) + 1 : 0; }
     if (!frames++) { session_t0 = now_ms(); prefs_load(); }   /* (the performance overlay starts as it was left) */
     if (mic_until && now_ms() >= mic_until) { mic_until = 0; audio_mic_hold(0); }
+    else if (mic_until && !open_) {             /* DraStic's sample is shorter than the blow: from its start again */
+        int smp = audio_mic_sample_ms();
+        if (smp > 0 && now_ms() - mic_trig >= smp - 30) { audio_mic_again(); mic_trig = now_ms(); }
+    }
 
     if (test && frames == 180) {
         if (enabled < 0) menu_event(0);

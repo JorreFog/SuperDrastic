@@ -34,6 +34,7 @@
 #include <pthread.h>
 #include <dlfcn.h>
 #include <math.h>
+#include <unistd.h>
 
 void dsflip_log(const char *fmt, ...);
 
@@ -332,8 +333,55 @@ void audio_pump_log(void) {
  * 16-bit samples (scaled to +-1.0); the first 60 blocks average a noise floor, which then keeps tracking slowly
  * (floor = 0.999 floor + 0.001 level); level > floor + threshold holds the key, dropping below releases it.
  * The threshold is ES's "microphone sensitivity" (DSHOOK_MIC_THRESH: high 0.03, medium 0.15, low 0.3; off 0).
- * Capture goes straight through ALSA (PipeWire's mic source). */
+ * Capture goes straight through ALSA (PipeWire's mic source).
+ *
+ * Changes from libdrastouch's logic, for a real blow that did nothing (ROCKNIXDS issue 26):
+ * - The capture's DC offset is taken out (a one-pole high-pass at ~14 Hz) before the level is measured: a constant
+ *   offset counted in every block's RMS, squeezed a blow's rise above the floor (sqrt(dc^2 + blow^2) - dc) and,
+ *   worse, went into the speaker leak the echo gate learns (level / output), raising its bar for nothing. The offset
+ *   is in the 10 s log line.
+ * - The echo gate learns the leak from the level above the noise floor, not the whole level (with the game quiet,
+ *   the room's own noise over a small output read as a leak of x1 or more), and not from blocks well above the leak
+ *   it expects: a blow that stayed under the bar taught the gate a bigger leak, every block of it, so the bar climbed
+ *   during the very blow it should have let through.
+ * - Once pressed, the key stays down while the level is above 60% of the way from the floor to the bar, and at least
+ *   DSFLIP_MIC_HOLD_MS (now 120 ms by default): a blow wavers around the bar, and every release and press restarted
+ *   DraStic's sample from its beginning (below), so the game heard its first few ms over and over.
+ * - DraStic plays its fake microphone's sample once per press, then silence while the key stays down: a blow longer
+ *   than the sample is re-pressed at its end (dsflip_mic_restart), and so is the menu's Blow. */
 void dsflip_mic_key(int down);
+void dsflip_mic_restart(int button);
+const char *menu_game_base(void);
+/* the length of the sample DraStic's fake microphone plays (ms): <DraStic's folder>/microphone/<game>.wav, else
+ * microphone.wav there, as DraStic r2.5.2.2 looks for them at the game's start; 0 without one (DraStic then plays
+ * noise for as long as the key is held) */
+int audio_mic_sample_ms(void) {
+    static int ms = -1;
+    if (ms >= 0) return ms;
+    ms = 0;
+    char cwd[400], p[700];
+    if (!getcwd(cwd, sizeof cwd)) return 0;
+    for (int k = 0; k < 2 && !ms; k++) {
+        if (k == 0) snprintf(p, sizeof p, "%s/microphone/%s.wav", cwd, menu_game_base()); else snprintf(p, sizeof p, "%s/microphone/microphone.wav", cwd);
+        FILE *f = fopen(p, "rb"); if (!f) continue;
+        uint8_t h[12], ck[8]; int ch = 0, rate = 0, bits = 0;
+        if (fread(h, 1, 12, f) == 12 && !memcmp(h, "RIFF", 4) && !memcmp(h + 8, "WAVE", 4))
+            while (fread(ck, 1, 8, f) == 8) {
+                uint32_t len = ck[4] | ck[5] << 8 | ck[6] << 16 | (uint32_t)ck[7] << 24;
+                if (!memcmp(ck, "fmt ", 4)) {
+                    uint8_t fm[16]; if (len < 16 || fread(fm, 1, 16, f) != 16) break;
+                    if (len > 16) fseek(f, (long)(len - 16), SEEK_CUR);
+                    ch = fm[2] | fm[3] << 8; rate = fm[4] | fm[5] << 8 | fm[6] << 16 | fm[7] << 24; bits = fm[14] | fm[15] << 8;
+                } else if (!memcmp(ck, "data", 4)) {
+                    if (ch > 0 && rate > 0 && bits >= 8) ms = (int)((long long)len * 1000 / ((long long)rate * ch * (bits / 8)));
+                    break;
+                } else fseek(f, (long)(len + (len & 1)), SEEK_CUR);
+            }
+        fclose(f);
+        if (ms) dsflip_log("[mic] DraStic's fake microphone sample: %s, %d ms (a longer blow presses it again)\n", p, ms);
+    }
+    return ms;
+}
 /* the in-game menu's mic meter (menu.c): the last block's level and the noise floor, published by the mic thread.
  * Without ES's mic sensitivity there is no mic thread; the meter then starts one that only measures (thresh 0) and
  * stops it once the meter hasn't been looked at for 2 s. While the menu is open the mic presses no key. */
@@ -351,7 +399,7 @@ int resume_control_code(const char *set, const char *name);   /* resume.c: a dra
  *                             setting; 0 turns the gate off: libdrastouch's plain floor + threshold)
  *   DSFLIP_MIC_COUPLING_MAX=<r>  the most speaker-to-mic leak the gate may learn (4; the learned leak includes the
  *                             room's noise, so a lower cap keeps the bar reachable while music plays)
- *   DSFLIP_MIC_HOLD_MS=<ms>   once pressed, the key stays down at least this long (0: it follows every 23 ms block)
+ *   DSFLIP_MIC_HOLD_MS=<ms>   once pressed, the key stays down at least this long (120; 0: only the hysteresis)
  *   DSFLIP_MIC_LF=<r>         a press also needs the block's low-frequency share (the RMS below ~250 Hz over the RMS)
  *                             above r: a blow into the mic is mostly wind below that, game sound mostly above; for a
  *                             speaker whose leak is as loud as a blow, where no level bar can separate them (the
@@ -376,17 +424,22 @@ static int mic_button(int *code_a, int *code_b) {
 }
 /* the in-game menu's Blow (menu.c): DraStic's fake microphone held, the way the mic thread presses it (it pressed only
  * the key, which a drastic.cfg with the joystick binding alone never sees: ROCKNIXDS issue 26) */
+static int menu_btn = -2;
 void audio_mic_hold(int down) {
-    static int btn = -2;
-    if (btn == -2) btn = mic_button(0, 0);
-    if (btn >= 0) dsflip_mic_button(btn, down); else dsflip_mic_key(down);
+    if (menu_btn == -2) menu_btn = mic_button(0, 0);
+    if (menu_btn >= 0) dsflip_mic_button(menu_btn, down); else dsflip_mic_key(down);
+}
+/* the menu's Blow, held past the sample's end: press it again */
+void audio_mic_again(void) {
+    if (menu_btn == -2) menu_btn = mic_button(0, 0);
+    dsflip_mic_restart(menu_btn);
 }
 static void *mic_thread(void *a) {
     float thresh = *(float *)a;
     void *cap = 0;
     int debug = getenv("DSFLIP_MIC_DEBUG") && strcmp(getenv("DSFLIP_MIC_DEBUG"), "0");
     float gate_k = envf("DSFLIP_MIC_GATE", 3.0f), coup_max = envf("DSFLIP_MIC_COUPLING_MAX", 4.0f);
-    int hold_ms = (int)envf("DSFLIP_MIC_HOLD_MS", 0);
+    int hold_ms = (int)envf("DSFLIP_MIC_HOLD_MS", 120);
     float lf_k = envf("DSFLIP_MIC_LF", 0);
     if (gate_k < 0) gate_k = 0;
     if (coup_max < 0.1f) coup_max = 0.1f;
@@ -411,7 +464,9 @@ static void *mic_thread(void *a) {
     float coup = 0; int coup_n = 0;     /* how much speaker output leaks into the mic (mic rms / output rms) */
     int16_t buf[1024];
     float floor_ = 0, peak = 0, allpeak = 0; int n = 0, down = 0, blocks = 0, presses = 0, total = 0, silent_said = 0;
-    long long down_since = 0;
+    long long down_since = 0, trig_at = 0;
+    int smp_ms = thresh > 0 ? audio_mic_sample_ms() : 0;
+    float hp_x = 0, hp_y = 0; double dc_sum = 0; long dc_n = 0;   /* the DC blocker's state; the offset, for the log */
     float lp = 0, lf_lo = 9, lf_hi = 0;  /* a first-order low-pass at ~250 Hz (1 - exp(-2 pi 250 / 44100)); the share's range */
     const float lpa = 0.035f;
     int errs = 0;
@@ -425,7 +480,12 @@ static void *mic_thread(void *a) {
         if (r <= 0) continue;
         errs = 0;
         double acc = 0, acclo = 0;
-        for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; lp += lpa * (v - lp); acclo += lp * lp; }
+        for (long i = 0; i < r; i++) {
+            float x = buf[i] * (1.0f / 32768), v = x - hp_x + 0.998f * hp_y;   /* DC out: y = x - x[-1] + 0.998 y[-1] */
+            hp_x = x; hp_y = v; dc_sum += x;
+            acc += v * v; lp += lpa * (v - lp); acclo += lp * lp;
+        }
+        dc_n += r;
         float level = (float)sqrt(acc / r);
         float lf = level > 1e-6f ? (float)sqrt(acclo / r) / level : 0;   /* the low-frequency share of this block */
         mic_lvl = level;
@@ -451,16 +511,23 @@ static void *mic_thread(void *a) {
         float bleed = coup * out, bar = floor_ + thresh;
         if (dcb && gate_k > 0 && gate_k * bleed + thresh > bar) bar = gate_k * bleed + thresh;
         int loud = level > bar && (lf_k <= 0 || lf > lf_k) && !mic_quiet;
+        if (down && !loud && !mic_quiet && level > floor_ + 0.6f * (bar - floor_)) loud = 1;   /* hysteresis: held on */
         if (level > floor_ + thresh) { if (lf < lf_lo) lf_lo = lf; if (lf > lf_hi) lf_hi = lf; }
-        if (!loud && out > 0.01f) {      /* learn the coupling only from blocks that aren't a real blow */
-            float rr = level / out; if (rr > coup_max) rr = coup_max;
+        /* learn the coupling only from blocks that aren't a real blow: not pressed, and (once it knows the leak) not
+         * well above the leak it expects; from the level above the room's noise */
+        if (!loud && out > 0.01f && !(coup_n >= 50 && level > floor_ + 1.5f * bleed + thresh)) {
+            float rr = (level > floor_ ? level - floor_ : 0) / out; if (rr > coup_max) rr = coup_max;
             coup = coup_n < 50 ? (coup * coup_n + rr) / (coup_n + 1) : coup * 0.99f + rr * 0.01f; coup_n++;
         }
         long long tnow = mono_ns();
         if (down && !loud && hold_ms > 0 && tnow - down_since < (long long)hold_ms * 1000000) loud = 1;   /* held on */
+        if (down && loud && smp_ms > 0 && tnow - trig_at >= (long long)(smp_ms - 30) * 1000000) {   /* past the sample's end */
+            dsflip_mic_restart(use_button); trig_at = tnow;
+            if (debug) dsflip_log("[mic] still blowing: the sample again\n");
+        }
         if (loud != down) {
             down = loud; presses += down;
-            if (down) down_since = tnow;
+            if (down) down_since = trig_at = tnow;
             if (use_button >= 0) dsflip_mic_button(use_button, down); else dsflip_mic_key(down);
             if (debug) dsflip_log("[mic] %s: level %.4f floor %.4f out %.4f coup %.2f bar %.4f lf %.2f\n", down ? "PRESS" : "release", level, floor_, out, coup, bar, lf);
         }
@@ -468,9 +535,10 @@ static void *mic_thread(void *a) {
             dsflip_log("[mic] level %.4f floor %.4f out %.4f coup %.2f bleed %.4f bar %.4f lf %.2f down %d\n", level, floor_, out, coup, bleed, bar, lf, down);
         if (level > peak) peak = level;
         if (++blocks >= 431) {           /* ~10 s: levels for bug reports and tuning */
-            if (lf_hi > 0) dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses, lf %.2f-%.2f above floor\n", floor_, peak, coup, presses, lf_lo, lf_hi);
-            else dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
-            blocks = presses = 0; peak = 0; lf_lo = 9; lf_hi = 0;
+            double dc = dc_n ? dc_sum / dc_n : 0;
+            if (lf_hi > 0) dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses, lf %.2f-%.2f above floor, dc %+.4f\n", floor_, peak, coup, presses, lf_lo, lf_hi, dc);
+            else dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses, dc %+.4f\n", floor_, peak, coup, presses, dc);
+            blocks = presses = 0; peak = 0; lf_lo = 9; lf_hi = 0; dc_sum = 0; dc_n = 0;
         }
     }
     if (a_close) a_close(cap);            /* the meter's own thread, no longer looked at */

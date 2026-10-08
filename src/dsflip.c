@@ -1148,6 +1148,16 @@ void dsflip_mic_button(int button, int down) {
     e.pad[12] = (uint8_t)button; e.pad[13] = down ? 1 : 0;
     push_ev(&e);
 }
+/* DraStic's fake microphone plays its sample (microphone/<game>.wav or microphone.wav, read once at the game's
+ * start) from the beginning at each press and then gives silence until the next one, whatever the hold (r2.5.2.2's
+ * spu_fake_microphone_start keeps the press time, spu_get_microphone_sample plays from there and returns 0 past the
+ * sample's end). A blow held longer than the sample is re-pressed: released in one of DraStic's event loops and
+ * pressed in the next (a barrier between them), so DraStic sees both and starts the sample over. button < 0: the key */
+void dsflip_mic_restart(int button) {
+    if (button >= 0) dsflip_mic_button(button, 0); else dsflip_mic_key(0);
+    sdl_ev e; memset(&e, 0, sizeof e); e.type = EV_BARRIER; push_ev(&e);
+    if (button >= 0) dsflip_mic_button(button, 1); else dsflip_mic_key(1);
+}
 /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
  * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
