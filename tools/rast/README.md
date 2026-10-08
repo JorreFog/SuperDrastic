@@ -277,7 +277,12 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   are nibbles 0 and 1 of the group's base sequence (`4 * (k & 7)`: what its former `seq >> (4 * k)`, undefined
   from k = 8, compiled to; ut/hr_ab: the same output on 1.5 M polygons): decide what 3x should walk there.
   The downsample is bound by its loads and the alpha test in the cycle model: two groups a step, the opaque outputs
-  computed before the test and the loads a group ahead all modeled within 3% of the current loop.
+  computed before the test and the loads a group ahead all modeled within 3% of the current loop. Its three ld3 cost
+  about what nine ldr q and a 3-way deinterleave would (tbl of two and three registers plus ins: ~11 cycles a row in
+  llvm-mca), and the alpha tests need no deinterleave; the u8 stage's wrap for 8-bit channels (ut/hr_ab's wide case)
+  must stay. fog_line (S4 at 3x: 2.1 M, IPC 0.62) keeps 14 constant vectors: the compiler reloads one tbl table from
+  the stack every step (ld1 of two registers); fewer constants (0x81 and 0x7f, the table pair) would keep it in
+  registers.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
   assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
   content signature in the key would make it certain.
