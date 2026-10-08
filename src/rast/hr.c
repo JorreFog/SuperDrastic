@@ -43,6 +43,7 @@
 #define EDGES_ARR  0x100
 #define EDGES_XMAX HR_W
 #define EDGES_LINKAGE static
+#define EDGES_NEON 1
 #include "spec/edges_impl.h"
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
@@ -183,23 +184,21 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     } else {
         hr_render_polygon_interpolate_edges_constprop_0(span, scratch, &vptr[0], bin_top, y_end, flags);
         hr_render_polygon_interpolate_edges_constprop_1(span + HR_SPS, scratch, &vptr[count], bin_top, y_end, flags);
-        for (int i = 0; i < lines; i++) { U16(span, 8 * HR_SPS + 4 * i) &= 0x7fff; U16(span, 9 * HR_SPS + 4 * i) &= 0x7fff; }
+        /* (render_polygon_4x clears the vertical-edge bits here; setup_spans masks them itself) */
         hr_render_polygon_setup_spans_4x(span, lines);
     }
     unsigned line0 = (unsigned)((int)(y_top > bin_top ? y_top : bin_top) - lb);     /* context line of the first line */
-    /* a guard against spans outside the context (should not happen: clipped polygons stay within the viewport) */
-    for (int i = 0; i < lines; i++) {
-        unsigned X = U16(sp, 8 * HR_SPS + 4 * i), C = U16(sp, 9 * HR_SPS + 4 * i);
-        if (X > HR_W || X + C > HR_W || line0 + (unsigned)lines > HR_CL) {
-            static unsigned nrep;
-            if (nrep++ < 8) {
-                fprintf(stderr, "[hr] bad span: poly %08x line %d/%d X %u C %u line0 %u ytop %u ybot %u bin %u..%u\n", a8, i, lines, X, C,
-                        line0, y_top, ybot, bin_top, bin_bot);
-                for (unsigned k = 0; k < count; k++)
-                    fprintf(stderr, "   v%u (%u,%u) w %d z %u\n", k, U16(vptr[k], 4), U16(vptr[k], 6), (int32_t)U32(vptr[k], 0), U16(vptr[k], 8));
-            }
-            return;
+    /* a guard against lines outside the context (should not happen: clipped polygons stay within the viewport). The
+     * spans stay within the line: setup_spans orders and clamps both ends to HR_W, so X + C <= HR_W. */
+    if (line0 + (unsigned)lines > HR_CL) {
+        static unsigned nrep;
+        if (nrep++ < 8) {
+            fprintf(stderr, "[hr] bad span: poly %08x lines %d line0 %u ytop %u ybot %u bin %u..%u\n", a8, lines, line0, y_top, ybot,
+                    bin_top, bin_bot);
+            for (unsigned k = 0; k < count; k++)
+                fprintf(stderr, "   v%u (%u,%u) w %d z %u\n", k, U16(vptr[k], 4), U16(vptr[k], 6), (int32_t)U32(vptr[k], 0), U16(vptr[k], 8));
         }
+        return;
     }
     if (defer) defer_poly(&layout_3x, H->ctx, sp, poly, 0, line0, (unsigned)lines, flags, vptr[0]);
     else f_run(&layout_3x, H->ctx, sp, poly, 0, line0, (unsigned)lines, flags, vptr[0], 0, 0);
@@ -409,7 +408,10 @@ static __attribute__((noinline)) void edge_lines(uint32_t *out0, uint32_t *out1,
         edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 0, k, &lp0, &lp1, er, eg, eb);
     edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
 }
-static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
+/* returns the resolved bin's 48 lines (768 pixels each, contiguous): H->out with edge marking, else the context's
+ * colour lines 1..48 themselves (fogged in place): the resolve would only clear bits 29-31 of each pixel, which the
+ * downsample ignores (it reads the alpha as & 0x1f and replaces byte 3) */
+static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
     int edges = (d3 >> 5) & 1, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
@@ -423,8 +425,8 @@ static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint
         uint32_t *o = H->out + (l - 1) * HR_W;
         if (fog) for (int k = l; k <= l + 1; k++) fog_line(COL(k), ATT(k), geom + 0x9974, params, fogc, fog == 1);
         if (edges) edge_lines(o, o + HR_W, COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), clear, geom + 0x99b4);
-        else for (int x = 0; x < 2 * HR_W; x++) o[x] = COL(l)[x] & 0x1fffffff;
     }
+    return edges ? H->out : COL(1);
 #undef COL
 #undef ATT
 }
@@ -558,9 +560,9 @@ void hr_render_bins(uint8_t *ctx) {
             memset(H->ctx + HR_ID, 0xff, HR_CL * HR_W);
             hr_render_list(H, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);
         }
-        hr_resolve_bin(H, sys, geom, bin);
-        if (hr_frame) memcpy(hr_frame + hy0 * HR_W, H->out, HR_BL * HR_W * 4);
-        hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
+        const uint32_t *res = hr_resolve_bin(H, sys, geom, bin);
+        if (hr_frame) memcpy(hr_frame + hy0 * HR_W, res, HR_BL * HR_W * 4);
+        hr_downsample(res, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
         comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */
     }
 }
