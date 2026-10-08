@@ -79,6 +79,8 @@ static void resolve_bin(uint8_t *ctx, uint8_t *sys, unsigned bin) {
 }
 
 static __thread int in_defer;    /* hook_setup: the polygon goes to the deferred queue */
+static int walk = 1;             /* RAST_WALK=0: DraStic's render_polygon_4x walks every polygon (else walk.c, most) */
+static walk_setup_fn hook_setup;
 static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8_t *verts, unsigned y0, int defer) {
     typedef void (*pfn)(void *, void *, void *, unsigned long, unsigned long);
     uint32_t n = U32(list, 0x1000);
@@ -87,7 +89,8 @@ static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8
         /* deferred: modulate-shaded polygons queue up; the others (toon, highlight, shadow) flush and render now */
         in_defer = defer && !((U32(poly, 4) >> 4) & 3);
         if (defer && !in_defer) defer_flush(&layout_2x, ctx);
-        DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
+        if (!walk || !walk_polygon_4x(ctx, poly, verts, y0, y0 + 32, hook_setup))
+            DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
     }
     in_defer = 0;
     if (defer) defer_flush(&layout_2x, ctx);
@@ -350,6 +353,7 @@ __attribute__((constructor)) static void rast_init(void) {
     pdiff = getenv("RAST_PDIFF") != 0;
     if (getenv("RAST_PDIFF_STRICT")) pdiff_strict = atoi(getenv("RAST_PDIFF_STRICT"));
     if (getenv("RAST_PIPE")) pipe_sel = atoi(getenv("RAST_PIPE"));
+    if (getenv("RAST_WALK")) walk = atoi(getenv("RAST_WALK"));
     { extern int use_neon; use_neon = pipe_sel >= 1 ? pipe_sel : 1; }
     if (getenv("RAST_DUMP_EVERY")) dump_every = atoi(getenv("RAST_DUMP_EVERY"));
     dl_iterate_phdr(cb, 0);
