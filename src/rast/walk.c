@@ -7,8 +7,8 @@
  * exclusive larger x, the span setup and the edge markers, and then render_polygon_setup_4x's work (the `setup`
  * argument: rast.c's hook). It leaves to DraStic (returns 0) the polygons whose handling differs or is not defined:
  * sprites (the axis-aligned quad path, attr bit 14), shadow polygons (mode 3: b0.c's stage-by-stage path, which wants
- * DraStic's scratch buffer), and vertex counts 0 and 10-15 (DraStic fills nine vertex pointers and reads stale stack
- * slots beyond). Not done, as it changes nothing: render_polygon_4x clears the vertical-edge bit of the x values
+ * DraStic's scratch buffer), vertex counts 0 and 10-15 (DraStic fills nine vertex pointers and reads stale stack
+ * slots beyond) and records whose bottom y lies below all their vertices (the walks run past the vertices). Not done, as it changes nothing: render_polygon_4x clears the vertical-edge bit of the x values
  * before the span setup when edge marking is off; the span setup masks it itself.
  * Checked by RAST=diff, which renders every bin with DraStic's renderer and ours (tools/rast/dev/regress.sh). */
 #include <arm_neon.h>
@@ -47,13 +47,18 @@ int walk_polygon_4x(uint8_t *ctx, uint8_t *poly, uint8_t *verts, unsigned bin_to
 
     const uint32_t seq = ((const uint32_t *)(ds_base + DS_VERTEX_ORDERS))[(a8 >> 16) & 0x7f];
     const size_t base = U16(poly, 0x1a);
-    /* vp[k] for the walk order's k = 0..count-1, then cyclically on both sides: DraStic sets vptr[count] = vptr[0];
-     * the chains of a valid polygon stop at its bottom vertex, but a record whose bottom y lies below its vertices
-     * walks on (up to 16 edges either way), into stale stack slots in DraStic and around the polygon here */
-    vtx_t *vpa[2 * 18 + 9], **vp = vpa + 18;
-    for (unsigned k = 0; k < count; k++) vp[k] = verts + 16 * (base + (k < 8 ? (seq >> (4 * k)) & 15 : 0));
-    for (int k = (int)count; k < 18 + 9; k++) vp[k] = vp[k - (int)count];
-    for (int k = -1; k >= -18; k--) vp[k] = vp[k + (int)count];
+    /* vp[k] for the walk order's k = 0..count-1, and vp[count] = vp[0] as DraStic's. Both chains stop at the lowest
+     * vertex at the latest, within vp[0..count], when the record's bottom y is not below every vertex; a record whose
+     * is walks on (up to 16 edges either way) into stale stack slots in DraStic: left to DraStic */
+    vtx_t *vp[10];
+    unsigned ymax = 0;
+    for (unsigned k = 0; k < count; k++) {
+        vp[k] = verts + 16 * (base + (k < 8 ? (seq >> (4 * k)) & 15 : 0));
+        unsigned y = U16(vp[k], 6);
+        if (y > ymax) ymax = y;
+    }
+    if (ybot > ymax) return 0;
+    vp[count] = vp[0];
 
     unsigned y_top = U16(vp[0], 6), y_end = ybot, skip = 0, clip = 0;
     int lines = (int)(ybot - y_top);

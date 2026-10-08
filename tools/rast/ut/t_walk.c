@@ -64,6 +64,7 @@ void ut_main(void) {
         for (unsigned k = b + 1; k < count; k++) ys[k] = ys[k - 1] - rnd(ys[k - 1] - ytop + 1);
         unsigned ybot = 0;
         for (unsigned k = 0; k < count; k++) if (ys[k] > ybot) ybot = ys[k];
+        const unsigned ymaxv = ybot;
         if (!rnd(50)) ybot = ys[0] + rnd(ybot - ys[0] + 1);  /* a bottom above the lowest vertex: the walks stop there */
         if (ybot > 511) ybot = 511;
         for (unsigned k = 0; k < count; k++) {
@@ -92,6 +93,16 @@ void ut_main(void) {
         cap_t ref = cap;
         memset(&cap, 0, sizeof cap);
         int handled = walk_polygon_4x(ctx, polyrec, verts, bin_top, bin_bot, capture);
+        if (!rnd(64)) {                                      /* a bottom below every vertex: left to DraStic */
+            unsigned yb = ymaxv + 1 + rnd(8);
+            uint32_t bad = (a8 & ~(0x1ffu << 23)) | (yb > 511 ? 511u : yb) << 23;
+            memcpy(polyrec + 8, &bad, 4);
+            if (bad >> 23 > ymaxv && walk_polygon_4x(ctx, polyrec, verts, bin_top, bin_bot, capture)) {
+                fprintf(stderr, "FAIL walk it %d: a bottom below the vertices was walked\n", it); ut_fail++; return;
+            }
+            memcpy(polyrec + 8, &a8, 4);
+            calls[3]++;
+        }
         char what[160];
         snprintf(what, sizeof what, "walk it %d count %u oi %u flags %02x ytop %u ybot %u bin %u edges %u", it, count, oi, flags,
                  ytop, ybot, bin_top, d3 >> 5);
@@ -112,5 +123,6 @@ void ut_main(void) {
             if (ut_cmp(aw, ref.arr[k], cap.arr[k], 4 * ref.nlines)) return;
         }
     }
-    fprintf(stderr, "  polygons %d, drawn without edge marking %d, with %d\n", calls[0], calls[1], calls[2]);
+    fprintf(stderr, "  polygons %d, drawn without edge marking %d, with %d; bottoms below the vertices left to DraStic %d\n",
+            calls[0], calls[1], calls[2], calls[3]);
 }

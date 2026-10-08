@@ -102,6 +102,11 @@ def roles(D, T, R, F, B, M):
         # so the colour is computed among the texel gather's loads and the three modulates run side by side; the
         # depth words, the fog bit and A go to the stack and the bytes register instead
         return {"vc": ["v18", "v19", "v20"], "vs": ["v21"]}
+    if T in (3, 4) and not F and R == 0 and M == 0:
+        # lit, paletted (the palette holds v18-v21): the same with the texture masks (loaded from the arguments where
+        # used) and the depth's spare registers (z: v9, the 8 z steps as 2 x v8, and pid << 24, loaded)
+        x = {0: ["v9", "v22"], 1: ["v8", "v9"], 2: ["v7", "v8"]}[D]
+        return {"vc": ["v16", "v17", x[0]], "vs": [x[1]]}
     pool = []
     if F or M == 1: pool += ["v10", "v11", "v12"]                               # no vertex colour
     if T == 0: pool += ["v13", "v14", "v16", "v17", "v18", "v19", "v20", "v21"]  # no texture
@@ -109,6 +114,8 @@ def roles(D, T, R, F, B, M):
     if M == 2: pool += ["v6", "v7", "v8", "v9"]                                 # no depth (the shade pass)
     elif D == 1: pool += ["v8", "v9"]                                           # w depth: v6 v7 only
     elif D == 2: pool += ["v7", "v8", "v9"]                                     # constant depth: v6 only
+    elif T in (3, 4) and (F or R) and M == 0: pool += ["v9", "v22"]  # z, paletted: v9 (8 z steps: 2 x v8), pid << 24 (loaded)
+    if T in (3, 4) and R and M == 0: pool += ["v16", "v17"]     # paletted translucent: the texture masks (loaded)
     want = []
     if T and F and R == 0 and M != 1:
         # textured flat: the flat colour and two more modulate scratches first (the three modulates side by side)
@@ -136,6 +143,20 @@ def roles(D, T, R, F, B, M):
     return r
 
 def q(v): return "q" + v[1:]
+
+def taken(reg): return any(reg in regs for regs in RL.values())
+
+def pid24(tmp):
+    """the pid << 24 splat: v22, or (v22 given to a role) loaded into tmp"""
+    if not taken("v22"): return "v22"
+    e(f"ldr {q(tmp)}, [x19, #{K['pid24']}]")
+    return tmp
+
+def z_step8(D):
+    """the latch's 8 z steps: + v9, or (v9 given to a role) + v8 twice"""
+    if D != 0: return
+    if not taken("v9"): e("add v6.2d, v6.2d, v9.2d"); e("add v7.2d, v7.2d, v9.2d")
+    else: e("add v6.2d, v6.2d, v8.2d"); e("add v7.2d, v7.2d, v8.2d"); e("add v6.2d, v6.2d, v8.2d"); e("add v7.2d, v7.2d, v8.2d")
 
 def flush_ools():
     for f in OOLS:
@@ -169,12 +190,13 @@ def prologue(name, D, T, R, F, M=0, B=0):
     e("adrp x20, rast_kern_tail"); e("add x20, x20, :lo12:rast_kern_tail")
     e("add x28, sp, #32")
     if T:
-        e(f"ldr q16, [x19, #{K['s_and']}]"); e(f"ldr q17, [x19, #{K['t_and']}]")
+        if not taken("v16"): e(f"ldr q16, [x19, #{K['s_and']}]"); e(f"ldr q17, [x19, #{K['t_and']}]")
         e(f"ldp x6, x21, [x19, #{K['tex']}]")
         if T in (3, 4) and not B:
             e("tbz w27, #7, 1f"); e(f"add x8, x19, #{K['pal16']}"); e("ld1 {v18.16b, v19.16b, v20.16b, v21.16b}, [x8]"); e("1:")
         e(f"ldrh w8, [x19, #{K['tw']}]"); e(f"mov v15.h[{L_TW}], w8")
-    e(f"ldr q22, [x19, #{K['pid24']}]"); e(f"ldr d23, [x19, #{K['bytes']}]")
+    if not taken("v22"): e(f"ldr q22, [x19, #{K['pid24']}]")
+    e(f"ldr d23, [x19, #{K['bytes']}]")
     if D == 2 and M != 2: e(f"add x8, x19, #{K['K']}"); e("ld1r {v6.4s}, [x8]")
     roles_setup(D)
     e("mov w7, w27"); e("mov x0, #0")
@@ -256,8 +278,9 @@ def depth_setup_z():
     e(f"ldr x11, [x19, #{K['recip']}]"); e("ldrsw x11, [x11, w5, uxtw #2]")
     e("mul x12, x10, x11"); e("asr x13, x10, #63"); e("add x12, x12, x13, lsr #34")
     e("lsl x8, x8, #30")
-    e("dup v9.2d, x12"); e("dup v6.2d, x8"); e("add x10, x8, x12"); e("mov v6.d[1], x10")
-    e("shl v8.2d, v9.2d, #1"); e("add v7.2d, v6.2d, v8.2d"); e("shl v8.2d, v9.2d, #2"); e("shl v9.2d, v9.2d, #3")
+    e("dup v25.2d, x12"); e("dup v6.2d, x8"); e("add x10, x8, x12"); e("mov v6.d[1], x10")
+    e("shl v8.2d, v25.2d, #1"); e("add v7.2d, v6.2d, v8.2d"); e("shl v8.2d, v25.2d, #2")
+    if not taken("v9"): e("shl v9.2d, v25.2d, #3")
 
 def interpolants_setup(T, F, M):
     """the line's vertex colour (not flat, not visibility) and texture coordinate bases (Q15 + rounding) and deltas"""
@@ -398,7 +421,8 @@ def test(D, fail="8f", eq=24):
     tail("v27")
     e(f"xtn v28.8b, v27.8h"); e("fmov x8, d28"); e(f"cbz x8, {fail}")
     if D != 2:
-        if "dep" in RL: e(f"orr {RL['dep'][0]}.16b, v25.16b, v22.16b"); e(f"orr {RL['dep'][1]}.16b, v26.16b, v22.16b")
+        if "dep" in RL:
+            p = pid24("v27"); e(f"orr {RL['dep'][0]}.16b, v25.16b, {p}.16b"); e(f"orr {RL['dep'][1]}.16b, v26.16b, {p}.16b")
         else: e("stp q25, q26, [sp, #64]")
 
 def test_equal(D, eq=24):
@@ -415,7 +439,7 @@ def dep_words(D):
     """the group's attribute words dep | pid << 24 -> two registers"""
     if "dep" in RL: return (RL["dep"][0], RL["dep"][0]) if D == 2 else tuple(RL["dep"])
     if D == 2: e("orr v25.16b, v6.16b, v22.16b"); return "v25", "v25"
-    e("ldp q25, q26, [sp, #64]"); e("orr v25.16b, v25.16b, v22.16b"); e("orr v26.16b, v26.16b, v22.16b")
+    e("ldp q25, q26, [sp, #64]"); p = pid24("v24"); e(f"orr v25.16b, v25.16b, {p}.16b"); e(f"orr v26.16b, v26.16b, {p}.16b")
     return "v25", "v26"
 
 def texcoord(axis, T, r):
@@ -424,6 +448,7 @@ def texcoord(axis, T, r):
     identity then); flip (or wrap): invert where x & W (kargs flip: W, or 0), & (W-1)"""
     a = "s" if axis == 0 else "t"
     m = f"v{16 + axis}"
+    if taken(m): e(f"ldr q25, [x19, #{K[a + '_and']}]"); m = "v25"       # (v25 is free until the colour)
     if T in (2, 4):
         e(f"and {r}.16b, {r}.16b, {m}.16b")
     else:
@@ -780,7 +805,7 @@ def latch(D, M=0, st=True, R=0):
     e("subs x5, x5, #8"); e("b.ls 9f")
     e(f"add x1, x1, #{16 if M == 1 else 32}"); e(f"add x2, x2, #{16 if M == 2 else 32}")
     if R: e("add x4, x4, #8")
-    if D == 0: e("add v6.2d, v6.2d, v9.2d"); e("add v7.2d, v7.2d, v9.2d")
+    z_step8(D)
     if st:
         e(f"tbnz w7, #0, {'6f' if D == 1 else '26f'}")
         e("fadd v0.4s, v0.4s, v4.4s"); e("fadd v1.4s, v1.4s, v4.4s"); e("fsub v2.4s, v2.4s, v5.4s"); e("fsub v3.4s, v3.4s, v5.4s")
@@ -829,7 +854,7 @@ def lazy_loop(D, T, R, F, M):
     e("subs x5, x5, #8"); e(f"b.ls {'9f' if R or M == 2 else '15f'}")
     if M: e(f"add x1, x1, #{16 if M == 1 else 32}")
     e(f"add x2, x2, #{16 if M == 2 else 32}")
-    if D == 0: e("add v6.2d, v6.2d, v9.2d"); e("add v7.2d, v7.2d, v9.2d")
+    z_step8(D)
     e("b 20b")
     if M != 2: test_equal(D, 34)
     e("27:")

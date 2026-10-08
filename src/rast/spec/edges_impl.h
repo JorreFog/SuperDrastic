@@ -108,6 +108,39 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_perspective_coefficients)(float 
 }
 
 EDGES_LINKAGE void EDGES_FN(render_polygon_edge_perspective_steps)(int16_t *outp, const float *inp, int32_t total) {
+#if EDGES_NEON
+    /* straight from the input (in place, the 16 bytes written trail the 64 read), two groups of 8 at a time while
+     * more than 8 are left: the same groups, each written once, as DraStic's one at a time */
+#define STEP8(in, out) do { \
+        float32x4x2_t p = vld2q_f32(in), q = vld2q_f32((in) + 8); \
+        float32x4_t r0 = vrecpeq_f32(p.val[1]), r1 = vrecpeq_f32(q.val[1]); \
+        r0 = vmulq_f32(r0, vrecpsq_f32(r0, p.val[1])); r1 = vmulq_f32(r1, vrecpsq_f32(r1, q.val[1])); \
+        r0 = vmulq_f32(r0, vrecpsq_f32(r0, p.val[1])); r1 = vmulq_f32(r1, vrecpsq_f32(r1, q.val[1])); \
+        vst1q_s16(out, vcombine_s16(vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(p.val[0], r0), 15)), \
+                                    vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(q.val[0], r1), 15)))); \
+    } while (0)
+    const float *in = inp;
+    int16_t *out = outp;
+    do {
+        if (total > 8) {
+            float32x4x2_t a = vld2q_f32(in), b = vld2q_f32(in + 8), c = vld2q_f32(in + 16), d = vld2q_f32(in + 24);
+            float32x4_t ra = vrecpeq_f32(a.val[1]), rb = vrecpeq_f32(b.val[1]), rc = vrecpeq_f32(c.val[1]), rd = vrecpeq_f32(d.val[1]);
+            ra = vmulq_f32(ra, vrecpsq_f32(ra, a.val[1])); rb = vmulq_f32(rb, vrecpsq_f32(rb, b.val[1]));
+            rc = vmulq_f32(rc, vrecpsq_f32(rc, c.val[1])); rd = vmulq_f32(rd, vrecpsq_f32(rd, d.val[1]));
+            ra = vmulq_f32(ra, vrecpsq_f32(ra, a.val[1])); rb = vmulq_f32(rb, vrecpsq_f32(rb, b.val[1]));
+            rc = vmulq_f32(rc, vrecpsq_f32(rc, c.val[1])); rd = vmulq_f32(rd, vrecpsq_f32(rd, d.val[1]));
+            vst1q_s16(out, vcombine_s16(vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(a.val[0], ra), 15)),
+                                        vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(b.val[0], rb), 15))));
+            vst1q_s16(out + 8, vcombine_s16(vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(c.val[0], rc), 15)),
+                                            vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(d.val[0], rd), 15))));
+            in += 32; out += 16; total -= 16;
+        } else {
+            STEP8(in, out);
+            in += 16; out += 8; total -= 8;
+        }
+    } while (total > 0);
+#undef STEP8
+#else
     uint8_t *out = (uint8_t *)outp;
     const uint8_t *in = (const uint8_t *)inp;
     do {
@@ -128,6 +161,7 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_perspective_steps)(int16_t *outp
         out += 16;
         total -= 8;
     } while (total > 0);
+#endif
 }
 
 EDGES_LINKAGE void EDGES_FN(render_polygon_edge_interpolate_w)(vtx_t **pairs, uint8_t *spans, const int16_t *stepsp,
