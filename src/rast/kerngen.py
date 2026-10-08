@@ -90,6 +90,11 @@ def roles(D, T, R, F, B, M):
     fb), a (A, for the alpha modulate), pid (the translucent id test), aref (the alpha test). The bilinear kernels use
     every register."""
     if B: return {}
+    if T in (1, 2) and not F and R == 0 and M == 0:
+        # lit, direct textures (the pool is v18-v21): the vertex colour in three registers and a second modulate scratch,
+        # so the colour is computed among the texel gather's loads and the three modulates run side by side; the
+        # depth words, the fog bit and A go to the stack and the bytes register instead
+        return {"vc": ["v18", "v19", "v20"], "vs": ["v21"]}
     pool = []
     if F or M == 1: pool += ["v10", "v11", "v12"]                               # no vertex colour
     if T == 0: pool += ["v13", "v14", "v16", "v17", "v18", "v19", "v20", "v21"]  # no texture
@@ -438,7 +443,7 @@ def gather(T):
     e("xtn v31.8b, v30.8h"); e("shrn v30.8b, v30.8h, #8")
     if T in (3, 4): e("2:")
 
-def texture(T):
+def texture(T, pre_gather=None):
     """texel channels -> tr v29, tg v27, tb v31, ta v30 (8 x u8 each)"""
     # u -> v30
     e(f"smull v30.4s, v24.4h, v15.h[{L_DU}]"); e(f"smull2 v29.4s, v24.8h, v15.h[{L_DU}]")
@@ -450,6 +455,7 @@ def texture(T):
     e("addhn v27.4h, v27.4s, v14.4s"); e("addhn2 v27.8h, v29.4s, v14.4s")
     e("sshr v27.8h, v27.8h, #3")
     texcoord(1, T, "v27")
+    if pre_gather: pre_gather()
     # address = u + v * W
     e(f"umull v29.4s, v27.4h, v15.h[{L_TW}]"); e(f"umull2 v27.4s, v27.8h, v15.h[{L_TW}]")
     e("uaddw v29.4s, v29.4s, v30.4h"); e("uaddw2 v27.4s, v27.4s, v30.8h")
@@ -530,9 +536,9 @@ def vertex_colour(ch, F, dst, slow=False):
         e(f"smlal {dst}.4s, v24.4h, v15.h[{l}]"); e(f"smlal2 v26.4s, v24.8h, v15.h[{l}]")
         e(f"uzp2 {dst}.8h, {dst}.8h, v26.8h"); e(f"shrn {dst}.8b, {dst}.8h, #2")
 
-def modulate(v, t, sh):
-    """t = ((v+1)*(t+1)-1) >> sh, bytes; v26 scratch"""
-    e(f"uaddl v26.8h, {v}.8b, {t}.8b"); e(f"umlal v26.8h, {v}.8b, {t}.8b"); e(f"shrn {t}.8b, v26.8h, #{sh}")
+def modulate(v, t, sh, w="v26"):
+    """t = ((v+1)*(t+1)-1) >> sh, bytes; w (v26) scratch"""
+    e(f"uaddl {w}.8h, {v}.8b, {t}.8b"); e(f"umlal {w}.8h, {v}.8b, {t}.8b"); e(f"shrn {t}.8b, {w}.8h, #{sh}")
 
 def modulate_alpha(skip):
     """ta (v30) -> ca = modulate(A, ta); with flag bit 10 (A is 31) ca = (32 (ta + 1) - 1) >> 5 = ta: to skip"""
@@ -551,6 +557,24 @@ def colour(T, F, B, M=0):
     """shaded colour -> (cr, cg, cb, ca) registers, 8 x u8 (textured: v29 v27 v31 v30; untextured flat with its
     colour words per batch: None); applies the alpha test (textured) unless shading deferred pixels (M = 2: the
     visibility pass applied it) or the texture's lowest alpha passes it (flag bit 8); fails to 8f"""
+    if T and "vc" in RL:
+        # the vertex colour among the gather's loads (the fast form; the out-of-line slow form replaces it), then the
+        # three modulates with their own scratch registers
+        vc = RL["vc"]
+        texture(T, lambda: [vertex_colour(ch, F, vc[ch]) for ch in range(3)])
+        e("tbnz w7, #2, 1f")                        # white vertex colour, alpha 31: the texel is the colour
+        e("tbz w7, #14, 37f")
+        e("38:")
+        for ch, t, w in ((0, "v29", "v26"), (1, "v27", RL["vs"][0]), (2, "v31", "v25")): modulate(vc[ch], t, 6, w)
+        def ool():
+            e("37:")
+            for ch in range(3): vertex_colour(ch, F, vc[ch], True)
+            e("b 38b")
+        OOLS.append(ool)
+        modulate_alpha("1f")
+        e("1:")
+        e("tbnz w7, #8, 2f"); alpha_test(); e("2:")
+        return "v29", "v27", "v31", "v30"
     if T:
         if B: texture_bilinear(T)
         else: texture(T)
