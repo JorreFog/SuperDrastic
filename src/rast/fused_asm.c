@@ -23,9 +23,11 @@ typedef struct {                /* layout shared with kerngen.py (K dict): the p
     uint32_t K; uint16_t tw; uint16_t pad;
     uint16_t s_and[8], t_and[8], s_lo[8], t_lo[8], s_hi[8], t_hi[8], s_flip[8], t_flip[8];
     uint8_t fraclut[16];        /* bilinear: the texel fraction (0..7) -> blend weight (0..8) */
-    uint16_t *owner; uint64_t pad2;  /* deferred shading: the owner buffer and the polygon's index, splat */
+    uint16_t *owner;                /* deferred shading: the owner buffer and the polygon's index, splat */
+    const void *kern;               /* (C side only, batch_asm: this polygon's kernel) */
     uint16_t idx16[8];
-    uint32_t lstride, attr_off, id_off, id_stride, owner_stride, pad3[3];   /* the hi-res kernels' buffer layout */
+    uint32_t lstride, attr_off, id_off, id_stride, owner_stride;   /* the hi-res kernels' buffer layout */
+    uint32_t kflags, kopt, pad3;    /* (C side only, batch_asm: the polygon's kernel flags; 1 flat white possible, 2 white lines) */
     uint8_t pal16[4][16];       /* the palette when it has at most 16 entries (flag bit 7), per channel: tbl lookups */
 } kargs_t;
 _Static_assert(sizeof(kargs_t) == 0x150, "kargs_t layout");
@@ -116,26 +118,36 @@ static unsigned clamp_bits(const poly_t *P) {
     return (P->flags & 2) ? (unsigned)(P->ms == CLAMP) << 11 | (unsigned)(P->mt == CLAMP) << 12 : 0;
 }
 
-/* a batch through the assembly kernel of this polygon's variant */
+/* a batch through the assembly kernel of this polygon's variant (kernel and flags chosen per polygon by
+ * batch_asm_poly; per batch only what depends on its first line: the flat colour and the white shortcuts) */
 static void batch_asm(poly_t *P, const uint8_t *bs, unsigned k, unsigned line, uint8_t *id0) {
-    unsigned fl = P->flags;
-    int D = (fl & 0x10) ? 2 : (fl & 8) ? 1 : 0, T = 0, R = fl & 1;
-    if (fl & 2) T = (P->paletted ? 3 : 1) + (P->ms == WRAP && P->mt == WRAP);
-    kern_fn *kern = ksets[P->hr].kernels[D][T][R][(fl >> 2) & 1][T && rast_texfilter ? 1 : 0];
     kargs_t *a = (kargs_t *)P->kargs;
     unsigned fr = U16(bs, SPO(P, 6)) >> 3, fg = U16(bs, SPO(P, 6) + 2) >> 3, fb = U16(bs, SPO(P, 8) + 2) >> 3;
     a->bytes[4] = (uint8_t)fr; a->bytes[5] = (uint8_t)fg; a->bytes[6] = (uint8_t)fb;
-    int flat_white = (fl & 4) && T && P->A == 31 && fr == 63 && fg == 63 && fb == 63;
-    const int edges = !R && ((P->d3 >> 5) & 1);
-    const int wtest = T && !(fl & 4) && first_white(P, bs);
-    /* flags: 0 affine steps, 1 depth equal, 2 white (flat batches; per line with 9), 6 edge marking, 7 pal16, 8 no
-     * alpha test, 9 look for white lines, 10 A is 31, 11 12 s t clamp; translucent: 3 blend, 4 fog, 5 depth update */
-    const unsigned flags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | flat_white << 2 | edges << 6 | P->pal16 << 7 |
-        P->noat << 8 | wtest << 9 | (P->A == 31) << 10 | clamp_bits(P) |
-        (R ? ((P->d3 >> 3) & 1) << 3 | ((P->attr >> 15) & 1) << 4 | ((P->attr >> 11) & 1) << 5 : 0);
+    unsigned flags = a->kflags;
+    if ((a->kopt & 1) && fr == 63 && fg == 63 && fb == 63) flags |= 1u << 2;
+    if ((a->kopt & 2) && first_white(P, bs)) flags |= 1u << 9;
     uint8_t dummy[32];
-    uint64_t anypass = kern(a, bs, k, line, P->ctx, flags, id0 ? id0 : dummy);
+    uint64_t anypass = ((kern_fn *)a->kern)(a, bs, k, line, P->ctx, flags, id0 ? id0 : dummy);
     if (anypass) { P->pass = 1; P->fogused |= 1; }
+}
+
+/* batch_asm's per-polygon part: the kernel of the polygon's variant and the flags that do not depend on the batch.
+ * flags: 0 affine steps, 1 depth equal, 2 white (flat batches; per line with 9), 6 edge marking, 7 pal16, 8 no alpha
+ * test, 9 look for white lines, 10 A is 31, 11 12 s t clamp; translucent: 3 blend, 4 fog, 5 depth update */
+static void batch_asm_poly(poly_t *P) {
+    unsigned fl = P->flags;
+    int D = (fl & 0x10) ? 2 : (fl & 8) ? 1 : 0, T = 0, R = fl & 1;
+    if (fl & 2) T = (P->paletted ? 3 : 1) + (P->ms == WRAP && P->mt == WRAP);
+    kargs_t *a = (kargs_t *)P->kargs;
+    a->kern = ksets[P->hr].kernels[D][T][R][(fl >> 2) & 1][T && rast_texfilter ? 1 : 0];
+    const int edges = !R && ((P->d3 >> 5) & 1);
+    a->kflags = ((fl >> 5) & 1) | ((P->attr >> 14) & 1) << 1 | edges << 6 | P->pal16 << 7 | P->noat << 8 |
+        (P->A == 31) << 10 | clamp_bits(P) |
+        (R ? ((P->d3 >> 3) & 1) << 3 | ((P->attr >> 15) & 1) << 4 | ((P->attr >> 11) & 1) << 5 : 0);
+    /* flat white: a flat batch's colour 63 63 63 (textured, A 31); white lines: first_white's test (textured,
+     * not flat) */
+    a->kopt = ((fl & 4) && T && P->A == 31) | (T && !(fl & 4) && P->A == 31) << 1;
 }
 
 static int tex_variant(const poly_t *P) {
@@ -175,5 +187,6 @@ static void batch_shade(poly_t *P, const uint8_t *bs, unsigned k, unsigned line,
 batch_fn *asm_batch_for(poly_t *P) {
     if (P->mode == 1 || P->mode == 2) return neon_batch_for(P);
     kargs_poly(P);
-    return P->dmode == 1 ? batch_vis : P->dmode == 2 ? batch_shade : batch_asm;
+    if (!P->dmode) { batch_asm_poly(P); return batch_asm; }
+    return P->dmode == 1 ? batch_vis : batch_shade;
 }

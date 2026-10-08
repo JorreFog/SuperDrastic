@@ -55,6 +55,13 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   group of 8 pixels: 02000 156 -> 135, 02100 207 -> 186, 04010 165 -> 144, 14010 166 -> 158, 23110 219 -> 201;
   cycles.py, stress ROM L4 at 2x: 21.85 M -> 20.98 M cycles a frame (-4.0%; librast 16.95 M -> 16.07 M), the
   kernel 02000 5.29 M -> 4.84 M, 02010 2.59 M -> 2.34 M (instructions +4%: the weights of groups that fail).
+  Then the 2x walker fused (`walk.c`): each edge's five routines in one pass over its lines, 8 a step in registers
+  (the first 8 in the edge setup's basic block), no float pairs and weights through scratch memory, no per-routine
+  reloads of the vertices; the span setup, with render_polygon_4x's edge-marking fix-up folded in, and the edge
+  markers 4 lines a step. Stress ROM L4 at 2x: the walk (edges, x/z, span setup, render_polygon_4x) 2.73 M -> 1.75 M
+  cycles a frame; the edge-marking scene S4 0.76 M -> 0.44 M (its frame 12.59 M -> 12.21 M). With `batch_asm`'s kernel and flags chosen once per polygon, `f_run`'s batch
+  loop two lines a step and walk.c calling the setup without rast.c's hook, the per-polygon setup 1.19 M -> 1.05 M:
+  the whole frame 21.83 M -> 20.81 M (-4.7%), the same differing bins at all 43 checkpoints of the scene cycle.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -158,9 +165,10 @@ stay with DraStic's chain), on the field scene S7 0.47 M -> 0.07 M; frame totals
 original inside DraStic's process (`tools/rast/ut/`). `src/rast/b0.c` rebuilds DraStic's per-polygon pipeline from
 them (the reference, and still the path for shadow polygons). The polygon walker's routines (`spec/edges_impl.h`, a
 template: DraStic's layout and the 3x one) also exist in NEON (`EDGES_NEON`, the same bytes, DraStic's overruns
-included: `t_edges.c` tests both forms); `src/rast/walk.c` is render_polygon_4x on them for the 2x bins (sprites,
-shadow polygons and odd vertex counts stay with DraStic's; `RAST_WALK=0` all of them; `t_walk.c` compares it with
-DraStic's on random polygons). `src/rast/fused.c` runs every pixel through all
+included: `t_edges.c` tests both forms); `src/rast/walk.c` is render_polygon_4x for the 2x bins on fused NEON forms
+of them (an edge's five routines in one pass, DraStic's values on the lines the setup and the markers read; sprites,
+shadow polygons and odd vertex counts stay with DraStic's; `RAST_WALK=0` all of them; `t_walk.c` compares the span
+arrays with DraStic's walker's on random polygons). `src/rast/fused.c` runs every pixel through all
 stages at once; `fused_neon.c` is that in C NEON (8 pixels a step), and `kerngen.py` generates `rast_kern.S`, the
 same in assembly with a fixed register allocation, one kernel per variant (depth source x texture x translucency
 x flat colour), which is what runs. Shortcuts that give the same bits: a white vertex colour with alpha 31 makes
