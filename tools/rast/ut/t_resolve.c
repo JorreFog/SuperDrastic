@@ -1,5 +1,6 @@
 /* t_resolve.c: bin resolve / fog / edge marking ports (src/rast/spec/resolve.c) vs DraStic's originals, and the NEON
- * resolve with the compositor's visibility table (src/rast/res2.c) vs DraStic's resolve and the visibility port.
+ * resolve with the compositor's visibility table (src/rast/res2.c) vs DraStic's resolve and the visibility port, and
+ * res2.c's fog and edge-marking resolves vs DraStic's drivers.
  * run.sh t_resolve.c ../../../src/rast/spec/resolve.c ../../../src/rast/spec/composite.c ../../../src/rast/res2.c
  *        ../../../src/rast/res2_line.S */
 #include "ut.h"
@@ -243,6 +244,68 @@ static void test_res2(int n) {
     }
 }
 
+/* res2_resolve_fx (the fog and edge-marking resolves fused, res2.c) vs DraStic's drivers: the output block, the gap
+ * buffers and the attribute lines (the colour lines are not compared: res2.c fogs and marks them in place), with and
+ * without the table; the table entries of the written half-rows vs the visibility port. Random contexts as setup()'s
+ * (attributes with ties, few ids and depths, or polygon ids in rectangles; the fog flag random, or clear in whole
+ * 32-pixel steps; fog tables (zero at small depths or everywhere: steps whose weights are all 0), fog
+ * colours and offsets, DISP3DCNT's fog shift, the clear attribute and the edge colours random; fog on or off by the
+ * context and system flags), every bin (bin 0's top line, bin 11's bottom line, the gap copies of the others). */
+static void test_fx(int n) {
+    static const struct { const char *name; uint32_t off; unsigned m; } drv[] = {
+        {"res2_resolve_fx fog_full", 0x57c70, 2}, {"res2_resolve_fx fog_alpha", 0x58280, 3},
+        {"res2_resolve_fx edge_mark", 0x56420, 4}, {"res2_resolve_fx edge_mark (5)", 0x56420, 5},
+        {"res2_resolve_fx edge_mark_fog_full", 0x57d90, 6}, {"res2_resolve_fx edge_mark_fog_alpha", 0x583a0, 7},
+    };
+    static uint8_t bits[64][32], flags[64], rbits[32];
+    for (int it = 0; it < n && ut_fail < 10; it++) {
+        for (unsigned d = 0; d < sizeof drv / sizeof drv[0]; d++) {
+            setup();
+            if (rnd(3) == 0) {                                  /* steps of 32 pixels without a fog flag */
+                for (int y = 0; y < 32; y++)
+                    for (int x = 0; x < 512; x += 32)
+                        if (rnd(2)) for (int i = 0; i < 32; i++) ((uint32_t *)ctx[0])[y * 512 + x + i] &= 0x7fffffffu;
+                memcpy(ctx[1], ctx[0], 0x10000);
+            }
+            if (rnd(2)) {                                       /* polygon ids in rectangles (steps without an id edge) */
+                uint32_t *a = (uint32_t *)(ctx[0] + 0x10000), ids[4][4];
+                int xs = 3 + rnd(6), ys = rnd(5);
+                for (int i = 0; i < 16; i++) ids[i >> 2][i & 3] = rnd(64) << 24 | rnd(4) << 30;
+                if (rnd(2)) ids[rnd(4)][rnd(4)] = *(uint32_t *)(sys[0] + 0x34eb4c) & 0xff000000u;
+                for (int y = 0; y < 32; y++)
+                    for (int x = 0; x < 512; x++)
+                        a[y * 512 + x] = (a[y * 512 + x] & 0xffffff) | ids[(y >> ys) & 3][(x >> xs) & 3];
+                memcpy(ctx[1] + 0x10000, ctx[0] + 0x10000, 0x10000);
+            }
+            if (rnd(4) == 0) {                                  /* weights 0 at small depths, or everywhere */
+                int n0 = rnd(2) ? 64 : 1 + rnd(4);
+                for (int k = 0; k < 2; k++) memset(geom[k] + 0x9974, 0, n0), memset(geom[k] + 0x9994, 0, n0 < 32 ? n0 : 32);
+            }
+            uint32_t bin = rnd(12), ob = bin * 0x10000;
+            int tab = rnd(4) != 0;
+            memset(bits, 0x5a, sizeof bits); memset(flags, 0x5a, sizeof flags);
+            DS(drv_fn, drv[d].off)(ctx[0], outf[0] + ob, bin);
+            int r = res2_resolve_fx(ctx[1], outf[1] + ob, bin, drv[d].m, tab ? bits : 0, tab ? flags : 0);
+            int f = ut_fail;
+            ut_cmp(drv[d].name, outf[0], outf[1], OUT_SZ);
+            ut_cmp(drv[d].name, ctx[0] + 0x10000, ctx[1] + 0x10000, 0x14000);
+            ut_cmp(drv[d].name, ctx[0] + 0x24010, ctx[1] + 0x24010, CTX_SZ - 0x24010);
+            ut_cmp(drv[d].name, sys[0] + GAPS_LO, sys[1] + GAPS_LO, GAPS_HI - GAPS_LO + 0x10);
+            if (ut_fail != f) fprintf(stderr, "  (iteration %d, bin %u, table %d)\n", it, bin, tab);
+            if (!tab || !r) continue;
+            int edge = drv[d].m & 4, h0 = edge && bin ? 2 : 0, h1 = edge && bin != 11 ? 62 : 64;
+            for (int h = h0; h < h1; h++) {
+                uint32_t rv = spec_render_scanline_set_3d_visibility(rbits, (const uint32_t *)(outf[0] + ob + h * 0x400));
+                if (ut_cmp("res2_resolve_fx bitmap", rbits, bits[h], 32) || rv != flags[h]) {
+                    if (rv != flags[h]) { fprintf(stderr, "FAIL res2_resolve_fx flag: half-row %d %#x, port %#x\n", h, flags[h], rv); ut_fail++; }
+                    fprintf(stderr, "  (%s, iteration %d, bin %u, half-row %d)\n", drv[d].name, it, bin, h);
+                    break;
+                }
+            }
+        }
+    }
+}
+
 /* res2_vis_bin (comp_bin's entries of a written block) vs the visibility port: alpha bytes of any value (the fog
  * resolves keep bits 5 and 6), 0 or 31, all 0, all 31, few translucent */
 static void test_vis(int n) {
@@ -285,11 +348,12 @@ void ut_main(void) {
     test_leaves(n * 4);
     test_drivers(n);
     test_res2(n);
+    test_fx(n);
     test_vis(n);
     set_ptrs(0); set_ptrs(1);
     *(uint64_t *)(sys[1] + 0x34eb58) = *(uint64_t *)(sys[0] + 0x34eb58);
     *(uint64_t *)(sys[1] + 0x2c1748) = *(uint64_t *)(sys[0] + 0x2c1748);
     ut_cmp("sys (whole)", sys[0], sys[1], SYS_SZ);
     ut_cmp("geom (whole)", geom[0], geom[1], GEOM_SZ);
-    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers, %d res2 and %d vis iterations\n", n * 4, n, n, n);
+    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers, %d res2, %d fx (x 6 modes) and %d vis iterations\n", n * 4, n, n, n, n);
 }

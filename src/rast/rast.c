@@ -63,31 +63,21 @@ static void clear_bin(uint8_t *ctx, uint8_t *sys, uint8_t *geom, unsigned y0) {
     }
 }
 
-/* the bin's resolve into its output block, then the compositor's visibility table entries for it (comp_bin(), while
- * the block is in cache); without fog and edge marking both in one NEON pass (res2.c: DraStic's
- * video_3d_resolve_bin_asm_4x and the table from the same registers) */
+/* the bin's resolve into its output block and the compositor's visibility table entries for it, while the block is in
+ * cache: res2.c's NEON forms of DraStic's resolves (video_3d_resolve_bin_asm_4x, and with fog and / or edge marking
+ * its drivers' stages fused per line), the plain resolve's pass writing the block and the entries from the same
+ * registers; the fog-only resolve's block (unmasked) then gets its entries from comp_bin() */
 static void resolve_bin(uint8_t *ctx, uint8_t *sys, unsigned bin) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
     uint8_t *out = PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES;
     unsigned m = ((d3 >> 5) & 1) << 2 | ((d3 >> 6) & 3);       /* edge marking, fog alpha-only, fog */
     if (U8(ctx, CTX_NO_EDGE)) m &= ~4u;
-    typedef void (*rfn)(void *, void *, unsigned long);
-    switch (m) {
-    case 2: DSFN(rfn, DS_RESOLVE_FOG_FULL_4X)(ctx, out, m); break;
-    case 3: DSFN(rfn, DS_RESOLVE_FOG_ALPHA_4X)(ctx, out, m); break;
-    case 4: case 5: DSFN(rfn, DS_RESOLVE_EDGE_4X)(ctx, out, bin); break;
-    case 6: DSFN(rfn, DS_RESOLVE_EDGE_FOG_FULL_4X)(ctx, out, bin); break;
-    case 7: DSFN(rfn, DS_RESOLVE_EDGE_FOG_ALPHA_4X)(ctx, out, bin); break;
-    default: {
-        uint8_t (*bits)[32], *flags;
-        if (comp_bin_table(sys, bin, &bits, &flags)) {
-            res2_resolve(out, (const uint32_t *)(ctx + CTX_COLOR), bits, flags);
-            comp_bin_done();
-            return;
-        }
-        res2_resolve(out, (const uint32_t *)(ctx + CTX_COLOR), 0, 0);
-        break;
-    }
+    uint8_t (*bits)[32], *flags;
+    int tab = comp_bin_table(sys, bin, &bits, &flags);
+    if (m & 6 ? res2_resolve_fx(ctx, out, bin, m, tab ? bits : 0, tab ? flags : 0)
+              : (res2_resolve(out, (const uint32_t *)(ctx + CTX_COLOR), tab ? bits : 0, tab ? flags : 0), 1)) {
+        if (tab) comp_bin_done();
+        return;
     }
     comp_bin(sys, bin, 1);
 }
