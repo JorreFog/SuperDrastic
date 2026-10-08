@@ -162,10 +162,11 @@ weights and interpolants for its first passing pixel; the vertex colour and the 
 they cannot overflow (checked per line). `kerngen.py`'s docstring lists the flags and the register use.
 `kernsched.py` then reorders each basic block of the generated code for the A55 (its docstring has the rules: every
 register, NZCV and memory access tracked, the base registers' roles telling read-only memory, the lines and the
-stack apart; the branches stay where they are): of several candidate orders it keeps the one that runs fastest on
-its model of llvm-mca's in-order Cortex-A55 (issue groups, the FP and load pipes' occupancy, the in-order writeback;
-it matches llvm-mca's cycles on the group loops within a cycle), with the state the block before leaves;
-`KERNSCHED=0 python3 kerngen.py` writes the kernels unscheduled.
+stack apart; the branches stay where they are, but an out-of-line block's jump back to the common path takes a copy
+of the instructions after its join, which makes one block of the code on both sides of the join): of several
+candidate orders it keeps the one that runs fastest on its model of llvm-mca's in-order Cortex-A55 (issue groups, the
+FP and load pipes' occupancy, the in-order writeback; it matches llvm-mca's cycles on the group loops within a
+cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py` writes the kernels unscheduled.
 
 ## Simulator usage (see `tools/sim/` for setup; `dev/` holds the scripts used during development)
 

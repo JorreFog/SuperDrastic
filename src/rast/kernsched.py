@@ -19,6 +19,9 @@ as late as its latency asks, without changing what the block computes:
     are independent); any other base register may address anything;
   - the block's branch stays its last instruction, and anything that is not understood (or that moves sp) ends a
     block, so it keeps its place.
+Before that, join_copies() lengthens the common path's blocks: where an out-of-line block jumps back (`b NNb`, the
+only kind of reference its label has), the jump gets a copy of the instructions after the label (up to 16) and
+jumps past them instead, so the label goes and the code on both sides of it is one block.
 Every order of the block that keeps those dependences computes the same; schedule_block() makes several and keeps
 the one a machine model runs fastest. The model (Machine, machine()) is llvm-mca's Cortex-A55 model as its in-order
 issue runs it (llvm-mca -mcpu=cortex-a55; it reproduces llvm-mca's cycles on the kernels' group loops within a cycle):
@@ -445,8 +448,52 @@ def schedule_block(ins, m=None, after=()):
     MEMO[memo] = [pos[I.order] for I in cands[0]]
     return cands[0]
 
+LABEL = re.compile(r"^(\d+):$")
+TARGET = re.compile(r"^\s*([\w.]+)\s+(?:.*,\s*)?(\d+)([fb])\s*$")
+
+def join_copies(lines, most=16):
+    """Joins reached only by unconditional jumps besides the fall-through (an out-of-line block's `b NNb` back to
+    the common path) split the common path's code into two blocks. Each such jump instead gets a copy of the
+    instructions after the join (up to the next label, branch or directive; at most `most`, all understood by
+    parse()) and jumps past them to a new label: the jumping path executes the same instructions in the same order,
+    and the label, now unreferenced, goes, so the code before and after it is one block. The group loop's head 0:
+    stays (the reference point of tools/rast/dev/kpath.py)."""
+    pos = {}
+    for k, l in enumerate(lines):
+        m = LABEL.match(l.strip())
+        if m: pos.setdefault(m.group(1), []).append(k)
+    refs = {}
+    for k, l in enumerate(lines):
+        m = TARGET.match(l)
+        if not m or m.group(1).split(".")[0].lower() not in BRANCH: continue
+        ps = [p for p in pos.get(m.group(2), []) if (p > k if m.group(3) == "f" else p < k)]
+        if ps: refs.setdefault(ps[0] if m.group(3) == "f" else ps[-1], []).append((k, m.group(1).lower()))
+    fresh = (str(n) for n in range(100, 100000) if str(n) not in pos)
+    drop, label_at, replace = set(), {}, {}
+    for L, rs in refs.items():
+        if lines[L].strip() == "0:" or any(mn != "b" for _, mn in rs) or L == 0: continue
+        prev = lines[L - 1].strip()
+        pm = prev.split(" ")[0].lower()
+        if not prev or prev.endswith(":") or pm in ("b", "br", "ret") or (pm not in BRANCH and parse(prev, 0) is None):
+            continue                                          # no fall-through into the join from an instruction
+        e = L + 1
+        while e < len(lines) and e - L - 1 < most and parse(lines[e], e) is not None: e += 1
+        if e == L + 1 or (e < len(lines) and parse(lines[e], e) is not None) or any(k == e for k, _ in rs): continue
+        new = next(fresh)
+        drop.add(L); label_at[e] = new
+        for k, _ in rs: replace[k] = lines[L + 1:e] + ["\tb " + new + ("b" if e < k else "f")]
+    out = []
+    for k, l in enumerate(lines):
+        if k in label_at: out.append(label_at[k] + ":")
+        if k in drop: continue
+        out.extend(replace.get(k, [l]))
+    if len(lines) in label_at: out.append(label_at[len(lines)] + ":")
+    return out
+
 def schedule(lines):
-    """the kernel file's lines, each basic block reordered"""
+    """the kernel file's lines, the out-of-line returns given copies of the code after their joins (join_copies()),
+    each basic block reordered"""
+    lines = join_copies(lines)
     items = [parse(l, k) for k, l in enumerate(lines)]
     out, m, k = [], Machine(), 0
     while k < len(lines):
