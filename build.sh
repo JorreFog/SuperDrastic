@@ -13,8 +13,9 @@ RC=src/third_party/rcheevos
 # src/rast: our 3D rasterizer for DraStic's hi-res mode (off unless DSFLIP_RAST=1; see src/rast/README.md)
 SRCS="src/dsflip.c src/shader.c src/audio.c src/ra.c src/ui.c src/volume.c src/cpugov.c src/resume.c src/menu.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c \
       $RC/src/rc_util.c $RC/src/rc_version.c $RC/src/rcheevos/*.c $RC/src/rapi/*.c $RC/src/rhash/*.c) \
-      src/rast/rast.c src/rast/walk.c src/rast/b0.c src/rast/fused.c src/rast/fused_neon.c src/rast/fused_asm.c src/rast/defer.c src/rast/hr.c src/rast/comp.c src/rast/rast_kern.S $(ls src/rast/spec/*.c)"
+      src/rast/rast.c src/rast/walk.c src/rast/b0.c src/rast/fused.c src/rast/fused_neon.c src/rast/fused_asm.c src/rast/defer.c src/rast/hr.c src/rast/comp.c src/rast/res2.c src/rast/res2_line.S src/rast/rast_kern.S $(ls src/rast/spec/*.c)"
 python3 src/rast/kerngen.py src/rast/rast_kern.S
+python3 src/rast/res2gen.py > src/rast/res2_line.S 2>/dev/null
 V=$(cat VERSION 2>/dev/null || echo dev)
 # -mtune=cortex-a55: scheduled for the handhelds' in-order cores (the RG DS and RG DS Plus); still plain ARMv8.0 code
 CC="clang --target=aarch64-linux-gnu --sysroot=$SR -fuse-ld=lld -O2 -mtune=cortex-a55 -Wall -Wno-unused-function"

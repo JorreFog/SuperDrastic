@@ -1,7 +1,11 @@
-/* t_resolve.c: bin resolve / fog / edge marking ports (src/rast/spec/resolve.c) vs DraStic's originals.
- * run.sh t_resolve.c ../../../src/rast/spec/resolve.c */
+/* t_resolve.c: bin resolve / fog / edge marking ports (src/rast/spec/resolve.c) vs DraStic's originals, and the NEON
+ * resolve with the compositor's visibility table (src/rast/res2.c) vs DraStic's resolve and the visibility port.
+ * run.sh t_resolve.c ../../../src/rast/spec/resolve.c ../../../src/rast/spec/composite.c ../../../src/rast/res2.c
+ *        ../../../src/rast/res2_line.S */
 #include "ut.h"
 #include "spec/resolve.h"
+#include "spec/composite.h"
+#include "res2.h"
 
 #define CTX_SZ  0x24100
 #define SYS_SZ  0x34f000
@@ -203,6 +207,73 @@ static void test_drivers(int n) {
     }
 }
 
+/* res2_resolve vs video_3d_resolve_bin_asm_4x (the block) and render_scanline_set_3d_visibility's port (each of the
+ * block's 64 half-rows); colour lines whose alphas are random, 0 or 31 only, all 0, all 31 (the three flags) */
+static void test_res2(int n) {
+    static uint8_t bits[64][32], flags[64], rbits[32];
+    for (int it = 0; it < n && ut_fail < 10; it++) {
+        setup();
+        uint32_t *c = (uint32_t *)ctx[0];
+        for (int y = 0; y < 32; y++) {
+            int mode = rnd(5);
+            for (int x = 0; x < 512; x++) {
+                uint32_t v = c[y * 512 + x], a = (v >> 24) & 0x1f;
+                if (mode == 1) a = rnd(2) ? 31 : 0;
+                else if (mode == 2) a = 0;
+                else if (mode == 3) a = 31;
+                else if (mode == 4) a = rnd(8) ? (rnd(2) ? 31 : 0) : rnd(32);
+                c[y * 512 + x] = (v & 0xe0ffffffu) | a << 24;
+            }
+        }
+        uint32_t bin = rnd(12), ob = bin * 0x10000;
+        memset(bits, 0x5a, sizeof bits); memset(flags, 0x5a, sizeof flags);
+        DS(resolve_fn, 0x9ce78)(outf[0] + ob, ctx[0]);
+        int tab = rnd(4) != 0;
+        res2_resolve(outf[1] + ob, (const uint32_t *)ctx[0], tab ? bits : 0, tab ? flags : 0);
+        if (ut_cmp("res2_resolve", outf[0], outf[1], OUT_SZ)) fprintf(stderr, "  (iteration %d, table %d)\n", it, tab);
+        if (!tab) continue;
+        for (int h = 0; h < 64; h++) {
+            uint32_t r = spec_render_scanline_set_3d_visibility(rbits, (const uint32_t *)(outf[0] + ob + h * 0x400));
+            if (ut_cmp("res2_resolve bitmap", rbits, bits[h], 32) || r != flags[h]) {
+                if (r != flags[h]) { fprintf(stderr, "FAIL res2_resolve flag: half-row %d %#x, port %#x\n", h, flags[h], r); ut_fail++; }
+                fprintf(stderr, "  (iteration %d, half-row %d)\n", it, h);
+                break;
+            }
+        }
+    }
+}
+
+/* res2_vis_bin (comp_bin's entries of a written block) vs the visibility port: alpha bytes of any value (the fog
+ * resolves keep bits 5 and 6), 0 or 31, all 0, all 31, few translucent */
+static void test_vis(int n) {
+    static uint8_t bits[64][32], flags[64], rbits[32];
+    for (int it = 0; it < n && ut_fail < 10; it++) {
+        uint32_t *b = (uint32_t *)outf[0];
+        for (int h = 0; h < 64; h++) {
+            int mode = rnd(6);
+            for (int x = 0; x < 256; x++) {
+                uint32_t v = (uint32_t)rnd64(), a = v >> 24;
+                if (mode == 1) a = rnd(2) ? 31 : 0;
+                else if (mode == 2) a = 0;
+                else if (mode == 3) a = 31;
+                else if (mode == 4) a = rnd(16) ? (rnd(2) ? 31 : 0) : rnd(256);
+                else if (mode == 5) a &= 0x1f;
+                b[h * 256 + x] = (v & 0xffffff) | a << 24;
+            }
+        }
+        memset(bits, 0x5a, sizeof bits); memset(flags, 0x5a, sizeof flags);
+        res2_vis_bin(outf[0], bits, flags);
+        for (int h = 0; h < 64; h++) {
+            uint32_t r = spec_render_scanline_set_3d_visibility(rbits, b + h * 256);
+            if (ut_cmp("res2_vis_bin bitmap", rbits, bits[h], 32) || r != flags[h]) {
+                if (r != flags[h]) { fprintf(stderr, "FAIL res2_vis_bin flag: half-row %d %#x, port %#x\n", h, flags[h], r); ut_fail++; }
+                fprintf(stderr, "  (iteration %d, half-row %d)\n", it, h);
+                break;
+            }
+        }
+    }
+}
+
 void ut_main(void) {
     for (int k = 0; k < 2; k++) {
         ctx[k] = calloc(1, CTX_SZ); sys[k] = calloc(1, SYS_SZ); geom[k] = calloc(1, GEOM_SZ); outf[k] = calloc(1, OUT_SZ);
@@ -213,10 +284,12 @@ void ut_main(void) {
     int n = s ? atoi(s) : 1000;
     test_leaves(n * 4);
     test_drivers(n);
+    test_res2(n);
+    test_vis(n);
     set_ptrs(0); set_ptrs(1);
     *(uint64_t *)(sys[1] + 0x34eb58) = *(uint64_t *)(sys[0] + 0x34eb58);
     *(uint64_t *)(sys[1] + 0x2c1748) = *(uint64_t *)(sys[0] + 0x2c1748);
     ut_cmp("sys (whole)", sys[0], sys[1], SYS_SZ);
     ut_cmp("geom (whole)", geom[0], geom[1], GEOM_SZ);
-    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers\n", n * 4, n);
+    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers, %d res2 and %d vis iterations\n", n * 4, n, n, n);
 }
