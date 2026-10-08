@@ -192,7 +192,8 @@ int resume_poll(void *ev) {
 /* Exit combos: Start + Select, or Menu + Start, held for EXIT_HOLD_MS quit the game the way the exit hotkey does
  * (with a resume save when that is on). ROCKNIX's DraStic had them through gptokeyb, which this session doesn't
  * run. DSFLIP_EXIT_COMBO=0: off. */
-#define EXIT_HOLD_MS 500
+#define EXIT_HOLD_MS 300            /* (500 until 0.5.0-beta.1: issue 3 found the way back slow; two buttons held
+                                       together for 0.3 s are still nothing a game asks for) */
 static int btn_start = -1, btn_select = -1, btn_menu = -1, exit_combo = 1;
 static uint64_t held_btns;                             /* joystick buttons down, by number */
 static long long combo_since;                          /* when the combo was complete (0: it isn't) */
@@ -265,6 +266,7 @@ void resume_frame(void) {
     if (want_save && !saving) {
         saving = 1; want_save = 0;
         dsflip_log("[resume] quit requested: saving a resume state\n");
+        cpugov_boost(3000);                           /* the top clock from the press on: DraStic compresses ~6.5 MB */
         unlink(resume_path);
         resume_press(btn_save);
         pthread_t t; if (pthread_create(&t, 0, save_thread, 0)) kill(getpid(), SIGKILL);
