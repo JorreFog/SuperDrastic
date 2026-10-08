@@ -108,6 +108,10 @@ def roles(D, T, R, F, B, M):
         want += [("flat", 3), ("vs", 2)]
     if T == 0 and R == 0 and M != 1: want.append(("colw", 1) if F else ("caf", 1))
     if R: want.append(("trans", 2))
+    if R and T and M == 0:
+        # textured translucent: two more, so that the colour's channels (in v25 and the blend weights' registers,
+        # free until the blend) modulate with their own scratch registers and two blend channels run side by side
+        want.append(("ex", 2))
     if M: want.append(("idx", 1))
     if M != 2: want.append(("dep", 1 if D == 2 else 2))
     if T:
@@ -563,6 +567,28 @@ def colour(T, F, B, M=0):
     """shaded colour -> (cr, cg, cb, ca) registers, 8 x u8 (textured: v29 v27 v31 v30; untextured flat with its
     colour words per batch: None); applies the alpha test (textured) unless shading deferred pixels (M = 2: the
     visibility pass applied it) or the texture's lowest alpha passes it (flag bit 8); fails to 8f"""
+    if T and "ex" in RL and "trans" in RL:
+        # translucent: the three channels' colour (vertex or flat) in v25 and the blend weights' registers, computed
+        # among the gather's loads; the modulates with v26 and the ex registers as their scratch
+        tr, ex = RL["trans"], RL["ex"]
+        cv = RL["flat"] if F and "flat" in RL else ["v25", tr[0], tr[1]]
+        ws = ["v26", ex[0], ex[1]]
+        texture(T, None if F and "flat" in RL else (lambda: [vertex_colour(ch, F, cv[ch]) for ch in range(3)]))
+        e("tbnz w7, #2, 1f")                        # white vertex colour, alpha 31: the texel is the colour
+        if not F:
+            e("tbz w7, #14, 37f")
+            e("38:")
+            def ool():
+                e("37:")
+                for ch in range(3): vertex_colour(ch, F, cv[ch], True)
+                e("b 38b")
+            OOLS.append(ool)
+        for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")): modulate(cv[ch], t, 6, ws[ch])
+        modulate_alpha("1f")
+        e("1:")
+        if M != 2:
+            e("tbnz w7, #8, 2f"); alpha_test(); e("2:")
+        return "v29", "v27", "v31", "v30"
     if T and "vc" in RL:
         # the vertex colour among the gather's loads (the fast form; the out-of-line slow form replaces it), then the
         # three modulates with their own scratch registers
@@ -671,9 +697,12 @@ def trans_store(D, cols):
         # blend: c' = (c + c*ws + d*wd) >> 5, ws = dal ? sa : 31, wd = dal ? 31 - sa : 0 (m8 is in x8), into v29 v27 v31
         e("cmeq v28.8b, v26.8b, #0")
         e(f"sub {wd}.8b, {ws}.8b, {sa}.8b"); e(f"bic {wd}.8b, {wd}.8b, v28.8b"); e(f"bif {ws}.8b, {sa}.8b, v28.8b")
-        for c, o, d in ((cb, "v31", "xtn v28.8b, v24.8h"), (cr, "v29", "xtn v28.8b, v25.8h"), (cg, "v27", "shrn v28.8b, v25.8h, #8")):
-            e(d); e(f"ushll v24.8h, {c}.8b, #0"); e(f"umlal v24.8h, {c}.8b, {ws}.8b"); e(f"umlal v24.8h, v28.8b, {wd}.8b")
-            e(f"shrn {o}.8b, v24.8h, #5")
+        # (with the ex registers the r channel blends in them, beside b; g after b)
+        xa, xd = RL["ex"] if "ex" in RL else ("v24", "v28")
+        for c, o, d, a, t in ((cb, "v31", "xtn v28.8b, v24.8h", "v24", "v28"), (cr, "v29", f"xtn {xd}.8b, v25.8h", xa, xd),
+                              (cg, "v27", "shrn v28.8b, v25.8h, #8", "v24", "v28")):
+            e(d); e(f"ushll {a}.8h, {c}.8b, #0"); e(f"umlal {a}.8h, {c}.8b, {ws}.8b"); e(f"umlal {a}.8h, {t}.8b, {wd}.8b")
+            e(f"shrn {o}.8b, {a}.8h, #5")
         moves = [(o, c) for c, o in ((cr, "v29"), (cg, "v27"), (cb, "v31")) if c != o]
         if moves:
             e("b 2f"); e("1:")
