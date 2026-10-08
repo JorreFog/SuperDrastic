@@ -6,7 +6,7 @@
  *   - the vertices' 3x screen coordinates, computed by hr_vertices() from the same clip-space values and viewport as
  *     DraStic's geometry_perspective_apply_hires_asm (hooked in rast.c; its math in the comment there);
  *   - our own polygon walker, hr_polygon(): render_polygon_4x's edge walks and span setup from spec/edges.c, with
- *     the line width 768 and span arrays of 64 entries;
+ *     the line width 768 and span arrays of 64 entries, a chain's lines stopped at the window (EDGES_LINE_CAP);
  *   - the pixel kernels of fused_asm.c in their hi-res instantiation (rast_kern_h*, strides from the kernel
  *     arguments) through f_run() with layout_3x, including deferred shading and bilinear filtering;
  *   - the bin resolve (edge marking, fog) as spec/resolve.c's, over 768-pixel lines, into a 48 x 768 buffer;
@@ -49,6 +49,7 @@
 static uint32_t hr_recip[1024];
 __attribute__((constructor)) static void hr_recip_init(void) { for (uint32_t i = 1; i < 1024; i++) hr_recip[i] = (0x3fffffffu + i) / i; }
 #define EDGES_RECIP_TABLE hr_recip
+#define EDGES_LINE_CAP 1                /* a chain's lines stop at the window (edges_impl.h, interpolate_edges) */
 #include "spec/edges_impl.h"
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
@@ -69,6 +70,7 @@ uint32_t *hr_frame;                     /* RAST_DUMP: the resolved 3x frame (576
 typedef struct {
     uint8_t *ctx;                       /* colour | attr | ids | header (sys, geom, line mask, fog used) */
     uint8_t *spans;
+    uint8_t *tp;                        /* the edge marking's id screen: the attribute lines' top bytes (edge_tplanes) */
 } hr_t;
 static __thread hr_t hr;
 
@@ -76,6 +78,7 @@ static hr_t *hr_get(void) {
     if (!hr.ctx) {
         hr.ctx = aligned_alloc(64, HR_CTX_SIZE + 64); memset(hr.ctx, 0, HR_CTX_SIZE + 64);
         hr.spans = aligned_alloc(64, HR_SPANS); memset(hr.spans, 0, HR_SPANS);
+        hr.tp = aligned_alloc(64, HR_CL * HR_W + 64); memset(hr.tp, 0, HR_CL * HR_W + 64);
     }
     return &hr;
 }
@@ -419,10 +422,29 @@ static inline __attribute__((always_inline)) void edge_block(uint32_t *col0, uin
     edge_mark(col0, p0.val[3], e0, er, eg, eb);
     edge_mark(col1, p1.val[3], e1, er, eg, eb);
 }
+/* the top bytes of n attribute lines (the polygon ids and flags) as byte planes, 16 pixels from 4 ldr q and two levels of
+ * uzp2: the edge marking's id screen reads each line's once instead of twice (a line is c0 or c1 of one pair and a or
+ * b of another) and its right neighbours with one unaligned load. 32 pixels a step, the loads at immediate offsets
+ * from one pointer in asm: the compiler makes ldp (which holds the A55's load pipe longer in the model) or
+ * post-incremented loads (which hold it and write the base back in order) of them otherwise; 21 cycles a step of 16
+ * -> ~22 a step of 32. */
+static __attribute__((noinline)) void edge_tplanes(uint8_t *tp, const uint32_t *att, unsigned n) {
+    const uint8_t *p = (const uint8_t *)att, *end = p + (size_t)n * HR_LSTRIDE;
+    _Static_assert(HR_W % 32 == 0, "edge_tplanes: 32 pixels a step");
+    for (; p != end; p += 128, tp += 32) {
+        uint8x16_t q0, q1, q2, q3, q4, q5, q6, q7;
+        __asm__("ldr %q0, [%8]\n\tldr %q1, [%8, #16]\n\tldr %q2, [%8, #32]\n\tldr %q3, [%8, #48]\n\t"
+                "ldr %q4, [%8, #64]\n\tldr %q5, [%8, #80]\n\tldr %q6, [%8, #96]\n\tldr %q7, [%8, #112]"
+                : "=w"(q0), "=w"(q1), "=w"(q2), "=w"(q3), "=w"(q4), "=w"(q5), "=w"(q6), "=w"(q7)
+                : "r"(p), "m"(*(const uint8_t (*)[128])p));
+        vst1q_u8(tp, vuzp2q_u8(vuzp2q_u8(q0, q1), vuzp2q_u8(q2, q3)));
+        vst1q_u8(tp + 16, vuzp2q_u8(vuzp2q_u8(q4, q5), vuzp2q_u8(q6, q7)));
+    }
+}
 /* two lines of the bin, marked in place: col0/c0 and col1/c1 (the line below), a = the line above the first, b = the
- * line below the second */
+ * line below the second; tp = the top-byte planes of a, c0, c1 and b (consecutive lines of HR_W bytes) */
 static __attribute__((noinline)) void edge_lines(uint32_t *col0, uint32_t *col1, const uint32_t *a, const uint32_t *c0, const uint32_t *c1, const uint32_t *b,
-                                                 uint32_t clear, const uint8_t *ec) {
+                                                 const uint8_t *tp, uint32_t clear, const uint8_t *ec) {
     uint8x8_t ecr = vrev64_u8(vld1_u8(ec)), ecg = vrev64_u8(vld1_u8(ec + 8)), ecb = vrev64_u8(vld1_u8(ec + 16));
     uint8x16_t er = vcombine_u8(ecr, ecr), eg = vcombine_u8(ecg, ecg), eb = vcombine_u8(ecb, ecb);
     er = vzip1q_u8(er, er); eg = vzip1q_u8(eg, eg); eb = vzip1q_u8(eb, eb);       /* entries 2i, 2i+1 = ec[7 - i] */
@@ -431,9 +453,28 @@ static __attribute__((noinline)) void edge_lines(uint32_t *col0, uint32_t *col1,
     uint8x16_t lp1 = vsetq_lane_u8((clear & 0xffffff) > (c1[0] & 0xffffff) ? (uint8_t)((clear ^ c1[0]) >> 24) : 0, vdupq_n_u8(0), 15);
     const uint8x16x4_t k = { { vdupq_n_u8((uint8_t)clear), vdupq_n_u8((uint8_t)(clear >> 8)), vdupq_n_u8((uint8_t)(clear >> 16)),
                                vdupq_n_u8((uint8_t)(clear >> 24)) } };
+    const uint8x16_t m3f = vdupq_n_u8(0x3f);
+    /* the id screen: a block whose neighbour pairs all have the same polygon id (bits 24-29) has no edge (an edge needs
+     * (N ^ C) & 0x3f000000), so it is left as it is. The pairs: line 0 with the line above and with line 1, line 1 with
+     * the line below, and each pixel of both lines with the one to its right; the left pair of pixel 0 is the previous
+     * block's right pair of its pixel 15: a screened block's left tests lp are 0 (no id differs), and a block after a
+     * full one is full when that one's lane 15 can be an edge (force; also the lines' pixel 0 against the clear
+     * attribute). The ids come from tp, the four lines' top bytes as byte planes (edge_tplanes, once per line for the
+     * bin; the right neighbours an unaligned load one byte on): 6 loads and 11 operations a block (~25 modeled cycles)
+     * instead of edge_block's ~160, and in the stress ROM's edge-marking scene 96% of the blocks pass. The last block,
+     * whose right neighbour is the clear attribute, is always full. */
+    const uint8_t *ta = tp, *t0p = tp + HR_W, *t1p = tp + 2 * HR_W, *tbp = tp + 3 * HR_W;
+    int force = ((vgetq_lane_u8(lp0, 15) | vgetq_lane_u8(lp1, 15)) & 0x3f) != 0;
     int x = 0;
-    for (; x < HR_W - 16; x += 16)
+    for (; x < HR_W - 16; x += 16) {
+        uint8x16_t t0 = vld1q_u8(t0p + x), t1 = vld1q_u8(t1p + x);
+        uint8x16_t d = vorrq_u8(vorrq_u8(veorq_u8(vld1q_u8(ta + x), t0), veorq_u8(t0, t1)),
+                                vorrq_u8(veorq_u8(t1, vld1q_u8(tbp + x)),
+                                         vorrq_u8(veorq_u8(t0, vld1q_u8(t0p + x + 1)), veorq_u8(t1, vld1q_u8(t1p + x + 1)))));
+        if (__builtin_expect(!force, 1) && !vmaxvq_u8(vandq_u8(d, m3f))) { lp0 = lp1 = vdupq_n_u8(0); continue; }
         edge_block(col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 0, k, &lp0, &lp1, er, eg, eb);
+        force = ((vgetq_lane_u8(lp0, 15) | vgetq_lane_u8(lp1, 15)) & 0x3f) != 0;
+    }
     edge_block(col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
 }
 /* resolves the bin in place and returns its 48 lines (768 pixels each, contiguous): the context's colour lines 1..48,
@@ -450,9 +491,10 @@ static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t
 #define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
 #define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
     _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
+    if (edges) edge_tplanes(H->tp, ATT(0), HR_CL);     /* (the resolve writes colours only: the attributes stay) */
     for (int l = 1; l <= HR_BL; l += 2) {               /* two lines a step: the edge marking shares their compares */
         if (fog) for (int k = l; k <= l + 1; k++) fog_line(COL(k), ATT(k), geom + 0x9974, params, fogc, fog == 1);
-        if (edges) edge_lines(COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), clear, geom + 0x99b4);
+        if (edges) edge_lines(COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), H->tp + (l - 1) * HR_W, clear, geom + 0x99b4);
     }
     return COL(1);
 #undef COL

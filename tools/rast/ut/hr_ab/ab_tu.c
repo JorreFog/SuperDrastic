@@ -28,9 +28,10 @@ static __attribute__((noinline)) void PFX(zero_stack)(void) {
 void PFX(poly)(uint8_t *poly, uint8_t *verts, const void *hv, const void *hv2, unsigned bin_top, unsigned bin_bot, int lb,
                uint32_t d3, int defer) {
     memcpy(hr_vtx[0], hv, sizeof hr_vtx[0]); memcpy(hr_vtx2[0], hv2, sizeof hr_vtx2[0]);
-    /* a span block of the test's own, zeroed with 4 KiB on both sides for every polygon: with each version's heap
-     * block and the previous polygon's spans left in it, two copies of the same hr.c hashed a few polygons in 5000
-     * differently (8 to 10 vertices; the cause is not known yet) */
+    /* a span block of the test's own, zeroed with 4 KiB on both sides for every polygon: a base whose walker does not
+     * stop a chain at its window (before EDGES_LINE_CAP) writes past the end of the span block on self-intersecting
+     * polygons, which with each version's heap block made two copies of the same such hr.c hash a few polygons in
+     * 5000 differently (the first version's block was followed by the second's) */
     static uint8_t spans[HR_SPANS + 8192] __attribute__((aligned(64)));
     hr_t *H = hr_get();
     memset(spans, 0, sizeof spans);

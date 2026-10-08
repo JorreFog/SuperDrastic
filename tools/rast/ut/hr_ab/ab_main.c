@@ -143,6 +143,98 @@ static int test_rds(int iters) {
     return bad;
 }
 
+/* the same on polygon-like contexts: rectangles of one polygon id each over a background (keys a gradient and noise),
+ * so most blocks of 16 pixels have one id in all their neighbour pairs and edge_lines' id screen passes them, and its
+ * transitions between screened and full blocks (the left tests carried across, the forced block after a full one) and
+ * the rectangles' edges at and next to block boundaries are exercised; the random contexts above give few such blocks */
+static int test_rds_rect(int iters) {
+    int bad = 0;
+    unsigned csz = old_ctx_size();
+    uint8_t *ctx = malloc(csz), *sys = calloc(1, 0x350000), *geom = calloc(1, 0x10000);
+    for (int it = 0; it < iters; it++) {
+        uint32_t *colp = (uint32_t *)ctx, *attp = (uint32_t *)(ctx + 50 * W * 4);
+        for (unsigned i = 0; i < csz; i++) ctx[i] = rnd();
+        uint32_t bg = rnd();
+        for (int i = 0; i < 50 * W; i++) attp[i] = bg + (it & 1 ? (rnd() & 3) : 0);
+        for (int r = 0, nr = 1 + rnd() % 12; r < nr; r++) {
+            int x0 = rnd() % W, y0 = rnd() % 50, w = 1 + rnd() % (it & 2 ? 40 : 400), h = 1 + rnd() % 50;
+            if (rnd() % 4 == 0) x0 = (x0 & ~15) + (int)(rnd() % 3) - 1;                 /* at block boundaries */
+            if (x0 < 0) x0 = 0;
+            uint32_t top = (rnd() & 0xc0000000u) | (rnd() % 64) << 24 | (rnd() % 3 ? 0 : 0x40000000u);
+            uint32_t key = rnd() & 0xffffff;
+            int gx = (int)(rnd() % 7) - 3, gy = (int)(rnd() % 7) - 3;
+            for (int y = y0; y < y0 + h && y < 50; y++)
+                for (int x = x0; x < x0 + w && x < W; x++)
+                    attp[y * W + x] = top | ((key + (uint32_t)(gx * x + gy * y) + (rnd() & 1)) & 0xffffff);
+        }
+        for (int i = 0; i < 50 * W; i++) colp[i] = pix(rnd() % 3, 0);
+        uint32_t d3 = (rnd() & ~0xf0u) | 0x20;                                          /* edge marking */
+        d3 |= ((it / 4) % 3 == 0 ? 0 : (it / 4) % 3 == 1 ? 0x80 : 0xc0);               /* fog: off, full, alpha only */
+        *(uint32_t *)(sys + 0x34eb40) = d3;
+        *(uint32_t *)(sys + 0x34eb48) = rnd();
+        *(uint32_t *)(sys + 0x34eb4c) = it % 4 == 3 ? attp[W] : rnd() % 2 ? bg : rnd();
+        *(uint32_t *)(sys + 0x34eb50) = rnd() % 4;
+        *(uint32_t *)(ctx + 2 * 50 * W * 4 + 50 * W + 0x14) = rnd() % 4;
+        for (int i = 0x9900; i < 0x9b00; i++) geom[i] = rnd();
+        for (int i = 0x99b4; i < 0x99cc; i++) geom[i] = (geom[i] & 0x3f) | 1;          /* edge colours: 6-bit, not 0 */
+        memset(o1, 0x5a, sizeof o1); memset(o2, 0x5a, sizeof o2);
+        old_rds(ctx, sys, geom, o1); new_rds(ctx, sys, geom, o2);
+        if (memcmp(o1, o2, sizeof o1)) {
+            for (size_t i = 0; i < sizeof o1; i += 4)
+                if (memcmp(o1 + i, o2 + i, 4)) { if (bad < 5) printf("rds rect it %d d3 %08x: byte %zu old %08x new %08x\n", it, d3, i, *(uint32_t *)(o1 + i), *(uint32_t *)(o2 + i)); break; }
+            bad++;
+        }
+    }
+    printf("resolve + downsample, polygon-like contexts: %d cases, %d differ\n", iters, bad);
+    return bad;
+}
+
+/* 1 when one of the polygon's two chains, walked as hr_polygon and edges_impl.h's interpolate_edges walk them, covers
+ * more lines than its window y_end - y_start: a chain that goes down, up and down again (these random polygons are
+ * mostly self-intersecting) covers lines twice. hr.c's walker stops such a chain at the window (EDGES_LINE_CAP); before
+ * it, the chain's lines ran on in the span arrays, past 64 the right chain's overwrote the left chain's first entries
+ * and past 128 the perspective steps ran out of the span block (what made two copies of the same hr.c differ with the
+ * previous polygons' spans in their heap blocks). Against a base without the cap (AB_UNCAPPED=1, set by run.sh) these
+ * polygons are counted apart; every other polygon must hash the same. */
+static int chain_overruns(unsigned count, const uint32_t *orders, unsigned oi, unsigned base, uint16_t (*hv)[2], uint16_t (*hv2)[2],
+                          const uint8_t *verts, unsigned bin_top, unsigned bin_bot, int edges) {
+    uint32_t seq = orders[oi & ~7u];                /* (t >= 8 of 9 and 10 vertices: the next group's entry, as hr_polygon) */
+    unsigned t = oi & 7, idx[10], ys[10], y[12], ymin = 0xffff, top = t, ybot = 0;
+    for (unsigned k = 0; k < count; k++) {
+        idx[k] = base + ((seq >> (4 * (k & 7))) & 15);
+        ys[k] = hv[idx[k]][1];
+        if (ys[k] < ymin) ymin = ys[k];
+    }
+    if (ys[t] != ymin) for (unsigned k = 0; k < count; k++) if (ys[k] == ymin) { top = k; break; }
+    for (unsigned k = 0, j = top % count; k < count; k++, j = j + 1 < count ? j + 1 : 0) {
+        unsigned vi = idx[j], y3 = hv[vi][1], rx = *(const uint16_t *)(verts + 16 * vi + 4), ry = *(const uint16_t *)(verts + 16 * vi + 6);
+        if (rx != hv2[vi][0] || ry != hv2[vi][1]) y3 = (3 * ry + 1) / 2;       /* hr_polygon's fallback */
+        y[k] = y3;
+        if (y3 > ybot) ybot = y3;
+    }
+    y[count] = y[0]; y[count + 1] = y[1];
+    int top_clip = y[0] < bin_top, bot_clip = ybot > bin_bot;
+    unsigned y_end = ybot < bin_bot ? ybot : bin_bot;
+    if ((int)y_end - (int)(y[0] > bin_top ? y[0] : bin_top) <= 0) return 0;
+    unsigned ys0 = edges ? bin_top - top_clip : bin_top, ye = edges ? y_end + bot_clip : y_end;
+    for (int dir = 1; dir >= -1; dir -= 2) {
+        int pos = dir > 0 ? 0 : (int)count;
+        unsigned yp = y[pos], n = 0;
+        int total = 0;
+        if (ye > yp) do {
+            pos += dir;
+            unsigned y1 = y[pos];
+            int len = (int)(y1 - yp);
+            if (ys0 > yp) len += (int)(yp - ys0);
+            if (y1 > ye) len += (int)(ye - y1);
+            if (len > 0) { if (n == 16) break; total += len; n++; }
+            yp = y1;
+        } while (ye > yp);
+        if (total > (int)ye - (int)ys0) return 1;
+    }
+    return 0;
+}
+
 /* the polygon walker (hr_polygon) on random polygons around random bins: what it hands the kernels compared */
 void old_poly(uint8_t *poly, uint8_t *verts, const void *hv, const void *hv2, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer);
 void new_poly(uint8_t *poly, uint8_t *verts, const void *hv, const void *hv2, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer);
@@ -156,7 +248,7 @@ static int test_poly(int iters) {
     uint32_t *orders = calloc(1, 0x11df90 + 512);
     ds_base = (uintptr_t)orders;                        /* the orders table at ds_base + DS_VERTEX_ORDERS */
     orders = (uint32_t *)((uint8_t *)orders + 0x11df90);
-    int bad = 0, calls = 0;
+    int bad = 0, calls = 0, over = 0, overbad = 0, uncapped = getenv("AB_UNCAPPED") && atoi(getenv("AB_UNCAPPED"));
     for (int it = 0; it < iters; it++) {
         unsigned bin = rnd() % 12, hy0 = bin * 48, bin_top = hy0 ? hy0 - 1 : 0, bin_bot = hy0 + 49 > 576 ? 576 : hy0 + 49;
         unsigned count = it % 13 == 0 ? 1 + rnd() % 2 : 3 + rnd() % 8, base = rnd() % (NV - 16), t = rnd() % count;
@@ -192,16 +284,23 @@ static int test_poly(int iters) {
         ab_hash = h0; ab_calls = c0;
         new_poly(poly, verts, hv, hv2, bin_top, bin_bot, (int)hy0 - 1, d3, defer);
         calls += c1;
-        if (h1 != ab_hash || c1 != ab_calls) { if (bad < 5) printf("poly it %d: count %u t %u bin %u calls %u/%u\n", it, count, t, bin, c1, ab_calls); bad++; }
+        int ov = chain_overruns(count, orders, (count * 8 + t) & 0x7f, base, hv, hv2, verts, bin_top, bin_bot, (d3 >> 5) & 1);
+        over += ov;
+        if (h1 != ab_hash || c1 != ab_calls) {
+            if (ov && uncapped) overbad++;
+            else { if (bad < 5) printf("poly it %d: count %u t %u bin %u calls %u/%u\n", it, count, t, bin, c1, ab_calls); bad++; }
+        }
     }
-    printf("polygon walker: %d polygons (%d reaching the kernels), %d differ\n", iters, calls, bad);
+    printf("polygon walker: %d polygons (%d reaching the kernels), %d differ", iters, calls, bad);
+    if (uncapped) printf(" (and %d of the %d with a chain longer than its window: the base walks them uncapped)", overbad, over);
+    printf("\n");
     return bad;
 }
 
 int main(int argc, char **argv) {
     int n = argc > 1 ? atoi(argv[1]) : 200;
     if (argc > 2) rs ^= strtoull(argv[2], 0, 0) * 0x9e3779b97f4a7c15ull;
-    int bad = test_ds(n) + test_fog(n * 10) + test_rds(n) + test_poly(n * 50);
+    int bad = test_ds(n) + test_fog(n * 10) + test_rds(n) + test_poly(n * 50) + test_rds_rect(n);
     printf(bad ? "FAIL\n" : "PASS\n");
     return bad != 0;
 }

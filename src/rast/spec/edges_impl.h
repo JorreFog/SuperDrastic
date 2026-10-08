@@ -230,16 +230,19 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_interpolate_parameters)(vtx_t **
         uint32_t tbase = (uint32_t)((int32_t)ta * 32768) + (dt > 0 ? 0x800 : 0);
         int32_t cnt = counts[e];
 #if EDGES_NEON
-        /* 4 lines: s16 x s16 products + the u32 bases, bits 15-30 (shrn), interleaved as the halves of the words */
+        /* 4 lines: s16 x s16 products + the u32 bases, bits 15-30 (shrn), interleaved as the halves of the words by
+         * zip1 and stored with str q (st2 models slower on the A55: 38 -> 28 cycles a step); b's words are b << 16 */
         const uint32x4_t vs = vdupq_n_u32(sbase), vt = vdupq_n_u32(tbase), vr = vdupq_n_u32(cbase[0]);
         const uint32x4_t vg = vdupq_n_u32(cbase[1]), vb = vdupq_n_u32(cbase[2]);
-        const uint16x4_t zero = vdup_n_u16(0);
 #define PAR(base, d) vshrn_n_u32(vaddq_u32(base, vreinterpretq_u32_s32(vmull_n_s16(q, d))), 15)
         do {
             int16x4_t q = vld1_s16((const int16_t *)st);
-            uint16x4x2_t vst = { { PAR(vs, ds), PAR(vt, dt) } }, vrg = { { PAR(vr, dc[0]), PAR(vg, dc[1]) } };
-            uint16x4x2_t vxb = { { zero, PAR(vb, dc[2]) } };                    /* DraStic: stale v26.h[k] */
-            vst2_u16((uint16_t *)ost, vst); vst2_u16((uint16_t *)org, vrg); vst2_u16((uint16_t *)oxb, vxb);
+            uint16x4_t s = PAR(vs, ds), t = PAR(vt, dt), r = PAR(vr, dc[0]), g = PAR(vg, dc[1]);
+            uint16x8_t st8 = vzip1q_u16(vcombine_u16(s, s), vcombine_u16(t, t)), rg8 = vzip1q_u16(vcombine_u16(r, r), vcombine_u16(g, g));
+            __asm__("" : "+w"(st8), "+w"(rg8));         /* (zip1 and str q: the compiler would make st2 of them again) */
+            vst1q_u16((uint16_t *)ost, st8);
+            vst1q_u16((uint16_t *)org, rg8);
+            vst1q_u32((uint32_t *)oxb, vshll_n_u16(PAR(vb, dc[2]), 16));    /* x 0 (DraStic: stale v26.h[k]) */
             st += 8; ost += 16; org += 16; oxb += 16;
             cnt -= 4;
         } while (cnt > 0);
@@ -330,6 +333,16 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_interpolate_edges)(void *unused, uint
     uint32_t n = 0, total = 0, skip0 = 0;
     vtx_t *prev = vptr[0];
     uint32_t yp = rd16(prev + 6);
+#ifdef EDGES_LINE_CAP
+    /* (the hi-res instantiation) at most y_end - y_start lines a chain, the most that the span setup and the kernels
+     * read. A chain that goes down, up and down again (a self-intersecting polygon, or the repeated vertices of 9 and
+     * 10) covers lines twice, and its lines run on in the arrays: past 64 entries the right chain's arrays overwrite
+     * the next arrays' (the left chain's) first entries, past 128 lines its perspective coefficients run past the end
+     * of the span block. DraStic's walker does the same with its 44-entry arrays (the spec_ instantiations keep it:
+     * t_edges.c compares them with DraStic's); at 3x the chain stops at the window instead: the lines within it are
+     * the same, what used to be overwritten is the chain's own. */
+    const int32_t cap = (int32_t)y_end - (int32_t)y_start;
+#endif
     if (y_end > yp) {
         vtx_t **q = vptr + dir;
         do {
@@ -339,6 +352,9 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_interpolate_edges)(void *unused, uint
             uint32_t sk = 0;
             if (y_start > yp) { len += (int32_t)(yp - y_start); sk = y_start - yp; }
             if (y1 > y_end) len += (int32_t)(y_end - y1);
+#ifdef EDGES_LINE_CAP
+            if (len > cap - (int32_t)total) { len = cap - (int32_t)total; if (len <= 0) break; }
+#endif
             if (len > 0) {
                 if (n == 16) break;                     /* the arrays hold 16 edges (never reached by DraStic's polygons) */
                 counts[n] = (uint8_t)len;
