@@ -209,6 +209,24 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   M cycles a frame, the frame net of `[other]` with both changes 9.62 -> 9.34 M. `t_resolve.c` (its rectangles of
   polygon ids; a screen that drops the next pixel's id fails it), S4's frame diff 0 bins, the scene cycle as before to
   55200 bins with the compositor's checks 0 differ.
+  Fourth round, the walk: the 3x walker (hr.c's hr_polygon) ran edges_impl.h's routines one after another, each a
+  pass over the chain's lines through the scratch (the float coefficients, the Q15 steps, then w, the parameters and
+  x/z), and the span setup and markers 8 lines a step; it now runs the 2x walker's fused routines (walk.c's, moved to
+  `walk_impl.h`, a template for both layouts: the array stride, the x clamp, the reciprocal table, the 3x chain cap and
+  hr.c's edge-marking x rule, + 1 unless bit 15 or x >= 768; `RAST_WALK=0` keeps edges_impl.h's). Modeled A55 cycles
+  a frame, stress ROM L4 at 3x: the walk (interpolate_edges 1.90 M, interp_x 0.65, setup_spans 0.58, hr_render_list
+  0.53) 3.66 M -> 2.05 M (hr_render_list, all of it inlined; f_run's 0.68 M the same workload), the frame net of
+  `[other]` 33.78 -> 32.35 M (-4.2%); the fog and edge-marking scene S4 at 3x 1.01 M -> 0.53 M. The 2x code is the
+  same instructions. `ut/hr_ab` against 4f63ae7: 0 of 50000 polygons differ in what f_run receives (it now hashes span
+  array 10, the edge markers, only with edge marking: without it nothing reads the array, and the former walker left
+  its scratch there; mutants of the 3x x rule, the cap and the s, t rounding fail it); the 3x scenes S7, S4, S2 and
+  L4 run (no signals). Why the walk is not shared across bins: each 2x bin restarts an edge's float accumulators at
+  the bin's first line (n0 = 0 B + k A, DraStic's skip), so a line's weights depend on the bin that draws it and a
+  walk continued from the bin above would round differently (exact only while every sum stays below 2^24); what is
+  the same for all bins of a polygon is its setup (the vertices, an edge's constants, f_run's and asm_batch_for's
+  per-polygon work: about 700 of the ~1900 modeled cycles a polygon and bin costs on L4), but L4 has ~505 polygons
+  a frame in 1166 polygon-bins (2.3 bins each), and the three render threads take every third bin, so a per-thread
+  cache would almost never hit: sharing needs a per-frame table across the threads (Next).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -234,7 +252,7 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   768x576 and supersampled into DraStic's 2x frame: every bin at 48 lines x 768 (plus a neighbour line above and
   below for the edge marking), with the vertices' 3x coordinates from a hook on DraStic's perspective transform
   (the same math with the viewport scaled by 3), our own polygon walker (spec/edges.c's routines with the wider
-  layout), the same kernels in a hi-res instantiation (rast_kern_h*, strides from the kernel arguments; deferred
+  layout, on walk.c's fused forms: `walk_impl.h`), the same kernels in a hi-res instantiation (rast_kern_h*, strides from the kernel arguments; deferred
   shading and bilinear filtering included), the bin resolve over 768-pixel lines and a 3:2 alpha-weighted box
   filter into the output block. The 2D compositing then sees a normal 2x frame, with anti-aliased polygon edges
   and 2.25 samples per pixel of texture detail. Shadow polygons (mode 3) render on the scalar line path with
@@ -410,11 +428,16 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
   leave by umov), which the model cannot price (store-to-load forwarding).
-- `ut/hr_ab`'s walker test does not see interpolate_parameters' outputs: a mutant of it (vsub for vadd in
-  edges_impl.h's NEON form) passes the walker A/B, which hashes the 11 span arrays f_run receives, while t_edges.c
-  fails it against DraStic's. Find out whether the 3x path overwrites or ignores span arrays 4, 6 and 8's parameter
-  halves before f_run, or the hash misses them; until then edges_impl.h changes rest on t_edges.c.
-- 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
+- `ut/hr_ab`'s walker test sees the parameters (fourth round: a mutant of the fused walker's s, t rounding fails it in
+  ~half the polygons): the earlier mutant of edges_impl.h passed because both sides then took the worktree's headers.
+  The 3x walker is now walk_impl.h's (edges_impl.h's NEON form only with `RAST_WALK=0`, checked by t_edges.c).
+- Sharing a polygon's per-bin setup across bins (fourth round, Status): a per-frame table of the per-polygon work
+  (the vertex pointers, the edges' constants, f_run's poly_t and the kernel arguments but the per-thread fields:
+  ctx, the owner buffer), filled by whichever render thread meets the polygon first and published lock-free (a
+  generation word per polygon, release/acquire), would save up to ~700 modeled cycles in ~660 of L4's 1166
+  polygon-bins a frame (~0.4 M at 2x), less the copies; the walk's weights stay per bin. Contiguous bins per thread
+  (the scheduling's choice) would let a per-thread cache do the same without sharing.
+- 3x: the top vertex for tied vertices; later the hi-res 3D
   layer presented through the dsflip shader instead of downsampled.
   Polygons of 9 and 10 vertices: DraStic's render_polygon_4x takes the walk's ninth vertex as base + 0 and never
   writes a tenth's slot (it walks a stale stack slot; walk.c leaves 10 to DraStic). hr.c's vertex indices for them
