@@ -317,7 +317,10 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   66-70 cycles a zero step against 74) is bound by the FP pipe where it fogs: four channels'
   smull/smull2/shrn/shrn2 per 16 pixels and the weights' two tbl2. The attributes by ldr q + shrn instead of ld4 + zip
   models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog and edge
-  marking could take res2.c's skips (S4 2x: edge marking 1.02 -> 0.57 M, fog 0.89 -> 0.78 M).
+  marking could take res2.c's skips (S4 2x: edge marking 1.02 -> 0.57 -> 0.50 M with the top-byte screen, fog 0.89
+  -> 0.78 -> 0.60 M with fog_zero_b2's depth screen, which carries over unchanged: the same table, offset and shift).
+  The edge screen's skipped step (61 modeled cycles: 16 ldr q, 12 uzp2, two ext, the xors) is near the issue limit;
+  the next saving there is fewer loads, e.g. a bin's top-byte planes made once (each line is read by three steps).
 - The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
