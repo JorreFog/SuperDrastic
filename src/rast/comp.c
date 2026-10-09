@@ -12,9 +12,10 @@
  * 2. Table (RAST_COMP=2, the default): the result depends only on the 1 KiB of pixels the pointer addresses, and in
  *    the 2x path that is a half-row of the 3D output frame (frame + line*0x1000 + q*0x400). So the render threads
  *    compute it once per finished bin (comp_bin(), called by rast.c's and hr.c's bin loops right after the bin's
- *    output block is written: 64 half-rows of 0x400 bytes, rows y at +y*0x800, parity p at +p*0x400) into a table
- *    per output frame; the hook copies the table entry when the pointer is a half-row of a frame whose table is
- *    valid, and computes with NEON otherwise.
+ *    output block is written: 64 half-rows of 0x400 bytes, rows y at +y*0x800, parity p at +p*0x400; res2.c's
+ *    res2_vis_bin(), compvis.h's results scheduled for the A55; or, but for the fog-only resolve, res2.c's resolves
+ *    while they write the block, through comp_bin_table()) into a table per output frame; the hook copies the table
+ *    entry when the pointer is a half-row of a frame whose table is valid, and computes with NEON otherwise.
  *
  * The table's validity rule: tvalid[slot] is set only while the frame's bytes are the ones the table was computed
  * from. DraStic writes the two output frames (sys + SYS_FRAMEBUF, 2 x 0xc0000) only in
@@ -63,6 +64,7 @@
 #include "comp.h"
 #include "compvis.h"
 #include "compfuse.h"
+#include "res2.h"
 #include "spec/composite.h"
 
 #define U32(p, o) (*(uint32_t *)((uint8_t *)(p) + (o)))
@@ -178,10 +180,21 @@ void comp_bin(uint8_t *sys, unsigned bin, int count) {
     if (s < 0 || bin >= NBINS) return;
     const uint8_t *blk = out + (size_t)bin * BIN_BYTES;
     unsigned e0 = s * HALF_ROWS + bin * 64;
-    for (unsigned h = 0; h < 64; h++)
-        tflag[e0 + h] = (uint8_t)comp_vis_neon(tbits[e0 + h], (const uint32_t *)(blk + h * 0x400));
+    res2_vis_bin(blk, &tbits[e0], &tflag[e0]);      /* compvis.h's results, scheduled for the A55 (res2.c) */
     if (count) __atomic_fetch_add(&bins_done, 1, __ATOMIC_RELAXED);
 }
+
+/* comp_bin() for a resolve that computes the entries itself (res2.c, while it writes the block): the bin's 64
+ * entries, or 0 when the table is off or the output is not one of its frames (then comp_bin() as usual, a no-op) */
+int comp_bin_table(uint8_t *sys, unsigned bin, uint8_t (**bits)[32], uint8_t **flags) {
+    if (!use_tab || bin >= NBINS) return 0;
+    int s = slot_of(PTR(sys, SYS_OUTPUT));
+    if (s < 0) return 0;
+    *bits = &tbits[s * HALF_ROWS + bin * 64];
+    *flags = &tflag[s * HALF_ROWS + bin * 64];
+    return 1;
+}
+void comp_bin_done(void) { __atomic_fetch_add(&bins_done, 1, __ATOMIC_RELAXED); }
 
 static void hook_uf4(uint8_t *sys, uint32_t skip) {
     uintptr_t b = (uintptr_t)sys + SYS_FRAMEBUF;

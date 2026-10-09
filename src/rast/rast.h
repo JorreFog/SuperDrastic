@@ -15,4 +15,8 @@ void b0_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsi
                  unsigned flags, uint8_t *v0);
 void f_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
                 unsigned flags, uint8_t *v0);
+/* walk.c: render_polygon_4x for ordinary polygons, `setup` in place of render_polygon_setup_4x; 0 = not handled */
+typedef void walk_setup_fn(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
+                           unsigned flags, uint8_t *v0);
+int walk_polygon_4x(uint8_t *ctx, uint8_t *poly, uint8_t *verts, unsigned bin_top, unsigned bin_bot, walk_setup_fn *setup);
 #endif

@@ -17,7 +17,7 @@
  * function is patched as comp_init() patches it (a copy of rast.c's rast_hook) and called through its entry: the
  * jump to the hook, the arguments as a caller leaves them, and the trampoline back into the original, against the
  * C port.
- * run.sh t_comp_hook.c ../../../src/rast/spec/composite.c */
+ * run.sh t_comp_hook.c ../../../src/rast/spec/composite.c ../../../src/rast/res2.c ../../../src/rast/res2_line.S */
 #include "ut.h"
 #include <stddef.h>
 #include <sys/mman.h>

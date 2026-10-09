@@ -1,7 +1,12 @@
-/* t_resolve.c: bin resolve / fog / edge marking ports (src/rast/spec/resolve.c) vs DraStic's originals.
- * run.sh t_resolve.c ../../../src/rast/spec/resolve.c */
+/* t_resolve.c: bin resolve / fog / edge marking ports (src/rast/spec/resolve.c) vs DraStic's originals, and the NEON
+ * resolve with the compositor's visibility table (src/rast/res2.c) vs DraStic's resolve and the visibility port, and
+ * res2.c's fog and edge-marking resolves vs DraStic's drivers.
+ * run.sh t_resolve.c ../../../src/rast/spec/resolve.c ../../../src/rast/spec/composite.c ../../../src/rast/res2.c
+ *        ../../../src/rast/res2_line.S */
 #include "ut.h"
 #include "spec/resolve.h"
+#include "spec/composite.h"
+#include "res2.h"
 
 #define CTX_SZ  0x24100
 #define SYS_SZ  0x34f000
@@ -203,6 +208,159 @@ static void test_drivers(int n) {
     }
 }
 
+/* res2_resolve vs video_3d_resolve_bin_asm_4x (the block) and render_scanline_set_3d_visibility's port (each of the
+ * block's 64 half-rows); colour lines whose alphas are random, 0 or 31 only, all 0, all 31 (the three flags) */
+static void test_res2(int n) {
+    static uint8_t bits[64][32], flags[64], rbits[32];
+    for (int it = 0; it < n && ut_fail < 10; it++) {
+        setup();
+        uint32_t *c = (uint32_t *)ctx[0];
+        for (int y = 0; y < 32; y++) {
+            int mode = rnd(5);
+            for (int x = 0; x < 512; x++) {
+                uint32_t v = c[y * 512 + x], a = (v >> 24) & 0x1f;
+                if (mode == 1) a = rnd(2) ? 31 : 0;
+                else if (mode == 2) a = 0;
+                else if (mode == 3) a = 31;
+                else if (mode == 4) a = rnd(8) ? (rnd(2) ? 31 : 0) : rnd(32);
+                c[y * 512 + x] = (v & 0xe0ffffffu) | a << 24;
+            }
+        }
+        uint32_t bin = rnd(12), ob = bin * 0x10000;
+        memset(bits, 0x5a, sizeof bits); memset(flags, 0x5a, sizeof flags);
+        DS(resolve_fn, 0x9ce78)(outf[0] + ob, ctx[0]);
+        int tab = rnd(4) != 0;
+        res2_resolve(outf[1] + ob, (const uint32_t *)ctx[0], tab ? bits : 0, tab ? flags : 0);
+        if (ut_cmp("res2_resolve", outf[0], outf[1], OUT_SZ)) fprintf(stderr, "  (iteration %d, table %d)\n", it, tab);
+        if (!tab) continue;
+        for (int h = 0; h < 64; h++) {
+            uint32_t r = spec_render_scanline_set_3d_visibility(rbits, (const uint32_t *)(outf[0] + ob + h * 0x400));
+            if (ut_cmp("res2_resolve bitmap", rbits, bits[h], 32) || r != flags[h]) {
+                if (r != flags[h]) { fprintf(stderr, "FAIL res2_resolve flag: half-row %d %#x, port %#x\n", h, flags[h], r); ut_fail++; }
+                fprintf(stderr, "  (iteration %d, half-row %d)\n", it, h);
+                break;
+            }
+        }
+    }
+}
+
+/* res2_resolve_fx (the fog and edge-marking resolves fused, res2.c) vs DraStic's drivers: the output block, the gap
+ * buffers and the attribute lines (the colour lines are not compared: res2.c fogs and marks them in place), with and
+ * without the table; the table entries of the written half-rows vs the visibility port. Random contexts as setup()'s
+ * (attributes with ties, few ids and depths, or polygon ids in rectangles; the fog flag random, or clear in whole
+ * 32-pixel steps; fog tables (zero at small depths or everywhere: steps whose weights are all 0; zero up to a small
+ * delta, with depths in a band about the fog offset: the depth screen's bound on both sides), fog
+ * colours and offsets, DISP3DCNT's fog shift, the clear attribute and the edge colours random; fog on or off by the
+ * context and system flags), every bin (bin 0's top line, bin 11's bottom line, the gap copies of the others). */
+static void test_fx(int n) {
+    static const struct { const char *name; uint32_t off; unsigned m; } drv[] = {
+        {"res2_resolve_fx fog_full", 0x57c70, 2}, {"res2_resolve_fx fog_alpha", 0x58280, 3},
+        {"res2_resolve_fx edge_mark", 0x56420, 4}, {"res2_resolve_fx edge_mark (5)", 0x56420, 5},
+        {"res2_resolve_fx edge_mark_fog_full", 0x57d90, 6}, {"res2_resolve_fx edge_mark_fog_alpha", 0x583a0, 7},
+    };
+    static uint8_t bits[64][32], flags[64], rbits[32];
+    for (int it = 0; it < n && ut_fail < 10; it++) {
+        for (unsigned d = 0; d < sizeof drv / sizeof drv[0]; d++) {
+            setup();
+            if (rnd(3) == 0) {                                  /* steps of 32 pixels without a fog flag */
+                for (int y = 0; y < 32; y++)
+                    for (int x = 0; x < 512; x += 32)
+                        if (rnd(2)) for (int i = 0; i < 32; i++) ((uint32_t *)ctx[0])[y * 512 + x + i] &= 0x7fffffffu;
+                memcpy(ctx[1], ctx[0], 0x10000);
+            }
+            if (rnd(2)) {                                       /* polygon ids in rectangles (steps without an id edge) */
+                uint32_t *a = (uint32_t *)(ctx[0] + 0x10000), ids[4][4];
+                int xs = 3 + rnd(6), ys = rnd(5);
+                for (int i = 0; i < 16; i++) ids[i >> 2][i & 3] = rnd(64) << 24 | rnd(4) << 30;
+                if (rnd(2)) ids[rnd(4)][rnd(4)] = *(uint32_t *)(sys[0] + 0x34eb4c) & 0xff000000u;
+                for (int y = 0; y < 32; y++)
+                    for (int x = 0; x < 512; x++)
+                        a[y * 512 + x] = (a[y * 512 + x] & 0xffffff) | ids[(y >> ys) & 3][(x >> xs) & 3];
+                memcpy(ctx[1] + 0x10000, ctx[0] + 0x10000, 0x10000);
+            }
+            if (rnd(4) == 0) {                                  /* weights 0 at small depths, or everywhere */
+                int n0 = rnd(2) ? 64 : 1 + rnd(4);
+                for (int k = 0; k < 2; k++) memset(geom[k] + 0x9974, 0, n0), memset(geom[k] + 0x9994, 0, n0 < 32 ? n0 : 32);
+            }
+            if (rnd(3) == 0) {          /* the fog depth screen's bound (res2.c fog_zero_b2): table entries 0 up to a
+                                         * segment j with a small delta of either sign, depths in a band about the
+                                         * offset, so that steps' largest depths fall on both sides of the bound */
+                int j = rnd(3) ? rnd(4) : rnd(32), dl = rnd(4) ? 1 + rnd(12) : rnd(2) ? 0 : -1 - rnd(4);
+                uint8_t *t = geom[0] + 0x9974;
+                memset(t, 0, j + 1); memset(t + 32, 0, j);
+                t[32 + j] = (uint8_t)dl;
+                if (rnd(2) && j < 31) t[j + 1] = (uint8_t)dl;
+                memcpy(geom[1] + 0x9974, t, 64);
+                uint32_t off = (rnd(2) ? 0x6000 + rnd(0x800) : rnd(0x8000)) & 0x7fff, sh = rnd(16), o15 = rnd(2) << 15;
+                for (int k = 0; k < 2; k++) {
+                    *(uint16_t *)(geom[k] + 0x9aaa) = (uint16_t)(off | o15);
+                    *(uint32_t *)(sys[k] + 0x34eb40) = (*(uint32_t *)(sys[0] + 0x34eb40) & ~0xf00u) | sh << 8;
+                }
+                uint32_t *a = (uint32_t *)(ctx[0] + 0x10000);
+                int band = 1 << rnd(13), base = (int)off + (int)((j * 1024u + rnd(1024)) >> sh) - band / 2;
+                for (int i = 0; i < 32 * 512; i++) {
+                    int dd = base + (int)rnd(band);
+                    dd = dd < 0 ? 0 : dd > 0x7fff ? 0x7fff : dd;
+                    a[i] = (a[i] & 0xff0001ffu) | (uint32_t)dd << 9;
+                }
+                memcpy(ctx[1] + 0x10000, ctx[0] + 0x10000, 0x10000);
+            }
+            uint32_t bin = rnd(12), ob = bin * 0x10000;
+            int tab = rnd(4) != 0;
+            memset(bits, 0x5a, sizeof bits); memset(flags, 0x5a, sizeof flags);
+            DS(drv_fn, drv[d].off)(ctx[0], outf[0] + ob, bin);
+            int r = res2_resolve_fx(ctx[1], outf[1] + ob, bin, drv[d].m, tab ? bits : 0, tab ? flags : 0);
+            int f = ut_fail;
+            ut_cmp(drv[d].name, outf[0], outf[1], OUT_SZ);
+            ut_cmp(drv[d].name, ctx[0] + 0x10000, ctx[1] + 0x10000, 0x14000);
+            ut_cmp(drv[d].name, ctx[0] + 0x24010, ctx[1] + 0x24010, CTX_SZ - 0x24010);
+            ut_cmp(drv[d].name, sys[0] + GAPS_LO, sys[1] + GAPS_LO, GAPS_HI - GAPS_LO + 0x10);
+            if (ut_fail != f) fprintf(stderr, "  (iteration %d, bin %u, table %d)\n", it, bin, tab);
+            if (!tab || !r) continue;
+            int edge = drv[d].m & 4, h0 = edge && bin ? 2 : 0, h1 = edge && bin != 11 ? 62 : 64;
+            for (int h = h0; h < h1; h++) {
+                uint32_t rv = spec_render_scanline_set_3d_visibility(rbits, (const uint32_t *)(outf[0] + ob + h * 0x400));
+                if (ut_cmp("res2_resolve_fx bitmap", rbits, bits[h], 32) || rv != flags[h]) {
+                    if (rv != flags[h]) { fprintf(stderr, "FAIL res2_resolve_fx flag: half-row %d %#x, port %#x\n", h, flags[h], rv); ut_fail++; }
+                    fprintf(stderr, "  (%s, iteration %d, bin %u, half-row %d)\n", drv[d].name, it, bin, h);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/* res2_vis_bin (comp_bin's entries of a written block) vs the visibility port: alpha bytes of any value (the fog
+ * resolves keep bits 5 and 6), 0 or 31, all 0, all 31, few translucent */
+static void test_vis(int n) {
+    static uint8_t bits[64][32], flags[64], rbits[32];
+    for (int it = 0; it < n && ut_fail < 10; it++) {
+        uint32_t *b = (uint32_t *)outf[0];
+        for (int h = 0; h < 64; h++) {
+            int mode = rnd(6);
+            for (int x = 0; x < 256; x++) {
+                uint32_t v = (uint32_t)rnd64(), a = v >> 24;
+                if (mode == 1) a = rnd(2) ? 31 : 0;
+                else if (mode == 2) a = 0;
+                else if (mode == 3) a = 31;
+                else if (mode == 4) a = rnd(16) ? (rnd(2) ? 31 : 0) : rnd(256);
+                else if (mode == 5) a &= 0x1f;
+                b[h * 256 + x] = (v & 0xffffff) | a << 24;
+            }
+        }
+        memset(bits, 0x5a, sizeof bits); memset(flags, 0x5a, sizeof flags);
+        res2_vis_bin(outf[0], bits, flags);
+        for (int h = 0; h < 64; h++) {
+            uint32_t r = spec_render_scanline_set_3d_visibility(rbits, b + h * 256);
+            if (ut_cmp("res2_vis_bin bitmap", rbits, bits[h], 32) || r != flags[h]) {
+                if (r != flags[h]) { fprintf(stderr, "FAIL res2_vis_bin flag: half-row %d %#x, port %#x\n", h, flags[h], r); ut_fail++; }
+                fprintf(stderr, "  (iteration %d, half-row %d)\n", it, h);
+                break;
+            }
+        }
+    }
+}
+
 void ut_main(void) {
     for (int k = 0; k < 2; k++) {
         ctx[k] = calloc(1, CTX_SZ); sys[k] = calloc(1, SYS_SZ); geom[k] = calloc(1, GEOM_SZ); outf[k] = calloc(1, OUT_SZ);
@@ -213,10 +371,13 @@ void ut_main(void) {
     int n = s ? atoi(s) : 1000;
     test_leaves(n * 4);
     test_drivers(n);
+    test_res2(n);
+    test_fx(n);
+    test_vis(n);
     set_ptrs(0); set_ptrs(1);
     *(uint64_t *)(sys[1] + 0x34eb58) = *(uint64_t *)(sys[0] + 0x34eb58);
     *(uint64_t *)(sys[1] + 0x2c1748) = *(uint64_t *)(sys[0] + 0x2c1748);
     ut_cmp("sys (whole)", sys[0], sys[1], SYS_SZ);
     ut_cmp("geom (whole)", geom[0], geom[1], GEOM_SZ);
-    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers\n", n * 4, n);
+    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers, %d res2, %d fx (x 6 modes) and %d vis iterations\n", n * 4, n, n, n, n);
 }

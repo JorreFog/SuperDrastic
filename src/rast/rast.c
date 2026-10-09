@@ -17,6 +17,7 @@
 #include "rast.h"
 #include "fused.h"
 #include "comp.h"
+#include "res2.h"
 
 uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
@@ -62,32 +63,43 @@ static void clear_bin(uint8_t *ctx, uint8_t *sys, uint8_t *geom, unsigned y0) {
     }
 }
 
+/* the bin's resolve into its output block and the compositor's visibility table entries for it, while the block is in
+ * cache: res2.c's NEON forms of DraStic's resolves (video_3d_resolve_bin_asm_4x, and with fog and / or edge marking
+ * its drivers' stages fused per line), the plain resolve's pass writing the block and the entries from the same
+ * registers; the fog-only resolve's block (unmasked) then gets its entries from comp_bin() */
 static void resolve_bin(uint8_t *ctx, uint8_t *sys, unsigned bin) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
     uint8_t *out = PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES;
     unsigned m = ((d3 >> 5) & 1) << 2 | ((d3 >> 6) & 3);       /* edge marking, fog alpha-only, fog */
     if (U8(ctx, CTX_NO_EDGE)) m &= ~4u;
-    typedef void (*rfn)(void *, void *, unsigned long);
-    switch (m) {
-    case 2: DSFN(rfn, DS_RESOLVE_FOG_FULL_4X)(ctx, out, m); break;
-    case 3: DSFN(rfn, DS_RESOLVE_FOG_ALPHA_4X)(ctx, out, m); break;
-    case 4: case 5: DSFN(rfn, DS_RESOLVE_EDGE_4X)(ctx, out, bin); break;
-    case 6: DSFN(rfn, DS_RESOLVE_EDGE_FOG_FULL_4X)(ctx, out, bin); break;
-    case 7: DSFN(rfn, DS_RESOLVE_EDGE_FOG_ALPHA_4X)(ctx, out, bin); break;
-    default: DSFN(void (*)(void *, void *), DS_RESOLVE_BIN_ASM_4X)(out, ctx); break;
+    uint8_t (*bits)[32], *flags;
+    int tab = comp_bin_table(sys, bin, &bits, &flags);
+    if (m & 6 ? res2_resolve_fx(ctx, out, bin, m, tab ? bits : 0, tab ? flags : 0)
+              : (res2_resolve(out, (const uint32_t *)(ctx + CTX_COLOR), tab ? bits : 0, tab ? flags : 0), 1)) {
+        if (tab) comp_bin_done();
+        return;
     }
+    comp_bin(sys, bin, 1);
 }
 
 static __thread int in_defer;    /* hook_setup: the polygon goes to the deferred queue */
+static int walk = 1;             /* RAST_WALK=0: DraStic's render_polygon_4x walks every polygon (else walk.c, most) */
+static walk_setup_fn hook_setup;
 static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8_t *verts, unsigned y0, int defer) {
     typedef void (*pfn)(void *, void *, void *, unsigned long, unsigned long);
     uint32_t n = U32(list, 0x1000);
+    /* walk.c's setup: hook_setup's choice made once (it runs inside our bin loop, so in_ours is set) when nothing
+     * per polygon decides it (deferred queueing, RAST_PDIFF); DraStic's own render_polygon_4x calls the hook */
+    walk_setup_fn *setup = defer || pdiff ? hook_setup : pipe_sel ? f_setup_4x : b0_setup_4x;
     for (uint32_t i = 0; i < n; i++) {
         uint8_t *poly = polys + 32 * (size_t)((const uint16_t *)list)[i];
         /* deferred: modulate-shaded polygons queue up; the others (toon, highlight, shadow) flush and render now */
-        in_defer = defer && !((U32(poly, 4) >> 4) & 3);
-        if (defer && !in_defer) defer_flush(&layout_2x, ctx);
-        DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
+        if (defer) {
+            in_defer = !((U32(poly, 4) >> 4) & 3);
+            if (!in_defer) defer_flush(&layout_2x, ctx);
+        }
+        if (!walk || !walk_polygon_4x(ctx, poly, verts, y0, y0 + 32, setup))
+            DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
     }
     in_defer = 0;
     if (defer) defer_flush(&layout_2x, ctx);
@@ -122,8 +134,7 @@ static void render_bins(uint8_t *ctx) {
             memset(ctx + CTX_IDBUF, 0xff, 0x4000);
             render_list(ctx, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, y0, 0);
         }
-        resolve_bin(ctx, sys, bin);
-        comp_bin(sys, bin, 1);          /* the compositor's visibility table, while the block is in cache */
+        resolve_bin(ctx, sys, bin);     /* and the compositor's visibility table, while the block is in cache */
     }
 }
 
@@ -350,6 +361,7 @@ __attribute__((constructor)) static void rast_init(void) {
     pdiff = getenv("RAST_PDIFF") != 0;
     if (getenv("RAST_PDIFF_STRICT")) pdiff_strict = atoi(getenv("RAST_PDIFF_STRICT"));
     if (getenv("RAST_PIPE")) pipe_sel = atoi(getenv("RAST_PIPE"));
+    if (getenv("RAST_WALK")) walk = atoi(getenv("RAST_WALK"));
     { extern int use_neon; use_neon = pipe_sel >= 1 ? pipe_sel : 1; }
     if (getenv("RAST_DUMP_EVERY")) dump_every = atoi(getenv("RAST_DUMP_EVERY"));
     dl_iterate_phdr(cb, 0);
