@@ -17,6 +17,7 @@
 #include "rast.h"
 #include "fused.h"
 #include "comp.h"
+#include "ds2d.h"
 #include "res2.h"
 
 uintptr_t ds_base;
@@ -374,6 +375,7 @@ __attribute__((constructor)) static void rast_init(void) {
         else if (dump_dir) hr_frame = calloc(768 * 576, 4);
     }
     comp_init();                         /* the compositor's 3D visibility step (comp.c) */
+    ds2d_init();                         /* DraStic's 2D scanline routines (ds2d.c) */
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
     fprintf(stderr, "[rast] Gengis Engine: hooked video_3d_render_bins_4x, mode %s, scale %d\n", e, rast_scale);
 }
