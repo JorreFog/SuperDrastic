@@ -528,7 +528,12 @@ static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t
  * NEON, four triples (four left and four right outputs in each of the two output rows) at a time: ld3 gives the a,
  * b and c pixels of the triples as vectors. Each of the 9 input vectors has one weight w: a0 4, b0 2, c0 4, a1 2,
  * b1 1, c1 2, a2 4, b2 2, c2 4 (top left: a0 b0 a1 b1, top right: c0 b0 c1 b1, bottom left: a1 b1 a2 b2, bottom
- * right: c1 b1 c2 b2). Three cases by the 36 alphas:
+ * right: c1 b1 c2 b2). A uniform step comes first: every triple's 9 pixels of one colour c (r, g, b; alpha bits 5-7
+ * aside) with channels <= 63 and alpha 31, which the all-opaque case below turns into c itself, alpha 31 (the clear
+ * area and flat areas: 65% of the steps of the field scene S7 at 3x, 42% of the stress ROM L4's, 15% of S4's). Its
+ * test (the triples' OR besides their AND, the opaque test folded into the same max) costs a step that is not uniform
+ * ~20 modeled cycles and saves a uniform one ~27 (of ~90), so after a step that is not uniform the next DS_SKIP steps
+ * go without it (two copies of the step, ds_step's test). Otherwise three cases by the 36 alphas:
  *  - all 31 (the opaque interior, by far the most common): A = 279 and K = 234 everywhere, so colour =
  *    (31 S 234 + 2^15) >> 16 = (7254 S + 2^15) >> 16 with S = sum(w c), which is sqrdmulh(S, 3627); alpha = 31.
  *    S = 2X + b1 with X = 2a0 + b0 + a1 for the top left output (the others alike), X as u8 (<= 252 for 6-bit
@@ -543,7 +548,12 @@ static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t
  * The left outputs of a row go to the first 0x400 bytes of the output line and the right ones to the second (the
  * even and the odd pixels: the output block's layout). */
 #include <arm_neon.h>
-static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out, uint32_t clear) {
+#define DS_SKIP 7
+/* one step: the four triples at r0, r1, r2 (three input rows) into the four output vectors at o0 (top left, + 0x400 top
+ * right, + 0x800 bottom left, + 0xc00 bottom right); test: the uniform test first, returns 1 when the step was not
+ * uniform (always_inline: the two forms are two copies of the step, the test a constant in each) */
+static inline __attribute__((always_inline)) int ds_step(const uint32_t *r0, const uint32_t *r1, const uint32_t *r2, uint8_t *o0,
+                                                         uint32x4_t clr, uint8x16_t two, const int test) {
     static const uint8_t alpha_idx[16] = { 3, 3, 3, 3, 7, 7, 7, 7, 11, 11, 11, 11, 15, 15, 15, 15 };
     /* the K spread: 7282 in bytes 0-7 and K of pixels 0-3 in bytes 8-15 (u16 lanes) -> two pixels' four lanes each */
     static const uint8_t k_idx[32] = { 8, 9, 8, 9, 8, 9, 0, 1, 10, 11, 10, 11, 10, 11, 0, 1,
@@ -551,70 +561,88 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
     const uint8x16_t aidx = vld1q_u8(alpha_idx), kidx0 = vld1q_u8(k_idx), kidx1 = vld1q_u8(k_idx + 16);
     const uint8x16_t a5 = vdupq_n_u8(0x1f);
     const uint32x4_t a5m = vdupq_n_u32(0x1f000000), amask = vdupq_n_u32(0xff000000), ones = vdupq_n_u32(1);
-    const uint32x4_t clr = vdupq_n_u32(clear & 0xffffff);   /* fully transparent outputs carry the clear colour, as at 2x */
     const uint16x4_t k9 = vdup_n_u16(7282);
+    uint32x4x3_t t0 = vld3q_u32(r0), t1 = vld3q_u32(r1), t2 = vld3q_u32(r2);
+    uint8x16_t a0 = vreinterpretq_u8_u32(t0.val[0]), b0 = vreinterpretq_u8_u32(t0.val[1]), c0 = vreinterpretq_u8_u32(t0.val[2]);
+    uint8x16_t a1 = vreinterpretq_u8_u32(t1.val[0]), b1 = vreinterpretq_u8_u32(t1.val[1]), c1 = vreinterpretq_u8_u32(t1.val[2]);
+    uint8x16_t a2 = vreinterpretq_u8_u32(t2.val[0]), b2 = vreinterpretq_u8_u32(t2.val[1]), c2 = vreinterpretq_u8_u32(t2.val[2]);
+    uint32x4_t all = vandq_u32(vandq_u32(vandq_u32(t0.val[0], t0.val[1]), vandq_u32(t0.val[2], t1.val[0])),
+                               vandq_u32(vandq_u32(t1.val[1], t1.val[2]), vandq_u32(t2.val[0], t2.val[1])));
+    all = vandq_u32(all, t2.val[2]);
+    uint32_t zm;
+    if (test) {
+        /* zm: bits 0-23 the r, g, b bits in which a triple's 9 pixels differ and the bits 6-7 of any channel
+         * (any & ~(all & 0x3f3f3f)), bits 24-28 the alpha bits 0-4 that some pixel has clear (~all & 0x1f),
+         * maxed over the four triples: 0 uniform, below 1 << 24 opaque */
+        uint32x4_t any = vorrq_u32(vorrq_u32(vorrq_u32(t0.val[0], t0.val[1]), vorrq_u32(t0.val[2], t1.val[0])),
+                                   vorrq_u32(vorrq_u32(t1.val[1], t1.val[2]), vorrq_u32(t2.val[0], vorrq_u32(t2.val[1], t2.val[2]))));
+        zm = vmaxvq_u32(vbicq_u32(vorrq_u32(vandq_u32(any, vdupq_n_u32(0x00ffffff)), a5m), vandq_u32(all, vdupq_n_u32(0x1f3f3f3f))));
+    } else zm = vmaxvq_u32(vbicq_u32(a5m, all));
+    uint32x4_t tl, tr, bl, br;          /* the outputs: top left, top right, bottom left, bottom right */
+    if (test && !zm) {
+        /* uniform: each triple's 9 pixels the same colour c, channels <= 63, alpha 31 (bits 5-7 aside): the
+         * opaque case's (7254 * 9 c + 2^15) >> 16 is c (for c <= 131; X = 4c does not wrap for c <= 63) */
+        tl = tr = bl = br = vandq_u32(all, vdupq_n_u32(0x1fffffff));
+    } else if (test ? zm < 1u << 24 : !zm) {
+        /* all opaque: S = 2X + b1 with X = 2a0 + b0 + a1 (top left), 2c0 + b0 + c1, 2a2 + b2 + a1, 2c2 + b2 + c1
+         * (u8: <= 252), so the u8 stage is an add and an mla per output and the u16 stage a shift and an add;
+         * sli puts 31 (a5's low byte) into byte 3 */
+        uint8x16_t xtl = vmlaq_u8(vaddq_u8(b0, a1), a0, two), xtr = vmlaq_u8(vaddq_u8(b0, c1), c0, two);
+        uint8x16_t xbl = vmlaq_u8(vaddq_u8(b2, a1), a2, two), xbr = vmlaq_u8(vaddq_u8(b2, c1), c2, two);
+#define DIV9(X) vsliq_n_u32(vreinterpretq_u32_u8(vuzp1q_u8( \
+            vreinterpretq_u8_s16(vqrdmulhq_n_s16(vreinterpretq_s16_u16(vaddw_u8(vshll_n_u8(vget_low_u8(X), 1), vget_low_u8(b1))), 3627)), \
+            vreinterpretq_u8_s16(vqrdmulhq_n_s16(vreinterpretq_s16_u16(vaddw_high_u8(vshll_high_n_u8(X, 1), b1)), 3627)))), vreinterpretq_u32_u8(a5), 24)
+        tl = DIV9(xtl); tr = DIV9(xtr); bl = DIV9(xbl); br = DIV9(xbr);
+#undef DIV9
+    } else if (!vmaxvq_u32(vandq_u32(a5m, vorrq_u32(vorrq_u32(vorrq_u32(vorrq_u32(t0.val[0], t0.val[1]), vorrq_u32(t0.val[2], t1.val[0])),
+                                                             vorrq_u32(vorrq_u32(t1.val[1], t1.val[2]), vorrq_u32(t2.val[0], t2.val[1]))), t2.val[2])))) {
+        tl = tr = bl = br = clr;        /* all transparent */
+    } else {
+#define WA(v, s) vshlq_n_u8(vandq_u8(vqtbl1q_u8(v, aidx), a5), s)
+        uint8x16_t wa0 = WA(a0, 2), wb0 = WA(b0, 1), wc0 = WA(c0, 2), wa1 = WA(a1, 1), wb1 = vandq_u8(vqtbl1q_u8(b1, aidx), a5);
+        uint8x16_t wc1 = WA(c1, 1), wa2 = WA(a2, 2), wb2 = WA(b2, 1), wc2 = WA(c2, 2);
+#undef WA
+#define ONE(v) v = vreinterpretq_u8_u32(vsliq_n_u32(vreinterpretq_u32_u8(v), ones, 24))
+        ONE(a0); ONE(b0); ONE(c0); ONE(a1); ONE(b1); ONE(c1); ONE(a2); ONE(b2); ONE(c2);
+#undef ONE
+#define MAC4(X0, W0, X1, W1, X2, W2, X3, W3) \
+        vmlal_u8(vmlal_u8(vmlal_u8(vmull_u8(vget_low_u8(X0), vget_low_u8(W0)), vget_low_u8(X1), vget_low_u8(W1)), \
+                          vget_low_u8(X2), vget_low_u8(W2)), vget_low_u8(X3), vget_low_u8(W3)), \
+        vmlal_high_u8(vmlal_high_u8(vmlal_high_u8(vmull_high_u8(X0, W0), X1, W1), X2, W2), X3, W3)
+        uint16x8_t ptl[2] = { MAC4(a0, wa0, b0, wb0, a1, wa1, b1, wb1) }, ptr[2] = { MAC4(c0, wc0, b0, wb0, c1, wc1, b1, wb1) };
+        uint16x8_t pbl[2] = { MAC4(a1, wa1, b1, wb1, a2, wa2, b2, wb2) }, pbr[2] = { MAC4(c1, wc1, b1, wb1, c2, wc2, b2, wb2) };
+#undef MAC4
+#define DIV(P, OUT) do { \
+            float32x4_t f = vcvtq_f32_u32(vshrq_n_u32(vuzp2q_u32(vreinterpretq_u32_u16(P[0]), vreinterpretq_u32_u16(P[1])), 16)); \
+            float32x4_t r = vrecpeq_f32(f); \
+            r = vmulq_f32(r, vrecpsq_f32(r, f)); r = vmulq_f32(r, vrecpsq_f32(r, f)); \
+            uint8x16_t k = vreinterpretq_u8_u16(vqmovn_high_u32(k9, vcvtq_n_u32_f32(r, 16))); \
+            uint16x8_t k01 = vreinterpretq_u16_u8(vqtbl1q_u8(k, kidx0)), k23 = vreinterpretq_u16_u8(vqtbl1q_u8(k, kidx1)); \
+            uint16x8_t c01 = vcombine_u16(vrshrn_n_u32(vmull_u16(vget_low_u16(P[0]), vget_low_u16(k01)), 16), \
+                                          vrshrn_n_u32(vmull_high_u16(P[0], k01), 16)); \
+            uint16x8_t c23 = vcombine_u16(vrshrn_n_u32(vmull_u16(vget_low_u16(P[1]), vget_low_u16(k23)), 16), \
+                                          vrshrn_n_u32(vmull_high_u16(P[1], k23), 16)); \
+            uint32x4_t px = vreinterpretq_u32_u8(vuzp1q_u8(vreinterpretq_u8_u16(c01), vreinterpretq_u8_u16(c23))); \
+            OUT = vbslq_u32(vtstq_u32(px, amask), px, clr); \
+        } while (0)
+        DIV(ptl, tl); DIV(ptr, tr); DIV(pbl, bl); DIV(pbr, br);
+#undef DIV
+    }
+    vst1q_u32((uint32_t *)o0, tl); vst1q_u32((uint32_t *)(o0 + 0x400), tr);
+    vst1q_u32((uint32_t *)(o0 + 0x800), bl); vst1q_u32((uint32_t *)(o0 + 0xc00), br);
+    return test && zm;
+}
+static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out, uint32_t clear) {
+    const uint32x4_t clr = vdupq_n_u32(clear & 0xffffff);   /* fully transparent outputs carry the clear colour, as at 2x */
     uint8x16_t two = vdupq_n_u8(2);
     __asm__("" : "+w"(two));                /* (an opaque 2: mla, not add + shl, for b + 2a) */
+    unsigned skip = 0;                      /* steps left without the uniform test */
     for (unsigned by = 0; by < HR_BL / 3; by++) {
         const uint32_t *r0 = in + 3 * by * HR_W, *r1 = r0 + HR_W, *r2 = r1 + HR_W;
         uint8_t *o0 = out + (2 * by) * 0x800, *oe = o0 + 0x400;
-        for (; o0 != oe; o0 += 16) {
-            __asm__("" : "+r"(r0), "+r"(r1), "+r"(r2), "+r"(o0));     /* (four pointers, post-incremented by the accesses) */
-            uint32x4x3_t t0 = vld3q_u32(r0), t1 = vld3q_u32(r1), t2 = vld3q_u32(r2);
-            r0 += 12; r1 += 12; r2 += 12;
-            uint8x16_t a0 = vreinterpretq_u8_u32(t0.val[0]), b0 = vreinterpretq_u8_u32(t0.val[1]), c0 = vreinterpretq_u8_u32(t0.val[2]);
-            uint8x16_t a1 = vreinterpretq_u8_u32(t1.val[0]), b1 = vreinterpretq_u8_u32(t1.val[1]), c1 = vreinterpretq_u8_u32(t1.val[2]);
-            uint8x16_t a2 = vreinterpretq_u8_u32(t2.val[0]), b2 = vreinterpretq_u8_u32(t2.val[1]), c2 = vreinterpretq_u8_u32(t2.val[2]);
-            uint32x4_t all = vandq_u32(vandq_u32(vandq_u32(t0.val[0], t0.val[1]), vandq_u32(t0.val[2], t1.val[0])),
-                                       vandq_u32(vandq_u32(t1.val[1], t1.val[2]), vandq_u32(t2.val[0], t2.val[1])));
-            uint32x4_t tl, tr, bl, br;          /* the outputs: top left, top right, bottom left, bottom right */
-            if (!vmaxvq_u32(vbicq_u32(a5m, vandq_u32(all, t2.val[2])))) {
-                /* all opaque: S = 2X + b1 with X = 2a0 + b0 + a1 (top left), 2c0 + b0 + c1, 2a2 + b2 + a1, 2c2 + b2 + c1
-                 * (u8: <= 252), so the u8 stage is an add and an mla per output and the u16 stage a shift and an add;
-                 * sli puts 31 (a5's low byte) into byte 3 */
-                uint8x16_t xtl = vmlaq_u8(vaddq_u8(b0, a1), a0, two), xtr = vmlaq_u8(vaddq_u8(b0, c1), c0, two);
-                uint8x16_t xbl = vmlaq_u8(vaddq_u8(b2, a1), a2, two), xbr = vmlaq_u8(vaddq_u8(b2, c1), c2, two);
-#define DIV9(X) vsliq_n_u32(vreinterpretq_u32_u8(vuzp1q_u8( \
-                    vreinterpretq_u8_s16(vqrdmulhq_n_s16(vreinterpretq_s16_u16(vaddw_u8(vshll_n_u8(vget_low_u8(X), 1), vget_low_u8(b1))), 3627)), \
-                    vreinterpretq_u8_s16(vqrdmulhq_n_s16(vreinterpretq_s16_u16(vaddw_high_u8(vshll_high_n_u8(X, 1), b1)), 3627)))), vreinterpretq_u32_u8(a5), 24)
-                tl = DIV9(xtl); tr = DIV9(xtr); bl = DIV9(xbl); br = DIV9(xbr);
-#undef DIV9
-            } else if (!vmaxvq_u32(vandq_u32(a5m, vorrq_u32(vorrq_u32(vorrq_u32(vorrq_u32(t0.val[0], t0.val[1]), vorrq_u32(t0.val[2], t1.val[0])),
-                                                                     vorrq_u32(vorrq_u32(t1.val[1], t1.val[2]), vorrq_u32(t2.val[0], t2.val[1]))), t2.val[2])))) {
-                tl = tr = bl = br = clr;        /* all transparent */
-            } else {
-#define WA(v, s) vshlq_n_u8(vandq_u8(vqtbl1q_u8(v, aidx), a5), s)
-                uint8x16_t wa0 = WA(a0, 2), wb0 = WA(b0, 1), wc0 = WA(c0, 2), wa1 = WA(a1, 1), wb1 = vandq_u8(vqtbl1q_u8(b1, aidx), a5);
-                uint8x16_t wc1 = WA(c1, 1), wa2 = WA(a2, 2), wb2 = WA(b2, 1), wc2 = WA(c2, 2);
-#undef WA
-#define ONE(v) v = vreinterpretq_u8_u32(vsliq_n_u32(vreinterpretq_u32_u8(v), ones, 24))
-                ONE(a0); ONE(b0); ONE(c0); ONE(a1); ONE(b1); ONE(c1); ONE(a2); ONE(b2); ONE(c2);
-#undef ONE
-#define MAC4(X0, W0, X1, W1, X2, W2, X3, W3) \
-                vmlal_u8(vmlal_u8(vmlal_u8(vmull_u8(vget_low_u8(X0), vget_low_u8(W0)), vget_low_u8(X1), vget_low_u8(W1)), \
-                                  vget_low_u8(X2), vget_low_u8(W2)), vget_low_u8(X3), vget_low_u8(W3)), \
-                vmlal_high_u8(vmlal_high_u8(vmlal_high_u8(vmull_high_u8(X0, W0), X1, W1), X2, W2), X3, W3)
-                uint16x8_t ptl[2] = { MAC4(a0, wa0, b0, wb0, a1, wa1, b1, wb1) }, ptr[2] = { MAC4(c0, wc0, b0, wb0, c1, wc1, b1, wb1) };
-                uint16x8_t pbl[2] = { MAC4(a1, wa1, b1, wb1, a2, wa2, b2, wb2) }, pbr[2] = { MAC4(c1, wc1, b1, wb1, c2, wc2, b2, wb2) };
-#undef MAC4
-#define DIV(P, OUT) do { \
-                    float32x4_t f = vcvtq_f32_u32(vshrq_n_u32(vuzp2q_u32(vreinterpretq_u32_u16(P[0]), vreinterpretq_u32_u16(P[1])), 16)); \
-                    float32x4_t r = vrecpeq_f32(f); \
-                    r = vmulq_f32(r, vrecpsq_f32(r, f)); r = vmulq_f32(r, vrecpsq_f32(r, f)); \
-                    uint8x16_t k = vreinterpretq_u8_u16(vqmovn_high_u32(k9, vcvtq_n_u32_f32(r, 16))); \
-                    uint16x8_t k01 = vreinterpretq_u16_u8(vqtbl1q_u8(k, kidx0)), k23 = vreinterpretq_u16_u8(vqtbl1q_u8(k, kidx1)); \
-                    uint16x8_t c01 = vcombine_u16(vrshrn_n_u32(vmull_u16(vget_low_u16(P[0]), vget_low_u16(k01)), 16), \
-                                                  vrshrn_n_u32(vmull_high_u16(P[0], k01), 16)); \
-                    uint16x8_t c23 = vcombine_u16(vrshrn_n_u32(vmull_u16(vget_low_u16(P[1]), vget_low_u16(k23)), 16), \
-                                                  vrshrn_n_u32(vmull_high_u16(P[1], k23), 16)); \
-                    uint32x4_t px = vreinterpretq_u32_u8(vuzp1q_u8(vreinterpretq_u8_u16(c01), vreinterpretq_u8_u16(c23))); \
-                    OUT = vbslq_u32(vtstq_u32(px, amask), px, clr); \
-                } while (0)
-                DIV(ptl, tl); DIV(ptr, tr); DIV(pbl, bl); DIV(pbr, br);
-#undef DIV
-            }
-            vst1q_u32((uint32_t *)o0, tl); vst1q_u32((uint32_t *)(o0 + 0x400), tr);
-            vst1q_u32((uint32_t *)(o0 + 0x800), bl); vst1q_u32((uint32_t *)(o0 + 0xc00), br);
+        for (; o0 != oe; o0 += 16, r0 += 12, r1 += 12, r2 += 12) {
+            if (skip) { skip--; ds_step(r0, r1, r2, o0, clr, two, 0); }
+            else if (ds_step(r0, r1, r2, o0, clr, two, 1)) skip = DS_SKIP;
         }
     }
 }

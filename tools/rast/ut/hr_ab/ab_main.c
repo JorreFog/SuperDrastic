@@ -43,6 +43,23 @@ static int test_ds(int iters) {
                 }
                 in[y * W + x] = pix(cls, wide);
             }
+        /* uniform 3x3 blocks (hr_downsample's uniform shortcut: r, g, b the same in all 9 pixels, alpha 31 with flag
+         * bits 5-7 per pixel): at random (un 1) or in runs of steps (2, 3; 3 one colour a step), some with a channel
+         * of 64 or more, some with one bit of one pixel flipped, some not opaque */
+        int un = it % 4;
+        uint32_t c = 0;
+        if (un) for (int by = 0; by < 16; by++)
+            for (int bx = 0; bx < 256; bx++) {
+                int run = ((bx / 4 + by + it) % 8) < (un == 3 ? 6 : 3);
+                if (!(un == 1 ? (int)(rnd() % 2) : run)) continue;
+                if (un != 3 || bx % 4 == 0 || !c) {
+                    c = pix(rnd() % 8 ? 0 : 2, wide);
+                    if (rnd() % 8 == 0) c |= 0x40u << (8 * (rnd() % 3));
+                }
+                for (int y = 3 * by; y < 3 * by + 3; y++)
+                    for (int x = 3 * bx; x < 3 * bx + 3; x++) in[y * W + x] = (c & 0x1fffffff) | (rnd() & 7) << 29;
+                if (rnd() % 8 == 0) in[(3 * by + rnd() % 3) * W + 3 * bx + rnd() % 3] ^= 1u << (rnd() % 29);
+            }
         uint32_t clear = rnd();
         memset(o1, 0x5a, sizeof o1); memset(o2, 0x5a, sizeof o2);
         old_ds(in, o1, clear); new_ds(in, o2, clear);

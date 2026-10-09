@@ -138,6 +138,15 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   those whose factors are all 0). Modeled A55 cycles a frame, S4 at 3x: fog_line 2.12 M -> 1.49 M (a skipped step 165
   -> 89 modeled cycles with full fog, 136 -> 86 alpha only; the others 3-4 more); `ut/hr_ab` (its fog and resolve
   cases now with zero-first tables and steps below the offset, failing mutants of the test) against 94f9689: the same.
+  The 3x downsample (hr_downsample) passes uniform steps through: when each of a step's four triples has the same r, g,
+  b in all 9 of its pixels (channels at most 63) and every alpha is 31, the opaque case's outputs are those colours
+  with alpha 31 (counted in the simulator: 65% of the steps of the field scene S7 at 3x, 15% of S4's; the stress ROM's
+  42% come in short runs). The test (the 9 vectors' OR beside their AND, the opaque test in the same max) makes a step
+  that is not uniform 90 -> 111 modeled cycles and a uniform one 90 -> 63, so after a step that is not uniform the next
+  7 go without it (DS_SKIP; 3 modeled worse on S4, the same on S7). Modeled A55 cycles a frame at 3x, hr_downsample: S7
+  1.11 M -> 0.93 M, L4 1.11 -> 1.10, S4 1.38 -> 1.34 (that profile had fewer steps of the general case: about the
+  same); `ut/hr_ab` (its downsample test now with uniform blocks at random and in runs, with flag bits, channels of 64
+  and more and one bit off, failing mutants of the test) against 94f9689: the same.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -338,8 +347,9 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   writes a tenth's slot (it walks a stale stack slot; walk.c leaves 10 to DraStic). hr.c's vertex indices for them
   are nibbles 0 and 1 of the group's base sequence (`4 * (k & 7)`: what its former `seq >> (4 * k)`, undefined
   from k = 8, compiled to; ut/hr_ab: the same output on 1.5 M polygons): decide what 3x should walk there.
-  The downsample is bound by its loads and the alpha test in the cycle model: two groups a step, the opaque outputs
-  computed before the test and the loads a group ahead all modeled within 3% of the current loop. Its three ld3 cost
+  The downsample is bound by its loads and the alpha test in the cycle model (uniform steps aside, Status): two
+  groups a step, the opaque outputs computed before the test and the loads a group ahead all modeled within 3% of the
+  loop. A cheaper uniform test would pay on the stress ROM, whose uniform steps come in short runs. Its three ld3 cost
   about what nine ldr q and a 3-way deinterleave would (tbl of two and three registers plus ins: ~11 cycles a row in
   llvm-mca), and the alpha tests need no deinterleave; the u8 stage's wrap for 8-bit channels (ut/hr_ab's wide case)
   must stay. fog_line (S4 at 3x: 1.5 M after its skip, the
