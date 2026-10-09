@@ -63,7 +63,15 @@ static int test_fog(int iters) {
     for (int it = 0; it < iters; it++) {
         for (int i = 0; i < 64; i++) table[i] = rnd();
         if (it & 1) for (int i = 0; i < 32; i++) table[i] = rnd() % 128;
-        int mode = it % 4;
+        uint32_t sh = rnd() % 16, off = rnd() & 0x7fff;
+        if (it % 4 == 1) off = rnd() % 0x400;
+        uint32_t params = sh | (off + (0x400u >> sh)) << 16;
+        if (it % 8 == 7) params = (rnd() & 0xffff0000u) | (rnd() & 0xff);   /* any shift byte */
+        /* near: table[0] = 0 (as fog density tables have) and steps of 32 pixels whose depths are all at most the
+         * offset (fog_line's skip of steps whose factors are all 0), some with one pixel at offset + 1 */
+        int mode = it % 4, near = it % 5 >= 3;
+        uint32_t uoff = (params >> 16) & 0xffff;
+        if (near) table[0] = 0;
         for (int x = 0; x < W; x++) {
             uint32_t c = pix(rnd() % 3, it % 5 == 4);
             if (mode == 1) c &= 0x7fffffff;                                  /* no fog flags */
@@ -72,11 +80,12 @@ static int test_fog(int iters) {
             c1[x] = c2[x] = c;
             att[0][x] = rnd();
             if (it % 3 == 0) att[0][x] = (att[0][x] & 0xff0001ff) | ((rnd() % 0x800) << 9) | ((rnd() & 1) ? 0x7f0000 << 1 : 0);
+            if (near && (x / 32) % 4 != 3) {
+                uint32_t dmax = uoff < 0x7fff ? uoff : 0x7fff, dd = rnd() % 4 ? rnd() % (dmax + 1) : dmax;
+                if ((x / 32) % 4 == 2 && x % 32 == (it % 32) && dmax < 0x7fff) dd = dmax + 1;
+                att[0][x] = (att[0][x] & 0xff0001ff) | dd << 9;
+            }
         }
-        uint32_t sh = rnd() % 16, off = rnd() & 0x7fff;
-        if (it % 4 == 1) off = rnd() % 0x400;
-        uint32_t params = sh | (off + (0x400u >> sh)) << 16;
-        if (it % 8 == 7) params = (rnd() & 0xffff0000u) | (rnd() & 0xff);   /* any shift byte */
         uint32_t fogc = rnd();
         int full = (it >> 1) & 1;
         old_fog(c1, att[0], table, params, fogc, full); new_fog(c2, att[0], table, params, fogc, full);
@@ -131,6 +140,10 @@ static int test_rds(int iters) {
         for (int i = 0x9900; i < 0x9b00; i++) geom[i] = rnd();
         for (int i = 0x99b4; i < 0x99cc; i++) geom[i] &= 0x3f;             /* edge colours: 6-bit */
         if (it & 4) for (int i = 0; i < 32; i++) geom[0x9974 + i] %= 128;
+        if (it % 5 >= 3) {                  /* table[0] = 0 and a high offset: fog_line's skip of steps without factors */
+            geom[0x9974] = 0;
+            *(uint16_t *)(geom + 0x9aaa) = it % 5 == 3 ? 0x7fff : 0x4000 + rnd() % 0x4000;
+        }
         memset(o1, 0x5a, sizeof o1); memset(o2, 0x5a, sizeof o2);
         old_rds(ctx, sys, geom, o1); new_rds(ctx, sys, geom, o2);
         if (memcmp(o1, o2, sizeof o1)) {
@@ -177,6 +190,10 @@ static int test_rds_rect(int iters) {
         *(uint32_t *)(ctx + 2 * 50 * W * 4 + 50 * W + 0x14) = rnd() % 4;
         for (int i = 0x9900; i < 0x9b00; i++) geom[i] = rnd();
         for (int i = 0x99b4; i < 0x99cc; i++) geom[i] = (geom[i] & 0x3f) | 1;          /* edge colours: 6-bit, not 0 */
+        if (it % 5 >= 3) {                  /* table[0] = 0, the offset at or just above the background's depth */
+            geom[0x9974] = 0;
+            *(uint16_t *)(geom + 0x9aaa) = (uint16_t)(((bg >> 9) & 0x7fff) + rnd() % 8);
+        }
         memset(o1, 0x5a, sizeof o1); memset(o2, 0x5a, sizeof o2);
         old_rds(ctx, sys, geom, o1); new_rds(ctx, sys, geom, o2);
         if (memcmp(o1, o2, sizeof o1)) {

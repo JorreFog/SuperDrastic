@@ -298,13 +298,16 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
     const uint8x16_t fa = vdupq_n_u8((uint8_t)(fogc >> 24)), x81 = vdupq_n_u8(0x81), x7f = vdupq_n_u8(0x7f);
     uint8_t *c8 = (uint8_t *)c, *end = c8 + 4 * HR_W;
     const ptrdiff_t ad = (const uint8_t *)attr - c8;                        /* one pointer: attr at c8 + ad */
-    /* the factor of 16 pixels: their alpha plane t (the flags) and their attribute words at at */
-#define FOG_K(t, at) ({ \
+    /* the factor of 16 pixels in two parts: FOG_D, the saturated depth differences d - off of the attribute words at
+     * at (u16 lanes, pixels 0-7 and 8-15), and FOG_K, the factor from them and the pixels' alpha plane t (the flags) */
+#define FOG_D(u0, u1, at) do { \
         uint8x16x4_t a = vld4q_u8(at); \
-        uint16x8_t d0 = vshrq_n_u16(vreinterpretq_u16_u8(vzip1q_u8(a.val[1], a.val[2])), 1); \
-        uint16x8_t d1 = vshrq_n_u16(vreinterpretq_u16_u8(vzip2q_u8(a.val[1], a.val[2])), 1); \
-        uint16x8_t v0 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d0, off)), sh)); \
-        uint16x8_t v1 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d1, off)), sh)); \
+        u0 = vqsubq_u16(vshrq_n_u16(vreinterpretq_u16_u8(vzip1q_u8(a.val[1], a.val[2])), 1), off); \
+        u1 = vqsubq_u16(vshrq_n_u16(vreinterpretq_u16_u8(vzip2q_u8(a.val[1], a.val[2])), 1), off); \
+    } while (0)
+#define FOG_K(t, u0, u1) ({ \
+        uint16x8_t v0 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(u0), sh)); \
+        uint16x8_t v1 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(u1), sh)); \
         /* i = v >> 10 (the high bytes >> 2), or >= 0xc0 without the fog flag (tbl gives 0) */ \
         uint8x16_t i = vsriq_n_u8(vcgezq_s8(vreinterpretq_s8_u8(t)), vuzp2q_u8(vreinterpretq_u8_u16(v0), vreinterpretq_u8_u16(v1)), 2); \
         int8x16_t dl = vreinterpretq_s8_u8(vqtbl2q_u8(dlt, i)); \
@@ -315,12 +318,23 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
     })
     /* two groups a step, so that the in-order core has two independent chains to interleave (a group's own chain,
      * from the attribute load to the store, is about 70 cycles long); a step without any fog flag is skipped, and in
-     * a step that is fogged a group without flags is unchanged (k = 0) */
+     * a step that is fogged a group without flags is unchanged (k = 0). With table[0] = 0 (fog density tables start
+     * at 0), a step whose 32 depths are all at most the offset (d - off saturates to 0, so v = 0, i = 0, f = 0 and
+     * w = table[0] = 0 for every flagged pixel) has all factors 0: its colours are the input with the flags cleared,
+     * without the rest of the factor and the modulates (S4 at 3x: 73% of the fogged steps) */
     _Static_assert(HR_W % 32 == 0, "fog: 32 pixels a step");
+    const int t0z = table[0] == 0;
     for (; c8 != end; c8 += 128) {
         uint8x16x4_t px = vld4q_u8(c8), py = vld4q_u8(c8 + 64);
         if (__builtin_expect(vmaxvq_u8(vorrq_u8(px.val[3], py.val[3])) < 0x80, 0)) continue;     /* no fog flag in the step */
-        int8x16_t kx = FOG_K(px.val[3], c8 + ad), ky = FOG_K(py.val[3], c8 + 64 + ad);
+        uint16x8_t ux0, ux1, uy0, uy1;
+        FOG_D(ux0, ux1, c8 + ad); FOG_D(uy0, uy1, c8 + 64 + ad);
+        if (t0z && !vmaxvq_u16(vorrq_u16(vorrq_u16(ux0, ux1), vorrq_u16(uy0, uy1)))) {
+            px.val[3] = vandq_u8(px.val[3], x7f); py.val[3] = vandq_u8(py.val[3], x7f);
+            vst4q_u8(c8, px); vst4q_u8(c8 + 64, py);
+            continue;
+        }
+        int8x16_t kx = FOG_K(px.val[3], ux0, ux1), ky = FOG_K(py.val[3], uy0, uy1);
         px.val[3] = fog_ch16(vandq_u8(px.val[3], x7f), fa, kx);
         py.val[3] = fog_ch16(vandq_u8(py.val[3], x7f), fa, ky);
         if (full) {
@@ -329,6 +343,7 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
         }
         vst4q_u8(c8, px); vst4q_u8(c8 + 64, py);
     }
+#undef FOG_D
 #undef FOG_K
 }
 static __attribute__((noinline)) void fog_line(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc, int full) {

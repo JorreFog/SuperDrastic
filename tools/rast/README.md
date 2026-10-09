@@ -131,6 +131,13 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   `ut/t_resolve.c` compares the block, the gap buffers and the table entries with DraStic's drivers (all six modes,
   every bin, polygon ids in rectangles and zero fog tables for the skips; it fails mutants of either skip); S4's
   frame diff 0 bins in 12000 with the compositor's checks 0 differ, the stress ROM's 6 in 4800.
+  Third round, 3x: hr.c's fog (fog_line) tests a step's 32 depths against the fog offset before the rest of the
+  factors: when the density table starts at 0 (as fog tables do) and every depth is at most the offset, every factor is
+  0 (d - off saturates to 0, so i = 0, f = 0 and w = table[0]) and the step is its colours with the fog flags cleared,
+  without the weights' tbl and multiplies and the modulates; 73% of the fogged steps of S4 at 3x (and nearly all of
+  those whose factors are all 0). Modeled A55 cycles a frame, S4 at 3x: fog_line 2.12 M -> 1.49 M (a skipped step 165
+  -> 89 modeled cycles with full fog, 136 -> 86 alpha only; the others 3-4 more); `ut/hr_ab` (its fog and resolve
+  cases now with zero-first tables and steps below the offset, failing mutants of the test) against 94f9689: the same.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -297,8 +304,9 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
 - The 2x fog (`res2.c` fog_line2x, 0.78 M cycles a frame on S4 at IPC 0.57) is bound by the FP pipe: four channels'
   smull/smull2/shrn/shrn2 per 16 pixels and the weights' two tbl2. The attributes by ldr q + shrn instead of ld4 + zip
-  models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog and edge
-  marking could take res2.c's skips (S4 2x: edge marking 1.02 -> 0.57 M, fog 0.89 -> 0.78 M).
+  models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog skips the
+  steps below the fog offset (Status); its edge marking could take res2.c's skip of the key compares (S4 2x: edge
+  marking 1.02 -> 0.57 M), and fog_line2x hr.c's depth test (its skip of steps whose factors are all 0 computes them).
 - The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
@@ -334,7 +342,8 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   computed before the test and the loads a group ahead all modeled within 3% of the current loop. Its three ld3 cost
   about what nine ldr q and a 3-way deinterleave would (tbl of two and three registers plus ins: ~11 cycles a row in
   llvm-mca), and the alpha tests need no deinterleave; the u8 stage's wrap for 8-bit channels (ut/hr_ab's wide case)
-  must stay. fog_line (S4 at 3x: 2.1 M, IPC 0.62) keeps 14 constant vectors: the compiler reloads one tbl table from
+  must stay. fog_line (S4 at 3x: 1.5 M after its skip, the
+  steps it does not skip 160-170 modeled cycles) keeps 14 constant vectors: the compiler reloads one tbl table from
   the stack every step (ld1 of two registers); fewer constants (0x81 and 0x7f, the table pair) would keep it in
   registers.
 - The 2x walker (stress ROM L4, 1.59 M cycles a frame): an edge's step computes the next 8 lines' weights after its
