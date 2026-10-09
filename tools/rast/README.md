@@ -131,6 +131,20 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   `ut/t_resolve.c` compares the block, the gap buffers and the table entries with DraStic's drivers (all six modes,
   every bin, polygon ids in rectangles and zero fog tables for the skips; it fails mutants of either skip); S4's
   frame diff 0 bins in 12000 with the compositor's checks 0 differ, the stress ROM's 6 in 4800.
+  Third round, the 2x walker's edges (`walk.c` walk_edge): a step that continues tests first and computes the next
+  8 lines' weights among its stores (an edge's last step computes none), which fits in registers with z as one
+  vector and a step (was four and a step) and x as one and a step, and with the products in fewer instructions: w's
+  (s64)dw q >> 15 as sqdmulh of q << 16, s and t's bits 15..30 as addhn of sqdmull (2 q d) and (s_a << 16) + 0x1000.
+  Both saturate only for q = -32768 with dw = INT32_MIN or d = -32768, so edges with such deltas take the former
+  products (`t_walk.c` now makes such edges; it fails either fast form forced on them). The setup takes the
+  vertices' z, c, s, t halfwords as vectors and the colour channels of both vertices in one (no scalar unpacking and
+  lane inserts), the reciprocal table's bound is a select and walk_chain is inlined once per depth source: the setup
+  is one basic block with the x and z setup. Modeled A55 cycles of a z edge: setup and first step 188 -> 160, a
+  continuing step 90 -> 68 (65 instructions: now issue-bound). walk_polygon_4x, cycles a frame (90 s profiles):
+  stress ROM L4 at 2x 1.59 M -> 1.43 M, S4 0.41 -> 0.37, S7 0.14 -> 0.12. The same span arrays as DraStic's walker
+  (`t_walk.c`), the scene cycle's differing bins as DraStic's renderer's at every checkpoint reached (to 93600 with
+  deferred shading), the compositor's checks 0 differ, S4 0 bins, the stress ROM's 9 in 7200, the single scenes as
+  94f9689's build.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -337,13 +351,15 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   must stay. fog_line (S4 at 3x: 2.1 M, IPC 0.62) keeps 14 constant vectors: the compiler reloads one tbl table from
   the stack every step (ld1 of two registers); fewer constants (0x81 and 0x7f, the table pair) would keep it in
   registers.
-- The 2x walker (stress ROM L4, 1.59 M cycles a frame): an edge's step computes the next 8 lines' weights after its
-  exit test (29 instructions, 43 cycles, one reciprocal chain). With the test first and that chain in the stores'
-  block clang spills (13 stack accesses a step) and the step models at 99 cycles instead of 93: needs fewer live
-  vectors (z as two vectors and a step, the colour bases in one). The edge setup (120 instructions, 99 cycles)
-  starts the first weights' chain at its cycle ~49, behind the w loads and conversions. `batch_end` is latency-bound
-  (38 cycles a step: ldp, uzp1, three ext + add, the compare, fmov): a polygon's prefix sums in one pass, then a
-  compare a batch.
+- The 2x walker (stress ROM L4, 1.43 M cycles a frame): a z edge's setup (127 instructions, 109 modeled cycles) is
+  the costliest block. Its first weights' chain is ~60 cycles of latency, but clang's schedule starts the first
+  frecpe at cycle ~40 and its uzp1 lands at ~103, behind the colour, x and z work it interleaves (and blocks on);
+  without the chain the rest is ~85 cycles. Clang's other schedulers model worse (-misched-topdown/bottomup,
+  ilpmax/min), and small source changes move the block by +-10 cycles either way (z kept as z << 2 with uzp2 stores:
+  2 instructions fewer a step, 3 cycles more; the vertices' y copied for the chain scan: the scan 18 -> 14 cycles,
+  the setup 109 -> 121): a scheduled block (res2gen.py's way) is what is left. The continuing step is issue-bound
+  (65 instructions, 68 cycles). `batch_end` is latency-bound (38 cycles a step: ldp, uzp1, three ext + add, the
+  compare, fmov): a polygon's prefix sums in one pass, then a compare a batch.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
   assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
   content signature in the key would make it certain.

@@ -1,10 +1,10 @@
 /* t_walk.c: src/rast/walk.c's walk_polygon_4x against DraStic's render_polygon_4x. Random ordinary polygons (1 to 9
  * vertices in one of DraStic's walk orders, y rising from the top vertex to the bottom one and falling back, as the
- * geometry stage makes them; vertical and horizontal edges, x beyond 511, zero heights) are walked into random bins
- * with edge marking off and on. DraStic's render_polygon_setup_4x is patched to a capture and walk.c gets the same
- * capture as its setup: per polygon, the arguments and every span array line the setup reads must match (the z
- * arrays only for polygons with z depth: the x-only walk leaves them as they were; the edge markers only with edge
- * marking).
+ * geometry stage makes them; vertical and horizontal edges, x beyond 511, zero heights, w deltas of 2^31 and s, t
+ * deltas of 0x8000) are walked into random bins with edge marking off and on. DraStic's render_polygon_setup_4x is
+ * patched to a capture and walk.c gets the same capture as its setup: per polygon, the arguments and every span
+ * array line the setup reads must match (the z arrays only for polygons with z depth: the x-only walk leaves them as
+ * they were; the edge markers only with edge marking).
  * run: tools/rast/ut/run.sh tools/rast/ut/t_walk.c src/rast/walk.c   (UT_SEED=n) */
 #include "ut.h"
 #include <sys/mman.h>
@@ -73,6 +73,10 @@ void ut_main(void) {
             uint16_t x = rnd(8) ? rnd(512) : rnd(2) ? 511 + rnd(4) : rnd(65536), y = ys[k], z = rnd(65536), c = rnd(65536);
             uint16_t s = rnd(4) ? rndr(-4096, 4096) : rnd(65536), t = rnd(4) ? rndr(-4096, 4096) : rnd(65536);
             if (k && !rnd(6)) x = U16X(verts + 16 * vi[k - 1], 4);                       /* vertical edges */
+            /* edges whose w delta is INT32_MIN or s or t delta -32768: walk.c's products saturate there (its F = 0) */
+            if (k && !rnd(10)) { uint32_t wp; memcpy(&wp, verts + 16 * vi[k - 1], 4); w = (int32_t)(wp ^ 0x80000000u); }
+            if (k && !rnd(10)) s = (uint16_t)(U16X(verts + 16 * vi[k - 1], 12) + 0x8000);
+            if (k && !rnd(10)) t = (uint16_t)(U16X(verts + 16 * vi[k - 1], 14) + 0x8000);
             memcpy(v, &w, 4); memcpy(v + 4, &x, 2); memcpy(v + 6, &y, 2); memcpy(v + 8, &z, 2);
             memcpy(v + 10, &c, 2); memcpy(v + 12, &s, 2); memcpy(v + 14, &t, 2);
         }

@@ -43,8 +43,9 @@ static inline void wr32(uint8_t *p, uint32_t v) { memcpy(p, &v, 4); }
  *   coefficients: lane m of 4 holds (num, den) of lines 4h + m, accumulated with d4 one group at a time as DraStic's
  *     four lanes do (each fadd rounded; the second group of an iteration is the first + d4, as DraStic's next one);
  *   steps: frecpe and two frecps steps, num * r to Q15 (fcvtzs #15), the low 16 bits;
- *   w: (s64)(wb - wa) * q >> 15, + wa (32-bit);
- *   s, t: bits 15..30 of base + q * ds (smlal, shrn #15) with base = s_a << 15 (+ 0x800 when ds > 0);
+ *   w: (s64)(wb - wa) * q >> 15, + wa (32-bit; sqdmulh of q << 16 where it cannot saturate, walk_edge says how);
+ *   s, t: bits 15..30 of base + q * ds (smlal, shrn #15, or sqdmull and addhn) with base = s_a << 15 (+ 0x800 when
+ *     ds > 0);
  *   r, g, b: base (c6(a) << 18) + 0x38000 has no bits below 15 and |q * dc| < 2^24, so bits 15..30 of the sum are
  *     (c6(a) << 3) + 7 + floor(q * dc / 2^15): sqdmulh(q, dc) (2 q dc >> 16, no saturation as |dc| <= 504) + that;
  *   x, z: the DDA x + i xs (u32), z + i zs (u64), as interp_x.
@@ -54,7 +55,11 @@ static inline void wr32(uint8_t *p, uint32_t v) { memcpy(p, &v, 4); }
  * walked lines are DraStic's bytes, which is what render_polygon_setup_4x and the edge markers read
  * (tools/rast/ut/t_walk.c compares those). */
 /* the edge heights' reciprocals: DraStic's reciprocal_table (initialize_video_3d fills it), 0 past it as edges_impl.h */
-static inline uint32_t wrecip(int32_t i) { return (uint32_t)i < 1024 ? ((const uint32_t *)(ds_base + DS_RECIP_TABLE))[i] : 0; }
+static inline uint32_t wrecip(int32_t i) {
+    const int in = (uint32_t)i < 1024;
+    uint32_t v = ((const uint32_t *)(ds_base + DS_RECIP_TABLE))[in ? i : 0];
+    return in ? v : 0;
+}
 
 static inline int32x4_t w_step(float32x4_t num, float32x4_t den) {
     float32x4_t r = vrecpeq_f32(den);
@@ -63,16 +68,18 @@ static inline int32x4_t w_step(float32x4_t num, float32x4_t den) {
     return vcvtq_n_s32_f32(vmulq_f32(num, r), 15);
 }
 
-static inline uint16_t wc6(uint32_t v) { return (uint16_t)(2 * v + (v != 0)); }
-
 /* one edge: lines line.. of the chain's arrays, cnt of them (8 a step), skip = the lines above y_start (edge 0's; 0 for
  * the others, which then add nothing: 0 * A to a zero numerator changes at most its sign, which no result sees).
  * For the A55's in-order issue the first 8 lines' weights (a chain of reciprocal steps: the latency) are computed
- * among the edge's setup, one basic block with their stores. A step's source computes the next 8's weights before
- * this 8's stores, but clang sinks them past the exit test, after the stores: forced before it (an empty asm on
- * them), a step took 81 modeled cycles instead of 93, but every edge paid for a chain its last step does not use
- * (2.3 steps an edge): +0.1 M a frame on the stress ROM. The edge's five multipliers share a register (by-lane
- * products), the rest are constants of the loop */
+ * among the edge's setup, one basic block with the colour, x and z setup (the reciprocal table's bound is a select,
+ * not a branch, and walk_polygon_4x inlines walk_chain once per depth source, so that clang does not merge the two
+ * setups up to a branch on it; the vertices' z, c, s, t halfwords come as vectors, the colour channels of both in
+ * one). A step that continues tests first and computes the next 8 lines' weights among its stores (an edge's last
+ * step computes none); that fits in registers with z as one vector of 2 lines and a step and x as one of 4 and a
+ * step (clang spilled 13 vectors a step with z as 4 vectors and x as 2), and with w's and s, t's products in fewer
+ * instructions (sqdmulh, sqdmull + addhn: the fast forms below). Modeled A55 cycles of a z edge: its setup and first
+ * step 188 -> 160, a continuing step 90 -> 68. The edge's five multipliers share a register (by-lane products), the
+ * rest are constants of the loop */
 static inline __attribute__((always_inline)) void walk_edge(uint8_t *spans, const uint8_t *a, const uint8_t *b, unsigned line,
                                                             int32_t cnt, uint32_t skip, const int withz) {
     /* coefficients: (num, den) of line j = (j + skip) (A, D) + (0 B, B H), as DraStic's lanes accumulate them */
@@ -97,20 +104,25 @@ static inline __attribute__((always_inline)) void walk_edge(uint8_t *spans, cons
     int16x8_t q, qn;
     WEIGHTS(q);
     /* w */
-    const int32x4_t dw = vdupq_n_s32((int32_t)((uint32_t)wb - (uint32_t)wa));
+    const int32_t dw0 = (int32_t)((uint32_t)wb - (uint32_t)wa);
+    const int32x4_t dw = vdupq_n_s32(dw0);
     const uint32x4_t w0 = vdupq_n_u32((uint32_t)wa);
-    /* s, t, r, g, b */
-    uint32_t ca = rd16(a + 0xa), cb = rd16(b + 0xa);
-    uint16_t ra = wc6(ca & 31), ga = wc6((ca >> 5) & 31), ba = wc6((ca >> 10) & 31);
-    int16_t dr = (int16_t)((wc6(cb & 31) - ra) << 3), dg = (int16_t)((wc6((cb >> 5) & 31) - ga) << 3);
-    int16_t db = (int16_t)((wc6((cb >> 10) & 31) - ba) << 3);
-    const int16x8_t vr = vdupq_n_s16((int16_t)((ra << 3) + 7)), vg = vdupq_n_s16((int16_t)((ga << 3) + 7));
-    const int16x8_t vb = vdupq_n_s16((int16_t)((ba << 3) + 7));
+    /* s, t, r, g, b: the vertices' halfwords z, c, s, t (+ 8) as one vector each; the colour channels of both
+     * vertices in one vector (c of a in lanes 0-2, of b in 4-6, shifted down by 0, 5, 10), wc6(v) = 2 v + (v != 0)
+     * as (v << 1) - (v != 0 ? -1 : 0); dm = b - a for z, c (unused), s, t, then the colours' (wc6 << 3) deltas */
+    static const uint8_t cidx[16] = { 2, 3, 2, 3, 2, 3, 255, 255, 10, 11, 10, 11, 10, 11, 255, 255 };
+    static const int16_t csh[8] = { 0, -5, -10, 0, 0, -5, -10, 0 };
+    const uint16x4_t ha = vld1_u16((const uint16_t *)(a + 8)), hb = vld1_u16((const uint16_t *)(b + 8));
+    uint16x8_t cc = vreinterpretq_u16_u8(vqtbl1q_u8(vreinterpretq_u8_u16(vcombine_u16(ha, hb)), vld1q_u8(cidx)));
+    cc = vandq_u16(vshlq_u16(cc, vld1q_s16(csh)), vdupq_n_u16(31));
+    const uint16x8_t c6 = vshlq_n_u16(vsubq_u16(vshlq_n_u16(cc, 1), vtstq_u16(cc, cc)), 3);
+    const int16x4_t cbase = vreinterpret_s16_u16(vadd_u16(vget_low_u16(c6), vdup_n_u16(7)));
+    const int16x8_t vr = vdupq_lane_s16(cbase, 0), vg = vdupq_lane_s16(cbase, 1), vb = vdupq_lane_s16(cbase, 2);
+    const int16x8_t dm = vreinterpretq_s16_u16(vcombine_u16(vsub_u16(hb, ha), vsub_u16(vget_high_u16(c6), vget_low_u16(c6))));
     int16_t sa = (int16_t)rd16(a + 0xc), ta = (int16_t)rd16(a + 0xe);
     int16_t ds = (int16_t)(uint16_t)(rd16(b + 0xc) - (uint16_t)sa), dt = (int16_t)(uint16_t)(rd16(b + 0xe) - (uint16_t)ta);
     const int32x4_t vs = vdupq_n_s32((int32_t)((uint32_t)((int32_t)sa * 32768) + (ds > 0 ? 0x800 : 0)));
     const int32x4_t vt = vdupq_n_s32((int32_t)((uint32_t)((int32_t)ta * 32768) + (dt > 0 ? 0x800 : 0)));
-    const int16x8_t dm = { ds, dt, dr, dg, db, 0, 0, 0 };
     /* x, z */
     uint32_t xa = rd16(a + 4);
     int32_t dx = (int32_t)(rd16(b + 4) - xa);
@@ -118,55 +130,81 @@ static inline __attribute__((always_inline)) void walk_edge(uint8_t *spans, cons
     uint32_t xs = (uint32_t)((dx < 0 ? prod + 0xfff : prod) >> 12), x = (xa << 18) + xs * skip;
     const uint16x8_t vf = vdupq_n_u16(dx == 0 ? 0x8000 : 0);
     static const uint32_t iota[4] = { 0, 1, 2, 3 };
-    uint32x4_t xl = vmlaq_n_u32(vdupq_n_u32(x), vld1q_u32(iota), xs), xh = vaddq_u32(xl, vdupq_n_u32(4 * xs));
-    const uint32x4_t x8 = vdupq_n_u32(8 * xs);
-    uint64x2_t z0 = vdupq_n_u64(0), z1 = z0, z2 = z0, z3 = z0, z8 = z0;
+    uint32x4_t xl = vmlaq_n_u32(vdupq_n_u32(x), vld1q_u32(iota), xs);
+    const uint32x4_t x4 = vdupq_n_u32(4 * xs);
+    uint64x2_t z0 = vdupq_n_u64(0), z2s = z0;
     if (withz) {
         uint32_t za = rd16(a + 8);
         int32_t dz = (int32_t)((rd16(b + 8) - za) << 9);
         uint64_t zs = (uint64_t)(int64_t)dz * rc + (dz < 0 ? 0x40000000u : 0), z = ((uint64_t)za << 39) + (uint64_t)skip * zs;
-        const uint64x2_t z2s = vdupq_n_u64(2 * zs);
+        z2s = vdupq_n_u64(2 * zs);
         z0 = vaddq_u64(vdupq_n_u64(z), vcombine_u64(vdup_n_u64(0), vdup_n_u64(zs)));
-        z1 = vaddq_u64(z0, z2s); z2 = vaddq_u64(z1, z2s); z3 = vaddq_u64(z2, z2s);
-        z8 = vdupq_n_u64(8 * zs);
     }
 
+    /* the products' fast forms (F = 1), exact unless a saturating case can occur, which the edge's deltas tell:
+     *   w: (s64)dw * q >> 15 is sqdmulh(q << 16, dw) = (2 (q 2^16) dw) >> 32, saturating only for q << 16 = dw =
+     *     INT32_MIN (q = -32768: a weight of 1.0 wrapped; DraStic's 2^31 there, sqdmulh's 2^31 - 1);
+     *   s, t: bits 15..30 of base + q d are bits 16..31 of 2 (base + q d) mod 2^32: addhn of sqdmull(q, d) (2 q d)
+     *     and (s_a << 16) + 0x1000 (when d > 0), sqdmull saturating only for q = d = -32768.
+     * Edges with dw = INT32_MIN or ds or dt = -32768 take the plain products (F = 0) */
+    int fast = (dw0 != INT32_MIN) & (ds != -32768) & (dt != -32768);
+    __asm__("" : "+r"(fast));          /* one branch on the three tests (clang branched on each) */
+    const int32x4_t vs2 = vdupq_n_s32((int32_t)(((uint32_t)(uint16_t)sa << 16) + (ds > 0 ? 0x1000 : 0)));
+    const int32x4_t vt2 = vdupq_n_s32((int32_t)(((uint32_t)(uint16_t)ta << 16) + (dt > 0 ? 0x1000 : 0)));
     uint8_t *o = spans + 4 * line;
-    for (;;) {
-        WEIGHTS(qn);
-        int16x4_t q0 = vget_low_s16(q);
-        int32x4_t ql = vmovl_s16(q0), qh = vmovl_high_s16(q);
-        int32x4_t wl = vshrn_high_n_s64(vshrn_n_s64(vmull_s32(vget_low_s32(dw), vget_low_s32(ql)), 15), vmull_high_s32(dw, ql), 15);
-        int32x4_t wh = vshrn_high_n_s64(vshrn_n_s64(vmull_s32(vget_low_s32(dw), vget_low_s32(qh)), 15), vmull_high_s32(dw, qh), 15);
-        vst1q_u32((uint32_t *)o, vaddq_u32(vreinterpretq_u32_s32(wl), w0));
-        vst1q_u32((uint32_t *)(o + 16), vaddq_u32(vreinterpretq_u32_s32(wh), w0));
-        int16x8_t s = vshrn_high_n_s32(vshrn_n_s32(vmlal_laneq_s16(vs, q0, dm, 0), 15), vmlal_high_laneq_s16(vs, q, dm, 0), 15);
-        int16x8_t t = vshrn_high_n_s32(vshrn_n_s32(vmlal_laneq_s16(vt, q0, dm, 1), 15), vmlal_high_laneq_s16(vt, q, dm, 1), 15);
-        int16x8x2_t st = { { s, t } };
-        vst2q_s16((int16_t *)(o + EA(4)), st);
-        int16x8x2_t rg = { { vaddq_s16(vr, vqdmulhq_laneq_s16(q, dm, 2)), vaddq_s16(vg, vqdmulhq_laneq_s16(q, dm, 3)) } };
-        vst2q_s16((int16_t *)(o + EA(6)), rg);
-        uint16x8_t xv = vorrq_u16(vf, vshrq_n_u16(vshrn_high_n_u32(vshrn_n_u32(xl, 16), xh, 16), 2));
-        uint16x8x2_t xb = { { xv, vreinterpretq_u16_s16(vaddq_s16(vb, vqdmulhq_laneq_s16(q, dm, 4))) } };
-        vst2q_u16((uint16_t *)(o + EA(8)), xb);
-        if (withz) {
-            vst1q_u32((uint32_t *)(o + EA(2)), vshrn_high_n_u64(vshrn_n_u64(z0, 30), z1, 30));
-            vst1q_u32((uint32_t *)(o + EA(2) + 16), vshrn_high_n_u64(vshrn_n_u64(z2, 30), z3, 30));
-        }
-        if ((cnt -= 8) <= 0) break;
-        q = qn;
-        xl = vaddq_u32(xl, x8); xh = vaddq_u32(xh, x8);
-        if (withz) { z0 = vaddq_u64(z0, z8); z1 = vaddq_u64(z1, z8); z2 = vaddq_u64(z2, z8); z3 = vaddq_u64(z3, z8); }
-        o += 32;
-    }
+#define STORES(F) do { \
+        int16x4_t q0 = vget_low_s16(q); \
+        int32x4_t wl, wh; \
+        int16x8_t s, t; \
+        if (F) { \
+            wl = vqdmulhq_s32(vreinterpretq_s32_u32(vshll_n_u16(vreinterpret_u16_s16(q0), 16)), dw); \
+            wh = vqdmulhq_s32(vreinterpretq_s32_u32(vshll_high_n_u16(vreinterpretq_u16_s16(q), 16)), dw); \
+            s = vaddhn_high_s32(vaddhn_s32(vqdmull_laneq_s16(q0, dm, 2), vs2), vqdmull_high_laneq_s16(q, dm, 2), vs2); \
+            t = vaddhn_high_s32(vaddhn_s32(vqdmull_laneq_s16(q0, dm, 3), vt2), vqdmull_high_laneq_s16(q, dm, 3), vt2); \
+        } else { \
+            int32x4_t ql = vmovl_s16(q0), qh = vmovl_high_s16(q); \
+            wl = vshrn_high_n_s64(vshrn_n_s64(vmull_s32(vget_low_s32(dw), vget_low_s32(ql)), 15), vmull_high_s32(dw, ql), 15); \
+            wh = vshrn_high_n_s64(vshrn_n_s64(vmull_s32(vget_low_s32(dw), vget_low_s32(qh)), 15), vmull_high_s32(dw, qh), 15); \
+            s = vshrn_high_n_s32(vshrn_n_s32(vmlal_laneq_s16(vs, q0, dm, 2), 15), vmlal_high_laneq_s16(vs, q, dm, 2), 15); \
+            t = vshrn_high_n_s32(vshrn_n_s32(vmlal_laneq_s16(vt, q0, dm, 3), 15), vmlal_high_laneq_s16(vt, q, dm, 3), 15); \
+        } \
+        vst1q_u32((uint32_t *)o, vaddq_u32(vreinterpretq_u32_s32(wl), w0)); \
+        vst1q_u32((uint32_t *)(o + 16), vaddq_u32(vreinterpretq_u32_s32(wh), w0)); \
+        int16x8x2_t st = { { s, t } }; \
+        vst2q_s16((int16_t *)(o + EA(4)), st); \
+        int16x8x2_t rg = { { vaddq_s16(vr, vqdmulhq_laneq_s16(q, dm, 4)), vaddq_s16(vg, vqdmulhq_laneq_s16(q, dm, 5)) } }; \
+        vst2q_s16((int16_t *)(o + EA(6)), rg); \
+        uint32x4_t xh = vaddq_u32(xl, x4); \
+        uint16x8_t xv = vorrq_u16(vf, vshrq_n_u16(vshrn_high_n_u32(vshrn_n_u32(xl, 16), xh, 16), 2)); \
+        uint16x8x2_t xb = { { xv, vreinterpretq_u16_s16(vaddq_s16(vb, vqdmulhq_laneq_s16(q, dm, 6))) } }; \
+        vst2q_u16((uint16_t *)(o + EA(8)), xb); \
+        xl = vaddq_u32(xh, x4); \
+        if (withz) { \
+            uint64x2_t z1 = vaddq_u64(z0, z2s), z2 = vaddq_u64(z1, z2s), z3 = vaddq_u64(z2, z2s); \
+            vst1q_u32((uint32_t *)(o + EA(2)), vshrn_high_n_u64(vshrn_n_u64(z0, 30), z1, 30)); \
+            vst1q_u32((uint32_t *)(o + EA(2) + 16), vshrn_high_n_u64(vshrn_n_u64(z2, 30), z3, 30)); \
+            z0 = vaddq_u64(z3, z2s); \
+        } \
+    } while (0)
+    /* the exit test first: a step that continues computes the next 8 lines' weights in its stores' block, where
+     * their reciprocal chain overlaps the stores; the last step only stores */
+#define LOOP(F) do { \
+        while (cnt > 8) { WEIGHTS(qn); STORES(F); q = qn; cnt -= 8; o += 32; } \
+        STORES(F); \
+        if (F) __asm__ volatile(""); /* (keeps the last step one block: clang tail-merged it with F = 0's) */ \
+    } while (0)
+    if (__builtin_expect(fast, 1)) LOOP(1);
+    else LOOP(0);
+#undef LOOP
+#undef STORES
 #undef WEIGHTS
 }
 
 /* the chain walk of render_polygon_interpolate_edges (spec/edges.c section 4): the edges with lines in
- * [y_start, y_end), each walked as it is found (DraStic collects up to 16, then runs each routine over all) */
+ * [y_start, y_end), each walked as it is found (DraStic collects up to 16, then runs each routine over all); withz:
+ * the polygon's depth is z (flags & 0x18 clear), whose arrays the walk then writes too */
 static inline __attribute__((always_inline)) void walk_chain(uint8_t *spans, vtx_t **vptr, int dir, uint32_t y_start,
-                                                             uint32_t y_end, uint32_t flags) {
-    const int withz = !(flags & 0x18);
+                                                             uint32_t y_end, const int withz) {
     vtx_t *prev = vptr[0];
     uint32_t yp = rd16(prev + 6), n = 0, line = 0;
     vtx_t **q = vptr + dir;
@@ -179,8 +217,7 @@ static inline __attribute__((always_inline)) void walk_chain(uint8_t *spans, vtx
         if (y1 > y_end) len += (int32_t)(y_end - y1);
         if (len > 0) {
             if (n == 16) break;
-            if (withz) walk_edge(spans, prev, cur, line, (uint8_t)len, n ? 0 : sk, 1);
-            else walk_edge(spans, prev, cur, line, (uint8_t)len, n ? 0 : sk, 0);
+            walk_edge(spans, prev, cur, line, (uint8_t)len, n ? 0 : sk, withz);
             line += (uint8_t)len;
             n++;
         }
@@ -325,7 +362,11 @@ int walk_polygon_4x(uint8_t *ctx, uint8_t *poly, uint8_t *verts, unsigned bin_to
     if (marks && (clip & 1)) { ys--; nl++; sp = span + 4; }
     if (marks && (clip & 2)) { ye++; nl++; }
     /* the forward chain into the left arrays, the backward one into the right (one inlined copy of the walk) */
-    for (int c = 0; c < 2; c++) walk_chain(span + c * SPAN_ARR, c ? &vp[count] : &vp[0], c ? -1 : 1, ys, ye, flags);
+    for (int c = 0; c < 2; c++) {
+        vtx_t **v = c ? &vp[count] : &vp[0];
+        if (!(flags & 0x18)) walk_chain(span + c * SPAN_ARR, v, c ? -1 : 1, ys, ye, 1);
+        else walk_chain(span + c * SPAN_ARR, v, c ? -1 : 1, ys, ye, 0);
+    }
     if (!marks) {
         walk_spans(span, lines, 0);
         setup(ctx, span, poly, buf, line0, (unsigned)lines, flags, vp[0]);
