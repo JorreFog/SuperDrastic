@@ -39,22 +39,26 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   2026-10-08, and with everything below too (the group head, the fused 2x walker, the scheduler's A55 model, the
   fused resolve and the 3x walker's steps; profiles of 90 s), and the second round below (the translucent tails and
   st4 stores, the 2x fog and edge-marking resolves, the 3x edge marking's id screen and walker stores, the 2x span
-  setup and batch splitting):
+  setup and batch splitting) and the third (the opaque kernels' attribute words kept in registers and st4 for the
+  paletted ones, the 2x and 3x fog's depth screens, the edge screens' loads, the 3x downsample's uniform steps, the 2x
+  walker's edge steps):
 
-  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of the first round | second round |
-  |---|---|---|---|---|---|
-  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) | 18.1 M (-3.3%) |
-  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) | 4.08 M (0.0%) |
-  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) | 9.75 M (-11.7%) |
-  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) | 34.2 M (-3.3%) |
-  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) | 7.41 M (-2.3%) |
-  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) | 18.9 M (-7.5%) |
+  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of the first round | second round | third round, net |
+  |---|---|---|---|---|---|---|
+  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) | 18.1 M (-3.3%) | 17.7 M (-0.9%) |
+  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) | 4.08 M (0.0%) | 3.92 M (-2.2%) |
+  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) | 9.75 M (-11.7%) | 9.12 M (-5.2%) |
+  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) | 34.2 M (-3.3%) | 33.8 M (-0.3%) |
+  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) | 7.41 M (-2.3%) | 7.13 M (-2.9%) |
+  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) | 18.9 M (-7.5%) | 17.7 M (-6.0%) |
 
   The totals include 0.07-0.83 M a frame of blocks outside DraStic and librast (cycles.py's `[other]`) that vary
   from run to run: the second round's changes are against the first round's profiles with those taken out (L4 2x
   18.42 -> 17.82 M, S7 4.00 -> 4.01, S4 10.90 -> 9.62, L4 3x 35.05 -> 33.89, S7 3x 7.51 -> 7.34, S4 3x 20.32 ->
   18.80; S7 at 2x spends most of its 3D time in the kernel 14010, which did not change); the earlier columns include
-  them.
+  them. The third round's column is net of them, against the second round's net figures (its profiles, run beside
+  a scene-cycle diff, reached fewer frames and so a different part of each ROM's scene mix: the per-function
+  figures in its paragraphs below are the firmer measure; the stress ROM's kernels and walker -0.22 M a frame).
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins. Since then each group starts with one basic block (`kerngen.py`'s head()): the
@@ -442,4 +446,7 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   understood. In a simulator set up afresh on 2026-10-08 it ran through every scene seven times without it (RAST=diff
   to 91200 bins, the same differing bins as DraStic's renderer at every checkpoint: 47 at 7200, 662 at 14400, 1919
   at 72000). A rare startup hang is DraStic's own (helpers waiting on locks not yet initialised, ROCKNIXDS
-  docs/handoff-local.md); the simulator does not preload libdsflip, which works around it: run again.
+  docs/handoff-local.md); the simulator does not preload libdsflip, which works around it: run again. On the evening
+  of 2026-10-08 the scene 2 -> 3 SIGILL came back in every run of every build, at low load too, and after the
+  container restarted it was gone again (2026-10-09: to 148800 bins, the same bins as DraStic's renderer at every
+  checkpoint): a state of the long-running simulator host, not of the code; restart before suspecting a build.
