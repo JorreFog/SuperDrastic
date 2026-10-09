@@ -226,7 +226,12 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   the same for all bins of a polygon is its setup (the vertices, an edge's constants, f_run's and asm_batch_for's
   per-polygon work: about 700 of the ~1900 modeled cycles a polygon and bin costs on L4), but L4 has ~505 polygons
   a frame in 1166 polygon-bins (2.3 bins each), and the three render threads take every third bin, so a per-thread
-  cache would almost never hit: sharing needs a per-frame table across the threads (Next).
+  cache would almost never hit: sharing needs a per-frame table across the threads (Next). At 3x f_run's batch
+  splitting (batch_end, a chain of prefix sums, ~40 modeled cycles a step of 8 lines) ran over every line of nearly
+  every polygon-bin to find one batch (up to 4096 pixels): `one_batch` first checks in one pass of independent steps
+  (sums and mins) whether the lines with pixels are one run that fits, the tips of width 0 skipped (`ut/batch_end`
+  checks it against the loop too): L4 at 3x f_run 0.68 M -> 0.61 M. At 2x half of L4's polygon-bins are more than one
+  batch of 512 and the test cost more than it saved (0.64 -> 0.73 M): 3x only.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
