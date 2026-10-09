@@ -150,6 +150,32 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   varies with the span: compare the instructions), at 3x h04010 7.68 -> 7.15 M (instructions 6.47 -> 6.07 M, kpath's
   5% fewer a group and slightly less work), librast 16.44 -> 16.06 M; at 2x 04010 and 04000 together
   4.34 -> 4.16 M, librast 7.25 -> 7.06 M (1747 and 1027 frames).
+  Third round, 3x: hr.c's fog (fog_line) tests a step's 32 depths against the fog offset before the rest of the
+  factors: when the density table starts at 0 (as fog tables do) and every depth is at most the offset, every factor is
+  0 (d - off saturates to 0, so i = 0, f = 0 and w = table[0]) and the step is its colours with the fog flags cleared,
+  without the weights' tbl and multiplies and the modulates; 73% of the fogged steps of S4 at 3x (and nearly all of
+  those whose factors are all 0). Modeled A55 cycles a frame, S4 at 3x: fog_line 2.12 M -> 1.49 M (a skipped step 165
+  -> 89 modeled cycles with full fog, 136 -> 86 alpha only; the others 3-4 more); `ut/hr_ab` (its fog and resolve
+  cases now with zero-first tables and steps below the offset, failing mutants of the test) against 94f9689: the same.
+  The 3x downsample (hr_downsample) passes uniform steps through: when each of a step's four triples has the same r, g,
+  b in all 9 of its pixels (channels at most 63) and every alpha is 31, the opaque case's outputs are those colours
+  with alpha 31 (counted in the simulator: 65% of the steps of the field scene S7 at 3x, 15% of S4's; the stress ROM's
+  42% come in short runs). The test (the 9 vectors' OR beside their AND, the opaque test in the same max) makes a step
+  that is not uniform 90 -> 111 modeled cycles and a uniform one 90 -> 63, so after a step that is not uniform the next
+  7 go without it (DS_SKIP; 3 modeled worse on S4, the same on S7). Modeled A55 cycles a frame at 3x, hr_downsample: S7
+  1.11 M -> 0.93 M, L4 1.11 -> 1.10, S4 1.38 -> 1.39 (a verifier's profile with fewer steps of the general case
+  than the base's: about 2% more on the same mix, against S7's 17% less); `ut/hr_ab` (its downsample test now with uniform blocks at random and in runs, with flag bits, channels of 64
+  and more and one bit off, failing mutants of the test) against 94f9689: the same.
+  The 3x edge marking's id screen (edge_lines) takes two blocks of 16 pixels a step while no block is forced (one max
+  and branch for both; a pair that does not pass is taken a block at a time): S4 at 3x, edge_lines 0.63 M -> 0.55 M
+  (a screened pair ~55 modeled cycles instead of ~68); `ut/hr_ab`'s polygon-like contexts fail mutants of it.
+  The NEON walker's interpolate_parameters (spec/edges_impl.h) takes its products as smull and add (clang made each a
+  mov of the base and an smlal): 29 -> 27 modeled cycles a step of 4 lines; stress ROM L4 at 3x,
+  hr_render_polygon_interpolate_edges 1.94 M -> 1.90 M (t_edges.c against DraStic's; `ut/hr_ab`, whose base side
+  now takes the base's headers too: the same).
+  The four changes against the second round's profiles, net of `[other]` (whose share varies run to run, as does the
+  scenes' mix in shorter runs): S4 at 3x 18.80 -> 18.08 M a frame (fog -0.63, edge marking -0.08), S7 at 3x the
+  downsample -0.18 M a frame; 2x does not use hr.c (S4's frame diff 0 bins in 7200, the compositor's checks 0 differ).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -316,8 +342,9 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
 - The 2x fog (`res2.c` fog_line2x, 0.78 M cycles a frame on S4 at IPC 0.57) is bound by the FP pipe: four channels'
   smull/smull2/shrn/shrn2 per 16 pixels and the weights' two tbl2. The attributes by ldr q + shrn instead of ld4 + zip
-  models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog and edge
-  marking could take res2.c's skips (S4 2x: edge marking 1.02 -> 0.57 M, fog 0.89 -> 0.78 M).
+  models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog skips the
+  steps below the fog offset (Status); its edge marking could take res2.c's skip of the key compares (S4 2x: edge
+  marking 1.02 -> 0.57 M), and fog_line2x hr.c's depth test (its skip of steps whose factors are all 0 computes them).
 - The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
@@ -342,17 +369,23 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
   leave by umov), which the model cannot price (store-to-load forwarding).
+- `ut/hr_ab`'s walker test does not see interpolate_parameters' outputs: a mutant of it (vsub for vadd in edges_impl.h's
+  NEON form) passes the walker A/B, which hashes the 11 span arrays f_run receives, while t_edges.c fails it against
+  DraStic's. Find out whether the 3x path overwrites or ignores span arrays 4, 6 and 8's parameter halves before f_run,
+  or the hash misses them; until then edges_impl.h changes rest on t_edges.c.
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
   layer presented through the dsflip shader instead of downsampled.
   Polygons of 9 and 10 vertices: DraStic's render_polygon_4x takes the walk's ninth vertex as base + 0 and never
   writes a tenth's slot (it walks a stale stack slot; walk.c leaves 10 to DraStic). hr.c's vertex indices for them
   are nibbles 0 and 1 of the group's base sequence (`4 * (k & 7)`: what its former `seq >> (4 * k)`, undefined
   from k = 8, compiled to; ut/hr_ab: the same output on 1.5 M polygons): decide what 3x should walk there.
-  The downsample is bound by its loads and the alpha test in the cycle model: two groups a step, the opaque outputs
-  computed before the test and the loads a group ahead all modeled within 3% of the current loop. Its three ld3 cost
+  The downsample is bound by its loads and the alpha test in the cycle model (uniform steps aside, Status): two
+  groups a step, the opaque outputs computed before the test and the loads a group ahead all modeled within 3% of the
+  loop. A cheaper uniform test would pay on the stress ROM, whose uniform steps come in short runs. Its three ld3 cost
   about what nine ldr q and a 3-way deinterleave would (tbl of two and three registers plus ins: ~11 cycles a row in
   llvm-mca), and the alpha tests need no deinterleave; the u8 stage's wrap for 8-bit channels (ut/hr_ab's wide case)
-  must stay. fog_line (S4 at 3x: 2.1 M, IPC 0.62) keeps 14 constant vectors: the compiler reloads one tbl table from
+  must stay. fog_line (S4 at 3x: 1.5 M after its skip, the
+  steps it does not skip 160-170 modeled cycles) keeps 14 constant vectors: the compiler reloads one tbl table from
   the stack every step (ld1 of two registers); fewer constants (0x81 and 0x7f, the table pair) would keep it in
   registers.
 - The 2x walker (stress ROM L4, 1.59 M cycles a frame): an edge's step computes the next 8 lines' weights after its

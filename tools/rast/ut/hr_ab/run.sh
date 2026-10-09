@@ -12,6 +12,11 @@ SIM=${SIM:-/tmp/claude-0/-home-user/b019d7e4-f3cd-580d-8132-fb9570fcadd2/scratch
 R=$(cd "$HERE/../../../../src/rast" && pwd)
 O=$(mktemp -d)
 git -C "$R" show "${BASE:-450370b}:src/rast/hr.c" > "$O/hr_base.c" || exit 2
+# the base's headers beside it (its quoted includes look in its own directory first): without them the base side took
+# the worktree's spec/edges_impl.h, so a change to the NEON walker ran on both sides
+git -C "$R" ls-tree -r --name-only "${BASE:-450370b}" src/rast | grep '\.h$' | while read -r f; do
+    mkdir -p "$O/$(dirname "${f#src/rast/}")"; git -C "$R" show "${BASE:-450370b}:$f" > "$O/${f#src/rast/}"
+done
 CC="clang --target=aarch64-linux-gnu --sysroot=$SIM/rtsys -O2 -mtune=cortex-a55 -Wall -Wno-unused-function -I$R"
 $CC -c -o "$O/old.o" -DTAG=old_ -DHRFILE="\"$O/hr_base.c\"" "$HERE/ab_tu.c" || exit 2
 $CC -c -o "$O/new.o" -DTAG=new_ -DHRFILE="\"${NEWFILE:-$R/hr.c}\"" "$HERE/ab_tu.c" || exit 2
