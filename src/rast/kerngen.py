@@ -33,14 +33,14 @@ Register use in the group loop:
   v6-v9   z: za zb zs4 z8 (u64 pairs)   w: dW W0 splats   const: K splat (per batch)
   v10-v14 r0 g0 b0 (u16 splats) ub vb (s32 splats)   v15  deltas (h lanes) dr dg - db du dv tw (tw per batch)
   v16 v17 texture s and t masks (W-1, H-1)   v18-v21 bilinear or the tbl palette   v22 pid<<24 splat
-  v23 bytes A aref fog pid fr fg fb   v24-v31 temporaries
+  v23 bytes A aref fog pid fr fg fb   v24-v31 temporaries (v28 the group's pass mask, but in keep_dep()'s kernels)
   Where a variant leaves some of v7-v14, v16-v21 unused, they hold per-batch constants or more scratch instead
   (roles()). kernsched.py then reorders every basic block for the in-order Cortex-A55.
   x1 colour ptr  x2 attribute ptr (both advance per group)  x3 pass masks (opaque, post-incremented) / id line
   (translucent, x4 the index)  (visibility kernels: x1 the owner line; shade kernels: x2 the owner line)
-  x5 the line's pixels left  x6 texels  x7 flags  x8 scratch  x9-x16 gather  x17 Rwc  x19 kargs
-  x20 tail-mask table  x21 palette  x22 span entry  x23 lines left  x24 bin line  x25 ctx  x26 id0  x27 batch flags
-  x28 the texel buffer (sp + 32)  x0 anypass (nonzero: some pixel passed)
+  x5 the line's pixels left  x6 texels  x7 flags  x8 the pass mask (scratch outside the loop)  x9-x16 gather
+  x17 Rwc  x19 kargs  x20 tail-mask table  x21 palette  x22 span entry  x23 lines left  x24 bin line  x25 ctx
+  x26 id0  x27 batch flags  x28 the texel buffer (sp + 32)  x0 anypass (nonzero: some pixel passed)
 The group loop (0:) starts with one basic block (head(), head_w()): the depth test, the perspective weights beside it
 (computed for every group: the in-order core overlaps the two chains only in one block; with w depth, which needs
 them first, the attribute words' load) and the next group's steps, so the latch carries no long-latency result into
@@ -49,7 +49,8 @@ passing group sets up the weights and interpolants (27:, then the weights at 28:
 the latch (the affine weights 6:, the depth-equal test 24:, which with w depth also takes the affine weights and the
 64-bit w products 23:, the 32-bit vertex colour 37:, the alpha modulate and alpha test 46: and the white lines' alpha
 test 45:, the partial-group store 1:) so the common path has no taken branch besides the loop's.
-Stack: [sp,#32] 8 texels, [sp,#64] the depth words of the group, [sp,#96..] spills
+Stack: [sp,#32] 8 texels, [sp,#64] the depth words of the group (keep_dep()'s kernels keep them in v25 v26 and
+spill them only at a line's first group), [sp,#96..] spills
 (bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
 (512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
 import os, sys
@@ -81,6 +82,29 @@ def e(s=""): out.append("\t" + s if s and not s.endswith(":") and not s.startswi
 
 RL = {}         # the current kernel's per-batch constants in otherwise unused registers: roles()
 OOLS = []       # out-of-line blocks of the group loop, emitted after its latch
+KD = False      # the current kernel's keep_dep() kind: its depth words stay in v25 v26, its pass mask in x8
+
+def keep_dep(D, T, R, F, B, M):
+    """The opaque textured kernels with z or w depth and no register for the dep role kept the group's attribute
+    words on the stack: spilled at the depth test, reloaded for the store (ldp q, which holds the A55's load pipe 6
+    cycles, and the pid orr). "flat": the flat paletted ones (03010 04010 13010 14010; S4's and S7's main kernels,
+    whose spares hold the flat colour and two modulate scratches); "lit": the lit direct-textured ones (01000 02000
+    11000 12000, whose spares hold the vertex colour and a modulate scratch); "litp": the lit paletted ones (03000
+    04000 13000 14000; b's modulate scratch is g's texel register v27, read by then). Instead the
+    test's v25 v26 keep them (the store ORs pid in: dep_words()), freed by the pass mask, which lives in x8 only
+    (the store and the partial group take it from there; the alpha test narrows x8): v28 is a modulate scratch
+    (lit: v24 r's, st being spent by then, and v28 b's, instead of v26 and v25; the slow vertex colour's v26 and the
+    texture masks' load, v25, take v28 too). The paletted ones ("flat", "litp") also store with st4 from v28-v31:
+    r's modulate takes v24 as its scratch, g's result overwrites its texel's v29 (r's, read by then), a | fog is v31
+    (b's texel, read by then) and b's result goes to v30 (the alpha texel) last, in the store's block, from its
+    scratch bsc() (the white lines' 44: puts b << 6 there). test()'s callers (the lazy loop's entry, the
+    depth-equal heads) spill the words too and 28: reloads them: the line setup at 27: uses v25 v26. kpath, cycles
+    a group (256 colours / 16): 04010 140/137 -> 133/130, 14010 148/145 -> 142/139, 03010 157 -> 150, 13010 165 ->
+    159; 02000 125 -> 122, 12000 136 -> 133, 04000 141/138 -> 136/133, 14000 149/146 -> 145/142.
+    ut/kern_ab checks every kernel against a base."""
+    if R or M or B or D == 2 or not T: return False
+    if F: return "flat" if T in (3, 4) else False
+    return "litp" if T in (3, 4) else "lit"
 
 def uses_st(D, T, F, M):
     """the perspective weights are needed: w depth, texture or vertex colour (not flat; the visibility pass has none)"""
@@ -419,12 +443,16 @@ def test(D, fail="8f", eq=24):
     e("uzp1 v27.8h, v27.8h, v28.8h")
     tail("v27")
     e(f"xtn v28.8b, v27.8h"); e("fmov x8, d28"); e(f"cbz x8, {fail}")
-    dep_post(D)
+    dep_post(D, True)
 
-def dep_post(D):
-    """after a passing test: the group's attribute words dep | pid << 24 into the dep registers, or dep spilled"""
+def dep_post(D, spill=False):
+    """after a passing test: the group's attribute words dep | pid << 24 into the dep registers, or dep spilled;
+    keep_dep() kernels: dep stays in v25 v26 (pid ORed in by the store, dep_words()), spilled too with `spill`
+    (test()'s callers, the lazy loop's entry and the depth-equal heads, reach 28:, which reloads them)"""
     if D != 2:
-        if "dep" in RL:
+        if KD:
+            if spill: e("stp q25, q26, [sp, #64]")
+        elif "dep" in RL:
             p = pid24("v27"); e(f"orr {RL['dep'][0]}.16b, v25.16b, {p}.16b"); e(f"orr {RL['dep'][1]}.16b, v26.16b, {p}.16b")
         else: e("stp q25, q26, [sp, #64]")
 
@@ -518,6 +546,10 @@ def test_equal(D, eq=24):
 
 def dep_words(D):
     """the group's attribute words dep | pid << 24 -> two registers"""
+    if KD:                                  # (in the store's block: there the pid load and the orrs hide)
+        p = pid24({"flat": "v27", "litp": RL["vs"][0]}.get(KD, "v28"))
+        e(f"orr v25.16b, v25.16b, {p}.16b"); e(f"orr v26.16b, v26.16b, {p}.16b")
+        return "v25", "v26"
     if "dep" in RL: return (RL["dep"][0], RL["dep"][0]) if D == 2 else tuple(RL["dep"])
     if D == 2: e("orr v25.16b, v6.16b, v22.16b"); return "v25", "v25"
     e("ldp q25, q26, [sp, #64]"); p = pid24("v24"); e(f"orr v25.16b, v25.16b, {p}.16b"); e(f"orr v26.16b, v26.16b, {p}.16b")
@@ -529,7 +561,8 @@ def texcoord(axis, T, r):
     identity then); flip (or wrap): invert where x & W (kargs flip: W, or 0), & (W-1)"""
     a = "s" if axis == 0 else "t"
     m = f"v{16 + axis}"
-    if taken(m): e(f"ldr q25, [x19, #{K[a + '_and']}]"); m = "v25"       # (v25 is free until the colour)
+    if taken(m):                                       # (v25 is free until the colour; keep_dep(): v28 is)
+        m = "v28" if KD else "v25"; e(f"ldr {q(m)}, [x19, #{K[a + '_and']}]")
     if T in (2, 4):
         e(f"and {r}.16b, {r}.16b, {m}.16b")
     else:
@@ -659,9 +692,10 @@ def vertex_colour(ch, F, dst, slow=False):
     if not slow:
         e(f"sqdmulh {dst}.8h, v24.8h, v15.h[{l}]"); e(f"add {dst}.8h, {dst}.8h, v{10 + ch}.8h"); e(f"shrn {dst}.8b, {dst}.8h, #3")
     else:
-        e(f"ushll {dst}.4s, v{10 + ch}.4h, #15"); e(f"mov v26.16b, {dst}.16b")
-        e(f"smlal {dst}.4s, v24.4h, v15.h[{l}]"); e(f"smlal2 v26.4s, v24.8h, v15.h[{l}]")
-        e(f"uzp2 {dst}.8h, {dst}.8h, v26.8h"); e(f"shrn {dst}.8b, {dst}.8h, #2")
+        w = "v28" if KD else "v26"                                              # (keep_dep(): v26 holds depth)
+        e(f"ushll {dst}.4s, v{10 + ch}.4h, #15"); e(f"mov {w}.16b, {dst}.16b")
+        e(f"smlal {dst}.4s, v24.4h, v15.h[{l}]"); e(f"smlal2 {w}.4s, v24.8h, v15.h[{l}]")
+        e(f"uzp2 {dst}.8h, {dst}.8h, {w}.8h"); e(f"shrn {dst}.8b, {dst}.8h, #2")
 
 def modulate(v, t, sh, w="v26", o=None):
     """o (t) = ((v+1)*(t+1)-1) >> sh, bytes; w (v26) scratch"""
@@ -675,11 +709,18 @@ def st4_store():
 
 def st4_quad():
     """the four registers in a row the st4 kernels' colour bytes go to: lit direct-textured opaque v18-v21 (vc, vs);
-    flat textured opaque with its depth words in registers v24-v27 (free after the modulates' inputs)"""
+    flat textured opaque with its depth words in registers v24-v27 (free after the modulates' inputs); keep_dep()'s
+    paletted kernels v28-v31"""
+    if KD in ("flat", "litp"): return ["v28", "v29", "v30", "v31"]
     if RL.get("vc") == ["v18", "v19", "v20"] and RL.get("vs") == ["v21"]: return ["v18", "v19", "v20", "v21"]
     if "flat" in RL and len(RL.get("vs", ())) == 2 and "dep" in RL and "trans" not in RL and "idx" not in RL:
         return ["v24", "v25", "v26", "v27"]
     return None
+
+def bsc():
+    """keep_dep()'s st4 kernels: b's modulate scratch, whose shrn into v30 waits for the store's block (flat: the
+    second modulate scratch; lit paletted: g's texel register v27, read by then)"""
+    return "v27" if KD == "litp" else RL["vs"][1]
 
 def modulate_alpha(skip, s=("v25", "v26")):
     """ta (v30) -> ca = modulate(A, ta); with flag bit 10 (A is 31) ca = (32 (ta + 1) - 1) >> 5 = ta: to skip;
@@ -692,8 +733,9 @@ def alpha_test(fail="8f", s="v25"):
     """ca v30 > aref -> narrows the mask v28; fails to `fail`; s: the scratch register"""
     if "aref" in RL: e(f"cmhi {s}.8b, v30.8b, {RL['aref'][0]}.8b")
     else: e(f"dup {s}.8b, v23.b[1]"); e(f"cmhi {s}.8b, v30.8b, {s}.8b")
-    e(f"and v28.8b, v28.8b, {s}.8b")
-    e("fmov x8, d28"); e(f"cbz x8, {fail}")
+    if KD: e(f"fmov x9, d{s[1:]}"); e("and x8, x8, x9")               # (keep_dep(): the mask in x8 only)
+    else: e(f"and v28.8b, v28.8b, {s}.8b"); e("fmov x8, d28")
+    e(f"cbz x8, {fail}")
 
 def fused_alpha(T, M, B):
     """the textured kernels' alpha stages behind one flag test: bit 15 (set in the prologue) is bits 8 and 10 both
@@ -718,12 +760,17 @@ def alpha_stage(T, M, B):
     e("tbz w7, #15, 46f")
     e("47:")
     # (the st4 kernels' colour bytes in v24-v27 keep the alpha stages' scratch in the texels' registers)
-    sc = ("v29", "v31") if st4_quad() == ["v24", "v25", "v26", "v27"] else ("v25", "v26")
+    # (keep_dep(): v24, r's modulate scratch, and g's texel v27 or (g's result in v27: no st4) b's scratch v28)
+    sc = (("v29", "v31") if st4_quad() == ["v24", "v25", "v26", "v27"] else
+          (("v24", RL["vs"][0]) if KD == "litp" else ("v24", "v27") if st4_store() else ("v24", "v28")) if KD else
+          ("v25", "v26"))
     def ool():
         e("46:"); modulate_alpha("45f", sc)
         if st4_store():
             e("b 45f")
-            qd = st4_quad(); e("44:"); e(f"mov {qd[0]}.8b, v29.8b"); e(f"mov {qd[1]}.8b, v27.8b"); e(f"mov {qd[2]}.8b, v31.8b")
+            qd = st4_quad(); e("44:"); e(f"mov {qd[0]}.8b, v29.8b"); e(f"mov {qd[1]}.8b, v27.8b")
+            if KD in ("flat", "litp"): e(f"ushll {bsc()}.8h, v31.8b, #6")    # b, as the store's shrn takes it
+            else: e(f"mov {qd[2]}.8b, v31.8b")
         e("45:"); e("tbnz w7, #8, 47b"); alpha_test("8b", sc[0]); e("b 47b")
     OOLS.append(ool)
 
@@ -758,15 +805,18 @@ def colour(T, F, B, M=0):
         white_branch(T, M, B)
         e("tbz w7, #14, 37f")
         e("38:")
-        o = vc if st4_store() else [None] * 3
-        for ch, t, w in ((0, "v29", "v26"), (1, "v27", RL["vs"][0]), (2, "v31", "v25")): modulate(vc[ch], t, 6, w, o[ch])
+        o = st4_quad() if st4_store() else [None] * 3
+        ws = ("v24", RL["vs"][0], "v27" if KD == "litp" else "v28") if KD else ("v26", RL["vs"][0], "v25")
+        for ch, t, w in zip(range(3), ("v29", "v27", "v31"), ws):           # (keep_dep(): v25 v26 the depth words)
+            if KD == "litp" and ch == 2: e(f"uaddl {w}.8h, {vc[ch]}.8b, {t}.8b"); e(f"umlal {w}.8h, {vc[ch]}.8b, {t}.8b")
+            else: modulate(vc[ch], t, 6, w, o[ch])
         def ool():
             e("37:")
             for ch in range(3): vertex_colour(ch, F, vc[ch], True)
             e("b 38b")
         OOLS.append(ool)
         alpha_stage(T, M, B)
-        return ("v18", "v19", "v20", "v30") if st4_store() else ("v29", "v27", "v31", "v30")
+        return (*st4_quad()[:3], "v30") if st4_store() else ("v29", "v27", "v31", "v30")
     if T:
         if B: texture_bilinear(T)
         else: texture(T)
@@ -777,10 +827,13 @@ def colour(T, F, B, M=0):
             vs = RL.get("vs", ())
             ws = (["v26", *vs] if len(vs) == 2 else ["v26", "v25", "v26"]) if F and "flat" in RL else ["v26"] * 3
             o = st4_quad() if st4_store() and M == 0 else [None] * 3
+            if KD == "flat": ws[0] = "v24"                                                 # (v25 v26: the depth words)
             for ch, t in ((0, "v29"), (1, "v27"), (2, "v31")):
                 if F and "flat" in RL: v = RL["flat"][ch]
                 else: v = "v25"; vertex_colour(ch, F, v, slow)
-                modulate(v, t, 6, ws[ch], o[ch])
+                if KD == "flat" and ch == 2:        # b's result to v30 in the store's block, after a | fog left it
+                    e(f"uaddl {ws[2]}.8h, {v}.8b, {t}.8b"); e(f"umlal {ws[2]}.8h, {v}.8b, {t}.8b")
+                else: modulate(v, t, 6, ws[ch], o[ch])
         if not F:
             e("tbz w7, #14, 37f")
             rgb(); e("38:")
@@ -817,7 +870,7 @@ def pack(cols):
     if "caf" in RL: a = ca
     else:
         if "fog" in RL: f = RL["fog"][0]
-        else: e("dup v25.8b, v23.b[2]"); f = "v25"
+        else: f = "v24" if KD else "v25"; e(f"dup {f}.8b, v23.b[2]")
         e(f"orr v30.8b, {ca}.8b, {f}.8b"); a = "v30"
     e(f"zip1 v29.16b, {cr}.16b, {cg}.16b"); e(f"zip1 v31.16b, {cb}.16b, {a}.16b")
     e("zip1 v27.8h, v29.8h, v31.8h"); e("zip2 v29.8h, v29.8h, v31.8h")
@@ -830,14 +883,16 @@ def store(D, cols):
     if st4_store() and cols == (*st4_quad()[:3], "v30"):
         # the bytes r g b (a | fog) in four registers in a row: st4 interleaves them into the colour words; the
         # partial group zips
-        r, g, b, a = st4_quad(); t, u = ("v24", "v27") if r == "v18" else ("v29", "v25")
+        r, g, b, a = st4_quad(); t, u = ("v24", "v27") if r in ("v18", "v28") else ("v29", "v25")
         if "fog" in RL: f = RL["fog"][0]
         else: e(f"dup {t}.8b, v23.b[2]"); f = t
         e(f"orr {a}.8b, v30.8b, {f}.8b")
+        if KD in ("flat", "litp"): e(f"shrn {b}.8b, {bsc()}.8h, #6")             # b (keep_dep(): last, into v30)
         d0, d1 = dep_words(D)
         e("cmn x8, #1"); e("b.ne 1f")
         e(f"st4 {{{r}.8b, {g}.8b, {b}.8b, {a}.8b}}, [x1]"); e(f"stp {q(d0)}, {q(d1)}, [x2]")
-        cl, ch = ("v29", "v27") if r == "v18" else ("v27", "v29")
+        cl, ch = (("v29", "v27") if r == "v18" else RL["vs"] if KD == "flat" else (RL["vs"][0], "v29") if KD == "litp"
+                  else ("v27", "v29"))
         zips = lambda: (e(f"zip1 {t}.16b, {r}.16b, {g}.16b"), e(f"zip1 {u}.16b, {b}.16b, {a}.16b"),
                         e(f"zip1 {cl}.8h, {t}.8h, {u}.8h"), e(f"zip2 {ch}.8h, {t}.8h, {u}.8h"))
     else:
@@ -846,10 +901,12 @@ def store(D, cols):
         e("cmn x8, #1"); e("b.ne 1f")
         e(f"stp {q(cl)}, {q(ch)}, [x1]"); e(f"stp {q(d0)}, {q(d1)}, [x2]")
         zips = lambda: None
-    e("8:"); e("str d28, [x3], #8")                                              # the pass mask (edge marking)
+    m = "x8" if KD else "d28"                                                   # (keep_dep(): the mask in x8 only)
+    e("8:"); e(f"str {m}, [x3], #8")                                             # the pass mask (edge marking)
     e("7:")
     def ool():
-        e("1:"); e("str d28, [x3], #8"); zips()
+        e("1:"); e(f"str {m}, [x3], #8"); zips()
+        if KD: e("fmov d28, x8")
         e("sshll v28.8h, v28.8b, #0"); e("sshll v30.4s, v28.4h, #0"); e("sshll2 v31.4s, v28.8h, #0")
         e(f"ldp q24, q28, [x1]"); e(f"bit v24.16b, {cl}.16b, v30.16b"); e(f"bit v28.16b, {ch}.16b, v31.16b"); e("stp q24, q28, [x1]")
         e(f"ldp q24, q28, [x2]"); e(f"bit v24.16b, {d0}.16b, v30.16b"); e(f"bit v28.16b, {d1}.16b, v31.16b"); e("stp q24, q28, [x2]")
@@ -1029,7 +1086,9 @@ def lazy_loop(D, T, R, F, M):
     interpolants_setup(T, F, M)
     if T and not F and M != 1: white_test()
     e("28:")                                                                     # (and the depth-equal head's)
-    e("tbnz w7, #0, 40f"); steps(); advance(0); e("b 5f")
+    if KD:                                  # the attribute words back (the line setup used v25 v26), st beside them
+        e("ldp q25, q26, [sp, #64]"); e("tbnz w7, #0, 40f"); steps(("v24", "v29", "v30", "v31")); advance(0); e("b 5f")
+    else: e("tbnz w7, #0, 40f"); steps(); advance(0); e("b 5f")
     e("40:"); advance(1); e("b 5f")
 
 def shade_store(cols):
@@ -1048,9 +1107,9 @@ def shade_store(cols):
 
 def kernel_vis(D, T):
     """visibility pass of a deferred opaque polygon; T only for textures whose alpha test can fail"""
-    global RL
+    global RL, KD
     name = f"{PFX}v{D}{T}"
-    RL = roles(D, T, 0, 0, 0, 1)
+    RL = roles(D, T, 0, 0, 0, 1); KD = False
     st = uses_st(D, T, 0, 1)
     prologue(name, D, T, 0, 0, 1)
     if lazy(D, st): lazy_loop(D, T, 0, 0, 1)
@@ -1073,9 +1132,9 @@ def kernel_vis(D, T):
 
 def kernel_shade(T, F, B):
     """shade pass of a deferred opaque polygon: the pixels it owns"""
-    global RL
+    global RL, KD
     name = f"{PFX}s{T}{F}{B}"
-    RL = roles(2, T, 0, F, B, 2)
+    RL = roles(2, T, 0, F, B, 2); KD = False
     st = uses_st(2, T, F, 2)
     prologue(name, 2, T, 0, F, 2, B)
     if lazy(2, st): lazy_loop(2, T, 0, F, 2)
@@ -1092,9 +1151,10 @@ def kernel_shade(T, F, B):
     e()
 
 def kernel(D, T, R, F, B):
-    global RL
+    global RL, KD
     name = f"{PFX}{D}{T}{R}{F}{B}"
     RL = roles(D, T, R, F, B, 0)
+    KD = keep_dep(D, T, R, F, B, 0)
     st = uses_st(D, T, F, 0)
     prologue(name, D, T, R, F, 0, B)
     if lazy(D, st): lazy_loop(D, T, R, F, 0)
