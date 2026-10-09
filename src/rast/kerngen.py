@@ -12,7 +12,8 @@ uint8_t *ctx, uint32_t flags, uint8_t *id0) -> anypass (uint64), for a batch: sp
 Deferred opaque shading (defer.c) splits the opaque work in two: rast_kern_v<D><T> (visibility) runs the depth test,
 the alpha test when the texture can fail it (T, else T = 0), writes the attribute words and marks the passing pixels
 with the polygon's index in the owner buffer (kargs.owner, u16 per pixel, 512 per bin line) and does the edge
-marking; rast_kern_s<T><F><B> (shade) then colours the pixels whose owner is this polygon (kargs.idx16).
+marking (the untextured ones with z or constant depth a group in one block without a branch: vis_group());
+rast_kern_s<T><F><B> (shade) then colours the pixels whose owner is this polygon (kargs.idx16).
 Runtime flags: bit 0 affine steps (w constant), bit 1 depth-equal test, bit 2 white vertex colour (flat batches; with
 bit 9 the kernels set it per line), bit 6 edge marking, bit 7 a palette of at most 16 entries (kargs.pal16; the
 nearest-filtering paletted kernels then look the texels up with tbl in v18-v21 instead of loading them), bit 8 no
@@ -126,16 +127,18 @@ def roles(D, T, R, F, B, M):
     v10-v12 without a vertex colour, the texture's registers without a texture or a palette, and the depth's unused
     ones (w depth v8 v9, constant depth v7-v9, the shade pass v6-v9)."""
     if B: return {}
-    if T in (1, 2) and not F and R == 0 and M == 0:
+    if T in (1, 2) and not F and R == 0 and M != 1:
         # lit, direct textures (the pool is v18-v21): the vertex colour in three registers and a second modulate scratch,
         # so the colour is computed among the texel gather's loads and the three modulates run side by side; the
-        # depth words, the fog bit and A go to the stack and the bytes register instead
-        return {"vc": ["v18", "v19", "v20"], "vs": ["v21"]}
-    if T in (3, 4) and not F and R == 0 and M == 0:
+        # depth words, the fog bit and A go to the stack and the bytes register instead (the shade pass, which has
+        # no depth: the polygon's index, the fog bit and A in v6-v8)
+        return {"vc": ["v18", "v19", "v20"], "vs": ["v21"], **({"idx": ["v6"], "fog": ["v7"], "a": ["v8"]} if M else {})}
+    if T in (3, 4) and not F and R == 0 and M != 1:
         # lit, paletted (the palette holds v18-v21): the same with the texture masks (loaded from the arguments where
-        # used) and the depth's spare registers (z: v9, the 8 z steps as 2 x v8, and pid << 24, loaded)
+        # used) and the depth's spare registers (z: v9, the 8 z steps as 2 x v8, and pid << 24, loaded; the shade
+        # pass: v7 v8, the polygon's index and the fog bit in v6 v9)
         x = {0: ["v9", "v22"], 1: ["v8", "v9"], 2: ["v7", "v8"]}[D]
-        return {"vc": ["v16", "v17", x[0]], "vs": [x[1]]}
+        return {"vc": ["v16", "v17", x[0]], "vs": [x[1]], **({"idx": ["v6"], "fog": ["v9"]} if M else {})}
     pool = []
     if F or M == 1: pool += ["v10", "v11", "v12"]                               # no vertex colour
     if T == 0: pool += ["v13", "v14", "v16", "v17", "v18", "v19", "v20", "v21"]  # no texture
@@ -209,8 +212,8 @@ def roles_setup(D):
         e("dup v26.8b, v23.b[6]"); e("zip1 v26.16b, v26.16b, v24.16b")                           # b a
         e(f"zip1 {r['colw'][0]}.8h, v25.8h, v26.8h")
 
-def prologue(name, D, T, R, F, M=0, B=0):
-    """M: 0 the kernel, 1 visibility, 2 shade"""
+def prologue(name, D, T, R, F, M=0, B=0, pre=None):
+    """M: 0 the kernel, 1 visibility, 2 shade; pre: per-kernel constants (before the line loop)"""
     e(f".globl {name}"); e(f".type {name}, %function"); e(f"{name}:")
     e("stp d8, d9, [sp, #-160]!"); e("stp d10, d11, [sp, #16]"); e("stp d12, d13, [sp, #32]"); e("stp d14, d15, [sp, #48]")
     e("stp x19, x20, [sp, #64]"); e("stp x21, x22, [sp, #80]"); e("stp x23, x24, [sp, #96]"); e("stp x25, x26, [sp, #112]")
@@ -229,6 +232,7 @@ def prologue(name, D, T, R, F, M=0, B=0):
     e(f"ldr d23, [x19, #{K['bytes']}]")
     if D == 2 and M != 2: e(f"add x8, x19, #{K['K']}"); e("ld1r {v6.4s}, [x8]")
     roles_setup(D)
+    if pre: pre()
     e("mov w7, w27"); e("mov x0, #0")
     if fused_alpha(T, M, B):                                                     # bit 15: bits 8 and 10 (fused_alpha())
         e("and w8, w27, w27, lsr #2"); e("ubfx w8, w8, #8, #1"); e("bfi w7, w8, #15, #1")
@@ -805,7 +809,7 @@ def colour(T, F, B, M=0):
         white_branch(T, M, B)
         e("tbz w7, #14, 37f")
         e("38:")
-        o = st4_quad() if st4_store() else [None] * 3
+        o = st4_quad() if st4_store() and M == 0 else [None] * 3                # (shade: in the texels' registers)
         ws = ("v24", RL["vs"][0], "v27" if KD == "litp" else "v28") if KD else ("v26", RL["vs"][0], "v25")
         for ch, t, w in zip(range(3), ("v29", "v27", "v31"), ws):           # (keep_dep(): v25 v26 the depth words)
             if KD == "litp" and ch == 2: e(f"uaddl {w}.8h, {vc[ch]}.8b, {t}.8b"); e(f"umlal {w}.8h, {vc[ch]}.8b, {t}.8b")
@@ -816,7 +820,7 @@ def colour(T, F, B, M=0):
             e("b 38b")
         OOLS.append(ool)
         alpha_stage(T, M, B)
-        return (*st4_quad()[:3], "v30") if st4_store() else ("v29", "v27", "v31", "v30")
+        return (*st4_quad()[:3], "v30") if st4_store() and M == 0 else ("v29", "v27", "v31", "v30")
     if T:
         if B: texture_bilinear(T)
         else: texture(T)
@@ -1105,12 +1109,61 @@ def shade_store(cols):
         e("b 8b")
     return ool
 
+def vis_group(D, eq):
+    """the untextured visibility pass with z or constant depth (v00, v20: the deferred path's common kernels): a group
+    in one basic block without a branch but the loop's. The test's mask merges the attribute words (dep | pid << 24)
+    and the polygon's index into the loaded words and owner entries (bit), and both are stored for every group: a
+    group whose pixels all fail stores the words it loaded (the bin's buffers are this thread's alone, and a partial
+    group's merge wrote back the same span of the line before). The former loop branched three ways (no pixel, all,
+    some: 36 modeled cycles a full group, ~20 more for the 20% partial ones, in five blocks). eq: the depth-equal
+    test's copy of the loop (flag bit 1, chosen per line). v13 0x00ffffff, v14 0x100 (prologue: vis_consts())."""
+    if D == 0:
+        e("shrn v25.2s, v6.2d, #30"); e("add v26.2d, v6.2d, v8.2d"); e("add v27.2d, v7.2d, v8.2d")
+        e("shrn2 v25.4s, v7.2d, #30"); e("shrn v26.2s, v26.2d, #30"); e("shrn2 v26.4s, v27.2d, #30")
+    dl, dh = depth_regs(D)
+    e("ldr q29, [x2]"); e("ldr q30, [x2, #16]")
+    e("and v27.16b, v29.16b, v13.16b"); e("and v28.16b, v30.16b, v13.16b")
+    if eq:                                                                      # |dep - d| < 0x100
+        e(f"sub v27.4s, {dl}.4s, v27.4s"); e(f"sub v28.4s, {dh}.4s, v28.4s")
+        e("abs v27.4s, v27.4s"); e("abs v28.4s, v28.4s")
+        e("cmhi v27.4s, v14.4s, v27.4s"); e("cmhi v28.4s, v14.4s, v28.4s")
+    else: e(f"cmhi v27.4s, v27.4s, {dl}.4s"); e(f"cmhi v28.4s, v28.4s, {dh}.4s")
+    e("mov x9, #8"); e("cmp x5, #8"); e("csel x9, x5, x9, lo"); e("ldr q31, [x20, x9, lsl #4]")
+    e("uzp1 v27.8h, v27.8h, v28.8h"); e("and v27.16b, v27.16b, v31.16b")
+    ix = RL["idx"][0]
+    e("ldr q24, [x1]"); e("xtn v28.8b, v27.8h"); e(f"bit v24.16b, {ix}.16b, v27.16b"); e("fmov x8, d28")
+    e("sshll v31.4s, v27.4h, #0"); e("sshll2 v27.4s, v27.8h, #0")
+    if D == 2: w0 = w1 = RL["dep"][0]
+    else: e("orr v25.16b, v25.16b, v22.16b"); e("orr v26.16b, v26.16b, v22.16b"); w0, w1 = "v25", "v26"
+    e(f"bit v29.16b, {w0}.16b, v31.16b"); e(f"bit v30.16b, {w1}.16b, v27.16b")
+    e("str q24, [x1]"); e("stp q29, q30, [x2]"); e("str d28, [x3], #8")
+    e("orr x0, x0, x8")
+    z_step8(D)
+    e("add x1, x1, #16"); e("add x2, x2, #32")
+    e("subs x5, x5, #8"); e(f"b.hi {24 if eq else 0}b")
+
+def vis_fast(D, T):
+    """vis_group()'s kernels: untextured, z or constant depth, with v13 v14 free for its constants"""
+    return T == 0 and D in (0, 2) and not taken("v13") and not taken("v14")
+
 def kernel_vis(D, T):
     """visibility pass of a deferred opaque polygon; T only for textures whose alpha test can fail"""
     global RL, KD
     name = f"{PFX}v{D}{T}"
     RL = roles(D, T, 0, 0, 0, 1); KD = False
     st = uses_st(D, T, 0, 1)
+    if vis_fast(D, T):
+        prologue(name, D, T, 0, 0, 1, pre=lambda: (e("mvni v13.4s, #0xff, lsl #24"), e("movi v14.4s, #1, lsl #8")))
+        e("tbnz w7, #1, 24f")
+        e("0:"); vis_group(D, False); e("b 9f")
+        e("24:"); vis_group(D, True)
+        e("9:")
+        e("sub x2, x2, #32")                                                     # (line_end: x2 at the last group)
+        line_end(0)
+        epilogue()
+        e(f".size {name}, .-{name}")
+        e()
+        return
     prologue(name, D, T, 0, 0, 1)
     if lazy(D, st): lazy_loop(D, T, 0, 0, 1)
     e("0:")
