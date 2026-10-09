@@ -140,6 +140,14 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   frame: fog_line2x 0.78 M -> 0.60 M (the frame net of `[other]` 9.62 -> 9.42 M). `t_resolve.c`'s fx test adds
   tables zero up to a small delta and depths in a band about the offset (a bound one too large fails it); S4's frame
   diff 0 bins with the compositor's checks 0 differ, the scene cycle's bins as before.
+  The 2x edge marking's screen (edge_lines2x: ~5600 of ~6100 steps of 16 pixels of two lines a frame on S4 have no
+  id edge) read the six attribute blocks it compares by ld4 (~10 cycles of the load pipe each) for their top bytes
+  alone: it now reads the four lines' words by single ldr q (one asm block: clang pairs them into ldp q, 6 cycles
+  each) and takes the top bytes with uzp2, the right neighbours' plane the same shifted by one with the next
+  pixel's byte; only a step with an id edge loads the full planes by ld4. A skipped step 82 -> 61 modeled cycles;
+  S4 at 2x: edge_lines2x 0.57 M -> 0.50 M cycles a frame, the frame net of `[other]` with both changes 9.62 -> 9.34
+  M. `t_resolve.c` (its rectangles of polygon ids; a screen that drops the next pixel's id fails it), S4's frame diff
+  0 bins, the scene cycle as before to 55200 bins with the compositor's checks 0 differ.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering

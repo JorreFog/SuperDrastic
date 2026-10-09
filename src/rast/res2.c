@@ -100,7 +100,8 @@ void res2_vis_bin(const uint8_t *blk, uint8_t (*bits)[32], uint8_t *flags) {
  *        table comes from the block (comp_bin()'s res2_vis_bin);
  *   edge marking: identify and mark in one pass over two lines at once (the pair's compares shared, a step of 16
  *        pixels of both lines without a marked pixel neither loads nor stores colours, and one in which no pixel's
- *        polygon id differs from a neighbour's skips the depth-key compares, edge_lines2x); a marked pixel
+ *        polygon id differs from a neighbour's, screened on the attributes' top bytes alone, skips the depth-key
+ *        compares and their loads, edge_lines2x); a marked pixel
  *        takes the edge colour's r, g, b in place and keeps its alpha byte, so the resolve's & 0x1fffffff then gives
  *        edge_mark's output (its alpha is c3 & 0x1f; unmarked pixels keep r, g, b): res2_line_asm writes the lines
  *        and their table entries in the same pass as the plain resolve.
@@ -231,23 +232,49 @@ static inline __attribute__((always_inline)) void edge_mark16(uint32_t *col, uin
     p.val[0] = vqtbx1q_u8(p.val[0], er, idx); p.val[1] = vqtbx1q_u8(p.val[1], eg, idx); p.val[2] = vqtbx1q_u8(p.val[2], eb, idx);
     vst4q_u8((uint8_t *)col, p);
 }
+/* the top bytes of 16 attribute words of four lines (ldr q and uzp2): llvm-mca's A55 holds the load pipe ~10 cycles
+ * an ld4 and 6 an ldp q, which clang would pair these loads into; the asm keeps them single and ahead of the uzp2
+ * (S4's skip step 64 -> 61 modeled cycles against clang's interleaving of four asm loads a line) */
+static inline __attribute__((always_inline)) void edge_ids(const uint32_t *w0, const uint32_t *w1, const uint32_t *w2,
+                                                           const uint32_t *w3, uint8x16_t *t0, uint8x16_t *t1,
+                                                           uint8x16_t *t2, uint8x16_t *t3) {
+    uint16x8_t q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15;
+    __asm__("ldr %q0, [%16]\n\tldr %q1, [%16, #16]\n\tldr %q2, [%16, #32]\n\tldr %q3, [%16, #48]\n\t"
+            "ldr %q4, [%17]\n\tldr %q5, [%17, #16]\n\tldr %q6, [%17, #32]\n\tldr %q7, [%17, #48]\n\t"
+            "ldr %q8, [%18]\n\tldr %q9, [%18, #16]\n\tldr %q10, [%18, #32]\n\tldr %q11, [%18, #48]\n\t"
+            "ldr %q12, [%19]\n\tldr %q13, [%19, #16]\n\tldr %q14, [%19, #32]\n\tldr %q15, [%19, #48]"
+            : "=&w"(q0), "=&w"(q1), "=&w"(q2), "=&w"(q3), "=&w"(q4), "=&w"(q5), "=&w"(q6), "=&w"(q7),
+              "=&w"(q8), "=&w"(q9), "=&w"(q10), "=&w"(q11), "=&w"(q12), "=&w"(q13), "=&w"(q14), "=&w"(q15)
+            : "r"(w0), "r"(w1), "r"(w2), "r"(w3), "m"(*(const uint8_t (*)[64])w0), "m"(*(const uint8_t (*)[64])w1),
+              "m"(*(const uint8_t (*)[64])w2), "m"(*(const uint8_t (*)[64])w3));
+#define EDGE_IDS(a, b, c, d) vuzp2q_u8(vreinterpretq_u8_u16(vuzp2q_u16(a, b)), vreinterpretq_u8_u16(vuzp2q_u16(c, d)))
+    *t0 = EDGE_IDS(q0, q1, q2, q3); *t1 = EDGE_IDS(q4, q5, q6, q7);
+    *t2 = EDGE_IDS(q8, q9, q10, q11); *t3 = EDGE_IDS(q12, q13, q14, q15);
+#undef EDGE_IDS
+}
 static inline __attribute__((always_inline)) void edge_block(uint32_t *col0, uint32_t *col1, const uint32_t *a, const uint32_t *c0,
                                                              const uint32_t *c1, const uint32_t *b, int last, uint8x16x4_t k,
                                                              uint8x16_t *lp0, uint8x16_t *lp1, uint8x16_t er, uint8x16_t eg, uint8x16_t eb) {
     const uint8x16_t m3f = vdupq_n_u8(0x3f), m40 = vdupq_n_u8(0x40);
+    /* a test is an edge only where the polygon ids differ (bits 0-5 of the top bytes' xor): when no pixel of either
+     * line differs in id from any neighbour, and the previous step's left tests (lane 15: this step's pixel 0) are
+     * clear, no pixel of the step is an edge and its left tests for the next step are clear too (only their bits 0-5
+     * are ever read). Most steps of a frame are inside polygons or the clear area: they skip the key compares, and
+     * their screen reads only the top bytes (four ldr q and three uzp2 a line of 16 pixels, the right neighbours'
+     * byte plane the same shifted by one with the next pixel's byte; S4 at 2x: 82 -> 61 modeled cycles a step);
+     * the steps with an id edge then load the full planes by ld4. */
+    uint8x16_t t0, t1, ta, tb;
+    edge_ids(c0, c1, a, b, &t0, &t1, &ta, &tb);
+    const uint8x16_t s0 = vextq_u8(t0, last ? k.val[3] : vld1q_dup_u8((const uint8_t *)(c0 + 16) + 3), 1);
+    const uint8x16_t s1 = vextq_u8(t1, last ? k.val[3] : vld1q_dup_u8((const uint8_t *)(c1 + 16) + 3), 1);
+    uint8x16_t x = vorrq_u8(vorrq_u8(veorq_u8(s0, t0), veorq_u8(ta, t0)), vorrq_u8(veorq_u8(t1, t0), veorq_u8(s1, t1)));
+    x = vorrq_u8(vorrq_u8(x, veorq_u8(tb, t1)), vorrq_u8(*lp0, *lp1));
+    if (!vmaxvq_u8(vandq_u8(x, m3f))) { *lp0 = *lp1 = vdupq_n_u8(0); return; }
     uint8x16x4_t p0 = vld4q_u8((const uint8_t *)c0), p1 = vld4q_u8((const uint8_t *)c1), r0, r1, n0, n1;
     uint8x16_t y0, y1, v, lt;
     if (!last) r0 = vld4q_u8((const uint8_t *)(c0 + 1)), r1 = vld4q_u8((const uint8_t *)(c1 + 1));
     else for (int i = 0; i < 4; i++) r0.val[i] = vextq_u8(p0.val[i], k.val[i], 1), r1.val[i] = vextq_u8(p1.val[i], k.val[i], 1);
     n0 = vld4q_u8((const uint8_t *)a); n1 = vld4q_u8((const uint8_t *)b);
-    /* a test is an edge only where the polygon ids differ (bits 0-5 of the top bytes' xor): when no pixel of either
-     * line differs in id from any neighbour, and the previous step's left tests (lane 15: this step's pixel 0) are
-     * clear, no pixel of the step is an edge and its left tests for the next step are clear too (only their bits 0-5
-     * are ever read). Most steps of a frame are inside polygons or the clear area: they skip the key compares. */
-    uint8x16_t x = vorrq_u8(vorrq_u8(veorq_u8(r0.val[3], p0.val[3]), veorq_u8(n0.val[3], p0.val[3])),
-                            vorrq_u8(veorq_u8(p1.val[3], p0.val[3]), veorq_u8(r1.val[3], p1.val[3])));
-    x = vorrq_u8(vorrq_u8(x, veorq_u8(n1.val[3], p1.val[3])), vorrq_u8(*lp0, *lp1));
-    if (!vmaxvq_u8(vandq_u8(x, m3f))) { *lp0 = *lp1 = vdupq_n_u8(0); return; }
     lt = edge_pair(r0, p0, &y0);
     y0 = vorrq_u8(y0, vextq_u8(*lp0, lt, 15)); *lp0 = lt;
     y0 = vorrq_u8(y0, vandq_u8(edge_gt(n0, p0), veorq_u8(n0.val[3], p0.val[3])));
