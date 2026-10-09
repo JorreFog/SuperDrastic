@@ -6,15 +6,18 @@
 
 /* a render thread's walk over its bins for one hook_entry call: for (b; (b = sched_next(&it)) >= 0;) render bin b */
 typedef struct {
-    unsigned k, nb, first, stride;      /* the fixed walk: bin first + k * stride, k < nb; claimed: the next of the order */
-    int dyn;                            /* claiming from the frame's queue */
+    unsigned k, nb, first, stride;      /* fixed: bin first + k * stride, k < nb; claimed: k the next of the order */
+    int dyn;                            /* claiming from the frame's queue: 1 a DraStic thread, 2 a worker */
+    unsigned gen;                       /* the frame's generation (a worker's: the one it was woken for) */
     int bin;                            /* the bin being rendered, or -1 */
     uint64_t t0;                        /* its start (counter ticks) */
     uint64_t c0;                        /* RAST_SCHEDSTATS: its start (thread CPU time, ns) */
 } sched_it;
 
-void sched_init(void);                  /* rast_init: RAST_SCHED, RAST_SCHEDDIFF, RAST_SCHEDSTATS, RAST_SCHEDHASH */
-extern int sched_mode, sched_diff;      /* RAST_SCHED: 0 DraStic's fixed bins, 1 claimed; RAST_SCHEDDIFF: also in diff */
+/* rast_init: RAST_SCHED, RAST_SCHEDDIFF, RAST_SCHEDSTATS, RAST_SCHEDHASH, RAST_WORKERS; render: a worker's bin loop
+ * on its context (rast.c; 0: no workers) */
+void sched_init(void (*render)(uint8_t *ctx));
+extern int sched_mode, sched_diff;      /* RAST_SCHED: 0 DraStic's fixed bins, 1 claimed; RAST_SCHEDDIFF: in diff */
 /* allow_dyn: claim when the frame's queue is open (rast.c: not in RAST=diff unless RAST_SCHEDDIFF=1) */
 void sched_start(sched_it *it, const uint8_t *ctx, int allow_dyn);
 int sched_next(sched_it *it);           /* the next bin, or -1 (the previous one is finished: its time recorded) */

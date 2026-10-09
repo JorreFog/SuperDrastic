@@ -234,6 +234,22 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   with the queue equal those with the fixed sets (L4 2x, 507 frames, the compositor's checks 0 differ); 3x runs of
   S2, S4, S7 and L4 without signals. (`ut/hr_ab/run.sh` copied no base headers: git ls-tree's paths are relative to
   the directory of -C; now --full-tree, so the base side builds with the base's headers as its comment says.)
+  Then render threads of librast's own (`RAST_WORKERS=k` / `DSFLIP_RAST_WORKERS`, default 0, only with threaded_3d
+  off): with threaded_3d=0 the emulation thread is one of DraStic's 3 render threads and a four-core handheld's
+  fourth core is left to the rest, so a worker with a context of its own claims bins beside them. The first DraStic
+  thread of a frame to start (DraStic wakes its threads after binning the frame's polygons) copies its context header
+  into the workers' and wakes them with the frame's generation; a worker claims by compare-and-swap only while the
+  claim word holds that generation (a late one takes nothing of the next frame), and DraStic's threads, once no bin
+  is left, wait for the bins still being rendered (a short spin, then a futex), so the frame is complete when they
+  return. Modeled as above (the queue on a core per thread, against DraStic's fixed sets and mean thread): one worker
+  takes the slowest thread from 1.19 to 0.88 of the mean on S7 at 2x and 3x, and from 1.07 to 0.82 on L4 at 2x: the
+  3D's critical path -23 to -26% if the fourth core is free (two workers, on more cores: L4 at 3x 1.07 -> 0.72);
+  off until a device A/B shows that (an audio or display thread there would share it). The same output: with workers
+  the output frames equal those with the fixed sets frame by frame (`RAST_SCHEDHASH`; one worker: L4 2x 270 frames
+  with the compositor's checks 0 differ, with deferred shading 527, S7 3x 922; two workers: L4 3x 209), the scene
+  cycle's `RAST=diff RAST_DEFER=1` (which keeps the workers off) DraStic's renderer's differing bins to 36000 bins
+  with the fixed sets and to 55200 with `RAST_SCHEDDIFF=1`, `ut/t_comp_hook.c` passes; binsched.c's own cost 0.003 M
+  modeled cycles a frame (L4 2x).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -388,7 +404,8 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   frame count every 10 frames (for per-frame figures from a block profile).
 - `RAST_SCHED=0` gives each render thread DraStic's fixed bins (`binsched.c`); `RAST_SCHEDSTATS=1` (or N: every N
   frames) prints the threads' balance, `RAST_SCHEDHASH=1` a hash of every output frame (runs with the fixed and the
-  claimed bins compare frame by frame), `RAST_SCHEDDIFF=1` claims the bins in `RAST=diff` too.
+  claimed bins compare frame by frame), `RAST_SCHEDDIFF=1` claims the bins in `RAST=diff` too; `RAST_WORKERS=k`
+  adds k render threads of librast's own (with threaded_3d off; not in `RAST=diff`).
 - `dev/prof.sh` profiles a run block by block; `dev/cycles.py <prof.txt> <log> <librast.so>` reports instructions and
   modeled Cortex-A55 cycles a frame per function, DraStic's and ours (`BLOCKS=<function>` lists its costliest
   blocks); `dev/kpath.py rast_kern.S <kernel>` a kernel's cycles per group of 8 pixels. Both need llvm-mca. The
@@ -405,7 +422,11 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 - The render threads' bins (`binsched.c`): the queue's order is the previous frame's bin times; S7's largest bin is
   ~65% of a thread's share, so no order of whole bins gets S7 below ~1.06 of the mean thread. Splitting the heaviest
   bin (two halves of 16 lines on two threads) needs the resolve, whose edge marking and fog read the neighbour lines,
-  across two contexts. On the device: how late the helpers start after DraStic wakes them (the queue absorbs it).
+  across two contexts. On the device: how late the helpers start after DraStic wakes them (the queue absorbs it), and
+  an A/B of `RAST_WORKERS=1` with threaded_3d=0 (frame times, and the audio): whether the fourth core is free.
+  `cpugov.c` sizes the clock by DraStic's busiest thread and the main thread's heaviest frame in CPU time: with the
+  queue the emulation thread takes over the bins of helpers that start late (more CPU time, less waiting), with
+  workers it waits more and renders less; its figures shift with them.
 - The 2x fog (`res2.c` fog_line2x, 0.60 M cycles a frame on S4 after the depth screen; its four ld4 a step, 45
   cycles, are now the largest part; ldr q + uzp for the planes the screen needs and bic + str for the flags model
   66-70 cycles a zero step against 74) is bound by the FP pipe where it fogs: four channels'
@@ -477,8 +498,12 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   with our hooks off, since 2026-10-03); regress.sh checks the later scenes one ROM at a time until that is
   understood. In a simulator set up afresh on 2026-10-08 it ran through every scene seven times without it (RAST=diff
   to 91200 bins, the same differing bins as DraStic's renderer at every checkpoint: 47 at 7200, 662 at 14400, 1919
-  at 72000). A rare startup hang is DraStic's own (helpers waiting on locks not yet initialised, ROCKNIXDS
-  docs/handoff-local.md); the simulator does not preload libdsflip, which works around it: run again. On the evening
-  of 2026-10-08 the scene 2 -> 3 SIGILL came back in every run of every build, at low load too, and after the
-  container restarted it was gone again (2026-10-09: to 148800 bins, the same bins as DraStic's renderer at every
-  checkpoint): a state of the long-running simulator host, not of the code; restart before suspecting a build.
+  at 72000). A startup hang is DraStic's own (helpers waiting on locks not yet initialised, ROCKNIXDS
+  docs/handoff-local.md: initialize_video_3d creates each render helper before it initialises the helper's mutexes and
+  condition variables and clears its flags, so a helper that already waits is lost and the first frame's
+  update_frame_3d_4x waits for it at 0x592fc forever; in the fourth round's loaded simulator 5 of 17 runs at 3x hung
+  so, with either bin assignment, and none of 22 at 2x); the simulator does not preload libdsflip, which works around
+  it: run again. On the evening of 2026-10-08 the scene 2 -> 3 SIGILL came back in every run of every build, at low
+  load too, and after the container restarted it was gone again (2026-10-09: to 148800 bins, the same bins as
+  DraStic's renderer at every checkpoint): a state of the long-running simulator host, not of the code; restart
+  before suspecting a build.

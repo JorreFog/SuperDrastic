@@ -242,6 +242,14 @@ static void dump_frame(uint8_t *ctx) {
     fclose(f);
 }
 
+/* binsched.c's workers (RAST_WORKERS): the bin loop on a worker's own context, claiming */
+static void worker_render(uint8_t *ctx) {
+    in_ours = 1;
+    comp_bins_begin(PTR(ctx, CTX_SYS));
+    (rast_scale == 3 ? hr_render_bins : render_bins)(ctx, 1);
+    in_ours = 0;
+}
+
 static int print_frames;         /* RAST_FRAMES=1: the frame count every 10 frames (profiling runs) */
 static void hook_entry(uint8_t *ctx) {
     static __thread int named;
@@ -401,7 +409,7 @@ __attribute__((constructor)) static void rast_init(void) {
         if (!orig_persp) { fprintf(stderr, "[rast] cannot hook the vertex transform, 3x off\n"); rast_scale = 2; }
         else if (dump_dir) hr_frame = calloc(768 * 576, 4);
     }
-    sched_init();                        /* the bins' queue (binsched.c; opened by comp.c's frame wrapper) */
+    sched_init(mode == 1 ? worker_render : 0);  /* the bins' queue (binsched.c; opened by comp.c's frame wrapper) */
     comp_init();                         /* the compositor's 3D visibility step (comp.c) */
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
     fprintf(stderr, "[rast] Gengis Engine: hooked video_3d_render_bins_4x, mode %s, scale %d\n", e, rast_scale);
