@@ -78,7 +78,7 @@ static hrv_t hr_vtx[2][HR_NVTX];        /* the vertices' 3x screen coordinates, 
 static hrv_t hr_vtx2[2][HR_NVTX];       /* the 2x ones: the index mapping check against DraStic's records */
 int hr_vcheck;
 int hr_check;                           /* RAST_HRCHECK=1: see hr_resolve_bin */
-int hr_ipcheck;                         /* RAST_HRIPCHECK: not used by this resolve */
+int hr_ipcheck;                         /* RAST_HRIPCHECK=1: see hr_resolve_bin */
 int hr_edges = -1;                      /* RAST_HR_EDGES=0/1 (tests): edge marking whatever DraStic's setting says */
 uint32_t *hr_frame;                     /* RAST_DUMP: the resolved 3x frame (576 x 768) */
 
@@ -561,29 +561,61 @@ static __attribute__((noinline)) void edge_lines(uint32_t *col0, uint32_t *col1,
     }
     edge_block(col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
 }
-/* resolves the bin in place and returns its 48 lines (768 pixels each, contiguous): the context's colour lines 1..48,
- * fogged and edge-marked. The resolve's other work, clearing bits 29-31 of each pixel, is left out: the downsample
- * ignores them (it reads the alpha as & 0x1f and replaces byte 3). The edge marking reads only the attribute lines and
- * each pixel's own colour, so marking the colour lines in place gives the same pixels as a separate output buffer.
- * no_edge: DraStic's disable_edge_marking (render context byte CTX_NO_EDGE), as rast.c's resolve_bin. */
-static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin, int no_edge) {
+/* Resolves the bin in place and downsamples it into the output block six lines at a time, while those lines are
+ * still in the cache (the bin's colour lines are 147 KiB, its context 300 KiB, in a 512 KiB cache shared by four
+ * cores). The resolve's other work, clearing bits 29-31 of each pixel, is left out: the downsample ignores them (it
+ * reads the alpha as & 0x1f and replaces byte 3). Fog reads a pixel's own colour and attributes; the edge marking
+ * reads only the attribute lines (and the id screen made from them) and each pixel's own colour: so resolving six
+ * lines and downsampling them before the next six gives the same pixels as resolving the whole bin first.
+ * no_edge: DraStic's disable_edge_marking (render context byte CTX_NO_EDGE), as rast.c's resolve_bin. dump: the
+ * resolved 3x lines (RAST_DUMP). RAST_HRIPCHECK=1: each bin also resolved whole on a copy and downsampled in one
+ * pass; the output blocks must be the same bytes. */
+static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t *out, uint32_t clear, unsigned triples);
+static void hr_resolve_lines(hr_t *H, uint8_t *ctx, uint8_t *geom, int l0, int l1, int fog, int edges, uint32_t params, uint32_t fogc,
+                             uint32_t clear) {
+#define COL(l) ((uint32_t *)(ctx + (l) * HR_LSTRIDE))
+#define ATT(l) ((uint32_t *)(ctx + HR_ATTR + (l) * HR_LSTRIDE))
+    for (int l = l0; l < l1; l += 2) {                  /* two lines a step: the edge marking shares their compares */
+        if (fog) for (int k = l; k <= l + 1; k++) fog_line(COL(k), ATT(k), geom + 0x9974, params, fogc, fog == 1);
+        if (edges) edge_lines(COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), H->tp + (l - 1) * HR_W, clear, geom + 0x99b4);
+    }
+#undef COL
+#undef ATT
+}
+static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, int no_edge, uint8_t *out, uint32_t clear_colour,
+                                                     uint32_t *dump) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
     if (hr_edges >= 0) no_edge = !hr_edges;            /* RAST_HR_EDGES=0/1 (tests) */
     int edges = (d3 >> 5) & 1 && !no_edge, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
     uint32_t params = 0, fogc = U32(geom, 0x9a9c), clear = U32(sys, SYS_CLEAR_ATTR);
     if (fog) { uint32_t sh = (d3 >> 8) & 0xf; params = sh | ((U16(geom, 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16; }
-#define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
-#define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
-    _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
-    if (edges) edge_tplanes(H->tp, ATT(0), HR_CL);     /* (the resolve writes colours only: the attributes stay) */
-    for (int l = 1; l <= HR_BL; l += 2) {               /* two lines a step: the edge marking shares their compares */
-        if (fog) for (int k = l; k <= l + 1; k++) fog_line(COL(k), ATT(k), geom + 0x9974, params, fogc, fog == 1);
-        if (edges) edge_lines(COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), H->tp + (l - 1) * HR_W, clear, geom + 0x99b4);
+    _Static_assert(HR_BL % 6 == 0, "the resolve takes the bin's lines in pairs and the downsample in triples");
+    if (edges) edge_tplanes(H->tp, (const uint32_t *)(H->ctx + HR_ATTR), HR_CL);   /* (the resolve writes colours only) */
+    static __thread uint8_t *ck_ctx, *ck_ref;
+    if (__builtin_expect(hr_ipcheck, 0)) {
+        if (!ck_ctx) { ck_ctx = aligned_alloc(64, HR_CTX_SIZE + 64); ck_ref = aligned_alloc(64, BIN_BYTES); }
+        memcpy(ck_ctx, H->ctx, HR_CTX_SIZE);
+        if (fog || edges) hr_resolve_lines(H, ck_ctx, geom, 1, HR_BL + 1, fog, edges, params, fogc, clear);
+        hr_downsample((const uint32_t *)(ck_ctx + HR_LSTRIDE), ck_ref, clear_colour, HR_BL / 3);
     }
-    return COL(1);
-#undef COL
-#undef ATT
+    for (int g = 1; g <= HR_BL; g += 6) {
+        if (fog || edges) hr_resolve_lines(H, H->ctx, geom, g, g + 6, fog, edges, params, fogc, clear);
+        const uint32_t *c = (const uint32_t *)(H->ctx + g * HR_LSTRIDE);
+        if (dump) memcpy(dump + (g - 1) * HR_W, c, 6 * HR_LSTRIDE);
+        hr_downsample(c, out + (size_t)((g - 1) / 3 * 2) * 0x800, clear_colour, 2);
+    }
+    if (__builtin_expect(hr_ipcheck, 0)) {
+        static unsigned long nbins, nbad;
+        unsigned long n = __atomic_add_fetch(&nbins, 1, __ATOMIC_RELAXED), bad = __atomic_load_n(&nbad, __ATOMIC_RELAXED);
+        if (memcmp(out, ck_ref, BIN_BYTES)) {
+            bad = __atomic_add_fetch(&nbad, 1, __ATOMIC_RELAXED);
+            unsigned i = 0; while (out[i] == ck_ref[i]) i++;
+            if (bad <= 20) fprintf(stderr, "[hrcheck] output block differs (fog %d edges %d): first at row %u byte %u: %02x, plain %02x\n",
+                                   fog, edges, i / 0x800, i % 0x800, out[i], ck_ref[i]);
+        }
+        if (n % 2400 == 0) fprintf(stderr, "[hrcheck] %lu bins resolved both ways, %lu differ\n", n, bad);
+    }
 }
 
 /* ---- downsample 3:2 into the output block ----
@@ -760,9 +792,8 @@ void hr_render_bins(uint8_t *ctx) {
             memset(H->ctx + HR_ID, 0xff, HR_CL * HR_W);
             hr_render_list(H, hr_lists(H, sys + SYS_BINS_TRANSL, bin, U8(geom, GEOM_SORT_MODE) & 1), trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);
         }
-        const uint32_t *res = hr_resolve_bin(H, sys, geom, bin, U8(ctx, CTX_NO_EDGE));
-        if (hr_frame) memcpy(hr_frame + hy0 * HR_W, res, HR_BL * HR_W * 4);
-        hr_downsample(res, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR), HR_BL / 3);
+        hr_resolve_bin(H, sys, geom, U8(ctx, CTX_NO_EDGE), PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR),
+                       hr_frame ? hr_frame + hy0 * HR_W : 0);
         hr_gaps(sys, bin, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES);
         if (hr_check) hr_check_save(PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, bin);
         comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */
