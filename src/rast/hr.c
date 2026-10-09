@@ -77,7 +77,6 @@ typedef struct { uint16_t x, y; } hrv_t;
 static hrv_t hr_vtx[2][HR_NVTX];        /* the vertices' 3x screen coordinates, per geometry buffer */
 static hrv_t hr_vtx2[2][HR_NVTX];       /* the 2x ones: the index mapping check against DraStic's records */
 int hr_vcheck;
-int hr_check;                           /* RAST_HRCHECK=1: see hr_resolve_bin */
 int hr_ipcheck;                         /* RAST_HRIPCHECK=1: see hr_resolve_bin */
 int hr_edges = -1;                      /* RAST_HR_EDGES=0/1 (tests): edge marking whatever DraStic's setting says */
 uint32_t *hr_frame;                     /* RAST_DUMP: the resolved 3x frame (576 x 768) */

@@ -330,7 +330,7 @@ __attribute__((constructor)) static void rast_init(void) {
     { const char *t = getenv("DSFLIP_RAST_SCALE"); if (!t) t = getenv("RAST_SCALE"); if (t) rast_scale = atoi(t) == 3 ? 3 : 2; }
     if (mode == 2) rast_scale = 2;
     hr_vcheck = getenv("RAST_VCHECK") != 0;
-    hr_check = getenv("RAST_HRCHECK") != 0;
+    hr_ipcheck = getenv("RAST_HRIPCHECK") != 0;
     if (getenv("RAST_HR_EDGES")) hr_edges = atoi(getenv("RAST_HR_EDGES"));
     dump_dir = getenv("RAST_DUMP");
     rast_stats = getenv("RAST_STATS") != 0;
