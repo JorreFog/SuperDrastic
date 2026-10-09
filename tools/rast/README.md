@@ -147,6 +147,9 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   1.11 M -> 0.93 M, L4 1.11 -> 1.10, S4 1.38 -> 1.34 (that profile had fewer steps of the general case: about the
   same); `ut/hr_ab` (its downsample test now with uniform blocks at random and in runs, with flag bits, channels of 64
   and more and one bit off, failing mutants of the test) against 94f9689: the same.
+  The 3x edge marking's id screen (edge_lines) takes two blocks of 16 pixels a step while no block is forced (one max
+  and branch for both; a pair that does not pass is taken a block at a time): S4 at 3x, edge_lines 0.63 M -> 0.55 M
+  (a screened pair ~55 modeled cycles instead of ~68); `ut/hr_ab`'s polygon-like contexts fail mutants of it.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
