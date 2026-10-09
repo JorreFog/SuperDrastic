@@ -131,6 +131,25 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   `ut/t_resolve.c` compares the block, the gap buffers and the table entries with DraStic's drivers (all six modes,
   every bin, polygon ids in rectangles and zero fog tables for the skips; it fails mutants of either skip); S4's
   frame diff 0 bins in 12000 with the compositor's checks 0 differ, the stress ROM's 6 in 4800.
+  Third round, the kernels (`kerngen.py`'s keep_dep()): the opaque textured kernels with z or w depth whose spare
+  registers all hold colour (the flat paletted 03010 04010 13010 14010, S4's and S7's main kernels, and the lit
+  ones, 02000's family) spilled the group's attribute words at the depth test and reloaded them for the store (ldp q
+  from the stack, which holds the A55's load pipe 6 cycles, and the pid orr). The pass mask now lives in x8 only (the
+  alpha test narrows x8, the store and the partial group take it from there), which frees v28: the words stay in v25
+  v26, and the paletted ones store with st4 from v28-v31 (b's result last, into the alpha texel's register).
+  kpath, cycles a group: 04010 140 -> 133 (16 colours 137 -> 130), 14010 148 -> 142, 03010 157 -> 150, 13010 165 ->
+  159, 04000 141 -> 136, 14000 149 -> 145, 02000 125 -> 122, 12000 136 -> 133; the hi-res set's the same.
+  `ut/kern_ab` (new) runs every nearest-filtering kernel of both sets, base and worktree, on the same random batches
+  (spans, depths, textures, palettes, colours, flags) and compares everything they write: against 94f9689 0 of
+  34000 batches differ (it caught a first version's scratch-register clash in the lit paletted kernels' alpha
+  stage); the scene cycle's differing bins as DraStic's renderer's at every checkpoint to 84000 bins, S4 and S7 0
+  differ, the stress ROM's 9 bins in 7200. cycles.py, 90 s profiles against the second round's: the field scene S7 at
+  2x, 14010 1.36 -> 1.31 M cycles a frame (librast 2.62 -> 2.57 M); the stress ROM L4 at 2x, 02000 4.58 -> 4.52 M
+  (librast 14.16 -> 14.10 M; the unchanged kernels and the walker the same to 0.01 M); the fog and edge-marking
+  scene S4 against a base profile from the same session (under load 90 s reach fewer frames, and S4's 3D load
+  varies with the span: compare the instructions), at 3x h04010 7.68 -> 7.15 M (instructions 6.47 -> 6.07 M, kpath's
+  5% fewer a group and slightly less work), librast 16.44 -> 16.06 M; at 2x 04010 and 04000 together
+  4.34 -> 4.16 M, librast 7.25 -> 7.06 M (1747 and 1027 frames).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -313,13 +332,12 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   ~0.8-0.98 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
   finds 0.1% more). Across blocks the translucent tail, the alpha stages and the st4 stores are done (Status); the
   reciprocal runs beside the depth test in the group head (head()), only the lazy loop's entry (28:) waits for the
-  test. Left: the opaque store reloads the depth words from the stack (ldp q and the pid orr, ~6 cycles a group
-  exposed on 02000: no two registers are free across the modulates; ORing pid in before the spill costs the head 1-3
-  cycles); the z-depth paletted flat kernels (04010, S4's) could store with st4 as 02010 does if their depth words,
-  spilled, came back into registers outside v24-v27; the texel gather's ld2 (7 cycles with nothing
+  test. The opaque textured kernels without a dep register now keep the depth words in v25 v26 (the pass mask in x8
+  only frees v28; kerngen.py's keep_dep()), and the paletted ones store with st4 (Status); ORing pid in at the depth
+  test instead of the store models 1-2 cycles worse. Left: the texel gather's ld2 (7 cycles with nothing
   independent left; ldr q and uzp model 2 worse); the 16-colour gather's bytes through the stack (stp w and ld2 to
-  assemble 8 bytes). Overlapping consecutive groups needs registers the kernels do not have (the bilinear kernels use
-  them all). Hoisting the fall-through code over the w7 flag branches does not pay (llvm-mca:
+  assemble 8 bytes; ORed together in x9 and moved by fmov they model the same). Overlapping consecutive groups
+  needs registers the kernels do not have (the bilinear kernels use them all). Hoisting the fall-through code over the w7 flag branches does not pay (llvm-mca:
   +1-8% on most kernels, the hoisted work lands above taken branches; -4-6% on the bilinear ones).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
