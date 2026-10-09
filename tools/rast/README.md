@@ -131,6 +131,15 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   `ut/t_resolve.c` compares the block, the gap buffers and the table entries with DraStic's drivers (all six modes,
   every bin, polygon ids in rectangles and zero fog tables for the skips; it fails mutants of either skip); S4's
   frame diff 0 bins in 12000 with the compositor's checks 0 differ, the stress ROM's 6 in 4800.
+  Third round. The 2x fog computed the factors of ~4100 steps of 32 pixels a frame on S4 only to find them all 0 (82
+  modeled cycles a step): the pixels before the fog offset. A depth screen now finds most of them first: res2.c's
+  fog_zero_b2() derives once per bin, from the fog table, its deltas, the offset and the shift, a bound on the
+  attributes' depth byte (bits 16-23) below which every factor is 0 (its comment has the derivation; S4: the steps
+  before the offset), and a step whose fog-flagged pixels are all below it clears the flags without the factors (its
+  attribute ld4 issued with the colours', before the flag test). Fog and edge marking S4 at 2x, modeled A55 cycles a
+  frame: fog_line2x 0.78 M -> 0.60 M (the frame net of `[other]` 9.62 -> 9.42 M). `t_resolve.c`'s fx test adds
+  tables zero up to a small delta and depths in a band about the offset (a bound one too large fails it); S4's frame
+  diff 0 bins with the compositor's checks 0 differ, the scene cycle's bins as before.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -295,7 +304,9 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 ## Next
 
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
-- The 2x fog (`res2.c` fog_line2x, 0.78 M cycles a frame on S4 at IPC 0.57) is bound by the FP pipe: four channels'
+- The 2x fog (`res2.c` fog_line2x, 0.60 M cycles a frame on S4 after the depth screen; its four ld4 a step, 45
+  cycles, are now the largest part; ldr q + uzp for the planes the screen needs and bic + str for the flags model
+  66-70 cycles a zero step against 74) is bound by the FP pipe where it fogs: four channels'
   smull/smull2/shrn/shrn2 per 16 pixels and the weights' two tbl2. The attributes by ldr q + shrn instead of ld4 + zip
   models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog and edge
   marking could take res2.c's skips (S4 2x: edge marking 1.02 -> 0.57 M, fog 0.89 -> 0.78 M).
