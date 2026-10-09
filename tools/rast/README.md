@@ -209,6 +209,31 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   M cycles a frame, the frame net of `[other]` with both changes 9.62 -> 9.34 M. `t_resolve.c` (its rectangles of
   polygon ids; a screen that drops the next pixel's id fails it), S4's frame diff 0 bins, the scene cycle as before to
   55200 bins with the compositor's checks 0 differ.
+  Fourth round, the render threads' bins (`binsched.c`, new): DraStic renders a hi-res frame on N threads (3 in the
+  simulator: the thread that calls update_frame_3d_4x, the emulation thread with threaded_3d=0, and two helpers it
+  wakes), each a fixed set of bins (first, first + N, ...), so the frame waits for the thread whose bins hold the heavy
+  part of the scene. Each bin's thread CPU time (`RAST_SCHEDSTATS`; the simulator's threads share loaded host cores,
+  so the times are replayed on a core per thread): the slowest thread's work is 1.07 of the mean thread's on the
+  stress ROM L4 and the fog scene S4, at 2x and 3x, and 1.19-1.20 on the field scene S7 (its largest bin ~65% of a
+  thread's share). The threads now claim the bins from a queue per frame, longest first by each bin's time in the
+  previous frame (list scheduling, LPT; a claim is an atomic or of the bin's bit, so each bin goes to exactly one
+  thread and one that starts late takes fewer); comp.c's wrapper on update_frame_3d_4x opens the queue before DraStic
+  wakes the threads and closes it after they all returned. Slowest thread / mean thread, fixed sets -> queue (the
+  order it took; by the previous frame's CPU times in brackets): L4 2x 1.070 -> 1.058 (1.048), S7 2x 1.190 -> 1.099
+  (1.093), S4 2x 1.066 -> 1.057 (1.051), L4 3x 1.070 -> 1.058 (1.046), S7 3x 1.200 -> 1.119 (1.110), S4 3x 1.072 ->
+  1.061 (1.050): the 3D's critical path -7% on S7, -1% on L4 and S4 (the summed cycles do not change). Ordered by each
+  frame's own times the queue would reach 1.02 on L4 and S4 and 1.08-1.09 on S7 (the bins' times vary from frame to
+  frame, in the simulator at least; an order by the bin lists' polygon counts, or by the previous times scaled by
+  their change, does no better: S4 2x 1.059 and 1.064 against 1.063), and the best fixed split of whole bins 1.01
+  and 1.06-1.07 (S7's largest bin); a split that is the best for the previous frame's times does worse than the queue
+  (S7 3x 1.16, with stealing a set's last bins 1.13). RAST=diff keeps DraStic's sets (its quirk pixels read scratch
+  memory the thread's earlier bins left; `RAST_SCHEDDIFF=1` claims there too, each claimed bin through both
+  renderers alone), `RAST_SCHED=0` keeps them everywhere. The same output: the scene cycle with `RAST=diff
+  RAST_COMPCHECK=1` gives DraStic's renderer's differing bins at every checkpoint reached (to 31200 bins; with
+  `RAST_SCHEDDIFF=1` to 24000), the compositor's checks 0 differ; frame by frame (`RAST_SCHEDHASH`) the output frames
+  with the queue equal those with the fixed sets (L4 2x, 507 frames, the compositor's checks 0 differ); 3x runs of
+  S2, S4, S7 and L4 without signals. (`ut/hr_ab/run.sh` copied no base headers: git ls-tree's paths are relative to
+  the directory of -C; now --full-tree, so the base side builds with the base's headers as its comment says.)
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -361,6 +386,9 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 - `RAST_PIPE` selects the pipeline: 0 = b0 (stage by stage), 1 = fused scalar, 2 = fused C NEON, 3 = assembly.
 - `RAST_DUMP=<dir>` writes frames as PPM; `RAST_STATS=1` prints the opaque overdraw; `RAST_FRAMES=1` prints the
   frame count every 10 frames (for per-frame figures from a block profile).
+- `RAST_SCHED=0` gives each render thread DraStic's fixed bins (`binsched.c`); `RAST_SCHEDSTATS=1` (or N: every N
+  frames) prints the threads' balance, `RAST_SCHEDHASH=1` a hash of every output frame (runs with the fixed and the
+  claimed bins compare frame by frame), `RAST_SCHEDDIFF=1` claims the bins in `RAST=diff` too.
 - `dev/prof.sh` profiles a run block by block; `dev/cycles.py <prof.txt> <log> <librast.so>` reports instructions and
   modeled Cortex-A55 cycles a frame per function, DraStic's and ours (`BLOCKS=<function>` lists its costliest
   blocks); `dev/kpath.py rast_kern.S <kernel>` a kernel's cycles per group of 8 pixels. Both need llvm-mca. The
@@ -374,6 +402,10 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 ## Next
 
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
+- The render threads' bins (`binsched.c`): the queue's order is the previous frame's bin times; S7's largest bin is
+  ~65% of a thread's share, so no order of whole bins gets S7 below ~1.06 of the mean thread. Splitting the heaviest
+  bin (two halves of 16 lines on two threads) needs the resolve, whose edge marking and fog read the neighbour lines,
+  across two contexts. On the device: how late the helpers start after DraStic wakes them (the queue absorbs it).
 - The 2x fog (`res2.c` fog_line2x, 0.60 M cycles a frame on S4 after the depth screen; its four ld4 a step, 45
   cycles, are now the largest part; ldr q + uzp for the planes the screen needs and bic + str for the flags model
   66-70 cycles a zero step against 74) is bound by the FP pipe where it fogs: four channels'

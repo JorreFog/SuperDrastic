@@ -24,6 +24,7 @@
 #include "rast.h"
 #include "fused.h"
 #include "comp.h"
+#include "binsched.h"
 #include "spec/edges.h"
 
 /* the 3x layout: 50 context lines (bin line l is frame line hy0 - 1 + l), 768 pixels; the span arrays 64 entries */
@@ -658,9 +659,8 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
 }
 
 /* ---- the bin loop (in place of rast.c's render_bins when the scale is 3) ---- */
-void hr_render_bins(uint8_t *ctx) {
+void hr_render_bins(uint8_t *ctx, int dyn) {
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
-    unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride;
     unsigned buf = U8(geom, GEOM_SWAP_BUF) ^ 1;
     uint8_t *verts = geom + GEOM_VERTS + buf * GEOM_VERTS_BUF;
     uint8_t *opa = geom + GEOM_POLYS_OPA + buf * GEOM_POLYS_BUF, *trl = geom + GEOM_POLYS_TRL + buf * GEOM_POLYS_BUF;
@@ -669,8 +669,10 @@ void hr_render_bins(uint8_t *ctx) {
     hr_t *H = hr_get();
     U64(H->ctx, HR_HDR) = (uint64_t)(uintptr_t)sys; U64(H->ctx, HR_HDR + 8) = (uint64_t)(uintptr_t)geom;
     f_begin_frame();
-    for (unsigned k = 0; k < nb; k++) {
-        unsigned bin = U8(ctx, CTX_FIRST_BIN) + k * stride, hy0 = bin * HR_BL;
+    sched_it it;
+    sched_start(&it, ctx, dyn);         /* DraStic's fixed bins, or claimed from the frame's queue (binsched.c) */
+    for (int b; (b = sched_next(&it)) >= 0;) {
+        unsigned bin = (unsigned)b, hy0 = bin * HR_BL;
         /* context line l is frame line lb + l; the walks cover the bin and its neighbour lines */
         int lb = (int)hy0 - 1;
         unsigned bin_top = hy0 ? hy0 - 1 : 0, bin_bot = hy0 + HR_BL + 1;

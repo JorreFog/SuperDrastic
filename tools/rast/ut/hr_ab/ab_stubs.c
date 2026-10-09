@@ -2,6 +2,7 @@
  * lines, the flags, the first vertex and the span block) into a running hash, so that hr_polygon can be compared */
 #include <stdint.h>
 #include "fused.h"
+#include "binsched.h"
 uintptr_t ds_base;
 int rast_defer, rast_texfilter;
 uint64_t ab_hash = 14695981039346656037ull;
@@ -23,3 +24,6 @@ void defer_poly(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, 
 void defer_flush(const layout_t *L, uint8_t *ctx) {}
 void f_begin_frame(void) {}
 void comp_bin(uint8_t *sys, unsigned bin, int count) {}
+/* hr_render_bins' bin walk (binsched.c; the bin loop is not under test here) */
+void sched_start(sched_it *it, const uint8_t *ctx, int allow_dyn) { it->bin = -1; }
+int sched_next(sched_it *it) { return -1; }

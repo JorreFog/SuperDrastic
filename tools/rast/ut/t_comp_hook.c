@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <sys/mman.h>
 #include "comp.c"
+#include "binsched.c"            /* the bin queue that hook_uf4 opens and closes around the update (nothing renders here) */
 
 uintptr_t ds_base;
 /* rast.c's rast_hook(), copied (rast.c is not linked here): the 4 original words into an executable buffer with a jump
