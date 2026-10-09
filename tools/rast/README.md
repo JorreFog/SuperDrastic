@@ -53,7 +53,8 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   The totals include 0.07-0.83 M a frame of blocks outside DraStic and librast (cycles.py's `[other]`) that vary
   from run to run: the second round's changes are against the first round's profiles with those taken out (L4 2x
   18.42 -> 17.82 M, S7 4.00 -> 4.01, S4 10.90 -> 9.62, L4 3x 35.05 -> 33.89, S7 3x 7.51 -> 7.34, S4 3x 20.32 ->
-  18.80; S7 at 2x spends most of its 3D time in the kernel 14010, which did not change); the earlier columns include them.
+  18.80; S7 at 2x spends most of its 3D time in the kernel 14010, which did not change); the earlier columns include
+  them.
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins. Since then each group starts with one basic block (`kerngen.py`'s head()): the
@@ -67,115 +68,126 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   (the first 8 in the edge setup's basic block), no float pairs and weights through scratch memory, no per-routine
   reloads of the vertices; the span setup, with render_polygon_4x's edge-marking fix-up folded in, and the edge
   markers 4 lines a step. Stress ROM L4 at 2x: the walk (edges, x/z, span setup, render_polygon_4x) 2.73 M -> 1.75 M
-  cycles a frame; the edge-marking scene S4 0.76 M -> 0.44 M (its frame 12.59 M -> 12.21 M). With `batch_asm`'s kernel and flags chosen once per polygon, `f_run`'s batch
-  loop two lines a step and walk.c calling the setup without rast.c's hook, the per-polygon setup 1.19 M -> 1.05 M:
-  the whole frame 21.83 M -> 20.81 M (-4.7%), the same differing bins at all 43 checkpoints of the scene cycle.
-  `kernsched.py`'s machine model is now llvm-mca's in-order A55 as measured (128-bit and widening NEON operations
-  hold a pipe two cycles and issue first in their group, `ldp q` holds the load pipe 6 cycles, results write back in
-  program order), each block scheduled several ways (the list scheduler, the original order, seven model-driven
-  rankings) and the one that reaches its branch soonest from the state the previous block leaves kept; an
-  out-of-line block's return takes a copy of the code after its join, so the blocks around the join become one.
-  kpath over 59 kernel paths: 10116 -> 9670 cycles (-4.4%). The combined build: the scene cycle's differing bins
-  as DraStic's renderer's at all 28 checkpoints to 67200 bins, deferred shading to 81600, the compositor's tables
-  checked against the C port (5657, 0 differ), the stress ROM's 6 bins in 4800 as before.
-  Then across blocks (`kerngen.py`'s layout; kpath, cycles a group): the translucent kernels load the destination
-  colours and the depth words (or the attribute words) into the blend's registers, free by then, before the fog and
+  cycles a frame; the edge-marking scene S4 0.76 M -> 0.44 M (its frame 12.59 M -> 12.21 M). With `batch_asm`'s kernel
+  and flags chosen once per polygon, `f_run`'s batch loop two lines a step and walk.c calling the setup without
+  rast.c's hook, the per-polygon setup 1.19 M -> 1.05 M: the whole frame 21.83 M -> 20.81 M (-4.7%), the same
+  differing bins at all 43 checkpoints of the scene cycle. `kernsched.py`'s machine model is now llvm-mca's in-order
+  A55 as measured (128-bit and widening NEON operations hold a pipe two cycles and issue first in their group, `ldp q`
+  holds the load pipe 6 cycles, results write back in program order), each block scheduled several ways (the list
+  scheduler, the original order, seven model-driven rankings) and the one that reaches its branch soonest from the
+  state the previous block leaves kept; an out-of-line block's return takes a copy of the code after its join, so the
+  blocks around the join become one. kpath over 59 kernel paths: 10116 -> 9670 cycles (-4.4%). The combined build: the
+  scene cycle's differing bins as DraStic's renderer's at all 28 checkpoints to 67200 bins, deferred shading to 81600,
+  the compositor's tables checked against the C port (5657, 0 differ), the stress ROM's 6 bins in 4800 as before. Then
+  across blocks (`kerngen.py`'s layout; kpath, cycles a group): the translucent kernels load the destination colours
+  and the depth words (or the attribute words) into the blend's registers, free by then, before the fog and
   depth-update branches, and store colours and attribute words after them in one block, so that the two
-  read-modify-writes interleave: 02100 184 -> 170 (with blending 212 -> 197), 02110 178 -> 168, 04100 (16 colours)
-  193 -> 178, 23110 198 -> 188, 00100 114 -> 104. The destination's halves come split by ld2 (no ldp q and uzp
-  pair: 02100 170 -> 165, with blending 197 -> 189); the textured kernels' alpha modulate and alpha test sit behind
-  one flag test (bit 15, set per batch: no alpha test and A is 31), both out of line, so the modulates and the store
-  are one block with no taken branch (the model does not price taken branches: 1 cycle less; two taken branches a
-  group fewer); the lit direct-textured opaque kernels store a full group with st4 from the modulates' bytes instead
-  of four zips and stp (with the flag test 02000 129 -> 125, white lines 117 -> 115), and so do the flat textured
-  ones whose depth words are in registers, through v24-v27 (02010 128 -> 122, 22010 119 -> 114). cycles.py, 90 s
-  profiles against e02a298's: stress ROM L4 at 2x, librast 14.75 M -> 14.38 M cycles a frame (02000 4.69 -> 4.58,
-  02100 2.86 -> 2.72, 02010 2.31 -> 2.24, 02110 1.46 -> 1.41); fog and edge marking S4 at 2x, 04010 3.42 -> 3.30.
-  The 2x walker's span setup (`walk.c`'s walk_spans) then takes the left/right swap a step of 4 lines at a time when
-  all 4 agree (the winding decides which chain is left; only the lines where the chains meet differ): no selects,
-  and without a swap no stores of the left arrays besides x. Stress ROM L4 at 2x: walk_polygon_4x 1.75 M -> 1.62 M
-  cycles a frame (its costliest block, the span setup's step of 4 lines, 58 -> 36 cycles; 4% of the steps mix); an
-  edge's first coefficient lanes as one vector product and sum (the same bits, walk.c says why): 1.62 M -> 1.59 M.
-  `f_run`'s batch splitting (runs of lines with pixels, at most 512 together; a chain of dependent loads and compares,
-  ~10 cycles a line) is 8 lines a step as NEON prefix sums (`batch_end`, `ut/batch_end` checks it against the loop it
-  replaced): f_run 0.70 M -> 0.64 M a frame, at 3x 0.83 M -> 0.68 M (the same batches).
-  The 3x resolve's edge marking (`hr.c` edge_lines) first screens each block of 16 pixels of its two lines on the
-  polygon ids alone: a block whose neighbour pairs all have the same id has no edge and is left as it is (96% of the
-  blocks in the edge-marking scene S4), the ids read from byte planes of the attribute lines' top bytes made once per
-  bin (edge_tplanes, ldr q and uzp2). Modeled A55 cycles a frame, S4 at 3x: the edge marking 2.38 M -> 0.95 M
-  (edge_lines 0.63 M + edge_tplanes 0.32 M), the frame 20.98 M -> 19.11 M; `ut/hr_ab` against e02a298: the same output.
-  The 3x walker stops a chain at its window (`EDGES_LINE_CAP` in `spec/edges_impl.h`, hr.c only): a chain that goes
-  down, up and down again (a self-intersecting polygon) covered lines twice and ran on in the span arrays, past 64
-  entries the right chain's overwrote the left chain's first entries and past 128 lines its perspective coefficients
-  ran out of the span block (into the heap: what made `ut/hr_ab`'s two copies of the same hr.c hand the kernels
-  different spans for a few polygons in 5000). Within the window the spans the kernels read are the same (only span
-  array 10's scratch leftovers differ, and only with edge marking off, when nothing reads it); convex polygons never have such chains (9-
-  and 10-vertex polygons with repeated vertices may), so real scenes should render as before. `ut/hr_ab` counts the polygons with such chains apart against a base
-  without the cap: against e02a298 0 of the others differ (and ~40% of the ~19% random polygons with one do).
-  The NEON walker's interpolate_parameters stores its interleaved halfwords with zip1 and str q instead of st2 (38 ->
-  28 modeled cycles a step of 4 lines): stress ROM L4 at 3x, hr_render_polygon_interpolate_edges 2.11 M -> 1.94 M
-  cycles a frame (the frame 35.88 M -> 35.37 M); the same bytes (t_edges.c against DraStic's, `ut/hr_ab`).
+  read-modify-writes interleave: 02100 184 -> 170 (with blending 212 -> 197), 02110 178 -> 168, 04100 (16 colours) 193
+  -> 178, 23110 198 -> 188, 00100 114 -> 104. The destination's halves come split by ld2 (no ldp q and uzp pair: 02100
+  170 -> 165, with blending 197 -> 189); the textured kernels' alpha modulate and alpha test sit behind one flag test
+  (bit 15, set per batch: no alpha test and A is 31), both out of line, so the modulates and the store are one block
+  with no taken branch (the model does not price taken branches: 1 cycle less; two taken branches a group fewer); the
+  lit direct-textured opaque kernels store a full group with st4 from the modulates' bytes instead of four zips and
+  stp (with the flag test 02000 129 -> 125, white lines 117 -> 115), and so do the flat textured ones whose depth
+  words are in registers, through v24-v27 (02010 128 -> 122, 22010 119 -> 114). cycles.py, 90 s profiles against
+  e02a298's: stress ROM L4 at 2x, librast 14.75 M -> 14.38 M cycles a frame (02000 4.69 -> 4.58, 02100 2.86 -> 2.72,
+  02010 2.31 -> 2.24, 02110 1.46 -> 1.41); fog and edge marking S4 at 2x, 04010 3.42 -> 3.30. The 2x walker's span
+  setup (`walk.c`'s walk_spans) then takes the left/right swap a step of 4 lines at a time when all 4 agree (the
+  winding decides which chain is left; only the lines where the chains meet differ): no selects, and without a swap no
+  stores of the left arrays besides x. Stress ROM L4 at 2x: walk_polygon_4x 1.75 M -> 1.62 M cycles a frame (its
+  costliest block, the span setup's step of 4 lines, 58 -> 36 cycles; 4% of the steps mix); an edge's first
+  coefficient lanes as one vector product and sum (the same bits, walk.c says why): 1.62 M -> 1.59 M. `f_run`'s batch
+  splitting (runs of lines with pixels, at most 512 together; a chain of dependent loads and compares, ~10 cycles a
+  line) is 8 lines a step as NEON prefix sums (`batch_end`, `ut/batch_end` checks it against the loop it replaced):
+  f_run 0.70 M -> 0.64 M a frame, at 3x 0.83 M -> 0.68 M (the same batches). The 3x resolve's edge marking (`hr.c`
+  edge_lines) first screens each block of 16 pixels of its two lines on the polygon ids alone: a block whose neighbour
+  pairs all have the same id has no edge and is left as it is (96% of the blocks in the edge-marking scene S4), the
+  ids read from byte planes of the attribute lines' top bytes made once per bin (edge_tplanes, ldr q and uzp2).
+  Modeled A55 cycles a frame, S4 at 3x: the edge marking 2.38 M -> 0.95 M (edge_lines 0.63 M + edge_tplanes 0.32 M),
+  the frame 20.98 M -> 19.11 M; `ut/hr_ab` against e02a298: the same output. The 3x walker stops a chain at its window
+  (`EDGES_LINE_CAP` in `spec/edges_impl.h`, hr.c only): a chain that goes down, up and down again (a self-intersecting
+  polygon) covered lines twice and ran on in the span arrays, past 64 entries the right chain's overwrote the left
+  chain's first entries and past 128 lines its perspective coefficients ran out of the span block (into the heap: what
+  made `ut/hr_ab`'s two copies of the same hr.c hand the kernels different spans for a few polygons in 5000). Within
+  the window the spans the kernels read are the same (only span array 10's scratch leftovers differ, and only with
+  edge marking off, when nothing reads it); convex polygons never have such chains (9- and 10-vertex polygons with
+  repeated vertices may), so real scenes should render as before. `ut/hr_ab` counts the polygons with such chains
+  apart against a base without the cap: against e02a298 0 of the others differ (and ~40% of the ~19% random polygons
+  with one do). The NEON walker's interpolate_parameters stores its interleaved halfwords with zip1 and str q instead
+  of st2 (38 -> 28 modeled cycles a step of 4 lines): stress ROM L4 at 3x, hr_render_polygon_interpolate_edges 2.11 M
+  -> 1.94 M cycles a frame (the frame 35.88 M -> 35.37 M); the same bytes (t_edges.c against DraStic's, `ut/hr_ab`).
   The 2x resolves with fog and edge marking are ours too (`res2.c`'s res2_resolve_fx(), dispatched by rast.c's
   resolve_bin): DraStic's drivers called a leaf routine per stage and line (fog weights into a byte array, the
   modulate, edge identify into an edge array, edge mark), each a pass over memory, and the table pass read the block
   back. Now hr.c's NEON fog (weights and modulate in one pass over byte planes) and edge marking (identify and mark,
-  two lines a step sharing their compares) run on the context's colour lines in place, the edge marking skipping
-  the depth-key compares of steps in which no pixel's polygon id differs from a neighbour's and the fog the modulate
-  of steps whose factors are all 0, and the plain resolve's
-  pass (res2_line_asm) writes the block and its table entries; DraStic's line structure is kept (bin 0's top line,
-  bin 11's bottom line with line 30's attributes, the gap copies). Fog and edge-marking scene S4 at 2x: DraStic's
-  identify 1.42 M, weights 0.50, mark 0.38, modulates 0.51 and the table pass 0.18 M cycles a frame become fog 0.78 M
-  (0.89 M without its skip), edge marking 0.57 M (1.02 M without its skip) and the resolve pass 0.26 M: the frame
-  11.05 M -> 9.82 M (-11.1%; profiles of both builds from the same session. An older profile of the base build gave
-  11.54 M, of which 0.5 M was a block outside DraStic and librast that later profiles of either build do not show).
-  `ut/t_resolve.c` compares the block, the gap buffers and the table entries with DraStic's drivers (all six modes,
-  every bin, polygon ids in rectangles and zero fog tables for the skips; it fails mutants of either skip); S4's
-  frame diff 0 bins in 12000 with the compositor's checks 0 differ, the stress ROM's 6 in 4800.
-  Third round, the kernels (`kerngen.py`'s keep_dep()): the opaque textured kernels with z or w depth whose spare
-  registers all hold colour (the flat paletted 03010 04010 13010 14010, S4's and S7's main kernels, and the lit
-  ones, 02000's family) spilled the group's attribute words at the depth test and reloaded them for the store (ldp q
-  from the stack, which holds the A55's load pipe 6 cycles, and the pid orr). The pass mask now lives in x8 only (the
-  alpha test narrows x8, the store and the partial group take it from there), which frees v28: the words stay in v25
-  v26, and the paletted ones store with st4 from v28-v31 (b's result last, into the alpha texel's register).
-  kpath, cycles a group: 04010 140 -> 133 (16 colours 137 -> 130), 14010 148 -> 142, 03010 157 -> 150, 13010 165 ->
-  159, 04000 141 -> 136, 14000 149 -> 145, 02000 125 -> 122, 12000 136 -> 133; the hi-res set's the same.
-  `ut/kern_ab` (new) runs every nearest-filtering kernel of both sets, base and worktree, on the same random batches
-  (spans, depths, textures, palettes, colours, flags) and compares everything they write: against 94f9689 0 of
-  34000 batches differ (it caught a first version's scratch-register clash in the lit paletted kernels' alpha
-  stage); the scene cycle's differing bins as DraStic's renderer's at every checkpoint to 84000 bins, S4 and S7 0
-  differ, the stress ROM's 9 bins in 7200. cycles.py, 90 s profiles against the second round's: the field scene S7 at
-  2x, 14010 1.36 -> 1.31 M cycles a frame (librast 2.62 -> 2.57 M); the stress ROM L4 at 2x, 02000 4.58 -> 4.52 M
-  (librast 14.16 -> 14.10 M; the unchanged kernels and the walker the same to 0.01 M); the fog and edge-marking
-  scene S4 against a base profile from the same session (under load 90 s reach fewer frames, and S4's 3D load
-  varies with the span: compare the instructions), at 3x h04010 7.68 -> 7.15 M (instructions 6.47 -> 6.07 M, kpath's
-  5% fewer a group and slightly less work), librast 16.44 -> 16.06 M; at 2x 04010 and 04000 together
-  4.34 -> 4.16 M, librast 7.25 -> 7.06 M (1747 and 1027 frames).
-  Third round, 3x: hr.c's fog (fog_line) tests a step's 32 depths against the fog offset before the rest of the
-  factors: when the density table starts at 0 (as fog tables do) and every depth is at most the offset, every factor is
-  0 (d - off saturates to 0, so i = 0, f = 0 and w = table[0]) and the step is its colours with the fog flags cleared,
-  without the weights' tbl and multiplies and the modulates; 73% of the fogged steps of S4 at 3x (and nearly all of
-  those whose factors are all 0). Modeled A55 cycles a frame, S4 at 3x: fog_line 2.12 M -> 1.49 M (a skipped step 165
-  -> 89 modeled cycles with full fog, 136 -> 86 alpha only; the others 3-4 more); `ut/hr_ab` (its fog and resolve
-  cases now with zero-first tables and steps below the offset, failing mutants of the test) against 94f9689: the same.
-  The 3x downsample (hr_downsample) passes uniform steps through: when each of a step's four triples has the same r, g,
-  b in all 9 of its pixels (channels at most 63) and every alpha is 31, the opaque case's outputs are those colours
-  with alpha 31 (counted in the simulator: 65% of the steps of the field scene S7 at 3x, 15% of S4's; the stress ROM's
-  42% come in short runs). The test (the 9 vectors' OR beside their AND, the opaque test in the same max) makes a step
-  that is not uniform 90 -> 111 modeled cycles and a uniform one 90 -> 63, so after a step that is not uniform the next
-  7 go without it (DS_SKIP; 3 modeled worse on S4, the same on S7). Modeled A55 cycles a frame at 3x, hr_downsample: S7
-  1.11 M -> 0.93 M, L4 1.11 -> 1.10, S4 1.38 -> 1.39 (a verifier's profile with fewer steps of the general case
-  than the base's: about 2% more on the same mix, against S7's 17% less); `ut/hr_ab` (its downsample test now with uniform blocks at random and in runs, with flag bits, channels of 64
-  and more and one bit off, failing mutants of the test) against 94f9689: the same.
-  The 3x edge marking's id screen (edge_lines) takes two blocks of 16 pixels a step while no block is forced (one max
-  and branch for both; a pair that does not pass is taken a block at a time): S4 at 3x, edge_lines 0.63 M -> 0.55 M
-  (a screened pair ~55 modeled cycles instead of ~68); `ut/hr_ab`'s polygon-like contexts fail mutants of it.
-  The NEON walker's interpolate_parameters (spec/edges_impl.h) takes its products as smull and add (clang made each a
-  mov of the base and an smlal): 29 -> 27 modeled cycles a step of 4 lines; stress ROM L4 at 3x,
-  hr_render_polygon_interpolate_edges 1.94 M -> 1.90 M (t_edges.c against DraStic's; `ut/hr_ab`, whose base side
-  now takes the base's headers too: the same).
-  The four changes against the second round's profiles, net of `[other]` (whose share varies run to run, as does the
-  scenes' mix in shorter runs): S4 at 3x 18.80 -> 18.08 M a frame (fog -0.63, edge marking -0.08), S7 at 3x the
-  downsample -0.18 M a frame; 2x does not use hr.c (S4's frame diff 0 bins in 7200, the compositor's checks 0 differ).
+  two lines a step sharing their compares) run on the context's colour lines in place, the edge marking skipping the
+  depth-key compares of steps in which no pixel's polygon id differs from a neighbour's and the fog the modulate of
+  steps whose factors are all 0, and the plain resolve's pass (res2_line_asm) writes the block and its table entries;
+  DraStic's line structure is kept (bin 0's top line, bin 11's bottom line with line 30's attributes, the gap copies).
+  Fog and edge-marking scene S4 at 2x: DraStic's identify 1.42 M, weights 0.50, mark 0.38, modulates 0.51 and the
+  table pass 0.18 M cycles a frame become fog 0.78 M (0.89 M without its skip), edge marking 0.57 M (1.02 M without
+  its skip) and the resolve pass 0.26 M: the frame 11.05 M -> 9.82 M (-11.1%; profiles of both builds from the same
+  session. An older profile of the base build gave 11.54 M, of which 0.5 M was a block outside DraStic and librast
+  that later profiles of either build do not show). `ut/t_resolve.c` compares the block, the gap buffers and the table
+  entries with DraStic's drivers (all six modes, every bin, polygon ids in rectangles and zero fog tables for the
+  skips; it fails mutants of either skip); S4's frame diff 0 bins in 12000 with the compositor's checks 0 differ, the
+  stress ROM's 6 in 4800. Third round, the kernels (`kerngen.py`'s keep_dep()): the opaque textured kernels with z or
+  w depth whose spare registers all hold colour (the flat paletted 03010 04010 13010 14010, S4's and S7's main
+  kernels, and the lit ones, 02000's family) spilled the group's attribute words at the depth test and reloaded them
+  for the store (ldp q from the stack, which holds the A55's load pipe 6 cycles, and the pid orr). The pass mask now
+  lives in x8 only (the alpha test narrows x8, the store and the partial group take it from there), which frees v28:
+  the words stay in v25 v26, and the paletted ones store with st4 from v28-v31 (b's result last, into the alpha
+  texel's register). kpath, cycles a group: 04010 140 -> 133 (16 colours 137 -> 130), 14010 148 -> 142, 03010 157 ->
+  150, 13010 165 -> 159, 04000 141 -> 136, 14000 149 -> 145, 02000 125 -> 122, 12000 136 -> 133; the hi-res set's the
+  same. `ut/kern_ab` (new) runs every nearest-filtering kernel of both sets, base and worktree, on the same random
+  batches (spans, depths, textures, palettes, colours, flags) and compares everything they write: against 94f9689 0 of
+  34000 batches differ (it caught a first version's scratch-register clash in the lit paletted kernels' alpha stage);
+  the scene cycle's differing bins as DraStic's renderer's at every checkpoint to 84000 bins, S4 and S7 0 differ, the
+  stress ROM's 9 bins in 7200. cycles.py, 90 s profiles against the second round's: the field scene S7 at 2x, 14010
+  1.36 -> 1.31 M cycles a frame (librast 2.62 -> 2.57 M); the stress ROM L4 at 2x, 02000 4.58 -> 4.52 M (librast 14.16
+  -> 14.10 M; the unchanged kernels and the walker the same to 0.01 M); the fog and edge-marking scene S4 against a
+  base profile from the same session (under load 90 s reach fewer frames, and S4's 3D load varies with the span:
+  compare the instructions), at 3x h04010 7.68 -> 7.15 M (instructions 6.47 -> 6.07 M, kpath's 5% fewer a group and
+  slightly less work), librast 16.44 -> 16.06 M; at 2x 04010 and 04000 together 4.34 -> 4.16 M, librast 7.25 -> 7.06 M
+  (1747 and 1027 frames). Third round, 3x: hr.c's fog (fog_line) tests a step's 32 depths against the fog offset
+  before the rest of the factors: when the density table starts at 0 (as fog tables do) and every depth is at most the
+  offset, every factor is 0 (d - off saturates to 0, so i = 0, f = 0 and w = table[0]) and the step is its colours
+  with the fog flags cleared, without the weights' tbl and multiplies and the modulates; 73% of the fogged steps of S4
+  at 3x (and nearly all of those whose factors are all 0). Modeled A55 cycles a frame, S4 at 3x: fog_line 2.12 M ->
+  1.49 M (a skipped step 165 -> 89 modeled cycles with full fog, 136 -> 86 alpha only; the others 3-4 more);
+  `ut/hr_ab` (its fog and resolve cases now with zero-first tables and steps below the offset, failing mutants of the
+  test) against 94f9689: the same. The 3x downsample (hr_downsample) passes uniform steps through: when each of a
+  step's four triples has the same r, g, b in all 9 of its pixels (channels at most 63) and every alpha is 31, the
+  opaque case's outputs are those colours with alpha 31 (counted in the simulator: 65% of the steps of the field scene
+  S7 at 3x, 15% of S4's; the stress ROM's 42% come in short runs). The test (the 9 vectors' OR beside their AND, the
+  opaque test in the same max) makes a step that is not uniform 90 -> 111 modeled cycles and a uniform one 90 -> 63,
+  so after a step that is not uniform the next 7 go without it (DS_SKIP; 3 modeled worse on S4, the same on S7).
+  Modeled A55 cycles a frame at 3x, hr_downsample: S7 1.11 M -> 0.93 M, L4 1.11 -> 1.10, S4 1.38 -> 1.39 (a verifier's
+  profile with fewer steps of the general case than the base's: about 2% more on the same mix, against S7's 17% less);
+  `ut/hr_ab` (its downsample test now with uniform blocks at random and in runs, with flag bits, channels of 64 and
+  more and one bit off, failing mutants of the test) against 94f9689: the same. The 3x edge marking's id screen
+  (edge_lines) takes two blocks of 16 pixels a step while no block is forced (one max and branch for both; a pair that
+  does not pass is taken a block at a time): S4 at 3x, edge_lines 0.63 M -> 0.55 M (a screened pair ~55 modeled cycles
+  instead of ~68); `ut/hr_ab`'s polygon-like contexts fail mutants of it. The NEON walker's interpolate_parameters
+  (spec/edges_impl.h) takes its products as smull and add (clang made each a mov of the base and an smlal): 29 -> 27
+  modeled cycles a step of 4 lines; stress ROM L4 at 3x, hr_render_polygon_interpolate_edges 1.94 M -> 1.90 M
+  (t_edges.c against DraStic's; `ut/hr_ab`, whose base side now takes the base's headers too: the same). The four
+  changes against the second round's profiles, net of `[other]` (whose share varies run to run, as does the scenes'
+  mix in shorter runs): S4 at 3x 18.80 -> 18.08 M a frame (fog -0.63, edge marking -0.08), S7 at 3x the downsample
+  -0.18 M a frame; 2x does not use hr.c (S4's frame diff 0 bins in 7200, the compositor's checks 0 differ). Third
+  round, the 2x walker's edges (`walk.c` walk_edge): a step that continues tests first and computes the next 8 lines'
+  weights among its stores (an edge's last step computes none), which fits in registers with z as one vector and a
+  step (was four and a step) and x as one and a step, and with the products in fewer instructions: w's (s64)dw q >> 15
+  as sqdmulh of q << 16, s and t's bits 15..30 as addhn of sqdmull (2 q d) and (s_a << 16) + 0x1000. Both saturate
+  only for q = -32768 with dw = INT32_MIN or d = -32768, so edges with such deltas take the former products
+  (`t_walk.c` now makes such edges; it fails either fast form forced on them). The setup takes the vertices' z, c, s,
+  t halfwords as vectors and the colour channels of both vertices in one (no scalar unpacking and lane inserts), the
+  reciprocal table's bound is a select and walk_chain is inlined once per depth source: the setup is one basic block
+  with the x and z setup. Modeled A55 cycles of a z edge: setup and first step 188 -> 160, a continuing step 90 -> 68
+  (65 instructions: now issue-bound). walk_polygon_4x, cycles a frame (90 s profiles): stress ROM L4 at 2x 1.59 M ->
+  1.43 M, S4 0.41 -> 0.37, S7 0.14 -> 0.12. The same span arrays as DraStic's walker (`t_walk.c`), the scene cycle's
+  differing bins as DraStic's renderer's at every checkpoint reached (to 93600 with deferred shading), the
+  compositor's checks 0 differ, S4 0 bins, the stress ROM's 9 in 7200, the single scenes as 94f9689's build.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -232,9 +244,9 @@ blending path; 0x10: visible and all opaque; 0: nothing visible): ~425 instructi
 renderer hooked (`RAST=ours`/`diff`, `DSFLIP_RAST=1`):
 
 - **NEON replacement** (`DSFLIP_RAST_COMP` / `RAST_COMP=1`): the same 32 bytes and return value in ~140
-  instructions a call (the kernel 124, `src/rast/compvis.h`: `ld4` for the alpha bytes, `cmtst` + bit weights + an `addp` tree for the
-  bitmap, `umin(a, a ^ 31)` for the flag), for any pointer DraStic passes (the 2x frame, the 1x line, a
-  BG0HOFS-shifted copy on its stack).
+  instructions a call (the kernel 124, `src/rast/compvis.h`: `ld4` for the alpha bytes, `cmtst` + bit weights + an
+  `addp` tree for the bitmap, `umin(a, a ^ 31)` for the flag), for any pointer DraStic passes (the 2x frame, the 1x
+  line, a BG0HOFS-shifted copy on its stack).
 - **Per-bin table** (`RAST_COMP=2`, the default): the result depends only on the 1 KiB half-row the pointer
   addresses, so the render threads compute all 64 half-rows of a bin right after its output block is written, into
   a table per output frame; the hook copies the entry (~28 instructions) when the pointer is a half-row of a frame
@@ -260,10 +272,10 @@ renderer hooked (`RAST=ours`/`diff`, `DSFLIP_RAST=1`):
   port, and every table when it becomes valid (`[comp] check:` every 2 s, `[compcheck]` lines for differences).
   The test ROMs' 3D layer is opaque nearly everywhere, so a stale table entry mostly gives the right answer anyway:
   the check mode catches a missing gap-row update (S4: 172 differing calls in 30 s with it removed) but hardly a
-  missing table copy (a frame-skipping S4 with `threaded_3d=1` flags only its first copy). `tools/rast/ut/t_comp_hook.c`
-  covers that bookkeeping on random frames: the hook's lookup and the wrappers' validity rule (rendered with
-  re-marked gap rows, copied, unchanged, 1x, reset; `threaded_3d` on and off) against the original, with stubs that
-  write the frames as the disassembly of `update_frame_3d_4x` shows.
+  missing table copy (a frame-skipping S4 with `threaded_3d=1` flags only its first copy).
+  `tools/rast/ut/t_comp_hook.c` covers that bookkeeping on random frames: the hook's lookup and the wrappers' validity
+  rule (rendered with re-marked gap rows, copied, unchanged, 1x, reset; `threaded_3d` on and off) against the
+  original, with stubs that write the frames as the disassembly of `update_frame_3d_4x` shows.
 - Cost per frame, simulator instruction counts (stress ROM L4 and the field scene S7, 90 s each): DraStic's
   function and its gather 0.326 M (425 a call); NEON 0.108 M (139 a call); table 0.024 M in the compositor (28 a
   call) plus 0.100 M on the render threads (`comp_bin`, 130 a half-row) and 0.006 M for the gap rows. On the
@@ -282,16 +294,17 @@ bytes over the planes where BG0 is on top (`spec/composite.c` documents every ro
 own encoder, so the masks in the scratch area are its bytes, and reads them: when no other layer of the layer mask
 claims a pixel and every pixel is BG0's or the backdrop's, the planes are `mask ? 3D bytes : backdrop` for every
 pixel, whatever BG0's own u16 line holds (the derivation is in `compfuse.h`), and one NEON pass writes them: 40
-instructions for a quarter that is all 3D, 27 all backdrop, ~140 mixed. Otherwise it calls DraStic's
-`select_pixels` as the original does; blending or brightness flags, no 3D layer (engine B) or another layer mask go
-to the original through a trampoline. Exactness: the C ports of the chain are unit-tested against the originals, and
-the fused pass against DraStic's `select_pixels` and the ports (`t_composite.c`); `t_comp_hook.c` runs the hook
-itself against the original on random engines, scratch areas and quarters through every path, with the check mode
-on and off; `RAST_COMPCHECK=1` runs every fused call twice in the emulator (ours, then the original through the
-trampoline on the same input bytes) and compares the scratch frame, the planes, the 3D pixels and the engine
-(`[comp] composite:` counts every 2 s). Cost per frame (simulator instruction counts, 90 s each): the chain's
-functions on the stress ROM L4 0.81 M -> 0.39 M (the quarters of engine B, which has no 3D layer,
-stay with DraStic's chain), on the field scene S7 0.47 M -> 0.07 M; frame totals 16.6 M (was 17.8) and 3.5 M (was 3.4; the totals move by about 0.5 M between runs, the per-call costs are exact: about 620 instructions a quarter before, 45 / 30 / 150 after).
+instructions for a quarter that is all 3D, 27 all backdrop, ~140 mixed. Otherwise it calls DraStic's `select_pixels`
+as the original does; blending or brightness flags, no 3D layer (engine B) or another layer mask go to the original
+through a trampoline. Exactness: the C ports of the chain are unit-tested against the originals, and the fused pass
+against DraStic's `select_pixels` and the ports (`t_composite.c`); `t_comp_hook.c` runs the hook itself against the
+original on random engines, scratch areas and quarters through every path, with the check mode on and off;
+`RAST_COMPCHECK=1` runs every fused call twice in the emulator (ours, then the original through the trampoline on the
+same input bytes) and compares the scratch frame, the planes, the 3D pixels and the engine (`[comp] composite:` counts
+every 2 s). Cost per frame (simulator instruction counts, 90 s each): the chain's functions on the stress ROM L4 0.81
+M -> 0.39 M (the quarters of engine B, which has no 3D layer, stay with DraStic's chain), on the field scene S7 0.47 M
+-> 0.07 M; frame totals 16.6 M (was 17.8) and 3.5 M (was 3.4; the totals move by about 0.5 M between runs, the
+per-call costs are exact: about 620 instructions a quarter before, 45 / 30 / 150 after).
 
 ## How it works
 
@@ -364,15 +377,16 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   test instead of the store models 1-2 cycles worse. Left: the texel gather's ld2 (7 cycles with nothing
   independent left; ldr q and uzp model 2 worse); the 16-colour gather's bytes through the stack (stp w and ld2 to
   assemble 8 bytes; ORed together in x9 and moved by fmov they model the same). Overlapping consecutive groups
-  needs registers the kernels do not have (the bilinear kernels use them all). Hoisting the fall-through code over the w7 flag branches does not pay (llvm-mca:
-  +1-8% on most kernels, the hoisted work lands above taken branches; -4-6% on the bilinear ones).
+  needs registers the kernels do not have (the bilinear kernels use them all). Hoisting the fall-through code over the
+  w7 flag branches does not pay (llvm-mca: +1-8% on most kernels, the hoisted work lands above taken branches; -4-6%
+  on the bilinear ones).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
   of the texel gather's trip through the stack (the texels stored as words, read back by ld2; the addresses now
   leave by umov), which the model cannot price (store-to-load forwarding).
-- `ut/hr_ab`'s walker test does not see interpolate_parameters' outputs: a mutant of it (vsub for vadd in edges_impl.h's
-  NEON form) passes the walker A/B, which hashes the 11 span arrays f_run receives, while t_edges.c fails it against
-  DraStic's. Find out whether the 3x path overwrites or ignores span arrays 4, 6 and 8's parameter halves before f_run,
-  or the hash misses them; until then edges_impl.h changes rest on t_edges.c.
+- `ut/hr_ab`'s walker test does not see interpolate_parameters' outputs: a mutant of it (vsub for vadd in
+  edges_impl.h's NEON form) passes the walker A/B, which hashes the 11 span arrays f_run receives, while t_edges.c
+  fails it against DraStic's. Find out whether the 3x path overwrites or ignores span arrays 4, 6 and 8's parameter
+  halves before f_run, or the hash misses them; until then edges_impl.h changes rest on t_edges.c.
 - 3x: the top vertex for tied vertices; the edge markers and the edge-marking x adjust in NEON; later the hi-res 3D
   layer presented through the dsflip shader instead of downsampled.
   Polygons of 9 and 10 vertices: DraStic's render_polygon_4x takes the walk's ninth vertex as base + 0 and never
@@ -388,13 +402,15 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   steps it does not skip 160-170 modeled cycles) keeps 14 constant vectors: the compiler reloads one tbl table from
   the stack every step (ld1 of two registers); fewer constants (0x81 and 0x7f, the table pair) would keep it in
   registers.
-- The 2x walker (stress ROM L4, 1.59 M cycles a frame): an edge's step computes the next 8 lines' weights after its
-  exit test (29 instructions, 43 cycles, one reciprocal chain). With the test first and that chain in the stores'
-  block clang spills (13 stack accesses a step) and the step models at 99 cycles instead of 93: needs fewer live
-  vectors (z as two vectors and a step, the colour bases in one). The edge setup (120 instructions, 99 cycles)
-  starts the first weights' chain at its cycle ~49, behind the w loads and conversions. `batch_end` is latency-bound
-  (38 cycles a step: ldp, uzp1, three ext + add, the compare, fmov): a polygon's prefix sums in one pass, then a
-  compare a batch.
+- The 2x walker (stress ROM L4, 1.43 M cycles a frame): a z edge's setup (127 instructions, 109 modeled cycles) is
+  the costliest block. Its first weights' chain is ~60 cycles of latency, but clang's schedule starts the first
+  frecpe at cycle ~40 and its uzp1 lands at ~103, behind the colour, x and z work it interleaves (and blocks on);
+  without the chain the rest is ~85 cycles. Clang's other schedulers model worse (-misched-topdown/bottomup,
+  ilpmax/min), and small source changes move the block by +-10 cycles either way (z kept as z << 2 with uzp2 stores:
+  2 instructions fewer a step, 3 cycles more; the vertices' y copied for the chain scan: the scan 18 -> 14 cycles,
+  the setup 109 -> 121): a scheduled block (res2gen.py's way) is what is left. The continuing step is issue-bound
+  (65 instructions, 68 cycles). `batch_end` is latency-bound (38 cycles a step: ldp, uzp1, three ext + add, the
+  compare, fmov): a polygon's prefix sums in one pass, then a compare a batch.
 - The texture alpha cache (`tex_min_alpha`, fused.c) keys on DraStic's texture-cache entry and the frame: it
   assumes DraStic does not reload an entry with another texture within one frame. True on everything tested; a
   content signature in the key would make it certain.
