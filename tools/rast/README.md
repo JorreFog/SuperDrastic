@@ -405,7 +405,7 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 - `RAST_SCHED=0` gives each render thread DraStic's fixed bins (`binsched.c`); `RAST_SCHEDSTATS=1` (or N: every N
   frames) prints the threads' balance, `RAST_SCHEDHASH=1` a hash of every output frame (runs with the fixed and the
   claimed bins compare frame by frame), `RAST_SCHEDDIFF=1` claims the bins in `RAST=diff` too; `RAST_WORKERS=k`
-  adds k render threads of librast's own (with threaded_3d off; not in `RAST=diff`).
+  adds k render threads of librast's own (with threaded_3d off; not in `RAST=diff`; -1: one, while it pays).
 - `dev/prof.sh` profiles a run block by block; `dev/cycles.py <prof.txt> <log> <librast.so>` reports instructions and
   modeled Cortex-A55 cycles a frame per function, DraStic's and ours (`BLOCKS=<function>` lists its costliest
   blocks); `dev/kpath.py rast_kern.S <kernel>` a kernel's cycles per group of 8 pixels. Both need llvm-mca. The
@@ -429,8 +429,10 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   `RAST_WORKERS=1` it is the A/B's measure; its slowest-thread figures there are the device's own bins' times.
   `cpugov.c` sizes the clock by DraStic's busiest thread and the main thread's heaviest frame in CPU time: with the
   queue the emulation thread takes over the bins of helpers that start late (more CPU time, less waiting), with
-  workers it waits more and renders less; its figures shift with them. If the fourth core is free only at times, the
-  workers could decide for themselves: windows of frames with and without them, by the update's wall time.
+  workers it waits more and renders less; its figures shift with them. `RAST_WORKERS=-1` lets one worker decide for
+  itself: windows of 30 frames with and without it by turns, then 8 windows of the one whose updates took less wall
+  time (`RAST_SCHEDSTATS` logs each choice); in the loaded simulator its choices are noise (the same output frames as
+  the fixed sets': L4 2x 451, S7 3x 922), on the device they would show whether the fourth core is free.
 - The 2x fog (`res2.c` fog_line2x, 0.60 M cycles a frame on S4 after the depth screen; its four ld4 a step, 45
   cycles, are now the largest part; ldr q + uzp for the planes the screen needs and bic + str for the flags model
   66-70 cycles a zero step against 74) is bound by the FP pipe where it fogs: four channels'

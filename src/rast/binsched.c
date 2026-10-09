@@ -42,7 +42,8 @@
  * The simulator's figures (as above; the queue on a core per thread, against DraStic's fixed sets and mean thread):
  * one worker takes the slowest thread from 1.19 to 0.88 of DraStic's mean thread on S7 at 2x and 3x and from 1.07 to
  * 0.82 on L4 at 2x, -23 to -26%, if the fourth core is free: off until a device A/B shows it is (an audio or display
- * thread there would share it).
+ * thread there would share it). RAST_WORKERS=-1: one worker, used while it pays (wk_ctl_frame: windows of frames
+ * with and without it, by the update's wall time).
  *
  * RAST_SCHED=0: DraStic's fixed sets. RAST_SCHEDSTATS=1 (or N: every N frames, else 300): the threads' work per frame
  * from each bin's thread CPU time: the mean thread; the slowest thread with the fixed sets, with the queue's order on
@@ -78,6 +79,7 @@ static uint8_t order[NBINS];            /* this frame's claim order: by t_last, 
 static uint64_t t_last[NBINS];          /* atomic: each bin's last render time (counter ticks) */
 static unsigned long errs;
 static unsigned nworkers;               /* RAST_WORKERS (below) */
+static int wk_auto, wk_frame;           /* RAST_WORKERS=-1: the workers when they pay (wk_ctl); this frame's choice */
 
 static inline uint64_t ticks(void) {
     uint64_t t;
@@ -180,7 +182,8 @@ static double split_makespan(const uint8_t *own, unsigned n) {      /* each set 
 }
 
 static void stats_frame(void) {
-    unsigned n = st_n, nq = n + (st_dyn ? nworkers : 0), m = MASK(__atomic_load_n(&claimed, __ATOMIC_RELAXED));
+    unsigned n = st_n, nq = n + (st_dyn && wk_frame ? nworkers : 0);
+    unsigned m = MASK(__atomic_load_n(&claimed, __ATOMIC_RELAXED));
     double wall = (double)(mono_ns() - st_wall0);
     if (!n || n > NBINS || m != (1u << NBINS) - 1) { acc.skipped++; return; }
     double fixed[NBINS] = { 0 }, cl[NBINS] = { 0 }, tot = 0, mb = 0, mf = 0, mc = 0;
@@ -230,6 +233,28 @@ static void hash_frame(const uint8_t *sys) {
     fprintf(stderr, "[sched] frame %lu hash %016llx\n", n++, (unsigned long long)h);
 }
 
+/* ---- RAST_WORKERS=-1: the workers when they pay ----
+ * Windows of WK_WIN rendered frames with the workers and without, by turns, compare the update's mean wall time
+ * (sched_frame_begin to sched_frame_end, counter ticks: DraStic's texture cache, binning, the render and the gap
+ * passes); the faster one then runs for WK_KEEP windows before the next pair. A busy fourth core shows as slower
+ * frames with the workers, a free one as faster. */
+#define WK_WIN 30
+#define WK_KEEP 8
+static struct { uint64_t t0, sum[2]; unsigned n, win, keep; int on, best; unsigned long chosen[2]; } wk_ctl;
+static void wk_ctl_frame(void) {
+    wk_ctl.sum[wk_ctl.on] += ticks() - wk_ctl.t0;
+    if (++wk_ctl.n < WK_WIN) return;
+    wk_ctl.n = 0;
+    if (wk_ctl.keep) { if (!--wk_ctl.keep) { wk_ctl.on = 1; wk_ctl.sum[0] = wk_ctl.sum[1] = 0; } return; }
+    if (wk_ctl.on) { wk_ctl.on = 0; return; }                  /* the pair's first window was with them */
+    wk_ctl.best = wk_ctl.on = wk_ctl.sum[1] < wk_ctl.sum[0];   /* both windows done: keep the faster */
+    wk_ctl.chosen[wk_ctl.best]++;
+    wk_ctl.keep = WK_KEEP;
+    if (stats) fprintf(stderr, "[sched] workers: %s (mean update %llu ticks with them, %llu without; chosen %lu times, "
+                       "not %lu)\n", wk_ctl.best ? "on" : "off", (unsigned long long)(wk_ctl.sum[1] / WK_WIN),
+                       (unsigned long long)(wk_ctl.sum[0] / WK_WIN), wk_ctl.chosen[1], wk_ctl.chosen[0]);
+}
+
 /* ---- the queue ---- */
 void sched_frame_begin(void) {
     if (stats) {
@@ -246,6 +271,8 @@ void sched_frame_begin(void) {
     for (unsigned b = 0; b < NBINS; b++) t[b] = __atomic_load_n(&t_last[b], __ATOMIC_RELAXED);
     lpt_order(t, order);
     if (stats) memcpy(st_order, order, NBINS);
+    wk_frame = nworkers && (!wk_auto || wk_ctl.on);
+    wk_ctl.t0 = ticks();
     __atomic_store_n(&in_update, 1, __ATOMIC_RELEASE);  /* the helpers see it after DraStic's mutex hand-off */
 }
 
@@ -257,6 +284,7 @@ void sched_frame_end(const uint8_t *sys) {
     if (dyn && m && m != (1u << NBINS) - 1 && __atomic_fetch_add(&errs, 1, __ATOMIC_RELAXED) < 20)
         fprintf(stderr, "[sched] frame's bins claimed %03x: some bin not rendered\n", m);
     if (stats && m) stats_frame();
+    if (wk_auto && dyn && m == (1u << NBINS) - 1) wk_ctl_frame();
     __atomic_store_n(&in_update, 0, __ATOMIC_RELAXED);
 }
 
@@ -344,7 +372,7 @@ void sched_start(sched_it *it, const uint8_t *ctx, int allow_dyn) {
     it->dyn = allow_dyn && it->stride && __atomic_load_n(&in_update, __ATOMIC_ACQUIRE);
     it->gen = wk_self ? wk_self_gen : qgen;
     if (wk_self) it->dyn = 2;
-    else if (it->dyn && nworkers && __atomic_load_n(&wk_gen, __ATOMIC_RELAXED) != it->gen && !threaded_3d(ctx))
+    else if (it->dyn && wk_frame && __atomic_load_n(&wk_gen, __ATOMIC_RELAXED) != it->gen && !threaded_3d(ctx))
         wake_workers(ctx, it->gen);
     if (stats) {
         if (!wk_self) __atomic_store_n(&st_n, it->stride, __ATOMIC_RELAXED);
@@ -369,8 +397,9 @@ int sched_next(sched_it *it) {
             unsigned c = order[it->k++];
             if (!(__atomic_fetch_or(&claimed, 1ull << c, __ATOMIC_RELAXED) & 1ull << c)) b = (int)c;
         }
-        /* with workers: return when every bin is finished */
-        if (b < 0 && nworkers) wait_done();
+        /* with workers (woken for this frame by its first thread, before any thread got here): return when every bin
+         * is finished */
+        if (b < 0 && nworkers && __atomic_load_n(&wk_gen, __ATOMIC_RELAXED) == it->gen) wait_done();
     } else if (it->dyn) {
         /* a worker: the same by compare-and-swap, while the frame is the one it was woken for */
         uint64_t w = __atomic_load_n(&claimed, __ATOMIC_ACQUIRE);
@@ -406,5 +435,7 @@ void sched_init(void (*render)(uint8_t *ctx)) {
     worker_render = render;
     e = getenv("DSFLIP_RAST_WORKERS");
     if (!e) e = getenv("RAST_WORKERS");
-    if (e && sched_mode && render) nworkers = atoi(e) < 0 ? 0 : atoi(e) > 4 ? 4 : (unsigned)atoi(e);
+    if (e && sched_mode && render) nworkers = atoi(e) < 0 ? 1 : atoi(e) > 4 ? 4 : (unsigned)atoi(e);
+    wk_auto = e && atoi(e) < 0;
+    wk_ctl.on = 1;
 }
