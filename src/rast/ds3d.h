@@ -44,9 +44,14 @@
 #define SYS_BINS_OPAQUE 0x2856c0    /* [12] { u16 poly[0x800]; u32 count; } */
 #define SYS_BINS_TRANSL 0x2916f0
 #define BIN_LIST_SIZE   0x1004
+/* the edge marking gap buffers, slot g = the boundary between bins g and g + 1 (spec/resolve.c): attributes 11 x 0x2000
+ * (lines 30, 31 of bin g, lines 0, 1 of bin g + 1), colours 11 x 0x1000 (line 31 of bin g, line 0 of bin g + 1) */
+#define SYS_ATTR_GAPS   0x32db40
+#define SYS_COLOR_GAPS  0x343b40
 
 /* geometry state; buf = the render-side buffer of the double-buffered polygon/vertex RAM */
 #define GEOM_SWAP_BUF   0x9ac0      /* u8: geometry-side buffer; render side is ^1 */
+#define GEOM_SORT_MODE  0x9acc      /* u8: bit 0 = translucent polygons in their own order (SWAP_BUFFERS bit 0), not y-sorted */
 /* the geometry side's clip-space vertex arrays and viewport (geometry_perspective_apply_hires_asm's inputs) */
 #define GEOM_VTX_COUNT  0x64c       /* u32 */
 #define GEOM_CLIP_X     0x17f0      /* s32[1568] clip x (screen x after the transform) */

@@ -10,4 +10,5 @@ void comp_bin(uint8_t *sys, unsigned bin, int count);   /* the bin's output bloc
 /* or, for a resolve that computes them (res2.c): the bin's entries (0: no table), then comp_bin_done() */
 int comp_bin_table(uint8_t *sys, unsigned bin, uint8_t (**bits)[32], uint8_t **flags);
 void comp_bin_done(void);
+extern void (*comp_uf4_done)(uint8_t *sys);             /* after an update_frame_3d_4x that rendered all bins (RAST_HRCHECK) */
 #endif

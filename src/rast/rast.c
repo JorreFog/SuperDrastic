@@ -372,6 +372,8 @@ __attribute__((constructor)) static void rast_init(void) {
         orig_persp = (void (*)(uint8_t *, const uint32_t *, const uint32_t *))rast_hook(DS_PERSP_APPLY_HIRES, expect_persp, (void *)hook_persp);
         if (!orig_persp) { fprintf(stderr, "[rast] cannot hook the vertex transform, 3x off\n"); rast_scale = 2; }
         else if (dump_dir) hr_frame = calloc(768 * 576, 4);
+        /* RAST_HRCHECK=1: the rows the bins wrote against the frame after DraStic's gap passes (needs RAST_COMP=2) */
+        if (rast_scale == 3 && getenv("RAST_HRCHECK")) { hr_check = 1; comp_uf4_done = hr_check_frame; }
     }
     comp_init();                         /* the compositor's 3D visibility step (comp.c) */
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }

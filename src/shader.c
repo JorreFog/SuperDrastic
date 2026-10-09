@@ -3,13 +3,19 @@
 // ES passes the choice as DSHOOK_SHADER (what ROCKNIX's libdrastouch reads). "bilinear"/"none"/unset keeps
 // libdsflip's zero-copy path. Anything else: each DS screen buffer DraStic finished is drawn with that
 // fragment shader into a panel-sized (640x480) dumb buffer, which is then scanned out 1:1 instead of the
-// DraStic buffer. Same inputs as stock: u_texture (GL_LINEAR), u_texture_size = DS buffer size,
-// u_output_size = panel size, v_texcoord, SWIZ(); gl_FragCoord.y is flipped to count from the bottom,
-// as it does in stock's window, so pixel masks keep stock's phase.
+// DraStic buffer (or, for a shader that asks for a smaller buffer with a "dsflip-output:" line, see below, scaled up
+// to the panel by the display controller). Same inputs as stock: u_texture (GL_LINEAR), u_texture_size = DS buffer
+// size, u_output_size = the buffer's size (the panel's, unless the shader asked for less), v_texcoord, SWIZ();
+// gl_FragCoord.y is flipped to count from the bottom, as it does in stock's window, so pixel masks keep stock's phase.
 //
 // Shader sources: ROCKNIX's built-ins are read out of /usr/lib/libdrastouch.so at runtime (they are not
 // copied into this repo), recognised by their content. Other names load <name>.frag from DSFLIP_SHADER_DIR,
 // /storage/.config/drastic/shaders (the files the stock path uses), or shaders/ beside libdsflip.so.
+//
+// The in-game menu can switch to another shader while the game runs (shader_switch, on the shader worker's thread
+// between frames): the new program is compiled first and replaces the old one only if it links, and only when it draws
+// into buffers of the size this session made (a "dsflip-output:" that differs needs a restart). "Off" in a session that
+// started with a shader is a plain copy (the GPU still draws; zero-copy needs a restart).
 //
 // GL runs only on the presenter thread, in a surfaceless context (it renders only into imported dumb buffers).
 // The RG DS's GPU runs ARM's libmali (mali_kbase, /dev/mali0; there is no DRM render node), so libmali's EGL in
@@ -23,6 +29,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <xf86drm.h>
 #include <drm_fourcc.h>
 
@@ -54,6 +61,7 @@ static EGLint (*eglDupNativeFenceFDANDROID)(EGLDisplay, void *);
 GLFN(GLuint, glCreateShader, GLenum) GLFN(void, glShaderSource, GLuint, GLsizei, const GLchar *const *, const GLint *)
 GLFN(void, glCompileShader, GLuint) GLFN(void, glGetShaderiv, GLuint, GLenum, GLint *)
 GLFN(void, glGetShaderInfoLog, GLuint, GLsizei, GLsizei *, GLchar *) GLFN(GLuint, glCreateProgram, void)
+GLFN(void, glDeleteProgram, GLuint) GLFN(void, glDeleteShader, GLuint)
 GLFN(void, glAttachShader, GLuint, GLuint) GLFN(void, glBindAttribLocation, GLuint, GLuint, const GLchar *)
 GLFN(void, glLinkProgram, GLuint) GLFN(void, glGetProgramiv, GLuint, GLenum, GLint *)
 GLFN(void, glGetProgramInfoLog, GLuint, GLsizei, GLsizei *, GLchar *) GLFN(void, glUseProgram, GLuint)
@@ -115,14 +123,51 @@ static GLuint prog; static GLint u_tex, u_tsize, u_osize, u_fch;
  * means the largest whole multiple of 256x192 that fits the panel, centred: 512x384 at 64,48 on the RG DS's 640x480,
  * all of it on the RG DS Plus's 1024x768 (4x) */
 static int vp[4], vp_integer;
+/* a shader may draw into a buffer smaller than the panel and leave the rest of the scaling to the display controller
+ * (the VOP2 scales any plane, bilinear, for free: DraStic's own 512x384 buffers reach the panel that way), with a line
+ * "dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH" in its source. The buffer is never
+ * larger than the panel. ds-fsr says 3x: on the RG DS Plus (1024x768, 4x) it draws 768x576, 56% of the panel's
+ * pixels, where a panel-sized pass would take ~2.6x the RG DS's GPU time (both panels: more than a frame); on the
+ * RG DS (640x480) 3x doesn't fit and the panel size stays. DSFLIP_SHADER_OUTPUT (the same syntax, or "panel")
+ * overrides the shader's line, for trying other sizes on a device. */
+static int out_num, out_req_w, out_req_h;       /* the shader's line: N, or an explicit WxH */
+static int out_w, out_h;                        /* the output buffer in use (shader_output_size) */
+static int parse_output(const char *s, int *n, int *w, int *h) {
+    int a, b; char c;
+    if (!strncmp(s, "panel", 5)) { *n = 0; *w = *h = 0; return 1; }
+    if (sscanf(s, "%dx%d", &a, &b) == 2 && a > 0 && b > 0) { *n = 0; *w = a; *h = b; return 1; }
+    if (sscanf(s, "%d%c", &a, &c) == 2 && c == 'x' && a > 0) { *n = a; *w = *h = 0; return 1; }
+    return 0;
+}
+/* the size of the buffers the shader draws into, for a pw x ph panel; 1 if smaller than the panel (scaled by the
+ * display controller). After shader_init; the viewport mapping below uses it too */
+static int last_pw, last_ph;                    /* the panel size it was last asked for */
+static void output_for(int n, int ow, int oh, int pw, int ph, int *w, int *h);
+int shader_output_size(int *w, int *h, int pw, int ph) {
+    last_pw = pw; last_ph = ph;
+    output_for(out_num, out_req_w, out_req_h, pw, ph, &out_w, &out_h);
+    *w = out_w; *h = out_h;
+    return out_w != pw || out_h != ph;
+}
+/* the buffer size for a shader's "dsflip-output:" (n, or ow x oh; 0: none) on a pw x ph panel */
+static void output_for(int n, int ow, int oh, int pw, int ph, int *w, int *h) {
+    const char *e = getenv("DSFLIP_SHADER_OUTPUT");
+    if (e && *e && !parse_output(e, &n, &ow, &oh)) SLOG("[shader] DSFLIP_SHADER_OUTPUT \"%s\" not understood (Nx, WxH or panel): ignored\n", e);
+    if (n > 0) { ow = 256 * n; oh = 192 * n; }
+    if (ow <= 0 || oh <= 0 || ow > pw || oh > ph) { ow = pw; oh = ph; }   /* no fit: the panel itself */
+    *w = ow; *h = oh;
+}
 int shader_viewport(int *v, int pw, int ph) {
+    int ow = out_w > 0 ? out_w : pw, oh = out_h > 0 ? out_h : ph;   /* the shader's rectangle is in its buffer's pixels */
+    int r[4] = { vp[0], vp[1], vp[2], vp[3] };
     if (vp_integer) {
-        int k = pw / 256 < ph / 192 ? pw / 256 : ph / 192; if (k < 1) k = 1;
-        vp[2] = 256 * k; vp[3] = 192 * k; vp[0] = (pw - vp[2]) / 2; vp[1] = (ph - vp[3]) / 2;
-        if (vp[2] == pw && vp[3] == ph) return 0;       /* fills the panel: nothing to map */
+        int k = ow / 256 < oh / 192 ? ow / 256 : oh / 192; if (k < 1) k = 1;
+        r[2] = 256 * k; r[3] = 192 * k; r[0] = (ow - r[2]) / 2; r[1] = (oh - r[3]) / 2;
+        if (r[2] == ow && r[3] == oh) return 0;         /* fills the buffer, so the panel: nothing to map */
     }
-    if (vp[2] <= 0 || vp[3] <= 0) return 0;
-    for (int i = 0; i < 4; i++) v[i] = vp[i];
+    if (r[2] <= 0 || r[3] <= 0) return 0;
+    /* in panel pixels (a buffer smaller than the panel is scaled up to it) */
+    v[0] = r[0] * pw / ow; v[1] = r[1] * ph / oh; v[2] = r[2] * pw / ow; v[3] = r[3] * ph / oh;
     return 1;
 }
 static int drm_fd;
@@ -229,10 +274,133 @@ static gimg *image_for(uint32_t handle, int w, int h, int pitch, uint64_t gen, i
 }
 
 /* ---- public ---- */
+/* menu.c: the shader picked for this game in the in-game menu, if the frontend's setting is still the one it was
+ * picked over (weak: tools/shtest.c has no menu) */
+__attribute__((weak)) const char *menu_shader_pick(const char *frontend);
 const char *shader_name(void) {
     const char *s = getenv("DSFLIP_SHADER"); if (!s) s = getenv("DSHOOK_SHADER");
+    if (menu_shader_pick) s = menu_shader_pick(s);
     if (!s || !*s || !strcmp(s, "none") || !strcmp(s, "bilinear")) return 0;
     return s;
+}
+
+/* the shader folders: DSFLIP_SHADER_DIR, ROCKNIX's DraStic shader folder, then shaders/ beside libdsflip.so (the
+ * standalone package's layout) */
+static int shader_dirs(char dirs[3][512]) {
+    int nd = 0;
+    const char *sdir = getenv("DSFLIP_SHADER_DIR");
+    if (sdir && *sdir) snprintf(dirs[nd++], 512, "%s", sdir);
+    snprintf(dirs[nd++], 512, "/storage/.config/drastic/shaders");
+    Dl_info di;
+    if (dladdr((void *)shader_dirs, &di) && di.dli_fname && strrchr(di.dli_fname, '/'))
+        snprintf(dirs[nd++], 512, "%.*s/shaders", (int)(strrchr(di.dli_fname, '/') - di.dli_fname), di.dli_fname);
+    return nd;
+}
+/* a plain copy, for "Off" in a session that started with a shader */
+static const char *plain_fs = "precision mediump float;\nuniform sampler2D u_texture;\nvarying vec2 v_texcoord;\n"
+    "void main() { gl_FragColor = SWIZ(texture2D(u_texture, v_texcoord)); }\n";
+/* compile and link shader `name` (0: the plain copy) into *out, with its viewport and output lines in *lines
+ * (vp[4], vp_integer, out_num, out_req_w, out_req_h); 0 if it can't be used. Nothing global changes here. */
+typedef struct { int vp[4], vp_integer, out_num, out_req_w, out_req_h; } shlines;
+static int compile_named(const char *name, GLuint *out, shlines *L) {
+    char path[600] = "", dirs[3][512]; size_t n;
+    int nd = shader_dirs(dirs);
+    memset(L, 0, sizeof *L);
+    char *fs = name ? drastouch_source(name, 0) : strdup(plain_fs), *vs = name ? drastouch_source(name, 1) : 0;
+    const char *from = name ? "libdrastouch" : "built in";
+    for (int i = 0; i < nd && !fs; i++) {
+        snprintf(path, sizeof path, "%s/%s.frag", dirs[i], name);
+        fs = slurp(path, &n); from = path;
+    }
+    if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s.frag in the shader folders)\n", name, name); return 0; }
+    { const char *m = strstr(fs, "dsflip-viewport:"); char word[16];
+      if (m && sscanf(m + 16, "%d %d %d %d", &L->vp[0], &L->vp[1], &L->vp[2], &L->vp[3]) == 4)
+          SLOG("[shader] draws the DS screen at %d,%d %dx%d of the panel (touch follows)\n", L->vp[0], L->vp[1], L->vp[2], L->vp[3]);
+      else if (m && sscanf(m + 16, "%15s", word) == 1 && !strcmp(word, "integer")) {
+          L->vp_integer = 1; SLOG("[shader] draws the DS screen at a whole-number scale, centred (touch follows)\n");
+      } else L->vp[2] = L->vp[3] = 0; }
+    { const char *m = strstr(fs, "dsflip-output:"); char word[32];
+      if (m && sscanf(m + 14, "%31s", word) == 1) {
+          if (!parse_output(word, &L->out_num, &L->out_req_w, &L->out_req_h)) SLOG("[shader] dsflip-output \"%s\" not understood (Nx or WxH): the panel size\n", word);
+          else if (L->out_num > 0) SLOG("[shader] draws %dx the DS screen (%dx%d) where the panel is larger; the display controller scales the rest\n", L->out_num, 256 * L->out_num, 192 * L->out_num);
+          else if (L->out_req_w > 0) SLOG("[shader] draws %dx%d where the panel is larger; the display controller scales the rest\n", L->out_req_w, L->out_req_h);
+      } }
+    char *ffs = flip_fragcoord(fs);
+    const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
+                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
+                    : "#define SWIZ(c) (c)\nuniform highp float dsf_fch;\n"
+                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n";
+    GLuint v = compile(GL_VERTEX_SHADER, "", vs ? vs : default_vs), f = compile(GL_FRAGMENT_SHADER, pre, ffs);
+    free(fs); free(ffs); free(vs);
+    if (!v || !f) { if (v) glDeleteShader(v); if (f) glDeleteShader(f); return 0; }
+    GLuint pg = glCreateProgram();
+    glAttachShader(pg, v); glAttachShader(pg, f);
+    glBindAttribLocation(pg, 0, "a_position"); glBindAttribLocation(pg, 1, "a_texcoord");
+    glLinkProgram(pg);
+    glDeleteShader(v); glDeleteShader(f);              /* (freed with the program) */
+    GLint okl = 0; glGetProgramiv(pg, GL_LINK_STATUS, &okl);
+    if (!okl) { char log[1024] = ""; glGetProgramInfoLog(pg, sizeof log, 0, log); SLOG("[shader] link failed: %s\n", log); glDeleteProgram(pg); return 0; }
+    SLOG("[shader] \"%s\" from %s\n", name ? name : "plain copy", from);
+    *out = pg;
+    return 1;
+}
+/* make pg the program in use, with its lines */
+static void use_program(GLuint pg, const shlines *L) {
+    prog = pg;
+    memcpy(vp, L->vp, sizeof vp); vp_integer = L->vp_integer;
+    out_num = L->out_num; out_req_w = L->out_req_w; out_req_h = L->out_req_h;
+    glUseProgram(prog);
+    u_tex = glGetUniformLocation(prog, "u_texture"); u_tsize = glGetUniformLocation(prog, "u_texture_size");
+    u_osize = glGetUniformLocation(prog, "u_output_size"); u_fch = glGetUniformLocation(prog, "dsf_fch");
+    glUniform1i(u_tex, 0);
+    glDisable(GL_BLEND); glDisable(GL_DITHER);
+}
+static int build(const char *name, GLuint *out) {
+    shlines L; GLuint pg;
+    if (!compile_named(name, &pg, &L)) return 0;
+    use_program(pg, &L); *out = pg;
+    return 1;
+}
+/* the in-game menu's switch (on the shader worker's thread, between frames): name, or 0 for a plain copy. 0 done,
+ * -1 it doesn't compile (the old one stays), -2 it wants buffers of another size than this session's (a restart) */
+int shader_switch(const char *name) {
+    shlines L; GLuint pg;
+    if (!compile_named(name, &pg, &L)) return -1;
+    int w, h;
+    output_for(L.out_num, L.out_req_w, L.out_req_h, last_pw, last_ph, &w, &h);
+    if (last_pw && (w != out_w || h != out_h)) {
+        SLOG("[shader] \"%s\" draws %dx%d, this session's buffers are %dx%d: from the next start\n", name ? name : "plain copy", w, h, out_w, out_h);
+        glDeleteProgram(pg); glUseProgram(prog);
+        return -2;
+    }
+    GLuint old = prog;
+    use_program(pg, &L);
+    glDeleteProgram(old);
+    return 0;
+}
+/* the shaders there are to pick from: ROCKNIX's built-ins (when libdrastouch.so is there) and every .frag in the
+ * shader folders, sorted, without repeats; up to max names */
+int shader_list(char (*names)[48], int max) {
+    static const char *const builtin[] = { "lcd1x-nds-color", "lcd3x", "quilez", "scanlines", "sharp-bilinear", "sharp-shimmerless" };
+    int n = 0;
+    if (!access("/usr/lib/libdrastouch.so", R_OK))
+        for (size_t i = 0; i < sizeof builtin / sizeof *builtin && n < max; i++) snprintf(names[n++], 48, "%s", builtin[i]);
+    char dirs[3][512]; int nd = shader_dirs(dirs);
+    for (int d = 0; d < nd; d++) {
+        DIR *dp = opendir(dirs[d]); struct dirent *e;
+        while (dp && (e = readdir(dp)) && n < max) {
+            size_t l = strlen(e->d_name);
+            if (l < 6 || l - 5 >= 48 || strcmp(e->d_name + l - 5, ".frag")) continue;
+            char nm[48]; snprintf(nm, sizeof nm, "%.*s", (int)(l - 5), e->d_name);
+            int dup = 0; for (int k = 0; k < n; k++) dup |= !strcmp(names[k], nm);
+            if (!dup) snprintf(names[n++], 48, "%s", nm);
+        }
+        if (dp) closedir(dp);
+    }
+    for (int i = 1; i < n; i++) for (int j = i; j > 0 && strcmp(names[j - 1], names[j]) > 0; j--) {
+        char t[48]; memcpy(t, names[j], 48); memcpy(names[j], names[j - 1], 48); memcpy(names[j - 1], t, 48);
+    }
+    return n;
 }
 
 /* on the presenter thread; returns 0 if the shader can't be used (the caller stays zero-copy) */
@@ -257,7 +425,7 @@ int shader_init(int fd, const char *name) {
     *(void **)&eglDupNativeFenceFDANDROID = eglGetProcAddress("eglDupNativeFenceFDANDROID");
 #define G(n) if (!(*(void **)&n = dlsym(gl, #n))) { SLOG("[shader] missing " #n "\n"); return 0; }
     G(glCreateShader) G(glShaderSource) G(glCompileShader) G(glGetShaderiv) G(glGetShaderInfoLog) G(glCreateProgram)
-    G(glAttachShader) G(glBindAttribLocation) G(glLinkProgram) G(glGetProgramiv) G(glGetProgramInfoLog) G(glUseProgram)
+    G(glDeleteProgram) G(glDeleteShader) G(glAttachShader) G(glBindAttribLocation) G(glLinkProgram) G(glGetProgramiv) G(glGetProgramInfoLog) G(glUseProgram)
     G(glGetUniformLocation) G(glUniform1i) G(glUniform1f) G(glUniform2f) G(glGenTextures) G(glDeleteTextures)
     G(glBindTexture) G(glTexParameteri) G(glActiveTexture) G(glGenFramebuffers) G(glDeleteFramebuffers)
     G(glBindFramebuffer) G(glFramebufferTexture2D) G(glCheckFramebufferStatus) G(glViewport) G(glVertexAttribPointer)
@@ -287,49 +455,8 @@ int shader_init(int fd, const char *name) {
     /* upload path: DraStic's XRGB8888 is B,G,R,X in memory; BGRA uploads need no swizzle in the shader */
     const char *gx = (const char *)glGetString(0x1F03 /* GL_EXTENSIONS */);
     up_fmt = gx && strstr(gx, "GL_EXT_texture_format_BGRA8888") ? 0x80E1 /* GL_BGRA_EXT */ : 0x1908 /* GL_RGBA */;
-    /* .frag files: DSFLIP_SHADER_DIR, ROCKNIX's DraStic shader folder, then shaders/ beside libdsflip.so (the
-     * standalone package's layout) */
-    char path[600] = "", dirs[3][512]; size_t n; int nd = 0;
-    const char *sdir = getenv("DSFLIP_SHADER_DIR");
-    if (sdir && *sdir) snprintf(dirs[nd++], sizeof dirs[0], "%s", sdir);
-    snprintf(dirs[nd++], sizeof dirs[0], "/storage/.config/drastic/shaders");
-    Dl_info di;
-    if (dladdr((void *)shader_init, &di) && di.dli_fname && strrchr(di.dli_fname, '/'))
-        snprintf(dirs[nd++], sizeof dirs[0], "%.*s/shaders", (int)(strrchr(di.dli_fname, '/') - di.dli_fname), di.dli_fname);
-    char *fs = drastouch_source(name, 0), *vs = drastouch_source(name, 1);
-    const char *from = "libdrastouch";
-    for (int i = 0; i < nd && !fs; i++) {
-        snprintf(path, sizeof path, "%s/%s.frag", dirs[i], name);
-        fs = slurp(path, &n); from = path;
-    }
-    if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s.frag in the shader folders)\n", name, name); return 0; }
-    { const char *m = strstr(fs, "dsflip-viewport:"); char word[16];
-      vp_integer = 0;
-      if (m && sscanf(m + 16, "%d %d %d %d", &vp[0], &vp[1], &vp[2], &vp[3]) == 4)
-          SLOG("[shader] draws the DS screen at %d,%d %dx%d of the panel (touch follows)\n", vp[0], vp[1], vp[2], vp[3]);
-      else if (m && sscanf(m + 16, "%15s", word) == 1 && !strcmp(word, "integer")) {
-          vp_integer = 1; SLOG("[shader] draws the DS screen at a whole-number scale, centred (touch follows)\n");
-      } else vp[2] = vp[3] = 0; }
-    char *ffs = flip_fragcoord(fs);
-    const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
-                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
-                    : "#define SWIZ(c) (c)\nuniform highp float dsf_fch;\n"
-                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n";
-    GLuint v = compile(GL_VERTEX_SHADER, "", vs ? vs : default_vs), f = compile(GL_FRAGMENT_SHADER, pre, ffs);
-    free(fs); free(ffs); free(vs);
-    if (!v || !f) return 0;
-    prog = glCreateProgram();
-    glAttachShader(prog, v); glAttachShader(prog, f);
-    glBindAttribLocation(prog, 0, "a_position"); glBindAttribLocation(prog, 1, "a_texcoord");
-    glLinkProgram(prog);
-    GLint okl = 0; glGetProgramiv(prog, GL_LINK_STATUS, &okl);
-    if (!okl) { char log[1024] = ""; glGetProgramInfoLog(prog, sizeof log, 0, log); SLOG("[shader] link failed: %s\n", log); return 0; }
-    glUseProgram(prog);
-    u_tex = glGetUniformLocation(prog, "u_texture"); u_tsize = glGetUniformLocation(prog, "u_texture_size");
-    u_osize = glGetUniformLocation(prog, "u_output_size"); u_fch = glGetUniformLocation(prog, "dsf_fch");
-    glUniform1i(u_tex, 0);
-    glDisable(GL_BLEND); glDisable(GL_DITHER);
-    SLOG("[shader] \"%s\" from %s, EGL %d.%d (%s%s, %s display)\n", name, from, maj, min, *dir ? dir : "system ", "libEGL", how);
+    if (!build(name, &prog)) return 0;
+    SLOG("[shader] EGL %d.%d (%s%s, %s display)\n", maj, min, *dir ? dir : "system ", "libEGL", how);
     return 1;
 }
 

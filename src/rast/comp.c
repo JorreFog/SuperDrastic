@@ -196,6 +196,7 @@ int comp_bin_table(uint8_t *sys, unsigned bin, uint8_t (**bits)[32], uint8_t **f
 }
 void comp_bin_done(void) { __atomic_fetch_add(&bins_done, 1, __ATOMIC_RELAXED); }
 
+void (*comp_uf4_done)(uint8_t *sys);
 static void hook_uf4(uint8_t *sys, uint32_t skip) {
     uintptr_t b = (uintptr_t)sys + SYS_FRAMEBUF;
     if (__atomic_load_n(&fb0, __ATOMIC_RELAXED) != b) { invalidate_all(); __atomic_store_n(&fb0, b, __ATOMIC_RELAXED); }
@@ -208,6 +209,7 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
     unsigned long n0 = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE);
     orig_uf4(sys, skip);
     unsigned long n = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE) - n0;
+    if (comp_uf4_done && n == NBINS) comp_uf4_done(sys);
     uint8_t *o = PTR(sys, SYS_OUTPUT), *last = PTR(sys, SYS_LAST);
     int so = slot_of(o), sl = slot_of(last);
     if (so < 0) { invalidate_all(); return; }

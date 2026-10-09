@@ -222,10 +222,10 @@ static void *gov_thread(void *a) {
         if (!dt) continue;
         if (boost_until > t || boosted) {               /* a savestate: the top clock, nothing counts meanwhile */
             if (boost_until > t) {
-                if (!boosted) { boosted = cur; dsflip_log("[cpugov] savestate: %d MHz until it's done\n", hwmax_ / 1000); }
+                if (!boosted) { boosted = cur; dsflip_log("[cpugov] boost (a savestate, the menu, the volume keys): %d MHz until it's done\n", hwmax_ / 1000); }
                 cur = hwmax_;
             } else {
-                dsflip_log("[cpugov] savestate done: back to %d MHz\n", boosted / 1000);
+                dsflip_log("[cpugov] boost done: back to %d MHz\n", boosted / 1000);
                 if (wr_int(POL "scaling_max_freq", boosted) == 0) cur = boosted;
                 boosted = 0;
                 for (int k = 0; k < FPS_WINDOWS; k++) { fps_t[k] = 0; peaks[k] = 0; }   /* the stall isn't this clock's */
@@ -333,7 +333,8 @@ void cpugov_start(void) {
     if (!pthread_create(&th, 0, gov_thread, 0)) pthread_setname_np(th, "dsf-cpugov");
 }
 
-/* DraStic is about to save or load a state (resume.c): the top clock now, for ms from now (extends a boost) */
+/* DraStic is about to save or load a state (resume.c), the menu is in use (menu.c), the volume keys are (volume.c):
+ * the top clock now, for ms from now (extends a boost) */
 void cpugov_boost(int ms) {
     if (!gov_on) return;
     struct timespec n; clock_gettime(CLOCK_MONOTONIC, &n);
