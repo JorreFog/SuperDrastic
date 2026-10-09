@@ -188,6 +188,23 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   1.43 M, S4 0.41 -> 0.37, S7 0.14 -> 0.12. The same span arrays as DraStic's walker (`t_walk.c`), the scene cycle's
   differing bins as DraStic's renderer's at every checkpoint reached (to 93600 with deferred shading), the
   compositor's checks 0 differ, S4 0 bins, the stress ROM's 9 in 7200, the single scenes as 94f9689's build.
+  Third round. The 2x fog computed the factors of ~4100 steps of 32 pixels a frame on S4 only to find them all 0 (82
+  modeled cycles a step): the pixels before the fog offset. A depth screen now finds most of them first: res2.c's
+  fog_zero_b2() derives once per bin, from the fog table, its deltas, the offset and the shift, a bound on the
+  attributes' depth byte (bits 16-23) at or below which every factor is 0 (its comment has the derivation; S4: the
+  steps before the offset), and a step whose fog-flagged pixels are all at or below it clears the flags without the
+  factors (its attribute ld4 issued with the colours', before the flag test). Fog and edge marking S4 at 2x, modeled
+  A55 cycles a frame: fog_line2x 0.78 M -> 0.60 M (the frame net of `[other]` 9.62 -> 9.42 M). `t_resolve.c`'s fx test
+  adds tables zero up to a small delta and depths in a band about the offset (a bound one too large fails it); S4's
+  frame diff 0 bins with the compositor's checks 0 differ, the scene cycle's bins as before. The 2x edge marking's
+  screen (edge_lines2x: ~5600 of ~6100 steps of 16 pixels of two lines a frame on S4 have no id edge) read the six
+  attribute blocks it compares by ld4 (~10 cycles of the load pipe each) for their top bytes alone: it now reads the
+  four lines' words by single ldr q (one asm block: clang pairs them into ldp q, 6 cycles each) and takes the top
+  bytes with uzp2, the right neighbours' plane the same shifted by one with the next pixel's byte; only a step with an
+  id edge loads the full planes by ld4. A skipped step 82 -> 61 modeled cycles; S4 at 2x: edge_lines2x 0.57 M -> 0.50
+  M cycles a frame, the frame net of `[other]` with both changes 9.62 -> 9.34 M. `t_resolve.c` (its rectangles of
+  polygon ids; a screen that drops the next pixel's id fails it), S4's frame diff 0 bins, the scene cycle as before to
+  55200 bins with the compositor's checks 0 differ.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -353,11 +370,17 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 ## Next
 
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
-- The 2x fog (`res2.c` fog_line2x, 0.78 M cycles a frame on S4 at IPC 0.57) is bound by the FP pipe: four channels'
+- The 2x fog (`res2.c` fog_line2x, 0.60 M cycles a frame on S4 after the depth screen; its four ld4 a step, 45
+  cycles, are now the largest part; ldr q + uzp for the planes the screen needs and bic + str for the flags model
+  66-70 cycles a zero step against 74) is bound by the FP pipe where it fogs: four channels'
   smull/smull2/shrn/shrn2 per 16 pixels and the weights' two tbl2. The attributes by ldr q + shrn instead of ld4 + zip
   models worse (0.89 -> 0.92 M). DraStic's gap passes (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog skips the
-  steps below the fog offset (Status); its edge marking could take res2.c's skip of the key compares (S4 2x: edge
-  marking 1.02 -> 0.57 M), and fog_line2x hr.c's depth test (its skip of steps whose factors are all 0 computes them).
+  steps below the fog offset when the table starts at 0 (Status); res2.c's fog_zero_b2() bound (any table, the offset
+  and the shift) carries over to hr.c's fog_line unchanged, and hr.c's edge marking could take res2.c's skip of the
+  key compares (S4 2x: edge marking 1.02 -> 0.57 -> 0.50 M with the top-byte screen, fog 0.89 -> 0.78 -> 0.60 M with
+  the depth screen). The 2x edge screen's skipped step (61 modeled cycles: 16 ldr q, 12 uzp2, two ext, the xors) is
+  near the issue limit; the next saving there is fewer loads: a bin's top-byte planes made once, as hr.c's
+  edge_tplanes does at 3x (each line is read by three steps).
 - The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight

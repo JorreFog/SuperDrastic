@@ -248,7 +248,8 @@ static void test_res2(int n) {
  * buffers and the attribute lines (the colour lines are not compared: res2.c fogs and marks them in place), with and
  * without the table; the table entries of the written half-rows vs the visibility port. Random contexts as setup()'s
  * (attributes with ties, few ids and depths, or polygon ids in rectangles; the fog flag random, or clear in whole
- * 32-pixel steps; fog tables (zero at small depths or everywhere: steps whose weights are all 0), fog
+ * 32-pixel steps; fog tables (zero at small depths or everywhere: steps whose weights are all 0; zero up to a small
+ * delta, with depths in a band about the fog offset: the depth screen's bound on both sides), fog
  * colours and offsets, DISP3DCNT's fog shift, the clear attribute and the edge colours random; fog on or off by the
  * context and system flags), every bin (bin 0's top line, bin 11's bottom line, the gap copies of the others). */
 static void test_fx(int n) {
@@ -280,6 +281,29 @@ static void test_fx(int n) {
             if (rnd(4) == 0) {                                  /* weights 0 at small depths, or everywhere */
                 int n0 = rnd(2) ? 64 : 1 + rnd(4);
                 for (int k = 0; k < 2; k++) memset(geom[k] + 0x9974, 0, n0), memset(geom[k] + 0x9994, 0, n0 < 32 ? n0 : 32);
+            }
+            if (rnd(3) == 0) {          /* the fog depth screen's bound (res2.c fog_zero_b2): table entries 0 up to a
+                                         * segment j with a small delta of either sign, depths in a band about the
+                                         * offset, so that steps' largest depths fall on both sides of the bound */
+                int j = rnd(3) ? rnd(4) : rnd(32), dl = rnd(4) ? 1 + rnd(12) : rnd(2) ? 0 : -1 - rnd(4);
+                uint8_t *t = geom[0] + 0x9974;
+                memset(t, 0, j + 1); memset(t + 32, 0, j);
+                t[32 + j] = (uint8_t)dl;
+                if (rnd(2) && j < 31) t[j + 1] = (uint8_t)dl;
+                memcpy(geom[1] + 0x9974, t, 64);
+                uint32_t off = (rnd(2) ? 0x6000 + rnd(0x800) : rnd(0x8000)) & 0x7fff, sh = rnd(16), o15 = rnd(2) << 15;
+                for (int k = 0; k < 2; k++) {
+                    *(uint16_t *)(geom[k] + 0x9aaa) = (uint16_t)(off | o15);
+                    *(uint32_t *)(sys[k] + 0x34eb40) = (*(uint32_t *)(sys[0] + 0x34eb40) & ~0xf00u) | sh << 8;
+                }
+                uint32_t *a = (uint32_t *)(ctx[0] + 0x10000);
+                int band = 1 << rnd(13), base = (int)off + (int)((j * 1024u + rnd(1024)) >> sh) - band / 2;
+                for (int i = 0; i < 32 * 512; i++) {
+                    int dd = base + (int)rnd(band);
+                    dd = dd < 0 ? 0 : dd > 0x7fff ? 0x7fff : dd;
+                    a[i] = (a[i] & 0xff0001ffu) | (uint32_t)dd << 9;
+                }
+                memcpy(ctx[1] + 0x10000, ctx[0] + 0x10000, 0x10000);
             }
             uint32_t bin = rnd(12), ob = bin * 0x10000;
             int tab = rnd(4) != 0;
