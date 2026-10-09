@@ -150,6 +150,12 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   The 3x edge marking's id screen (edge_lines) takes two blocks of 16 pixels a step while no block is forced (one max
   and branch for both; a pair that does not pass is taken a block at a time): S4 at 3x, edge_lines 0.63 M -> 0.55 M
   (a screened pair ~55 modeled cycles instead of ~68); `ut/hr_ab`'s polygon-like contexts fail mutants of it.
+  The NEON walker's interpolate_parameters (spec/edges_impl.h) takes its products as smull and add (clang made each a
+  mov of the base and an smlal): 29 -> 27 modeled cycles a step of 4 lines; stress ROM L4 at 3x,
+  hr_render_polygon_interpolate_edges 1.94 M -> 1.90 M (t_edges.c against DraStic's, `ut/hr_ab`: the same).
+  The four changes against the second round's profiles, net of `[other]` (whose share varies run to run, as does the
+  scenes' mix in shorter runs): S4 at 3x 18.80 -> 18.08 M a frame (fog -0.63, edge marking -0.08), S7 at 3x the
+  downsample -0.18 M a frame; 2x does not use hr.c (S4's frame diff 0 bins in 7200, the compositor's checks 0 differ).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering

@@ -231,10 +231,13 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_interpolate_parameters)(vtx_t **
         int32_t cnt = counts[e];
 #if EDGES_NEON
         /* 4 lines: s16 x s16 products + the u32 bases, bits 15-30 (shrn), interleaved as the halves of the words by
-         * zip1 and stored with str q (st2 models slower on the A55: 38 -> 28 cycles a step); b's words are b << 16 */
+         * zip1 and stored with str q (st2 models slower on the A55: 38 -> 28 cycles a step); b's words are b << 16.
+         * The products are smull and add (the empty asm keeps clang from making each a mov of the base and an smlal:
+         * the same sums, 29 -> 27 modeled cycles a step, the five products issuing back to back) */
         const uint32x4_t vs = vdupq_n_u32(sbase), vt = vdupq_n_u32(tbase), vr = vdupq_n_u32(cbase[0]);
         const uint32x4_t vg = vdupq_n_u32(cbase[1]), vb = vdupq_n_u32(cbase[2]);
-#define PAR(base, d) vshrn_n_u32(vaddq_u32(base, vreinterpretq_u32_s32(vmull_n_s16(q, d))), 15)
+#define PAR(base, d) ({ int32x4_t p_ = vmull_n_s16(q, d); __asm__("" : "+w"(p_)); \
+                        vshrn_n_u32(vaddq_u32(base, vreinterpretq_u32_s32(p_)), 15); })
         do {
             int16x4_t q = vld1_s16((const int16_t *)st);
             uint16x4_t s = PAR(vs, ds), t = PAR(vt, dt), r = PAR(vr, dc[0]), g = PAR(vg, dc[1]);
