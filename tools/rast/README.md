@@ -424,9 +424,13 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   bin (two halves of 16 lines on two threads) needs the resolve, whose edge marking and fog read the neighbour lines,
   across two contexts. On the device: how late the helpers start after DraStic wakes them (the queue absorbs it), and
   an A/B of `RAST_WORKERS=1` with threaded_3d=0 (frame times, and the audio): whether the fourth core is free.
+  `RAST_SCHEDSTATS=1`'s "update wall" is update_frame_3d_4x's wall time a frame (DraStic's texture cache and
+  binning, the render, the gap passes) on the device as in the simulator: with `RAST_SCHED=0`, 1, and 1 with
+  `RAST_WORKERS=1` it is the A/B's measure; its slowest-thread figures there are the device's own bins' times.
   `cpugov.c` sizes the clock by DraStic's busiest thread and the main thread's heaviest frame in CPU time: with the
   queue the emulation thread takes over the bins of helpers that start late (more CPU time, less waiting), with
-  workers it waits more and renders less; its figures shift with them.
+  workers it waits more and renders less; its figures shift with them. If the fourth core is free only at times, the
+  workers could decide for themselves: windows of frames with and without them, by the update's wall time.
 - The 2x fog (`res2.c` fog_line2x, 0.60 M cycles a frame on S4 after the depth screen; its four ld4 a step, 45
   cycles, are now the largest part; ldr q + uzp for the planes the screen needs and bic + str for the flags model
   66-70 cycles a zero step against 74) is bound by the FP pipe where it fogs: four channels'
