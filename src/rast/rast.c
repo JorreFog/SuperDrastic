@@ -2,7 +2,8 @@
  *
  * DraStic calls video_3d_render_bins_4x(ctx) once per render thread per frame. We patch its entry with a branch to
  * rast_render_bins(). RAST env: "off" leaves DraStic alone, "ours" renders with ours only, "diff" (development)
- * renders every bin with both, compares the resolved output and keeps DraStic's, logging any mismatch. */
+ * renders every bin with both, compares the resolved output and keeps DraStic's, logging any mismatch. Which bins a
+ * thread renders: binsched.c (claimed from the frame's queue, longest first; DraStic's fixed sets in diff mode). */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <link.h>
@@ -19,6 +20,7 @@
 #include "comp.h"
 #include "ds2d.h"
 #include "res2.h"
+#include "binsched.h"
 
 uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
@@ -117,16 +119,19 @@ static void stats_bin(uint8_t *ctx, uint8_t *sys) {
     __atomic_fetch_add(&st_covered, cov, __ATOMIC_RELAXED);
 }
 
-static void render_bins(uint8_t *ctx) {
+/* the thread's bins: DraStic's fixed set (first, first + stride, ...) or, when binsched.c's queue is open (dyn), the
+ * bins it claims from the frame's queue, longest first */
+static void render_bins(uint8_t *ctx, int dyn) {
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
-    unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride;
     unsigned buf = U8(geom, GEOM_SWAP_BUF) ^ 1;
     uint8_t *verts = geom + GEOM_VERTS + buf * GEOM_VERTS_BUF;
     uint8_t *opa = geom + GEOM_POLYS_OPA + buf * GEOM_POLYS_BUF, *trl = geom + GEOM_POLYS_TRL + buf * GEOM_POLYS_BUF;
     uint32_t ntrl = U32(geom, GEOM_TRL_COUNT + buf * GEOM_POLYS_BUF);
     f_begin_frame();
-    for (unsigned k = 0; k < nb; k++) {
-        unsigned bin = U8(ctx, CTX_FIRST_BIN) + k * stride, y0 = bin * 32;
+    sched_it it;
+    sched_start(&it, ctx, dyn);
+    for (int b; (b = sched_next(&it)) >= 0;) {
+        unsigned bin = (unsigned)b, y0 = bin * 32;
         clear_bin(ctx, sys, geom, y0);
         U64(ctx, CTX_LINEMASK) = 0xffffffffull;
         render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0, rast_defer && pipe_sel == 3 && !pdiff);
@@ -144,15 +149,17 @@ static void render_bins(uint8_t *ctx) {
 static pthread_mutex_t stat_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned long st_bins, st_bad, st_calls;
 
-static void diff_render_bins(uint8_t *ctx) {
+/* both renderers on the context's fixed bins (first, first + stride, ...); returns the differing ones */
+static unsigned long diff_bins(uint8_t *ctx, unsigned *nbp) {
     uint8_t *sys = PTR(ctx, CTX_SYS);
     unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride, first = U8(ctx, CTX_FIRST_BIN);
+    *nbp = nb;
     orig_render_bins(ctx);
     uint8_t *out = PTR(sys, SYS_OUTPUT);
     static __thread uint8_t *ref;
     if (!ref) ref = malloc(NBINS * BIN_BYTES);
     for (unsigned k = 0; k < nb; k++) { unsigned b = first + k * stride; memcpy(ref + b * BIN_BYTES, out + b * BIN_BYTES, BIN_BYTES); }
-    in_ours = 1; render_bins(ctx); in_ours = 0;
+    in_ours = 1; render_bins(ctx, 0); in_ours = 0;     /* the same fixed bins as DraStic's (binsched.c) */
     unsigned long bad = 0;
     for (unsigned k = 0; k < nb; k++) {
         unsigned b = first + k * stride;
@@ -169,6 +176,27 @@ static void diff_render_bins(uint8_t *ctx) {
             memcpy(out + b * BIN_BYTES, ref + b * BIN_BYTES, BIN_BYTES);
             comp_bin(sys, b, 0);        /* the block changed after render_bins computed its entries */
         }
+    }
+    return bad;
+}
+
+/* DraStic's fixed bins; or (RAST_SCHEDDIFF=1) the bins claimed from binsched.c's queue, each through both renderers with
+ * the context's first bin and stride set to that bin alone (DraStic's loop: bin first + k * stride for k < 12 /
+ * stride), restored after. The differing bins can then differ from the fixed sets' run where DraStic's own quirk
+ * pixels read scratch memory that another bin left (README, Status) */
+static void diff_render_bins(uint8_t *ctx) {
+    unsigned long bad = 0, nb = 0;
+    sched_it it;
+    sched_start(&it, ctx, sched_diff);
+    if (!it.dyn) { unsigned n; bad = diff_bins(ctx, &n); nb = n; }
+    else {
+        uint8_t first = U8(ctx, CTX_FIRST_BIN), stride = U8(ctx, CTX_BIN_STRIDE);
+        for (int b; (b = sched_next(&it)) >= 0;) {
+            unsigned n;
+            U8(ctx, CTX_FIRST_BIN) = (uint8_t)b; U8(ctx, CTX_BIN_STRIDE) = NBINS;
+            bad += diff_bins(ctx, &n); nb += n;
+        }
+        U8(ctx, CTX_FIRST_BIN) = first; U8(ctx, CTX_BIN_STRIDE) = stride;
     }
     pthread_mutex_lock(&stat_lock);
     st_calls++; st_bins += nb; st_bad += bad;
@@ -215,12 +243,20 @@ static void dump_frame(uint8_t *ctx) {
     fclose(f);
 }
 
+/* binsched.c's workers (RAST_WORKERS): the bin loop on a worker's own context, claiming */
+static void worker_render(uint8_t *ctx) {
+    in_ours = 1;
+    comp_bins_begin(PTR(ctx, CTX_SYS));
+    (rast_scale == 3 ? hr_render_bins : render_bins)(ctx, 1);
+    in_ours = 0;
+}
+
 static int print_frames;         /* RAST_FRAMES=1: the frame count every 10 frames (profiling runs) */
 static void hook_entry(uint8_t *ctx) {
     static __thread int named;
     if (!named) { named = 1; pthread_setname_np(pthread_self(), "rast-3d"); }  /* the performance log's per-thread CPU */
     comp_bins_begin(PTR(ctx, CTX_SYS));
-    if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; (rast_scale == 3 ? hr_render_bins : render_bins)(ctx); in_ours = 0; }
+    if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; (rast_scale == 3 ? hr_render_bins : render_bins)(ctx, 1); in_ours = 0; }
     if (dump_dir) dump_frame(ctx);
     if (print_frames && U8(ctx, CTX_FIRST_BIN) == 0) {
         static unsigned long n;
@@ -374,6 +410,7 @@ __attribute__((constructor)) static void rast_init(void) {
         if (!orig_persp) { fprintf(stderr, "[rast] cannot hook the vertex transform, 3x off\n"); rast_scale = 2; }
         else if (dump_dir) hr_frame = calloc(768 * 576, 4);
     }
+    sched_init(mode == 1 ? worker_render : 0);  /* the bins' queue (binsched.c; opened by comp.c's frame wrapper) */
     comp_init();                         /* the compositor's 3D visibility step (comp.c) */
     ds2d_init();                         /* DraStic's 2D scanline routines (ds2d.c) */
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }

@@ -24,7 +24,9 @@
  *     memcpy()s the last rendered frame (SYS_LAST) into SYS_OUTPUT. hook_uf4() wraps it: before, it invalidates
  *     the frame the call may write (the unpublished one with threaded_3d; the bins also invalidate SYS_OUTPUT when
  *     they start); after, it recomputes the 44 gap-row entries and validates the frame if all 12 bins ran, copies
- *     the source's table and validity if it copied, or restores the old validity if nothing was written.
+ *     the source's table and validity if it copied, or restores the old validity if nothing was written. Around
+ *     DraStic's function it also opens and closes the frame's bin queue, from which the render threads claim their
+ *     bins (binsched.c).
  *   - update_frame_3d_1x (1x frames, whose lines are also 0x400 apart) and reset_video_3d (memset): both
  *     invalidate every table, before and after.
  * Ordering: with threaded_3d=0, rendering (line 215) and compositing (line 192, or line by line) run one after the
@@ -65,6 +67,7 @@
 #include "compvis.h"
 #include "compfuse.h"
 #include "res2.h"
+#include "binsched.h"
 #include "spec/composite.h"
 
 #define U32(p, o) (*(uint32_t *)((uint8_t *)(p) + (o)))
@@ -206,7 +209,9 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
         for (int s = 0; s < 2; s++) if (s != p) set_valid(s, 0);
     }
     unsigned long n0 = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE);
+    sched_frame_begin();                                         /* the render threads' bin queue (binsched.c) */
     orig_uf4(sys, skip);
+    sched_frame_end(sys);
     unsigned long n = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE) - n0;
     uint8_t *o = PTR(sys, SYS_OUTPUT), *last = PTR(sys, SYS_LAST);
     int so = slot_of(o), sl = slot_of(last);

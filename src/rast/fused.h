@@ -48,7 +48,7 @@ void defer_poly(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, 
                 unsigned nlines, unsigned flags, uint8_t *v0);
 void defer_flush(const layout_t *L, uint8_t *ctx);
 /* hr.c: the 3x pipeline */
-void hr_render_bins(uint8_t *ctx);
+void hr_render_bins(uint8_t *ctx, int dyn);    /* dyn: claim bins from binsched.c's queue */
 void hr_vertices(uint8_t *geom, const uint32_t *recips, const uint32_t *shifts);
 extern int hr_vcheck;
 extern uint32_t *hr_frame;

@@ -14,7 +14,7 @@ O=$(mktemp -d)
 git -C "$R" show "${BASE:-450370b}:src/rast/hr.c" > "$O/hr_base.c" || exit 2
 # the base's headers beside it (its quoted includes look in its own directory first): without them the base side took
 # the worktree's spec/edges_impl.h, so a change to the NEON walker ran on both sides
-git -C "$R" ls-tree -r --name-only "${BASE:-450370b}" src/rast | grep '\.h$' | while read -r f; do
+git -C "$R" ls-tree -r --name-only --full-tree "${BASE:-450370b}" src/rast | grep '\.h$' | while read -r f; do
     mkdir -p "$O/$(dirname "${f#src/rast/}")"; git -C "$R" show "${BASE:-450370b}:$f" > "$O/${f#src/rast/}"
 done
 CC="clang --target=aarch64-linux-gnu --sysroot=$SIM/rtsys -O2 -mtune=cortex-a55 -Wall -Wno-unused-function -I$R"
