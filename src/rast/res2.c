@@ -464,3 +464,66 @@ int res2_resolve_fx(uint8_t *ctx, uint8_t *out, unsigned bin, unsigned m, uint8_
 #undef COL
 #undef ATT
 }
+
+/* ---- DraStic's edge-marking gap passes ----
+ * update_frame_3d_4x, with edge marking on, re-marks the bin boundary rows 32k-1 and 32k (k = 1..11) after the bins:
+ * the 2x bin resolves leave the attribute lines 30 and 31 of bin k-1 and 0 and 1 of bin k in a gap buffer (sys +
+ * 0x32db40 + (k-1) 0x2000) and the colour lines 31 and 0 in another (sys + 0x343b40 + (k-1) 0x1000), and per line the
+ * driver fogs the colour line in place (fog modes: the weights of its attribute line, then the modulate), identifies
+ * its edges against the lines above and below and marks it into the output row. This is that driver, as decompiled
+ * (video_3d_resolve_bin_edge_mark[_fog_{full,alpha}]_gaps_4x), calling DraStic's own leaf routines L with the same
+ * arguments in the same order and one 520-byte buffer for the weights and the edges as it has: the same bytes, in the
+ * output rows and in the gap buffers. comp.c installs it in place of the three, and skips it at 3x (see there). */
+void res2_gaps(uint8_t *vb, int fog, const res2_gap_leaves *L) {
+    uint8_t *sys = vb - 0x1056c0;
+    const uint8_t *geom = RDPTR(sys, 0x2c1748);
+    uint8_t *out = RDPTR(sys, 0x34eb58) + 0xf800;
+    const uint32_t clear = RD32(sys, 0x34eb4c), sh = (RD32(sys, 0x34eb40) >> 8) & 0xf;
+    const uint32_t params = sh | ((*(const uint16_t *)(geom + 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16;
+    uint8_t buf[520] __attribute__((aligned(16)));
+    const uint8_t *a = sys + 0x32db40;
+    uint8_t *k = sys + 0x343b40;
+    for (int g = 0; g < 11; g++, a += 0x2000, k += 0x1000, out += 0x10000)
+        for (int h = 0; h < 2; h++) {
+            const uint32_t *at = (const uint32_t *)(a + h * 0x800);
+            uint32_t *kc = (uint32_t *)(k + h * 0x800);
+            if (fog) {
+                L->weights(at + 0x200, buf, geom + 0x9974, params);
+                L->modulate[fog - 1](kc, kc, buf, RD32(geom, 0x9a9c));
+            }
+            L->identify(buf, at, at + 0x200, at + 0x400, clear);
+            L->mark(out + h * 0x800, kc, buf, geom + 0x99b4);
+        }
+}
+/* the same pass with res2.c's own stages (res2_resolve_fx's): per gap the two colour lines fogged in place by
+ * fog_line2x (the weights of the attribute line below each, as DraStic's driver: the gap buffers keep DraStic's
+ * fogged colours), then copied and the copies marked by edge_lines2x as one pair (the four attribute lines' top-byte
+ * planes made by edge_tplanes2x for its id screen), and the marked lines written to the output rows by res2_line_asm
+ * (its masked split is edge_mark's output, as in res2_resolve_fx; the table entries it computes are dropped: comp.c's
+ * update wrapper recomputes the gap rows' entries) */
+void res2_gaps_neon(uint8_t *vb, int fog) {
+    uint8_t *sys = vb - 0x1056c0;
+    const uint8_t *geom = RDPTR(sys, 0x2c1748), *table = geom + 0x9974, *ec = geom + 0x99b4;
+    uint8_t *out = RDPTR(sys, 0x34eb58) + 0xf800;
+    const uint32_t clear = RD32(sys, 0x34eb4c), sh = (RD32(sys, 0x34eb40) >> 8) & 0xf, fogc = RD32(geom, 0x9a9c);
+    const uint32_t params = sh | ((*(const uint16_t *)(geom + 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16;
+    const int zb = fog ? fog_zero_b2(table, params) : -1;
+    uint32_t ln[2][W2] __attribute__((aligned(64)));
+    uint8_t b[64] __attribute__((aligned(16)));
+    uint8_t *tp = tplanes2x();
+    for (int g = 0; g < 11; g++, out += 0x10000) {
+        const uint32_t *a = (const uint32_t *)(sys + 0x32db40 + g * 0x2000);      /* four attribute lines */
+        uint32_t *k = (uint32_t *)(sys + 0x343b40 + g * 0x1000);                  /* two colour lines */
+        if (fog) {
+            fog_line2x(k, a + W2, table, params, fogc, zb, fog == 1);
+            fog_line2x(k + W2, a + 2 * W2, table, params, fogc, zb, fog == 1);
+        }
+        memcpy(ln, k, sizeof ln);
+        edge_tplanes2x(tp, a, 4);
+        edge_lines2x(ln[0], ln[1], a, a + W2, a + 2 * W2, a + 3 * W2, tp, tp + W2, tp + 2 * W2, tp + 3 * W2, clear, ec);
+        for (int h = 0; h < 2; h++) {
+            uint32_t *e = (uint32_t *)(out + h * 0x800);
+            res2_line_asm(ln[h], e, e + 256, b, w8);
+        }
+    }
+}

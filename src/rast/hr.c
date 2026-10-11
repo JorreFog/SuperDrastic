@@ -607,6 +607,7 @@ static __attribute__((noinline)) void edge_lines(uint32_t *col0, uint32_t *col1,
  * ignores them (it reads the alpha as & 0x1f and replaces byte 3). The edge marking reads only the attribute lines and
  * each pixel's own colour, so marking the colour lines in place gives the same pixels as a separate output buffer. */
 static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
+    comp_hr_frame();                    /* (the bin boundary rows are this resolve's: DraStic's gap passes are skipped) */
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
     int edges = (d3 >> 5) & 1, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;

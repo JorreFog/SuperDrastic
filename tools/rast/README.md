@@ -337,6 +337,31 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   of the line below before the fog wrote it: the fog now runs a pair ahead), `t_resolve.c` (the drivers with fog and
   edge marking, every bin), S4's frame diff with the compositor's checks, the scene cycle's bins as DraStic's
   renderer's (to 48000 bins, 4147 tables and 3.08 M composited quarters checked, 0 differ).
+  Then a 3x bug: update_frame_3d_4x runs DraStic's edge-marking gap pass after the bins whenever edge marking is on,
+  at 3x too. At 2x it re-marks the bin boundary rows 32k-1 and 32k from gap buffers that the bin resolves fill
+  (DraStic's, then res2.c's); at 3x hr.c resolves those rows itself with each bin's neighbour lines and nothing fills
+  the gap buffers, so the pass overwrote the 22 rows with marks of stale data: in a game started at 3x, zeros, every
+  pixel of those rows transparent (measured on the fog and edge-marking scene S4: 11264 pixels a frame with alpha 0
+  there, none beside them; transparent lines every 32 output rows; 4f63ae7 had it too). The three gap passes (plain,
+  fog full, fog alpha-only) are replaced (`comp.c`; the plain one's fourth instruction is an adrp, so no trampoline)
+  by `res2.c`'s res2_gaps(): DraStic's driver as decompiled, calling DraStic's own leaf routines (fog weights and
+  modulate, edge identify and mark) in the same order with one 520-byte buffer, skipped once hr.c's resolve has run
+  (the scale is fixed at start-up; `RAST_GAPHOOK=0` leaves DraStic's). At 3x the rows are now the downsample's (S4:
+  none transparent; they differ from their neighbours as often as the neighbours from theirs) and the pass's 0.16 M
+  modeled cycles a frame on S4 are gone; at 2x the output frames are DraStic's pass's frame by frame
+  (`RAST_SCHEDHASH`, which hashes each frame after the gap passes: S4 3029 frames, 0 differ). `t_resolve.c` compares
+  res2_gaps with the three originals (the output rows, the gap buffers' fogged colours and everything else it checks;
+  a mutant with identify's line arguments swapped fails it), S4's frame diff with the compositor's checks, the scene
+  cycle's bins as DraStic's renderer's (to 76800 bins, 6537 tables and 4.84 M composited quarters checked, 0 differ).
+  Then the gap passes at 2x from res2.c's NEON stages (res2_gaps_neon; `RAST_GAPHOOK=2` keeps DraStic's driver): per
+  gap the two colour lines fogged in place by fog_line2x (the gap buffers keep DraStic's fogged colours), copied, the
+  copies marked as one pair by edge_lines2x on the four attribute lines' top-byte planes, and the output rows written
+  by res2_line_asm. S4 at 2x: DraStic's pass 0.162 M modeled cycles a frame (identify 0.082, the fog weights 0.029,
+  mark 0.022, the modulates 0.029) -> ~0.075 M of res2's stages. `t_resolve.c` compares both drivers with the three
+  originals (mutants that mark the gap buffers in place or fog with the wrong line's weights fail it); S4's output
+  frames equal DraStic's passes' frame by frame (`RAST_SCHEDHASH`, 2590 frames), its frame diff with the compositor's
+  checks, the scene cycle's bins as DraStic's renderer's (to 60000 bins, 5108 tables and 3.78 M composited quarters
+  checked, 0 differ).
   Fifth round, overdraw (`defer.c`, the deferred kernels). Measured first, per bin (a C NEON build's RAST_STATS): the
   stress ROM writes 1.5 opaque pixels per covered one (1.25-1.75 in every bin), the field scene S7 1.0 everywhere, the
   fog and edge-marking scene S4 1.15 (1.0 in 75% of its bins, up to 2.25 in its heaviest); polygons whose depth test
@@ -826,12 +851,12 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
 - The 2x fog (`res2.c` fog_line2x; its zero step is now 53 modeled cycles, Status) is bound by the FP pipe where it
   fogs: four channels' smull/smull2/shrn/shrn2 per 16 pixels and the weights' two tbl2; a fogged step's two reductions
   in series (the depth screen, then the flag test) cost it ~10 cycles against the planes' form. DraStic's gap passes
-  (rows 32k-1 and 32k, 0.08 M) still run. hr.c's 3x fog skips the steps below the fog offset when the table starts at
-  0 (Status); res2.c's fog_zero_b2() bound (any table, the offset and the shift) now screens hr.c's fog_line too
-  (Status, fifth round), and hr.c's edge marking could take res2.c's skip of the key compares (S4 2x: edge marking
-  1.02 -> 0.57 -> 0.50 M with the top-byte screen, fog 0.89 -> 0.78 -> 0.60 M with the depth screen). The 2x edge
-  screen now reads a bin's top-byte planes made once, as hr.c's at 3x (fifth round); its skipped pair of blocks (56
-  modeled cycles: 12 loads, the xors and ors, one max) is near the issue limit.
+  (rows 32k-1 and 32k) are res2.c's NEON stages at 2x and skipped at 3x (fifth round). hr.c's 3x fog skips the steps
+  below the fog offset when the table starts at 0 (Status); res2.c's fog_zero_b2() bound (any table, the offset and
+  the shift) now screens hr.c's fog_line too (Status, fifth round), and hr.c's edge marking could take res2.c's skip
+  of the key compares (S4 2x: edge marking 1.02 -> 0.57 -> 0.50 M with the top-byte screen, fog 0.89 -> 0.78 -> 0.60 M
+  with the depth screen). The 2x edge screen now reads a bin's top-byte planes made once, as hr.c's at 3x (fifth
+  round); its skipped pair of blocks (56 modeled cycles: 12 loads, the xors and ors, one max) is near the issue limit.
 - Deferred shading (fifth round, Status): a better per-bin predictor than the depth complexity, which cannot tell
   polygons drawn back to front (overdraw) from front to back (cheap one-pass failures): the overdraw itself (written
   and owned pixels: the visibility and shade kernels would return counts instead of their any-pass flags). The shade
@@ -916,8 +941,11 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
   operations already fill, and ld3's latency mostly overlaps them); the alpha tests need no deinterleave; the u8
   stage's wrap for 8-bit channels (ut/hr_ab's wide case) must stay. The opaque block is 40 NEON operations at
   throughput 1 (add, mla, two ushll, two uaddw, two sqrdmulh, uzp1, sli per output vector) for its 50 cycles: the
-  formula's floor in this form. cf_run's all-3D quarter by ldr q + three tbl a block instead of ld4 models 189 -> 165
-  cycles a quarter (0.02 M a frame): not taken.
+  formula's floor in this form. cf_run's all-3D quarter by ldr q + three tbl a block instead of ld4,
+  software-pipelined (each tbl or stp followed by a load of the next block into the other register group), models 189
+  -> 140 cycles a quarter as a whole in llvm-mca and is exact (t_composite, the fused path's checks on S7), but
+  cycles.py shows no change (S7: cf_run 0.147 M a frame either way): the profiler cuts the kernel into three blocks
+  that it models from an empty pipeline, which hides the overlap. Not taken; a device A/B would tell.
 - The 2x walker (stress ROM L4, 1.43 M cycles a frame): a z edge's setup (127 instructions, 109 modeled cycles) is
   the costliest block. Its first weights' chain is ~60 cycles of latency, but clang's schedule starts the first
   frecpe at cycle ~40 and its uzp1 lands at ~103, behind the colour, x and z work it interleaves (and blocks on);
