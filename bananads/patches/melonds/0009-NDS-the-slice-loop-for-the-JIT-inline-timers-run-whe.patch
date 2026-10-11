@@ -1,6 +1,6 @@
-From 22bd4afb08a964502b7faeebdf1f4a5375883c12 Mon Sep 17 00:00:00 2001
+From e1c09a207513fb0af0c8fa86b1052c8692bc0bea Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
-Date: Sun, 11 Oct 2026 20:40:28 +0000
+Date: Sun, 11 Oct 2026 21:03:59 +0000
 Subject: [PATCH] NDS: the slice loop for the JIT inline, timers run when they
  overflow
 
@@ -25,7 +25,8 @@ is exact: the same cycles, events and order at any slice.
   region up again for every block); a halted CPU that nothing interrupts;
   GPU3D::Run's idle case; no timer due on either CPU by the ARM9's time
   (TimerNextMin), which takes the ARM7's halted case without its timer
-  check; RunSystem's walk when an event is due. TotalScanlines is checked
+  check, and a busy ARM7's first pass without the checks just made;
+  RunSystem's walk when an event is due. TotalScanlines is checked
   after an event only (only events change it); CPUStop is read once for the
   ARM7's DMA and the sleep check when nothing runs between. The scheduler's
   members, the ARMs and GPU3D go through addresses kept in registers
@@ -43,9 +44,9 @@ is exact: the same cycles, events and order at any slice.
   of calling GetRXBase for every block.
 ---
  src/ARMJIT.h |   4 +-
- src/NDS.cpp  | 442 ++++++++++++++++++++++++++++++++++++++++++++++++---
+ src/NDS.cpp  | 445 ++++++++++++++++++++++++++++++++++++++++++++++++---
  src/NDS.h    |  18 ++-
- 3 files changed, 435 insertions(+), 29 deletions(-)
+ 3 files changed, 438 insertions(+), 29 deletions(-)
 
 diff --git a/src/ARMJIT.h b/src/ARMJIT.h
 index 75fe540..62aecfd 100644
@@ -70,7 +71,7 @@ index 75fe540..62aecfd 100644
      std::unordered_map<u32, JitBlock*> JitBlocks7 {};
  
 diff --git a/src/NDS.cpp b/src/NDS.cpp
-index b606589..a9c71af 100644
+index b606589..1991a5c 100644
 --- a/src/NDS.cpp
 +++ b/src/NDS.cpp
 @@ -54,6 +54,18 @@ using namespace Platform;
@@ -272,7 +273,7 @@ index b606589..a9c71af 100644
                  }
  
                  RunSystem(target);
-@@ -1122,6 +1207,261 @@ u32 NDS::RunFrame()
+@@ -1122,6 +1207,264 @@ u32 NDS::RunFrame()
          return 263;
  }
  
@@ -375,13 +376,14 @@ index b606589..a9c71af 100644
 +
 +    // the loop over the ARM7 in RunFrame, from its first check on, with its timers: runARM7Busy from the first pass of
 +    // its body on (the caller checked ARM7Timestamp < target)
-+    auto runARM7Busy = [&](u64 target) __attribute__((always_inline))
++    // (clean: the caller saw no DMA7 bit in CPUStop and the ARM7 not halted, just before; nothing ran since)
++    auto runARM7Busy = [&](u64 target, bool clean = false) __attribute__((always_inline))
 +    {
 +        do
 +        {
 +            ARM7Target = target; // might be changed by a reschedule
 +
-+            if (CPUStop & CPUStop_DMA7)
++            if (!clean && (CPUStop & CPUStop_DMA7))
 +            {
 +                DMAs[4].Run();
 +                DMAs[5].Run();
@@ -393,13 +395,14 @@ index b606589..a9c71af 100644
 +                    dsi.RunNDMAs(1);
 +                }
 +            }
-+            else if (!arm7.Halted)
++            else if (clean || !arm7.Halted)
 +                ExecuteJITInline<1>(*this, arm7, ARM7Timestamp, ARM7Target, rxBase);
 +            else
 +                arm7.Execute<CPUExecuteMode::JIT>();
 +
 +            if (ARM7Timestamp >= SCHED(sb, TimerNext[1]))
 +                RunTimers(1);
++            clean = false;
 +        } while (ARM7Timestamp < target);
 +    };
 +    auto runARM7 = [&](u64 target) __attribute__((always_inline))
@@ -478,14 +481,15 @@ index b606589..a9c71af 100644
 +            stop = CPUStop;
 +            if (ARM7Timestamp < target)
 +            {
-+                if (arm7.Halted == 1 && !(stop & CPUStop_DMA7) && !HaltInterrupted(1))
++                const u8 halted7 = arm7.Halted;
++                if (halted7 == 1 && !(stop & CPUStop_DMA7) && !HaltInterrupted(1))
 +                {
 +                    ARM7Target = target;
 +                    ARM7Timestamp = target;
 +                }
 +                else
 +                {
-+                    runARM7Busy(target);
++                    runARM7Busy(target, halted7 == 0 && !(stop & CPUStop_DMA7));
 +                    stop = CPUStop;
 +                }
 +            }
@@ -534,7 +538,7 @@ index b606589..a9c71af 100644
  u32 NDS::RunFrame()
  {
  #ifdef JIT_ENABLED
-@@ -1178,40 +1518,61 @@ void NDS::UnregisterEventFuncs(u32 id)
+@@ -1178,40 +1521,61 @@ void NDS::UnregisterEventFuncs(u32 id)
  
  void NDS::ScheduleEvent(u32 id, bool periodic, s32 delay, u32 funcid, u32 param)
  {
@@ -610,7 +614,7 @@ index b606589..a9c71af 100644
  }
  
  
-@@ -1746,6 +2107,32 @@ void NDS::RunTimers(u32 cpu)
+@@ -1746,6 +2110,32 @@ void NDS::RunTimers(u32 cpu)
      if (timermask & 0x8) RunTimer((cpu<<2)+3, cycles);
  
      TimerTimestamp[cpu] += cycles;
@@ -643,7 +647,7 @@ index b606589..a9c71af 100644
  }
  
  const s32 TimerPrescaler[4] = {0, 6, 8, 10};
-@@ -1778,6 +2165,9 @@ void NDS::TimerStart(u32 id, u16 cnt)
+@@ -1778,6 +2168,9 @@ void NDS::TimerStart(u32 id, u16 cnt)
          TimerCheckMask[id>>2] |= 0x01 << (id&0x3);
      else
          TimerCheckMask[id>>2] &= ~(0x01 << (id&0x3));
