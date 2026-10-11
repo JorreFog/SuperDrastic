@@ -97,6 +97,22 @@ jobs:
             qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 300 \
               --a jit=on --a jit.mul=off --b jit=on --b jit.mul=on $rom
           done
+      - name: The DraStic JIT study's differential ROMs (PR #10): BananaJIT = interpreter = ARMv5TE
+        run: |
+          if ! git fetch --depth 1 origin drastic-jit-re; then echo "branch drastic-jit-re not found: skipped"; exit 0; fi
+          mkdir -p pr10 && git archive FETCH_HEAD docs/drastic-jit/tools/dyn/diff | tar -x -C pr10
+          D=pr10/docs/drastic-jit/tools/dyn/diff
+          python3 $D/build.py && python3 $D/build.py extra
+          for r in out/diff.nds:out/tests.txt out_extra/diff_extra.nds:out_extra/tests.txt; do
+            rom=$D/${r%%:*}; tests=$D/${r##*:}; n=$(wc -l < $tests); len=$((n * 4))
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --frames 60 \
+              --region 0x02200100:$len --a jit=off --b jit=on $rom
+            for j in off on; do
+              qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --frames 60 --region 0x02200000:8 \
+                --dump 0x02200000:$((len + 256)) --a jit=$j --b jit=$j $rom | grep "run A" > dump.txt
+              python3 bananads/tools/check_results.py $tests dump.txt
+            done
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: bananads-aarch64

@@ -83,6 +83,14 @@ pictures.
 **Not checked:** a device, real games, speed. qemu's numbers say nothing about the A55, and under qemu the
 stress ROMs are bound by 3D, not by the CPUs.
 
+**Against the architecture:** the DraStic JIT study's differential ROMs (SuperDrastic PR #10,
+`docs/drastic-jit/tools/dyn/diff`, its own clean-room builder) run one instruction per test and store the
+results. That is 1,311 words, plus 1,659 in the `extra` set: register-specified shifts and their carry,
+rotated-immediate carry, QADD/QSUB/QDADD/QDSUB, SMLAxy/SMLAWy/SMLALxy, MSR and Q, register aliasing. BananaJIT's
+results equal the interpreter's (`bananads-difftest --region`), and both equal the ARMv5TE values the
+builder computes (`tools/check_results.py`); CI runs it. Those are the classes where the study found
+DraStic's JIT wrong.
+
 `BANANAJIT_TRACE=1` logs every compiled block: each instruction's address, kind, and whether it is native.
 
 **Next, in order of what the traces show the interpreter still doing:**
