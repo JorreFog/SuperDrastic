@@ -1,0 +1,23 @@
+#!/bin/sh
+# shot <run tag>: the run's scanout dumps (bench.sh SHOT=) as PNGs in the scratchpad's shots/ (top over bottom in one image too)
+S=${PERF_WORK:-$HOME/.cache/superdrastic-perf}; mkdir -p $S/shots
+for i in 0 1; do RGDS_HOST=${RGDS_HOST:?set RGDS_HOST} ${RGDS_RG:-$HOME/.cache/rgds/rg} "cat /storage/dsflip/opt/runs/$1.scan$i.raw" > $S/shots/$1.scan$i.raw; done
+python3 - "$S/shots/$1" <<'PY'
+import sys, struct, zlib
+def load(fn):
+    d = open(fn, 'rb').read(); nl = d.index(b'\n'); w, h, pitch, bpp = map(int, d[:nl].split()[:4]); px = d[nl + 1:]
+    rows = []
+    for y in range(h):
+        r = px[y * pitch: y * pitch + w * 4]
+        rows.append(bytes(b for i in range(0, len(r), 4) for b in (r[i + 2], r[i + 1], r[i])))
+    return w, h, rows
+def png(fn, w, h, rows):
+    raw = b''.join(b'\x00' + r for r in rows)
+    def ch(t, d): return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+    open(fn, 'wb').write(b'\x89PNG\r\n\x1a\n' + ch(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) + ch(b'IDAT', zlib.compress(raw, 6)) + ch(b'IEND', b''))
+base = sys.argv[1]
+a = load(base + '.scan0.raw'); b = load(base + '.scan1.raw')
+assert a[0] == b[0]
+png(base + '.png', a[0], a[1] + b[1], a[2] + b[2])
+print(base + '.png', a[0], a[1] + b[1])
+PY

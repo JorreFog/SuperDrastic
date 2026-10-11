@@ -1,5 +1,7 @@
 // shtest.c: runs shader.c outside DraStic (no DRM master needed): a test image through a shader into a
 // panel-sized dumb buffer, written as PPM. shtest <shader> <srcw> <srch> <out.ppm>
+// OUT=WxH: the panel's size (default 640x480, the RG DS's; the RG DS Plus is 1024x768). A shader that asks for a
+// smaller buffer ("dsflip-output: 3x", ds-fsr) gets it, as in libdsflip: the PPM is then that size.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -12,6 +14,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 int shader_init(int fd, const char *name);
+int shader_output_size(int *w, int *h, int pw, int ph);
 int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 extern int shader_copy_mode;
 int shader_fence(void);
@@ -28,11 +31,15 @@ static buf mk(int w, int h) {
 }
 int main(int argc, char **argv) {
     if (argc < 5) return 2;
-    int sw = atoi(argv[2]), sh = atoi(argv[3]), dw = 640, dh = 480;
+    int sw = atoi(argv[2]), sh = atoi(argv[3]), pw = 640, ph = 480, dw, dh;
+    const char *out = getenv("OUT");
+    if (out && (sscanf(out, "%dx%d", &pw, &ph) != 2 || pw <= 0 || ph <= 0)) { fprintf(stderr, "bad OUT %s (WxH)\n", out); return 2; }
     fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
     fprintf(stderr, "init...\n");
     shader_copy_mode = getenv("COPY") != 0;
     if (!shader_init(fd, argv[1])) { fprintf(stderr, "shader_init failed\n"); return 1; }
+    if (shader_output_size(&dw, &dh, pw, ph)) fprintf(stderr, "output %dx%d (the display controller would scale it to the %dx%d panel)\n", dw, dh, pw, ph);
+    else fprintf(stderr, "output %dx%d\n", dw, dh);
     buf s = mk(sw, sh), d = mk(dw, dh);
     for (int y = 0; y < sh; y++) for (int x = 0; x < sw; x++) {      /* colour bars + 1px checker + gradient */
         uint32_t v;

@@ -1,0 +1,19 @@
+#!/bin/sh
+# sdbuild <srcdir> <outname> [extra cflags]: SuperDrastic as build.sh builds it, with symbols kept in <out>.sym.so
+# and the stripped library in <out>.so (same code). Output in the scratchpad's out/.
+set -e
+SRC=${1:?srcdir}; NAME=${2:?name}; shift 2
+SR=${SYSROOT:?an aarch64 sysroot, see build.sh}
+OUT=${PERF_WORK:-$HOME/.cache/superdrastic-perf}/out
+cd "$SRC"
+RC=src/third_party/rcheevos
+SRCS="src/dsflip.c src/dshook.c src/shader.c src/audio.c src/ra.c src/ui.c src/volume.c src/cpugov.c src/resume.c src/menu.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c \
+      $RC/src/rc_util.c $RC/src/rc_version.c $RC/src/rcheevos/*.c $RC/src/rapi/*.c $RC/src/rhash/*.c) \
+      $(ls src/rast/*.c) src/rast/rast_kern.S $(ls src/rast/spec/*.c)"
+python3 src/rast/kerngen.py src/rast/rast_kern.S
+V=$(cat VERSION 2>/dev/null || echo dev)
+clang --target=aarch64-linux-gnu --sysroot=$SR -fuse-ld=lld -O2 -g -Wall -Wno-unused-function -Wno-tautological-compare \
+    -shared -fPIC -DDSFLIP_VERSION="\"$V\"" -DRC_DISABLE_LUA -DRC_CLIENT_SUPPORTS_HASH -I"$SR/usr/include/libdrm" \
+    -I$RC/include -I$RC/src -Isrc/third_party/stb "$@" -o $OUT/$NAME.sym.so $SRCS -ldrm -lpthread -lm
+llvm-strip --strip-unneeded -o $OUT/$NAME.so $OUT/$NAME.sym.so
+ls -l $OUT/$NAME.so $OUT/$NAME.sym.so | awk '{print $5, $9}'

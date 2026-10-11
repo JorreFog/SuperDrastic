@@ -4,7 +4,9 @@
 #   14400-bin checkpoints (47 and 662 known bins, with and without deferred shading), per-polygon diff on each single scene
 #   S3-S9 (dsscenes-cycle.nds sometimes dies in the simulator at frame 720, the scene 2 -> 3 transition, a SIGILL in
 #   DraStic's JIT cache that also happens with RAST=off, mostly under load: then the cycle runs cover scenes 0-2 only);
-#   3x stability: S7, S4, S2 and L4 keep rendering.
+#   3x stability: S7, S4, S2 and L4 keep rendering; and DraStic's edge marking gap passes, which re-mark rows 32k-1 and 32k
+#   after the bins, leave the rows the 3x bins wrote (RAST_HRCHECK: S4 has edge marking, 22 rows a frame without hr.c's gap
+#   buffers).
 # One simulator job at a time (each 0.5-3 minutes, about 20 minutes in all). Prints one line per check with PASS/FAIL.
 SIM=${SIM:-/tmp/claude-0/-home-user/2214c741-dca5-5de9-abc6-6b47f5d47ba5/scratchpad}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -35,9 +37,11 @@ for n in 3 4 5 6 7 8 9; do
     check "pdiff S$n (${f:-0} frames)" "$(grep -ac '\[pdiff\]' $L/pd-s$n.log)$([ "${f:-0}" -ge 100 ] || echo ' (starved: under 100 frames)')" 0
 done
 for r in dsscenes-S7 dsscenes-S4 dsscenes-S2 dsstress-L4; do
-    sh $HERE/run.sh $ROMS/$r.nds 40 ours -E RAST_SCALE=3 -E RAST_FRAMES=1 > $L/3x-$r.log 2>&1
+    sh $HERE/run.sh $ROMS/$r.nds 40 ours -E RAST_SCALE=3 -E RAST_FRAMES=1 -E RAST_HRCHECK=1 > $L/3x-$r.log 2>&1
     n=$(grep -a '\[rast\] frames' $L/3x-$r.log | tail -1 | grep -o '[0-9]*$'); s=$(grep -ac '\[sim\] signal' $L/3x-$r.log)
-    if [ "${n:-0}" -ge 100 ] && [ "$s" = 0 ]; then echo "PASS 3x $r ($n frames)"; else echo "FAIL 3x $r (${n:-0} frames, $s faults)"; fail=1; fi
+    g=$(grep -a '\[hr\] check' $L/3x-$r.log | tail -1 | grep -o '[0-9]* with rows changed')
+    if [ "${n:-0}" -ge 100 ] && [ "$s" = 0 ] && [ "$g" = "0 with rows changed" ]; then echo "PASS 3x $r ($n frames, gap rows kept)"
+    else echo "FAIL 3x $r (${n:-0} frames, $s faults, gap rows: ${g:-no check line})"; fail=1; fi
 done
 echo "logs in $L"
 exit $fail

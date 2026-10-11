@@ -34,6 +34,9 @@ own, for any firmware.
   DTCM memory, for `.nds` ROMs and ROMs in a `.zip`.
 - **Its own CPU governor**: the lowest clock at which the game drops no more frames than at full clock (HeartGold at
   2x: ~1450-1660 MHz instead of 1992), and the GPU's clock chosen per shader.
+- **An in-game menu** in place of DraStic's (which stays a tap away): save and load with both screens' pictures and an
+  undo, volume and per-screen brightness, the microphone's meter and a fake blow, the shader (per game), a performance
+  overlay (FPS, frame time, drops, clocks).
 - **DraStic's menu** on the bottom panel while the game stays on top, with the time and the battery on the top screen.
 - **Quitting** with Start + Select or Menu + Start held (with a save to resume from, where the frontend wants one).
 

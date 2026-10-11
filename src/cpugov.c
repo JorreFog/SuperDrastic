@@ -21,8 +21,10 @@
 // 10 min), and that is remembered per game, shader and resolution: without it every session found the same clocks
 // again by dropping frames at each of them, most of them in its first minute (1.4: one or two such drops in the first
 // minute of a 90 s HeartGold run). A session starts with those clocks banned for as long as their strikes say, and
-// two minutes at a clock or lower without a drop forgive it one strike. <data>/cpugov/<rom>.<shader>.<1x|2x> holds
-// "<kHz> <strikes>" per clock that has any; <data> is DSFLIP_DATA, else libdsflip's folder.
+// two minutes at a clock or lower without a drop forgive it one strike. <data>/cpugov/<rom>.<shader>.<1x|2x|3x> holds
+// "<kHz> <strikes>" per clock that has any; <data> is DSFLIP_DATA, else libdsflip's folder. 3x is Gengis Engine drawing
+// at 3x (rast_active_scale): its frame is 2x's size but it needs more CPU, so sharing 2x's file would keep 2x sessions
+// of the same game at clocks they don't need, and start 3x ones too low. Up to 0.5.0-beta.1, 3x was filed as "2x".
 //
 // Only a drop that looks CPU-bound earns a strike: a frame in the last second took BLAME_PEAK of a refresh, or the
 // busiest thread was over TARGET. Most drops in real play are not that: they come in waves as DraStic's presents drift
@@ -137,6 +139,7 @@ static void mem_save(void) {
     if (fclose(f) == 0) rename(tmp, mem_path); else unlink(tmp);
 }
 /* what's known for this game with this shader at resolution w (DraStic's screen width); starts the bans */
+int rast_active_scale(void);                 /* rast/rast.c */
 static void mem_load(int w) {
     mem_w = w; mem_path[0] = 0;
     for (int i = 0; i < nf; i++) { strikes[i] = 0; bad_until[i] = 0; proof_ms[i] = 0; }
@@ -151,7 +154,8 @@ static void mem_load(int w) {
     const char *sb = strrchr(sh, '/'); if (sb) sh = sb + 1;
     const char *data = getenv("DSFLIP_DATA"); if (!data || !*data) data = "/storage/.config/drastic/dsflip";
     char dir[512]; snprintf(dir, sizeof dir, "%s/cpugov", data); mkdir(dir, 0755);
-    snprintf(mem_path, sizeof mem_path, "%s/%s.%s.%s", dir, rom, sh, w > 256 ? "2x" : "1x");
+    snprintf(mem_path, sizeof mem_path, "%s/%s.%s.%s", dir, rom, sh,
+             w <= 256 ? "1x" : rast_active_scale() == 3 ? "3x" : "2x");
     char said[256] = ""; size_t m = 0; int khz, k;
     if ((f = fopen(mem_path, "r"))) {
         while (fscanf(f, "%d %d", &khz, &k) == 2) {
@@ -222,10 +226,10 @@ static void *gov_thread(void *a) {
         if (!dt) continue;
         if (boost_until > t || boosted) {               /* a savestate: the top clock, nothing counts meanwhile */
             if (boost_until > t) {
-                if (!boosted) { boosted = cur; dsflip_log("[cpugov] savestate: %d MHz until it's done\n", hwmax_ / 1000); }
+                if (!boosted) { boosted = cur; dsflip_log("[cpugov] boost (a savestate, the menu, the volume keys): %d MHz until it's done\n", hwmax_ / 1000); }
                 cur = hwmax_;
             } else {
-                dsflip_log("[cpugov] savestate done: back to %d MHz\n", boosted / 1000);
+                dsflip_log("[cpugov] boost done: back to %d MHz\n", boosted / 1000);
                 if (wr_int(POL "scaling_max_freq", boosted) == 0) cur = boosted;
                 boosted = 0;
                 for (int k = 0; k < FPS_WINDOWS; k++) { fps_t[k] = 0; peaks[k] = 0; }   /* the stall isn't this clock's */
@@ -333,7 +337,8 @@ void cpugov_start(void) {
     if (!pthread_create(&th, 0, gov_thread, 0)) pthread_setname_np(th, "dsf-cpugov");
 }
 
-/* DraStic is about to save or load a state (resume.c): the top clock now, for ms from now (extends a boost) */
+/* DraStic is about to save or load a state (resume.c), the menu is in use (menu.c), the volume keys are (volume.c):
+ * the top clock now, for ms from now (extends a boost) */
 void cpugov_boost(int ms) {
     if (!gov_on) return;
     struct timespec n; clock_gettime(CLOCK_MONOTONIC, &n);

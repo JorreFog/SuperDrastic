@@ -1,0 +1,18 @@
+#!/bin/sh
+# hashcmp <name> <libA> <libB> <secs> <hash spec> <games...> [-- envA... [-- envB...]]: the same games (no input) with
+# two libraries (or two settings), frame hashes compared. Prints one line per game. Leaves ES stopped (KEEP=1).
+S=${PERF_WORK:-$HOME/.cache/superdrastic-perf}
+NAME=$1; LA=$2; LB=$3; SECS=$4; HS=$5; shift 5
+GAMES=; while [ $# -gt 0 ] && [ "$1" != -- ]; do GAMES="$GAMES $1"; shift; done
+[ "$1" = -- ] && shift
+EA=; while [ $# -gt 0 ] && [ "$1" != -- ]; do EA="$EA $1"; shift; done
+[ "$1" = -- ] && shift
+EB=${*:-$EA}
+RG="env RGDS_HOST=${RGDS_HOST:?set RGDS_HOST} ${RGDS_RG:-$HOME/.cache/rgds/rg}"
+for g in $GAMES; do
+  for v in A B; do
+    if [ $v = A ]; then L=$LA; E=$EA; else L=$LB; E=$EB; fi
+    $S/bin/bench $NAME-$g-$v $g EXE=/storage/dsflip/opt/drastic KEEP=1 PERF=none SECS=$SECS WARM=5 WALK=0 LIB=/storage/dsflip/opt/lib/$L.so KHZ=1992000 DSFLIP_HASH=$HS $E 2>&1 | head -1 | sed 's/ temp=.*//; s/ khz=[0-9]*//' 
+  done
+  $RG "echo \"== $g: \$(sh /storage/dsflip/opt/hcmp.sh $NAME-$g-A $NAME-$g-B)\""
+done

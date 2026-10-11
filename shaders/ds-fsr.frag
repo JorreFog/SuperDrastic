@@ -5,6 +5,16 @@
 // then clamps to the 2x2 texels around the sample (no ringing) and adds a light sharpen. Smooth rather than
 // pixel-sharp: for pixel-exact sharpness use ds-crisp.
 //
+// Output size: 3x the DS screen (768x576) where the panel is larger, the panel itself where it isn't (next line).
+// dsflip-output: 3x
+// On the RG DS Plus (1024x768 panels, 4x) the pass draws 768x576 and the display controller scales that to the
+// panel (bilinear, free), so a 2x game is upscaled 2x -> 3x by EASU, the ratio FSR calls "Quality" (1.5x), with
+// the last 1.33x left to the scaler. A panel-sized pass there is 2.56x the RG DS's pixels (1024x768 x 2 panels):
+// at the RG DS's measured 4.8 ms per 640x480 panel that is ~12 ms per panel, ~25 ms per frame, more than the
+// 16.7 ms refresh, so every other frame dropped. 768x576 is 56% of that: ~7 ms per panel, ~14 ms per frame, which
+// fits (to be measured on a Plus: tools/shaders.sh with OUT=1024x768). On the RG DS (640x480) 3x doesn't fit and
+// nothing changes: 2x -> 2.5x straight into the panel, as before.
+//
 // Same algorithm as the fsr.frag port (the RetroArch/melonDS EASU), made ~2x cheaper on this Mali-G52 without
 // changing the result (measured with dsflip/shtest, pipelined GPU time per 640x480 panel at 800 MHz):
 //   fsr.frag  9.7 ms  (19.3 ms per frame for both panels: every other frame dropped)

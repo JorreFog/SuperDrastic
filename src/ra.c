@@ -24,6 +24,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <time.h>
 #include "rc_client.h"
 #include "rc_consoles.h"
 #include "rc_hash.h"
@@ -83,9 +84,11 @@ static void *curl_lib;
 static void *(*c_init)(void); static int (*c_setopt)(void *, int, ...); static int (*c_perform)(void *);
 static int (*c_getinfo)(void *, int, ...); static void (*c_cleanup)(void *);
 static void *(*c_slist_append)(void *, const char *); static void (*c_slist_free)(void *);
+static const char *(*c_strerror)(int);
 enum { CURLOPT_WRITEDATA = 10001, CURLOPT_URL = 10002, CURLOPT_POSTFIELDS = 10015, CURLOPT_USERAGENT = 10018,
        CURLOPT_HTTPHEADER = 10023, CURLOPT_WRITEFUNCTION = 20011, CURLOPT_TIMEOUT = 13, CURLOPT_NOSIGNAL = 99,
-       CURLOPT_FOLLOWLOCATION = 52, CURLINFO_RESPONSE_CODE = 0x200002 };
+       CURLOPT_FOLLOWLOCATION = 52, CURLOPT_ERRORBUFFER = 10010, CURLOPT_CONNECTTIMEOUT = 78,
+       CURLINFO_RESPONSE_CODE = 0x200002 };
 
 static int curl_load(void) {
     if (curl_lib) return 1;
@@ -95,6 +98,7 @@ static int curl_load(void) {
     c_perform = dlsym(curl_lib, "curl_easy_perform"); c_getinfo = dlsym(curl_lib, "curl_easy_getinfo");
     c_cleanup = dlsym(curl_lib, "curl_easy_cleanup"); c_slist_append = dlsym(curl_lib, "curl_slist_append");
     c_slist_free = dlsym(curl_lib, "curl_slist_free_all");
+    c_strerror = dlsym(curl_lib, "curl_easy_strerror");
     return c_init && c_setopt && c_perform && c_getinfo && c_cleanup && c_slist_append && c_slist_free;
 }
 
@@ -108,18 +112,35 @@ static size_t on_body(char *p, size_t sz, size_t n, void *u) {
 
 typedef struct { char *url, *post, *ctype; rc_client_server_callback_t cb; void *cbdata; } http_req;
 static char user_agent[256];
+/* the HTTP status of the request whose callback runs on this thread (0: no answer at all): the login callbacks tell a
+ * network failure, which must not cost the saved token, from a real refusal */
+static __thread long http_status;
+
+/* the API a request is for ("r=login2"), for the log: never the post data itself, it holds the password or token */
+static void api_name(const http_req *r, char *out, size_t n) {
+    const char *q = r->post ? r->post : strchr(r->url, '?');
+    const char *p = q ? strstr(q, "r=") : 0;
+    while (p && p != q && p[-1] != '&' && p[-1] != '?') p = strstr(p + 1, "r=");
+    if (!p) { snprintf(out, n, "?"); return; }
+    p += 2; size_t k = strcspn(p, "&"); if (k >= n) k = n - 1;
+    memcpy(out, p, k); out[k] = 0;
+}
 
 static void *http_thread(void *a) {
     http_req *r = a;
     membuf body = { 0, 0 }; long status = 0;
+    char err[256] = "";
     void *h = c_init();
     void *hdrs = 0;
+    int code = -1;
     if (h) {
         c_setopt(h, CURLOPT_URL, r->url);
         c_setopt(h, CURLOPT_USERAGENT, user_agent);
         c_setopt(h, CURLOPT_NOSIGNAL, 1L);
         c_setopt(h, CURLOPT_TIMEOUT, 30L);
+        c_setopt(h, CURLOPT_CONNECTTIMEOUT, 10L);
         c_setopt(h, CURLOPT_FOLLOWLOCATION, 1L);
+        c_setopt(h, CURLOPT_ERRORBUFFER, err);
         c_setopt(h, CURLOPT_WRITEFUNCTION, on_body);
         c_setopt(h, CURLOPT_WRITEDATA, &body);
         if (r->post) {
@@ -129,13 +150,28 @@ static void *http_thread(void *a) {
                 hdrs = c_slist_append(0, ct); c_setopt(h, CURLOPT_HTTPHEADER, hdrs);
             }
         }
-        if (c_perform(h) == 0) c_getinfo(h, CURLINFO_RESPONSE_CODE, &status);
+        if ((code = c_perform(h)) == 0) c_getinfo(h, CURLINFO_RESPONSE_CODE, &status);
         c_cleanup(h);
         if (hdrs) c_slist_free(hdrs);
     }
     rc_api_server_response_t resp;
-    resp.body = body.data ? body.data : ""; resp.body_length = body.len;
-    resp.http_status_code = status ? (int)status : RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
+    char api[32]; api_name(r, api, sizeof api);
+    char msg[320];
+    if (!status) {
+        /* no answer: rcheevos takes the body of a client error as the error text. It used to be empty, so the log and
+         * the pop-up said "Login failed: " with nothing after it (2026-10-05) */
+        snprintf(msg, sizeof msg, "no connection to RetroAchievements (%s)",
+                 err[0] ? err : !h ? "libcurl failed to start" : c_strerror ? c_strerror(code) : "network error");
+        dsflip_log("[ra] %s: %s (curl %d)\n", api, msg, code);
+        free(body.data); body.data = 0;
+        resp.body = msg; resp.body_length = strlen(msg);
+        resp.http_status_code = RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
+    } else {
+        if (status != 200) dsflip_log("[ra] %s: HTTP %ld (%zu bytes)\n", api, status, body.len);
+        resp.body = body.data ? body.data : ""; resp.body_length = body.len;
+        resp.http_status_code = (int)status;
+    }
+    http_status = status;
     r->cb(&resp, r->cbdata);
     free(body.data); free(r->url); free(r->post); free(r->ctype); free(r);
     return 0;
@@ -144,7 +180,9 @@ static void *http_thread(void *a) {
 static void server_call(const rc_api_request_t *req, rc_client_server_callback_t cb, void *cbdata, rc_client_t *c) {
     (void)c;
     if (!curl_load()) {
-        rc_api_server_response_t resp = { "", 0, RC_API_SERVER_RESPONSE_CLIENT_ERROR };
+        static const char nolib[] = "libcurl.so.4 not found";
+        rc_api_server_response_t resp = { nolib, sizeof nolib - 1, RC_API_SERVER_RESPONSE_CLIENT_ERROR };
+        http_status = -1;
         cb(&resp, cbdata); return;
     }
     http_req *r = calloc(1, sizeof *r);
@@ -385,23 +423,46 @@ static void on_login_password(int result, const char *err, rc_client_t *c, void 
 static void start_load(void) {
     rc_client_begin_identify_and_load_game(rc, RC_CONSOLE_NINTENDO_DS, rom_path, 0, 0, on_load, 0);
 }
+/* A login that got no answer (no network yet, DNS, a timeout) or a busy server's (429, 5xx) is tried again later with
+ * the same credentials: it says nothing about them. Before, a failed token login deleted the token and tried the
+ * password at once, which failed the same way: the player lost the saved login to a moment without network.
+ * Retries at 15 s, 30 s, 60 s, then every 2 minutes; one pop-up for the first. ra_frame starts them. */
+static char tok_user[128], tok_token[256];       /* the token login's credentials, for its retries */
+static volatile long long retry_at; static volatile int retry_n, retry_with_token;
+static long long mono_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
+static int transient(int result) {
+    long st = http_status;
+    return result == RC_NO_RESPONSE || st <= 0 || st == 429 || st >= 500;
+}
+static void retry_later(int with_token, const char *err) {
+    static const int wait_s[] = { 15, 30, 60, 120 };
+    int k = retry_n < 4 ? retry_n : 3;
+    dsflip_log("[ra] %s login: %s (HTTP %ld): trying again in %d s\n", with_token ? "token" : "password", err && *err ? err : "no answer",
+               http_status, wait_s[k]);
+    if (!retry_n) dsflip_toast("RetroAchievements: no connection", "Trying again in the background", 0xff7a4a, 4000);
+    retry_with_token = with_token; retry_n++;
+    retry_at = mono_ms() + wait_s[k] * 1000LL;
+}
 static void on_login_token(int result, const char *err, rc_client_t *c, void *u) {
     (void)c; (void)u;
-    if (result == RC_OK) { dsflip_log("[ra] logged in with token as %s\n", user); logged_in = 1; return; }
-    dsflip_log("[ra] token login failed (%s)%s\n", err ? err : "?", *pass ? ", trying the password" : "");
+    if (result == RC_OK) { dsflip_log("[ra] logged in with token as %s\n", user); retry_n = 0; logged_in = 1; return; }
+    if (transient(result)) { retry_later(1, err); return; }      /* the token is kept */
+    dsflip_log("[ra] token login refused (%s, HTTP %ld)%s\n", err && *err ? err : "no reason given", http_status, *pass ? ", trying the password" : "");
     unlink(TOKEN_FILE);
     if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
-    else dsflip_toast("RetroAchievements", "login expired: re-enter your password in ES", 0xff7a4a, 5000);
+    else dsflip_toast("RetroAchievements", "Login expired: re-enter your password in ES", 0xff7a4a, 5000);
 }
 static void on_login_password(int result, const char *err, rc_client_t *c, void *u) {
     (void)c; (void)u;
     if (result != RC_OK) {
-        dsflip_log("[ra] login failed: %s\n", err ? err : "?");
-        dsflip_toast("RetroAchievements login failed", err ? err : "check user/password in ES", 0xff7a4a, 5000);
+        if (transient(result)) { retry_later(0, err); return; }
+        dsflip_log("[ra] login failed: %s (HTTP %ld)\n", err && *err ? err : "no reason given", http_status);
+        dsflip_toast("RetroAchievements login failed", err && *err ? err : "Check the user and password in ES", 0xff7a4a, 5000);
         return;
     }
     dsflip_log("[ra] logged in as %s\n", user);
     save_token();
+    retry_n = 0;
     logged_in = 1;
 }
 
@@ -622,7 +683,10 @@ static void ra_start(void) {
         if (fgets(tu, sizeof tu, tf) && fgets(tok, sizeof tok, tf)) { tu[strcspn(tu, "\r\n")] = 0; tok[strcspn(tok, "\r\n")] = 0; }
         fclose(tf);
     }
-    if (*tok && !strcasecmp(tu, user)) rc_client_begin_login_with_token(rc, user, tok, on_login_token, 0);
+    if (*tok && !strcasecmp(tu, user)) {
+        snprintf(tok_user, sizeof tok_user, "%s", user); snprintf(tok_token, sizeof tok_token, "%s", tok);
+        rc_client_begin_login_with_token(rc, user, tok, on_login_token, 0);
+    }
     else if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
     else dsflip_toast("RetroAchievements", "no password set in ES", 0xff7a4a, 4000);
 }
@@ -710,6 +774,12 @@ void ra_frame(void) {
     frames++;
     if (frames == 1) ra_start();
     if (!rc) return;
+    if (retry_at && !logged_in && mono_ms() >= retry_at) {     /* a login that got no answer: again (see retry_later) */
+        retry_at = 0;
+        dsflip_log("[ra] login: trying again (%d)\n", retry_n);
+        if (retry_with_token && *tok_token) rc_client_begin_login_with_token(rc, tok_user, tok_token, on_login_token, 0);
+        else if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
+    }
     /* the cart header is copied into RAM at boot: look once the game is running, retry every ~2 s */
     if (!ram && !scanning && frames >= 90 && frames % 120 == 90) {
         scanning = 1;

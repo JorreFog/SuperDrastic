@@ -37,10 +37,17 @@ export DSFLIP_LOG=${DSFLIP_LOG:-$LOGDIR/superdrastic.log}
 mkdir -p "$DSFLIP_DATA" "$LOGDIR" 2>/dev/null
 RUNLOG=$LOGDIR/run.log
 for v in DSFLIP_SHADER DSFLIP_SHADER_DIR DSFLIP_TOP DSFLIP_CARD DSFLIP_TOUCH DSFLIP_TOUCH_INVERT DSFLIP_FONT \
-         DSFLIP_RA_USER DSFLIP_RA_PASSWORD DSFLIP_RA_SOUND DSFLIP_CPUGOV DSFLIP_CPUGOV_MEMORY DSFLIP_RESUME_FILE DSFLIP_RESUME_LOAD DSFLIP_CPU_MIN DSFLIP_CPU_MAX DSHOOK_MIC_THRESH; do
+         DSFLIP_RA_USER DSFLIP_RA_PASSWORD DSFLIP_RA_SOUND DSFLIP_CPUGOV DSFLIP_CPUGOV_MEMORY DSFLIP_RESUME_FILE DSFLIP_RESUME_LOAD DSFLIP_CPU_MIN DSFLIP_CPU_MAX DSHOOK_MIC_THRESH \
+         DSFLIP_MENU DSFLIP_MENU_SOUNDS DSFLIP_MENU_HINTS DSFLIP_BACKLIGHT_TOP; do
     eval "[ -n \"\${$v}\" ] && export $v"
 done
 SHADER=${DSFLIP_SHADER:-${DSHOOK_SHADER:-none}}
+# the shader picked for this game in the in-game menu (data/menu.cfg: "shader.<game>=<picked> <the shader it was picked
+# over>"), while that is still the shader asked for here: SuperDrastic uses it, and the GPU's clock below follows it
+for ROM; do :; done
+G=$(basename "$ROM"); G=${G%.*}; B=$SHADER; [ "$B" = bilinear ] && B=none
+PICK=$(awk -v k="shader.$G=" 'index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' "$DSFLIP_DATA/menu.cfg" 2>/dev/null)
+[ -n "$PICK" ] && [ "${PICK#* }" = "$B" ] && SHADER=${PICK%% *}
 
 say() { echo "$(date '+%F %T') $*" >> "$RUNLOG"; }
 plain() { cd "$WORKDIR" && exec "$DRASTIC" "$@"; }

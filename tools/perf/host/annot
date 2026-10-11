@@ -1,0 +1,33 @@
+#!/bin/sh
+# annot <run tag> <symbol> [lib.sym.so] [min %]: where in a function of the library the samples of a bench run fall:
+# the disassembly with each instruction's share of the function's samples
+S=${PERF_WORK:-$HOME/.cache/superdrastic-perf}
+TAG=$1; SYM=$2; LIB=${3:-$S/out/base.sym.so}; MIN=${4:-0.4}
+RGDS_HOST=${RGDS_HOST:?set RGDS_HOST} ${RGDS_RG:-$HOME/.cache/rgds/rg} "perf script -i /storage/dsflip/opt/runs/$TAG.perf -F ip,sym --no-demangle 2>/dev/null | awk '\$2 == \"$SYM\" { c[\$1]++ } END { for (a in c) print a, c[a] }'" > /tmp/annot.$$
+BASE=$(RGDS_HOST=${RGDS_HOST:?set RGDS_HOST} ${RGDS_RG:-$HOME/.cache/rgds/rg} "perf script -i /storage/dsflip/opt/runs/$TAG.perf --show-mmap-events 2>/dev/null | grep -m1 'r-xp.*$(basename ${LIBNAME:-base.so})' | sed 's/.*\[\(0x[0-9a-f]*\)(.*@ \(0x[0-9a-f]*\|0\) .*/\1 \2/'")
+ADDR=$(llvm-nm --defined-only $LIB | awk -v s=$SYM '$3 == s { print $1 }')
+python3 - "$SYM" "$LIB" "$ADDR" "$MIN" /tmp/annot.$$ $BASE <<'PY'
+import sys, subprocess, re
+sym, lib, addr, minp, f = sys.argv[1:6]
+base = int(sys.argv[6], 16) - int(sys.argv[7], 16) if len(sys.argv) > 7 else 0
+# the executable segment's file offset and address differ in lld's layout: file offset -> address
+for l in subprocess.run(["llvm-readelf", "-lW", lib], capture_output=True, text=True).stdout.splitlines():
+    w = l.split()
+    if w and w[0] == "LOAD" and "E" in "".join(w[6:8]):
+        base -= (int(w[2], 16) & ~0xfff) - (int(w[1], 16) & ~0xfff)
+addr = int(addr, 16)
+cnt = {}
+for l in open(f):
+    a, c = l.split(); cnt[int(a, 16) - base] = int(c)
+tot = sum(cnt.values())
+dis = subprocess.run(["llvm-objdump", "-d", "--no-show-raw-insn", f"--disassemble-symbols={sym}", lib], capture_output=True, text=True).stdout
+print(f"{sym}: {tot} samples, load base {base:#x}")
+acc = 0
+for l in dis.splitlines():
+    m = re.match(r"\s*([0-9a-f]+):\s+(.*)", l)
+    if not m: continue
+    a = int(m.group(1), 16); c = cnt.get(a, 0)
+    p = 100.0 * c / tot if tot else 0
+    if p >= float(minp): print(f"{p:6.2f}%  {a - addr:5x}: {m.group(2)}")
+PY
+rm -f /tmp/annot.$$

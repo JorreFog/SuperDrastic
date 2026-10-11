@@ -20,6 +20,11 @@
 # 0.03 = high sensitivity, 0.15 = medium, 0.3 = low; 0: mic off
 #DSHOOK_MIC_THRESH=0
 
+# The in-game menu (0: DraStic's own menu), its navigation sounds and its tips (both can also be switched in the menu)
+#DSFLIP_MENU=1
+#DSFLIP_MENU_SOUNDS=1
+#DSFLIP_MENU_HINTS=1
+
 # SuperDrastic's CPU governor (on with the "performance" governor and one CPU cluster): 0 = leave the clock alone
 #DSFLIP_CPUGOV=1
 # It remembers clocks that dropped frames, per game, shader and resolution (data/cpugov/): 0 = start knowing nothing
