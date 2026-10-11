@@ -81,6 +81,14 @@ jobs:
             qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
               --a jit=on --a jit.faststores=off --b jit=on --b jit.faststores=on $rom
           done
+      - name: BananaJIT's inline ARM7 loads/stores change no cycle (an ARM7 that never halts, ARM and Thumb)
+        run: |
+          STRESS_ARM7=arm python3 stressrom/build.py
+          STRESS_ARM7=thumb python3 stressrom/build.py
+          for rom in stressrom/out-arm7/dsstress-L5.nds stressrom/out-arm7-thumb/dsstress-L5.nds; do
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
+              --a jit=on --a jit.fastmem7=off --b jit=on --b jit.fastmem7=on $rom
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: bananads-aarch64

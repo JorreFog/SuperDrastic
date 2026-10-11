@@ -5,6 +5,7 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <vector>
 
 #include "ARMInterpreter.h"
 #include "ARMJIT.h"
@@ -34,12 +35,15 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
     Reset();
     FastLoads = FastLoads9Ok() && !getenv("BANANAJIT_NO_FASTLOADS");
     FastStores = FastLoads && !getenv("BANANAJIT_NO_FASTSTORES") && offsetof(AddressRange, Code) % 4 == 0;
+    FastMem7On = !getenv("BANANAJIT_NO_FASTMEM7") && offsetof(AddressRange, Code) % 4 == 0 &&
+                 offsetof(ARM, CodeCycles) < 16384;
     LinkBlocks = !getenv("BANANAJIT_NO_LINK") && offsetof(ARM, FastBlockLookup) % 8 == 0 &&
                  offsetof(ARM, FastBlockLookup) < 32768 && offsetof(ARM, StopExecution) % 4 == 0;
     Platform::Log(Platform::LogLevel::Info, "[bananajit] BananaDS's own JIT, %zu MB of code memory, ARM9 loads %s\n",
                   CodeSize >> 20, FastLoads ? "inline" : "through calls");
     Platform::Log(Platform::LogLevel::Info, "[bananajit] blocks %s, ARM9 stores %s\n",
                   LinkBlocks ? "linked" : "return to the loop", FastStores ? "inline" : "through calls");
+    Platform::Log(Platform::LogLevel::Info, "[bananajit] ARM7 loads/stores %s\n", FastMem7On ? "inline" : "through calls");
 }
 
 Compiler::~Compiler() { ARMJIT_Global::FreeCodeMem(CodeMemBase); }
@@ -683,6 +687,126 @@ void Compiler::FastStore9(int size, const void* slowfn) {
     A.land(done2);
 }
 
+// ARM7 loads and stores, inline: ARMv4::DataRead/DataWrite8/16/32, NDS::ARM7Read*/ARM7Write* and
+// ARMv4::AddCycles_CDI/CD for main RAM (0x02xxxxxx) and ARM7 WRAM (0x038xxxxx). Stores go inline only when
+// the code bitmap of that memory (CodeIndexMainRAM / CodeIndexARM7WRAM) has no code in the 16-byte chunk.
+// Anything else (BIOS, shared WRAM, I/O...) takes the call. The ARM7 has no protection unit. Unlike the
+// ARM9, DataRegion is the aligned address. The cost reads CodeCycles (set by the last jump) at run time:
+//   numC = ARM7MemTimings[CodeCycles][Thumb ? 0 : 2]; numD = ARM7MemTimings[addr >> 15][size == 4 ? 2 : 0]
+//   loads:  data in main RAM: code there too ? C + D : max(C+1 + D - 3, max(C+1, D))
+//           else:             code in main RAM ? max(C + D+1 - 3, max(C, D+1)) : C + D + 1
+//   stores: data in main RAM or code in main RAM, but not both: max(C + D - 3, max(C, D)); else C + D
+// CodeRegion (code in main RAM?) is the block's: set by the jump into it, like CodeCycles' region.
+void Compiler::FastMem7(bool load, int size, bool sign, bool rotate, const void* slowfn) {
+    const Reg X16 = (Reg)16, X17 = (Reg)17, X3 = W3, X4 = W4, X5 = W5;
+    FlushCycles();
+    StoreHigh();
+    if (size == 4) { A.lsri(X16, W1, 2); A.lsli(X16, X16, 2); }
+    else if (size == 2) { A.lsri(X16, W1, 1); A.lsli(X16, X16, 1); }
+    else A.mov(X16, W1);
+
+    const bool codeMain = (CurInstr.Addr >> 24) == 2;
+    // numD -> W17 (from the aligned address), numC -> W5, then the cost -> added to the cycles
+    auto charge = [&](bool dataMain) {
+        A.movix(X3, (uint64_t)(uintptr_t)&NDS.ARM7MemTimings[0][0]);
+        A.lsri(X17, X16, 15);
+        A.addx(X4, X3, X17, LSL, 2);
+        A.ldrb(X17, X4, size == 4 ? 2 : 0);
+        A.str(X16, RCPU, offsetof(ARM, DataRegion));
+        A.str(X17, RCPU, offsetof(ARM, DataCycles));
+        A.ldr(X5, RCPU, offsetof(ARM, CodeCycles));
+        A.addx(X4, X3, X5, LSL, 2);
+        A.ldrb(X5, X4, Thumb ? 0 : 2);
+        auto maxsum = [&]() {  // W17 = max(W5 + W17 - 3, max(W5, W17))
+            A.add(X3, X5, X17);
+            A.subi(X3, X3, 3);
+            A.subs(ZR, X5, X17);
+            A.csel(X4, X5, X17, HI);        // max(C, D), unsigned: both small
+            A.subs(ZR, X3, X4);
+            A.csel(X17, X3, X4, GT);        // C + D - 3 can be negative: signed compare
+        };
+        if (load) {
+            if (dataMain) {
+                if (codeMain) A.add(X17, X5, X17);
+                else { A.addi(X5, X5, 1); maxsum(); }
+            } else {
+                if (codeMain) { A.addi(X17, X17, 1); maxsum(); }
+                else { A.add(X17, X5, X17); A.addi(X17, X17, 1); }
+            }
+        } else {
+            if (dataMain != codeMain) maxsum();
+            else A.add(X17, X5, X17);
+        }
+        A.add(RCycles, RCycles, X17);
+    };
+    auto access = [&](Reg base, Reg idx) {
+        if (load) {
+            if (size == 4) A.ldr_reg(W0, base, idx);
+            else if (size == 2) A.ldrh_reg(W0, base, idx);
+            else A.ldrb_reg(W0, base, idx);
+        } else {
+            if (size == 4) A.str_reg(W2, base, idx);
+            else if (size == 2) A.strh_reg(W2, base, idx);
+            else A.strb_reg(W2, base, idx);
+        }
+    };
+    // a store hitting compiled code goes to the call: CodeIndex[local / 512].Code bit (local & 0x1FF) / 16
+    auto codeCheck = [&](AddressRange* index) {
+        A.lsri(W0, X17, 9);
+        A.movi(X4, (u32)sizeof(AddressRange));
+        A.mulx(W0, W0, X4);
+        A.movix(X3, (uint64_t)(uintptr_t)index + offsetof(AddressRange, Code));
+        A.addx(X3, X3, W0);
+        A.ldr(W0, X3, 0);
+        A.ubfx(X4, X17, 4, 5);
+        A.lsrv(W0, W0, X4);
+        A.ubfx(W0, W0, 0, 1);
+        return A.cbnz_fwd(W0);
+    };
+
+    std::vector<A64::Fixup> slow, done;
+    // main RAM: (addr & 0xFF800000) is 0x02000000 or 0x02800000
+    A.lsri(X17, X16, 24);
+    A.cmpi(X17, 2);
+    auto notMain = A.bcond_fwd(NE);
+    A.movix(X17, (uint64_t)(uintptr_t)&NDS.MainRAMMask);
+    A.ldr(X17, X17, 0);
+    A.and_(X17, X16, X17);
+    if (!load) slow.push_back(codeCheck(NDS.JIT.CodeIndexMainRAM));
+    A.movix(X3, (uint64_t)(uintptr_t)&NDS.MainRAM);
+    A.ldrx(X3, X3, 0);
+    access(X3, X17);
+    charge(true);
+    done.push_back(A.b_fwd());
+
+    // ARM7 WRAM: (addr & 0xFF800000) == 0x03800000
+    A.land(notMain);
+    A.lsri(X17, X16, 23);
+    A.cmpi(X17, 7);
+    slow.push_back(A.bcond_fwd(NE));
+    A.ubfx(X17, X16, 0, 16);  // & (ARM7WRAMSize - 1)
+    if (!load) slow.push_back(codeCheck(NDS.JIT.CodeIndexARM7WRAM));
+    A.movix(X3, (uint64_t)(uintptr_t)&NDS.ARM7WRAM);
+    A.ldrx(X3, X3, 0);
+    access(X3, X17);
+    charge(false);
+    done.push_back(A.b_fwd());
+
+    for (auto f : slow) A.land(f);
+    CallOut(slowfn);
+    auto end = A.b_fwd();
+    for (auto f : done) A.land(f);
+    if (load) {
+        if (size == 4 && rotate) {
+            A.ubfx(X17, W1, 0, 2);
+            A.lsli(X17, X17, 3);
+            A.rorv(W0, W0, X17);
+        }
+        if (sign) size == 2 ? A.sxth(W0, W0) : A.sxtb(W0, W0);
+    }
+    A.land(end);
+}
+
 void Compiler::CompileMem() {
     const u32 in = CurInstr.Instr;
     const u16 kind = CurInstr.Info.Kind;
@@ -753,6 +877,17 @@ void Compiler::CompileMem() {
     } else if (!load && CurCPU->Num == 0 && FastStores) {
         int size = half ? 2 : (in & (1 << 22)) ? 1 : 4;
         FastStore9(size, fn);
+    } else if (CurCPU->Num == 1 && FastMem7On) {
+        int size = 4;
+        bool sign = false;
+        if (half) {
+            if (!load) size = 2;
+            else {
+                size = kind <= ak_LDRH_POST_IMM ? 2 : kind <= ak_LDRSB_POST_IMM ? 1 : 2;
+                sign = kind > ak_LDRH_POST_IMM;
+            }
+        } else if (in & (1 << 22)) size = 1;
+        FastMem7(load, size, sign, !NoRotate, fn);
     } else {
         CallOut(fn);
     }

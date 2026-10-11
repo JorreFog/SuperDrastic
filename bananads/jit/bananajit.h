@@ -63,6 +63,8 @@ private:
     void FastLoad9(int size, bool sign, bool rotate, const void* slowfn);  // ARM9 TCM/main-RAM loads inline
     bool FastLoads = false;
     bool FastStores = false;
+    bool FastMem7On = false;
+    void FastMem7(bool load, int size, bool sign, bool rotate, const void* slowfn);  // ARM7 main RAM/WRAM
     void FastStore9(int size, const void* slowfn);  // ARM9 DTCM/main-RAM stores inline
     bool LinkBlocks = false;
     void AddCycles(s32 n) { ConstantCycles += n; }

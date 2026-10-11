@@ -162,6 +162,8 @@ bool Emu::load_rom(const std::string& path) {
     else setenv("BANANAJIT_NO_FASTLOADS", "1", 1);
     if (cfg_.flag("jit.faststores", true)) unsetenv("BANANAJIT_NO_FASTSTORES");
     else setenv("BANANAJIT_NO_FASTSTORES", "1", 1);
+    if (cfg_.flag("jit.fastmem7", true)) unsetenv("BANANAJIT_NO_FASTMEM7");
+    else setenv("BANANAJIT_NO_FASTMEM7", "1", 1);
     if (cfg_.flag("jit.link", true)) unsetenv("BANANAJIT_NO_LINK");  // jit.link=off: back to the loop each block
     else setenv("BANANAJIT_NO_LINK", "1", 1);
 #endif

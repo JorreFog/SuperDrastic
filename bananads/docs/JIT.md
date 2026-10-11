@@ -40,6 +40,12 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
     reads) has no compiled code in that 16-byte chunk; then the check would have done nothing. Code
     there, ITCM, no write permission or any other address: the call. `jit.faststores=off`; main RAM is
     identical after every frame with it on or off (CI).
+  - ARM7 loads and stores inline for main RAM and ARM7 WRAM (`ARMv4::DataRead/DataWrite*`,
+    `NDS::ARM7Read/Write*`, `AddCycles_CDI/CD`). Stores take the code-bitmap check, as on the ARM9. The cost
+    reads `CodeCycles` at run time. It is set by the last jump, so it can name a different 32 KB than the PC.
+    `jit.fastmem7=off`. Checked with `STRESS_ARM7=arm|thumb stressrom/build.py`, an ARM7 that never halts:
+    main RAM is identical after every frame with it on or off (CI). One extra cycle per access is caught
+    after frame 1.
   - Block linking: a block's exit does what melonDS's `Execute` loop does between two blocks, in the same
     order: the StopExecution check, `Timestamp += Cycles`, the Target check, the region check and the
     FastBlockLookup lookup. Then it jumps straight into the next block instead of returning. The table is
@@ -76,7 +82,7 @@ stress ROMs are bound by 3D, not by the CPUs.
    to keep the run-time cost to stay exact.
 2. LDM/STM and PUSH/POP.
 3. MUL/MLA (the interpreter charges by operand size), shifts by a register.
-4. ARM7 loads and stores inline. `ARMv4`'s cycle formula depends on the code and data regions at run time.
+4. PUSH/POP/LDM/STM: the next big share of what the interpreter still runs. `ARMv4`'s cycle formula depends on the code and data regions at run time.
 5. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
 
 ## The DraStic JIT study (2026-10-11)

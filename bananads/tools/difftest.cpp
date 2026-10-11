@@ -8,6 +8,7 @@
 //     --region ADDR:LEN     compare only this main-RAM window (a test ROM's result block), e.g. 0x02300000:0x1000
 //     --every               compare after every frame and stop at the first that differs (default: only at the end)
 //     --a K=V / --b K=V     settings for run A / run B (default A: jit=off, B: jit=on)
+//     --dump ADDR:LEN       print run A's bytes there at the end (to see what a test ROM wrote)
 //
 // The two back-ends aren't cycle-exact with each other (melonDS's JIT counts cycles per block), so a game can
 // drift apart in timing without a bug. Test ROMs that compute, write a result block and halt are the reliable
@@ -38,6 +39,7 @@ struct Opts {
     long frames = 600;
     uint32_t addr = 0, len = 0;  // len 0 = all of main RAM
     bool every = false;
+    uint32_t dump_addr = 0, dump_len = 0;
     std::vector<std::string> a{"jit=off"}, b{"jit=on"};
 };
 
@@ -131,6 +133,12 @@ int main(int argc, char** argv) {
             if (c == std::string::npos) return 2;
             o.addr = (uint32_t)strtoul(r.substr(0, c).c_str(), nullptr, 0);
             o.len = (uint32_t)strtoul(r.substr(c + 1).c_str(), nullptr, 0);
+        } else if (s == "--dump" && i + 1 < argc) {
+            std::string r = argv[++i];
+            size_t c = r.find(':');
+            if (c == std::string::npos) return 2;
+            o.dump_addr = (uint32_t)strtoul(r.substr(0, c).c_str(), nullptr, 0);
+            o.dump_len = (uint32_t)strtoul(r.substr(c + 1).c_str(), nullptr, 0);
         } else if (s == "--a" && i + 1 < argc) {
             if (!a_set) o.a.clear(), a_set = true;
             o.a.push_back(argv[++i]);
@@ -152,6 +160,16 @@ int main(int argc, char** argv) {
     long f = run(o, o.b, o.frames, &hb, o.every ? &ha : nullptr, nullptr);
     // With --every, run B stops at the first frame that differs (f < frames, or the last frame itself).
     bool differ = o.every ? hb.back() != ha[hb.size() - 1] : hb.back() != ha.back();
+    if (o.dump_len) {
+        Opts d = o;
+        d.addr = o.dump_addr;
+        d.len = o.dump_len;
+        Snapshot S;
+        run(d, o.a, o.frames, nullptr, nullptr, &S);
+        printf("run A at %08x:", o.dump_addr);
+        for (uint8_t b : S.ram) printf(" %02x", b);
+        printf("\n");
+    }
     if (!differ) {
         printf("SAME after %ld frames (%s)\n", o.frames, o.len ? "region" : "all of main RAM");
         return 0;
