@@ -649,6 +649,44 @@ void BananaRenderer2D::DrawBG_Text(u32 line, u32 bgnum)
     bool drawn = false;
 
 #ifdef BANANA_NEON
+    if (bpp8 && Banana2DFast)
+    {
+        // 256-colour tiles: the map from block pointers as for 16 colours; the 8 palette entries of a tile row loaded
+        // straight into two vector lanes each (no scalar and/store per pixel), masked and stored as two vectors
+        const u16* block[2] = { (const u16*)&vram[tilemapaddr & vrammask],
+                                (const u16*)&vram[(tilemapaddr + (widexmask << 3)) & vrammask] };
+        const u32 rowoff[2] = { tilesetaddr + (row << 3), tilesetaddr + ((7 - row) << 3) };
+        const uint32x4_t vmask = vdupq_n_u32(flagmask), zero = vdupq_n_u32(0);
+        for (int t = 0; t < 33; t++, xt += 8, out += 8)
+        {
+            u16 tile = block[(xt & widexmask) >> 8][(xt >> 3) & 31];
+            u64 pix = *(u64*)&vram[(rowoff[(tile >> 11) & 1] + ((tile & 0x03FF) << 6)) & vrammask];
+            if (pix == 0)
+            {
+                vst1q_u32(out, zero);
+                vst1q_u32(out + 4, zero);
+                full = false;
+                continue;
+            }
+            drawn = true;
+            if (HasZeroByte(pix)) full = false;
+            if (tile & (1<<10)) pix = __builtin_bswap64(pix);
+            const u32* pal = extpal ? GetBGExtPal(extpalslot, tile >> 12) : PalBG256;
+            uint32x4_t lo = vld1q_dup_u32(&pal[pix & 0xFF]);
+            lo = vld1q_lane_u32(&pal[(pix >> 8) & 0xFF], lo, 1);
+            lo = vld1q_lane_u32(&pal[(pix >> 16) & 0xFF], lo, 2);
+            lo = vld1q_lane_u32(&pal[(pix >> 24) & 0xFF], lo, 3);
+            uint32x4_t hi = vld1q_dup_u32(&pal[(pix >> 32) & 0xFF]);
+            hi = vld1q_lane_u32(&pal[(pix >> 40) & 0xFF], hi, 1);
+            hi = vld1q_lane_u32(&pal[(pix >> 48) & 0xFF], hi, 2);
+            hi = vld1q_lane_u32(&pal[pix >> 56], hi, 3);
+            vst1q_u32(out, vandq_u32(lo, vmask));
+            vst1q_u32(out + 4, vandq_u32(hi, vmask));
+        }
+        if (drawn) LayerDrawn |= (1 << bgnum);
+        if (full) LayerFull |= (1 << bgnum);
+        return;
+    }
     if (!bpp8 && Banana2DFast)
     {
         // 16-colour tiles, 8 pixels per tile row: the 8 nibbles spread to 8 index bytes (reversed for an X flip), looked up
@@ -857,6 +895,46 @@ void BananaRenderer2D::DrawBG_Affine(u32 line, u32 bgnum)
     u32* out = BGLine(bgnum);
     u32 acc = 0;   // OR of outputs, for emptiness
     u32 all = ~0u; // AND of outputs, for fullness
+
+    if (Banana2DFast)
+    {
+        // four pixels per step, each stage (map byte, tile pixel, palette entry) done for all four before the next,
+        // so the in-order A55 isn't waiting on one pixel's chain of three dependent loads; outside the map (no
+        // wrap) a pixel is zeroed with a select; two pixels per 64-bit and/or/store
+        const u8* pal8 = vram;
+        const u64 fm = (u64)flagmask | ((u64)flagmask << 32);
+        u64 acc64 = 0, all64 = ~0ULL;
+        u32 m[4], o[4];
+        for (int i = 0; i < 256; i += 4)
+        {
+            u32 rx[4], ry[4];
+            for (int k = 0; k < 4; k++)
+            {
+                rx[k] = rotX; ry[k] = rotY;
+                rotX += rotA; rotY += rotC;
+            }
+            for (int k = 0; k < 4; k++)
+            {
+                o[k] = (rx[k] | ry[k]) & overflowmask;
+                m[k] = pal8[(tilemapaddr + ((((ry[k] & coordmask) >> 11) << yshift) + ((rx[k] & coordmask) >> 11))) & vrammask];
+            }
+            for (int k = 0; k < 4; k++)
+                m[k] = pal8[(tilesetaddr + (m[k] << 6) + (((ry[k] >> 8) & 0x7) << 3) + ((rx[k] >> 8) & 0x7)) & vrammask];
+            for (int k = 0; k < 4; k++)
+                m[k] = o[k] ? 0 : PalBG256[m[k]];
+            u64 p0 = ((u64)m[0] | ((u64)m[1] << 32)) & fm;
+            u64 p1 = ((u64)m[2] | ((u64)m[3] << 32)) & fm;
+            *(u64*)&out[i] = p0;
+            *(u64*)&out[i + 2] = p1;
+            acc64 |= p0 | p1;
+            all64 &= p0 & p1;
+        }
+        acc = (u32)acc64 | (u32)(acc64 >> 32);
+        all = (u32)all64 & (u32)(all64 >> 32);
+        if (acc) LayerDrawn |= (1 << bgnum);
+        if (all) LayerFull |= (1 << bgnum);
+        return;
+    }
 
     for (int i = 0; i < 256; i++)
     {
@@ -1396,6 +1474,44 @@ void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
     }
 }
 
+// one sprite table entry on sprite line `line` (inside its Y range)
+inline void BananaRenderer2D::DrawSpriteEntry(u32 line, const SpriteEntry& e)
+{
+    s32 ypos;
+    if ((e.flags & 6) == 4)
+    {
+        // sprite mosaic (not for OBJ-window sprites): Y position latched by the register side
+        ypos = (R.OBJMosaicLine - e.ypos) & 0xFF;
+        if (ypos >= e.boundheight) ypos = 0;
+    }
+    else
+        ypos = (line - e.ypos) & 0xFF;
+
+    s32 xpos = e.xpos;
+    if (!(e.flags & 2))
+    {
+        s32 x0 = xpos < 0 ? 0 : xpos;
+        s32 x1 = xpos + e.boundwidth; if (x1 > 256) x1 = 256;
+        if (x0 < ObjXMin) ObjXMin = x0;
+        if (x1 > ObjXMax) ObjXMax = x1;
+    }
+    else
+        ObjWinDirty = true;
+
+    if (e.flags & 1)
+    {
+        if (e.flags & 2) DrawSprite_Rotscale<true>(e.num, e.boundwidth, e.boundheight, e.width, e.height, xpos, ypos);
+        else             DrawSprite_Rotscale<false>(e.num, e.boundwidth, e.boundheight, e.width, e.height, xpos, ypos);
+    }
+    else
+    {
+        if (e.flags & 2) DrawSprite_Normal<true>(e.num, e.width, e.height, xpos, ypos);
+        else             DrawSprite_Normal<false>(e.num, e.width, e.height, xpos, ypos);
+    }
+
+    NumSprites++;
+}
+
 void BananaRenderer2D::DrawSpritesFrom(u32 line, const Banana2DRegs& regs)
 {
     if (Banana2DFast)
@@ -1444,56 +1560,27 @@ void BananaRenderer2D::DrawSpritesFrom(u32 line, const Banana2DRegs& regs)
         RebuildSpriteTable();
 
     // render.2d_fast: only the entries on this line (the same ones, in the same order)
-    u64 onLine[2] = { ~0ULL, ~0ULL };
     if (Banana2DFast)
     {
-        onLine[0] = SpriteLines[line & 0xFF][0];
-        onLine[1] = SpriteLines[line & 0xFF][1];
+        for (int w = 0; w < 2; w++)
+        for (u64 bits = SpriteLines[line & 0xFF][w]; bits; bits &= bits - 1)
+        {
+            int i = w * 64 + __builtin_ctzll(bits);
+            if (i >= NumSpriteTab)
+                break;
+            const SpriteEntry& e = SpriteTab[i];
+            if (((line - e.ypos) & 0xFF) < e.boundheight)
+                DrawSpriteEntry(line, e);
+        }
     }
-    for (int w = 0; w < 2; w++)
-    for (u64 bits = onLine[w]; bits; bits &= bits - 1)
+    else
     {
-        int i = w * 64 + __builtin_ctzll(bits);
-        if (i >= NumSpriteTab)
-            break;
-        const SpriteEntry& e = SpriteTab[i];
-
-        if (((line - e.ypos) & 0xFF) >= e.boundheight)
-            continue;
-
-        s32 ypos;
-        if ((e.flags & 6) == 4)
+        for (int i = 0; i < NumSpriteTab; i++)
         {
-            // sprite mosaic (not for OBJ-window sprites): Y position latched by the register side
-            ypos = (R.OBJMosaicLine - e.ypos) & 0xFF;
-            if (ypos >= e.boundheight) ypos = 0;
+            const SpriteEntry& e = SpriteTab[i];
+            if (((line - e.ypos) & 0xFF) < e.boundheight)
+                DrawSpriteEntry(line, e);
         }
-        else
-            ypos = (line - e.ypos) & 0xFF;
-
-        s32 xpos = e.xpos;
-        if (!(e.flags & 2))
-        {
-            s32 x0 = xpos < 0 ? 0 : xpos;
-            s32 x1 = xpos + e.boundwidth; if (x1 > 256) x1 = 256;
-            if (x0 < ObjXMin) ObjXMin = x0;
-            if (x1 > ObjXMax) ObjXMax = x1;
-        }
-        else
-            ObjWinDirty = true;
-
-        if (e.flags & 1)
-        {
-            if (e.flags & 2) DrawSprite_Rotscale<true>(e.num, e.boundwidth, e.boundheight, e.width, e.height, xpos, ypos);
-            else             DrawSprite_Rotscale<false>(e.num, e.boundwidth, e.boundheight, e.width, e.height, xpos, ypos);
-        }
-        else
-        {
-            if (e.flags & 2) DrawSprite_Normal<true>(e.num, e.width, e.height, xpos, ypos);
-            else             DrawSprite_Normal<false>(e.num, e.width, e.height, xpos, ypos);
-        }
-
-        NumSprites++;
     }
     ObjDirtyMin = ObjXMin;
     ObjDirtyMax = ObjXMax;
@@ -2058,8 +2145,8 @@ struct CompStep
 // covers the whole line). has3d: a step is the 3D layer's own line, made into DrawBG_3D's pixels here
 // (opaque where the alpha byte is nonzero, with the 3D flag added); every other step's pixels are
 // opaque exactly where their flag byte is nonzero, so the same test serves all steps
-template<int N, bool needSecond, bool has3d>
-static void CompositeN(const CompStep* steps, const u32* startLine, bool onBackdrop, u32* outTop, u32* outSecond)
+template<int N, bool needSecond, bool has3d, bool onBackdrop>
+static void CompositeLoop(const CompStep* steps, const u32* startLine, u32* outTop, u32* outSecond)
 {
     // (the step pointers and priority values in registers for the whole line)
     const u32* line[N > 0 ? N : 1];
@@ -2103,6 +2190,14 @@ static void CompositeN(const CompStep* steps, const u32* startLine, bool onBackd
         if (needSecond)
             VStore(outSecond + i, sec);
     }
+}
+
+// (the backdrop case as its own loop, so neither has a test per step)
+template<int N, bool needSecond, bool has3d>
+static void CompositeN(const CompStep* steps, const u32* startLine, bool onBackdrop, u32* outTop, u32* outSecond)
+{
+    if (onBackdrop) CompositeLoop<N, needSecond, has3d, true>(steps, startLine, outTop, outSecond);
+    else            CompositeLoop<N, needSecond, has3d, false>(steps, startLine, outTop, outSecond);
 }
 
 void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)

@@ -235,6 +235,7 @@ private:
                      s32 rotA, s32 rotC, s32 rotX, s32 rotY, u32 bgnum);
 
     void RebuildSpriteTable();
+    inline void DrawSpriteEntry(u32 line, const SpriteEntry& e);
     void ApplySpriteMosaicX();
     void ResolveSprites();
     template<bool windows> void ResolveSpritesImpl();
