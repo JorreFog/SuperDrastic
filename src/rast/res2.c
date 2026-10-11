@@ -464,3 +464,34 @@ int res2_resolve_fx(uint8_t *ctx, uint8_t *out, unsigned bin, unsigned m, uint8_
 #undef COL
 #undef ATT
 }
+
+/* ---- DraStic's edge-marking gap passes ----
+ * update_frame_3d_4x, with edge marking on, re-marks the bin boundary rows 32k-1 and 32k (k = 1..11) after the bins:
+ * the 2x bin resolves leave the attribute lines 30 and 31 of bin k-1 and 0 and 1 of bin k in a gap buffer (sys +
+ * 0x32db40 + (k-1) 0x2000) and the colour lines 31 and 0 in another (sys + 0x343b40 + (k-1) 0x1000), and per line the
+ * driver fogs the colour line in place (fog modes: the weights of its attribute line, then the modulate), identifies
+ * its edges against the lines above and below and marks it into the output row. This is that driver, as decompiled
+ * (video_3d_resolve_bin_edge_mark[_fog_{full,alpha}]_gaps_4x), calling DraStic's own leaf routines L with the same
+ * arguments in the same order and one 520-byte buffer for the weights and the edges as it has: the same bytes, in the
+ * output rows and in the gap buffers. comp.c installs it in place of the three, and skips it at 3x (see there). */
+void res2_gaps(uint8_t *vb, int fog, const res2_gap_leaves *L) {
+    uint8_t *sys = vb - 0x1056c0;
+    const uint8_t *geom = RDPTR(sys, 0x2c1748);
+    uint8_t *out = RDPTR(sys, 0x34eb58) + 0xf800;
+    const uint32_t clear = RD32(sys, 0x34eb4c), sh = (RD32(sys, 0x34eb40) >> 8) & 0xf;
+    const uint32_t params = sh | ((*(const uint16_t *)(geom + 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16;
+    uint8_t buf[520] __attribute__((aligned(16)));
+    const uint8_t *a = sys + 0x32db40;
+    uint8_t *k = sys + 0x343b40;
+    for (int g = 0; g < 11; g++, a += 0x2000, k += 0x1000, out += 0x10000)
+        for (int h = 0; h < 2; h++) {
+            const uint32_t *at = (const uint32_t *)(a + h * 0x800);
+            uint32_t *kc = (uint32_t *)(k + h * 0x800);
+            if (fog) {
+                L->weights(at + 0x200, buf, geom + 0x9974, params);
+                L->modulate[fog - 1](kc, kc, buf, RD32(geom, 0x9a9c));
+            }
+            L->identify(buf, at, at + 0x200, at + 0x400, clear);
+            L->mark(out + h * 0x800, kc, buf, geom + 0x99b4);
+        }
+}

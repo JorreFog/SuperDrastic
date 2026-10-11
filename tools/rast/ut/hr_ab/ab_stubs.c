@@ -30,6 +30,7 @@ int defer_bin(unsigned bin, unsigned area) { return rast_defer; }
 void defer_measure_reset(void) {}
 void f_begin_frame(void) {}
 void comp_bin(uint8_t *sys, unsigned bin, int count) {}
+void comp_hr_frame(void) {}
 /* hr_render_bins' bin walk (binsched.c; the bin loop is not under test here) */
 void sched_start(sched_it *it, const uint8_t *ctx, int allow_dyn) { it->bin = -1; }
 int sched_next(sched_it *it) { return -1; }

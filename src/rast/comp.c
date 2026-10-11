@@ -53,6 +53,9 @@
  *    the planes with 0x40 bytes either side, the 3D pixels and the engine's first 0x400 bytes; counts per path every
  *    2 s ("[comp] composite:" lines, "[compcheck]" for a difference).
  *
+ * 4. DraStic's edge-marking gap passes (the bin boundary rows after the bins): replaced by the same driver on DraStic's
+ *    own leaf routines (res2.c res2_gaps), skipped at 3x, where they marked those rows from stale data (at hook_gaps).
+ *
  * RAST_COMP (or DSFLIP_RAST_COMP): 0 off (DraStic's function), 1 the NEON replacement only, 2 (default) with the
  * table. RAST_COMPFUSE (DSFLIP_RAST_COMPFUSE) 0 leaves render_scanline_2d_composite alone. */
 #define _GNU_SOURCE
@@ -238,6 +241,56 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
     }
 }
 
+/* ---- DraStic's edge-marking gap passes (update_frame_3d_4x, edge marking on, after the bins) ----
+ * They re-mark the bin boundary rows 32k-1 and 32k from gap buffers that the 2x bin resolves fill (res2.c res2_gaps()
+ * has the details). At 3x (hr.c) each bin is resolved with its neighbour lines in its context, those rows included,
+ * and nothing fills the gap buffers: the pass marked the rows from stale data (zeros in a game started at 3x, so all
+ * 22 rows transparent every frame: measured on the fog and edge-marking scene S4, 11264 pixels a frame with alpha 0
+ * there and none in the rows beside them). The three are replaced (the plain one's 4th instruction is an adrp: no
+ * trampoline) by res2_gaps(), DraStic's driver with its own leaf routines, which is skipped once the 3x pipeline has
+ * resolved a bin (comp_hr_frame(); the scale is fixed at start-up). RAST_GAPHOOK=0 leaves them alone. */
+#define DS_GAPS           0x56630      /* video_3d_resolve_bin_edge_mark_gaps_4x(vb) */
+#define DS_GAPS_FOG_FULL  0x580c0      /* video_3d_resolve_bin_edge_mark_fog_full_gaps_4x(vb) */
+#define DS_GAPS_FOG_ALPHA 0x586d0      /* video_3d_resolve_bin_edge_mark_fog_alpha_gaps_4x(vb) */
+#define DS_EDGE_IDENTIFY  0x9d368      /* video_3d_edge_identify_asm_4x(u8 edge[], above, line, below, clear) */
+#define DS_EDGE_MARK      0x9d2d8      /* video_3d_edge_mark_asm_4x(out, colour, edge[], edge colours) */
+#define DS_FOG_WEIGHTS    0x9cf00      /* video_3d_fog_calculate_weights_asm_4x(attr, u8 w[], table, params) */
+#define DS_FOG_MOD_FULL   0x9cff8      /* video_3d_fog_modulate_full_intermediate_asm_4x(dst, src, w[], fog colour) */
+#define DS_FOG_MOD_ALPHA  0x9d18c      /* video_3d_fog_modulate_alpha_intermediate_asm_4x(dst, src, w[], fog colour) */
+#define DSG(type, off) ((type)(ds_base + (off)))
+static int hr_frames;                   /* atomic: the 3x pipeline renders the frames */
+void comp_hr_frame(void) { __atomic_store_n(&hr_frames, 1, __ATOMIC_RELAXED); }
+static res2_gap_leaves gap_leaves;
+static void hook_gaps(uint8_t *vb, int fog) {
+    if (__atomic_load_n(&hr_frames, __ATOMIC_RELAXED)) return;
+    res2_gaps(vb, fog, &gap_leaves);
+}
+static void hook_gaps_plain(uint8_t *vb) { hook_gaps(vb, 0); }
+static void hook_gaps_fog_full(uint8_t *vb) { hook_gaps(vb, 1); }
+static void hook_gaps_fog_alpha(uint8_t *vb) { hook_gaps(vb, 2); }
+static const uint32_t expect_gaps[4] = { 0xd109c3ff, 0x91492001, 0x9146e003, 0xb0000842 };
+static const uint32_t expect_gaps_fog[4] = { 0xd10a43ff, 0x9146e001, 0x91492002, 0xa9007bfd };  /* both fog modes */
+static void gaps_init(void) {
+    const char *e = getenv("RAST_GAPHOOK");
+    if (e && !atoi(e)) return;
+    gap_leaves.identify = DSG(void (*)(uint8_t *, const uint32_t *, const uint32_t *, const uint32_t *, uint32_t), DS_EDGE_IDENTIFY);
+    gap_leaves.mark = DSG(void (*)(uint8_t *, const uint32_t *, const uint8_t *, const uint8_t *), DS_EDGE_MARK);
+    gap_leaves.weights = DSG(void (*)(const uint32_t *, uint8_t *, const uint8_t *, uint32_t), DS_FOG_WEIGHTS);
+    gap_leaves.modulate[0] = DSG(void (*)(uint32_t *, const uint32_t *, const uint8_t *, uint32_t), DS_FOG_MOD_FULL);
+    gap_leaves.modulate[1] = DSG(void (*)(uint32_t *, const uint32_t *, const uint8_t *, uint32_t), DS_FOG_MOD_ALPHA);
+    /* all three or none (a frame must not mix DraStic's and ours: they are the same bytes, but the 3x skip must hold) */
+    if (memcmp((const void *)(ds_base + DS_GAPS), expect_gaps, 16) || memcmp((const void *)(ds_base + DS_GAPS_FOG_FULL), expect_gaps_fog, 16) ||
+        memcmp((const void *)(ds_base + DS_GAPS_FOG_ALPHA), expect_gaps_fog, 16)) {
+        fprintf(stderr, "[comp] unknown edge-marking gap passes, left alone\n");
+        return;
+    }
+    rast_hook(DS_GAPS, expect_gaps, (void *)hook_gaps_plain);
+    rast_hook(DS_GAPS_FOG_FULL, expect_gaps_fog, (void *)hook_gaps_fog_full);
+    rast_hook(DS_GAPS_FOG_ALPHA, expect_gaps_fog, (void *)hook_gaps_fog_alpha);
+    fprintf(stderr, "[comp] edge-marking gap passes replaced (skipped at 3x)\n");
+}
+#undef DSG
+
 static void hook_uf1(uint8_t *sys, uint32_t skip) {
     invalidate_all(); orig_uf1(sys, skip); invalidate_all();
     if (compcheck) __atomic_fetch_add(&cc_upd[3], 1, __ATOMIC_RELAXED);
@@ -378,6 +431,7 @@ void comp_init(void) {
     if (!e) e = getenv("RAST_COMP");
     comp_mode = e ? atoi(e) : 2;
     compcheck = getenv("RAST_COMPCHECK") && atoi(getenv("RAST_COMPCHECK"));
+    gaps_init();
     if (comp_mode <= 0) return;
     if (comp_mode >= 2) {
         /* the table needs all three wrappers; any unknown entry leaves it off */
