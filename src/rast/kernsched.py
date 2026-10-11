@@ -550,7 +550,8 @@ def climb_loop(lines, start, end, evals, seed=1):
     second pass carries the first's state, as the loop does; three passes found the same orders): each step moves one
     instruction of a block to another place its dependences (dag()) allow, after its last
     predecessor and before its first successor (labels and branches stay), and keeps the order when the loop runs no
-    slower; `evals` such moves, fewer when a quarter of them pass without a gain. Deterministic (its own xorshift
+    slower; `evals` such moves (the equal-cost ones keep the climb moving on plateaus: stopping after a quarter of
+    the budget without a gain cost 02000's loop 4 cycles a group). Deterministic (its own xorshift
     generator, seeded); identical paths are climbed once."""
     seg, cur = [], []
     for k in range(start, end):
@@ -592,8 +593,8 @@ def climb_loop(lines, start, end, evals, seed=1):
             x ^= (x << 13) & 0xffffffffffffffff; x ^= x >> 7; x ^= (x << 17) & 0xffffffffffffffff
             return (x >> 11) % n
         best = run(orders)
-        done = since = tries = 0
-        while done < evals and since < evals // 4 and tries < 50 * evals:
+        done = tries = 0
+        while done < evals and tries < 50 * evals:
             tries += 1
             b = big[rnd(len(big))]; o = orders[b]; n = len(o)
             k = rnd(n); x_ = o[k]
@@ -605,10 +606,8 @@ def climb_loop(lines, start, end, evals, seed=1):
             if t >= k: t += 1
             q = o[:k] + o[k + 1:]; q.insert(t, x_)
             o2 = list(orders); o2[b] = q
-            c = run(o2); done += 1; since += 1
-            if c <= best:
-                if c < best: since = 0
-                best, orders = c, o2
+            c = run(o2); done += 1
+            if c <= best: best, orders = c, o2
         new = []
         for sg, o in zip(seg, orders):
             if o is None: new.append(lines[sg])

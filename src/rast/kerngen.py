@@ -1100,14 +1100,16 @@ def owner_test(fail="8f"):
     e("xtn v28.8b, v27.8h"); e("fmov x8, d28"); e(f"cbz x8, {fail}")
 
 def pair_screen(D, R):
-    """the lazy loop's groups two at a time while both fail (most of a translucent polygon's groups behind opaque
-    ones: the stress ROM's 02100 tests ~26000 groups a frame, ~19000 of them failing before a line's first pass): the
-    depth words of the group and the next, both attribute blocks loaded, compared and their masks ORed (the next
-    group's through the tail table: x5 > 8, so the group itself is full) in one block, one branch. Both failing:
-    two groups on; otherwise on into the single test (26:), which tests the group again and finds its passing pixels
-    or steps one group (the pair then starts at the passing group). Depth-equal lines and a line's last group take
-    the single test. The same reads as the single test's (the next group is the line's)."""
-    e("tbnz w7, #1, 26f"); e("cmp x5, #8"); e("b.ls 26f")
+    """after a failing group (21:), the lazy loop's groups two at a time while both fail (most of a translucent
+    polygon's groups behind opaque ones: the stress ROM's 02100 tests ~26000 groups a frame, ~19000 of them failing
+    before a line's first pass), 22:: the depth words of the group and the next, both attribute blocks loaded,
+    compared and their masks ORed (the next group's through the tail table: x5 > 8, so the group itself is full) in
+    one block, one branch. Both failing: two groups on; otherwise back to the single test (20:), which tests the group
+    again and finds its passing pixels or steps one group. A line's first group takes the single test alone (most
+    opaque lines pass there: the pair screen first cost them ~40 instructions a line), as do the depth-equal lines
+    and a line's last group. The same reads as the single test's (the next group is the line's)."""
+    e("22:")
+    e("tbnz w7, #1, 20b"); e("cmp x5, #8"); e("b.ls 20b")
     if D == 0:
         depth(D)                                                                # (v25 v26; v27 scratch)
         if not taken("v9"): e("add v29.2d, v6.2d, v9.2d"); e("add v30.2d, v7.2d, v9.2d")
@@ -1125,11 +1127,10 @@ def pair_screen(D, R):
     e("uzp1 v27.8h, v27.8h, v28.8h"); e("uzp1 v31.8h, v31.8h, v24.8h")
     e("mov x9, #16"); e("cmp x5, #16"); e("csel x9, x5, x9, lo"); e("sub x9, x9, #8")      # (the next group's pixels)
     e("ldr q28, [x20, x9, lsl #4]"); e("and v31.16b, v31.16b, v28.16b")
-    e("orr v27.16b, v27.16b, v31.16b"); e("xtn v28.8b, v27.8h"); e("fmov x9, d28"); e("cbnz x9, 26f")
+    e("orr v27.16b, v27.16b, v31.16b"); e("xtn v28.8b, v27.8h"); e("fmov x9, d28"); e("cbnz x9, 20b")
     e("subs x5, x5, #16"); e(f"b.ls {'9f' if R else '15f'}")
     e("add x2, x2, #64"); z_step8(D); z_step8(D)
-    e("b 20b")
-    e("26:")
+    e("b 22b")
 
 def lazy_loop(D, T, R, F, M):
     """the group loop until the line's first group with a passing pixel (20:): the depth (or owner) test and the
@@ -1137,7 +1138,6 @@ def lazy_loop(D, T, R, F, M):
     first pass: no pass mask before it is set, and a line without one skips the edge marking); then (27:) the
     line's weights and interpolants (v28, x8: the pass mask kept), and on into the full loop at the weights (28:)"""
     e("20:")
-    if M == 0: pair_screen(D, R)
     if M == 2: owner_test("21f")
     else: depth(D); test(D, "21f", 34)
     e("b 27f")
@@ -1146,7 +1146,8 @@ def lazy_loop(D, T, R, F, M):
     if M: e(f"add x1, x1, #{16 if M == 1 else 32}")
     e(f"add x2, x2, #{16 if M == 2 else 32}")
     z_step8(D)
-    e("b 20b")
+    if M == 0: pair_screen(D, R)                                                 # (22:, back to 20: on a pass)
+    else: e("b 20b")
     if M != 2: test_equal(D, 34)
     e("27:")
     steps_setup(D, True)                                                         # (w9 = C)
@@ -1189,7 +1190,9 @@ PIPE_FLAGS_FLAT = ((1 << 0) | (1 << 1) | (1 << 2) | (1 << 15), 1 << 15)     # (f
 PIPE_FLAGS_TRANS = (0x453f, (1 << 3) | (1 << 8) | (1 << 14))
 PIPE_WHITE = 1 << 2      # the flat kernels' white loops: the same mask, bit 2 set (a white flat colour: the texel)
 
-PIPE_CLIMB = 24000       # climb_loop()'s evaluated moves for each pipelined loop (~25 s each; seven distinct loops)
+PIPE_CLIMB = 12000       # climb_loop()'s evaluated moves for each pipelined loop, and for the profiles' hot ones:
+PIPE_CLIMB_HOT, PIPE_HOT = 40000, {("02000", 51), ("02010", 51), ("02010", 121), ("02100", 51), ("02110", 51),
+                                   ("04000", 81), ("04010", 81), ("14010", 151)}   # (the h twins: the same paths)
 
 def pipe_ok(D, T, R, F, M, B=0):
     """the kernels with pipe()'s loop: z or w depth, wrapped textures, opaque: lit direct (02000 12000: keep_dep()'s
@@ -1657,5 +1660,7 @@ if os.environ.get("KERNSCHED", "1") != "0":
     # pipe()'s loops, as a whole (kernsched.climb_loop(): the steady path from 51: to the jump back)
     for L in (51, 81, 121, 151):
         for k in [k for k, l in enumerate(out) if l == f"{L}:"]:
-            kernsched.climb_loop(out, k, out.index(f"\tb {L}b", k) + 1, PIPE_CLIMB)
+            name = next(out[j] for j in range(k, -1, -1) if out[j].startswith("rast_kern_"))   # (rast_kern_[h]DTRFB:)
+            n = PIPE_CLIMB_HOT if (name[len("rast_kern_"):-1].lstrip("h"), L) in PIPE_HOT else PIPE_CLIMB
+            kernsched.climb_loop(out, k, out.index(f"\tb {L}b", k) + 1, n)
 open(sys.argv[1] if len(sys.argv) > 1 else "rast_kern.S", "w").write("\n".join(out) + "\n")

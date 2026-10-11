@@ -446,6 +446,20 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   cycles a frame, base -> ours, on the stress ROM L4: the queue 0.314 -> 0.204 M (46.6 -> 30.3 cycles a call, 6740
   calls a frame), add_vertex 0.077 -> 0.050 M, the vertex block 0.058 -> 0.031 M, the y-sort 0.151 -> 0.148 M;
   together 0.167 M a frame less on L4, 0.088 M on S4, 0.063 M on S7.
+  Then the lazy loop's first group is tested alone again (the pair screen after a failing group only: a line whose
+  first group passed ran it and then the single test, ~40 cycles; llvm-mca, a line from its start into the pipelined
+  loop: 02000 181 -> 140 cycles, 02010 169 -> 128, 02100 180 -> 139), and the climb spends its budget (stopping
+  after a quarter of it without a gain cut it off on plateaus), 40000 evaluations for the eight loops the profiles
+  show hot and 12000 for the rest: 02000 94 -> 88.5 cycles a group, 02100 156 -> 153, 02110 152 -> 150, 04000 (16
+  colours) 98 -> 96.5; generating the kernels takes about 3 minutes. Modeled A55 cycles a frame (90 s profiles
+  against the main branch (9991184, same session): stress ROM L4 at 2x, 02100 2.71 -> 2.33 M, 02110 1.41 -> 1.20,
+  02010 2.24 -> 1.95, 02000 4.03 -> 3.90 (instructions +0.7%), the four 10.39 -> 9.38 M (-9.7%), the frame net of
+  [other] 16.49 -> 15.48 M (-6.1%); at 3x the four 22.21 -> 19.63 M (-11.6%; h02000's instructions 9.76 and 9.74 M:
+  the same span), the frame net 30.01 -> 27.41 M (-8.7%); the field scene S7's 14010 1.32 -> 1.03 M (-22%), its
+  frame net 3.55 -> 3.26 M (-8.4%); S4 the same (its kernels were pipelined on the main branch already)).
+  `ut/kern_ab` against 4f63ae7: 0 of 170000 batches differ; the scene cycle's differing bins as DraStic's renderer's
+  at every checkpoint to 40800 bins with the compositor's checks 0 differ, with deferred shading to 69600, S4 0 bins
+  in 31200, the stress ROM's 12 in 12000, the four 3x runs without signals.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -705,7 +719,8 @@ of the instructions after its join, which makes one block of the code on both si
 candidate orders it keeps the one that runs fastest on its model of llvm-mca's in-order Cortex-A55 (issue groups, the
 FP and load pipes' occupancy, the in-order writeback; it matches llvm-mca's cycles on the group loops within a
 cycle), with the state the block before leaves; the pipelined loops' steady paths are then climbed as a whole
-(climb_loop(), 24000 evaluated moves a loop: nearly all of the 2.5 minutes a generation takes); `KERNSCHED=0 python3
+(climb_loop(), 40000 evaluated moves for the eight loops the profiles show hot and 12000 for the others: nearly
+all of the ~3 minutes a generation takes on a quiet host); `KERNSCHED=0 python3
 kerngen.py` writes the kernels unscheduled and unclimbed.
 
 ## Simulator usage (see `tools/sim/` for setup; `dev/` holds the scripts used during development)
@@ -796,11 +811,20 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
   test instead of the store models 1-2 cycles worse. Left: the texel gather's ld2 (7 cycles with nothing
   independent left; ldr q and uzp model 2 worse); the 16-colour gather's bytes through the stack (stp w and ld2 to
   assemble 8 bytes; ORed together in x9 and moved by fmov they model the same). Consecutive groups now overlap in
-  the hottest kernels' pipelined loops (Status, fifth round); left for them: the other kernels (03010 13010 with
-  clamped textures, whose clamp branches would need a loop per mode; 01000 11000; the lit paletted 04000 family,
-  whose spare registers hold the vertex colour; the visibility and shade passes; bilinear, which uses every
-  register), the w-depth kernels' lines with 64-bit products, and the loops' steady path itself (FP-pipe bound
-  ~73 cycles a group for 02000 in llvm-mca's model, 92 now; the climb's model and llvm-mca differ by a few cycles).
+  the pipelined loops of 02000 02010 04000 04010 12000 14000 14010 (and the flat ones' white lines) and of the
+  translucent 02100 02110 (Status, fifth round). Left: the other kernels (03010 13010 with clamped textures, whose
+  clamp branches would need a loop per mode; 01000 11000; S7's 23110, 0.36 M a frame spread over many flag paths;
+  S4's untextured 00010, 0.41 M, whose 34-cycle group is one test chain: a pipelined step would still wait for the
+  next group's mask, ~0.1 M; the visibility and shade passes; bilinear, which uses every register), the w-depth
+  kernels' lines with 64-bit products, and in the loops: the steady path (02000 88.5 cycles a group against the FP
+  pipes' bound of ~70 in the model: the rest is in-order writeback and operand stalls; annealing found worse orders
+  than the climb, and more evaluations give a cycle or two); the translucent loops (153 and 150 cycles against a
+  bound of ~105: the destination's ld2 and the colour's ldp wait for registers the colour stage still uses, every
+  register being taken); the line entry (~90 modeled cycles from a line's first passing group into the loop, against
+  ~3 groups a line on L4: one block with the first group's weights at 27: modeled 94 -> 89 only, the chain of the
+  line's steps and the first weights is ~55 cycles); the lazy loop's two-group screen (24.5 cycles a failing group,
+  latency-bound: a bound test, the 16 attribute depths' umaxv against the end depths, models 23.5); the partial
+  group's store (ld4, bit, st4 instead of the zips: 34 -> 30 modeled cycles, ~6300 a frame on L4).
   Hoisting the fall-through code over the
   w7 flag branches does not pay (llvm-mca: +1-8% on most kernels, the hoisted work lands above taken branches; -4-6%
   on the bilinear ones).
