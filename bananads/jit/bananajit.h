@@ -74,6 +74,10 @@ private:
     struct ColdTail { std::vector<bananajit::A64::Fixup> fix; bool known; u32 pc; u32* slot; };
     void SyncTime();
     void RefreshBudget();
+    void ForceExit();
+    void EmitSync(u32 slot);
+    void EmitBudget(u32 slot);
+    int CurNum = 0;  // (the stubs' CPU while they are generated)
     struct Slot { u32 orig; u32 pc; u8 num; };
     std::unordered_map<u32, Slot> Slots;               // an exit's slot (code offset) -> its link path's B, its target
     std::unordered_map<u32, std::vector<u32>> Links;   // a block's entry (code offset) -> the slots linked to it
@@ -148,8 +152,9 @@ private:
 
     melonDS::NDS& NDS;
     u8* CodeBase = nullptr;
-    bananajit::A64 A;
-    size_t CodeSize = 0;
+    bananajit::A64 A;          // the near region: the blocks' hot code (and the shared stubs, first)
+    bananajit::A64 F;          // the far region: their cold code (exits' ways back, link paths, slow paths)
+    size_t CodeSize = 0, NearSize = 0;
 
     // per block
     ARM* CurCPU = nullptr;

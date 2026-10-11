@@ -33,12 +33,18 @@ ARM_Dispatch:
     add x7, x2, #16             // the fast-memory base's offset from this CPU object -> x8
     ldrsw x7, [x7, x6, lsl #2]
     ldr x8, [x29, x7]
-    add x7, x2, #32             // the budget: Target - Timestamp
+    add x7, x2, #32             // B0 = Target - Timestamp; w28 = Cycles - B0 (bananajit.cpp, BudgetOff)
     ldrsw x7, [x7, x6, lsl #2]
     add x7, x29, x7
     ldp x9, x10, [x7]
     sub x10, x10, x9
-    str w10, [sp, #96]
+    sub w28, w28, w10
+    ldr w5, [x2, #28]           // StopExecution set: forced (B0 += w28, w28 = 0), the first exit leaves
+    ldr w9, [x29, x5]
+    cbz w9, 3f
+    add w10, w10, w28
+    mov w28, #0
+3:  str w10, [sp, #96]
     ldp w5, w6, [x2, #8]        // offsetof(ARM, R), resident
     cbz w6, 1f
     add x7, x29, x5             // the guest's r0-r7 in w19-w26, r8-r14 in w9-w15
@@ -58,6 +64,8 @@ BJ_RetState:
     adrp x2, bj_offsets
     add x2, x2, :lo12:bj_offsets
     ldp w3, w4, [x2]
+    ldr w5, [sp, #96]           // the CPU's Cycles: w28 + B0
+    add w28, w28, w5
     str w28, [x29, x3]
     str w27, [x29, x4]
     ldp w5, w6, [x2, #8]

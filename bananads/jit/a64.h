@@ -238,6 +238,7 @@ struct A64 {
     Fixup cbz_fwd(Reg t) { Fixup f{code, 2}; put(cbz_(t, 0)); return f; }
     Fixup cbnz_fwd(Reg t) { Fixup f{code, 2}; put(cbnz_(t, 0)); return f; }
     Fixup tbnz_fwd(Reg t, uint32_t bit) { Fixup f{code, 3}; put(0x37000000 | (bit & 31) << 19 | t); return f; }  // W, bit < 32
+    Fixup tbz_fwd(Reg t, uint32_t bit) { Fixup f{code, 3}; put(0x36000000 | (bit & 31) << 19 | t); return f; }
     void land(Fixup f) {
         int32_t words = (int32_t)(code - f.at);
         if (f.kind == 0) *f.at |= words & 0x3FFFFFF;

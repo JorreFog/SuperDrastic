@@ -26,12 +26,13 @@ extern "C" uint64_t bj_link[3] = {0, 0, 0};
 // linkage.S's ARM_Dispatch and BJ_RetState read these: the offsets, and whether registers are resident (one
 // setting for the process: BANANAJIT_NO_RESIDENT, development only)
 // [4], [5]: the offset of the fast-memory base (ARMJIT_Memory::FastMem9Start/7Start) from the ARM9 / ARM7 object,
-// [6]: offsetof(ARM, Num); ARM_Dispatch loads it into x8 (linked blocks keep it there). [8], [9]: the offset of
+// [6]: offsetof(ARM, Num); ARM_Dispatch loads it into x8 (linked blocks keep it there). [7]: offsetof(ARM,
+// StopExecution). [8], [9]: the offset of
 // NDS::ARM9Timestamp / ARM7Timestamp (Target follows it) from the ARM9 / ARM7 object, for the cycle budget
 extern "C" melonDS::u32 bj_offsets[10];
 extern "C" melonDS::u32 bj_offsets[10] = { (melonDS::u32)offsetof(melonDS::ARM, Cycles), (melonDS::u32)offsetof(melonDS::ARM, CPSR),
                                            (melonDS::u32)offsetof(melonDS::ARM, R), 1, 0, 0,
-                                           (melonDS::u32)offsetof(melonDS::ARM, Num), 0, 0, 0 };
+                                           (melonDS::u32)offsetof(melonDS::ARM, Num), (melonDS::u32)offsetof(melonDS::ARM, StopExecution), 0, 0 };
 
 namespace melonDS {
 
@@ -41,8 +42,11 @@ static constexpr Reg RCPU = (Reg)29, RCycles = (Reg)28, RCPSR = (Reg)27;
 static constexpr Reg W0 = (Reg)0, W1 = (Reg)1, W2 = (Reg)2, W3 = (Reg)3, W4 = (Reg)4, W5 = (Reg)5, W6 = (Reg)6;
 
 static size_t off_R(int i) { return offsetof(ARM, R) + 4 * i; }
-// the cycle budget's slot in ARM_Dispatch's stack frame (linkage.S): Target - Timestamp when the Timestamp was last
-// brought up to date (ExitBlock)
+// The cycles. w28 = the cycles since the Timestamp was last brought up to date, minus B0, which is Target -
+// Timestamp then, kept in ARM_Dispatch's stack frame at BudgetOff (linkage.S). So w28 reaches 0 when the CPU's slice
+// is over, and an exit tests one bit. StopExecution (IRQs, halts, idle loops) is folded in by "forcing": B0 += w28,
+// w28 = 0 (the cycles stay the same, the next exit leaves) at dispatch, after calls into the core and at idle
+// branches. BJ_RetState stores w28 + B0 as the CPU's Cycles.
 static constexpr u32 BudgetOff = 96;
 static bool FastLoads9Ok();
 
@@ -51,6 +55,7 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
     CodeMemBase = ARMJIT_Global::AllocateCodeMem();
     CodeBase = (u8*)CodeMemBase;
     CodeSize = ARMJIT_Global::CodeMemorySliceSize;
+    NearSize = (CodeSize / 4 * 3) & ~(size_t)0xFFFF;  // the blocks' hot code; the rest is the far region (cold code)
     // Every offset BananaJIT stores to must fit an unsigned scaled 12-bit load/store offset.
     assert(offsetof(ARM, CurInstr) < 16380 && offsetof(ARM, CodeCycles) < 16380);
     Reset();
@@ -109,6 +114,7 @@ Compiler::~Compiler() {
 
 void Compiler::Reset() {
     A = A64((uint32_t*)CodeBase);
+    F = A64((uint32_t*)(CodeBase + NearSize));
     Patches.clear();
     SlowPaths.clear();
     ColdTails.clear();
@@ -408,7 +414,14 @@ void Compiler::AddrNearCPU(Reg d, const void* p) {
 // up to date (ARM_Dispatch, or a call into the core: SyncTime), and ARM_Dispatch's stack frame holds what was left
 // then (Target - Timestamp, BudgetOff). A call may schedule an event (Target moves), so RefreshBudget after it.
 
-void Compiler::SyncTime() { A.jump(SyncStub[CurCPU->Num], true); }        // Timestamp += w28; w28 = 0
+void Compiler::ForceExit() {  // the next exit leaves (B0 += w28, w28 = 0)
+    A.ldr((Reg)16, SP, BudgetOff);
+    A.add((Reg)16, (Reg)16, RCycles);
+    A.str((Reg)16, SP, BudgetOff);
+    A.movz(RCycles, 0);
+}
+
+void Compiler::SyncTime() { A.jump(SyncStub[CurCPU->Num], true); }        // Timestamp += the cycles since
 void Compiler::RefreshBudget() { A.jump(BudgetStub[CurCPU->Num], true); }  // the budget slot <- Target - Timestamp
 
 // Leaving a block. With block linking on (the default; jit.link=off turns it off), the block does what
@@ -433,11 +446,7 @@ void Compiler::ExitBlock(bool known, u32 knownPC, int thumbAfter, bool addrInW0)
     }
     const Reg X0r = W0, X16 = (Reg)16, X17 = (Reg)17;
     std::vector<A64::Fixup> toBack;
-    A.ldr(X16, RCPU, offsetof(ARM, StopExecution));
-    toBack.push_back(A.cbnz_fwd(X16));
-    A.ldr(X16, SP, BudgetOff);
-    A.subs(ZR, RCycles, X16);
-    toBack.push_back(A.bcond_fwd(GE));
+    toBack.push_back(A.tbz_fwd(RCycles, 31));  // w28 >= 0: the slice is over, or StopExecution forced it
     if (known) {
         u32* slot = A.here();
         A.brk();  // the slot: B to its link path (after the block) until linked
@@ -513,7 +522,7 @@ void Compiler::Fallback(bool thumb) {
     FlushCycles();
     FlushRegs(true);
     SyncTime();
-    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
+    A.str(ZR, RCPU, offsetof(ARM, Cycles));  // (synced: the interpreter's cycles from 0)
     A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
     A.movi(W0, CurInstr.Instr);  // R15 is already stored (CompileBlock)
     A.str(W0, RCPU, offsetof(ARM, CurInstr));
@@ -812,7 +821,7 @@ void Compiler::CallOut(const void* fn) {
     FlushCycles();
     StoreHigh();
     SyncTime();
-    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
+    A.str(ZR, RCPU, offsetof(ARM, Cycles));
     A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
     if (CurCPU->Num == 0) {
         A.movi((Reg)16, (u32)(s32)CurInstr.CodeCycles);
@@ -1321,19 +1330,42 @@ int64_t Compiler::TimestampOff(int num) const {
 
 // SyncStub: Timestamp += w28, w28 = 0. BudgetStub: [sp + BudgetOff] = Target - Timestamp, for the caller's sp (the
 // dispatcher's frame). Both clobber x16, x17 only.
-void Compiler::GenTimeStubs(int num) {
-    SyncStub[num] = A.here();
-    AddCPUOffS((Reg)16, TimestampOff(num));
-    A.ldrx((Reg)17, (Reg)16, 0);
-    A.addx_sxtw((Reg)17, (Reg)17, RCycles);
-    A.strx((Reg)17, (Reg)16, 0);
+// SyncStub: Timestamp += the cycles since (w28 + B0); B0 = -w28 (w28 stays). BudgetStub, after a call (w28 = the
+// cycles since the sync, which the call may have added to): B0 = Target - Timestamp (the call may have scheduled an
+// event), w28 -= B0, forced when StopExecution is set. Both for the caller's sp (the dispatcher's frame) and clobber
+// x16, x17 only (not the host's NZCV).
+void Compiler::EmitSync(u32 slot) {
+    A.ldr((Reg)17, SP, slot);
+    A.add((Reg)17, (Reg)17, RCycles);             // the cycles since the last sync
+    AddCPUOffS((Reg)16, TimestampOff(CurNum));
+    A.ldrx((Reg)16, (Reg)16, 0);
+    A.addx_sxtw((Reg)16, (Reg)16, (Reg)17);
+    AddCPUOffS((Reg)17, TimestampOff(CurNum));
+    A.strx((Reg)16, (Reg)17, 0);
+    A.sub((Reg)17, ZR, RCycles);
+    A.str((Reg)17, SP, slot);                     // B0 = -w28
+}
+
+void Compiler::EmitBudget(u32 slot) {
+    AddCPUOffS((Reg)16, TimestampOff(CurNum));
+    A.ldpx((Reg)16, (Reg)17, (Reg)16, 0);
+    A.subx((Reg)17, (Reg)17, (Reg)16);           // B0 = Target - Timestamp
+    A.sub(RCycles, RCycles, (Reg)17);
+    A.ldr((Reg)16, RCPU, offsetof(ARM, StopExecution));
+    auto go = A.cbz_fwd((Reg)16);
+    A.add((Reg)17, (Reg)17, RCycles);             // forced: the next exit leaves
     A.movz(RCycles, 0);
+    A.land(go);
+    A.str((Reg)17, SP, slot);
+}
+
+void Compiler::GenTimeStubs(int num) {
+    CurNum = num;
+    SyncStub[num] = A.here();
+    EmitSync(BudgetOff);
     A.ret();
     BudgetStub[num] = A.here();
-    AddCPUOffS((Reg)16, TimestampOff(num));
-    A.ldpx((Reg)16, (Reg)17, (Reg)16, 0);
-    A.subx((Reg)17, (Reg)17, (Reg)16);
-    A.str((Reg)17, SP, BudgetOff);
+    EmitBudget(BudgetOff);
     A.ret();
 }
 
@@ -1350,11 +1382,8 @@ u32* Compiler::GenMemStub(int num, bool load, int kind, int r) {
     for (int k = 0; k < 4; k++) A.stpx((Reg)(8 + 2 * k), (Reg)(9 + 2 * k), SP, 16 * k);
     A.mrs_nzcv((Reg)16);
     A.stpx((Reg)16, (Reg)30, SP, 64);
-    AddCPUOffS((Reg)16, TimestampOff(num));  // the handlers read the time (timers) and schedule events
-    A.ldrx((Reg)17, (Reg)16, 0);
-    A.addx_sxtw((Reg)17, (Reg)17, RCycles);
-    A.strx((Reg)17, (Reg)16, 0);
-    A.movz(RCycles, 0);
+    CurNum = num;
+    EmitSync(80 + BudgetOff);  // the handlers read the time (timers) and schedule events
     const void* fn;
     if (load) {
         const int size = kind < 2 ? 1 : kind < 4 ? 2 : 4;
@@ -1378,13 +1407,11 @@ u32* Compiler::GenMemStub(int num, bool load, int kind, int r) {
         else { A.mov(W0, W1); A.mov(W1, R); }                             // SlowWrite7(addr, val)
     }
     A.jump(fn, true);
+    A.movz(RCycles, 0);  // (no cycles since the sync: the slow functions charge none)
+    EmitBudget(80 + BudgetOff);
     A.ldpx((Reg)16, (Reg)30, SP, 64);
     A.msr_nzcv((Reg)16);
     for (int k = 0; k < 4; k++) A.ldpx((Reg)(8 + 2 * k), (Reg)(9 + 2 * k), SP, 16 * k);
-    AddCPUOffS((Reg)16, TimestampOff(num));  // the call may have scheduled an event: the budget again
-    A.ldpx((Reg)16, (Reg)17, (Reg)16, 0);
-    A.subx((Reg)17, (Reg)17, (Reg)16);
-    A.str((Reg)17, SP, 80 + BudgetOff);
     A.addxi(SP, SP, 80);
     if (load) {
         if (kind == 0) A.uxtb(R, W0);
@@ -1587,6 +1614,7 @@ void Compiler::SlowBlockTransfer(bool load, const int* regs, int n, SaveSet ss) 
             }
         }
     RestoreCallerSaved(extra, ss);
+    A.movz(RCycles, 0);  // (the slow functions charge no cycles)
     RefreshBudget();
     if (ss.nzcv) {
         if (flagsFull) FlagsEpoch = A.flagEpoch;
@@ -1765,7 +1793,7 @@ void Compiler::CompileBlockTransfer() {
     FlushCycles();
     StoreHigh();
     SyncTime();
-    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
+    A.str(ZR, RCPU, offsetof(ARM, Cycles));
     A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
     if (Num == 0) {  // the ARM9's AddCycles_CDI/CD read CodeCycles, and R[15]&2 for Thumb
         A.movi((Reg)16, (u32)(s32)CurInstr.CodeCycles);
@@ -1967,6 +1995,7 @@ bool Compiler::CompileBranch() {
     if (CurInstr.BranchFlags & branch_IdleBranch) {
         A.movz(W0, 1);
         A.strb(W0, RCPU, offsetof(ARM, IdleLoop));
+        ForceExit();
     }
     if (CurInstr.BranchFlags & branch_FollowCondTaken) return false;  // the block goes on at the target
     const s32 keep = ConstantCycles;
@@ -2153,7 +2182,8 @@ static const char* TraceName(bool thumb, const FetchedInstr& f) {
 }
 
 JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[], int count, bool) {
-    if ((size_t)((u8*)A.here() - CodeBase) > CodeSize - 64 * 1024) {
+    if ((size_t)((u8*)A.here() - CodeBase) > NearSize - 64 * 1024 ||
+        (size_t)((u8*)F.here() - CodeBase) > CodeSize - 64 * 1024) {
         Platform::Log(Platform::LogLevel::Debug, "[bananajit] code memory full, starting over\n");
         NDS.JIT.ResetBlockCache();
     }
@@ -2284,6 +2314,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             if (taken && (CurInstr.BranchFlags & branch_IdleBranch)) {
                 A.movz(W0, 1);
                 A.strb(W0, RCPU, offsetof(ARM, IdleLoop));
+                ForceExit();
             }
             if ((taken && (CurInstr.BranchFlags & branch_FollowCondNotTaken)) ||
                 (!taken && (CurInstr.BranchFlags & branch_FollowCondTaken))) {
@@ -2320,9 +2351,21 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
 
     if (!lastExited) ExitBlock(exitKnown, exitPC);
 
-    // the exits' ways back to the loop, out of the way of the block's own code
+    // The block's cold code goes to the far region (melonDS's JIT does the same): the near region holds the blocks'
+    // hot code only, densely, for the A55's small instruction cache and TLB. In the near code each exit's way back
+    // is one B, its conditional branches land on it.
+    std::vector<u32*> nearB;
     for (auto& t : ColdTails) {
         for (auto f : t.fix) A.land(f);
+        nearB.push_back(A.here());
+        A.brk();
+    }
+    u32* nearEnd = A.here();
+    std::swap(A, F);
+    u32* farStart = A.here();
+    for (size_t k = 0; k < ColdTails.size(); k++) {
+        const ColdTail& t = ColdTails[k];
+        *nearB[k] = A64::b_((int32_t)(A.here() - nearB[k]));
         if (t.known) { A.movi(W0, t.pc); A.str(W0, RCPU, off_R(15)); }
         A.jump((const void*)&BJ_RetState, false);
         if (t.slot) {
@@ -2330,7 +2373,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             u32* path = A.here();
             *t.slot = A64::b_((int32_t)(path - t.slot));
             Slots[(u32)((u8*)t.slot - CodeBase)] = {*t.slot, t.pc, (u8)CurCPU->Num};
-            A.adr((Reg)16, t.slot);
+            A.adrp((Reg)16, t.slot);
+            A.addxi((Reg)16, (Reg)16, (u32)((uintptr_t)t.slot & 0xFFF));
             A.adrp((Reg)17, &bj_link[0]);
             A.addxi((Reg)17, (Reg)17, (u32)((uintptr_t)&bj_link[0] & 0xFFF));
             A.strx((Reg)16, (Reg)17, 0);
@@ -2342,7 +2386,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
         }
     }
     ColdTails.clear();
-    // the fast-memory accesses' slow paths, likewise
+    // the block transfers' slow paths, likewise
     for (auto& d : SlowPaths) {
         u32* slow = A.here();
         d.emit();
@@ -2351,6 +2395,10 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             Patches[(u32)((u8*)f - CodeBase)] = {(u32)((u8*)d.seq - CodeBase), (u32)((u8*)slow - CodeBase), 0, 1};
     }
     SlowPaths.clear();
+    u32* farEnd = A.here();
+    std::swap(A, F);
+    __builtin___clear_cache((char*)farStart, (char*)farEnd);
+    (void)nearEnd;
     CurConditional = false;
 
     __builtin___clear_cache((char*)start, (char*)A.here());
