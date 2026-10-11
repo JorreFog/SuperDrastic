@@ -1,0 +1,147 @@
+#include <SDL.h>
+
+#include <chrono>
+#include <cstring>
+#include <thread>
+
+#include "Platform.h"
+#include "frontend.h"
+
+using melonDS::Platform::Log;
+using melonDS::Platform::LogLevel;
+
+namespace bananads {
+
+static void on_audio(void* ud, Uint8* stream, int len) {
+    Emu* emu = (Emu*)ud;
+    int16_t* out = (int16_t*)stream;
+    int frames = len / 4;
+    int got = emu->audio(out, frames);
+    // Short of samples (a slow frame): repeat the last one rather than click.
+    for (int i = got; i < frames; i++) {
+        out[i * 2] = got ? out[(got - 1) * 2] : 0;
+        out[i * 2 + 1] = got ? out[(got - 1) * 2 + 1] : 0;
+    }
+}
+
+static void on_mic(void* ud, Uint8* stream, int len) {
+    ((Emu*)ud)->mic().push((const int16_t*)stream, len / 2, 44100);
+}
+
+static uint32_t key_bit(SDL_Keycode k) {
+    switch (k) {
+        case SDLK_x: return KeyA;
+        case SDLK_z: return KeyB;
+        case SDLK_s: return KeyX;
+        case SDLK_a: return KeyY;
+        case SDLK_q: return KeyL;
+        case SDLK_w: return KeyR;
+        case SDLK_RETURN: return KeyStart;
+        case SDLK_RSHIFT: case SDLK_BACKSPACE: return KeySelect;
+        case SDLK_UP: return KeyUp;
+        case SDLK_DOWN: return KeyDown;
+        case SDLK_LEFT: return KeyLeft;
+        case SDLK_RIGHT: return KeyRight;
+        default: return 0;
+    }
+}
+
+int run_sdl(Emu& emu, const Config& cfg) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
+        Log(LogLevel::Error, "[sdl] %s\n", SDL_GetError());
+        return 1;
+    }
+    int scale = (int)cfg.num("sdl.scale", 2);
+    SDL_Window* win = SDL_CreateWindow("BananaDS", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 256 * scale,
+                                       384 * scale, SDL_WINDOW_RESIZABLE);
+    SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_PRESENTVSYNC);
+    SDL_RenderSetLogicalSize(ren, 256, 384);
+    SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, 256, 384);
+
+    SDL_AudioSpec want{}, have{};
+    want.freq = 48000;
+    want.format = AUDIO_S16SYS;
+    want.channels = 2;
+    want.samples = 1024;
+    want.callback = on_audio;
+    want.userdata = &emu;
+    SDL_AudioDeviceID out = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
+    if (out) SDL_PauseAudioDevice(out, 0);
+
+    SDL_AudioDeviceID in = 0;
+    if (cfg.str("mic.source", "device") == "device") {
+        SDL_AudioSpec mw{}, mh{};
+        mw.freq = 44100;
+        mw.format = AUDIO_S16SYS;
+        mw.channels = 1;
+        mw.samples = 1024;
+        mw.callback = on_mic;
+        mw.userdata = &emu;
+        in = SDL_OpenAudioDevice(nullptr, 1, &mw, &mh, 0);
+        if (in) SDL_PauseAudioDevice(in, 0);
+        else Log(LogLevel::Warn, "[sdl] no microphone: %s (F1 still blows)\n", SDL_GetError());
+    }
+
+    uint32_t keys = 0;
+    bool touching = false, quit = false;
+    auto next = std::chrono::steady_clock::now();
+    const auto frame = std::chrono::nanoseconds(16715180);  // 1 / 59.8261 Hz
+
+    while (!quit && !emu.stopped()) {
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) quit = true;
+            else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
+                bool down = e.type == SDL_KEYDOWN;
+                SDL_Keycode k = e.key.keysym.sym;
+                if (down && !e.key.repeat) {
+                    if (k == SDLK_ESCAPE) quit = true;
+                    else if (k == SDLK_F1) emu.mic().blow(1500);
+                    else if (k >= SDLK_F5 && k <= SDLK_F7) emu.save_state(1 + (k - SDLK_F5));
+                    else if (k >= SDLK_F9 && k <= SDLK_F11) emu.load_state(1 + (k - SDLK_F9));
+                }
+                uint32_t b = key_bit(k);
+                keys = down ? keys | b : keys & ~b;
+            } else if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONUP) {
+                int wx = e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x;
+                int wy = e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y;
+                float lx, ly;
+                SDL_RenderWindowToLogical(ren, wx, wy, &lx, &ly);
+                if (e.type == SDL_MOUSEBUTTONDOWN && ly >= 192) touching = true;
+                if (e.type == SDL_MOUSEBUTTONUP) {
+                    touching = false;
+                    emu.release_touch();
+                }
+                if (touching) emu.touch((int)lx, (int)ly - 192);
+            }
+        }
+        emu.set_keys(keys);
+        emu.run_frame();  // the audio callback reads the SPU meanwhile: melonDS locks its output buffer
+
+        void* px;
+        int pitch;
+        SDL_LockTexture(tex, nullptr, &px, &pitch);
+        for (int y = 0; y < 384; y++)
+            memcpy((uint8_t*)px + y * pitch, y < 192 ? emu.top() + y * 256 : emu.bottom() + (y - 192) * 256, 1024);
+        SDL_UnlockTexture(tex);
+        SDL_RenderClear(ren);
+        SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        SDL_RenderPresent(ren);
+
+        next += frame;
+        auto now = std::chrono::steady_clock::now();
+        if (next > now) std::this_thread::sleep_until(next);
+        else if (now - next > frame * 4) next = now;  // too far behind: don't run to catch up
+    }
+
+    if (cfg.flag("resume.on_quit", true)) emu.save_state(0);
+    if (in) SDL_CloseAudioDevice(in);
+    if (out) SDL_CloseAudioDevice(out);
+    SDL_DestroyTexture(tex);
+    SDL_DestroyRenderer(ren);
+    SDL_DestroyWindow(win);
+    SDL_Quit();
+    return 0;
+}
+
+}  // namespace bananads

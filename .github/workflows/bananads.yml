@@ -1,0 +1,143 @@
+# BananaDS (bananads/): builds it for the PC and for aarch64, runs the host tests on both (aarch64 under qemu), and
+# boots the 3D stress-test ROM headless as a smoke test. Only runs when bananads/ or this file changes.
+name: bananads
+on:
+  push:
+    branches: [main]
+    paths: ['bananads/**', 'stressrom/**', '.github/workflows/bananads.yml']
+  pull_request:
+    paths: ['bananads/**', 'stressrom/**', '.github/workflows/bananads.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake g++ clang lld llvm python3 pkg-config \
+            libsdl2-dev libasound2-dev libenet-dev g++-aarch64-linux-gnu qemu-user
+      - name: PC build
+        run: |
+          cmake -S bananads -B build-pc -DBANANADS_LAN=ON
+          cmake --build build-pc -j"$(nproc)"
+      - name: Host tests
+        run: ctest --test-dir build-pc --output-on-failure
+      - name: Smoke test (the stress ROM, headless)
+        run: |
+          python3 stressrom/build.py
+          mkdir -p smoke
+          ./build-pc/bananads --frontend headless --set headless.frames=600 --set headless.dump_dir=smoke \
+            --set headless.dump_every=600 --set save.dir=smoke --set wifi.dns=off stressrom/out/dsstress-L5.nds \
+            2>&1 | tee smoke/log.txt
+          grep -q '600 frames' smoke/log.txt
+          test -s smoke/frame600.ppm
+      - name: Differential harness (the interpreter against itself must match)
+        run: ./build-pc/bananads-difftest --frames 120 --b jit=off stressrom/out/dsstress-L3.nds
+      - name: aarch64 build
+        run: |
+          PKG_CONFIG_LIBDIR=/nonexistent cmake -S bananads -B build-a64 \
+            -DCMAKE_TOOLCHAIN_FILE=$PWD/bananads/cmake/aarch64-linux-gnu.cmake -DBANANADS_SDL=OFF -DBANANADS_ALSA=OFF
+          cmake --build build-a64 -j"$(nproc)"
+      - name: aarch64 tests and smoke test (qemu, ARM64 JIT)
+        run: |
+          qemu-aarch64 -L /usr/aarch64-linux-gnu build-a64/bananads-tests
+          qemu-aarch64 -L /usr/aarch64-linux-gnu build-a64/bananads --frontend headless --set headless.frames=120 \
+            --set save.dir=smoke --set wifi.dns=off stressrom/out/dsstress-L5.nds 2>&1 | grep '120 frames'
+      - name: BananaJIT (aarch64, qemu) gives the interpreter's pictures
+        run: |
+          PKG_CONFIG_LIBDIR=/nonexistent cmake -S bananads -B build-bj \
+            -DCMAKE_TOOLCHAIN_FILE=$PWD/bananads/cmake/aarch64-linux-gnu.cmake -DBANANADS_SDL=OFF -DBANANADS_ALSA=OFF \
+            -DBANANADS_JIT=banana
+          cmake --build build-bj -j"$(nproc)"
+          for j in on off; do
+            mkdir -p bj-$j
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads --frontend headless --set jit=$j \
+              --set headless.frames=300 --set headless.dump_dir=bj-$j --set headless.dump_every=150 \
+              --set save.dir=smoke --set wifi.dns=off --set resume.on_start=off stressrom/out/dsstress-L5.nds
+          done
+          cmp bj-on/frame150.ppm bj-off/frame150.ppm
+          cmp bj-on/frame300.ppm bj-off/frame300.ppm
+      - name: BananaJIT on Thumb code (the stress ROM compiled as Thumb)
+        run: |
+          STRESS_THUMB=1 python3 stressrom/build.py
+          for j in on off; do
+            mkdir -p bjt-$j
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads --frontend headless --set jit=$j \
+              --set headless.frames=300 --set headless.dump_dir=bjt-$j --set headless.dump_every=150 \
+              --set save.dir=smoke --set wifi.dns=off --set resume.on_start=off stressrom/out-thumb/dsstress-L5.nds
+          done
+          cmp bjt-on/frame150.ppm bjt-off/frame150.ppm
+          cmp bjt-on/frame300.ppm bjt-off/frame300.ppm
+      - name: BananaJIT's inline loads/stores and block linking change no cycle (main RAM equal after every frame)
+        run: |
+          for rom in stressrom/out/dsstress-L5.nds stressrom/out-thumb/dsstress-L5.nds; do
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
+              --a jit=on --a jit.fastloads=off --b jit=on --b jit.fastloads=on $rom
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
+              --a jit=on --a jit.link=off --b jit=on --b jit.link=on $rom
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
+              --a jit=on --a jit.faststores=off --b jit=on --b jit.faststores=on $rom
+          done
+      - name: BananaJIT's inline ARM7 loads/stores change no cycle (an ARM7 that never halts, ARM and Thumb)
+        run: |
+          STRESS_ARM7=arm python3 stressrom/build.py
+          STRESS_ARM7=thumb python3 stressrom/build.py
+          for rom in stressrom/out-arm7/dsstress-L5.nds stressrom/out-arm7-thumb/dsstress-L5.nds; do
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
+              --a jit=on --a jit.fastmem7=off --b jit=on --b jit.fastmem7=on $rom
+          done
+      - name: BananaJIT's native multiply and register shift cost exactly what the interpreter does (main RAM equal every frame)
+        run: |
+          for rom in stressrom/out/dsstress-L5.nds stressrom/out/dsstress-ramp.nds \
+                     stressrom/out-thumb/dsstress-L5.nds stressrom/out-thumb/dsstress-ramp.nds \
+                     stressrom/out-arm7/dsstress-L5.nds stressrom/out-arm7-thumb/dsstress-L5.nds; do
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 300 \
+              --a jit=on --a jit.mul=off --b jit=on --b jit.mul=on $rom
+          done
+      - name: BananaJIT's native block transfers (LDM/STM, PUSH/POP) cost exactly what the interpreter does (main RAM equal every frame)
+        run: |
+          for rom in stressrom/out/dsstress-L5.nds stressrom/out/dsstress-ramp.nds \
+                     stressrom/out-thumb/dsstress-L5.nds stressrom/out-thumb/dsstress-ramp.nds \
+                     stressrom/out-arm7/dsstress-L5.nds stressrom/out-arm7-thumb/dsstress-L5.nds; do
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 300 \
+              --a jit=on --a jit.ldm=off --b jit=on --b jit.ldm=on $rom
+          done
+      - name: The DraStic JIT study's differential ROMs (PR #10): BananaJIT = interpreter = ARMv5TE
+        run: |
+          if ! git fetch --depth 1 origin drastic-jit-re; then echo "branch drastic-jit-re not found: skipped"; exit 0; fi
+          mkdir -p pr10 && git archive FETCH_HEAD docs/drastic-jit/tools/dyn/diff | tar -x -C pr10
+          D=pr10/docs/drastic-jit/tools/dyn/diff
+          python3 $D/build.py && python3 $D/build.py extra
+          for r in out/diff.nds:out/tests.txt out_extra/diff_extra.nds:out_extra/tests.txt; do
+            rom=$D/${r%%:*}; tests=$D/${r##*:}; n=$(wc -l < $tests); len=$((n * 4))
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --frames 60 \
+              --region 0x02200100:$len --a jit=off --b jit=on $rom
+            for j in off on; do
+              qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --frames 60 --region 0x02200000:8 \
+                --dump 0x02200000:$((len + 256)) --a jit=$j --b jit=$j $rom | grep "run A" > dump.txt
+              python3 bananads/tools/check_results.py $tests dump.txt
+            done
+          done
+      - name: The handheld test kit (docs/DEVICE-TEST.md)
+        run: |
+          # arm64 SDL2/ALSA for the kit's window frontend; without them package-device.sh builds headless-only
+          sudo dpkg --add-architecture arm64 || true
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources || true
+          printf 'Types: deb\nURIs: http://ports.ubuntu.com/ubuntu-ports\nSuites: noble noble-updates\nComponents: main universe\nArchitectures: arm64\n' \
+            | sudo tee /etc/apt/sources.list.d/arm64-ports.sources > /dev/null
+          (sudo apt-get update -qq && sudo apt-get install -y -qq libsdl2-dev:arm64 libasound2-dev:arm64) || true
+          mkdir -p kit && sh bananads/tools/package-device.sh kit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bananads-device
+          path: kit/bananads-device-*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bananads-aarch64
+          path: |
+            build-a64/bananads
+            bananads/README.md
+            bananads/docs/SETTINGS.md
