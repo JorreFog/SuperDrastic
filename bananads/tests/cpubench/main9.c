@@ -257,6 +257,6 @@ int main(void)
         sums[7] ^= mix(mixbuf, 256, pass);
         if (pass == 16) for (int i = 0; i < 8; i++) frozen[i + 1] = sums[i];
         frozen[0] = pass;
-        draw(frozen, 9);
+        if ((pass & 7) == 0) draw(frozen, 9);   /* (drawing is VRAM writes, not the CPU work measured) */
     }
 }

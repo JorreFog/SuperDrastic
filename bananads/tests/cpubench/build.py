@@ -8,6 +8,8 @@ Needs clang + ld.lld + llvm-objcopy. The header layout is stressrom's (ARM9 at 0
 import os, struct, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "out"); os.makedirs(OUT, exist_ok=True)
+# data in pages of its own, away from the code (games keep them apart: a page holding compiled code makes
+# its stores take the JIT's invalidation check)
 LD = """ENTRY(%s)
 SECTIONS {
   . = %s;
@@ -16,6 +18,7 @@ SECTIONS {
   __itcm_start = .;
   .itcm : { *(.itcmcode) }
   __itcm_end = .;
+  . = ALIGN(0x10000);
   .data : { *(.data*) }
   . = ALIGN(4);
   __bss_start = .;
