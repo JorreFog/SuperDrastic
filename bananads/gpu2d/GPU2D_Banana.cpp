@@ -358,6 +358,7 @@ void BananaRenderer2D::Reset()
     BGExtPalValid = 0;
     ObjExtValid = false;
     NumSpriteTab = 0;
+    memset(SpriteLines, 0, sizeof(SpriteLines));
     SpriteTabStale = true;
     NumSprites = 0;
     ObjXMin = 256; ObjXMax = 0;
@@ -1311,6 +1312,19 @@ void BananaRenderer2D::RebuildSpriteTable()
         e.boundwidth = boundwidth;
     }
     NumSpriteTab = n;
+
+    // render.2d_fast: the entries each sprite line can draw, as bits in table order
+    if (Banana2DFast)
+    {
+        memset(SpriteLines, 0, sizeof(SpriteLines));
+        for (int i = 0; i < n; i++)
+        {
+            const SpriteEntry& e = SpriteTab[i];
+            u64 bit = 1ULL << (i & 63);
+            for (u32 h = 0; h < e.boundheight; h++)
+                SpriteLines[(e.ypos + h) & 0xFF][i >> 6] |= bit;
+        }
+    }
 }
 
 void BananaRenderer2D::DrawSprites(u32 line)
@@ -1392,8 +1406,19 @@ void BananaRenderer2D::DrawSpritesFrom(u32 line, const Banana2DRegs& regs)
     if (R.OAMRebuild)
         RebuildSpriteTable();
 
-    for (int i = 0; i < NumSpriteTab; i++)
+    // render.2d_fast: only the entries on this line (the same ones, in the same order)
+    u64 onLine[2] = { ~0ULL, ~0ULL };
+    if (Banana2DFast)
     {
+        onLine[0] = SpriteLines[line & 0xFF][0];
+        onLine[1] = SpriteLines[line & 0xFF][1];
+    }
+    for (int w = 0; w < 2; w++)
+    for (u64 bits = onLine[w]; bits; bits &= bits - 1)
+    {
+        int i = w * 64 + __builtin_ctzll(bits);
+        if (i >= NumSpriteTab)
+            break;
         const SpriteEntry& e = SpriteTab[i];
 
         if (((line - e.ypos) & 0xFF) >= e.boundheight)

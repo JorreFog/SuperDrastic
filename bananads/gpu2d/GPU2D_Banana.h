@@ -193,6 +193,7 @@ private:
     };
     SpriteEntry SpriteTab[128];
     int NumSpriteTab;
+    u64 SpriteLines[256][2];    // render.2d_fast: bit i set when SpriteTab[i] covers the sprite line (low 8 bits)
     bool SpriteTabStale;
 
     u32 NumSprites;
