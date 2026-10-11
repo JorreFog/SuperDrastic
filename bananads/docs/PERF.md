@@ -121,6 +121,10 @@ directory of its own, for A/B runs.
 4. **`fast_gxdma` and `fast_spu`** (NDS, SPU): exact shortcuts, below.
 5. **IO statistics and direct routes** for the JIT's slow memory paths (`NDS_IOFast`, ARMJIT), below.
 6. **`fast_sched`** (NDS): the scheduler keeps its next event's time, below.
+7. **The AArch64 JIT's code** (ARMJIT_A64, `jit.codegen`): fewer host instructions per block and per exit, below.
+8. **Block loads on the fastmem path**, and `LookUpBlock`/`HaltInterrupted` inline, below.
+9. **The slice loop for the JIT inline** (`core.fast_loop`), timers run when they overflow (`core.fast_timers`), below.
+10. **Fewer layers for the JIT's slow memory accesses** (`jit.vramfast`, `jit.iodirect`, `render.vramtrack_skip`), below.
 
 melonDS's A64 quirks, left as they are because changing them changes timing:
 - `Comp_AddCycles_C(true)` adds the not-taken path's cycles to the whole block.
@@ -144,7 +148,8 @@ gone; `BANANADS_CORE_SLICE=256` in the environment does the same). `kIterationCy
 | `core.slice_idle` | the slice away from IPC | `512` with `auto`; otherwise = `core.slice` |
 | `core.slice_hold` | bus cycles the short slice stays after an IPC access | `4096` |
 | `core.slice_stats=N` | logs IPC accesses per frame and the share of time near IPC, every N frames | `0` |
-| `core.fast_gxdma`, `core.fast_spu`, `core.fast_sched` | on/off | `off` |
+| `core.fast_gxdma`, `core.fast_spu` | on/off | `off` |
+| `core.fast_sched` | on/off | `on` since patch 0009 (its slice loop needs it; `off` before) |
 
 `auto` hooks the IPC case labels of the twelve `ARM9/ARM7IORead/Write8/16/32` handlers (IPCSYNC, IPCFIFOCNT,
 SEND, RECV) and WRAMCNT writes; other IO addresses cost nothing, and `NextTarget` gains one load, compare and
@@ -242,6 +247,117 @@ one never-taken branch per site when off. `tests/iorom/` is the stress ROM with 
 CMake now finds the newest patch that reverse-applies and applies only the ones after it (before, reconfiguring
 a patched tree failed, since 0001's reverse check breaks once 0002 is on).
 
+## The JIT path, measured without a device (2026-10-11, third session)
+
+The goal set for this session: the JIT path twice as fast, then a third of its cost. Three agents worked in
+parallel, split by file (the generated code, the per-slice runtime and scheduler, the memory accesses behind the
+JIT), plus the coordinator's block-load change. Everything is exact and behind toggles. **No fps number was taken:
+the handheld can't be reached from here**, so the measure is host instructions per emulated frame under qemu.
+
+### How it was measured
+
+- `tools/perf/qemu-count/` (its README): a qemu TCG plugin counts the main thread's AArch64 instructions per
+  function and per JIT block, frames 100-300, exactly reproducible. Instruction counts aren't A55 time: they miss
+  cache misses and stalls (the inlined exit checks of the first session counted 1% fewer instructions and ran
+  slower), so the device has the last word.
+- `tests/cpubench/`: game-like ARM9 work that never waits (a bytecode interpreter, entities, a sprite sort, LZ77,
+  text tiles, CRC32 in ARM, calls, the divider, a routine in ITCM), as Thumb, as ARM, and with a busy ARM7. Its
+  startup turns the protection unit and caches on, as games do: melonDS's direct boot leaves them off, and uncached
+  the ARM9 ran 8 times less code per frame and the JIT was 10% of the main thread instead of the profile's 28%.
+- `tests/membench/`: a frame of a game's memory traffic (BG/OBJ VRAM, OAM, palette, the divider and square root,
+  IO polling, IME/IF, IPC with a halting ARM7, the GX FIFO, stores into a code page).
+
+### Results (thousands of host instructions per frame; before = the branch before 0007-0010)
+
+| ROM | main thread | JIT code | JIT runtime + scheduler | memory paths | CPU emulation (the last three) |
+|---|---|---|---|---|---|
+| cpubench Thumb | 10,555 → 4,860 (2.17x) | 4,070 → 2,418 | 3,966 → 1,100 | 1,002 → 182 | 9,038 → 3,700 (2.44x) |
+| cpubench ARM | 10,089 → 4,372 (2.31x) | 3,520 → 1,897 | 3,973 → 1,085 | 1,088 → 231 | 8,581 → 3,212 (2.67x) |
+| cpubench busy ARM7 | 10,797 → 5,297 (2.04x) | 4,402 → 2,705 | 3,774 → 1,156 | 1,002 → 182 | 9,178 → 4,043 (2.27x) |
+| membench | 10,349 → 6,931 (1.49x) | 190 → 107 | 3,559 → 941 | 426 → 180 | 4,175 → 1,228 (3.40x) |
+
+(JIT code includes the exit stubs. "JIT runtime + scheduler" is `Execute`, the lookup and dispatch and
+`RunFrame`/`RunSystem`/`RunTimers`/`NextTarget`, counted together because 0009 moves the first into the second.
+membench's main thread is mostly the software 3D renderer and the 2D engine, untouched here.) Twice as fast is
+reached on the CPU emulation of every ROM; a third is reached by the runtime/scheduler part on Thumb and ARM and
+by the memory paths on cpubench, not by the JIT's generated code (59%, 54% and 61% of before).
+
+### What changed
+
+- **0007, the JIT's code** (`jit.codegen=new|old`, default new; `MELONDS_JIT_NO<name>=1` turns one part off; with
+  `old` the code is byte for byte the previous one). Thumb jit-code with that part off alone (it includes what
+  depends on it), from 2,434k: CONDEXIT (a block-ending conditional branch with a known target gets a linkable exit
+  each way) +1,000; EXITSTUB (ExitCheck/DynExit: one extended add, `ARM_Ret` from a literal, a variant without the
+  CPSR store, a shorter lookup) +695; EXITPC (a constant exit's R15 stored by the stub) +577; SELFLOOP (a jump back
+  to the block's own start checks inline, through a slot linked from the start) +440; LOOPREGS (such loops keep
+  their guest registers in host registers round the loop) +329; KEEPFLAGS (fastmem call functions keep NZCV) +193;
+  LAZYFLAGS (flags stay in NZCV until needed) +168; FOLDEXIT +97; DEAD (dead `cls`/`clz`, CodeCycles stores and R15
+  loads) +85; FASTENTRY (x26 set by a 3-instruction prologue at the block's entry, skipped by linked exits) +46;
+  DYNADDR +34; DYNCACHE (a per-site cache for `bx lr`/`pop {pc}`/`ldr pc`, linked like a known exit) +24; MEMADDR
+  +21; CODESTORES +14. Block code is 1-4% smaller; the far region (cold link paths) larger.
+- **0008, block loads on the fastmem path** (`MELONDS_JIT_NOFASTLDM=1` off): the A64 compiler compiled the fastmem
+  path for block stores only, so every LDM and POP called `SlowBlockTransfer9` (~100 instructions). A fault anywhere
+  in the sequence patches all of it into the slow call and runs it again from the address. Plus `LookUpBlock` and
+  `HaltInterrupted` inline. cpubench Thumb: -1,005k on the main thread.
+- **0009, the slice loop** (`core.fast_loop`, `core.fast_timers`, both default on; `core.fast_sched` now defaults
+  on, which `fast_loop` needs): `NDS::RunSlicesJIT` does `NextTarget`, the `Execute<JIT>` block loop and lookup, a
+  halted CPU, `GPU3D::Run`'s idle case and the event walk inline, with the scheduler's and the CPUs' fields reached
+  through addresses in registers (the NDS object is ~94 MB, so GCC rebuilt far addresses at every use). Timers run
+  only when one is due to overflow. `RunSystem` walks only the set events; cancelling the next event marks it for
+  recompute. Main thread, cpubench Thumb: all on 7,118k; `fast_timers` off 7,993k; `fast_loop` off 8,216k; only
+  `fast_sched` 8,990k; all off 9,595k.
+- **0010, the memory accesses behind the JIT** (`MELONDS_MEMFAST` mask, default 7: `jit.vramfast` 1,
+  `jit.iodirect` 2, `render.vramtrack_skip` 4): VRAM with one bank at a 16 KB page straight to the bank through a
+  per-page table (dirty bit and capture check included; empty while VRAM holds compiled code), OAM and palette
+  straight to the GPU; the divider, square root, IPC and IME/IE/IF straight to their state; other IO registers
+  without the virtual dispatch; one function per hot register for the JIT's static-address calls; `SlowRead9` and
+  `SlowWrite9`'s common cases inline; the Banana 2D engine's per-line `VRAMTrackingSet::DeriveState` returns at once
+  when nothing was remapped and its banks aren't dirty. Per access: a VRAM 16-bit write 155 → 41 instructions, an
+  IO read 125 → 52, a static-address IO write 74 → 21, a hardware divide (memory side) ~550 → ~175.
+
+### Checks (aarch64 under qemu, on the merged branch with 0001-0010 applied to pristine melonDS)
+
+- Pictures at frames 150 and 300 identical to the build before 0007-0010 on cpubench (Thumb, ARM, busy ARM7), the
+  stress ROMs (L5 ARM, Thumb, busy ARM7; L10), iorom, ipcrom and dmasnd; the ARMv5TE differential ROMs pass;
+  `bananads-tests` passes. With the defaults, with every new toggle off at once, and with FOLDEXIT and DEAD off
+  alone; each agent also ran it with each of its toggles off alone.
+- `bananads-difftest --every --frames 300`, every new setting off against every one on: main RAM identical every
+  frame on cpubench Thumb, cpubench busy ARM7, membench and ipcrom.
+- The agents' own: sabotage builds caught by difftest; membench and ds2dtest with `render.2d_thread` off and on;
+  savestate reloads; `core.slice=auto` and `256` identical to the previous build at the same settings; the JIT's
+  membench checksums equal the interpreter's.
+
+### On the device
+
+`tools/device/hgquick.sh` on HeartGold, each line against a plain run of the same binary (all new parts are on by
+default, so these turn them off):
+```
+EXTRA="--set jit.codegen=old" tools/device/hgquick.sh <bin>                                   # 0007
+MELONDS_JIT_NOFASTLDM=1 tools/device/hgquick.sh <bin>                                          # 0008's block loads
+EXTRA="--set core.fast_loop=off --set core.fast_timers=off --set core.fast_sched=off" tools/device/hgquick.sh <bin>   # 0009
+EXTRA="--set jit.vramfast=off --set jit.iodirect=off --set render.vramtrack_skip=off" tools/device/hgquick.sh <bin>   # 0010
+EXTRA="--set jit.codegen=old --set core.fast_loop=off --set core.fast_timers=off --set core.fast_sched=off --set jit.vramfast=off --set jit.iodirect=off --set render.vramtrack_skip=off" MELONDS_JIT_NOFASTLDM=1 tools/device/hgquick.sh <bin>   # all of it
+```
+Then `tools/device/quick.sh` and the 42-frame `rtc.fixed` HeartGold compare with the defaults. If 0007 is slower
+on the device than its count says, `perf stat -e L1-icache-load-misses,iTLB-load-misses` against `jit.codegen=old`
+first: its far region grew. A single 0007 part is `MELONDS_JIT_NO<name>=1`.
+
+### What's left, largest first (estimates are of the part they touch)
+
+1. **A cycle budget in a register** across blocks instead of Timestamp/Target in memory: the exit check would be
+   `subs budget, budget, #cycles; b.le out` instead of ~9 instructions. Needs a runtime contract change (0009) and
+   the JIT (0007) together: the runtime forces the budget to 0 when it sets StopExecution, and Timestamp is brought
+   up to date at ARM_Ret, before interpreter fallbacks and before every C call from JIT code. -15 to 20% of JIT code.
+2. **Guest registers resident across linked blocks**, then loops over several blocks (lz_decompress, the sprite
+   sort): -6 to 8%, then -5% of JIT code. Needs fixed home registers for all 15 guest registers and a second entry
+   for "registers loaded".
+3. **The JIT emitting VRAM/OAM/palette stores inline** with 0010's per-page table: ~150k/frame on cpubench.
+4. **The divider**: 5 `StartDiv` (cancel + schedule) per divide, 36-100k/frame on cpubench; must stay exact for
+   `NextTarget`.
+5. **A busy ARM7's turn**: ~16 loop + 22 dispatch instructions per turn (cpubench busy ARM7 is at 35% of its
+   runtime/scheduler, not a third). Continuing from `ARM_Ret` without returning to the loop was tried, exact, and
+   net worse (+144k with the busy ARM7): dropped.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser
@@ -259,13 +375,13 @@ a patched tree failed, since 0001's reverse check breaks once 0002 is on).
    - Find which other slow accesses are hot: count them by address.
 4. **3D geometry** (11.9%): NEON for the matrix and vertex work and the clipping, and less per-command FIFO
    overhead. It has to stay synchronous: GXSTAT, FIFO stalls and matrix reads depend on its timing.
-5. **JIT dispatch** (9.7%):
+5. **JIT dispatch** (9.7%): *Pulled: 0008, 0009, above (the third session).*
    - Count why exits go back to the loop: `StopExecution` (an IRQ pending while masked keeps it set), the slice
      end, a region change (`SetupExecutableRegion`, e.g. ITCM ↔ main RAM), or a lookup miss.
    - `DynExit` could know more than one region.
    - Find why `Compiler::Reset` runs during gameplay: near or far memory full? The far region is only 4 MB, and
      link paths now use it too.
-6. **JIT code** (~28%):
+6. **JIT code** (~28%): *Partly pulled: 0007 and 0008, above; what's left is listed there.*
    - Guest registers resident across linked blocks; BananaJIT had this.
    - The fast-memory base kept in x26 instead of reloaded per block (three instructions).
    - Fewer R15/CodeCycles/RegionCodeCycles stores at exits.
