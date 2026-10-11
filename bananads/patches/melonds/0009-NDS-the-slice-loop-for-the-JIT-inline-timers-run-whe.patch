@@ -1,39 +1,51 @@
-From a9a449c8ca2b846d164b55b58ffe9934623fedf1 Mon Sep 17 00:00:00 2001
+From 22bd4afb08a964502b7faeebdf1f4a5375883c12 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
-Date: Sun, 11 Oct 2026 20:11:37 +0000
+Date: Sun, 11 Oct 2026 20:40:28 +0000
 Subject: [PATCH] NDS: the slice loop for the JIT inline, timers run when they
  overflow
 
 What melonDS does once per scheduler slice (about 9,000 times a frame at
-melonDS's 64 cycles) costs more than the JIT's code on a CPU-bound ROM. All
-of it is exact: the same cycles, events and order at any slice.
+64 cycles) cost more than the JIT's code on a CPU-bound ROM. Every change
+is exact: the same cycles, events and order at any slice.
 
-- FastTimers (SetFastTimers, default off in melonDS): RunFrame runs a CPU's
-  timers only once its time reaches TimerNext[cpu], the earliest overflow of
-  its counting timers. RunTimer is additive, so the counters catch up then;
-  every read of a counter goes through RunTimers first; TimerStart and
-  RunTimers recompute TimerNext; the counters are caught up before a
-  savestate is written and before sleep mode moves the times. Off, TimerNext
-  stays 0 and the timers run every slice as before.
-- FastLoop (SetFastLoop, default off; needs FastSched): RunSlicesJIT, RunFrame's
-  loop for the JIT with NextTarget, a running CPU's Execute<JIT> block loop
-  (no call per slice), a halted CPU nothing interrupts, GPU3D::Run's idle
-  case and RunSystem's early-out inline, the scheduler's members through one
-  base register. TotalScanlines is checked after an event only (only events
-  change it).
-- FastSched: RunSystem walks the set bits only (same events, same order, same
-  snapshot of the mask) and rebuilds SchedNext on the way; CancelEvent of the
-  event SchedNext holds sets it to 0, "to recompute", which RunSystem or
-  NextTarget resolves (the divider and sqrt unit cancel and reschedule on
-  every parameter write). SchedNextUpdate walks the set bits only.
-- ARMJIT::LookUpBlock adds the code base it keeps (JitRXBase) instead of
-  calling GetRXBase for every block; Reschedule is inline in ScheduleEvent;
-  SchedEvent is 64 bytes.
+- FastTimers (SetFastTimers; default off here): RunFrame runs a CPU's
+  timers only once its time reaches TimerNext[cpu], the earliest overflow
+  of its counting timers (at least every 2^30 cycles: RunTimers' cycles is
+  an s32). RunTimer is additive, so the counters catch up then; a read of a
+  counter goes through RunTimers first; TimerStart and RunTimers recompute
+  TimerNext; the counters are caught up before a savestate is written and
+  before sleep mode moves the times. Off: TimerNext stays 0 and the timers
+  run every slice, as before.
+- FastLoop (SetFastLoop; default off here; used with FastSched):
+  RunSlicesJIT, RunFrame's loop for the JIT with the common cases inline:
+  NextTarget; Execute<JIT>'s block loop for a running CPU (the block lookup
+  without GetRXBase's call; region setup out of line; one compare for the
+  region check, which differs from melonDS's only for a region whose end
+  wraps past 2^32, the ARM9 BIOS's last mirror, where melonDS sets the same
+  region up again for every block); a halted CPU that nothing interrupts;
+  GPU3D::Run's idle case; no timer due on either CPU by the ARM9's time
+  (TimerNextMin), which takes the ARM7's halted case without its timer
+  check; RunSystem's walk when an event is due. TotalScanlines is checked
+  after an event only (only events change it); CPUStop is read once for the
+  ARM7's DMA and the sleep check when nothing runs between. The scheduler's
+  members, the ARMs and GPU3D go through addresses kept in registers
+  (PinAddress, SCHED): the NDS object is large and GCC rebuilt each far
+  member's address at every use.
+- FastSched: RunSystem walks the set bits only (the same events, the same
+  order, the same snapshot of the mask) and rebuilds SchedNext on the way
+  (a debug build checks it against a full walk); CancelEvent of the event
+  SchedNext holds sets it to 0, "to recompute", which RunSystem or
+  NextTarget resolves (the divider and sqrt unit cancel and reschedule
+  theirs on every parameter write); SchedNextUpdate walks the set bits
+  only; ScheduleEvent reads CurCPU and the clock shift once and does
+  Reschedule's work itself; SchedEvent is 64 bytes.
+- ARMJIT keeps the code region's base (JitRXBase) for LookUpBlock instead
+  of calling GetRXBase for every block.
 ---
  src/ARMJIT.h |   4 +-
- src/NDS.cpp  | 338 ++++++++++++++++++++++++++++++++++++++++++++++++---
- src/NDS.h    |  15 ++-
- 3 files changed, 341 insertions(+), 16 deletions(-)
+ src/NDS.cpp  | 442 ++++++++++++++++++++++++++++++++++++++++++++++++---
+ src/NDS.h    |  18 ++-
+ 3 files changed, 435 insertions(+), 29 deletions(-)
 
 diff --git a/src/ARMJIT.h b/src/ARMJIT.h
 index 75fe540..62aecfd 100644
@@ -58,19 +70,39 @@ index 75fe540..62aecfd 100644
      std::unordered_map<u32, JitBlock*> JitBlocks7 {};
  
 diff --git a/src/NDS.cpp b/src/NDS.cpp
-index b606589..20acd95 100644
+index b606589..a9c71af 100644
 --- a/src/NDS.cpp
 +++ b/src/NDS.cpp
-@@ -524,6 +524,8 @@ void NDS::Reset()
+@@ -54,6 +54,18 @@ using namespace Platform;
+ // than leave a sliver of an iteration before the event.
+ const s32 kIterationCycleMargin = 8;
+ 
++// An address kept in a register, instead of GCC rebuilding the address of a member far into the NDS object
++// (mov/movk/add, past main RAM) at every use.
++template <typename T>
++[[gnu::always_inline]] static inline T* PinAddress(T* p)
++{
++    asm("" : "+r"(p));
++    return p;
++}
++// The scheduler's members sit together: SCHED(sb, m) is member m through sb = PinAddress(&SysTimestamp).
++#define SCHED(sb, m) (*reinterpret_cast<std::remove_reference_t<decltype(m)>*>((sb) + \
++    (reinterpret_cast<uintptr_t>(&(m)) - reinterpret_cast<uintptr_t>(&SysTimestamp))))
++
+ // timing notes
+ //
+ // * this implementation is technically wrong for VRAM
+@@ -524,6 +536,9 @@ void NDS::Reset()
      TimerCheckMask[1] = 0;
      TimerTimestamp[0] = 0;
      TimerTimestamp[1] = 0;
 +    TimerNext[0] = 0;
 +    TimerNext[1] = 0;
++    TimerNextMin = 0;
  
      for (i = 0; i < 8; i++) DMAs[i].Reset();
      memset(DMA9Fill, 0, 4*4);
-@@ -688,6 +690,14 @@ bool NDS::DoSavestate(Savestate* file)
+@@ -688,6 +703,15 @@ bool NDS::DoSavestate(Savestate* file)
  
      file->Var32(&CPUStop);
  
@@ -82,16 +114,19 @@ index b606589..20acd95 100644
 +    }
 +    TimerNext[0] = 0;
 +    TimerNext[1] = 0;
++    TimerNextMin = 0;
      for (int i = 0; i < 8; i++)
      {
          Timer* timer = &Timers[i];
-@@ -829,11 +839,11 @@ void NDS::SetSlice(s32 slice, s32 idle, u32 hold) noexcept
+@@ -828,14 +852,15 @@ void NDS::SetSlice(s32 slice, s32 idle, u32 hold) noexcept
+ 
  void NDS::SchedNextUpdate() noexcept
  {
++    char* const sb = PinAddress(reinterpret_cast<char*>(&SysTimestamp));
      u64 next = UINT64_MAX;
 -    u32 mask = SchedListMask;
 -    for (int i = 0; mask; i++, mask >>= 1)
-+    for (u32 mask = SchedListMask; mask; mask &= mask - 1)
++    for (u32 mask = SCHED(sb, SchedListMask); mask; mask &= mask - 1)
      {
 -        if ((mask & 0x1) && SchedList[i].Timestamp < next)
 -            next = SchedList[i].Timestamp;
@@ -99,9 +134,12 @@ index b606589..20acd95 100644
 +        if (ts < next)
 +            next = ts;
      }
-     SchedNext = next;
+-    SchedNext = next;
++    SCHED(sb, SchedNext) = next;
  }
-@@ -844,7 +854,11 @@ u64 NDS::NextTarget()
+ 
+ u64 NDS::NextTarget()
+@@ -844,7 +869,11 @@ u64 NDS::NextTarget()
  
      u32 mask = SchedListMask;
      if (FastSched)
@@ -113,7 +151,7 @@ index b606589..20acd95 100644
      else
      for (int i = 0; i < Event_MAX; i++)
      {
-@@ -876,13 +890,56 @@ u64 NDS::NextTarget()
+@@ -876,13 +905,56 @@ u64 NDS::NextTarget()
      return max;
  }
  
@@ -122,32 +160,32 @@ index b606589..20acd95 100644
 +// way: the events still pending as they're passed, and what the handlers schedule (ScheduleEvent takes the min); a
 +// handler's CancelEvent of the event SchedNext holds so far sets it to 0, which the end resolves. (Inline: RunSystem
 +// and RunSlicesJIT.)
-+[[gnu::always_inline]] inline void NDS::RunEventsDue() noexcept
++[[gnu::always_inline]] inline void NDS::RunEventsDue(char* const sb) noexcept
 +{
 +    u64 next = UINT64_MAX;
-+    u32 live = SchedListMask;
++    u32 live = SCHED(sb, SchedListMask);
 +    for (u32 mask = live; mask; mask &= mask - 1)
 +    {
 +        const u32 i = __builtin_ctz(mask);
 +        SchedEvent& evt = SchedList[i];
 +
-+        if (evt.Timestamp <= SysTimestamp)
++        if (evt.Timestamp <= SCHED(sb, SysTimestamp))
 +        {
-+            SchedListMask &= ~(1<<i);
++            SCHED(sb, SchedListMask) &= ~(1<<i);
 +
-+            SchedNext = next;
++            SCHED(sb, SchedNext) = next;
 +            EventFunc func = evt.Funcs[evt.FuncID];
 +            func(evt.That, evt.Param);
-+            next = SchedNext;
-+            live = SchedListMask;
++            next = SCHED(sb, SchedNext);
++            live = SCHED(sb, SchedListMask);
 +        }
 +        else if ((live & (1<<i)) && evt.Timestamp < next)
 +            next = evt.Timestamp;
 +    }
-+    SchedNext = next;
++    SCHED(sb, SchedNext) = next;
 +
 +    // a recompute inside the walk may have taken an event the walk fired after it (one due by now)
-+    if (next <= SysTimestamp)
++    if (next <= SCHED(sb, SysTimestamp))
 +        SchedNextUpdate();
 +#ifndef NDEBUG
 +    const u64 built = SchedNext;
@@ -166,22 +204,23 @@ index b606589..20acd95 100644
 +    {
 +        // nothing is due before SchedNext, so the walk would fire nothing
 +        if (timestamp >= SchedNext)
-+            RunEventsDue();
++            RunEventsDue(PinAddress(reinterpret_cast<char*>(&SysTimestamp)));
          return;
 +    }
  
      u32 mask = SchedListMask;
      for (int i = 0; i < Event_MAX; i++)
-@@ -904,8 +961,6 @@ void NDS::RunSystem(u64 timestamp)
+@@ -903,9 +975,6 @@ void NDS::RunSystem(u64 timestamp)
+ 
          mask >>= 1;
      }
- 
+-
 -    if (FastSched)
 -        SchedNextUpdate();
  }
  
  u64 NDS::NextTargetSleep()
-@@ -997,10 +1052,18 @@ u32 NDS::RunFrame()
+@@ -997,10 +1066,19 @@ u32 NDS::RunFrame()
                  if (target > frametarget)
                      target = frametarget;
  
@@ -197,10 +236,11 @@ index b606589..20acd95 100644
                  TimerTimestamp[1] = target;
 +                TimerNext[0] = 0;
 +                TimerNext[1] = 0;
++                TimerNextMin = 0;
                  GPU.GPU3D.Timestamp = target;
                  RunSystemSleep(target);
  
-@@ -1025,6 +1088,11 @@ u32 NDS::RunFrame()
+@@ -1025,6 +1103,11 @@ u32 NDS::RunFrame()
              }
              CPUStop &= ~CPUStop_Wakeup;
  
@@ -212,7 +252,7 @@ index b606589..20acd95 100644
              while (Running && GPU.TotalScanlines==0)
              {
                  u64 target = NextTarget();
-@@ -1055,7 +1123,8 @@ u32 NDS::RunFrame()
+@@ -1055,7 +1138,8 @@ u32 NDS::RunFrame()
                      ARM9.Execute<cpuMode>();
                  }
  
@@ -222,7 +262,7 @@ index b606589..20acd95 100644
                  GPU.GPU3D.Run();
  
                  target = ARM9Timestamp >> ARM9ClockShift;
-@@ -1082,7 +1151,8 @@ u32 NDS::RunFrame()
+@@ -1082,7 +1166,8 @@ u32 NDS::RunFrame()
                          ARM7.Execute<cpuMode>();
                      }
  
@@ -232,31 +272,48 @@ index b606589..20acd95 100644
                  }
  
                  RunSystem(target);
-@@ -1122,6 +1192,215 @@ u32 NDS::RunFrame()
+@@ -1122,6 +1207,261 @@ u32 NDS::RunFrame()
          return 263;
  }
  
 +#ifdef JIT_ENABLED
++// (out of line, so that the loop doesn't keep its arguments' addresses in registers)
++template <u32 num, typename CPU>
++[[gnu::noinline, gnu::cold]] static bool SetupExecutableRegionFor(NDS& nds, CPU& cpu, u32 instrAddr)
++{
++    if (nds.JIT.SetupExecutableRegion(num, instrAddr, cpu.FastBlockLookup, cpu.FastBlockLookupStart, cpu.FastBlockLookupSize))
++        return true;
++    Log(LogLevel::Error, num ? "ARMv4 PC in non executable region %08X\n" : "ARMv5 PC in non executable region %08X\n", cpu.R[15]);
++    return false;
++}
++
 +// ARMv5/ARMv4::Execute<JIT>'s block loop and its end, for a CPU that isn't halted (FastLoop)
 +template <u32 num, typename CPU>
-+[[gnu::always_inline]] static inline void ExecuteJITInline(NDS& nds, CPU& cpu, u64& timestamp, u64& target)
++[[gnu::always_inline]] static inline void ExecuteJITInline(NDS& nds, CPU& cpu, u64& timestamp, u64& target, u8* const rxBase)
 +{
 +    while (timestamp < target)
 +    {
-+        u32 instrAddr = cpu.R[15] - ((cpu.CPSR&0x20)?2:4);
++        // R[15] - (Thumb ? 2 : 4)
++        u32 instrAddr = cpu.R[15] - 4 + ((cpu.CPSR >> 4) & 2);
 +
-+        if ((instrAddr < cpu.FastBlockLookupStart || instrAddr >= (cpu.FastBlockLookupStart + cpu.FastBlockLookupSize))
-+            && !nds.JIT.SetupExecutableRegion(num, instrAddr, cpu.FastBlockLookup, cpu.FastBlockLookupStart, cpu.FastBlockLookupSize))
++        // (one compare for melonDS's instrAddr < start || instrAddr >= start + size: they differ only for a
++        // region whose end wraps past 2^32, the ARM9 BIOS's last mirror, where melonDS sets the same region up
++        // again for every block and this doesn't)
++        u32 offset = instrAddr - cpu.FastBlockLookupStart;
++        if (offset >= cpu.FastBlockLookupSize) [[unlikely]]
 +        {
-+            timestamp = target;
-+            Log(LogLevel::Error, num ? "ARMv4 PC in non executable region %08X\n" : "ARMv5 PC in non executable region %08X\n", cpu.R[15]);
-+            return;
++            if (!SetupExecutableRegionFor<num>(nds, cpu, instrAddr))
++            {
++                timestamp = target;
++                return;
++            }
++            offset = instrAddr - cpu.FastBlockLookupStart;
 +        }
 +
-+        JitBlockEntry block = nds.JIT.LookUpBlock(num, cpu.FastBlockLookup,
-+            instrAddr - cpu.FastBlockLookupStart, instrAddr);
-+        if (block)
-+            ARM_Dispatch(&cpu, block);
++        // LookUpBlock
++        const u64 entry = cpu.FastBlockLookup[offset / 2];
++        if (entry >> 32 == (instrAddr | num)) [[likely]]
++            ARM_Dispatch(&cpu, (JitBlockEntry)(rxBase + (u32)entry));
 +        else
 +            nds.JIT.CompileBlock(&cpu);
 +
@@ -274,36 +331,25 @@ index b606589..20acd95 100644
 +                    timestamp = target;
 +                }
 +                cpu.IdleLoop = 0;
-+                break;
++
++                // Execute's end (only this way out can leave Halted set: StopExecution covers it)
++                if (cpu.Halted == 2)
++                    cpu.Halted = 0;
++
++                if (num == 1 && cpu.Halted == 4)
++                {
++                    assert(nds.ConsoleType == 1);
++                    auto& dsi = dynamic_cast<melonDS::DSi&>(nds);
++                    dsi.SoftReset();
++                    cpu.Halted = 2;
++                }
++                return;
 +            }
 +        }
 +
 +        timestamp += cpu.Cycles;
 +        cpu.Cycles = 0;
 +    }
-+
-+    if (cpu.Halted) [[unlikely]]
-+    {
-+        if (cpu.Halted == 2)
-+            cpu.Halted = 0;
-+
-+        if (num == 1 && cpu.Halted == 4)
-+        {
-+            assert(nds.ConsoleType == 1);
-+            auto& dsi = dynamic_cast<melonDS::DSi&>(nds);
-+            dsi.SoftReset();
-+            cpu.Halted = 2;
-+        }
-+    }
-+}
-+
-+// FastLoop's base registers: an address the loop keeps in a register, instead of GCC rebuilding the address of a
-+// member far into the NDS object (mov/movk/add) at every use
-+template <typename T>
-+[[gnu::always_inline]] static inline T* PinAddress(T* p)
-+{
-+    asm("" : "+r"(p));
-+    return p;
 +}
 +
 +// FastLoop (exact): RunFrame's loop for the JIT, slice for slice what it does with FastSched, with the common
@@ -320,24 +366,68 @@ index b606589..20acd95 100644
 +    ARMv5& arm9 = *PinAddress(&ARM9);
 +    ARMv4& arm7 = *PinAddress(&ARM7);
 +    GPU3D& gpu3d = *PinAddress(&GPU.GPU3D);
-+    // the scheduler's members, which sit together: through one base register
-+    char* const sched = PinAddress(reinterpret_cast<char*>(&SysTimestamp));
-+    auto S = [sched, this](auto& member) -> auto&
-+    {
-+        using T = std::remove_reference_t<decltype(member)>;
-+        return *reinterpret_cast<T*>(sched + (reinterpret_cast<uintptr_t>(&member) - reinterpret_cast<uintptr_t>(&SysTimestamp)));
-+    };
++    char* const sb = PinAddress(reinterpret_cast<char*>(&SysTimestamp));
++    u8* const rxBase = JIT.JitRXBase;
 +
 +    // (CancelEvent's "to recompute", from outside RunFrame; inside, RunSystem resolves it)
-+    if (S(SchedNext) == 0)
++    if (SCHED(sb, SchedNext) == 0)
 +        SchedNextUpdate();
 +
-+    while (S(Running))
++    // the loop over the ARM7 in RunFrame, from its first check on, with its timers: runARM7Busy from the first pass of
++    // its body on (the caller checked ARM7Timestamp < target)
++    auto runARM7Busy = [&](u64 target) __attribute__((always_inline))
++    {
++        do
++        {
++            ARM7Target = target; // might be changed by a reschedule
++
++            if (CPUStop & CPUStop_DMA7)
++            {
++                DMAs[4].Run();
++                DMAs[5].Run();
++                DMAs[6].Run();
++                DMAs[7].Run();
++                if (ConsoleType == 1)
++                {
++                    auto& dsi = dynamic_cast<melonDS::DSi&>(*this);
++                    dsi.RunNDMAs(1);
++                }
++            }
++            else if (!arm7.Halted)
++                ExecuteJITInline<1>(*this, arm7, ARM7Timestamp, ARM7Target, rxBase);
++            else
++                arm7.Execute<CPUExecuteMode::JIT>();
++
++            if (ARM7Timestamp >= SCHED(sb, TimerNext[1]))
++                RunTimers(1);
++        } while (ARM7Timestamp < target);
++    };
++    auto runARM7 = [&](u64 target) __attribute__((always_inline))
++    {
++        if (ARM7Timestamp >= target)
++            return;
++
++        if (arm7.Halted == 1 && !(CPUStop & CPUStop_DMA7) && !HaltInterrupted(1))
++        {
++            // one pass of the loop: Execute takes ARM7Timestamp to ARM7Target, then the timers run
++            ARM7Target = target;
++            ARM7Timestamp = target;
++            if (target >= SCHED(sb, TimerNext[1]))
++                RunTimers(1);
++            return;
++        }
++
++        runARM7Busy(target);
++    };
++
++    // SysTimestamp and SchedNext as the last slice's end left them (only RunSystem sets SysTimestamp)
++    u64 sys = SCHED(sb, SysTimestamp);
++    u64 next = SCHED(sb, SchedNext);
++    while (SCHED(sb, Running))
 +    {
 +        // NextTarget(), FastSched
-+        const u64 sys = S(SysTimestamp);
-+        const u64 max = sys + (sys < S(SliceNearIPCUntil) ? S(SliceShort) : S(SliceIdle));
-+        const u64 next = S(SchedNext);
++        const s32 sliceShort = SCHED(sb, SliceShort), sliceIdle = SCHED(sb, SliceIdle);
++        const u64 max = sys + (sys < SCHED(sb, SliceNearIPCUntil) ? sliceShort : sliceIdle);
 +        u64 target = (next < max + kIterationCycleMargin) ? next : max;
 +
 +        ARM9Target = target << ARM9ClockShift;
@@ -366,80 +456,76 @@ index b606589..20acd95 100644
 +            }
 +        }
 +        else if (!arm9.Halted) [[likely]]
-+            ExecuteJITInline<0>(*this, arm9, ARM9Timestamp, ARM9Target);
++            ExecuteJITInline<0>(*this, arm9, ARM9Timestamp, ARM9Target, rxBase);
 +        else if (arm9.Halted == 1 && !HaltInterrupted(0))
 +            ARM9Timestamp = ARM9Target;
 +        else
 +            arm9.Execute<CPUExecuteMode::JIT>();
 +
-+        // (the ARM9's time is read again after a call, as melonDS's loop does)
 +        target = ARM9Timestamp >> ARM9ClockShift;
-+        if (target >= S(TimerNext[0]))
-+        {
-+            RunTimers(0);
-+            target = ARM9Timestamp >> ARM9ClockShift;
-+        }
 +
 +        // GPU3D::Run's early-out (the same condition, its cheapest part first)
-+        if ((gpu3d.CmdPIPE.IsEmpty() && !(gpu3d.GXStat & (1<<27))) || !gpu3d.GeometryEnabled || gpu3d.FlushRequest)
++        const bool gpuIdle = (gpu3d.CmdPIPE.IsEmpty() && !(gpu3d.GXStat & (1<<27))) || !gpu3d.GeometryEnabled ||
++            gpu3d.FlushRequest;
++        u32 stop;
++        if (target < SCHED(sb, TimerNextMin) && gpuIdle) [[likely]]
++        {
++            // no timer due on either CPU by the ARM9's time, which is as far as the ARM7 goes (RunTimers(0) and
++            // RunTimers(1) wouldn't be called), and nothing for the geometry engine to do
 +            gpu3d.Timestamp = target;
++            CurCPU = 1;
++            // (CPUStop read once for the ARM7's DMA and the sleep check below, when nothing runs in between)
++            stop = CPUStop;
++            if (ARM7Timestamp < target)
++            {
++                if (arm7.Halted == 1 && !(stop & CPUStop_DMA7) && !HaltInterrupted(1))
++                {
++                    ARM7Target = target;
++                    ARM7Timestamp = target;
++                }
++                else
++                {
++                    runARM7Busy(target);
++                    stop = CPUStop;
++                }
++            }
++        }
 +        else
 +        {
-+            gpu3d.Run();
-+            target = ARM9Timestamp >> ARM9ClockShift;
-+        }
-+
-+        CurCPU = 1;
-+
-+        if (ARM7Timestamp < target)
-+        {
-+            if (arm7.Halted == 1 && !(CPUStop & CPUStop_DMA7) && !HaltInterrupted(1))
++            // (the ARM9's time is read again after a call, as melonDS's loop does)
++            if (target >= SCHED(sb, TimerNext[0]))
 +            {
-+                // one pass of the loop below: Execute takes ARM7Timestamp to ARM7Target, then the timers run
-+                ARM7Target = target;
-+                ARM7Timestamp = target;
-+                if (target >= S(TimerNext[1]))
-+                    RunTimers(1);
++                RunTimers(0);
++                target = ARM9Timestamp >> ARM9ClockShift;
 +            }
++
++            if ((gpu3d.CmdPIPE.IsEmpty() && !(gpu3d.GXStat & (1<<27))) || !gpu3d.GeometryEnabled || gpu3d.FlushRequest)
++                gpu3d.Timestamp = target;
 +            else
 +            {
-+                do
-+                {
-+                    ARM7Target = target; // might be changed by a reschedule
-+
-+                    if (CPUStop & CPUStop_DMA7)
-+                    {
-+                        DMAs[4].Run();
-+                        DMAs[5].Run();
-+                        DMAs[6].Run();
-+                        DMAs[7].Run();
-+                        if (ConsoleType == 1)
-+                        {
-+                            auto& dsi = dynamic_cast<melonDS::DSi&>(*this);
-+                            dsi.RunNDMAs(1);
-+                        }
-+                    }
-+                    else if (!arm7.Halted)
-+                        ExecuteJITInline<1>(*this, arm7, ARM7Timestamp, ARM7Target);
-+                    else
-+                        arm7.Execute<CPUExecuteMode::JIT>();
-+
-+                    if (ARM7Timestamp >= S(TimerNext[1]))
-+                        RunTimers(1);
-+                } while (ARM7Timestamp < target);
++                gpu3d.Run();
++                target = ARM9Timestamp >> ARM9ClockShift;
 +            }
++
++            CurCPU = 1;
++            runARM7(target);
++            stop = CPUStop;
 +        }
 +
 +        // RunSystem(target), FastSched
-+        S(SysTimestamp) = target;
-+        if (target >= S(SchedNext))
++        SCHED(sb, SysTimestamp) = target;
++        sys = target;
++        next = SCHED(sb, SchedNext);
++        if (target >= next)
 +        {
-+            RunEventsDue();
++            RunEventsDue(sb);
 +            if (GPU.TotalScanlines != 0)
 +                break;
++            stop = CPUStop;
++            next = SCHED(sb, SchedNext);
 +        }
 +
-+        if (CPUStop & CPUStop_Sleep)
++        if (stop & CPUStop_Sleep)
 +            break;
 +    }
 +}
@@ -448,33 +534,83 @@ index b606589..20acd95 100644
  u32 NDS::RunFrame()
  {
  #ifdef JIT_ENABLED
-@@ -1140,7 +1419,8 @@ u32 NDS::RunFrame()
-     }
- }
+@@ -1178,40 +1518,61 @@ void NDS::UnregisterEventFuncs(u32 id)
  
--void NDS::Reschedule(u64 target)
-+// (inline: ScheduleEvent is its only caller)
-+[[gnu::always_inline]] inline void NDS::Reschedule(u64 target)
+ void NDS::ScheduleEvent(u32 id, bool periodic, s32 delay, u32 funcid, u32 param)
  {
-     if (CurCPU == 0)
+-    if (SchedListMask & (1<<id))
++    char* const sb = PinAddress(reinterpret_cast<char*>(&SysTimestamp));
++    const u32 mask = SCHED(sb, SchedListMask);
++    if (mask & (1<<id))
      {
-@@ -1208,10 +1488,12 @@ void NDS::ScheduleEvent(u32 id, bool periodic, s32 delay, u32 funcid, u32 param)
+         Log(LogLevel::Debug, "!! EVENT %d ALREADY SCHEDULED\n", id);
+         return; 
+     }
+ 
++    // (what Reschedule reads too, read once: the stores below go through sb, which GCC can't tell apart)
++    const int curCPU = CurCPU;
++    const u32 shift = ARM9ClockShift;
+     SchedEvent& evt = SchedList[id];
+ 
++    u64 timestamp;
+     if (periodic)
+-        evt.Timestamp += delay;
++        timestamp = evt.Timestamp + delay;
+     else
+     {
+-        if (CurCPU == 0)
+-            evt.Timestamp = (ARM9Timestamp >> ARM9ClockShift) + delay;
++        if (curCPU == 0)
++            timestamp = (ARM9Timestamp >> shift) + delay;
+         else
+-            evt.Timestamp = ARM7Timestamp + delay;
++            timestamp = ARM7Timestamp + delay;
++    }
++
++    // Reschedule(timestamp)
++    if (curCPU == 0)
++    {
++        if (timestamp < (ARM9Target >> shift))
++            ARM9Target = (timestamp << shift);
++    }
++    else
++    {
++        if (timestamp < ARM7Target)
++            ARM7Target = timestamp;
+     }
+ 
++    evt.Timestamp = timestamp;
+     evt.FuncID = funcid;
+     evt.Param = param;
+ 
+-    SchedListMask |= (1<<id);
+-    if (evt.Timestamp < SchedNext)
+-        SchedNext = evt.Timestamp;
+-
+-    Reschedule(evt.Timestamp);
++    SCHED(sb, SchedListMask) = mask | (1<<id);
++    if (timestamp < SCHED(sb, SchedNext))
++        SCHED(sb, SchedNext) = timestamp;
+ }
  
  void NDS::CancelEvent(u32 id)
  {
 -    const bool wasnext = (SchedListMask & (1<<id)) && SchedList[id].Timestamp == SchedNext;
+-    SchedListMask &= ~(1<<id);
+-    if (FastSched && wasnext)
+-        SchedNextUpdate();
 +    // FastSched: cancelling the event SchedNext holds sets it to 0, "to recompute" (often a new one follows: the
 +    // divider and sqrt unit cancel and reschedule theirs on every parameter write). The next RunSystem walks the
 +    // list, firing only what is due as always, and rebuilds it; NextTarget recomputes it if it comes first.
-+    if ((SchedListMask & (1<<id)) && SchedList[id].Timestamp == SchedNext)
-+        SchedNext = 0;
-     SchedListMask &= ~(1<<id);
--    if (FastSched && wasnext)
--        SchedNextUpdate();
++    char* const sb = PinAddress(reinterpret_cast<char*>(&SysTimestamp));
++    const u32 mask = SCHED(sb, SchedListMask);
++    if ((mask & (1<<id)) && SchedList[id].Timestamp == SCHED(sb, SchedNext))
++        SCHED(sb, SchedNext) = 0;
++    SCHED(sb, SchedListMask) = mask & ~(1<<id);
  }
  
  
-@@ -1746,6 +2028,31 @@ void NDS::RunTimers(u32 cpu)
+@@ -1746,6 +2107,32 @@ void NDS::RunTimers(u32 cpu)
      if (timermask & 0x8) RunTimer((cpu<<2)+3, cycles);
  
      TimerTimestamp[cpu] += cycles;
@@ -503,10 +639,11 @@ index b606589..20acd95 100644
 +            next = due;
 +    }
 +    TimerNext[cpu] = next;
++    TimerNextMin = std::min(TimerNext[0], TimerNext[1]);
  }
  
  const s32 TimerPrescaler[4] = {0, 6, 8, 10};
-@@ -1778,6 +2085,9 @@ void NDS::TimerStart(u32 id, u16 cnt)
+@@ -1778,6 +2165,9 @@ void NDS::TimerStart(u32 id, u16 cnt)
          TimerCheckMask[id>>2] |= 0x01 << (id&0x3);
      else
          TimerCheckMask[id>>2] &= ~(0x01 << (id&0x3));
@@ -517,7 +654,7 @@ index b606589..20acd95 100644
  
  
 diff --git a/src/NDS.h b/src/NDS.h
-index 5acd202..c28ed5f 100644
+index 5acd202..f00c835 100644
 --- a/src/NDS.h
 +++ b/src/NDS.h
 @@ -93,7 +93,7 @@ typedef void (*EventFunc)(void* that, u32 param);
@@ -536,20 +673,24 @@ index 5acd202..c28ed5f 100644
 +    // FastTimers (exact, BananaDS): RunFrame runs a CPU's timers only once its time reaches TimerNext[cpu], the
 +    // earliest overflow of its counting timers (RunTimer is additive, so the counters catch up then; every read of a
 +    // counter goes through RunTimers first). Off: TimerNext stays 0, and the timers run every slice as melonDS's.
-+    void SetFastTimers(bool on) noexcept { FastTimers = on; TimerNext[0] = TimerNext[1] = 0; }
++    void SetFastTimers(bool on) noexcept { FastTimers = on; TimerNext[0] = TimerNext[1] = TimerNextMin = 0; }
 +    // FastLoop (exact, BananaDS; needs FastSched): RunFrame's loop for the JIT with NextTarget, RunSystem's
 +    // early-out, GPU3D::Run's idle case, a halted CPU and Execute's block loop inline (RunSlicesJIT).
 +    void SetFastLoop(bool on) noexcept { FastLoop = on; }
  
      u32 IME[2];
      u32 IE[2];
-@@ -551,6 +558,12 @@ protected:
+@@ -549,8 +556,15 @@ protected:
+     u32 SliceHold = 0;
+     u64 SliceNearIPCUntil = 0; // the short slice is used while SysTimestamp is below this
      bool FastSched = false;
-     u64 SchedNext = UINT64_MAX; // the earliest Timestamp of the events in SchedListMask (exact while FastSched)
+-    u64 SchedNext = UINT64_MAX; // the earliest Timestamp of the events in SchedListMask (exact while FastSched)
++    u64 SchedNext = UINT64_MAX; // the earliest Timestamp of the events in SchedListMask (exact while FastSched; 0: to recompute, CancelEvent)
      void SchedNextUpdate() noexcept;
-+    void RunEventsDue() noexcept;
++    void RunEventsDue(char* sb) noexcept;
 +    bool FastTimers = false;
 +    u64 TimerNext[2] = {0, 0}; // RunFrame skips RunTimers(cpu) while the CPU's time is below this (FastTimers)
++    u64 TimerNextMin = 0; // the lower of the two
 +    void TimerNextUpdate(u32 cpu) noexcept;
 +    bool FastLoop = false;
 +    void RunSlicesJIT();
