@@ -74,6 +74,11 @@ int run_headless(Emu& emu, const Config& cfg) {
     // headless.reload_at: after this frame, save the state to slot 3 and load it straight back (tests the savestate
     // path: the run should go on as if nothing happened)
     const long reload = cfg.num("headless.reload_at", -1);
+    // headless.audio_dump=<file>: the raw stereo s16 samples the SPU hands the frontend (SPU::ReadOutput), so two
+    // builds' audio compares byte for byte with cmp
+    const std::string adump = cfg.str("headless.audio_dump", "");
+    FILE* af = adump.empty() ? nullptr : fopen(adump.c_str(), "wb");
+    if (!adump.empty() && !af) Log(LogLevel::Error, "[headless] headless.audio_dump: can't open %s\n", adump.c_str());
     auto tm = t0;
     for (; done < frames && !emu.stopped(); done++) {
         if (done == from) tm = std::chrono::steady_clock::now();
@@ -84,12 +89,14 @@ int run_headless(Emu& emu, const Config& cfg) {
             emu.set_keys(keys);
         }
         emu.run_frame();
-        while (emu.audio(snd.data(), 4096) > 0) {}  // drain it, as a sound device would
+        for (int n; (n = emu.audio(snd.data(), 4096)) > 0;)  // drain it, as a sound device would
+            if (af) fwrite(snd.data(), sizeof(int16_t) * 2, n, af);
         if (done + 1 == reload && !(emu.save_state(3) && emu.load_state(3)))
             Log(LogLevel::Error, "[headless] headless.reload_at: the state didn't save and load back\n");
         if (!dir.empty() && every > 0 && (done + 1) % every == 0)
             dump_ppm(dir + "/frame" + std::to_string(done + 1) + ".ppm", emu.top(), emu.bottom());
     }
+    if (af) fclose(af);
     double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     Log(LogLevel::Info, "[headless] %ld frames in %.2f s: %.1f fps (%.0f%% of a DS)\n", done, s, done / s,
         done / s / 59.8261 * 100);

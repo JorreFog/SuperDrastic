@@ -20,6 +20,8 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `core.slice_stats` | `0` | every this many frames, log the IPC accesses per frame and the share of time near one (the short slice's share), for tuning `auto` per game |
 | `core.fast_gxdma` | `off` | DMA words from main RAM to the geometry FIFO go straight to the 3D engine instead of through melonDS's bus and IO dispatch (patches/melonds/0004). Exact: the same results and timing; off until measured on the handheld |
 | `core.fast_spu` | `off` | the mixer skips sound channels that are off (patches/melonds/0004). Exact; off until measured |
+| `core.fast_mix` | `on` | the SPU runs only the sound channels due to take a sample (all of them after a sound register write) and keeps the others' output, sums the mixers with NEON, and sound DMA and capture read and write main RAM without the bus dispatch (patches/melonds/0013). Exact: the same audio byte for byte (`headless.audio_dump`) and the same RAM |
+| `core.fast_dma` | `on` | 32-bit DMA from main RAM to the GX FIFO or between main RAM addresses without the bus dispatch, and the ARM9's main RAM burst timing looked up once per run (patches/melonds/0013). Exact: the same timing and results |
 | `core.fast_sched` | `on` | the scheduler keeps the time of its next event instead of walking its event list twice every slice (patches/melonds/0006, 0009). Exact; on since `core.fast_loop` needs it |
 | `core.fast_timers` | `on` | a CPU's timers run only when one of them overflows, not every slice (patches/melonds/0009). Exact |
 | `core.fast_loop` | `on` | the scheduler's slice loop for the JIT with the common cases inline: block lookup and dispatch, a halted CPU, an idle 3D engine, a slice with no event due (patches/melonds/0009). Exact; used with `core.fast_sched` |
@@ -55,6 +57,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `headless.frames` | `600` | how many frames `headless` runs |
 | `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
 | `headless.reload_at` | none | after this frame, save the state to slot 3 and load it straight back (a test of the savestate path) |
+| `headless.audio_dump` | none | write the raw audio the SPU hands the frontend (`SPU::ReadOutput`: stereo s16 at the output rate, 48000 Hz) to this file, so two builds' audio compares byte for byte with `cmp` |
 | `headless.measure_from` | `0` | also report the fps from this frame on (a game's scene, after loading) |
 | `headless.input` | none | scripted presses: `<frame>:<keys>[:<frames held>]`, comma-separated, keys joined by `+` (`a b select start right left up down r l x y`), held 6 frames by default: `600:start,900:a:10` |
 | `log.file` | none | a copy of the log (stderr always gets it) |
