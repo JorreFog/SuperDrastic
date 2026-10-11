@@ -646,11 +646,14 @@ void BananaRenderer2D::DrawBG_Text(u32 line, u32 bgnum)
         const uint8x16_t flagplane = vsetq_lane_u8(0, vdupq_n_u8((u8)(1u << bgnum)), 0);
         const uint8x16_t zero = vdupq_n_u8(0);
         uint8x8_t minidx = vdup_n_u8(0xFF);
+        // the line's (at most two) 32-entry map blocks: 64-byte aligned, so each is contiguous in VRAM
+        const u16* block[2] = { (const u16*)&vram[tilemapaddr & vrammask],
+                                (const u16*)&vram[(tilemapaddr + (widexmask << 3)) & vrammask] };
+        const u32 rowoff[2] = { tilesetaddr + (row << 2), tilesetaddr + ((7 - row) << 2) };
         for (int t = 0; t < 33; t++, xt += 8, out += 8)
         {
-            u16 tile = *(u16*)&vram[(tilemapaddr + ((xt & 0xF8) >> 2) + ((xt & widexmask) << 3)) & vrammask];
-            u32 r = (tile & (1<<11)) ? (7 - row) : row;
-            u32 pix = *(u32*)&vram[(tilesetaddr + ((tile & 0x03FF) << 5) + (r << 2)) & vrammask];
+            u16 tile = block[(xt & widexmask) >> 8][(xt >> 3) & 31];
+            u32 pix = *(u32*)&vram[(rowoff[(tile >> 11) & 1] + ((tile & 0x03FF) << 5)) & vrammask];
             if (pix == 0)
             {
                 vst1q_u8((u8*)out, zero);
