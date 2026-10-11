@@ -54,6 +54,20 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
     `jit.fastmem7=off`. Checked with `STRESS_ARM7=arm|thumb stressrom/build.py`, an ARM7 that never halts:
     main RAM is identical after every frame with it on or off (CI). One extra cycle per access is caught
     after frame 1.
+  - Block transfers: LDM/STM and Thumb PUSH/POP/LDMIA/STMIA. The register list is known at compile time, so
+    the walk is unrolled: the lowest transfer address and the write-back are computed in host registers, the
+    list is gathered into / scattered out of a scratch buffer two words at a time (STP/LDP), and one call does
+    the word accesses and the cycle charge through the interpreter's own functions. That call does the first
+    word with `DataRead32`/`DataWrite32` (nonsequential) and the rest with `DataRead32S`/`DataWrite32S`
+    (sequential) -- which is what accumulates `DataCycles` -- then one `AddCycles_CDI` (loads) or `AddCycles_CD`
+    (stores), exactly as `A_LDM`/`A_STM`/`T_*` do, so the side effects and the cost are the interpreter's. The
+    base-in-list cases follow the interpreter per architecture: LDM write-back is suppressed on ARMv4, and on
+    ARMv5 only when base is not the last-loaded register; an STM stores the original base (ARMv5/Thumb, or base
+    lowest) or the running address (ARMv4, base not lowest). Left to the interpreter: the user-bank form (the
+    `^`/S bit), LDM (and Thumb POP) with the PC in the list (a jump), STM with the PC (a rare constant), an
+    empty list, and a PC base. `jit.ldm=off` sends block transfers back to the interpreter; with it on or off,
+    `bananads-difftest --every` finds main RAM byte-identical after every frame (CI, L5 and ramp, ARM and
+    Thumb, and the ARM7 ROMs), so it changes no cycle.
   - Block linking: a block's exit does what melonDS's `Execute` loop does between two blocks, in the same
     order: the StopExecution check, `Timestamp += Cycles`, the Target check, the region check and the
     FastBlockLookup lookup. Then it jumps straight into the next block instead of returning. The table is
@@ -62,11 +76,13 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
   - Thumb: every Thumb instruction that means exactly what an ARM instruction means is compiled as that ARM
     instruction (`ThumbToARM`). That covers shifts by an immediate, add/subtract, MOV/CMP/ADD/SUB with
     immediates, the register ALU ops, the high-register ADD/CMP/MOV, PC/SP-relative ADD, ADD SP, and every
-    load/store form except PUSH/POP/LDMIA/STMIA. One exception to "exactly": Thumb's PC- and SP-relative LDR
-    doesn't rotate an unaligned word, so it uses its own helper.
+    load/store form. PUSH/POP/LDMIA/STMIA are the block transfers above (their own compiler, not ThumbToARM).
+    One exception to "exactly": Thumb's PC- and SP-relative LDR doesn't rotate an unaligned word, so it uses
+    its own helper.
 - **Everything else** runs through melonDS's interpreter, one instruction at a time, using the framework's
   protocol (R15, CurInstr and CodeCycles set first, and the PC stored before the condition check). Today that
-  is branches, LDM/STM/PUSH/POP, MSR/MRS, the DSP multiplies (SMLAxy and friends), coprocessor instructions.
+  is branches, MSR/MRS, the DSP multiplies (SMLAxy and friends), coprocessor instructions, and the
+  block-transfer forms left out above (user-bank, PC in the list).
 - **Fastmem:** off with BananaJIT for now.
 
 **Checked (aarch64 under qemu):** the stress ROMs (`dsstress-L1`, `L5`, `L10`, `dsswap`, `dsstress-ramp`)
@@ -74,8 +90,9 @@ give pictures identical to the interpreter's at frames 150, 300, 450 and 600. Th
 and compiled as Thumb (`STRESS_THUMB=1 stressrom/build.py`); CI checks L5 both ways. Native share of compiled
 instructions in `dsstress-L5` (measured before native multiply/register-shift; CI re-measures):
 - **ARM:** 1,533 of 1,598 (96%).
-- **Thumb:** 3,782 of 4,266 (89%). With multiply and the register shifts now native, the remaining fallbacks
-  are the branches and PUSH/POP; the share rises toward the branch/PUSH-POP floor on both.
+- **Thumb:** 3,782 of 4,266 (89%). With multiply, the register shifts and now the block transfers (PUSH/POP
+  and LDM/STM) native, the remaining fallbacks are the branches; the share rises toward the branch floor on
+  both. (The numbers above predate the block-transfer slice; CI re-measures.)
 
 RAM drifts from frame 9 on through block-granularity timing, as with melonDS's JIT (frame 6), with the same
 pictures.
@@ -97,8 +114,7 @@ DraStic's JIT wrong.
 1. Branches natively. Linking is done, but a branch still calls `JumpTo`. Its fetch costs go through the ARM9
    instruction-cache model; melonDS's JIT precomputes them, which is an approximation. A native branch has
    to keep the run-time cost to stay exact.
-2. LDM/STM and PUSH/POP.
-3. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
+2. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
 
 **The one known difference from the interpreter.** Native ARM7 instructions charge their code-fetch cycles from
 the `CodeCycles` the framework recorded when it compiled the block. The interpreter uses the CPU's current

@@ -40,6 +40,7 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
     LinkBlocks = !getenv("BANANAJIT_NO_LINK") && offsetof(ARM, FastBlockLookup) % 8 == 0 &&
                  offsetof(ARM, FastBlockLookup) < 32768 && offsetof(ARM, StopExecution) % 4 == 0;
     DoMul = !getenv("BANANAJIT_NO_MUL");
+    DoLDM = !getenv("BANANAJIT_NO_LDM");
     Platform::Log(Platform::LogLevel::Info, "[bananajit] BananaDS's own JIT, %zu MB of code memory, ARM9 loads %s\n",
                   CodeSize >> 20, FastLoads ? "inline" : "through calls");
     Platform::Log(Platform::LogLevel::Info, "[bananajit] blocks %s, ARM9 stores %s\n",
@@ -94,6 +95,13 @@ int Compiler::NativeKindARM(u32 instr, u16 kind) {
         if (rn == 15 && wb) return 0;
         if (regoff && (instr & 0xF) == 15) return 0;
         return 2;
+    }
+    if (kind == ak_LDM || kind == ak_STM) {
+        if (instr & (1 << 22)) return 0;   // the S bit (user-bank / CPSR-restore form): the interpreter's
+        if (instr & (1 << 15)) return 0;   // the PC in the list: LDM is a jump, STM a rare constant: interpreter
+        if ((instr & 0xFFFF) == 0) return 0;  // an empty register list is unpredictable: the interpreter's
+        if (rn == 15) return 0;            // a PC base is unpredictable: the interpreter's
+        return 5;
     }
     return 0;
 }
@@ -178,19 +186,25 @@ int Compiler::ThumbToARM(u32 t, u16 kind, u32 r15, u32& arm, u16& armKind, u32& 
     case tk_LDR_SPREL:
         noRotate = true;
         arm = 0xE5900000 | 13 << 16 | rd8 << 12 | imm8 << 2; armKind = ak_LDR_IMM; return 2;
+    // Block transfers (not an ARM instruction form: CompileBlockTransfer reads the Thumb encoding directly).
+    case tk_PUSH:  return ((t & 0xFF) | ((t & (1 << 8)) ? (1 << 14) : 0)) ? 5 : 0;  // STMDB sp! {low regs, LR}
+    case tk_POP:   return (t & (1 << 8)) ? 0 : ((t & 0xFF) ? 5 : 0);  // POP with PC is a jump: the interpreter's
+    case tk_LDMIA: case tk_STMIA: return (t & 0xFF) ? 5 : 0;          // LDMIA/STMIA rb! {low regs}
     default: return 0;
     }
 }
 
 static bool ThumbKindNative(u16 kind) {
     using namespace ARMInstrInfo;
-    return kind <= tk_LDR_SPREL;  // everything ThumbToARM has a case for (it covers 0..tk_LDR_SPREL)
+    // everything ThumbToARM has a case for: 0..tk_LDR_SPREL, plus the four block-transfer kinds
+    return kind <= tk_LDR_SPREL || kind == tk_PUSH || kind == tk_POP || kind == tk_LDMIA || kind == tk_STMIA;
 }
 
 bool Compiler::CanCompile(bool thumb, u16 kind) {
     using namespace ARMInstrInfo;
     if (thumb) return ThumbKindNative(kind);
-    return IsDataProcessing(kind) || IsWordByte(kind) || IsHalf(kind) || (kind >= ak_MUL && kind <= ak_SMLAL);
+    return IsDataProcessing(kind) || IsWordByte(kind) || IsHalf(kind) || (kind >= ak_MUL && kind <= ak_SMLAL) ||
+           kind == ak_LDM || kind == ak_STM;
 }
 
 // --- registers, flags, cycles ---
@@ -1055,10 +1069,159 @@ void Compiler::CompileMem() {
     }
 }
 
+// --- ARM/Thumb block transfers (LDM/STM, PUSH/POP/LDMIA/STMIA), native ---
+
+// A scratch buffer the generated code gathers a store's register list into, and scatters a load's out of into
+// the guest registers. One block runs at a time and a transfer completes within the single helper call below,
+// so one file-static buffer is safe (it is never live across two transfers, on either CPU). Slots 0.. hold the
+// transferred words; a high slot carries a load's write-back value across the call.
+static constexpr int BlockWBSlot = 16;
+static u32 BlockXferBuf[BlockWBSlot + 1];
+
+// The word-transfer sequence the interpreter's block-transfer functions do: the first access nonsequential
+// (DataRead32/DataWrite32), the rest sequential (DataRead32S/DataWrite32S) -- which is what accumulates
+// DataCycles -- then one AddCycles_CDI (loads) / AddCycles_CD (stores) at the end. `addr` is the lowest
+// transfer address (the sequence ascends, low register first) and `buf` holds `count` (>= 1) words. Going
+// through the interpreter's own functions in this exact order makes the side effects and the cycle count the
+// interpreter's. (ARMInterpreter_LoadStore.cpp: A_LDM / A_STM, T_PUSH / T_POP / T_LDMIA / T_STMIA.)
+static void bj_blockload(ARM* c, u32 addr, u32* buf, u32 count) {
+    c->DataRead32(addr, &buf[0]);
+    for (u32 i = 1; i < count; i++) c->DataRead32S(addr + 4 * i, &buf[i]);
+    c->AddCycles_CDI();
+}
+static void bj_blockstore(ARM* c, u32 addr, u32* buf, u32 count) {
+    c->DataWrite32(addr, buf[0]);
+    for (u32 i = 1; i < count; i++) c->DataWrite32S(addr + 4 * i, buf[i]);
+    c->AddCycles_CD();
+}
+
+// LDM/STM and the Thumb PUSH/POP/LDMIA/STMIA, native. The register list is known at compile time, so the walk
+// is unrolled: the lowest transfer address and the write-back are computed in host registers, the list is
+// gathered into / scattered out of BlockXferBuf two words at a time (STP/LDP), and one call does the actual
+// word accesses and the cycle charge through the interpreter's functions (bj_blockstore / bj_blockload). The
+// guest registers stay in host registers across the block; only the transferred ones are touched. NativeKind
+// has already excluded the forms left to the interpreter: the S bit (user-bank / CPSR-restore), the PC in the
+// list (LDM is a jump; STM a rare constant), POP with PC (a jump), an empty list, and a PC base.
+void Compiler::CompileBlockTransfer() {
+    using namespace ARMInstrInfo;
+    const u32 in = CurInstr.Instr;
+    const u16 kind = CurInstr.Info.Kind;
+    const bool thumbForm = (kind == tk_PUSH || kind == tk_POP || kind == tk_LDMIA || kind == tk_STMIA);
+
+    u32 rlist, rn;
+    bool load, pre, up;  // pre = add 4 before each word (P bit); up = increment (U bit)
+    if (!thumbForm) {  // ARM LDM / STM
+        rlist = in & 0x7FFF;  // bits 0..14 (PC excluded by NativeKind)
+        rn = (in >> 16) & 0xF;
+        load = in & (1 << 20);
+        pre = in & (1 << 24);
+        up = in & (1 << 23);
+    } else {
+        rn = (kind == tk_LDMIA || kind == tk_STMIA) ? ((in >> 8) & 7) : 13;
+        load = (kind == tk_POP || kind == tk_LDMIA);
+        switch (kind) {
+        case tk_PUSH: rlist = (in & 0xFF) | ((in & (1 << 8)) ? (1 << 14) : 0); pre = true;  up = false; break;  // STMDB sp!
+        default:      rlist = in & 0xFF;                                       pre = false; up = true;  break;  // POP/LDMIA/STMIA
+        }
+    }
+
+    const int n = __builtin_popcount(rlist);
+    const int Num = CurCPU->Num;
+    const bool baseInList = rlist & (1u << rn);
+
+    // The lowest transfer address, matching the interpreter's loop (a decrement first does base -= 4*n, then
+    // both directions transfer ascending): start = base + (up ? (pre?4:0) : -4*n + (pre?0:4)).
+    const s32 startOff = up ? (pre ? 4 : 0) : (-4 * n + (pre ? 0 : 4));
+    const s32 wbDelta = up ? 4 * n : -4 * n;  // the write-back value is base + wbDelta
+
+    // Whether the base register is written back (its value is base + wbDelta):
+    //  stores: PUSH/STMIA always; ARM STM iff the W bit.
+    //  loads : base not in the list -> as the W bit says (always for POP/LDMIA);
+    //          base in the list -> the arch differs (A_LDM / T_LDMIA):
+    //            Thumb LDMIA: no write-back; ARMv4 (Num 1): no write-back;
+    //            ARMv5 (Num 0): iff base is the only register, or a register above base is in the list.
+    const bool wbBit = thumbForm ? true : (in & (1 << 21));
+    bool doWriteback;
+    if (!wbBit) doWriteback = false;
+    else if (!load) doWriteback = true;
+    else if (!baseInList) doWriteback = true;
+    else if (thumbForm) doWriteback = false;
+    else doWriteback = (Num == 0) && ((!(rlist & ~(1u << rn))) || (rlist & ~((2u << rn) - 1)));
+
+    // A store's base-register slot holds a special value (A_STM / T_STMIA): the original base for ARMv5, Thumb,
+    // or when base is the lowest register in the list; the running transfer address for ARMv4 when it is not
+    // the lowest. (The user-bank form, which would bank the stored value, is excluded by NativeKind.)
+    const bool storeBaseRunning = !load && baseInList && !thumbForm && Num == 1 && (rlist & ((1u << rn) - 1));
+
+    int regs[16], ns = 0;
+    for (int r = 0; r < 15; r++) if (rlist & (1 << r)) regs[ns++] = r;
+
+    const Reg BUF = W2;  // x2 = &BlockXferBuf (also the helper's buf argument)
+    Need(rn);
+    // the lowest transfer address -> W1 (the helper's addr argument; also the base of a running-address slot)
+    if (startOff > 0) A.addi(W1, host(rn), startOff);
+    else if (startOff < 0) A.subi(W1, host(rn), -startOff);
+    else A.mov(W1, host(rn));
+    A.movix(BUF, (uint64_t)(uintptr_t)&BlockXferBuf[0]);
+
+    if (load) {
+        // a load may overwrite the base in the list; save base + wbDelta now, across the call, for the write-back
+        if (doWriteback) {
+            wbDelta >= 0 ? A.addi(W4, host(rn), (u32)wbDelta) : A.subi(W4, host(rn), (u32)-wbDelta);
+            A.str(W4, BUF, BlockWBSlot * 4);
+        }
+    } else {
+        for (int r = 0; r < ns; r++) Need(regs[r]);  // every stored register in a host register (before writeback)
+        int i = 0;
+        while (i < ns) {
+            const bool special = (regs[i] == (int)rn) && storeBaseRunning;
+            if (special) { A.addi(W4, W1, 4 * i); A.str(W4, BUF, i * 4); i++; continue; }  // the running address
+            if (i + 1 < ns && !((regs[i + 1] == (int)rn) && storeBaseRunning)) {
+                A.stp(host(regs[i]), host(regs[i + 1]), BUF, i * 4);  // base-in-list (ARMv5/Thumb/lowest): host(rn) = old base
+                i += 2;
+            } else {
+                A.str(host(regs[i]), BUF, i * 4);
+                i++;
+            }
+        }
+    }
+
+    // the call: fn(cpu, startAddr = W1, buf = x2, count = W3), with the interpreter's state in memory
+    FlushCycles();
+    StoreHigh();
+    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
+    A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
+    if (Num == 0) {  // the ARM9's AddCycles_CDI/CD read CodeCycles, and R[15]&2 for Thumb
+        A.movi((Reg)16, (u32)(s32)CurInstr.CodeCycles);
+        A.str((Reg)16, RCPU, offsetof(ARM, CodeCycles));
+        if (Thumb) { A.movi((Reg)16, R15); A.str((Reg)16, RCPU, off_R(15)); }
+    }
+    A.movx(W0, RCPU);
+    A.movi(W3, (u32)n);
+    A.jump(load ? (const void*)&bj_blockload : (const void*)&bj_blockstore, true);
+    A.ldr(RCycles, RCPU, offsetof(ARM, Cycles));
+    A.ldr(RCPSR, RCPU, offsetof(ARM, CPSR));
+    for (int g = 8; g < 15; g++)
+        if (Loaded & (1 << g)) A.ldr(host(g), RCPU, off_R(g));  // r8-r14 live in caller-saved regs: the call may clobber them
+
+    if (load) {
+        A.movix(W3, (uint64_t)(uintptr_t)&BlockXferBuf[0]);  // w3 (count) is free now: reuse as the buffer base
+        int i = 0;
+        while (i < ns) {
+            if (i + 1 < ns) { A.ldp(host(regs[i]), host(regs[i + 1]), W3, i * 4); Dirty(regs[i]); Dirty(regs[i + 1]); i += 2; }
+            else { A.ldr(host(regs[i]), W3, i * 4); Dirty(regs[i]); i++; }
+        }
+        if (doWriteback) { A.ldr(host(rn), W3, BlockWBSlot * 4); Dirty(rn); }  // after the scatter: overrides an in-list load
+    } else if (doWriteback) {
+        wbDelta >= 0 ? A.addi(host(rn), host(rn), (u32)wbDelta) : A.subi(host(rn), host(rn), (u32)-wbDelta);
+        Dirty(rn);
+    }
+}
+
 // --- a block ---
 
 static const char* TraceName(bool thumb, const FetchedInstr& f) {
-    static const char* names[5] = {"interp", "native-alu", "native-mem", "native-mul", "native-shift"};
+    static const char* names[6] = {"interp", "native-alu", "native-mem", "native-mul", "native-shift", "native-ldm"};
     u32 a, pc;
     u16 k;
     bool nr;
@@ -1099,7 +1262,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
         NoRotate = false;
         int nk = thumb ? ThumbToARM(CurInstr.Instr, kind, R15, armInstr, armKind, PCValue, NoRotate)
                        : NativeKindARM(CurInstr.Instr, kind);
-        if (!DoMul && nk >= 3) nk = 0;  // jit.mul=off: multiply and register-shift through the interpreter
+        if (!DoMul && (nk == 3 || nk == 4)) nk = 0;  // jit.mul=off: multiply and register-shift through the interpreter
+        if (!DoLDM && nk == 5) nk = 0;               // jit.ldm=off: block transfers through the interpreter
         const bool native = nk != 0;
         const bool selfCycles = nk != 1;  // the interpreter or a memory helper charges this one's cycles
 
@@ -1128,7 +1292,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             if (native) {  // whatever it touches is loaded on both paths
                 for (int g = 0; g < 15; g++)
                     if ((CurInstr.Info.SrcRegs | CurInstr.Info.DstRegs) & (1 << g)) Need(g);
-                if (nk == 2) StoreHigh();  // its call stores them only on the taken path
+                if (nk == 2 || nk == 5) StoreHigh();  // their call stores them only on the taken path
             } else {
                 FlushRegs(false);
             }
@@ -1137,7 +1301,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             skip = A.bcond_fwd((Cond)(cond ^ 1));
         }
 
-        if (thumb && nk) {  // compiled as the ARM instruction it means; flags, registers and cycles stay Thumb's
+        if (thumb && nk && nk != 5) {  // compiled as the ARM instruction it means; flags, registers and cycles stay Thumb's
             CurInstr.Instr = armInstr;
             if (nk == 2) CurInstr.Info.Kind = armKind;
         }
@@ -1150,6 +1314,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             CompileMul();          // charges its own AddCycles_CI
         } else if (nk == 4) {
             CompileALU();          // register-shifted operand; CompileALU charges its own AddCycles_CI(1)
+        } else if (nk == 5) {
+            CompileBlockTransfer();  // charges its own AddCycles_CDI/CD (loads/stores) through the helper
         } else {
             Fallback(thumb);
         }
