@@ -395,6 +395,32 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   4f63ae7: 0 of 323000 batches differ (four seeds); the scene cycle's differing bins as DraStic's renderer's at
   every checkpoint to 74400 bins with the compositor's checks 0 differ, with deferred shading to 67200, S4 0 bins in
   12000, the stress ROM's 6 bins in 4800, the four 3x runs without signals.
+  Then three more by the profiles: the flat textured kernels' white lines (flag bit 2: the texel is the colour),
+  which pipe()'s loops excluded and which are nearly all of L4's 02010 and S7's 14010 (the white path's copy block
+  ran on every group), get white loops of their own (pipe_loops(): 120:, 150: for the 16-colour palette; colour()
+  takes the texture and white_copies() into the st4 quad instead of the modulates): kpath, the white path, 02010 113
+  -> 82.5, 14010 135 -> 96 (16 colours 132 -> 93), 04010 126 -> 106 (123 -> 96). The translucent 02100 and 02110,
+  L4's second and fourth kernels, get a pipelined loop (pipe_trans()) for lines with blending, no fog, no depth
+  update, no alpha test and A < 31 (L4's: the blend and the alpha modulate ran on every group, fog and depth update
+  on none): a step is the next group's head and the current group's colour, alpha modulate, blend, id test and
+  stores in one block, falling through while the next group passes (the translucent store merges any mask); the
+  current group's words in v10 v11 for 02100 (its r0 g0 splats to the stack) and in the dep role's v19 v20 for 02110
+  (its flat colour then loaded from the kernel arguments), the next group's attribute address in x16 (x26 is id0
+  there): kpath, blending with the alpha modulate, 02100 202 -> 156, 02110 198 -> 152. The lazy kernels' loop before
+  a line's first passing group tests two groups a step while both fail (pair_screen(): one block, one branch; on a
+  pass the single test takes the group again): llvm-mca, a failing group 29 -> 24.5 cycles (02100 tests ~26000
+  groups a frame on L4, ~19000 of them failing there). The climb runs its model over two passes of a loop (three
+  found the same orders), so 17 distinct loops generate in about 2.5 minutes. Modeled A55 cycles a frame (90 s
+  profiles; this build's against 4f63ae7's (same session, m9) and commit 2's: stress ROM L4 at 2x, 02100 2.76 ->
+  2.39 M (IPC 0.85 -> 1.05), 02110 1.39 -> 1.21, 02010 2.23 -> 2.07 (IPC 0.88 -> 1.13), the four L4 kernels 10.91 ->
+  9.92 M (-9.1%; commit 2's profile 10.38); at 3x h02100 6.14 -> 5.22, h02110 3.05 -> 2.58, h02010 4.78 -> 4.18, the
+  four 23.66 -> 20.70 M (-12.5%); the field scene S7's 14010 1.28 -> 1.05 M (-18%; instructions +12%: the pipelined
+  loop's and a longer span of the scene). The spans differ (1071 to 1439 frames of L4): judge by the IPC and the
+  instructions as well; the frames' totals now include the main branch's other changes (merged before this commit)).
+  `ut/kern_ab` against 4f63ae7 (its forced pipelined batches now half white, and with pipe_trans()'s flags on an
+  eighth of the translucent kernels'): 0 of 340000 batches differ; the scene cycle's differing bins as DraStic's
+  renderer's at every checkpoint to 62400 bins with the compositor's checks 0 differ, with deferred shading to
+  112800, S4 0 bins in 16800, the stress ROM's 6 bins in 4800, the four 3x runs without signals.
   Fifth round, 2D: `ds2d.c` (the section "DraStic's 2D scanline routines" below) replaces seven of DraStic's 2D
   routines in a first commit and ten more in a second, each exact (`t_ds2d.c`, RAST_2DCHECK=1 over the 2D and 3D
   scenes); modeled A55 cycles a frame: every 2x / 3x game's conversion 0.62 -> 0.29 M, the field scene S7 frame 4.49

@@ -5,7 +5,9 @@
  * bytes) and mostly in the ranges real spans have (depths in 24 bits, weights in [0, 1)), so that the depth test
  * passes and fails, whole groups pass (the straight store) and partial ones store through the masks. Directed
  * cases for the pipelined loops (kerngen.py's pipe(): a step tests the next group while it stores the current one):
- * their flags forced on a quarter of the batches (perspective, no depth-equal test, no white, no alpha stage), lines
+ * their flags forced on a quarter of the batches (perspective, no depth-equal test, no alpha stage; half of them
+ * white: the flat kernels' white loops; the translucent ones' half with pipe_trans()'s: blending, no fog, no depth
+ * update, A not 31), lines
  * of 1, 2, 7, 8, 9, 15, 16, 17, 24, 25 pixels, lines ending at the buffer's edge (x = 512, or 768 in the hi-res set),
  * and a depth mode whose groups of 8 pixels pass or fail whole (a full group followed by a failing one, a failing
  * first group). The count of batches with the pipelined loops' flags is printed with the result. */
@@ -127,8 +129,12 @@ int main(int argc, char **argv) {
             if (rr(4) == 0) flags |= 1 << 9;     /* white lines */
             if (rr(4)) flags |= 1 << 10;         /* A is 31 */
             flags |= rr(4) << 11;                /* clamps */
-            if (rr(4) == 0) flags = (flags & ~0x207u) | 0x500;   /* the pipelined loops' flags (kerngen.py's pipe()) */
-            if ((flags & 0x707) == 0x500) piped++;
+            if (rr(4) == 0) {                    /* the pipelined loops' flags (kerngen.py's pipe()), white or not */
+                flags = (flags & ~0x207u) | 0x500 | (rr(2) ? 4 : 0);
+                if (R && rr(2)) flags = (flags & ~0x43cu) | 0x108;   /* pipe_trans(): blending, no fog, no depth update,
+                                                                        A not 31 */
+            }
+            if ((flags & 0x703) == 0x500 || (R && (flags & 0x53f) == 0x108)) piped++;
             /* the buffers: random colours and ids, attribute words by the depth mode */
             for (size_t i = 0; i < sizeof ctx0 / 4; i++) ((uint32_t *)ctx0)[i] = rnd() << 8 ^ rnd();
             uint32_t *at = (uint32_t *)(ctx0 + (hr ? a.attr_off : 0x10000));
