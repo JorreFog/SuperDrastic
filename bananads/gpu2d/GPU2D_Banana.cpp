@@ -2020,9 +2020,44 @@ void BananaRenderer2D::ApplySpriteMosaicX()
     u8 mosw = R.OBJMosaicSize[0];
     if (mosw == 0) return;
 
+    int i0 = 0, i1 = 256;
     u8 mosx = 0;
     u32 latchcolor = 0;
-    for (int i = 0; i < 256; i++)
+#ifdef BANANA_NEON
+    if (Banana2DFast)
+    {
+        // every pixel's own value first (a transparent pixel's from its attribute byte), 4 at a time; a pixel without
+        // the mosaic bit always latches itself, so the sequential pass is needed only from the mosaic block holding
+        // the first pixel with the bit to the last such pixel
+        const uint32x4_t vop = vdupq_n_u32(OBJ_IsOpaque), vm = vdupq_n_u32(OBJ_IsSprite | OBJ_Mosaic | OBJ_BGPrioMask);
+        const uint32x4_t vmos = vdupq_n_u32(OBJ_Mosaic);
+        int first = 256, last = -1;
+        for (int i = 0; i < 256; i += 4)
+        {
+            uint32x4_t p = vld1q_u32(&OBJLine[i]);
+            uint32x4_t t = vandq_u32(vshlq_n_u32(VFromBytes4(*(const u32*)&OBJTransAttr[i]), 16), vm);
+            uint32x4_t c = vbslq_u32(vtstq_u32(p, vop), p, t);
+            vst1q_u32(&OBJLine[i], c);
+            if (vmaxvq_u32(vandq_u32(c, vmos)))
+            {
+                for (int k = 0; k < 4; k++)
+                    if (OBJLine[i + k] & OBJ_Mosaic)
+                    {
+                        if (first == 256) first = i + k;
+                        last = i + k;
+                    }
+            }
+        }
+        if (last < 0)
+            i1 = 0;
+        else
+        {
+            i0 = first - (first % (mosw + 1));
+            i1 = last + 1;
+        }
+    }
+#endif
+    for (int i = i0; i < i1; i++)
     {
         u32 curcolor = OBJLine[i];
         if (!(curcolor & OBJ_IsOpaque))
