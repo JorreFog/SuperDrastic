@@ -27,10 +27,11 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   written in one NEON pass instead of DraStic's five-stage chain (`render_scanline_2d_composite` hooked,
   `RAST_COMPFUSE=0` off): on the stress ROM the chain's 0.81 M a frame become 0.39 M, on the field
   scene 0.47 M become 0.07 M, checked byte for byte against the original in the running emulator.
-- **DraStic's geometry stage, cheaper.** Four of its functions on the emulation thread are replaced by exact
-  ones (the command queue's fast paths, the vertex batch, the A55-scheduled vertex transform, the polygon binning;
-  `RAST_GEOM=0` off, `RAST_GEOMCHECK=1` checks every call against DraStic's): 0.063 M modeled cycles a frame less
-  on the field scene, 0.166 M on the stress ROM (below).
+- **DraStic's geometry stage, cheaper.** Six of its functions on the emulation thread are replaced by exact ones
+  (the command queue's fast paths for the ports and for GXFIFO, the vertex batch, the vertex transform with its
+  lighting in NEON lanes, the polygon binning; `RAST_GEOM=0` off, `RAST_GEOMCHECK=1` checks every call against
+  DraStic's): 0.33 M modeled cycles a frame less on the stress ROM, 0.15 M on
+  the fog and edge scene, 0.07 M on the field scene (below).
 - **Scheduled for the handhelds' in-order core.** The RG DS and RG DS Plus run Cortex-A55 cores, which issue in
   program order, at most two instructions a cycle, and stall on every operand that is not ready: instruction counts
   miss that. `tools/rast/dev/cycles.py` models it (every executed block of a simulator profile through llvm-mca's
@@ -219,7 +220,11 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   emulator (`RAST_GEOMCHECK=1`) and in `ut/t_geom.c`. Modeled A55 cycles a frame, base -> ours, on the stress
   ROM L4: the queue 0.314 -> 0.204 M (46.6 -> 30.3 cycles a call, 6740 calls a frame), add_vertex 0.077 -> 0.050 M,
   the vertex block 0.058 -> 0.031 M, the y-sort 0.151 -> 0.148 M; together 0.167 M a frame less on L4, 0.088 M on
-  S4, 0.063 M on S7.
+  S4, 0.063 M on S7. Then geometry_transform_vertexes as a whole, its lighting four normals at a time in NEON lanes
+  (lane for lane DraStic's fixed point), and the GXFIFO form of the queue: the transform with its vertex block 6954 -> 2512 modeled cycles a call on
+  L4 (43 calls a frame: 0.299 -> 0.108 M), S4 0.114 -> 0.042 M, S7 0.027 -> 0.014 M; the GXFIFO queue 33.7 -> 25.8
+  cycles a call on the new GXFIFO scene S10 (1090 calls a frame). The replaced functions together: 0.33, 0.15 and
+  0.07 M a frame less on L4, S4 and S7 (of the geometry stage's ~1.35, ~0.45 and ~0.25 M).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -357,6 +362,19 @@ and lighting, clipping, and the binning of the finished polygons for the render 
   passes (per polygon: y range, shading flags, texture lookup, top row; rows down: by bottom y; rows up: into the
   bins) on its own sort arrays, step by step, but visiting only the rows that hold polygons (a byte a row and a bit
   per 8 rows) where the original walks all 385 rows twice.
+- `queue_geometry_command_packed` (GXFIFO and its mirrors 0x4000400..0x400043f: the words of a display list a game
+  writes with the CPU): the same as the queue for the packed form (four command bytes a word, their parameters in
+  order); the DMA form (`queue_geometry_command_packed_multi` and `_multi_cycles`, `dma_transfer_gxfifo`'s callees,
+  a whole DMA block a call) stays DraStic's: on S10 one call takes the scene's display list, ~15 modeled cycles a
+  word (0.016 M a frame), table lookups and a copy of the parameters, nothing a port would halve.
+- `geometry_transform_vertexes`: the whole function (the vertex block above, the texture coordinate copy, the
+  lighting, the colour event stream, the bookkeeping and the flush past 127 output vertices). The lighting is
+  computed four normals at a time in NEON lanes with a scalar loop over the light mask: lane for lane DraStic's
+  arithmetic (the 64-bit normal transform narrowed to bits 12..43, 32-bit wrapping products and sums, the signed
+  clamp of the shininess index with the table read per lane). The colour fill follows the event stream the way all
+  three of the original's fill variants read a consistent one (one byte per normal or colour, strictly rising vertex
+  indices, as process_geometry_commands builds it); any other state goes to the original untouched (the check mode
+  counts those: none on the ROMs).
 
 The callers assume the AAPCS and nothing more (from the disassembly: the JIT's 32-bit store helper saves w12-w18, x30
 and NZCV around its call; the C callers keep only callee-saved registers across the calls; each original calls code
@@ -382,6 +400,21 @@ active too) the same ROMs, 15.8 M, 3.52 M, 24093 and 156416, 0 differ; at 1x (hi
 same queue and batch) the stress ROM, 8.48 M, 2.02 M and 35296, 0 differ (the 2D cycle's test ROM never writes the
 geometry ports). The scene cycle's frame diff gives exactly DraStic's renderer's counts at every checkpoint reached
 (to 132000 bins).
+The transform and the GXFIFO queue (the second step): `t_geom.c`'s test_tvx (20000 batches a seed: pending
+matrices, the flush threshold crossed, lit, explicit, mixed and empty event streams, any light mask, the shininess
+table on and off; inconsistent streams must be passed on; the check mode's flush hook) and test_packed (200000 states
+and packed words), seeds 1, 3, 5; nine mutants fail it. `RAST_GEOMCHECK=1` with both added, at 2x over the eleven
+scenes (S10 below), the scene cycle, L4 and L10: 1357910 transforms (none passed on by the event-stream rule) and
+1806067 GXFIFO words checked, with 43.2 M queue, 10.7 M add_vertex, 54502 y-sort and 387349 vertex block calls, 0
+differ; at 3x the same ROMs, 1232663 transforms and 1074240 words, 0 differ; at 1x the stress ROM, 44436
+transforms, 0 differ. The scene cycle's frame diff: DraStic's renderer's counts at every checkpoint (to 108000).
+
+The scene ROMs' source (ROCKNIXDS `stressrom/scenes9.c`) gains scene 10 (`dsscenes-S10.nds`, fixed-scene ROMs only:
+the cycle ROM is unchanged; built with the other scenes' build.py and options under a new file name): a
+packed display list (three lights, the shininess table on in the second half, matrix stack commands, lit textured
+cubes, a VTX_10 sphere with normals and vertex colours, a VTX_XY/VTX_DIFF floor) sent by DMA 3 in geometry-FIFO mode
+in the first half of the scene and by stores to GXFIFO and its mirrors in the second, so the packed paths are
+exercised and checked like the direct ports.
 
 ## How it works
 
@@ -429,15 +462,15 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
 
 ## Next
 
-- DraStic's geometry stage, next (`dsgeom.c`): geometry_transform_vertexes' lighting (L4 0.24 M, S4 0.09 M modeled
-  cycles a frame: per vertex and light a chain of dependent multiplies; the whole function would have to be
-  replaced, its batch bookkeeping too), process_geometry_commands' dispatch (L4 0.13 M) and geometry_flush_polygons
-  (L4 0.23 M; 12 KiB of code), geometry_clipped_vertex_interpolate_edge (L4 0.07 M; a static function: check its
-  callers' register assumptions first). The y-sort's per-polygon work is still DraStic's in C (L4 0.148 M): a
-  row's loads first into a local array, to overlap the entries' load chains, modeled worse (0.162 M; clang keeps
-  that loop one entry a block). Games feed the geometry engine by DMA into GXFIFO (`queue_geometry_command_packed`
-  and `_packed_multi`, not replaced; the test ROMs write the command ports), so the queue's share there is
-  unmeasured.
+- DraStic's geometry stage, next (`dsgeom.c`): the remaining cost on the stress ROM is spread thin:
+  geometry_flush_polygons (L4 0.23 M modeled cycles a frame over dozens of small blocks, its largest 0.035 M) and
+  process_geometry_commands (0.13 M, one computed-goto switch over the command handlers) have no hot path short of
+  the whole function; geometry_clipped_vertex_interpolate_edge (0.07 M, a leaf with a 64-bit division) could be
+  rewritten but its callers in flush_polygons may rely on GCC's knowledge of its clobber set (check the four call
+  sites first). The DMA form of the packed queue (`queue_geometry_command_packed_multi`) costs ~15 modeled cycles a
+  word on `dsscenes-S10.nds`: little to gain. The y-sort's per-polygon work is still DraStic's in C (L4 0.148
+  M): a row's loads first into a local array, to overlap the entries' load chains, modeled worse (0.162 M; clang
+  keeps that loop one entry a block).
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
 - The 2x fog (`res2.c` fog_line2x, 0.60 M cycles a frame on S4 after the depth screen; its four ld4 a step, 45
   cycles, are now the largest part; ldr q + uzp for the planes the screen needs and bic + str for the flags model

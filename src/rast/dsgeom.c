@@ -88,6 +88,40 @@
  * geometry_transform_vertex_block_asm(geom) (0x9dda0, from geometry_transform_vertexes): geom_tvb.S, the same
  * computation scheduled for the A55 (its header has the details).
  *
+ * geometry_transform_vertexes(geom) (0x5e060): finishes a batch. 38 bl sites, all C: geometry_add_vertex (a full
+ * batch), geometry_load_polygon_count / geometry_load_vertex_count (GXSTAT reads), update_frame_geometry and 34 in
+ * process_geometry_commands' handlers; it calls the matrix-multiply and vertex-block asm (outside its unit), so GCC's
+ * IPA-RA cannot have narrowed its clobber set for them and an AAPCS replacement is safe. The original (0x5e060..0x5e884):
+ *   n = the batch count (+0x300); nothing when 0. With the matrix flag (+0x9ad0) the clip matrix (+0x97e4) is rebuilt
+ *   first (geometry_matrix_multiply_4x4_by_4x4_asm of +0x9824 and the position matrix at *+0x9a58), the flag cleared.
+ *   The vertex block (above) transforms the batch to the clip-space vertices from index i0 = +0x330; the batch's
+ *   texture coordinate words (+0x52c) are copied to +0x14dc + 4 (i0 + k).
+ *   Lighting: the batch's normals (+0x33c.., packed 10.10.10, their end at +0x318) each give a colour: the normal
+ *   through the direction matrix (*+0x9a60, its first three rows, 64-bit products, bits 12..43 of each sum), then for
+ *   each light i of the mask (+0x9ac3, every set bit of the byte): dif = ((ty*ly) >> 9) + ((tx*lx) >> 9) + ((tz*lz)
+ *   >> 9) with the light vector at +0x96c8 + 12 i, 32-bit products and sums, 0 when negative; spec the same with the
+ *   half vector at +0x96f8 + 12 i, then squared; with the shininess table on (+0x9ace) spec = 2 * table[min(spec >>
+ *   11, 127)] (+0x98a4; the clamp is signed: a wrapped square stays negative and indexes below the table, as the
+ *   original does), else spec >>= 9; r += dif * (u16 at +0x9728 + 6 i) + spec * (u16 at +0x9740 + 6 i), g and b
+ *   with +2 and +4, all starting from the three words at +0x9758 and wrapping; the colour is (b >> 14 at most 31) <<
+ *   10 | (g >> 14 ...) << 5 | (r >> 14 ...). geom_light() does this four normals at a time in NEON lanes, lane for
+ *   lane the same arithmetic (the lights in a scalar loop, so any number of them; the table read per lane).
+ *   Colours: the output colours at +0x1354 + 2 (i0 + k), k < n, come from the colour event stream (+0x4dc.., its end
+ *   at +0x328; process_geometry_commands pushes one byte per NORMAL or COLOR command: the batch count then (bits
+ *   0..6) and bit 7 for an explicit colour, whose value goes to the list at +0x44c (end +0x320); a command at the
+ *   same count replaces the last event): vertices before the first event's index take the current colour (+0x644,
+ *   a 32-bit word, its low 16 bits stored), those from an event's index to the next event's its colour (the explicit
+ *   list and the lit colours each in order), and the current colour becomes the last event's. The original has three
+ *   copies of that fill: with normals and explicit colours it walks the stream to its end and takes bit 7 per event;
+ *   with normals only it walks as many events as normals (bit 7 ignored); with explicit colours only as many as
+ *   colours. DraStic's streams always have one byte per list entry with strictly rising indices up to the count, so
+ *   the three agree; tvx_fast() handles only such a stream (one pass checks it: the counts add up, the indices rise,
+ *   the bit-7 count is the colour count) and passes any other state to the original untouched.
+ *   Then +0x310 = 0xff, the three list ends reset, the count 0, +0x330 = i0 + n, +0x644 = the current colour, and
+ *   when i0 + n > 127 geometry_flush_polygons(geom) (a tail call in the original; a call here).
+ * The event fill is one memset-like store per run, the lighting ~90 instructions per 4 vertices with 2 lights
+ * against the original's ~45 per vertex and light plus 12 for the normal.
+ *
  * Check mode (RAST_GEOMCHECK=1): every call ours handles runs twice on the same bytes: ours, then the original through
  * the trampoline, and everything it may write is compared. queue_geometry_command: the geometry state's
  * +0x9a00..+0x9b00 (cursors, counts, flags) and 64 bytes around each of the three cursors' targets (the original would
@@ -95,8 +129,14 @@
  * batch, its counts, the texture coordinates) and +0x9800..+0x9b00 (the texture matrix, the flags; the original
  * would differ there or in the batch count if it called either function); the y-sort: the polygons, the vertices,
  * the bins and DraStic's sort arrays (its texture lookups run twice: the second finds the first's entry); the vertex
- * block: +0..+0x4000 (the batch, the clip-space vertices and codes). Counts every 2 s ("[geom] queue:" lines,
- * "[geomcheck]" for a difference). */
+ * block: +0..+0x4000 (the batch, the clip-space vertices and codes); the transform: +0..+0x1800 (the batch, the
+ * lists, the output vertices) and +0x9700..+0x9b00 (the clip matrix, the flags), with the flush handled so: DraStic's
+ * geometry_flush_polygons entry is hooked (geom_flush_check), the input is saved, ours runs with a flush it asks for
+ * only recorded, the regions are copied out and the input restored, the original runs (its tail call to the flush
+ * lands on the hook and is recorded the same way), the regions and the two flush decisions are compared (one side
+ * asking alone is reported as a difference), and a flush the original asked for is then run once, on its bytes.
+ * The "to DraStic's" count of the transform says how often the event stream rule passed a call on (never, on
+ * consistent streams). Counts every 2 s ("[geom] queue:" lines, "[geomcheck]" for a difference). */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -183,6 +223,57 @@ int geom_queue_ours(uint8_t *g, uint32_t cmd, uint32_t param) { return queue_fas
 void geom_queue_command(uint8_t *g, uint32_t cmd, uint32_t param) {
     if (__builtin_expect(!queue_fast(g, cmd, param), 0)) geom_queue_orig(g, cmd, param);
 }
+
+/* ---- queue_geometry_command_packed ---- */
+#define DS_QUEUE_PACKED 0x62b10
+geom_packed_fn *geom_packed_orig;
+
+/* queue_geometry_command_packed(geom, word) (0x62b10; the JIT's 32-bit store helper arm64_store_memory32_arm9 at
+ * 0x8d678, which saves w12-w18, x30 and NZCV around the bl as for the plain queue, and store_io_register_arm9_32 (C),
+ * for GXFIFO and its mirrors 0x4000400..0x400043f: games' CPU-written packed display lists; AAPCS is enough). The original
+ * (0x62b10..0x62c24): a parameter (left != 0): *par_pend++ = word; left == 1 completes the group: cmd_cur = cmd_pend,
+ * par_cur = par_pend, then process_geometry when cmd_pend - queue > 0x400 (signed); left -= 1 after it. Else a
+ * command word: its four 7-bit command bytes, the non-zero ones appended at cmd_cur in order; cmd_pend = past them;
+ * n = the sum of their parameter counts: n != 0 leaves left = n (every parameter of the group comes through the
+ * first path); n == 0 completes the group at once: cmd_cur = cmd_pend, process_geometry when past 0x400. The swap
+ * flag is not consulted. packed_fast() does those stores in the original's order for the calls that do not run
+ * process_geometry; the others go to the original before anything is written (as queue_fast). */
+static inline __attribute__((always_inline)) int packed_fast(uint8_t *g, uint32_t w) {
+    unsigned left = g[G_LEFT];
+    uint8_t *c = ldp_(g, G_CMD_CUR), *cp = ldp_(g, G_CMD_PEND);
+    uint32_t *pp = ldp_(g, G_PAR_PEND);
+    unsigned c0 = w & 0x7f, c1 = (w >> 8) & 0x7f, c2 = (w >> 16) & 0x7f, c3 = (w >> 24) & 0x7f;
+    unsigned n = cmd_params[c0] + cmd_params[c1] + cmd_params[c2] + cmd_params[c3];
+    __asm__("" : "+r"(left), "+r"(c), "+r"(cp), "+r"(pp), "+r"(n));
+    if (left) {
+        if (left != 1) {
+            *pp = w;
+            stp_(g, G_PAR_PEND, pp + 1);
+            g[G_LEFT] = (uint8_t)(left - 1);
+            return 1;
+        }
+        if ((int64_t)((uintptr_t)cp - ((uintptr_t)g + G_QUEUE)) > G_QUEUE_MAX) return 0;
+        *pp = w;
+        stp_(g, G_PAR_PEND, pp + 1);
+        stp_(g, G_CMD_CUR, cp);
+        stp_(g, G_PAR_CUR, pp + 1);
+        g[G_LEFT] = 0;
+        return 1;
+    }
+    uint8_t *q = c + (c0 != 0) + (c1 != 0) + (c2 != 0) + (c3 != 0);
+    if (!n && (int64_t)((uintptr_t)q - ((uintptr_t)g + G_QUEUE)) > G_QUEUE_MAX) return 0;
+    if (c0) *c++ = (uint8_t)c0;
+    if (c1) *c++ = (uint8_t)c1;
+    if (c2) *c++ = (uint8_t)c2;
+    if (c3) *c++ = (uint8_t)c3;
+    stp_(g, G_CMD_PEND, c);
+    if (n) g[G_LEFT] = (uint8_t)n;
+    else stp_(g, G_CMD_CUR, c);
+    return 1;
+}
+
+int geom_packed_ours(uint8_t *g, uint32_t w) { return packed_fast(g, w); }
+void geom_queue_packed(uint8_t *g, uint32_t w) { if (__builtin_expect(!packed_fast(g, w), 0)) geom_packed_orig(g, w); }
 
 /* ---- geometry_add_vertex ---- */
 #define DS_GEOMETRY_ADD_VERTEX 0x5e890
@@ -384,10 +475,161 @@ void geom_ysort(uint8_t *geom, uint8_t *bins, uint8_t *polys, uint8_t *verts, ui
 #define DS_TRANSFORM_VERTEX_BLOCK 0x9dda0
 geom_tvb_fn *geom_tvb_orig;
 
+/* ---- geometry_transform_vertexes ---- */
+#define DS_TRANSFORM_VERTEXES  0x5e060
+#define DS_FLUSH_POLYGONS      0x5aef0     /* geometry_flush_polygons(geom): static, x0 only */
+#define DS_MATRIX_MUL_4X4_ASM  0x9df08     /* geometry_matrix_multiply_4x4_by_4x4_asm(dst, a, b) */
+#define G_LAST_EVENT   0x310    /* u32: the last event byte pushed (0xff after a transform: no event matches a count) */
+#define G_NORMAL_CUR   0x318    /* s32 *: the end of the batch's normals at +0x33c (packed 10.10.10) */
+#define G_NORMALS      0x33c
+#define G_COLOUR_CUR   0x320    /* u16 *: the end of the batch's explicit colours at +0x44c */
+#define G_COLOURS      0x44c
+#define G_EVENT_CUR    0x328    /* u8 *: the end of the colour events at +0x4dc */
+#define G_EVENTS       0x4dc
+#define G_OUT_BASE     0x330    /* u32: the index of the batch's first output vertex */
+#define G_CUR_COLOUR   0x644    /* u32: the colour the next vertices take */
+#define G_OUT_COLOUR   0x1354   /* u16[196]: the output vertices' colours */
+#define G_OUT_TEX      0x14dc   /* u32[196]: their texture coordinates */
+#define G_CLIP_MTX     0x97e4
+#define G_PROJ_MTX     0x9824
+#define G_POS_MTX_PTR  0x9a58   /* s32 (*)[16]: the position matrix the clip matrix is rebuilt from */
+#define G_LIGHT_VEC    0x96c8   /* s32[4][3]: the lights' directions through the direction matrix */
+#define G_HALF_VEC     0x96f8   /* s32[4][3]: their half vectors */
+#define G_LIGHT_DIF    0x9728   /* u16[4][3]: light colour x material diffuse, r g b */
+#define G_LIGHT_SPE    0x9740   /* u16[4][3]: light colour x material specular */
+#define G_LIGHT_BASE   0x9758   /* u32[3]: the emission + ambient sums every vertex starts from */
+#define G_SHIN_TABLE   0x98a4   /* u8[128]: the shininess table */
+#define G_LIGHT_MASK   0x9ac3   /* u8: the enabled lights */
+#define G_SHIN_ON      0x9ace   /* u8: the shininess table enabled */
+#define G_DIR_MTX_PTR  0x9a60   /* s32 (*)[16]: the direction (light) matrix */
+#define TVX_MAX_NORMALS 68      /* the original's stack array holds 64 colours and 4 words of slack */
+
+geom_tvx_fn *geom_tvx_orig;
+geom_flush_fn *geom_flush_orig;
+static geom_matmul_fn *geom_matmul;
+/* check mode: a flush the transform asks for while the two runs are compared is held and run once afterwards
+ * (plain statics: the transform and the flush run on the emulation thread only) */
+static int flush_hold, flush_wanted;
+static inline void flush_call(uint8_t *g) { if (flush_hold) flush_wanted = 1; else geom_flush_orig(g); }
+void geom_flush_check(uint8_t *g) { flush_call(g); }
+
+/* the lit colours of the batch's nb normals, four at a time in NEON lanes (the lights in a scalar loop, so any
+ * number of them): DraStic's arithmetic lane for lane (32-bit wrapping products and sums, the 64-bit normal
+ * transform narrowed to bits 12..43, the signed clamps, the table lookups per lane). lit holds nb rounded up to 4. */
+static void geom_light(const uint8_t *g, uint32_t nb, uint16_t *lit) {
+    const uint8_t *M = ldp_(g, G_DIR_MTX_PTR);
+    int32_t m0 = ld32(M, 0), m1 = ld32(M, 4), m2 = ld32(M, 8), m4 = ld32(M, 0x10), m5 = ld32(M, 0x14), m6 = ld32(M, 0x18),
+            m8 = ld32(M, 0x20), m9 = ld32(M, 0x24), m10 = ld32(M, 0x28);
+    uint32x4_t base_r = vdupq_n_u32((uint32_t)ld32(g, G_LIGHT_BASE)), base_g = vdupq_n_u32((uint32_t)ld32(g, G_LIGHT_BASE + 4)),
+               base_b = vdupq_n_u32((uint32_t)ld32(g, G_LIGHT_BASE + 8));
+    unsigned mask = g[G_LIGHT_MASK], shin = g[G_SHIN_ON];
+    for (uint32_t v = 0; v < nb; v += 4) {
+        int32x4_t nw;
+        if (v + 4 <= nb) nw = vld1q_s32((const int32_t *)(g + G_NORMALS + 4 * v));
+        else { int32_t t[4] = { 0, 0, 0, 0 }; memcpy(t, g + G_NORMALS + 4 * v, 4 * (nb - v)); nw = vld1q_s32(t); }
+        /* the three 10-bit fields, sign-extended (sbfx) */
+        int32x4_t nx = vshrq_n_s32(vshlq_n_s32(nw, 22), 22), ny = vshrq_n_s32(vshlq_n_s32(nw, 12), 22),
+                  nz = vshrq_n_s32(vshlq_n_s32(nw, 2), 22);
+        int32x2_t nxl = vget_low_s32(nx), nyl = vget_low_s32(ny), nzl = vget_low_s32(nz);
+        /* (ny*m4 + nx*m0 + nz*m8) >> 12, the low 32 bits of a wrapping 64-bit sum (ubfx #12, #32): shrn */
+        int64x2_t a = vmlal_n_s32(vmlal_n_s32(vmull_n_s32(nyl, m4), nxl, m0), nzl, m8);
+        int64x2_t b = vmlal_high_n_s32(vmlal_high_n_s32(vmull_high_n_s32(ny, m4), nx, m0), nz, m8);
+        int32x4_t tx = vshrn_high_n_s64(vshrn_n_s64(a, 12), b, 12);
+        a = vmlal_n_s32(vmlal_n_s32(vmull_n_s32(nyl, m5), nxl, m1), nzl, m9);
+        b = vmlal_high_n_s32(vmlal_high_n_s32(vmull_high_n_s32(ny, m5), nx, m1), nz, m9);
+        int32x4_t ty = vshrn_high_n_s64(vshrn_n_s64(a, 12), b, 12);
+        a = vmlal_n_s32(vmlal_n_s32(vmull_n_s32(nyl, m6), nxl, m2), nzl, m10);
+        b = vmlal_high_n_s32(vmlal_high_n_s32(vmull_high_n_s32(ny, m6), nx, m2), nz, m10);
+        int32x4_t tz = vshrn_high_n_s64(vshrn_n_s64(a, 12), b, 12);
+        uint32x4_t r = base_r, gg = base_g, bb = base_b;
+        for (unsigned i = 0, m = mask; m; i++, m >>= 1) {
+            if (!(m & 1)) continue;
+            const uint8_t *L = g + G_LIGHT_VEC + 12 * i, *H = g + G_HALF_VEC + 12 * i;
+            /* ((ty*ly) >> 9) + ((tx*lx) >> 9) + ((tz*lz) >> 9), each product's low 32 bits, 0 when the sum is negative */
+            int32x4_t d = vaddq_s32(vshrq_n_s32(vmulq_n_s32(ty, ld32(L, 4)), 9), vshrq_n_s32(vmulq_n_s32(tx, ld32(L, 0)), 9));
+            d = vmaxq_s32(vaddq_s32(d, vshrq_n_s32(vmulq_n_s32(tz, ld32(L, 8)), 9)), vdupq_n_s32(0));
+            int32x4_t s = vaddq_s32(vshrq_n_s32(vmulq_n_s32(ty, ld32(H, 4)), 9), vshrq_n_s32(vmulq_n_s32(tx, ld32(H, 0)), 9));
+            s = vmaxq_s32(vaddq_s32(s, vshrq_n_s32(vmulq_n_s32(tz, ld32(H, 8)), 9)), vdupq_n_s32(0));
+            s = vmulq_s32(s, s);
+            if (shin) {
+                /* (s >> 11) at most 127 (signed: a wrapped square stays negative) indexes the table; twice the byte */
+                int32_t t[4];
+                vst1q_s32(t, vminq_s32(vshrq_n_s32(s, 11), vdupq_n_s32(127)));
+                for (int k = 0; k < 4; k++) t[k] = 2 * g[G_SHIN_TABLE + (intptr_t)t[k]];
+                s = vld1q_s32(t);
+            } else s = vshrq_n_s32(s, 9);
+            const uint8_t *D = g + G_LIGHT_DIF + 6 * i, *P = g + G_LIGHT_SPE + 6 * i;
+            uint32x4_t du = vreinterpretq_u32_s32(d), su = vreinterpretq_u32_s32(s);
+            r = vmlaq_n_u32(vmlaq_n_u32(r, du, ld16(D, 0)), su, ld16(P, 0));
+            gg = vmlaq_n_u32(vmlaq_n_u32(gg, du, ld16(D, 2)), su, ld16(P, 2));
+            bb = vmlaq_n_u32(vmlaq_n_u32(bb, du, ld16(D, 4)), su, ld16(P, 4));
+        }
+        uint32x4_t c31 = vdupq_n_u32(31);
+        r = vminq_u32(vshrq_n_u32(r, 14), c31); gg = vminq_u32(vshrq_n_u32(gg, 14), c31); bb = vminq_u32(vshrq_n_u32(bb, 14), c31);
+        vst1_u16(lit + v, vmovn_u32(vorrq_u32(vorrq_u32(vshlq_n_u32(bb, 10), vshlq_n_u32(gg, 5)), r)));
+    }
+}
+
+static inline void fill16(uint8_t *p, uint16_t c, uint32_t cnt) {
+    uint16x8_t v = vdupq_n_u16(c);
+    for (; cnt >= 8; cnt -= 8, p += 16) vst1q_u16((uint16_t *)p, v);
+    for (; cnt; cnt--, p += 2) st16(p, 0, c);
+}
+
+/* the original's effect; 0 (nothing written) for a state the original's three fill variants would not read alike
+ * (DraStic never builds one: the event stream is one byte per normal or colour, the vertex indices strictly rising) */
+static inline __attribute__((always_inline)) int tvx_fast(uint8_t *g) {
+    uint32_t n = (uint32_t)ld32(g, G_BATCH_N);
+    if (!n) return 1;
+    const uint8_t *ncur = ldp_(g, G_NORMAL_CUR), *ccur = ldp_(g, G_COLOUR_CUR), *ecur = ldp_(g, G_EVENT_CUR);
+    uintptr_t nb = (uintptr_t)(ncur - (g + G_NORMALS)) >> 2, na = (uintptr_t)(ccur - (g + G_COLOURS)) >> 1, ne = ecur - (g + G_EVENTS);
+    if (ne != na + nb || nb > TVX_MAX_NORMALS || na > 72) return 0;
+    const uint8_t *ev = g + G_EVENTS;
+    for (uintptr_t k = 0, prev = 0, nc = 0; k < ne; k++) {
+        uint32_t e = ev[k], idx = e & 0x7f;
+        if ((k && idx <= prev) || idx > n) return 0;
+        nc += e >> 7;
+        prev = idx;
+        if (k + 1 == ne && nc != na) return 0;
+    }
+    uint32_t i0 = (uint32_t)ld32(g, G_OUT_BASE);
+    if (g[G_MTX_DIRTY]) { geom_matmul(g + G_CLIP_MTX, g + G_PROJ_MTX, ldp_(g, G_POS_MTX_PTR)); g[G_MTX_DIRTY] = 0; }
+    geom_tvb(g);
+    uint32_t end = i0 + n;
+    memcpy(g + G_OUT_TEX + 4 * (uintptr_t)i0, g + G_BATCH_TEX, 4 * (size_t)n);
+    uint16_t lit[TVX_MAX_NORMALS + 4];
+    if (nb) geom_light(g, (uint32_t)nb, lit);
+    /* the colours: the current one up to each event's vertex, then that event's (explicit or lit) */
+    uint8_t *out = g + G_OUT_COLOUR + 2 * (uintptr_t)i0;
+    const uint8_t *ex = g + G_COLOURS;
+    const uint16_t *li = lit;
+    uint32_t cur = (uint32_t)ld32(g, G_CUR_COLOUR), prev = 0;
+    for (uintptr_t k = 0; k < ne; k++) {
+        uint32_t e = ev[k], idx = e & 0x7f, cnt = idx - prev;
+        fill16(out, (uint16_t)cur, cnt);
+        out += 2 * cnt;
+        if (e & 0x80) { cur = ld16(ex, 0); ex += 2; } else cur = *li++;
+        prev = idx;
+    }
+    fill16(out, (uint16_t)cur, n - prev);
+    st32(g, G_LAST_EVENT, 0xff);
+    stp_(g, G_NORMAL_CUR, g + G_NORMALS);
+    stp_(g, G_COLOUR_CUR, g + G_COLOURS);
+    st32(g, G_BATCH_N, 0);
+    stp_(g, G_EVENT_CUR, g + G_EVENTS);
+    st32(g, G_OUT_BASE, end);
+    st32(g, G_CUR_COLOUR, cur);
+    if (end > 0x7f) flush_call(g);
+    return 1;
+}
+
+int geom_tvx_ours(uint8_t *g) { return tvx_fast(g); }
+void geom_transform_vertexes(uint8_t *g) { if (__builtin_expect(!tvx_fast(g), 0)) geom_tvx_orig(g); }
+
 /* ---- check mode ---- */
 #define QC_AROUND 32
-static unsigned long qc_n[2], qc_bad;      /* [0] handled by ours (checked), [1] to the original */
-static unsigned long vc_n[2], vc_bad, yc_n, yc_bad, tc_n, tc_bad;
+static unsigned long qc_n[2], qc_bad, pc_n[2], pc_bad;      /* [0] handled by ours (checked), [1] to the original */
+static unsigned long vc_n[2], vc_bad, yc_n, yc_bad, tc_n, tc_bad, xc_n[2], xc_bad;
 static struct timespec qc_last;
 
 static void qc_report(void) {
@@ -396,8 +638,9 @@ static void qc_report(void) {
     if (now.tv_sec - qc_last.tv_sec < 2) return;
     qc_last = now;
     fprintf(stderr, "[geom] queue: %lu checked, %lu differ, %lu to DraStic's; add_vertex: %lu checked, %lu differ, %lu to "
-            "DraStic's; y-sort: %lu checked, %lu differ; vertex block: %lu checked, %lu differ\n", qc_n[0], qc_bad, qc_n[1],
-            vc_n[0], vc_bad, vc_n[1], yc_n, yc_bad, tc_n, tc_bad);
+            "DraStic's; y-sort: %lu checked, %lu differ; vertex block: %lu checked, %lu differ; transform: %lu checked, %lu "
+            "differ, %lu to DraStic's; packed: %lu checked, %lu differ, %lu to DraStic's\n", qc_n[0], qc_bad, qc_n[1], vc_n[0],
+            vc_bad, vc_n[1], yc_n, yc_bad, tc_n, tc_bad, xc_n[0], xc_bad, xc_n[1], pc_n[0], pc_bad, pc_n[1]);
 }
 
 /* the bytes a call may write: the state's queue fields and 32 bytes either side of the three cursors' targets (the
@@ -437,6 +680,33 @@ void geom_queue_command_check(uint8_t *g, uint32_t cmd, uint32_t param) {
         fprintf(stderr, " (DraStic/ours; 0..255 the fields from +0x9a00, then the cmd, par, pend areas)\n");
     }
     /* the original's bytes stay: they are DraStic's */
+    qc_report();
+}
+
+
+void geom_queue_packed_check(uint8_t *g, uint32_t w) {
+    uint8_t *c = ldp_(g, G_CMD_CUR), *p = ldp_(g, G_PAR_CUR), *q = ldp_(g, G_PAR_PEND);
+    struct qc_img in, ours, ref;
+    qc_take(&in, g, c, p, q);
+    if (!packed_fast(g, w)) {
+        geom_packed_orig(g, w);
+        pc_n[1]++;
+        qc_report();
+        return;
+    }
+    qc_take(&ours, g, c, p, q);
+    qc_put(&in, g, c, p, q);
+    geom_packed_orig(g, w);
+    qc_take(&ref, g, c, p, q);
+    pc_n[0]++;
+    if (memcmp(&ours, &ref, sizeof ours) && pc_bad++ < 30) {
+        fprintf(stderr, "[geomcheck] queue_geometry_command_packed(%p, %#x) left %u queued %ld differs from DraStic's:",
+                (void *)g, w, in.f[G_LEFT - 0x9a00], (long)(c - (g + G_QUEUE)));
+        const uint8_t *a = (const uint8_t *)&ref, *b = (const uint8_t *)&ours;
+        for (unsigned i = 0, k = 0; i < sizeof ours && k < 8; i++)
+            if (a[i] != b[i]) { fprintf(stderr, " [%u] %02x/%02x", i, a[i], b[i]); k++; }
+        fprintf(stderr, " (DraStic/ours)\n");
+    }
     qc_report();
 }
 
@@ -529,10 +799,55 @@ void geom_tvb_check(uint8_t *g) {
     qc_report();
 }
 
+/* transform_vertexes: the batch, its lists and counts, the output vertices (+0..+0x1800) and the clip matrix and
+ * flags (+0x9700..+0x9b00). The hook on geometry_flush_polygons (0x5aef0) exists in check mode only; its entry's
+ * first four instructions (mov x12 / sub sp / mov x1 / add x10) are position independent; its callers (the
+ * transform's tail call 0x5e834, geometry_load_polygon_count 0x5f7d8, geometry_load_vertex_count 0x5f828,
+ * process_geometry_commands 0x5fe94 and 0x60338, update_frame_geometry 0x62a04) touch callee-saved registers only
+ * after it, and its clobber set is "everything" (it calls the perspective asm), so a C wrapper is a valid stand-in;
+ * with no check window open (flush_hold 0: a flush asked for outside a transform) geom_flush_check passes the call
+ * straight to the original. Sequence: save; ours with flush_hold set (its flush only recorded in flush_wanted);
+ * copy out; restore; the original with the hold still set (its tail call reaches geom_flush_check through the hooked
+ * entry and is recorded the same way); compare the regions and the two decisions; then a flush the original asked for
+ * runs once, on its bytes. Ours asking alone (or the original alone) counts as a difference and is printed. */
+#define XC_LO 0x1800
+#define XC_HI_AT 0x9700
+#define XC_HI 0x400
+static uint8_t xc_in[XC_LO + XC_HI], xc_ours[XC_LO + XC_HI];
+void geom_tvx_check(uint8_t *g) {
+    memcpy(xc_in, g, XC_LO); memcpy(xc_in + XC_LO, g + XC_HI_AT, XC_HI);
+    flush_hold = 1; flush_wanted = 0;
+    if (!tvx_fast(g)) { flush_hold = 0; geom_tvx_orig(g); xc_n[1]++; qc_report(); return; }
+    int ours_flush = flush_wanted;
+    memcpy(xc_ours, g, XC_LO); memcpy(xc_ours + XC_LO, g + XC_HI_AT, XC_HI);
+    memcpy(g, xc_in, XC_LO); memcpy(g + XC_HI_AT, xc_in + XC_LO, XC_HI);
+    flush_wanted = 0;
+    geom_tvx_orig(g);
+    flush_hold = 0;
+    xc_n[0]++;
+    int bad = memcmp(xc_ours, g, XC_LO) || memcmp(xc_ours + XC_LO, g + XC_HI_AT, XC_HI) || ours_flush != flush_wanted;
+    if (bad && xc_bad++ < 30) {
+        fprintf(stderr, "[geomcheck] geometry_transform_vertexes(%p) n %u from %u normals %ld colours %ld events %ld flush %d/%d differs from DraStic's:",
+                (void *)g, (uint32_t)ld32(xc_in, G_BATCH_N), (uint32_t)ld32(xc_in, G_OUT_BASE),
+                (long)(((uint8_t *)ldp_(xc_in, G_NORMAL_CUR) - (g + G_NORMALS)) / 4), (long)(((uint8_t *)ldp_(xc_in, G_COLOUR_CUR) - (g + G_COLOURS)) / 2),
+                (long)((uint8_t *)ldp_(xc_in, G_EVENT_CUR) - (g + G_EVENTS)), flush_wanted, ours_flush);
+        for (unsigned i = 0, k = 0; i < XC_LO + XC_HI && k < 8; i++) {
+            uint8_t r = i < XC_LO ? g[i] : g[XC_HI_AT + i - XC_LO];
+            if (r != xc_ours[i]) { fprintf(stderr, " [+%#x] %02x/%02x", i < XC_LO ? i : XC_HI_AT + i - XC_LO, r, xc_ours[i]); k++; }
+        }
+        fprintf(stderr, " (DraStic/ours)\n");
+    }
+    if (flush_wanted) geom_flush_orig(g);
+    qc_report();
+}
+
 static const uint32_t expect_queue[4] = { 0xa9bd7bfd, 0x910003fd, 0xf90013f5, 0x91402415 };
 static const uint32_t expect_vertex[4] = { 0xa9bb7bfd, 0x910003fd, 0xa90363f7, 0x91402417 };
+static const uint32_t expect_packed[4] = { 0xa9be7bfd, 0xaa0003e2, 0x910003fd, 0xa90153f3 };
 static const uint32_t expect_tvb[4] = { 0x91402401, 0xb9433003, 0x911f9021, 0xb9430002 };
 static const uint32_t expect_ysort[4] = { 0xa9af7bfd, 0x910003fd, 0xa90153f3, 0xaa0103f4 };
+static const uint32_t expect_tvx[4] = { 0xa9aa7bfd, 0x910003fd, 0xa90153f3, 0xaa0003f3 };
+static const uint32_t expect_flush[4] = { 0xd287720c, 0xcb2c63ff, 0xd28f3f01, 0x8b01000a };
 
 void geom_init(void) {
     const char *e = getenv("DSFLIP_RAST_GEOM");
@@ -544,11 +859,19 @@ void geom_init(void) {
     geom_queue_orig = (geom_queue_fn *)rast_hook(DS_QUEUE_GEOMETRY_COMMAND, expect_queue,
                                                  check ? (void *)geom_queue_command_check : (void *)geom_queue_command);
     if (!geom_queue_orig) { fprintf(stderr, "[geom] unknown queue_geometry_command, not replaced\n"); return; }
+    geom_packed_orig = (geom_packed_fn *)rast_hook(DS_QUEUE_PACKED, expect_packed, check ? (void *)geom_queue_packed_check : (void *)geom_queue_packed);
     geom_vertex_orig = (geom_vertex_fn *)rast_hook(DS_GEOMETRY_ADD_VERTEX, expect_vertex,
                                                    check ? (void *)geom_add_vertex_check : (void *)geom_add_vertex);
     geom_ysort_orig = (geom_ysort_fn *)rast_hook(DS_YSORT_4X, expect_ysort, check ? (void *)geom_ysort_check : (void *)geom_ysort);
     geom_tvb_orig = (geom_tvb_fn *)rast_hook(DS_TRANSFORM_VERTEX_BLOCK, expect_tvb, check ? (void *)geom_tvb_check : (void *)geom_tvb);
-    fprintf(stderr, "[geom] queue_geometry_command%s%s%s replaced%s\n", geom_vertex_orig ? ", geometry_add_vertex" : "",
-            geom_ysort_orig ? ", video_3d_bin_polygons_y_sort_4x" : "", geom_tvb_orig ? ", geometry_transform_vertex_block_asm" : "",
+    /* the transform needs the vertex block (ours calls geom_tvb) and, in check mode, the flush held */
+    geom_matmul = (geom_matmul_fn *)(ds_base + DS_MATRIX_MUL_4X4_ASM);
+    geom_flush_orig = (geom_flush_fn *)(ds_base + DS_FLUSH_POLYGONS);
+    if (check) geom_flush_orig = (geom_flush_fn *)rast_hook(DS_FLUSH_POLYGONS, expect_flush, (void *)geom_flush_check);
+    if (geom_tvb_orig && geom_flush_orig)
+        geom_tvx_orig = (geom_tvx_fn *)rast_hook(DS_TRANSFORM_VERTEXES, expect_tvx, check ? (void *)geom_tvx_check : (void *)geom_transform_vertexes);
+    fprintf(stderr, "[geom] queue_geometry_command%s%s%s%s%s replaced%s\n", geom_packed_orig ? ", queue_geometry_command_packed" : "",
+            geom_vertex_orig ? ", geometry_add_vertex" : "", geom_ysort_orig ? ", video_3d_bin_polygons_y_sort_4x" : "",
+            geom_tvb_orig ? ", geometry_transform_vertex_block_asm" : "", geom_tvx_orig ? ", geometry_transform_vertexes" : "",
             check ? ", checking every call against DraStic's" : "");
 }

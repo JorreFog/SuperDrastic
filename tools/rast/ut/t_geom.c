@@ -9,7 +9,8 @@
  * reported, the original's bytes left), and DraStic's entry patched as geom_init() patches it (a copy of rast.c's
  * rast_hook), called through that entry against the original through the trampoline.
  * geometry_add_vertex the same way (test_vertex(): the batch, its counts and the texture matrix and coordinates);
- * video_3d_bin_polygons_y_sort_4x in test_ysort(), geometry_transform_vertex_block_asm (geom_tvb.S) in test_tvb().
+ * video_3d_bin_polygons_y_sort_4x in test_ysort(), geometry_transform_vertex_block_asm (geom_tvb.S) in test_tvb(),
+ * queue_geometry_command_packed (GXFIFO words) in test_packed(), geometry_transform_vertexes in test_tvx().
  * run.sh t_geom.c ../../../src/rast/geom_tvb.S */
 #include "ut.h"
 #include <sys/mman.h>
@@ -125,6 +126,63 @@ static void test_queue(int n) {
     fprintf(stderr, "queue_geometry_command: %u parameter, %u last parameter, %u command with more, %u with one, %u with none "
             "equal to DraStic's; %u passed on\n", handled[0], handled[1], handled[2], handled[3], handled[4], fwd);
     if (!handled[0] || !handled[1] || !handled[2] || !handled[3] || !handled[4] || !fwd) { fprintf(stderr, "FAIL queue: a path not covered\n"); ut_fail++; }
+}
+
+
+/* queue_geometry_command_packed: the queue states of rnd_state() (cmd_pend apart from cmd_cur half the time, which
+ * this path reads) and packed words whose four bytes are command ids with parameters, without (MTX_PUSH, MTX_IDENTITY,
+ * END_VTXS), zero, or any byte; where ours handles the call the same regions as the queue test are compared, where
+ * it passes the call on nothing may be written and the original would run process_geometry */
+static const uint8_t pk_cmds[] = { 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x20, 0x21, 0x22,
+                                   0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x30, 0x31, 0x32, 0x33, 0x34, 0x40, 0x41, 0x50, 0x60, 0x70, 0x71, 0x72 };
+static uint32_t pk_word(void) {
+    uint32_t w = 0;
+    unsigned k = rnd(8);
+    if (k == 7) return (uint32_t)rnd64();
+    for (int i = 0; i < 4; i++) {
+        unsigned b = k < 4 ? (rnd(3) ? pk_cmds[rnd(sizeof pk_cmds)] : 0) : k == 4 ? pk_cmds[rnd(sizeof pk_cmds)] : rnd(2) ? rnd(0x100) : 0;
+        w |= b << (8 * i);
+    }
+    return w;
+}
+static void pfw_stub(uint8_t *g, uint32_t w) { fw_g = g; fw_cmd = w; fw_n++; }
+static void test_packed(int n) {
+    geom_packed_fn *orig = DS(geom_packed_fn *, DS_QUEUE_PACKED);
+    unsigned handled[4] = { 0 }, fwd = 0;
+    for (int i = 0; i < n && !ut_fail; i++) {
+        uint32_t cmd, param;
+        rnd_state(ga, &cmd, &param);
+        uint32_t w = pk_word();
+        copy_state(g0, ga);
+        unsigned left = ga[G_LEFT];
+        unsigned np = cmd_params[w & 0x7f] + cmd_params[w >> 8 & 0x7f] + cmd_params[w >> 16 & 0x7f] + cmd_params[w >> 24 & 0x7f];
+        unsigned nc = (w & 0x7f ? 1 : 0) + (w >> 8 & 0x7f ? 1 : 0) + (w >> 16 & 0x7f ? 1 : 0) + (w >> 24 & 0x7f ? 1 : 0);
+        geom_packed_orig = pfw_stub; fw_n = 0;
+        geom_queue_packed(ga, w);
+        if (fw_n) {
+            if (fw_n != 1 || fw_g != ga || fw_cmd != w) { fprintf(stderr, "FAIL packed: forwarded call's arguments\n"); ut_fail++; }
+            cmp_state("packed: forwarded call wrote", g0, ga);
+            long qp = (uint8_t *)ldp_(g0, G_CMD_PEND) - (g0 + G_QUEUE), qc = (uint8_t *)ldp_(g0, G_CMD_CUR) + nc - (g0 + G_QUEUE);
+            int need = left == 1 ? qp > 0x400 : left ? 0 : (np == 0 && qc > 0x400);
+            if (!need) { fprintf(stderr, "FAIL packed: forwarded a call ours handles (left %u word %#x)\n", left, w); ut_fail++; }
+            fwd++;
+            continue;
+        }
+        handled[left > 1 ? 0 : left ? 1 : np ? 2 : 3]++;
+        copy_state(gb, g0);
+        orig(gb, w);
+        if (cmp_state("packed: ours vs DraStic's", gb, ga))
+            fprintf(stderr, "   left %u word %#x params %u commands %u queued %ld\n", left, w, np, nc, (long)((uint8_t *)ldp_(g0, G_CMD_CUR) - (g0 + G_QUEUE)));
+        copy_state(ga, g0);
+        geom_packed_orig = orig;
+        unsigned long bad = pc_bad;
+        geom_queue_packed_check(ga, w);
+        if (pc_bad != bad) { fprintf(stderr, "FAIL packed: the check mode reported a difference\n"); ut_fail++; }
+        cmp_state("packed: check mode's result", gb, ga);
+    }
+    fprintf(stderr, "queue_geometry_command_packed: %u parameter, %u last parameter, %u command word with parameters, %u without "
+            "equal to DraStic's; %u passed on\n", handled[0], handled[1], handled[2], handled[3], fwd);
+    if (!handled[0] || !handled[1] || !handled[2] || !handled[3] || !fwd) { fprintf(stderr, "FAIL packed: a path not covered\n"); ut_fail++; }
 }
 
 /* geometry_add_vertex: the batch and the flags random, the count 0..63, 64 (a full batch: passed on) or beyond, the
@@ -311,6 +369,147 @@ static void test_tvb(int n) {
     fprintf(stderr, "geometry_transform_vertex_block_asm: %d batches, %lu vertices equal to DraStic's\n", n, verts);
 }
 
+/* geometry_transform_vertexes: a batch of 1..64 vertices from a random output index (the flush threshold of 127
+ * output vertices crossed often), the clip matrix sometimes pending (DraStic's matrix multiply runs for both), a
+ * consistent colour event stream as process_geometry_commands builds it (strictly rising vertex indices up to the
+ * count, one normal or explicit colour per event; all lit, all explicit, mixed, or none), any light mask (bits 4-7
+ * included), the shininess table on or off, light and half vectors, matrices and colour tables random (realistic
+ * magnitudes when the table is on so its index stays in the state's guard pages: a wrapped square indexes below the
+ * table, both read the same bytes), and a few inconsistent streams, which ours must pass on untouched. DraStic's
+ * geometry_flush_polygons is patched to geom_flush_check (as geom_init() does in check mode) with a logging stub
+ * as the flush, so the tail call's presence and argument are compared too. The whole state is compared; then the
+ * check mode. */
+#define XT_GUARD 0x400000
+static uint64_t fl_log[8]; static int fl_n;
+static void flush_stub(uint8_t *g) { if (fl_n < 8) fl_log[fl_n++] = (uintptr_t)g; }
+static void tvx_fw_stub(uint8_t *g) { fw_g = g; fw_n++; }
+static void xt_state(uint8_t *g, int *consistent) {
+    rndfill(g, 0xa000);
+    uint32_t n = rnd(16) ? 1 + rnd(64) : (rnd(2) ? 64 : 1 + rnd(3)), i0 = rnd(4) ? rnd(128) : 100 + rnd(32);
+    st32(g, G_BATCH_N, n); st32(g, G_OUT_BASE, i0);
+    g[G_MTX_DIRTY] = rnd(4) ? 0 : 1 + rnd(255);
+    unsigned shin = rnd(2);
+    g[G_SHIN_ON] = shin ? 1 + rnd(255) : 0;
+    g[G_LIGHT_MASK] = rnd(2) ? rnd(16) : (uint8_t)rnd64();
+    stp_(g, G_POS_MTX_PTR, g + 0x9100); stp_(g, G_DIR_MTX_PTR, g + 0x9200);
+    for (int k = 0; k < 0xc0; k++) if (rnd(2)) st32(g, 4 * k, (uint32_t)(int16_t)rnd64());
+    for (int k = 0; k < 16; k++) {
+        if (rnd(2)) st32(g, G_CLIP_MTX + 4 * k, (uint32_t)(int16_t)rnd64());
+        if (rnd(2)) st32(g, G_PROJ_MTX + 4 * k, (uint32_t)(int16_t)rnd64());
+        if (rnd(2)) st32(g, 0x9100 + 4 * k, (uint32_t)(int16_t)rnd64());
+        if (shin || rnd(2)) st32(g, 0x9200 + 4 * k, (uint32_t)rndr(-4096, 4096));
+    }
+    for (int k = 0; k < 24; k++) if (shin || rnd(2)) st32(g, G_LIGHT_VEC + 4 * k, (uint32_t)rndr(-4096, 4096));
+    if (rnd(2)) for (int k = 0; k < 24; k++) st16(g, G_LIGHT_DIF + 2 * k, (uint16_t)rnd(0x400));
+    if (rnd(2)) for (int k = 0; k < 3; k++) st32(g, G_LIGHT_BASE + 4 * k, rnd(0x100000));
+    if (rnd(2)) st32(g, G_CUR_COLOUR, rnd(0x10000));
+    /* the events: ne distinct rising indices in 0..n; kind by a mode */
+    unsigned mode = rnd(8), ne = mode == 0 ? 0 : rnd(2) ? rnd(n + 2) : rnd(6);
+    if (ne > n + 1) ne = n + 1;
+    if (ne > 65) ne = 65;
+    uint8_t idx[66];
+    { /* ne distinct values of 0..n, rising */
+        unsigned left = ne;
+        for (unsigned v = 0, k = 0; v <= n && left; v++) if (rnd(n + 1 - v) < left) { idx[k++] = (uint8_t)v; left--; }
+    }
+    unsigned na = 0, nb = 0;
+    for (unsigned k = 0; k < ne; k++) {
+        int explicit = mode == 1 ? 1 : mode == 2 ? 0 : rnd(2);
+        g[G_EVENTS + k] = (uint8_t)(idx[k] | (explicit ? 0x80 : 0));
+        if (explicit) { st16(g, G_COLOURS + 2 * na, (uint16_t)rnd64()); na++; }
+        else { st32(g, G_NORMALS + 4 * nb, (uint32_t)rnd64()); nb++; }
+    }
+    *consistent = 1;
+    if (rnd(32) == 0) {                 /* an inconsistent stream: a count off, a falling index, or a kind count off */
+        unsigned w = rnd(3);
+        if (w == 0) ne += 1;
+        else if (w == 1 && ne >= 2) { uint8_t t = g[G_EVENTS]; g[G_EVENTS] = g[G_EVENTS + 1]; g[G_EVENTS + 1] = t; }
+        else if (ne) g[G_EVENTS] ^= 0x80;
+        else ne = 1;
+        *consistent = 0;
+    }
+    stp_(g, G_NORMAL_CUR, g + G_NORMALS + 4 * nb); stp_(g, G_COLOUR_CUR, g + G_COLOURS + 2 * na); stp_(g, G_EVENT_CUR, g + G_EVENTS + ne);
+}
+/* a copy of a transform state: its five pointers (the three list cursors, the matrices) moved with it */
+static void xt_copy(uint8_t *dst, const uint8_t *src) {
+    static const unsigned ptrs[5] = { G_NORMAL_CUR, G_COLOUR_CUR, G_EVENT_CUR, G_POS_MTX_PTR, G_DIR_MTX_PTR };
+    memcpy(dst, src, 0xa000);
+    for (int i = 0; i < 5; i++) stp_(dst, ptrs[i], (uint8_t *)ldp_(src, ptrs[i]) - src + dst);
+}
+/* ref (a state at r) against ours (at g): the pointers compared as offsets */
+static int xt_cmp(const char *what, const uint8_t *ref, const uint8_t *ours) {
+    static uint8_t *tmp;
+    if (!tmp) tmp = malloc(0xa000);
+    xt_copy(tmp, ref);
+    static const unsigned ptrs[5] = { G_NORMAL_CUR, G_COLOUR_CUR, G_EVENT_CUR, G_POS_MTX_PTR, G_DIR_MTX_PTR };
+    for (int i = 0; i < 5; i++) stp_(tmp, ptrs[i], (uint8_t *)ldp_(ref, ptrs[i]) - ref + (uint8_t *)ours);
+    return ut_cmp(what, tmp, ours, 0xa000);
+}
+static void test_tvx(int n) {
+    geom_tvx_fn *orig = DS(geom_tvx_fn *, DS_TRANSFORM_VERTEXES);
+    uint8_t *gb = calloc(1, 2 * XT_GUARD + 0xa000), *rb = calloc(1, 2 * XT_GUARD + 0xa000);
+    uint8_t *g = gb + XT_GUARD, *r = rb + XT_GUARD;
+    if (!rast_hook(DS_FLUSH_POLYGONS, expect_flush, (void *)geom_flush_check)) { fprintf(stderr, "FAIL transform: cannot patch the flush\n"); ut_fail++; return; }
+    geom_flush_orig = flush_stub;
+    geom_matmul = DS(geom_matmul_fn *, DS_MATRIX_MUL_4X4_ASM);
+    unsigned long verts = 0, lit = 0, flushes = 0, dirty = 0, fwd = 0;
+    for (int it = 0; it < n && !ut_fail; it++) {
+        int consistent;
+        xt_state(g, &consistent);
+        int was_dirty = g[G_MTX_DIRTY] != 0;
+        uint32_t batch_n = (uint32_t)ld32(g, G_BATCH_N);
+        xt_copy(r, g);
+        geom_tvx_orig = tvx_fw_stub; fw_n = 0; fl_n = 0;
+        geom_transform_vertexes(g);
+        int ours_n = fw_n, ours_fl = fl_n; uint64_t ours_log = fl_log[0];
+        if (ours_n) {
+            if (consistent) { fprintf(stderr, "FAIL transform: passed on a consistent state (iteration %d)\n", it); ut_fail++; }
+            if (ours_n != 1 || fw_g != g || ours_fl) { fprintf(stderr, "FAIL transform: forwarded call's arguments or a flush\n"); ut_fail++; }
+            xt_cmp("transform: forwarded call wrote", r, g);
+            fwd++;
+            continue;
+        }
+        if (!consistent) { fprintf(stderr, "FAIL transform: handled an inconsistent state (iteration %d)\n", it); ut_fail++; }
+        fl_n = 0;
+        orig(r);
+        if (xt_cmp("transform: ours vs DraStic's", r, g) || ours_fl != fl_n || (fl_n && ours_log != fl_log[0]))
+            { if (ours_fl != fl_n) ut_fail++; fprintf(stderr, "   iteration %d: n %u from %u mask %#x shin %u dirty %u flush %d/%d\n", it, (uint32_t)ld32(r, G_BATCH_N), (uint32_t)ld32(r, G_OUT_BASE), g[G_LIGHT_MASK], g[G_SHIN_ON], g[G_MTX_DIRTY], fl_n, ours_fl); }
+        verts += batch_n;
+        flushes += fl_n; dirty += was_dirty;
+        /* the check mode on a fresh consistent state (an inconsistent one would reach the original, which, like
+         * DraStic itself, never sees one): no difference, DraStic's bytes, one flush */
+        do xt_state(g, &consistent); while (!consistent);
+        xt_copy(r, g);
+        geom_tvx_orig = orig;
+        unsigned long bad = xc_bad;
+        fl_n = 0;
+        geom_tvx_check(g);
+        int chk_fl = fl_n;
+        fl_n = 0;
+        orig(r);
+        if (xc_bad != bad) { fprintf(stderr, "FAIL transform: the check mode reported a difference\n"); ut_fail++; }
+        xt_cmp("transform: check mode's result", r, g);
+        if (chk_fl != fl_n) { fprintf(stderr, "FAIL transform: the check mode flushed %d times, the original %d\n", chk_fl, fl_n); ut_fail++; }
+        lit += ((uint8_t *)ldp_(r, G_NORMAL_CUR) - (r + G_NORMALS)) / 4;
+    }
+    fprintf(stderr, "geometry_transform_vertexes: %d batches, %lu vertices equal to DraStic's (%lu with the matrix pending, %lu flushing); %lu passed on\n", n, verts, dirty, flushes, fwd);
+    if (!dirty || !flushes || !fwd) { fprintf(stderr, "FAIL transform: a path not covered\n"); ut_fail++; }
+    /* the check mode's flush handling: a flush asked for outside a check window passes straight through; a batch
+     * past the threshold against an "original" that never flushes is reported as a difference (one side asking
+     * alone), returns, and runs no flush (the original's decision rules) */
+    fl_n = 0;
+    geom_flush_check(g);
+    if (fl_n != 1 || fl_log[0] != (uintptr_t)g) { fprintf(stderr, "FAIL transform: the flush hook did not pass a flush through\n"); ut_fail++; }
+    int consistent;
+    do xt_state(g, &consistent); while (!consistent || (uint32_t)ld32(g, G_OUT_BASE) + (uint32_t)ld32(g, G_BATCH_N) <= 0x7f);
+    geom_tvx_orig = tvx_fw_stub;                                /* does nothing, asks for no flush */
+    unsigned long bad = xc_bad; fl_n = 0;
+    geom_tvx_check(g);
+    if (xc_bad != bad + 1 || fl_n != 0) { fprintf(stderr, "FAIL transform: a one-sided flush was not reported as a difference (%lu) or a flush ran (%d)\n", xc_bad - bad, fl_n); ut_fail++; }
+    xc_bad = bad;                                               /* that report was the test's doing */
+    (void)lit;
+}
+
 /* DraStic's entry patched to the replacement, as geom_init() does: called through the entry, against the original
  * through the trampoline, on the calls ours handles */
 static void test_patched(int n) {
@@ -348,6 +547,24 @@ static void test_patched(int n) {
         done++;
     }
     fprintf(stderr, "patched geometry_add_vertex: %d calls through the entry equal to the original's\n", done);
+    geom_packed_fn *pentry = DS(geom_packed_fn *, DS_QUEUE_PACKED);
+    geom_packed_fn *ptramp = (geom_packed_fn *)rast_hook(DS_QUEUE_PACKED, expect_packed, (void *)geom_queue_packed);
+    if (!ptramp) { fprintf(stderr, "FAIL patched: queue_geometry_command_packed's first words differ\n"); ut_fail++; return; }
+    done = 0;
+    for (int i = 0; i < 50 * n && done < n && !ut_fail; i++) {
+        uint32_t cmd, param;
+        rnd_state(ga, &cmd, &param);
+        uint32_t w = pk_word();
+        copy_state(gb, ga);
+        copy_state(g0, ga);
+        if (!packed_fast(g0, w)) continue;
+        geom_packed_orig = ptramp;
+        pentry(ga, w);
+        ptramp(gb, w);
+        cmp_state("patched packed entry vs trampoline", gb, ga);
+        done++;
+    }
+    fprintf(stderr, "patched queue_geometry_command_packed: %d calls through the entry equal to the original's\n", done);
 }
 
 void ut_main(void) {
@@ -355,8 +572,10 @@ void ut_main(void) {
     geom_tables(ut_base);
     ga = calloc(1, GSIZE); gb = calloc(1, GSIZE); g0 = calloc(1, GSIZE);
     test_queue(200000);
+    test_packed(200000);
     test_vertex(200000);
     test_ysort(1500);
     test_tvb(20000);
+    test_tvx(20000);
     test_patched(20000);
 }
