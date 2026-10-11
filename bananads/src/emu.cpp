@@ -214,6 +214,21 @@ bool Emu::load_rom(const std::string& path) {
         if (iofast == "on") setenv("MELONDS_IOFAST", "1", 1);
         else if (iofast == "off") setenv("MELONDS_IOFAST", "0", 1);
     }
+    // jit.vramfast=on|off and jit.iodirect=on|off set bits 1 and 2 of MELONDS_MEMFAST (melonDS patch 0010, read
+    // at the JIT's reset; default both on, exact): VRAM with one bank at the 16 KB straight to the bank, OAM and
+    // palette straight to the GPU; the divider, square root, IPCSYNC/IPCFIFOCNT and IME/IE/IF straight to their
+    // state, other IO registers without the ARM9Read*/ARM7Read* dispatch. Unset, the environment decides; as with
+    // jit.iofast, a difftest sets them on both --a and --b.
+    {
+        const char* cur = getenv("MELONDS_MEMFAST");
+        unsigned long mask = cur ? strtoul(cur, nullptr, 0) & 3 : 3;
+        const unsigned long before = mask;
+        const std::string vram = cfg_.str("jit.vramfast", ""), io = cfg_.str("jit.iodirect", "");
+        if (vram == "on") mask |= 1; else if (vram == "off") mask &= ~1ul;
+        if (io == "on") mask |= 2; else if (io == "off") mask &= ~2ul;
+        if (mask != before || (!cur && (!vram.empty() || !io.empty())))
+            setenv("MELONDS_MEMFAST", std::to_string(mask).c_str(), 1);
+    }
 
     setup_wifi();
     setup_local();
