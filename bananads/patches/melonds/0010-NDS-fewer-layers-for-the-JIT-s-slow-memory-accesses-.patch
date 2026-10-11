@@ -1,0 +1,1450 @@
+From 4e4157a3be89c445f94672c2f8a3bec0d2d51d4f Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 20:28:14 +0000
+Subject: [PATCH] NDS: fewer layers for the JIT's slow memory accesses (VRAM,
+ OAM, palette, IO registers)
+
+What the JIT's slow loads and stores do is unchanged: the same values, side effects and order as the
+NDS::ARM9Read*/ARM9Write* chain. MELONDS_MEMFAST (a mask, default 7: all on) picks the parts:
+
+- 1 (VRAM, OAM, palette): GPU::VRAMDirect, a table per 16 KB page of 0x06000000-0x06FFFFFF, says for each page
+  with one bank alone mapped where the page is in its bank, the bank's dirty word and bit, and its display
+  capture block's flags; MapVRAM_*, Reset and a state load mark it stale, and it is rebuilt at the next access.
+  A VRAM store is then the capture-block check, the dirty bit and the store, what SyncVRAM_* and WriteVRAM_* do
+  for such a page; reads likewise. Palette and OAM stores and loads go straight to GPU::WritePalette/WriteOAM
+  (and the reads) after the POWCNT1 check. For the slow paths, block transfers and the JIT's static-address
+  VRAM calls. SyncVRAMCaptureBlock and the full mapping walk stay for pages with several banks or a capture.
+- 2 (IO): NDS::ARM9IOReadDirect/ARM9IOWriteDirect and ARM7IOReadDirect: the divider and square root unit,
+  IPCSYNC/IPCFIFOCNT, the IPC FIFOs, IME/IE/IF, line for line as ARM9IO*/ARM7IO* do them; other IO registers
+  straight to NDS::ARM9IO*/ARM7IO* without the virtual ARM9Read*/ARM7Read* dispatch. The JIT's static-address
+  IO calls (GetFuncForAddr) get one function per such register.
+- 4 (VRAM tracking): VRAMTrackingSet::DeriveState, which the 2D renderers call per line, returns at once when
+  nothing was remapped since its last call (GPU::VRAMMapGen, bumped with every VRAMMap_* change: MapVRAM_*,
+  Reset, a state load) and the banks mapped there then have no dirty bit: the walk would return nothing and
+  clear nothing.
+
+SlowRead9/SlowWrite9 start with the common cases inline, with no call and no stack frame, after checks that
+have no side effects (the TCMs, the region, the VRAM page's entry, the code bitmap for main RAM, so a store
+into a page holding code but not into code skips CheckAndInvalidate's call); anything else takes the full path
+(IO statistics, TCMs, MELONDS_IOFAST routes, the NDS chain), as does everything while MELONDS_IOSTATS counts.
+MELONDS_IOFAST's register reads and GX route are taken from the inline start too. The VRAM table has no entries
+while any compiled code is in VRAM (ARMJIT_Memory::SetCodeProtection marks it stale), so the inline VRAM store
+needs no CheckAndInvalidate. SlowBlockTransfer9 stores inside one 1 KB of OAM, palette, a VRAM page or the GX
+FIFO do the region's checks once. ARMJIT_Memory::LocaliseAddress is inline for the regions CheckAndInvalidate
+names as constants (the same result).
+
+MELONDS_MEMFAST=0 gives patch 0005's paths; BananaDS sets it from jit.vramfast, jit.iodirect and
+render.vramtrack_skip.
+---
+ src/ARMJIT.cpp        | 464 ++++++++++++++++++++++++++++++++++++------
+ src/ARMJIT_Memory.cpp | 163 ++++++++++++++-
+ src/ARMJIT_Memory.h   |  18 +-
+ src/GPU.cpp           |  73 +++++++
+ src/GPU.h             | 144 +++++++++++++
+ src/NDS.h             | 171 ++++++++++++++++
+ src/NDS_IOFast.cpp    |  11 +
+ src/NDS_IOFast.h      |  27 +++
+ 8 files changed, 1001 insertions(+), 70 deletions(-)
+
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 5356968..10934cb 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -102,48 +102,85 @@ template <typename T>
+ static inline bool IOFastRead9(melonDS::NDS& nds, u32 addr, T& val)
+ {
+     const u32 routes = IOFastRoutes;
+-    if ((routes & iofast_MainRAM) && (addr >> 24) == 0x02)
++    const u32 parts = MemFastParts;
++    switch (addr >> 24)
+     {
++    case 0x02:
++        if (!(routes & iofast_MainRAM))
++            return false;
+         val = *(T*)&nds.MainRAM[addr & nds.MainRAMMask];
+         return true;
+-    }
+-    if (sizeof(T) >= 2 && (routes & iofast_VRAM) && (addr >> 24) == 0x06)
+-    {
+-        melonDS::GPU& gpu = nds.GPU;
+-        switch (addr & 0x00E00000)
++    case 0x04:
++        if (routes & iofast_IORead)
+         {
+-        case 0x00000000: gpu.SyncVRAM_ABG(addr, false); val = gpu.ReadVRAM_ABG<T>(addr); return true;
+-        case 0x00200000: gpu.SyncVRAM_BBG(addr, false); val = gpu.ReadVRAM_BBG<T>(addr); return true;
+-        case 0x00400000: gpu.SyncVRAM_AOBJ(addr, false); val = gpu.ReadVRAM_AOBJ<T>(addr); return true;
+-        case 0x00600000: gpu.SyncVRAM_BOBJ(addr, false); val = gpu.ReadVRAM_BOBJ<T>(addr); return true;
+-        default:         gpu.SyncVRAM_LCDC(addr, false); val = gpu.ReadVRAM_LCDC<T>(addr); return true;
+-        }
+-    }
+-    if (!(routes & iofast_IORead))
+-        return false;
+-    if (sizeof(T) == 4)
+-    {
+-        switch (addr)
+-        {
+-        case 0x04000004: val = nds.GPU.DispStat[0] | (nds.GPU.VCount << 16); return true;
+-        case 0x04000208: val = nds.IME[0]; return true;
+-        case 0x04000210: val = nds.IE[0]; return true;
+-        case 0x04000214: val = nds.IF[0]; return true;
++            if (sizeof(T) == 4)
++            {
++                switch (addr)
++                {
++                case 0x04000004: val = nds.GPU.DispStat[0] | (nds.GPU.VCount << 16); return true;
++                case 0x04000208: val = nds.IME[0]; return true;
++                case 0x04000210: val = nds.IE[0]; return true;
++                case 0x04000214: val = nds.IF[0]; return true;
++                }
++            }
++            else if (sizeof(T) == 2)
++            {
++                switch (addr)
++                {
++                case 0x04000004: val = nds.GPU.DispStat[0]; return true;
++                case 0x04000006: val = nds.GPU.VCount; return true;
++                case 0x04000130: nds.LagFrameFlag = false; val = nds.KeyInput & 0xFFFF; return true;
++                case 0x04000208: val = nds.IME[0]; return true;
++                case 0x04000210: val = nds.IE[0] & 0xFFFF; return true;
++                case 0x04000212: val = nds.IE[0] >> 16; return true;
++                case 0x04000214: val = nds.IF[0] & 0xFFFF; return true;
++                case 0x04000216: val = nds.IF[0] >> 16; return true;
++                }
++            }
+         }
+-    }
+-    else if (sizeof(T) == 2)
+-    {
+-        switch (addr)
++        if (!(parts & memfast_IO))
++            return false;
++        // the plain registers, then ARM9Read*'s case 0x04000000 without its dispatch
++        if (sizeof(T) >= 2 && nds.ARM9IOReadDirect<T>(addr, val))
++            return true;
++        if (sizeof(T) == 4)
++            val = nds.NDS::ARM9IORead32(addr);
++        else if (sizeof(T) == 2)
++            val = nds.NDS::ARM9IORead16(addr);
++        else
++            val = nds.NDS::ARM9IORead8(addr);
++        return true;
++    case 0x05:
++        // ARM9Read16/32's palette and OAM (8-bit reads keep ARM9Read8's own case)
++        if (sizeof(T) < 2 || !(parts & memfast_VRAM))
++            return false;
++        if (!(nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))) val = 0;
++        else val = nds.GPU.ReadPalette<T>(addr);
++        return true;
++    case 0x07:
++        if (sizeof(T) < 2 || !(parts & memfast_VRAM))
++            return false;
++        if (!(nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))) val = 0;
++        else val = nds.GPU.ReadOAM<T>(addr & 0x7FF);
++        return true;
++    case 0x06:
++        if (sizeof(T) < 2)
++            return false;
++        if ((parts & memfast_VRAM) && nds.GPU.ReadVRAMDirect<T>(addr, val))
++            return true;
++        if (routes & iofast_VRAM)
+         {
+-        case 0x04000004: val = nds.GPU.DispStat[0]; return true;
+-        case 0x04000006: val = nds.GPU.VCount; return true;
+-        case 0x04000130: nds.LagFrameFlag = false; val = nds.KeyInput & 0xFFFF; return true;
+-        case 0x04000208: val = nds.IME[0]; return true;
+-        case 0x04000210: val = nds.IE[0] & 0xFFFF; return true;
+-        case 0x04000212: val = nds.IE[0] >> 16; return true;
+-        case 0x04000214: val = nds.IF[0] & 0xFFFF; return true;
+-        case 0x04000216: val = nds.IF[0] >> 16; return true;
++            melonDS::GPU& gpu = nds.GPU;
++            switch (addr & 0x00E00000)
++            {
++            case 0x00000000: gpu.SyncVRAM_ABG(addr, false); val = gpu.ReadVRAM_ABG<T>(addr); return true;
++            case 0x00200000: gpu.SyncVRAM_BBG(addr, false); val = gpu.ReadVRAM_BBG<T>(addr); return true;
++            case 0x00400000: gpu.SyncVRAM_AOBJ(addr, false); val = gpu.ReadVRAM_AOBJ<T>(addr); return true;
++            case 0x00600000: gpu.SyncVRAM_BOBJ(addr, false); val = gpu.ReadVRAM_BOBJ<T>(addr); return true;
++            default:         gpu.SyncVRAM_LCDC(addr, false); val = gpu.ReadVRAM_LCDC<T>(addr); return true;
++            }
+         }
++        return false;
+     }
+     return false;
+ }
+@@ -152,39 +189,73 @@ template <typename T>
+ static inline bool IOFastWrite9(melonDS::NDS& nds, u32 addr, u32 val)
+ {
+     const u32 routes = IOFastRoutes;
+-    if ((routes & iofast_MainRAM) && (addr >> 24) == 0x02)
++    const u32 parts = MemFastParts;
++    switch (addr >> 24)
+     {
++    case 0x02:
++        if (!(routes & iofast_MainRAM))
++            return false;
+         nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(addr);
+         *(T*)&nds.MainRAM[addr & nds.MainRAMMask] = val;
+         return true;
+-    }
+-    if (sizeof(T) >= 2 && (routes & iofast_VRAM) && (addr >> 24) == 0x06)
+-    {
+-        nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_VRAM>(addr);
+-        melonDS::GPU& gpu = nds.GPU;
+-        switch (addr & 0x00E00000)
+-        {
+-        case 0x00000000: gpu.SyncVRAM_ABG(addr, true); gpu.WriteVRAM_ABG<T>(addr, val); return true;
+-        case 0x00200000: gpu.SyncVRAM_BBG(addr, true); gpu.WriteVRAM_BBG<T>(addr, val); return true;
+-        case 0x00400000: gpu.SyncVRAM_AOBJ(addr, true); gpu.WriteVRAM_AOBJ<T>(addr, val); return true;
+-        case 0x00600000: gpu.SyncVRAM_BOBJ(addr, true); gpu.WriteVRAM_BOBJ<T>(addr, val); return true;
+-        default:         gpu.SyncVRAM_LCDC(addr, true); gpu.WriteVRAM_LCDC<T>(addr, val); return true;
+-        }
+-    }
+-    // the geometry engine's FIFO (0x04000400-43F) and command ports (0x04000440-5FF): ARM9IOWrite32 hands
+-    // these to GPU3D::Write32, which drops them while the geometry engine is off and gives the FIFO port to
+-    // WriteToGXFIFO
+-    if (sizeof(T) == 4 && (routes & iofast_GX) && addr - 0x04000400 < 0x200)
+-    {
+-        GPU3D& gpu3d = nds.GPU.GPU3D;
+-        if (addr < 0x04000440)
++    case 0x04:
++        // the geometry engine's FIFO (0x04000400-43F) and command ports (0x04000440-5FF): ARM9IOWrite32 hands
++        // these to GPU3D::Write32, which drops them while the geometry engine is off and gives the FIFO port to
++        // WriteToGXFIFO
++        if (sizeof(T) == 4 && (routes & iofast_GX) && addr - 0x04000400 < 0x200)
+         {
+-            if (gpu3d.GeometryEnabled)
+-                gpu3d.WriteToGXFIFO(val);
++            GPU3D& gpu3d = nds.GPU.GPU3D;
++            if (addr < 0x04000440)
++            {
++                if (gpu3d.GeometryEnabled)
++                    gpu3d.WriteToGXFIFO(val);
++            }
++            else
++                gpu3d.Write32(addr, val);
++            return true;
+         }
++        if (!(parts & memfast_IO))
++            return false;
++        // the plain registers, then ARM9Write*'s case 0x04000000 without its dispatch
++        if (sizeof(T) >= 2 && nds.ARM9IOWriteDirect<T>(addr, (T)val))
++            return true;
++        if (sizeof(T) == 4)
++            nds.NDS::ARM9IOWrite32(addr, val);
++        else if (sizeof(T) == 2)
++            nds.NDS::ARM9IOWrite16(addr, val);
+         else
+-            gpu3d.Write32(addr, val);
++            nds.NDS::ARM9IOWrite8(addr, val);
++        return true;
++    case 0x05:
++        // ARM9Write16/32's palette and OAM (8-bit writes keep ARM9Write8's own case)
++        if (sizeof(T) < 2 || !(parts & memfast_VRAM))
++            return false;
++        if (nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))
++            nds.GPU.WritePalette<T>(addr, val);
+         return true;
++    case 0x07:
++        if (sizeof(T) < 2 || !(parts & memfast_VRAM))
++            return false;
++        if (nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))
++            nds.GPU.WriteOAM<T>(addr, val);
++        return true;
++    case 0x06:
++        if (sizeof(T) < 2 || !((routes & iofast_VRAM) || (parts & memfast_VRAM)))
++            return false;
++        nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_VRAM>(addr);
++        if ((parts & memfast_VRAM) && nds.GPU.WriteVRAMDirect<T>(addr, val))
++            return true;
++        {
++            melonDS::GPU& gpu = nds.GPU;
++            switch (addr & 0x00E00000)
++            {
++            case 0x00000000: gpu.SyncVRAM_ABG(addr, true); gpu.WriteVRAM_ABG<T>(addr, val); return true;
++            case 0x00200000: gpu.SyncVRAM_BBG(addr, true); gpu.WriteVRAM_BBG<T>(addr, val); return true;
++            case 0x00400000: gpu.SyncVRAM_AOBJ(addr, true); gpu.WriteVRAM_AOBJ<T>(addr, val); return true;
++            case 0x00600000: gpu.SyncVRAM_BOBJ(addr, true); gpu.WriteVRAM_BOBJ<T>(addr, val); return true;
++            default:         gpu.SyncVRAM_LCDC(addr, true); gpu.WriteVRAM_LCDC<T>(addr, val); return true;
++            }
++        }
+     }
+     return false;
+ }
+@@ -200,7 +271,7 @@ static inline T SlowRead9Impl(u32 addr, ARMv5* cpu)
+         val = *(T*)&cpu->ITCM[addr & 0x7FFF];
+     else if ((addr & cpu->DTCMMask) == cpu->DTCMBase)
+         val = *(T*)&cpu->DTCM[addr & 0x3FFF];
+-    else if (ConsoleType == 0 && IOFastOn && IOFastRead9<T>(cpu->NDS, addr, val))
++    else if (ConsoleType == 0 && (IOFastRoutes | (MemFastParts & 3)) && IOFastRead9<T>(cpu->NDS, addr, val))
+         ;
+     else if (std::is_same<T, u32>::value)
+         val = NDS::Current->ARM9Read32(addr);
+@@ -216,12 +287,89 @@ static inline T SlowRead9Impl(u32 addr, ARMv5* cpu)
+ }
+ 
+ template <typename T, int ConsoleType>
+-T SlowRead9(u32 addr, ARMv5* cpu)
++[[gnu::noinline]] static T SlowRead9Full(u32 addr, ARMv5* cpu)
+ {
+     MELONDS_IOSTAT(iostat_Read9, addr & ~(u32)(sizeof(T) - 1), sizeof(T), 1);
+     return SlowRead9Impl<T, ConsoleType>(addr, cpu);
+ }
+ 
++// The JIT's slow loads and stores start here (MELONDS_MEMFAST, NDS_IOFast.h): the common cases inline, with no
++// call and no stack frame, after side-effect-free checks; anything else, or any check failing, goes to the full
++// path above, which does the whole thing (the checks again, the IO statistics, the TCMs, the routes, the chain).
++// The common cases: VRAM with the page's table entry current and plain (GPU::WriteVRAMQuick) and no compiled code
++// in the 16 bytes, palette and OAM, main RAM with no compiled code in the 16 bytes, the plain IO registers
++// (NDS::ARM9IOReadDirect/WriteDirect).
++template <typename T, int ConsoleType>
++T SlowRead9(u32 addr, ARMv5* cpu)
++{
++    if (ConsoleType == 0)
++    {
++        const u32 flags = SlowPathFlags;
++        const u32 a = addr & ~(u32)(sizeof(T) - 1);
++        if (!(flags & slow_FullPath) && a >= cpu->ITCMSize && (a & cpu->DTCMMask) != cpu->DTCMBase)
++        {
++            melonDS::NDS& nds = cpu->NDS;
++            T val;
++            bool done = false;
++            switch (a >> 24)
++            {
++            case 0x02:
++                if (flags & slow_MainRAM)
++                {
++                    val = *(T*)&nds.MainRAM[a & nds.MainRAMMask];
++                    done = true;
++                }
++                break;
++            case 0x04:
++                // (MELONDS_IOFAST's register reads, all below IPCSYNC; NDS::ARM9IOReadDirect's are from it on)
++                if (a < 0x04000180)
++                {
++                    if (!(flags & slow_IORead))
++                        break;
++                    if (sizeof(T) == 2)
++                    {
++                        switch (a)
++                        {
++                        case 0x04000004: val = nds.GPU.DispStat[0]; done = true; break;
++                        case 0x04000006: val = nds.GPU.VCount; done = true; break;
++                        case 0x04000130: nds.LagFrameFlag = false; val = nds.KeyInput & 0xFFFF; done = true; break;
++                        }
++                    }
++                    else if (sizeof(T) == 4 && a == 0x04000004)
++                    {
++                        val = nds.GPU.DispStat[0] | (nds.GPU.VCount << 16);
++                        done = true;
++                    }
++                }
++                else if (sizeof(T) >= 2 && (flags & slow_MemIO))
++                    done = nds.ARM9IOReadDirect<T>(a, val);
++                break;
++            case 0x05:
++                if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
++                {
++                    val = (nds.PowerControl9 & ((a & 0x400) ? (1<<9) : (1<<1))) ? nds.GPU.ReadPalette<T>(a) : 0;
++                    done = true;
++                }
++                break;
++            case 0x06:
++                if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
++                    done = nds.GPU.ReadVRAMQuick<T>(a, val);
++                break;
++            case 0x07:
++                if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
++                {
++                    val = (nds.PowerControl9 & ((a & 0x400) ? (1<<9) : (1<<1))) ? nds.GPU.ReadOAM<T>(a & 0x7FF) : 0;
++                    done = true;
++                }
++                break;
++            }
++            if (done)
++                return sizeof(T) == 4 ? ROR(val, (addr & 0x3) << 3) : val;
++        }
++    }
++    return SlowRead9Full<T, ConsoleType>(addr, cpu);
++}
++
+ template <typename T, int ConsoleType>
+ static inline T SlowRead7Impl(u32 addr)
+ {
+@@ -229,7 +377,20 @@ static inline T SlowRead7Impl(u32 addr)
+     addr &= ~(sizeof(T) - 1);
+ 
+     T val;
+-    if (std::is_same<T, u32>::value)
++    if (ConsoleType == 0 && (MemFastParts & memfast_IO) && (addr & 0xFF800000) == 0x04000000)
++    {
++        // ARM7Read*'s case 0x04000000 without its dispatch, the plain registers first
++        melonDS::NDS& nds = *NDS::Current;
++        if (sizeof(T) >= 2 && nds.ARM7IOReadDirect<T>(addr, val))
++            ;
++        else if (std::is_same<T, u32>::value)
++            val = nds.NDS::ARM7IORead32(addr);
++        else if (std::is_same<T, u16>::value)
++            val = nds.NDS::ARM7IORead16(addr);
++        else
++            val = nds.NDS::ARM7IORead8(addr);
++    }
++    else if (std::is_same<T, u32>::value)
+         val = NDS::Current->ARM7Read32(addr);
+     else if (std::is_same<T, u16>::value)
+         val = NDS::Current->ARM7Read16(addr);
+@@ -263,7 +424,7 @@ static inline void SlowWrite9Impl(u32 addr, ARMv5* cpu, u32 val)
+     {
+         *(T*)&cpu->DTCM[addr & 0x3FFF] = val;
+     }
+-    else if (ConsoleType == 0 && IOFastOn && IOFastWrite9<T>(cpu->NDS, addr, val))
++    else if (ConsoleType == 0 && (IOFastRoutes | (MemFastParts & 3)) && IOFastWrite9<T>(cpu->NDS, addr, val))
+     {
+     }
+     else if (std::is_same<T, u32>::value)
+@@ -281,18 +442,135 @@ static inline void SlowWrite9Impl(u32 addr, ARMv5* cpu, u32 val)
+ }
+ 
+ template <typename T, int ConsoleType>
+-void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
++[[gnu::noinline]] static void SlowWrite9Full(u32 addr, ARMv5* cpu, u32 val)
+ {
+     MELONDS_IOSTAT(iostat_Write9, addr & ~(u32)(sizeof(T) - 1), sizeof(T), 1);
+     SlowWrite9Impl<T, ConsoleType>(addr, cpu, val);
+ }
+ 
++// MELONDS_IOFAST's GX FIFO and command port route (IOFastWrite9's)
++[[gnu::noinline]] static void GXWrite9Route(melonDS::NDS& nds, u32 addr, u32 val)
++{
++    GPU3D& gpu3d = nds.GPU.GPU3D;
++    if (addr < 0x04000440)
++    {
++        if (gpu3d.GeometryEnabled)
++            gpu3d.WriteToGXFIFO(val);
++    }
++    else
++        gpu3d.Write32(addr, val);
++}
++
++template <typename T>
++[[gnu::noinline]] static void IOWrite9Route(melonDS::NDS& nds, u32 addr, u32 val)
++{
++    // ARM9Write*'s case 0x04000000 without its dispatch, the plain registers first
++    if (sizeof(T) >= 2 && nds.ARM9IOWriteDirect<T>(addr, (T)val))
++        return;
++    if (sizeof(T) == 4)
++        nds.NDS::ARM9IOWrite32(addr, val);
++    else if (sizeof(T) == 2)
++        nds.NDS::ARM9IOWrite16(addr, val);
++    else
++        nds.NDS::ARM9IOWrite8(addr, val);
++}
++
++// the common stores, inline, after side-effect-free checks; false: nothing done (a is aligned, not in the TCMs)
++template <typename T>
++static inline bool QuickWrite9(melonDS::NDS& nds, u32 a, u32 val, u32 flags)
++{
++    switch (a >> 24)
++    {
++    case 0x06:
++        // (CheckAndInvalidate<0, memregion_VRAM> has nothing to do: GPU::VRAMDirect has entries only while VRAM
++        // holds no compiled code)
++        if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
++            return nds.GPU.WriteVRAMQuick<T>(a, val);
++        return false;
++    case 0x02:
++        // (CheckAndInvalidate<0, memregion_MainRAM> likewise)
++        if (flags & slow_MainRAM)
++        {
++            const u32 off = a & nds.MainRAMMask;
++            const AddressRange* code = &nds.JIT.CodeIndexMainRAM[off / 512];
++            __asm__("" : "+r"(code));
++            if (!((code->Code >> ((a & 0x1FF) / 16)) & 1))
++            {
++                *(T*)&nds.MainRAM[off] = val;
++                return true;
++            }
++        }
++        return false;
++    case 0x05:
++        if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
++        {
++            if (nds.PowerControl9 & ((a & 0x400) ? (1<<9) : (1<<1)))
++            {
++                melonDS::GPU* gpu = &nds.GPU;
++                __asm__("" : "+r"(gpu));    // (one base for the GPU's members)
++                gpu->WritePalette<T>(a, val);
++            }
++            return true;
++        }
++        return false;
++    case 0x07:
++        if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
++        {
++            if (nds.PowerControl9 & ((a & 0x400) ? (1<<9) : (1<<1)))
++            {
++                melonDS::GPU* gpu = &nds.GPU;
++                __asm__("" : "+r"(gpu));
++                gpu->WriteOAM<T>(a, val);
++            }
++            return true;
++        }
++        return false;
++    }
++    return false;
++}
++
++template <typename T, int ConsoleType>
++void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
++{
++    if (ConsoleType == 0)
++    {
++        const u32 flags = SlowPathFlags;
++        const u32 a = addr & ~(u32)(sizeof(T) - 1);
++        if (!(flags & slow_FullPath) && a >= cpu->ITCMSize && (a & cpu->DTCMMask) != cpu->DTCMBase)
++        {
++            melonDS::NDS& nds = cpu->NDS;
++            if (QuickWrite9<T>(nds, a, val, flags))
++                return;
++            if ((a >> 24) == 0x04 && (flags & slow_MemIO))
++            {
++                if (sizeof(T) == 4 && (flags & iofast_GX) && a - 0x04000400 < 0x200)
++                    GXWrite9Route(nds, a, val);
++                else
++                    IOWrite9Route<T>(nds, a, val);
++                return;
++            }
++        }
++    }
++    SlowWrite9Full<T, ConsoleType>(addr, cpu, val);
++}
++
+ template <typename T, int ConsoleType>
+ static inline void SlowWrite7Impl(u32 addr, u32 val)
+ {
+     addr &= ~(sizeof(T) - 1);
+ 
+-    if (std::is_same<T, u32>::value)
++    if (ConsoleType == 0 && (MemFastParts & memfast_IO) && (addr & 0xFF800000) == 0x04000000)
++    {
++        // ARM7Write*'s case 0x04000000 without its dispatch
++        melonDS::NDS& nds = *NDS::Current;
++        if (std::is_same<T, u32>::value)
++            nds.NDS::ARM7IOWrite32(addr, val);
++        else if (std::is_same<T, u16>::value)
++            nds.NDS::ARM7IOWrite16(addr, val);
++        else
++            nds.NDS::ARM7IOWrite8(addr, val);
++    }
++    else if (std::is_same<T, u32>::value)
+         NDS::Current->ARM7Write32(addr, val);
+     else if (std::is_same<T, u16>::value)
+         NDS::Current->ARM7Write16(addr, val);
+@@ -312,7 +590,59 @@ void SlowBlockTransfer9(u32 addr, u64* data, u32 num, ARMv5* cpu)
+ {
+     addr &= ~0x3;
+     MELONDS_IOSTAT(Write ? iostat_Block9Write : iostat_Block9Read, addr, 4, num);
+-    if (ConsoleType == 0 && IOFastOn)
++    const u32 flags = SlowPathFlags;
++    if (ConsoleType == 0 && Write && (flags & (slow_MemVRAM | slow_MemIO)) && num)
++    {
++        // a store inside one 1 KB (one OAM or palette half, one VRAM page, the GX FIFO) and clear of the TCMs:
++        // what the words' own paths do, with the region's checks once (they can't change within the block)
++        const u32 last = addr + (num - 1) * 4;
++        if (((addr ^ last) >> 10) == 0 && addr >= cpu->ITCMSize && (~cpu->DTCMMask) >= 0x3FF
++            && (addr & cpu->DTCMMask) != cpu->DTCMBase)
++        {
++            melonDS::NDS& nds = cpu->NDS;
++            switch ((flags & slow_MemVRAM) ? addr >> 24 : 0)
++            {
++            case 0x04:
++                break;
++            case 0x05:
++                if (nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))
++                {
++                    melonDS::GPU* gpu = &nds.GPU;
++                    __asm__("" : "+r"(gpu));
++                    for (u32 i = 0; i < num; i++)
++                        gpu->WritePalette<u32>(addr + i * 4, (u32)data[i]);
++                }
++                return;
++            case 0x07:
++                if (nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))
++                {
++                    // (GPU::WriteOAM for each word: the words, then the 1 KB's dirty bit they all set)
++                    melonDS::GPU* gpu = &nds.GPU;
++                    __asm__("" : "+r"(gpu));
++                    u8* oam = gpu->OAM;
++                    for (u32 i = 0; i < num; i++)
++                        *(u32*)&oam[(addr + i * 4) & 0x7FF] = (u32)data[i];
++                    gpu->OAMDirty |= 1 << ((addr & 0x7FF) / 1024);
++                }
++                return;
++            case 0x06:
++                // (an entry means no compiled code in VRAM: CheckAndInvalidate would do nothing)
++                if (nds.GPU.WriteVRAMQuickBlock(addr, data, num))
++                    return;
++                break;
++            }
++            // the GX FIFO (MELONDS_IOFAST's route, word by word: GPU3D::GeometryEnabled can't change in between)
++            if ((flags & slow_MemIO) && (flags & iofast_GX) && addr >= 0x04000400 && last < 0x04000440)
++            {
++                GPU3D& gpu3d = nds.GPU.GPU3D;
++                if (gpu3d.GeometryEnabled)
++                    for (u32 i = 0; i < num; i++)
++                        gpu3d.WriteToGXFIFO((u32)data[i]);
++                return;
++            }
++        }
++    }
++    if (ConsoleType == 0 && (IOFastRoutes | (MemFastParts & 3)))
+     {
+         // the same per word as SlowWrite9/SlowRead9 (the TCMs first), with the direct routes
+         melonDS::NDS& nds = cpu->NDS;
+diff --git a/src/ARMJIT_Memory.cpp b/src/ARMJIT_Memory.cpp
+index 5a0d110..325288e 100644
+--- a/src/ARMJIT_Memory.cpp
++++ b/src/ARMJIT_Memory.cpp
+@@ -498,6 +498,9 @@ void ARMJIT_Memory::Mapping::Unmap(int region, melonDS::NDS& nds) noexcept
+ 
+ void ARMJIT_Memory::SetCodeProtection(int region, u32 offset, bool protect) noexcept
+ {
++    // (a VRAM page gaining or losing code: GPU::VRAMDirect has no entries while VRAM holds code)
++    if (region == memregion_VRAM)
++        NDS.GPU.MarkVRAMDirectStale();
+     offset &= ~(PageSize - 1);
+     //printf("set code protection %d %x %d\n", region, offset, protect);
+ 
+@@ -841,7 +844,7 @@ bool ARMJIT_Memory::FaultHandler(FaultDescription& faultDesc, melonDS::NDS& nds)
+     return false;
+ }
+ 
+-ARMJIT_Memory::ARMJIT_Memory(melonDS::NDS& nds) : NDS(nds)
++ARMJIT_Memory::ARMJIT_Memory(melonDS::NDS& nds) : NDS(nds), MainRAMMaskRef(&nds.MainRAMMask)
+ {
+     ARMJIT_Global::Init();
+ #if defined(__SWITCH__)
+@@ -1173,7 +1176,7 @@ bool ARMJIT_Memory::GetMirrorLocation(int region, u32 num, u32 addr, u32& memory
+     }
+ }
+ 
+-u32 ARMJIT_Memory::LocaliseAddress(int region, u32 num, u32 addr) const noexcept
++u32 ARMJIT_Memory::LocaliseAddressFull(int region, u32 num, u32 addr) const noexcept
+ {
+     switch (region)
+     {
+@@ -1369,6 +1372,8 @@ u32 WifiRead32(u32 addr)
+ template <typename T>
+ void VRAMWrite(u32 addr, T val)
+ {
++    if ((MemFastParts & memfast_VRAM) && NDS::Current->GPU.WriteVRAMDirect<T>(addr, val))
++        return;
+     switch (addr & 0x00E00000)
+     {
+     case 0x00000000: NDS::Current->GPU.SyncVRAM_ABG(addr, true); NDS::Current->GPU.WriteVRAM_ABG<T>(addr, val); return;
+@@ -1381,6 +1386,9 @@ void VRAMWrite(u32 addr, T val)
+ template <typename T>
+ T VRAMRead(u32 addr)
+ {
++    T val;
++    if ((MemFastParts & memfast_VRAM) && NDS::Current->GPU.ReadVRAMDirect<T>(addr, val))
++        return val;
+     switch (addr & 0x00E00000)
+     {
+     case 0x00000000: NDS::Current->GPU.SyncVRAM_ABG(addr, false); return NDS::Current->GPU.ReadVRAM_ABG<T>(addr);
+@@ -1494,6 +1502,131 @@ static u32 NDS_ARM7IORead32(u32 addr)
+     return NDS::Current->ARM7IORead32(addr);
+ }
+ 
++// MELONDS_MEMFAST's memfast_IO (the DS only): the plain registers straight to their state, other IO registers
++// straight to NDS::ARM9IO*/ARM7IO*, without the virtual calls
++template <typename T>
++static T NDS_ARM9IOReadDirect(u32 addr)
++{
++    melonDS::NDS& nds = *NDS::Current;
++    T val;
++    if (sizeof(T) >= 2 && nds.ARM9IOReadDirect<T>(addr, val))
++        return val;
++    if (sizeof(T) == 4)
++        return nds.NDS::ARM9IORead32(addr);
++    if (sizeof(T) == 2)
++        return nds.NDS::ARM9IORead16(addr);
++    return nds.NDS::ARM9IORead8(addr);
++}
++
++template <typename T>
++static void NDS_ARM9IOWriteDirect(u32 addr, T val)
++{
++    melonDS::NDS& nds = *NDS::Current;
++    if (sizeof(T) >= 2 && nds.ARM9IOWriteDirect<T>(addr, val))
++        return;
++    if (sizeof(T) == 4)
++        nds.NDS::ARM9IOWrite32(addr, val);
++    else if (sizeof(T) == 2)
++        nds.NDS::ARM9IOWrite16(addr, val);
++    else
++        nds.NDS::ARM9IOWrite8(addr, val);
++}
++
++// and for an address the JIT knows that is one of the plain registers, a function for that register alone (the
++// address constant: ARM9IOReadDirect/WriteDirect fold to its one case)
++template <typename T, u32 Addr>
++static T NDS_ARM9IOReadReg(u32)
++{
++    T val;
++    NDS::Current->ARM9IOReadDirect<T>(Addr, val);
++    return val;
++}
++
++template <typename T, u32 Addr>
++static void NDS_ARM9IOWriteReg(u32, T val)
++{
++    NDS::Current->ARM9IOWriteDirect<T>(Addr, val);
++}
++
++#define IOREG_READ(T, a) case a: return (void*)NDS_ARM9IOReadReg<T, a>;
++#define IOREG_WRITE(T, a) case a: return (void*)NDS_ARM9IOWriteReg<T, a>;
++static void* GetIORegFunc9(u32 addr, bool store, int size) noexcept
++{
++    if (size == 16 && !store)
++    {
++        switch (addr)
++        {
++        IOREG_READ(u16, 0x04000180) IOREG_READ(u16, 0x04000184) IOREG_READ(u16, 0x04000208)
++        IOREG_READ(u16, 0x04000210) IOREG_READ(u16, 0x04000212) IOREG_READ(u16, 0x04000214)
++        IOREG_READ(u16, 0x04000216) IOREG_READ(u16, 0x04000280) IOREG_READ(u16, 0x040002A0)
++        IOREG_READ(u16, 0x040002A2) IOREG_READ(u16, 0x040002A4) IOREG_READ(u16, 0x040002A6)
++        IOREG_READ(u16, 0x040002A8) IOREG_READ(u16, 0x040002AA) IOREG_READ(u16, 0x040002AC)
++        IOREG_READ(u16, 0x040002AE) IOREG_READ(u16, 0x040002B0) IOREG_READ(u16, 0x040002B4)
++        IOREG_READ(u16, 0x040002B6)
++        }
++    }
++    else if (size == 32 && !store)
++    {
++        switch (addr)
++        {
++        IOREG_READ(u32, 0x04000180) IOREG_READ(u32, 0x04000208) IOREG_READ(u32, 0x04000210)
++        IOREG_READ(u32, 0x04000214) IOREG_READ(u32, 0x04000280) IOREG_READ(u32, 0x04000290)
++        IOREG_READ(u32, 0x04000294) IOREG_READ(u32, 0x04000298) IOREG_READ(u32, 0x0400029C)
++        IOREG_READ(u32, 0x040002A0) IOREG_READ(u32, 0x040002A4) IOREG_READ(u32, 0x040002A8)
++        IOREG_READ(u32, 0x040002AC) IOREG_READ(u32, 0x040002B0) IOREG_READ(u32, 0x040002B4)
++        IOREG_READ(u32, 0x040002B8) IOREG_READ(u32, 0x040002BC)
++        }
++    }
++    else if (size == 16 && store)
++    {
++        switch (addr)
++        {
++        IOREG_WRITE(u16, 0x04000208) IOREG_WRITE(u16, 0x04000210) IOREG_WRITE(u16, 0x04000212)
++        IOREG_WRITE(u16, 0x04000214) IOREG_WRITE(u16, 0x04000216) IOREG_WRITE(u16, 0x04000280)
++        IOREG_WRITE(u16, 0x040002B0)
++        }
++    }
++    else if (size == 32 && store)
++    {
++        switch (addr)
++        {
++        IOREG_WRITE(u32, 0x04000208) IOREG_WRITE(u32, 0x04000210) IOREG_WRITE(u32, 0x04000214)
++        IOREG_WRITE(u32, 0x04000280) IOREG_WRITE(u32, 0x040002B0) IOREG_WRITE(u32, 0x04000290)
++        IOREG_WRITE(u32, 0x04000294) IOREG_WRITE(u32, 0x04000298) IOREG_WRITE(u32, 0x0400029C)
++        IOREG_WRITE(u32, 0x040002B8) IOREG_WRITE(u32, 0x040002BC)
++        }
++    }
++    return nullptr;
++}
++#undef IOREG_READ
++#undef IOREG_WRITE
++
++template <typename T>
++static T NDS_ARM7IOReadDirect(u32 addr)
++{
++    melonDS::NDS& nds = *NDS::Current;
++    T val;
++    if (sizeof(T) >= 2 && nds.ARM7IOReadDirect<T>(addr, val))
++        return val;
++    if (sizeof(T) == 4)
++        return nds.NDS::ARM7IORead32(addr);
++    if (sizeof(T) == 2)
++        return nds.NDS::ARM7IORead16(addr);
++    return nds.NDS::ARM7IORead8(addr);
++}
++
++template <typename T>
++static void NDS_ARM7IOWriteDirect(u32 addr, T val)
++{
++    melonDS::NDS& nds = *NDS::Current;
++    if (sizeof(T) == 4)
++        nds.NDS::ARM7IOWrite32(addr, val);
++    else if (sizeof(T) == 2)
++        nds.NDS::ARM7IOWrite16(addr, val);
++    else
++        nds.NDS::ARM7IOWrite8(addr, val);
++}
++
+ static void NDS_ARM7IOWrite8(u32 addr, u8 val)
+ {
+     NDS::Current->ARM7IOWrite8(addr, val);
+@@ -1538,6 +1671,20 @@ void* ARMJIT_Memory::GetFuncForAddr(ARM* cpu, u32 addr, bool store, int size) co
+                 }
+             }
+ 
++            if (NDS.ConsoleType == 0 && (MemFastParts & memfast_IO))
++            {
++                if (void* f = GetIORegFunc9(addr, store, size))
++                    return f;
++                switch (size | store)
++                {
++                case 8: return (void*)NDS_ARM9IOReadDirect<u8>;
++                case 9: return (void*)NDS_ARM9IOWriteDirect<u8>;
++                case 16: return (void*)NDS_ARM9IOReadDirect<u16>;
++                case 17: return (void*)NDS_ARM9IOWriteDirect<u16>;
++                case 32: return (void*)NDS_ARM9IOReadDirect<u32>;
++                case 33: return (void*)NDS_ARM9IOWriteDirect<u32>;
++                }
++            }
+             switch (size | store)
+             {
+             case 8: return (void*)NDS_ARM9IORead8;
+@@ -1581,6 +1728,18 @@ void* ARMJIT_Memory::GetFuncForAddr(ARM* cpu, u32 addr, bool store, int size) co
+                 }
+             }*/
+ 
++            if (NDS.ConsoleType == 0 && (MemFastParts & memfast_IO))
++            {
++                switch (size | store)
++                {
++                case 8: return (void*)NDS_ARM7IOReadDirect<u8>;
++                case 9: return (void*)NDS_ARM7IOWriteDirect<u8>;
++                case 16: return (void*)NDS_ARM7IOReadDirect<u16>;
++                case 17: return (void*)NDS_ARM7IOWriteDirect<u16>;
++                case 32: return (void*)NDS_ARM7IOReadDirect<u32>;
++                case 33: return (void*)NDS_ARM7IOWriteDirect<u32>;
++                }
++            }
+             switch (size | store)
+             {
+             case 8: return (void*)NDS_ARM7IORead8;
+diff --git a/src/ARMJIT_Memory.h b/src/ARMJIT_Memory.h
+index 4bf660e..a1116ce 100644
+--- a/src/ARMJIT_Memory.h
++++ b/src/ARMJIT_Memory.h
+@@ -134,7 +134,22 @@ public:
+     int ClassifyAddress9(u32 addr) const noexcept;
+     int ClassifyAddress7(u32 addr) const noexcept;
+     bool GetMirrorLocation(int region, u32 num, u32 addr, u32& memoryOffset, u32& mirrorStart, u32& mirrorSize) const noexcept;
+-    u32 LocaliseAddress(int region, u32 num, u32 addr) const noexcept;
++    // (inline for the regions whose stores take ARMJIT::CheckAndInvalidate on the slow paths, which name the
++    // region as a constant: the switch folds away; the rest in LocaliseAddressFull)
++    u32 LocaliseAddress(int region, u32 num, u32 addr) const noexcept
++    {
++        if (__builtin_constant_p(region))
++        {
++            switch (region)
++            {
++            case memregion_ITCM: return (addr & (ITCMPhysicalSize - 1)) | (memregion_ITCM << 27);
++            case memregion_MainRAM: return (addr & *MainRAMMaskRef) | (memregion_MainRAM << 27);
++            case memregion_VRAM: return (addr & 0xFFFFF) | (memregion_VRAM << 27);
++            }
++        }
++        return LocaliseAddressFull(region, num, addr);
++    }
++    u32 LocaliseAddressFull(int region, u32 num, u32 addr) const noexcept;
+     bool IsFastmemCompatible(int region) const noexcept;
+     void* GetFuncForAddr(ARM* cpu, u32 addr, bool store, int size) const noexcept;
+     bool MapAtAddress(u32 addr) noexcept;
+@@ -168,6 +183,7 @@ private:
+     void SetCodeProtectionRange(u32 addr, u32 size, u32 num, int protection) noexcept;
+ 
+     melonDS::NDS& NDS;
++    const u32* MainRAMMaskRef;  // &NDS.MainRAMMask (set at the NDS's reset, after the JIT's)
+     void* FastMem9Start;
+     void* FastMem7Start;
+     u8* MemoryBase = nullptr;
+diff --git a/src/GPU.cpp b/src/GPU.cpp
+index b695ee9..991bfad 100644
+--- a/src/GPU.cpp
++++ b/src/GPU.cpp
+@@ -48,6 +48,7 @@ enum
+     CBFlag_Complete     = (1<<14), // this block contains a complete capture (not in progress)
+     CBFlag_Synced       = (1<<13), // this block has been synced back to emulated VRAM
+ };
++static_assert(GPU::CaptureBlockIsCapture == CBFlag_IsCapture, "");
+ 
+ 
+ /*
+@@ -172,6 +173,7 @@ void GPU::Reset() noexcept
+ 
+     VRAMMap_ARM7[0] = 0;
+     VRAMMap_ARM7[1] = 0;
++    VRAMMappingChanged();
+ 
+     memset(VRAMPtr_ABG, 0, sizeof(VRAMPtr_ABG));
+     memset(VRAMPtr_AOBJ, 0, sizeof(VRAMPtr_AOBJ));
+@@ -275,6 +277,7 @@ void GPU::DoSavestate(Savestate* file) noexcept
+ 
+     if (!file->Saving)
+     {
++        VRAMMappingChanged();
+         for (int i = 0; i < 0x20; i++)
+         {
+             VRAMPtr_ABG[i] = GetUniqueBankPtr(VRAMMap_ABG[i], i << 14);
+@@ -585,6 +588,7 @@ u16* GPU::GetUniqueBankCBF(u32 mask, u32 offset)
+ 
+ void GPU::MapVRAM_AB(u32 bank, u8 cnt) noexcept
+ {
++    VRAMMappingChanged();
+     cnt &= 0x9B;
+ 
+     u8 oldcnt = VRAMCNT[bank];
+@@ -649,6 +653,7 @@ void GPU::MapVRAM_AB(u32 bank, u8 cnt) noexcept
+ 
+ void GPU::MapVRAM_CD(u32 bank, u8 cnt) noexcept
+ {
++    VRAMMappingChanged();
+     cnt &= 0x9F;
+ 
+     u8 oldcnt = VRAMCNT[bank];
+@@ -744,6 +749,7 @@ void GPU::MapVRAM_CD(u32 bank, u8 cnt) noexcept
+ 
+ void GPU::MapVRAM_E(u32 bank, u8 cnt) noexcept
+ {
++    VRAMMappingChanged();
+     cnt &= 0x87;
+ 
+     u8 oldcnt = VRAMCNT[bank];
+@@ -812,6 +818,7 @@ void GPU::MapVRAM_E(u32 bank, u8 cnt) noexcept
+ 
+ void GPU::MapVRAM_FG(u32 bank, u8 cnt) noexcept
+ {
++    VRAMMappingChanged();
+     cnt &= 0x9F;
+ 
+     u8 oldcnt = VRAMCNT[bank];
+@@ -920,6 +927,7 @@ void GPU::MapVRAM_FG(u32 bank, u8 cnt) noexcept
+ 
+ void GPU::MapVRAM_H(u32 bank, u8 cnt) noexcept
+ {
++    VRAMMappingChanged();
+     cnt &= 0x83;
+ 
+     u8 oldcnt = VRAMCNT[bank];
+@@ -978,6 +986,7 @@ void GPU::MapVRAM_H(u32 bank, u8 cnt) noexcept
+ 
+ void GPU::MapVRAM_I(u32 bank, u8 cnt) noexcept
+ {
++    VRAMMappingChanged();
+     cnt &= 0x83;
+ 
+     u8 oldcnt = VRAMCNT[bank];
+@@ -1393,6 +1402,21 @@ void GPU::SetVCount(u16 val, u16 mask) noexcept
+ template <u32 Size, u32 MappingGranularity>
+ NonStupidBitField<Size/VRAMDirtyGranularity> VRAMTrackingSet<Size, MappingGranularity>::DeriveState(const u32* currentMappings, GPU& gpu)
+ {
++    // nothing remapped since the last call and no dirty bit in the banks mapped here: the walk below would
++    // return nothing and clear nothing
++    if ((MemFastParts & memfast_VRAMTrack) && LastMapGen == gpu.VRAMMapGen)
++    {
++        bool clean = true;
++        for (u32 banks = LastBanks; banks != 0 && clean; banks &= banks - 1)
++        {
++            const NonStupidBitField<128*1024/VRAMDirtyGranularity>& dirty = gpu.VRAMDirty[__builtin_ctz(banks)];
++            for (u32 w = 0; w < sizeof(dirty.Data) / sizeof(dirty.Data[0]); w++)
++                clean &= dirty.Data[w] == 0;
++        }
++        if (clean)
++            return NonStupidBitField<Size/VRAMDirtyGranularity>();
++    }
++
+     NonStupidBitField<Size/VRAMDirtyGranularity> result;
+     u16 banksToBeZeroed = 0;
+     for (u32 i = 0; i < Size / MappingGranularity; i++)
+@@ -1444,6 +1468,9 @@ NonStupidBitField<Size/VRAMDirtyGranularity> VRAMTrackingSet<Size, MappingGranul
+         }
+     }
+ 
++    LastMapGen = gpu.VRAMMapGen;
++    LastBanks = banksToBeZeroed;
++
+     while (banksToBeZeroed != 0)
+     {
+         u32 num = __builtin_ctz(banksToBeZeroed);
+@@ -1612,6 +1639,52 @@ void GPU::CheckCaptureEnd()
+     VRAMCBFlagsOr(dstbank, dstoff, CBFlag_Complete);
+ }
+ 
++void GPU::UpdateVRAMDirect() noexcept
++{
++    // the 128 distinct pages (ABG 32, BBG 8, AOBJ 16, BOBJ 8, LCDC 64), then their mirrors (bits 21-23 pick the
++    // area, the bits above its size within bits 14-20 mirror)
++    static const u16 noCapture = 0;
++    static constexpr u32 pageMask[8] = {0x1F, 0x7, 0xF, 0x7, 0x3F, 0x3F, 0x3F, 0x3F};
++#ifdef JIT_ENABLED
++    // the JIT's slow paths skip ARMJIT::CheckAndInvalidate for the pages here: no entry while any compiled code
++    // is in VRAM (the first code in a page marks the table stale: ARMJIT_Memory::SetCodeProtection)
++    for (const AddressRange& range : NDS.JIT.CodeIndexVRAM)
++    {
++        if (range.Code)
++        {
++            for (VRAMDirectPage& p : VRAMDirect)
++                p = VRAMDirectPage{nullptr, nullptr, &noCapture, 0, 0};
++            VRAMDirectStale = false;
++            return;
++        }
++    }
++#endif
++    for (u32 i = 0; i < 1024; i++)
++    {
++        const u32 area = i >> 7;
++        const u32 first = area >= 4 ? (4 << 7) | (i & 0x3F) : (area << 7) | (i & pageMask[area]);
++        VRAMDirectPage& p = VRAMDirect[i];
++        if (first != i)
++        {
++            p = VRAMDirect[first];
++            continue;
++        }
++        const int bank = SingleVRAMBank(0x06000000 | (i << 14));
++        if (bank < 0)
++        {
++            p = VRAMDirectPage{nullptr, nullptr, &noCapture, 0, 0};
++            continue;
++        }
++        const u32 off = (i << 14) & VRAMMask[bank];
++        p.Mem = &VRAM[bank][off];
++        p.DirtyWord = &VRAMDirty[bank].Data[off >> 15];
++        p.CaptureFlags = bank < 4 ? &VRAMCaptureBlockFlags[(bank << 2) | (off >> 15)] : &noCapture;
++        p.DirtyBit = (off >> 9) & 63;
++        p.Pad = 0;
++    }
++    VRAMDirectStale = false;
++}
++
+ void GPU::SyncVRAMCaptureBlock(u32 block, bool write)
+ {
+     u16 flags = VRAMCaptureBlockFlags[block];
+diff --git a/src/GPU.h b/src/GPU.h
+index b0e1faf..97e711b 100644
+--- a/src/GPU.h
++++ b/src/GPU.h
+@@ -40,6 +40,11 @@ struct VRAMTrackingSet
+ 
+     const u32 VRAMBitsPerMapping = MappingGranularity / VRAMDirtyGranularity;
+ 
++    // (BananaDS, MELONDS_MEMFAST's memfast_VRAMTrack) GPU::VRAMMapGen at the last DeriveState, and the banks
++    // mapped here then: while the generation holds and those banks have no dirty bit, DeriveState has nothing to do
++    u64 LastMapGen = ~0ULL;
++    u16 LastBanks = 0;
++
+     void Reset()
+     {
+         for (u32 i = 0; i < Size / MappingGranularity; i++)
+@@ -48,6 +53,7 @@ struct VRAMTrackingSet
+             // so it will always be a mismatch => the bank will be completely invalidated
+             Mapping[i] = 0x8000;
+         }
++        LastMapGen = ~0ULL;
+     }
+     NonStupidBitField<Size/VRAMDirtyGranularity> DeriveState(const u32* currentMappings, GPU& gpu);
+ };
+@@ -145,6 +151,141 @@ public:
+         if (mask & (1<<3)) SyncVRAMCaptureBlock((3<<2) | addr, write);
+     }
+ 
++    /*
++        The CPU's 16- and 32-bit VRAM accesses in one step (BananaDS, MELONDS_MEMFAST): when one bank alone is
++        mapped at the address's 16 KB, what SyncVRAM_*(addr, write) and then Read/WriteVRAM_*<T>(addr) do there:
++        the capture block's sync (banks A-D), the bank's dirty bit, the access. False when no bank or several are
++        mapped there; the caller takes the full path then. addr is 0x06xxxxxx, aligned.
++    */
++    static constexpr u16 CaptureBlockIsCapture = 1 << 15;    // GPU.cpp's CBFlag_IsCapture
++
++    // the bank mapped alone at addr's 16 KB as the ARM9 sees VRAM, or -1
++    int SingleVRAMBank(u32 addr) const noexcept
++    {
++        // LCDC: WriteVRAM_LCDC's switch on addr & 0xFF8FC000, by 16 KB page
++        static constexpr s8 lcdcBank[64] = {
++            0, 0, 0, 0, 0, 0, 0, 0,  1, 1, 1, 1, 1, 1, 1, 1,  2, 2, 2, 2, 2, 2, 2, 2,  3, 3, 3, 3, 3, 3, 3, 3,
++            4, 4, 4, 4, 5, 6, 7, 7,  8, -1, -1, -1, -1, -1, -1, -1,
++            -1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1};
++        u32 mask;
++        switch (addr & 0x00E00000)
++        {
++        case 0x00000000: mask = VRAMMap_ABG[(addr >> 14) & 0x1F]; break;
++        case 0x00200000: mask = VRAMMap_BBG[(addr >> 14) & 0x7]; break;
++        case 0x00400000: mask = VRAMMap_AOBJ[(addr >> 14) & 0xF]; break;
++        case 0x00600000: mask = VRAMMap_BOBJ[(addr >> 14) & 0x7]; break;
++        default:
++            {
++                int bank = lcdcBank[(addr >> 14) & 0x3F];
++                return (bank >= 0 && (VRAMMap_LCDC & (1 << bank))) ? bank : -1;
++            }
++        }
++        if (mask == 0 || (mask & (mask - 1)))
++            return -1;
++        return __builtin_ctz(mask);
++    }
++
++    // per 16 KB page of 0x06000000-0x06FFFFFF (address bits 14-23), when one bank alone is mapped there: the page
++    // in its bank, the bank's dirty word and first bit for it, its capture block's flags (banks A-D); rebuilt from
++    // SingleVRAMBank on the first access after a mapping change (VRAMDirectStale: MapVRAM_*, Reset, a state load,
++    // a VRAM page gaining or losing compiled code), and empty while VRAM holds compiled code (UpdateVRAMDirect)
++    struct VRAMDirectPage
++    {
++        u8* Mem;                    // VRAM[bank] + (page & VRAMMask[bank]), or null: no bank or several
++        u64* DirtyWord;             // &VRAMDirty[bank].Data[(page & VRAMMask[bank]) >> 15]
++        const u16* CaptureFlags;    // &VRAMCaptureBlockFlags[the page's capture block] (banks A-D), else a zero
++        u32 DirtyBit;               // ((page & VRAMMask[bank]) >> 9) & 63
++        u32 Pad;
++    };
++    void UpdateVRAMDirect() noexcept;
++
++    // the common case alone, for the JIT's slow paths: the table current, one bank at the page, the page not a
++    // display capture's; false (nothing done) otherwise
++    // (a stale table has every Mem null: MarkVRAMDirectStale)
++    template<typename T>
++    bool WriteVRAMQuick(u32 addr, T val) noexcept
++    {
++        const VRAMDirectPage* p = &VRAMDirect[(addr >> 14) & 0x3FF];
++        __asm__("" : "+r"(p));  // (one address for the entry: the compiler re-derives it from the GPU otherwise)
++        u8* mem = p->Mem;
++        if (!mem || (*p->CaptureFlags & CaptureBlockIsCapture))
++            return false;
++        *p->DirtyWord |= 1ULL << (p->DirtyBit + ((addr >> 9) & 31));
++        *(T*)&mem[addr & 0x3FFF] = val;
++        return true;
++    }
++    // num words from addr, all in one page (its entry checked once): what WriteVRAMQuick<u32> does for each
++    bool WriteVRAMQuickBlock(u32 addr, const u64* data, u32 num) noexcept
++    {
++        const VRAMDirectPage* p = &VRAMDirect[(addr >> 14) & 0x3FF];
++        __asm__("" : "+r"(p));
++        u8* mem = p->Mem;
++        if (!mem || (*p->CaptureFlags & CaptureBlockIsCapture))
++            return false;
++        u64* dirty = p->DirtyWord;
++        const u32 bit = p->DirtyBit;
++        for (u32 i = 0; i < num; i++, addr += 4)
++        {
++            *dirty |= 1ULL << (bit + ((addr >> 9) & 31));
++            *(u32*)&mem[addr & 0x3FFF] = (u32)data[i];
++        }
++        return true;
++    }
++    template<typename T>
++    bool ReadVRAMQuick(u32 addr, T& val) const noexcept
++    {
++        const VRAMDirectPage* p = &VRAMDirect[(addr >> 14) & 0x3FF];
++        __asm__("" : "+r"(p));
++        const u8* mem = p->Mem;
++        if (!mem || (*p->CaptureFlags & CaptureBlockIsCapture))
++            return false;
++        val = *(const T*)&mem[addr & 0x3FFF];
++        return true;
++    }
++    // every change to the VRAMMap_* tables: VRAMTrackingSet::DeriveState's generation, and VRAMDirect stale
++    void VRAMMappingChanged() noexcept
++    {
++        VRAMMapGen++;
++        MarkVRAMDirectStale();
++    }
++    void MarkVRAMDirectStale() noexcept
++    {
++        if (VRAMDirectStale)
++            return;
++        VRAMDirectStale = true;
++        for (VRAMDirectPage& p : VRAMDirect)
++            p.Mem = nullptr;
++    }
++
++    template<typename T>
++    bool WriteVRAMDirect(u32 addr, T val)
++    {
++        if (__builtin_expect(VRAMDirectStale, 0))
++            UpdateVRAMDirect();
++        const VRAMDirectPage& p = VRAMDirect[(addr >> 14) & 0x3FF];
++        if (!p.Mem)
++            return false;
++        if (__builtin_expect(*p.CaptureFlags & CaptureBlockIsCapture, 0))
++            SyncVRAMCaptureBlock(p.CaptureFlags - VRAMCaptureBlockFlags, true);
++        *p.DirtyWord |= 1ULL << (p.DirtyBit + ((addr >> 9) & 31));
++        *(T*)&p.Mem[addr & 0x3FFF] = val;
++        return true;
++    }
++
++    template<typename T>
++    bool ReadVRAMDirect(u32 addr, T& val)
++    {
++        if (__builtin_expect(VRAMDirectStale, 0))
++            UpdateVRAMDirect();
++        const VRAMDirectPage& p = VRAMDirect[(addr >> 14) & 0x3FF];
++        if (!p.Mem)
++            return false;
++        if (__builtin_expect(*p.CaptureFlags & CaptureBlockIsCapture, 0))
++            SyncVRAMCaptureBlock(p.CaptureFlags - VRAMCaptureBlockFlags, false);
++        val = *(T*)&p.Mem[addr & 0x3FFF];
++        return true;
++    }
++
+     int GetCaptureBlock_LCDC(u32 offset);
+ 
+     void GetCaptureInfo_ABG(int* info);
+@@ -674,6 +815,9 @@ public:
+     melonDS::GPU3D GPU3D;
+ 
+     NonStupidBitField<128*1024/VRAMDirtyGranularity> VRAMDirty[9] {};
++    bool VRAMDirectStale = true;            // (BananaDS: VRAMDirect needs rebuilding)
++    VRAMDirectPage VRAMDirect[1024] {};
++    u64 VRAMMapGen = 0;                     // (BananaDS: bumped by VRAMMappingChanged)
+     VRAMTrackingSet<512*1024, 16*1024> VRAMDirty_ABG {};
+     VRAMTrackingSet<256*1024, 16*1024> VRAMDirty_AOBJ {};
+     VRAMTrackingSet<128*1024, 16*1024> VRAMDirty_BBG {};
+diff --git a/src/NDS.h b/src/NDS.h
+index 5acd202..7eb4cff 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -526,6 +526,177 @@ public: // TODO: Encapsulate the rest of these members
+     virtual void ARM7IOWrite16(u32 addr, u16 val);
+     virtual void ARM7IOWrite32(u32 addr, u32 val);
+ 
++    // BananaDS (MELONDS_MEMFAST's memfast_IO, NDS_IOFast.h): what ARM9IORead16/32 and ARM9IOWrite16/32 do for
++    // the hottest plain registers (the divider and square root unit, IPCSYNC/IPCFIFOCNT, the IPC send FIFO's
++    // 32-bit writes, IME/IE/IF), line for line, for the JIT's slow paths; false for any other address. The DS's
++    // handlers (ConsoleType 0), without IO statistics.
++    template <typename T>
++    bool ARM9IOReadDirect(u32 addr, T& val) noexcept
++    {
++        if (sizeof(T) == 2)
++        {
++            switch (addr)
++            {
++            case 0x04000180: SliceIPC(0); val = IPCSync9; return true;
++            case 0x04000184: SliceIPC(0);
++                {
++                    u16 v = IPCFIFOCnt9;
++                    if (IPCFIFO9.IsEmpty())     v |= 0x0001;
++                    else if (IPCFIFO9.IsFull()) v |= 0x0002;
++                    if (IPCFIFO7.IsEmpty())     v |= 0x0100;
++                    else if (IPCFIFO7.IsFull()) v |= 0x0200;
++                    val = v;
++                    return true;
++                }
++            case 0x04000208: val = IME[0]; return true;
++            case 0x04000210: val = IE[0] & 0xFFFF; return true;
++            case 0x04000212: val = IE[0] >> 16; return true;
++            case 0x04000214: val = IF[0] & 0xFFFF; return true;
++            case 0x04000216: val = IF[0] >> 16; return true;
++            case 0x04000280: val = DivCnt; return true;
++            case 0x040002A0: val = DivQuotient[0] & 0xFFFF; return true;
++            case 0x040002A2: val = DivQuotient[0] >> 16; return true;
++            case 0x040002A4: val = DivQuotient[1] & 0xFFFF; return true;
++            case 0x040002A6: val = DivQuotient[1] >> 16; return true;
++            case 0x040002A8: val = DivRemainder[0] & 0xFFFF; return true;
++            case 0x040002AA: val = DivRemainder[0] >> 16; return true;
++            case 0x040002AC: val = DivRemainder[1] & 0xFFFF; return true;
++            case 0x040002AE: val = DivRemainder[1] >> 16; return true;
++            case 0x040002B0: val = SqrtCnt; return true;
++            case 0x040002B4: val = SqrtRes & 0xFFFF; return true;
++            case 0x040002B6: val = SqrtRes >> 16; return true;
++            }
++        }
++        else if (sizeof(T) == 4)
++        {
++            switch (addr)
++            {
++            case 0x04000180: SliceIPC(0); val = IPCSync9; return true;
++            case 0x04000208: val = IME[0]; return true;
++            case 0x04000210: val = IE[0]; return true;
++            case 0x04000214: val = IF[0]; return true;
++            case 0x04000280: val = DivCnt; return true;
++            case 0x04000290: val = DivNumerator[0]; return true;
++            case 0x04000294: val = DivNumerator[1]; return true;
++            case 0x04000298: val = DivDenominator[0]; return true;
++            case 0x0400029C: val = DivDenominator[1]; return true;
++            case 0x040002A0: val = DivQuotient[0]; return true;
++            case 0x040002A4: val = DivQuotient[1]; return true;
++            case 0x040002A8: val = DivRemainder[0]; return true;
++            case 0x040002AC: val = DivRemainder[1]; return true;
++            case 0x040002B0: val = SqrtCnt; return true;
++            case 0x040002B4: val = SqrtRes; return true;
++            case 0x040002B8: val = SqrtVal[0]; return true;
++            case 0x040002BC: val = SqrtVal[1]; return true;
++            }
++        }
++        return false;
++    }
++    // the ARM7's: ARM7IORead16/32 for IPCSYNC, IPCFIFOCNT, the IPC receive FIFO and IME/IE/IF
++    template <typename T>
++    bool ARM7IOReadDirect(u32 addr, T& val) noexcept
++    {
++        if (sizeof(T) == 2)
++        {
++            switch (addr)
++            {
++            case 0x04000180: SliceIPC(1); val = IPCSync7; return true;
++            case 0x04000184: SliceIPC(1);
++                {
++                    u16 v = IPCFIFOCnt7;
++                    if (IPCFIFO7.IsEmpty())     v |= 0x0001;
++                    else if (IPCFIFO7.IsFull()) v |= 0x0002;
++                    if (IPCFIFO9.IsEmpty())     v |= 0x0100;
++                    else if (IPCFIFO9.IsFull()) v |= 0x0200;
++                    val = v;
++                    return true;
++                }
++            case 0x04000208: val = IME[1]; return true;
++            case 0x04000210: val = IE[1] & 0xFFFF; return true;
++            case 0x04000212: val = IE[1] >> 16; return true;
++            }
++        }
++        else if (sizeof(T) == 4)
++        {
++            switch (addr)
++            {
++            case 0x04000180: SliceIPC(1); val = IPCSync7; return true;
++            case 0x04000208: val = IME[1]; return true;
++            case 0x04000210: val = IE[1]; return true;
++            case 0x04000214: val = IF[1]; return true;
++            case 0x04100000: SliceIPC(1);
++                if (IPCFIFOCnt7 & 0x8000)
++                {
++                    if (IPCFIFO9.IsEmpty())
++                    {
++                        IPCFIFOCnt7 |= 0x4000;
++                        val = IPCFIFO9.Peek();
++                    }
++                    else
++                    {
++                        val = IPCFIFO9.Read();
++
++                        if (IPCFIFO9.IsEmpty() && (IPCFIFOCnt9 & 0x0004))
++                            SetIRQ(0, IRQ_IPCSendDone);
++                    }
++                }
++                else
++                    val = IPCFIFO9.Peek();
++                return true;
++            }
++        }
++        return false;
++    }
++    template <typename T>
++    bool ARM9IOWriteDirect(u32 addr, T val) noexcept
++    {
++        if (sizeof(T) == 2)
++        {
++            switch (addr)
++            {
++            case 0x04000208: IME[0] = val & 0x1; UpdateIRQ(0); return true;
++            case 0x04000210: IE[0] = (IE[0] & 0xFFFF0000) | val; UpdateIRQ(0); return true;
++            case 0x04000212: IE[0] = (IE[0] & 0x0000FFFF) | (val << 16); UpdateIRQ(0); return true;
++            case 0x04000214: IF[0] &= ~val; GPU.GPU3D.CheckFIFOIRQ(); UpdateIRQ(0); return true;
++            case 0x04000216: IF[0] &= ~(val<<16); GPU.GPU3D.CheckFIFOIRQ(); UpdateIRQ(0); return true;
++            case 0x04000280: DivCnt = val; StartDiv(); return true;
++            case 0x040002B0: SqrtCnt = val; StartSqrt(); return true;
++            }
++        }
++        else if (sizeof(T) == 4)
++        {
++            switch (addr)
++            {
++            case 0x04000188: SliceIPC(0);
++                if (IPCFIFOCnt9 & 0x8000)
++                {
++                    if (IPCFIFO9.IsFull())
++                        IPCFIFOCnt9 |= 0x4000;
++                    else
++                    {
++                        bool wasempty = IPCFIFO9.IsEmpty();
++                        IPCFIFO9.Write(val);
++                        if ((IPCFIFOCnt7 & 0x0400) && wasempty)
++                            SetIRQ(1, IRQ_IPCRecv);
++                    }
++                }
++                return true;
++            case 0x04000208: IME[0] = val & 0x1; UpdateIRQ(0); return true;
++            case 0x04000210: IE[0] = val; UpdateIRQ(0); return true;
++            case 0x04000214: IF[0] &= ~val; GPU.GPU3D.CheckFIFOIRQ(); UpdateIRQ(0); return true;
++            case 0x04000280: DivCnt = val; StartDiv(); return true;
++            case 0x040002B0: SqrtCnt = val; StartSqrt(); return true;
++            case 0x04000290: DivNumerator[0] = val; StartDiv(); return true;
++            case 0x04000294: DivNumerator[1] = val; StartDiv(); return true;
++            case 0x04000298: DivDenominator[0] = val; StartDiv(); return true;
++            case 0x0400029C: DivDenominator[1] = val; StartDiv(); return true;
++            case 0x040002B8: SqrtVal[0] = val; StartSqrt(); return true;
++            case 0x040002BC: SqrtVal[1] = val; StartSqrt(); return true;
++            }
++        }
++        return false;
++    }
++
+ #ifdef JIT_ENABLED
+     [[nodiscard]] bool IsJITEnabled() const noexcept { return EnableJIT; }
+     void SetJITArgs(std::optional<JITArgs> args) noexcept;
+diff --git a/src/NDS_IOFast.cpp b/src/NDS_IOFast.cpp
+index 2787c88..cc74418 100644
+--- a/src/NDS_IOFast.cpp
++++ b/src/NDS_IOFast.cpp
+@@ -50,10 +50,21 @@ static u32 ReadIOFastEnv()
+ u32 IOFastRoutes = ReadIOFastEnv();
+ bool IOFastOn = IOFastRoutes != 0;
+ 
++static u32 ReadMemFastEnv()
++{
++    const char* e = getenv("MELONDS_MEMFAST");
++    return e ? (u32)strtoul(e, nullptr, 0) & 0x7 : 0x7;
++}
++
++u32 MemFastParts = ReadMemFastEnv();
++u32 SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !(MemFastParts & 3)) ? (u32)slow_FullPath : 0);
++
+ void IOFastInit() noexcept
+ {
+     IOFastRoutes = ReadIOFastEnv();
+     IOFastOn = IOFastRoutes != 0;
++    MemFastParts = ReadMemFastEnv();
++    SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !(MemFastParts & 3)) ? (u32)slow_FullPath : 0);
+ }
+ 
+ namespace
+diff --git a/src/NDS_IOFast.h b/src/NDS_IOFast.h
+index 3de27cb..03d9da0 100644
+--- a/src/NDS_IOFast.h
++++ b/src/NDS_IOFast.h
+@@ -61,9 +61,36 @@ enum
+     iofast_IORead = 8,      // DISPSTAT/VCOUNT, KEYINPUT, IME/IE/IF reads
+ };
+ 
++// MELONDS_MEMFAST (a mask, default all; BananaDS's jit.vramfast/jit.iodirect): fewer layers for the slow
++// accesses, each exact (the same values, side effects and order as the NDS::ARM9Read*/ARM9Write* chain)
++enum
++{
++    memfast_VRAM = 1,       // VRAM with one bank at the 16 KB straight to the bank (GPU::WriteVRAMDirect), OAM and
++                            // palette straight to the GPU, for the slow paths, block transfers and the JIT's
++                            // static-address VRAM calls
++    memfast_IO = 2,         // the divider, square root, IPCSYNC/IPCFIFOCNT, IME/IE/IF straight to their state
++                            // (NDS::ARM9IOReadDirect/ARM9IOWriteDirect), other IO registers straight to
++                            // NDS::ARM9IO*/ARM7IO* (no ARM9Read*/ARM7Read* dispatch), also for the JIT's
++                            // static-address IO calls
++    memfast_VRAMTrack = 4,  // VRAMTrackingSet::DeriveState returns at once when nothing was remapped since its
++                            // last call (GPU::VRAMMapGen) and its banks have no dirty bit
++};
++
+ extern bool IOStatsOn;
+ extern bool IOFastOn;       // MELONDS_IOFAST isn't 0 and the mask isn't empty
+ extern u32 IOFastRoutes;
++extern u32 MemFastParts;    // MELONDS_MEMFAST, memfast_* (read at ARMJIT::Reset, with IOFastInit)
++// all of it in one word for the slow paths' entry: IOFastRoutes, MemFastParts << 4, and bit 31 when the slow
++// paths take their full path only (the IO statistics on, or no MELONDS_MEMFAST part)
++enum
++{
++    slow_MainRAM = iofast_MainRAM,
++    slow_IORead = iofast_IORead,
++    slow_MemVRAM = memfast_VRAM << 4,
++    slow_MemIO = memfast_IO << 4,
++    slow_FullPath = 1u << 31,
++};
++extern __attribute__((visibility("hidden"))) u32 SlowPathFlags;
+ 
+ // counts one access of `size` bytes (or a block of `words` words) at addr; only called when IOStatsOn
+ void IOStatsCount(int kind, u32 addr, u32 size, u32 words) noexcept;
+-- 
+2.43.0
+
