@@ -36,6 +36,7 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
     FastStores = FastLoads && !getenv("BANANAJIT_NO_FASTSTORES") && offsetof(AddressRange, Code) % 4 == 0;
     LinkBlocks = !getenv("BANANAJIT_NO_LINK") && offsetof(ARM, FastBlockLookup) % 8 == 0 &&
                  offsetof(ARM, FastBlockLookup) < 32768 && offsetof(ARM, StopExecution) % 4 == 0;
+    DoMul = !getenv("BANANAJIT_NO_MUL");
     Platform::Log(Platform::LogLevel::Info, "[bananajit] BananaDS's own JIT, %zu MB of code memory, ARM9 loads %s\n",
                   CodeSize >> 20, FastLoads ? "inline" : "through calls");
     Platform::Log(Platform::LogLevel::Info, "[bananajit] blocks %s, ARM9 stores %s\n",
@@ -56,7 +57,7 @@ u8* Compiler::RewriteMemAccess(u8* pc) {
 // --- what is native ---
 
 static_assert(ARMInstrInfo::ak_TST_REG_LSL_IMM == 12 * 18 && ARMInstrInfo::ak_CMN_IMM == 12 * 18 + 4 * 9 - 1,
-              "melonDS's instruction kinds moved: check IsDataProcessing and IsShiftByReg");
+              "melonDS's instruction kinds moved: check IsDataProcessing");
 static bool IsDataProcessing(u16 kind) { return kind <= ARMInstrInfo::ak_CMN_IMM; }
 
 static bool IsWordByte(u16 k) { return k >= ARMInstrInfo::ak_STR_REG_LSL && k <= ARMInstrInfo::ak_LDRB_POST_IMM; }
@@ -66,11 +67,21 @@ static bool IsHalf(u16 k) {
 }
 
 int Compiler::NativeKindARM(u32 instr, u16 kind) {
+    using namespace ARMInstrInfo;
     const u32 rd = (instr >> 12) & 0xF, rn = (instr >> 16) & 0xF;
     if (IsDataProcessing(kind)) {
         bool imm = instr & (1 << 25);
-        if (!imm && (instr & (1 << 4))) return 0;  // shift by a register: later
+        if (!imm && (instr & (1 << 4))) {  // operand 2 shifted by a register
+            const u32 rm = instr & 0xF, rs = (instr >> 8) & 0xF;
+            if (rd == 15 || rn == 15 || rm == 15 || rs == 15) return 0;  // a PC operand: the interpreter's
+            return 4;
+        }
         return rd != 15 ? 1 : 0;                   // writes to the PC branch: the interpreter's
+    }
+    if (kind >= ak_MUL && kind <= ak_SMLAL) {  // MUL/MLA/UMULL/UMLAL/SMULL/SMLAL (never a PC register)
+        if (((instr >> 16) & 0xF) == 15 || ((instr >> 12) & 0xF) == 15 ||
+            ((instr >> 8) & 0xF) == 15 || (instr & 0xF) == 15) return 0;
+        return 3;
     }
     if (IsWordByte(kind) || IsHalf(kind)) {
         const bool load = instr & (1 << 20), post = !(instr & (1 << 24)), wb = post || (instr & (1 << 21));
@@ -112,6 +123,11 @@ int Compiler::ThumbToARM(u32 t, u16 kind, u32 r15, u32& arm, u16& armKind, u32& 
     case tk_SUB_IMM: arm = 0xE2500000 | rd8 << 16 | rd8 << 12 | imm8; return 1;
     case tk_AND_REG: arm = 0xE0100000 | rd << 16 | rd << 12 | rs; return 1;            // ANDS rd, rd, rs
     case tk_EOR_REG: arm = 0xE0300000 | rd << 16 | rd << 12 | rs; return 1;
+    case tk_LSL_REG: case tk_LSR_REG: case tk_ASR_REG: case tk_ROR_REG: {              // MOVS rd, rd, sh rs
+        const u32 sh = kind == tk_LSL_REG ? 0 : kind == tk_LSR_REG ? 1 : kind == tk_ASR_REG ? 2 : 3;
+        arm = 0xE1B00000 | rd << 12 | rs << 8 | sh << 5 | 1 << 4 | rd; return 4;
+    }
+    case tk_MUL_REG: arm = 0xE0100090 | rd << 16 | rs << 8 | rd; armKind = ak_MUL; return 3;  // MULS rd, rd, rs
     case tk_ADC_REG: arm = 0xE0B00000 | rd << 16 | rd << 12 | rs; return 1;
     case tk_SBC_REG: arm = 0xE0D00000 | rd << 16 | rd << 12 | rs; return 1;
     case tk_TST_REG: arm = 0xE1100000 | rd << 16 | rs; return 1;
@@ -164,20 +180,13 @@ int Compiler::ThumbToARM(u32 t, u16 kind, u32 r15, u32& arm, u16& armKind, u32& 
 
 static bool ThumbKindNative(u16 kind) {
     using namespace ARMInstrInfo;
-    if (kind > tk_LDR_SPREL) return false;
-    return kind != tk_LSL_REG && kind != tk_LSR_REG && kind != tk_ASR_REG && kind != tk_ROR_REG && kind != tk_MUL_REG;
-}
-
-// The framework asks per kind, for its flag analysis. Shifts by a register are never native; a write to the
-// PC can't be told from the kind, and goes to the interpreter, which reads only the flags the kind reads.
-static bool IsShiftByReg(u16 kind) {
-    u32 idx = kind < 12 * 18 ? kind % 18 : (kind - 12 * 18) % 9;  // ak_ALU groups of 18, ak_Test of 9
-    return (idx >= 4 && idx <= 7) || (kind < 12 * 18 && idx >= 13 && idx <= 16);
+    return kind <= tk_LDR_SPREL;  // everything ThumbToARM has a case for (it covers 0..tk_LDR_SPREL)
 }
 
 bool Compiler::CanCompile(bool thumb, u16 kind) {
+    using namespace ARMInstrInfo;
     if (thumb) return ThumbKindNative(kind);
-    return ((IsDataProcessing(kind) && !IsShiftByReg(kind)) || IsWordByte(kind) || IsHalf(kind));
+    return IsDataProcessing(kind) || IsWordByte(kind) || IsHalf(kind) || (kind >= ak_MUL && kind <= ak_SMLAL);
 }
 
 // --- registers, flags, cycles ---
@@ -216,6 +225,17 @@ void Compiler::LoadFlags() {
     A.lsri(W5, RCPSR, 28);
     A.lsli(W5, W5, 28);
     A.msr_nzcv(W5);
+}
+
+// AddCycles_CI(internal): a nonsequential code fetch (index 0/2, not AddCycles_C's 1/3) plus the internal
+// cycles. Charged straight to RCycles here, so it lands only on the taken path of a conditional instruction
+// (the skip path charges AddCycles_C through CompileBlock); multiply adds its data-dependent part after.
+void Compiler::AddCyclesCI(s32 internal) {
+    s32 n = (CurCPU->Num ? NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
+                         : ((R15 & 2) ? 0 : (s32)CurInstr.CodeCycles)) +
+            internal;
+    if (n > 0 && n < 4096) A.addi(RCycles, RCycles, n);
+    else if (n) { A.movi((Reg)16, (u32)n); A.add(RCycles, RCycles, (Reg)16); }
 }
 
 s32 Compiler::CyclesC() const {
@@ -350,6 +370,58 @@ Compiler::Reg Compiler::Shifter(u32 in, bool wantC, bool& carry_changes, Reg dst
     }
 }
 
+// Operand 2 shifted by the bottom byte of a register (ARM's reg-specified shift). The host's shifts take the
+// amount mod 32, so the >= 32 cases (result 0 or the sign, and the carry) are handled explicitly, matching the
+// interpreter's LSL/LSR/ASR/ROR_REG(_S) macros. With wantC the shifter's carry is written to CPSR here (and
+// left unchanged when the amount is 0); the result is returned in W0.
+Compiler::Reg Compiler::RegShifter(u32 in, bool wantC) {
+    const u32 rm = in & 0xF, st = (in >> 5) & 3, rs = (in >> 8) & 0xF;
+    Need(rm);
+    Need(rs);
+    const Reg Rm = host(rm);
+    A.ubfx(W1, host(rs), 0, 8);  // amount = Rs & 0xFF
+    if (!wantC) {
+        if (st == 3) {  // ROR (RORV is mod 32: an amount of 0 or a multiple of 32 leaves Rm)
+            A.rorv(W0, Rm, W1);
+        } else {
+            A.cmpi(W1, 32);
+            if (st == 2) {  // ASR: amount >= 32 fills with the sign (saturate the amount to 31)
+                A.movi(W2, 31);
+                A.csel(W1, W2, W1, GE);
+                A.asrv(W0, Rm, W1);
+            } else {  // LSL / LSR: amount >= 32 gives 0
+                st == 0 ? A.lslv(W0, Rm, W1) : A.lsrv(W0, Rm, W1);
+                A.csel(W0, ZR, W0, GE);
+            }
+        }
+    } else {
+        A.mov(W0, Rm);
+        auto zero = A.cbz_fwd(W1);  // amount 0: result is Rm, carry unchanged
+        A.subi(W1, W1, 1);
+        if (st == 3) {  // ROR by amount: carry is Rm[(amount-1) & 31]; one more rotate completes it
+            A.rorv(W0, Rm, W1);
+            A.bfi(RCPSR, W0, 29, 1);
+        } else {
+            A.cmpi(W1, 31);  // amount-1 > 31 -> amount > 32; amount-1 >= 31 -> amount >= 32
+            if (st == 2) {  // ASR
+                A.movi(W2, 31);
+                A.csel(W1, W2, W1, GT);
+                A.asrv(W0, Rm, W1);
+                A.bfi(RCPSR, W0, 29, 1);
+            } else {  // LSL / LSR
+                if (st == 0) { A.lslv(W0, Rm, W1); A.ubfx(W1, W0, 31, 1); }
+                else A.lsrv(W0, Rm, W1);
+                A.csel(W1, ZR, st ? W0 : W1, GT);  // amount > 32: carry 0
+                A.bfi(RCPSR, W1, 29, 1);
+                A.csel(W0, ZR, W0, GE);            // amount >= 32: result 0
+            }
+        }
+        A.orr(W0, ZR, W0, (Shift)st, 1);  // the last unit of shift, so the total is `amount`
+        A.land(zero);
+    }
+    return W0;
+}
+
 void Compiler::CompileALU() {
     const u32 in = CurInstr.Instr;
     const u32 op = (in >> 21) & 0xF, rn = (in >> 16) & 0xF, rd = (in >> 12) & 0xF;
@@ -362,6 +434,7 @@ void Compiler::CompileALU() {
     // Operand 2 -> op2 (a register), the shifter's carry -> W2 when it changes C (carry_changes)
     Reg op2;
     bool carry_changes = false;
+    const bool regShift = !I && (in & (1 << 4));  // operand 2 shifted by a register
     if (I) {
         u32 rot = ((in >> 8) & 0xF) * 2, imm = in & 0xFF;
         imm = rot ? (imm >> rot) | (imm << (32 - rot)) : imm;
@@ -371,6 +444,8 @@ void Compiler::CompileALU() {
             A.movi(W2, imm >> 31);
             carry_changes = true;
         }
+    } else if (regShift) {
+        op2 = RegShifter(in, wantC);  // writes C to CPSR itself when wantC
     } else {
         op2 = Shifter(in, wantC, carry_changes, W1);
     }
@@ -419,6 +494,89 @@ void Compiler::CompileALU() {
         }
     }
     if (!test) Dirty(rd);
+    if (regShift) AddCyclesCI(1);  // a register-specified shift: the interpreter's AddCycles_CI(1)
+}
+
+// Multiply, native. MUL/MLA write a 32-bit result; the long forms split a 64-bit product into RdLo/RdHi. The
+// cost is the interpreter's AddCycles_CI (ARMInterpreter_ALU.cpp): on ARM9 a compile-time S?3:1; on ARM7 it
+// depends on the multiplier at run time (1 if Rs[31:8] is all 0s/1s, 2 at [31:16], 3 at [31:24], else 4):
+//   short signed (A_MUL):        4 - min(3, (CLS(Rs)+1) >> 3), and +1 for A_MLA
+//   long  signed (A_SMULL/SMLAL): 5 - min(3, (CLS(Rs)+1) >> 3)
+//   long  unsigned (A_UMULL/UMLAL): 5 - min(3, CLZ(Rs) >> 3)   (only tests == 0, so CLZ, no +1 on the count)
+//   Thumb T_MUL:                 4 - min(3, CLZ(Rd) >> 3)      (unsigned, on the first operand)
+// S sets N/Z from the full result; on ARM7 S also clears C (SetC(0)); ARM9 leaves C alone.
+void Compiler::CompileMul() {
+    using namespace ARMInstrInfo;
+    const u32 in = CurInstr.Instr;
+    const u16 kind = CurInstr.Info.Kind;
+    const bool S = in & (1 << 20);
+    const u8 flags = S ? CurInstr.SetFlags : 0;
+    const u32 rdHi = (in >> 16) & 0xF, rn12 = (in >> 12) & 0xF, rs = (in >> 8) & 0xF, rm = in & 0xF;
+
+    bool isLong, isSigned, accumulate;
+    if (Thumb) { isLong = isSigned = accumulate = false; }  // Thumb MUL: a plain 32-bit multiply
+    else
+        switch (kind) {
+        case ak_MUL:   isLong = false; isSigned = true;  accumulate = false; break;
+        case ak_MLA:   isLong = false; isSigned = true;  accumulate = true;  break;
+        case ak_UMULL: isLong = true;  isSigned = false; accumulate = false; break;
+        case ak_UMLAL: isLong = true;  isSigned = false; accumulate = true;  break;
+        case ak_SMULL: isLong = true;  isSigned = true;  accumulate = false; break;
+        default:       isLong = true;  isSigned = true;  accumulate = true;  break;  // ak_SMLAL
+        }
+
+    Need(rm);
+    Need(rs);
+
+    // Cycles first: on ARM7 the count reads an operand the result may overwrite (Rd == Rm/Rs is allowed).
+    if (CurCPU->Num == 0) {
+        AddCyclesCI(S ? 3 : 1);
+    } else {
+        const u32 cycleOp = Thumb ? rm : rs;  // ARM counts on Rs; Thumb T_MUL on the first operand (Rd)
+        const bool cycleSigned = Thumb ? false : (isLong ? isSigned : true);
+        const s32 C = (accumulate || isLong) ? 5 : 4;  // MUL/Thumb MUL give 1..4; MLA and the long forms 2..5
+        if (cycleSigned) { A.cls(W0, host(cycleOp)); A.addi(W0, W0, 1); }  // K = leading sign bits (CLS + 1)
+        else A.clz(W0, host(cycleOp));                                     // K = leading zero bits (CLZ)
+        A.lsri(W0, W0, 3);            // q = K >> 3 (0..4)
+        A.lsri(W1, W0, 2);            // 1 exactly when q == 4
+        A.sub(W0, W0, W1);            // min(3, q)
+        AddCyclesCI(C);              // RCycles += nonseq code + C ...
+        A.sub(RCycles, RCycles, W0);  // ... - min(3, q)
+    }
+
+    if (!isLong) {
+        if (accumulate) { Need(rn12); A.madd(host(rdHi), host(rm), host(rs), host(rn12)); }
+        else A.mul(host(rdHi), host(rm), host(rs));
+        Dirty(rdHi);
+        if (flags & (flag_N | flag_Z)) {
+            A.tst(host(rdHi), host(rdHi));
+            A.mrs_nzcv(W6);
+            A.ubfx(W6, W6, 30, 2);
+            A.bfi(RCPSR, W6, 30, 2);
+        }
+    } else {
+        const Reg X16 = (Reg)16, X17 = (Reg)17;  // the 64-bit product stays out of the guest registers
+        if (accumulate) {
+            Need(rn12);
+            Need(rdHi);
+            A.mov(X16, host(rn12));                 // RdLo, zero-extended
+            A.orrx(X16, X16, host(rdHi), LSL, 32);  // | RdHi << 32: the 64-bit accumulator
+            isSigned ? A.smaddl(X17, host(rm), host(rs), X16) : A.umaddl(X17, host(rm), host(rs), X16);
+        } else {
+            isSigned ? A.smull(X17, host(rm), host(rs)) : A.umull(X17, host(rm), host(rs));
+        }
+        if (flags & (flag_N | flag_Z)) {
+            A.tstx(X17);
+            A.mrs_nzcv(W6);
+            A.ubfx(W6, W6, 30, 2);
+            A.bfi(RCPSR, W6, 30, 2);
+        }
+        A.mov(host(rn12), X17);        // RdLo = low 32 (a W move zero-extends the guest register)
+        A.lsrxi(host(rdHi), X17, 32);  // RdHi = high 32 (written last: it wins if RdHi == RdLo, as the interpreter does)
+        Dirty(rn12);
+        Dirty(rdHi);
+    }
+    if (CurCPU->Num == 1 && (flags & flag_C)) A.bfi(RCPSR, ZR, 29, 1);  // ARM7: S clears C
 }
 
 // --- ARM loads and stores, native: the address here, the access through the interpreter's own functions ---
@@ -765,7 +923,7 @@ void Compiler::CompileMem() {
 // --- a block ---
 
 static const char* TraceName(bool thumb, const FetchedInstr& f) {
-    static const char* names[3] = {"interp", "native-alu", "native-mem"};
+    static const char* names[5] = {"interp", "native-alu", "native-mem", "native-mul", "native-shift"};
     u32 a, pc;
     u16 k;
     bool nr;
@@ -804,8 +962,9 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
         u16 armKind = 0;
         PCValue = R15;
         NoRotate = false;
-        const int nk = thumb ? ThumbToARM(CurInstr.Instr, kind, R15, armInstr, armKind, PCValue, NoRotate)
-                             : NativeKindARM(CurInstr.Instr, kind);
+        int nk = thumb ? ThumbToARM(CurInstr.Instr, kind, R15, armInstr, armKind, PCValue, NoRotate)
+                       : NativeKindARM(CurInstr.Instr, kind);
+        if (!DoMul && nk >= 3) nk = 0;  // jit.mul=off: multiply and register-shift through the interpreter
         const bool native = nk != 0;
         const bool selfCycles = nk != 1;  // the interpreter or a memory helper charges this one's cycles
 
@@ -852,6 +1011,10 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             AddCycles(CyclesC());  // the same taken or skipped
         } else if (nk == 2) {
             CompileMem();
+        } else if (nk == 3) {
+            CompileMul();          // charges its own AddCycles_CI
+        } else if (nk == 4) {
+            CompileALU();          // register-shifted operand; CompileALU charges its own AddCycles_CI(1)
         } else {
             Fallback(thumb);
         }
