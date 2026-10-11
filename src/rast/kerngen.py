@@ -50,12 +50,13 @@ passing group sets up the weights and interpolants (27:, then the weights at 28:
 the latch (the affine weights 6:, the depth-equal test 24:, which with w depth also takes the affine weights and the
 64-bit w products 23:, the 32-bit vertex colour 37:, the alpha modulate and alpha test 46: and the white lines' alpha
 test 45:, the partial-group store 1:) so the common path has no taken branch besides the loop's.
-The hottest kernels (pipe_ok(): 02000 02010 04010 12000 14010 and their hi-res twins) have a second, software-pipelined
-group loop (pipe(), 50: and 80:) for the lines whose flags allow it (the common ones: perspective, no depth-equal
-test, no white line, no alpha stage): each step stores one group while the next group's head (depth test, weights)
-runs in the same block, so that the two chains overlap; kernsched.climb_loop() orders its steady path as a whole.
+The hottest kernels (pipe_ok(): 02000 02010 04000 04010 12000 14000 14010 and their hi-res twins) have a second,
+software-pipelined group loop (pipe(), 50: and 80:) for the lines whose flags allow it (the common ones: perspective,
+no depth-equal test, no white line, no alpha stage): each step stores one group while the next group's head (depth
+test, weights) runs in the same block, so that the two chains overlap; kernsched.climb_loop() orders its steady path
+as a whole.
 Stack: [sp,#32] 8 texels, [sp,#64] the depth words of the group (keep_dep()'s kernels keep them in v25 v26 and
-spill them only at a line's first group), [sp,#96..] spills (pipe(): the line's ub vb b0 splats and the fog bytes)
+spill them only at a line's first group), [sp,#96..] spills (pipe(): the line's ub vb b0 (r0) splats and the fog bytes)
 (bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
 (512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
 import os, re, sys
@@ -89,7 +90,8 @@ RL = {}         # the current kernel's per-batch constants in otherwise unused r
 OOLS = []       # out-of-line blocks of the group loop, emitted after its latch
 KD = False      # the current kernel's keep_dep() kind: its depth words stay in v25 v26, its pass mask in x8
 FAST = None     # while the pipelined loop's colour stage is generated (pipe()): its substitutions, else None
-FS_UB, FS_VB, FS_B0, FS_FOG = 96, 112, 128, 144  # pipe(): the stack slots of the line's ub vb b0 splats, the fog bytes
+FS_UB, FS_VB, FS_B0, FS_FOG, FS_R0 = 96, 112, 128, 144, 160  # pipe(): the stack slots of the line's ub vb b0 (r0)
+                                                              # splats and the fog bytes
 
 def keep_dep(D, T, R, F, B, M):
     """The opaque textured kernels with z or w depth and no register for the dep role kept the group's attribute
@@ -705,8 +707,8 @@ def vertex_colour(ch, F, dst, slow=False):
         return
     l = (L_DR, L_DG, L_DB)[ch]
     if not slow:
-        c0 = f"v{10 + ch}"
-        if FAST and ch == 2: c0 = FAST["b0"]; e(f"ldr {q(c0)}, [sp, #{FS_B0}]")   # (pipe(): v12 is its head's)
+        c0, k = f"v{10 + ch}", ("r0", "g0", "b0")[ch]
+        if FAST and k in FAST: c0 = FAST[k]; e(f"ldr {q(c0)}, [sp, #{FS_R0 if ch == 0 else FS_B0}]")   # (pipe(): the head's)
         e(f"sqdmulh {dst}.8h, v24.8h, v15.h[{l}]"); e(f"add {dst}.8h, {dst}.8h, {c0}.8h"); e(f"shrn {dst}.8b, {dst}.8h, #3")
     else:
         w = "v28" if KD else "v26"                                              # (keep_dep(): v26 holds depth)
@@ -1134,11 +1136,12 @@ PIPE_FLAGS_FLAT = ((1 << 0) | (1 << 1) | (1 << 2) | (1 << 15), 1 << 15)     # (f
 PIPE_CLIMB = 24000       # climb_loop()'s evaluated moves for each pipelined loop (~25 s each; seven distinct loops)
 
 def pipe_ok(D, T, R, F, M):
-    """the kernels with pipe()'s loop: z depth, wrapped textures, opaque: lit direct (02000: keep_dep()'s "lit"), flat
-    direct (02010) and flat paletted (04010: keep_dep()'s "flat")"""
+    """the kernels with pipe()'s loop: z or w depth, wrapped textures, opaque: lit direct (02000 12000: keep_dep()'s
+    "lit"), flat direct (02010), flat paletted (04010 14010: keep_dep()'s "flat") and lit paletted (04000 14000:
+    keep_dep()'s "litp")"""
     if M or D == 2 or R: return False
-    if D == 1 and not (T == 4 or KD == "lit"): return False                     # (14010, 12000)
-    return T == 2 and (KD == "lit" or F == 1 and "dep" in RL) or T == 4 and KD == "flat"     # (not bilinear)
+    if D == 1 and not (T == 4 or KD == "lit"): return False                     # (14010, 14000, 12000)
+    return T == 2 and (KD == "lit" or F == 1 and "dep" in RL) or T == 4 and KD in ("flat", "litp")   # (not bilinear)
 
 def pipe_cfg(T, F):
     """pipe()'s registers: dep, the current group's depth words as the colour stage stores them (keep_dep()'s: v25
@@ -1147,6 +1150,15 @@ def pipe_cfg(T, F):
     the per-line constants it loads from the stack; mov: the weights move from the head's register to v24 after the
     store (02010: v24 is also the st4 quad's first, which the second copy's renaming would break); flags: the line
     flags it needs (mask, value; 04010: two loops, by flag bit 7)"""
+    if T == 4 and not F:
+        # lit paletted (keep_dep()'s "litp": the vertex colour in v16 v17 and v9 (w depth: v8), its modulate scratch
+        # vs (v22; w depth: v9, and v22 keeps pid << 24), the palette v18-v21): the head's results in v13 v14 v12
+        # (ub vb b0, from the stack), its scratch v23 (the weights' second half, then the test's first word
+        # register) and v10 (r0, from the stack); ub and b0 load into v31, vb into the modulate scratch and r0
+        # into v28 (the mask register of texcoord(), free by the vertex colour)
+        return dict(dep=("v25", "v26"), H=("v13", "v14", "v12", "v23", "v23", "v10", "v10", None),
+                    fast={"ub": "v31", "vb": RL["vs"][0], "r0": "v28", "b0": "v31"}, save=("v13", "v14", "v12", "v10"),
+                    flags=PIPE_FLAGS)
     if T == 4:
         return dict(dep=("v25", "v26"), H=("v13", "v14", "v16", "v17", "v17", "v23", "v23", None),
                     fast={"ub": "v31", "vb": RL["vs"][1]}, save=("v13", "v14"), flags=PIPE_FLAGS_FLAT)  # (b's scratch)
@@ -1232,8 +1244,9 @@ def pipe(D, T, R, F, B, L=50, p16=None):
     and store (colour() and store() as the loop above has them for these flags, captured with FAST set: no flag
     branches) and the next group's head (pipe_head(): its depth test, weights and steps), and kernsched.climb_loop()
     orders the steady path as a whole. kpath-style cycles a group (llvm-mca's A55 model, tools/rast/dev's path from
-    L+1: to the jump back over two steps): 02000 122 -> 92.5, 02010 122 -> 92.5, 04010 133 -> 101.5 (16 colours 130 ->
-    96.5), 14010 142 -> ~104 (139 -> ~100), 12000 133 -> ~97.
+    L+1: to the jump back over two steps): 02000 122 -> ~93, 02010 122 -> ~90, 04010 133 -> ~99 (16 colours 130 ->
+    ~91), 14010 142 -> ~102 (139 -> ~97), 12000 133 -> ~95, 04000 136 -> ~108 (133 -> ~98), 14000 145 -> ~107 (142 ->
+    ~98); the climb's result varies by 1-2 cycles a group between generator versions.
     Registers (pipe_cfg()): the head takes per-batch constants the colour stage then loads where it uses them: the
     line's ub vb (b0) splats from the stack (FS_UB FS_VB FS_B0, stored at L:), the texture masks and pid << 24 from
     the kernel arguments, the fog bytes from FS_FOG; z depth frees v9 (pipe_head()'s z steps). Two copies of the
@@ -1248,7 +1261,7 @@ def pipe(D, T, R, F, B, L=50, p16=None):
     c = pipe_cfg(T, F)
     H, dep = c["H"], c["dep"]
     e(f"{L}:")
-    for r, o in zip(c["save"], (FS_UB, FS_VB, FS_B0)): e(f"str {q(r)}, [sp, #{o}]")
+    for r, o in zip(c["save"], (FS_UB, FS_VB, FS_B0, FS_R0)): e(f"str {q(r)}, [sp, #{o}]")
     e("dup v16.8b, v23.b[2]"); e(f"str d16, [sp, #{FS_FOG}]")
     if D == 0:                              # from the lazy entry 27:, in place of 28: (which the depth-equal head
                                             # shares): the words back, the first group's weights and steps

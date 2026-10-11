@@ -128,13 +128,13 @@ static void span4_inputs(uint16_t *pal, uint16_t *entries, uint8_t *flags) {
 
 static void test_span4(void) {
     span4_fn_t ds = DS(span4_fn_t, DS_SPAN4);
-    sp_tiles = malloc(65536 + 4);
+    sp_tiles = malloc(65536 + 8);
     static uint16_t pal[256], entries[36];
     static uint8_t flags[36], d1[528 + 2 * G], d2[528 + 2 * G], r1[136 + 2 * G], r2[136 + 2 * G];
     unsigned n = 0;
     for (int it = 0; it < 3000; it++) {
-        if (it % 64 == 0) rndfill(sp_tiles, 65536 + 4);
-        if (it == 0) { sp_tiles0 = malloc(65536 + 4); memcpy(sp_tiles0, sp_tiles, 65536 + 4); }
+        if (it % 64 == 0) rndfill(sp_tiles, 65536 + 8);
+        if (it == 0) { sp_tiles0 = malloc(65536 + 8); memcpy(sp_tiles0, sp_tiles, 65536 + 8); }
         span4_inputs(pal, entries, flags);
         rndfill(d1, sizeof d1); memcpy(d2, d1, sizeof d1);
         rndfill(r1, sizeof r1); memcpy(r2, r1, sizeof r1);
@@ -405,6 +405,301 @@ static void test_prio(void) {
     fprintf(stderr, "prio_single: %u random calls, 2000 with overlapping vis / excl, 200 through the check wrapper equal\n", n);
 }
 
+
+/* ---- the palette lookups ---- */
+#define NPAL 32
+typedef void (*pal8_fn_t)(uint16_t *, const uint8_t *, const uint16_t *, int);
+typedef void (*pal12_fn_t)(uint16_t *, const uint16_t *, const uint16_t *, int);
+static struct { uint8_t buf[0x800 + 2 * G]; uint16_t pal[4096]; int dst, src, n; uint8_t ref[0x800 + 2 * G]; } pal_case[2][NPAL];
+
+/* a count as the callers pass them (256, or a clipped run's length), or any */
+static int pal_n(void) {
+    switch (rnd(4)) {
+    case 0: return 256;
+    case 1: return 1 + rnd(256);
+    case 2: return rnd(20) - 4;
+    default: return 1 + rnd(24);
+    }
+}
+static void test_pal(void) {
+    pal8_fn_t ds8 = DS(pal8_fn_t, DS_PAL8);
+    pal12_fn_t ds12 = DS(pal12_fn_t, DS_PAL12);
+    static uint8_t b1[0x800 + 2 * G], b2[0x800 + 2 * G];
+    static uint16_t pal[4096];
+    unsigned n8 = 0, n12 = 0, nplain = 0;
+    for (int it = 0; it < 6000; it++) {
+        int ext = it & 1;
+        rndfill(b1, sizeof b1); rndfill(pal, sizeof pal);
+        if (rnd(2)) for (int i = 0; i < 0x800; i++) b1[G + i] = rnd(2) ? rnd(16) : (uint8_t)rnd64();     /* small indexes too */
+        int n = pal_n(), it8 = pal_iters(n);
+        int dst, src, poff = -1;                          /* poff >= 0: the 8bpp palette inside the buffer */
+        switch (rnd(7)) {
+        case 0: dst = 0; src = ext ? 0 : 0x110 - rnd(8); break;                 /* tiled_ext: in place (12bpp), src above dst (8bpp) */
+        case 1: { int s = rnd(256), e = s + rnd(256 - s); n = e - s + 1; it8 = pal_iters(n);
+                  dst = 2 * s; src = ext ? 2 * s : 0x100 + s; break; }          /* the affine runs */
+        case 2: dst = rnd(0x400); src = dst + rnd(80) - 40; nplain++; break;      /* near aliasing: the plain path */
+        case 3: if (!ext && it >= 2 * NPAL) { poff = 2 * rnd(0x2c0); dst = poff + rnd(1100) - 600; if (dst < 0) dst = 0; src = 0x500 + rnd(0x100);
+                            nplain++; break; }                  /* dst over the palette: the plain path */
+                /* fall through */
+        default: dst = rnd(0x400); src = rnd(0x400); break;
+        }
+        if (src < 0) src = 0;
+        if (dst + 16 * it8 > 0x800 || src + (ext ? 16 : 8) * it8 > 0x800) continue;
+        memcpy(b2, b1, sizeof b1);
+        if (it < 2 * NPAL) {                           /* the inputs, for the patched-entry test */
+            memcpy(pal_case[ext][it / 2].buf, b1, sizeof b1); memcpy(pal_case[ext][it / 2].pal, pal, sizeof pal);
+            pal_case[ext][it / 2].dst = dst; pal_case[ext][it / 2].src = src; pal_case[ext][it / 2].n = n;
+        }
+        if (ext) { ds12((uint16_t *)(b1 + G + dst), (const uint16_t *)(b1 + G + src), pal, n); ds2d_pal12((uint16_t *)(b2 + G + dst), (const uint16_t *)(b2 + G + src), pal, n); n12++; }
+        else if (poff >= 0) { ds8((uint16_t *)(b1 + G + dst), b1 + G + src, (const uint16_t *)(b1 + G + poff), n);
+                              ds2d_pal8((uint16_t *)(b2 + G + dst), b2 + G + src, (const uint16_t *)(b2 + G + poff), n); n8++; }
+        else { ds8((uint16_t *)(b1 + G + dst), b1 + G + src, pal, n); ds2d_pal8((uint16_t *)(b2 + G + dst), b2 + G + src, pal, n); n8++; }
+        if (ut_cmp(ext ? "palette_lookup_12bpp" : "palette_lookup_8bpp", b1, b2, sizeof b1)) {
+            fprintf(stderr, "  dst %d src %d n %d\n", dst, src, n);
+            return;
+        }
+        if (it < 2 * NPAL) memcpy(pal_case[ext][it / 2].ref, b1, sizeof b1);
+    }
+    /* the private copies of the originals (the check mode's reference), then the check wrappers */
+    orig_pal8 = (pal8_fn)copy_orig(DS_PAL8, 112);
+    orig_pal12 = (pal12_fn)copy_orig(DS_PAL12, 116);
+    if (!orig_pal8 || !orig_pal12) { fprintf(stderr, "FAIL copy_orig\n"); ut_fail++; return; }
+    unsigned long bad0 = chk_bad[H_PAL8] + chk_bad[H_PAL12];
+    static uint8_t b0[0x800 + 2 * G];
+    for (int it = 0; it < 400; it++) {
+        int ext = it & 1, n = pal_n();
+        rndfill(b0, sizeof b0); rndfill(pal, sizeof pal);
+        int dst = rnd(0x200), src = rnd(0x200);
+        memcpy(b1, b0, sizeof b0); memcpy(b2, b0, sizeof b0);
+        if (ext) {
+            ds12((uint16_t *)(b1 + G + dst), (const uint16_t *)(b1 + G + src), pal, n);
+            orig_pal12((uint16_t *)(b2 + G + dst), (const uint16_t *)(b2 + G + src), pal, n);
+            if (ut_cmp("palette_lookup_12bpp copy of the original", b1, b2, sizeof b1)) return;
+            memcpy(b2, b0, sizeof b0);
+            chk_pal12((uint16_t *)(b2 + G + dst), (const uint16_t *)(b2 + G + src), pal, n);
+            if (ut_cmp("palette_lookup_12bpp check wrapper", b1, b2, sizeof b1)) return;
+        } else {
+            ds8((uint16_t *)(b1 + G + dst), b1 + G + src, pal, n);
+            orig_pal8((uint16_t *)(b2 + G + dst), b2 + G + src, pal, n);
+            if (ut_cmp("palette_lookup_8bpp copy of the original", b1, b2, sizeof b1)) return;
+            memcpy(b2, b0, sizeof b0);
+            chk_pal8((uint16_t *)(b2 + G + dst), b2 + G + src, pal, n);
+            if (ut_cmp("palette_lookup_8bpp check wrapper", b1, b2, sizeof b1)) return;
+        }
+    }
+    if (chk_bad[H_PAL8] + chk_bad[H_PAL12] != bad0) { fprintf(stderr, "FAIL palette_lookup check wrappers counted differences\n"); ut_fail++; }
+    fprintf(stderr, "palette_lookup: %u 8bpp + %u 12bpp random calls equal (%u near-aliasing through the plain path), 200 each "
+            "through the copies and the check wrappers\n", n8, n12, nplain);
+}
+
+/* ---- priority_encode_double ---- */
+typedef void (*prio2_fn_t)(uint8_t *, uint8_t *, uint8_t *, uint8_t *);
+static struct { uint8_t eng[0x100], S[0x900], ref[0x900]; } p2_case[NPR];
+
+static void test_prio2(void) {
+    prio2_fn_t ds = DS(prio2_fn_t, DS_PRIO_DOUBLE);
+    static uint8_t eng[0x100], S1[0x900], S2[0x900], eng2[0x100];
+    unsigned n = 0;
+    for (int it = 0; it < 20000; it++) {
+        prio_case(eng, S1);                                /* vis at +0x40, excl at +0x380; excl2 at +0x600 */
+        rndfill(S1 + 0x700, 0x200);
+        memcpy(S2, S1, sizeof S1); memcpy(eng2, eng, sizeof eng);
+        if (it < NPR) memcpy(p2_case[it].S, S1, sizeof S1);
+        ds(eng, S1 + 0x40, S1 + 0x380, S1 + 0x600);
+        ds2d_prio_double(eng2, S2 + 0x40, S2 + 0x380, S2 + 0x600);
+        if (ut_cmp("prio_double", S1, S2, sizeof S1) || ut_cmp("prio_double eng", eng, eng2, sizeof eng)) return;
+        if (it < NPR) { memcpy(p2_case[it].eng, eng, sizeof eng); memcpy(p2_case[it].ref, S1, sizeof S1); }
+        n++;
+    }
+    /* overlapping vis / excl / excl2: the same order of loads and stores per layer */
+    for (int it = 0; it < 3000; it++) {
+        prio_case(eng, S1);
+        rndfill(S1 + 0x700, 0x200);
+        memcpy(S2, S1, sizeof S1);
+        int d1 = 32 * rnd(14), d2 = 32 * rnd(14);
+        ds(eng, S1 + 0x40, S1 + 0x40 + d1, S1 + 0x40 + d2);
+        ds2d_prio_double(eng, S2 + 0x40, S2 + 0x40 + d1, S2 + 0x40 + d2);
+        if (ut_cmp("prio_double overlapping", S1, S2, sizeof S1)) return;
+    }
+    orig_prio2 = ds;
+    unsigned long bad0 = chk_bad[H_PRIO2];
+    for (int it = 0; it < 200; it++) {
+        prio_case(eng, S1);
+        rndfill(S1 + 0x700, 0x200);
+        memcpy(S2, S1, sizeof S1);
+        ds(eng, S1 + 0x40, S1 + 0x380, S1 + 0x600);
+        chk_prio2(eng, S2 + 0x40, S2 + 0x380, S2 + 0x600);
+        if (ut_cmp("prio_double check wrapper", S1, S2, sizeof S1)) return;
+    }
+    if (chk_bad[H_PRIO2] != bad0) { fprintf(stderr, "FAIL prio_double check wrapper counted differences\n"); ut_fail++; }
+    fprintf(stderr, "prio_double: %u random calls, 3000 with overlapping buffers, 200 through the check wrapper equal\n", n);
+}
+
+/* ---- the effects' weight setups and the shade ---- */
+typedef void (*alpha_fn_t)(uint8_t *, uint8_t *, const uint8_t *, const uint8_t *);
+typedef void (*blendw_fn_t)(uint32_t, uint8_t *, uint8_t *, const uint8_t *);
+typedef void (*shade_fn_t)(const uint8_t *, uint8_t *, const uint8_t *, const uint8_t *);
+#define NFX 16
+/* one buffer holds wa, wb, alpha and the mask at random (possibly aliasing) offsets */
+static struct { uint8_t buf[0x800]; int wa, wb, al, mk; uint32_t w; uint8_t ref[0x800]; } fx_case[4][NFX];
+static struct { uint8_t eng[0x100], in[0x300], mask[32], out[0x300 + 2 * G]; } sh_case[NFX];
+
+static void fx_layout(int *wa, int *wb, int *al, int *mk) {
+    if (rnd(3)) { *wa = rnd(0x100); *wb = 0x200 + rnd(0x100); *al = 0x400 + rnd(0x100); *mk = 0x600 + rnd(0x100); return; }
+    *wa = rnd(0x400); *wb = rnd(0x400); *al = rnd(0x400); *mk = rnd(0x700);     /* aliasing layouts */
+}
+static void fx_mask(uint8_t *m) {
+    fill_mask(m);
+    if (rnd(4) == 0) memset(m, 0, 32);
+}
+static void test_effects_setup(void) {
+    alpha_fn_t dsab = DS(alpha_fn_t, DS_SETUP_ALPHA_BASE), dsa = DS(alpha_fn_t, DS_SETUP_ALPHA);
+    blendw_fn_t dsbb = DS(blendw_fn_t, DS_SETUP_BLEND_BASE), dsb = DS(blendw_fn_t, DS_SETUP_BLEND);
+    static uint8_t b1[0x800], b2[0x800];
+    static const char *nm[4] = { "setup_alpha_base", "setup_alpha", "setup_blend_base", "setup_blend" };
+    unsigned n[4] = { 0 };
+    for (int it = 0; it < 12000; it++) {
+        int f = it & 3, wa, wb, al, mk;
+        rndfill(b1, sizeof b1);
+        fx_layout(&wa, &wb, &al, &mk);
+        fx_mask(b1 + mk);
+        if (rnd(2)) for (int i = 0; i < 256; i++) b1[al + i] = rnd(32);                 /* 3D alpha values */
+        uint32_t w = rnd(2) ? rnd(0x10000) : (uint32_t)rnd64();
+        memcpy(b2, b1, sizeof b1);
+        switch (f) {
+        case 0: dsab(b1 + wa, b1 + wb, b1 + al, b1 + mk); ds2d_setup_alpha_base(b2 + wa, b2 + wb, b2 + al, b2 + mk); break;
+        case 1: dsa(b1 + wa, b1 + wb, b1 + al, b1 + mk); ds2d_setup_alpha(b2 + wa, b2 + wb, b2 + al, b2 + mk); break;
+        case 2: dsbb(w, b1 + wa, b1 + wb, b1 + mk); ds2d_setup_blend_base(w, b2 + wa, b2 + wb, b2 + mk); break;
+        default: dsb(w, b1 + wa, b1 + wb, b1 + mk); ds2d_setup_blend(w, b2 + wa, b2 + wb, b2 + mk); break;
+        }
+        if (ut_cmp(nm[f], b1, b2, sizeof b1)) { fprintf(stderr, "  wa %d wb %d alpha %d mask %d w %#x\n", wa, wb, al, mk, w); return; }
+        if (it / 4 < NFX) {
+            int k = it / 4;
+            memcpy(fx_case[f][k].buf, b2, sizeof b2); memcpy(fx_case[f][k].ref, b1, sizeof b1);    /* b2 == b1 now: the inputs are in there */
+            fx_case[f][k].wa = wa; fx_case[f][k].wb = wb; fx_case[f][k].al = al; fx_case[f][k].mk = mk; fx_case[f][k].w = w;
+        }
+        n[f]++;
+    }
+    /* the inputs of the kept cases: regenerate them (the buffers above hold the outputs) */
+    for (int f = 0; f < 4; f++) for (int k = 0; k < NFX; k++) {
+        rndfill(fx_case[f][k].buf, 0x800);
+        fx_case[f][k].wa = rnd(0x100); fx_case[f][k].wb = 0x200 + rnd(0x100); fx_case[f][k].al = 0x400 + rnd(0x100); fx_case[f][k].mk = 0x600 + rnd(0x100);
+        fx_mask(fx_case[f][k].buf + fx_case[f][k].mk);
+        memcpy(fx_case[f][k].ref, fx_case[f][k].buf, 0x800);
+        uint8_t *r = fx_case[f][k].ref;
+        switch (f) {
+        case 0: dsab(r + fx_case[f][k].wa, r + fx_case[f][k].wb, r + fx_case[f][k].al, r + fx_case[f][k].mk); break;
+        case 1: dsa(r + fx_case[f][k].wa, r + fx_case[f][k].wb, r + fx_case[f][k].al, r + fx_case[f][k].mk); break;
+        case 2: dsbb(fx_case[f][k].w, r + fx_case[f][k].wa, r + fx_case[f][k].wb, r + fx_case[f][k].mk); break;
+        default: dsb(fx_case[f][k].w, r + fx_case[f][k].wa, r + fx_case[f][k].wb, r + fx_case[f][k].mk); break;
+        }
+    }
+    /* the originals through the ORIG4 stubs, then the check wrappers */
+    ds2d_orig_vars[0][0] = ds2d_orig_vars[1][0] = ut_base + DS_SHADE_BITS;
+    ds2d_orig_vars[0][1] = ut_base + DS_SETUP_ALPHA_BASE + 16;
+    ds2d_orig_vars[1][1] = ut_base + DS_SETUP_ALPHA + 16;
+    orig_blend_base = dsbb; orig_blend_set = dsb;
+    unsigned long bad0 = chk_bad[H_ALPHA_BASE] + chk_bad[H_ALPHA] + chk_bad[H_BLEND_BASE] + chk_bad[H_BLEND_SET];
+    static uint8_t b0[0x800];
+    for (int it = 0; it < 800; it++) {
+        int f = it & 3, wa = rnd(0x100), wb = 0x200 + rnd(0x100), al = 0x400 + rnd(0x100), mk = 0x600 + rnd(0x100);
+        rndfill(b0, sizeof b0); fx_mask(b0 + mk);
+        uint32_t w = (uint32_t)rnd64();
+        memcpy(b1, b0, sizeof b0); memcpy(b2, b0, sizeof b0);
+        switch (f) {
+        case 0: dsab(b1 + wa, b1 + wb, b1 + al, b1 + mk); ds2d_alpha_base_orig(b2 + wa, b2 + wb, b2 + al, b2 + mk); break;
+        case 1: dsa(b1 + wa, b1 + wb, b1 + al, b1 + mk); ds2d_alpha_orig(b2 + wa, b2 + wb, b2 + al, b2 + mk); break;
+        case 2: dsbb(w, b1 + wa, b1 + wb, b1 + mk); break;
+        default: dsb(w, b1 + wa, b1 + wb, b1 + mk); break;
+        }
+        if (f < 2 && ut_cmp("setup_alpha originals through the stubs", b1, b2, sizeof b1)) return;
+        memcpy(b2, b0, sizeof b0);
+        switch (f) {
+        case 0: chk_alpha_base(b2 + wa, b2 + wb, b2 + al, b2 + mk); break;
+        case 1: chk_alpha_set(b2 + wa, b2 + wb, b2 + al, b2 + mk); break;
+        case 2: chk_blend_base(w, b2 + wa, b2 + wb, b2 + mk); break;
+        default: chk_blend_set(w, b2 + wa, b2 + wb, b2 + mk); break;
+        }
+        if (ut_cmp("effects setup check wrappers", b1, b2, sizeof b1)) return;
+    }
+    if (chk_bad[H_ALPHA_BASE] + chk_bad[H_ALPHA] + chk_bad[H_BLEND_BASE] + chk_bad[H_BLEND_SET] != bad0) { fprintf(stderr, "FAIL effects setup check wrappers counted differences\n"); ut_fail++; }
+    fprintf(stderr, "effects setups: %u %u %u %u random calls (aliasing layouts included), the stubs and 200 each through the check wrappers equal\n", n[0], n[1], n[2], n[3]);
+}
+
+static void test_shade(void) {
+    shade_fn_t ds = DS(shade_fn_t, DS_SHADE);
+    static uint8_t eng[0x100], in[0x300 + 2 * G], mask[32], o1[0x300 + 2 * G], o2[0x300 + 2 * G];
+    unsigned n = 0;
+    for (int it = 0; it < 6000; it++) {
+        rndfill(eng, sizeof eng);
+        if (rnd(2)) { uint16_t v = rnd(2) ? rnd(32) : rnd(0x10000); memcpy(eng + 0xa2, &v, 2); }
+        fill_planes(in, sizeof in); fill_mask(mask);
+        rndfill(o1, sizeof o1); memcpy(o2, o1, sizeof o1);
+        if (rnd(4) == 0) {                                   /* in place */
+            memcpy(o1 + G, in + G, 0x300); memcpy(o2 + G, in + G, 0x300);
+            ds(eng, o1 + G, o1 + G, mask); ds2d_shade(eng, o2 + G, o2 + G, mask);
+        } else { ds(eng, o1 + G, in + G, mask); ds2d_shade(eng, o2 + G, in + G, mask); }
+        if (ut_cmp("shade", o1, o2, sizeof o1)) { fprintf(stderr, "  evy %#x bldcnt %#x\n", eng[0xa2] | eng[0xa3] << 8, eng[0xa0] | eng[0xa1] << 8); return; }
+        if (it < NFX) { memcpy(sh_case[it].eng, eng, sizeof eng); memcpy(sh_case[it].in, in + G, 0x300); memcpy(sh_case[it].mask, mask, 32); memcpy(sh_case[it].out, o1, sizeof o1); }
+        n++;
+    }
+    orig_shade = ds;
+    unsigned long bad0 = chk_bad[H_SHADE];
+    for (int it = 0; it < 200; it++) {
+        rndfill(eng, sizeof eng); fill_planes(in, sizeof in); fill_mask(mask);
+        rndfill(o1, sizeof o1); memcpy(o2, o1, sizeof o1);
+        ds(eng, o1 + G, in + G, mask); chk_shade(eng, o2 + G, in + G, mask);
+        if (ut_cmp("shade check wrapper", o1, o2, sizeof o1)) return;
+    }
+    if (chk_bad[H_SHADE] != bad0) { fprintf(stderr, "FAIL shade check wrapper counted differences\n"); ut_fail++; }
+    fprintf(stderr, "shade: %u random quarters (in place too) + 200 through the check wrapper equal\n", n);
+}
+
+/* ---- the 8bpp text BG spans ---- */
+typedef void (*span8n_fn_t)(uint8_t *, const uint8_t *, const uint16_t *, const uint8_t *);
+typedef void (*span8e_fn_t)(uint16_t *, const uint8_t *, const uint16_t *, const uint8_t *);
+static struct { uint16_t entries[36]; uint8_t flags[36]; uint8_t dst[528 + 2 * G]; } s8_case[2][NSP];
+
+static void test_span8(void) {
+    span8n_fn_t dsn = DS(span8n_fn_t, DS_SPAN8N);
+    span8e_fn_t dse = DS(span8e_fn_t, DS_SPAN8E);
+    static uint16_t entries[36], pal[256];
+    static uint8_t flags[36], d1[528 + 2 * G], d2[528 + 2 * G];
+    unsigned n = 0;
+    for (int it = 0; it < 6000; it++) {
+        int ext = it & 1;
+        if (it % 64 == 0) rndfill(sp_tiles, 65536 + 8);
+        const uint8_t *tiles = it < 2 * NSP ? sp_tiles0 : sp_tiles;         /* the kept cases: the first fill */
+        span4_inputs(pal, entries, flags);
+        rndfill(d1, sizeof d1); memcpy(d2, d1, sizeof d1);
+        if (ext) { dse((uint16_t *)(d1 + G), tiles, entries, flags); ds2d_span8e((uint16_t *)(d2 + G), tiles, entries, flags); }
+        else { dsn(d1 + G, tiles, entries, flags); ds2d_span8n(d2 + G, tiles, entries, flags); }
+        if (ut_cmp(ext ? "span8 ext palette" : "span8 normal palette", d1, d2, sizeof d1)) return;
+        if (it / 2 < NSP) {
+            memcpy(s8_case[ext][it / 2].entries, entries, sizeof entries); memcpy(s8_case[ext][it / 2].flags, flags, sizeof flags);
+            memcpy(s8_case[ext][it / 2].dst, d1, sizeof d1);
+        }
+        n++;
+    }
+    ds2d_orig_vars[2][0] = ds2d_orig_vars[3][0] = ut_base + DS_SPAN8_CONSTS;
+    ds2d_orig_vars[2][1] = ut_base + DS_SPAN8N + 16;
+    ds2d_orig_vars[3][1] = ut_base + DS_SPAN8E + 16;
+    unsigned long bad0 = chk_bad[H_SPAN8N] + chk_bad[H_SPAN8E];
+    for (int it = 0; it < 400; it++) {
+        int ext = it & 1;
+        span4_inputs(pal, entries, flags);
+        rndfill(d1, sizeof d1); memcpy(d2, d1, sizeof d1);
+        if (ext) { dse((uint16_t *)(d1 + G), sp_tiles, entries, flags); ds2d_span8e_orig((uint16_t *)(d2 + G), sp_tiles, entries, flags); }
+        else { dsn(d1 + G, sp_tiles, entries, flags); ds2d_span8n_orig(d2 + G, sp_tiles, entries, flags); }
+        if (ut_cmp("span8 originals through the stubs", d1, d2, sizeof d1)) return;
+        memcpy(d2, d1, sizeof d1); rndfill(d2 + G, ext ? 528 : 264);
+        if (ext) chk_span8e((uint16_t *)(d2 + G), sp_tiles, entries, flags); else chk_span8n(d2 + G, sp_tiles, entries, flags);
+        if (ut_cmp("span8 check wrappers", d1, d2, sizeof d1)) return;
+    }
+    if (chk_bad[H_SPAN8N] + chk_bad[H_SPAN8E] != bad0) { fprintf(stderr, "FAIL span8 check wrappers counted differences\n"); ut_fail++; }
+    fprintf(stderr, "span8: %u random lines (normal / extended palettes), 200 each through the stubs and the check wrappers equal\n", n);
+}
+
 static void test_patched(void) {
     setenv("RAST_2D", "-1", 1);
     unsetenv("RAST_2DCHECK");
@@ -491,7 +786,72 @@ static void test_patched(void) {
         ds2d_span4_orig((uint16_t *)(d + G), r + G, sp_case[i].pal, sp_tiles0, sp_case[i].entries, sp_case[i].flags);
         if (ut_cmp("span4 original after the patch", sp_case[i].dst, d, sizeof d) || ut_cmp("span4 original after the patch rows", sp_case[i].rows, r, sizeof r)) return;
     }
-    fprintf(stderr, "patched entries: %d calls each equal\n", NCONV);
+    /* the ten routines of the second batch through their patched entries */
+    {
+        pal8_fn_t p8 = DS(pal8_fn_t, DS_PAL8); pal12_fn_t p12 = DS(pal12_fn_t, DS_PAL12);
+        static uint8_t b[0x800 + 2 * G];
+        for (int ext = 0; ext < 2; ext++) for (int i = 0; i < NPAL; i++) {
+            memcpy(b, pal_case[ext][i].buf, sizeof b);
+            if (ext) p12((uint16_t *)(b + G + pal_case[1][i].dst), (const uint16_t *)(b + G + pal_case[1][i].src), pal_case[1][i].pal, pal_case[1][i].n);
+            else p8((uint16_t *)(b + G + pal_case[0][i].dst), b + G + pal_case[0][i].src, pal_case[0][i].pal, pal_case[0][i].n);
+            if (ut_cmp("palette_lookup patched entry", pal_case[ext][i].ref, b, sizeof b)) return;
+        }
+        prio2_fn_t pp = DS(prio2_fn_t, DS_PRIO_DOUBLE);
+        for (int i = 0; i < NPR; i++) {
+            static uint8_t S[0x900];
+            memcpy(S, p2_case[i].S, sizeof S);
+            pp(p2_case[i].eng, S + 0x40, S + 0x380, S + 0x600);
+            if (ut_cmp("prio_double patched entry", p2_case[i].ref, S, sizeof S)) return;
+            memcpy(S, p2_case[i].S, sizeof S);
+            orig_prio2(p2_case[i].eng, S + 0x40, S + 0x380, S + 0x600);
+            if (ut_cmp("prio_double trampoline", p2_case[i].ref, S, sizeof S)) return;
+        }
+        alpha_fn_t fab = DS(alpha_fn_t, DS_SETUP_ALPHA_BASE), fa = DS(alpha_fn_t, DS_SETUP_ALPHA);
+        blendw_fn_t fbb = DS(blendw_fn_t, DS_SETUP_BLEND_BASE), fb = DS(blendw_fn_t, DS_SETUP_BLEND);
+        for (int f = 0; f < 4; f++) for (int k = 0; k < NFX; k++) {
+            static uint8_t x[0x800];
+            memcpy(x, fx_case[f][k].buf, sizeof x);
+            int wa = fx_case[f][k].wa, wb = fx_case[f][k].wb, al = fx_case[f][k].al, mk = fx_case[f][k].mk;
+            switch (f) {
+            case 0: fab(x + wa, x + wb, x + al, x + mk); break;
+            case 1: fa(x + wa, x + wb, x + al, x + mk); break;
+            case 2: fbb(fx_case[f][k].w, x + wa, x + wb, x + mk); break;
+            default: fb(fx_case[f][k].w, x + wa, x + wb, x + mk); break;
+            }
+            if (ut_cmp("effects setup patched entry", fx_case[f][k].ref, x, sizeof x)) return;
+            memcpy(x, fx_case[f][k].buf, sizeof x);
+            switch (f) {
+            case 0: ds2d_alpha_base_orig(x + wa, x + wb, x + al, x + mk); break;
+            case 1: ds2d_alpha_orig(x + wa, x + wb, x + al, x + mk); break;
+            case 2: orig_blend_base(fx_case[f][k].w, x + wa, x + wb, x + mk); break;
+            default: orig_blend_set(fx_case[f][k].w, x + wa, x + wb, x + mk); break;
+            }
+            if (ut_cmp("effects setup original after the patch", fx_case[f][k].ref, x, sizeof x)) return;
+        }
+        shade_fn_t fs = DS(shade_fn_t, DS_SHADE);
+        for (int k = 0; k < NFX; k++) {
+            static uint8_t o[0x300 + 2 * G];
+            memcpy(o, sh_case[k].out, sizeof o); memset(o + G, 0x5a, 0x300);
+            fs(sh_case[k].eng, o + G, sh_case[k].in, sh_case[k].mask);
+            if (ut_cmp("shade patched entry", sh_case[k].out, o, sizeof o)) return;
+            memset(o + G, 0xa5, 0x300);
+            orig_shade(sh_case[k].eng, o + G, sh_case[k].in, sh_case[k].mask);
+            if (ut_cmp("shade trampoline", sh_case[k].out, o, sizeof o)) return;
+        }
+        span8n_fn_t s8n = DS(span8n_fn_t, DS_SPAN8N); span8e_fn_t s8e = DS(span8e_fn_t, DS_SPAN8E);
+        for (int ext = 0; ext < 2; ext++) for (int i = 0; i < NSP; i++) {
+            static uint8_t d[528 + 2 * G];
+            memcpy(d, s8_case[ext][i].dst, sizeof d); memset(d + G, 0x5a, ext ? 528 : 264);
+            if (ext) s8e((uint16_t *)(d + G), sp_tiles0, s8_case[1][i].entries, s8_case[1][i].flags);
+            else s8n(d + G, sp_tiles0, s8_case[0][i].entries, s8_case[0][i].flags);
+            if (ut_cmp("span8 patched entry", s8_case[ext][i].dst, d, sizeof d)) return;
+            memset(d + G, 0xa5, ext ? 528 : 264);
+            if (ext) ds2d_span8e_orig((uint16_t *)(d + G), sp_tiles0, s8_case[1][i].entries, s8_case[1][i].flags);
+            else ds2d_span8n_orig(d + G, sp_tiles0, s8_case[0][i].entries, s8_case[0][i].flags);
+            if (ut_cmp("span8 original after the patch", s8_case[ext][i].dst, d, sizeof d)) return;
+        }
+    }
+    fprintf(stderr, "patched entries: %d calls each equal (second batch: %d / %d / %d)\n", NCONV, NPAL, NPR, NFX);
 }
 
 void ut_main(void) {
@@ -503,5 +863,10 @@ void ut_main(void) {
     test_effects();
     test_blend();
     test_prio();
+    test_pal();
+    test_prio2();
+    test_effects_setup();
+    test_shade();
+    test_span8();
     test_patched();
 }

@@ -12,7 +12,7 @@
  * +0x100, +0) interleaved into one output row of 512 xRGB pixels:
  *     out[2i]   = a[0x200+i] << 2 | a[0x100+i] << 2 << 8 | a[i] << 2 << 16 | alpha(2i) << 24
  *     out[2i+1] = the same from b,                                          alpha(2i+1) << 24
- * (each << 2 within its byte), alpha(p) = 0xff for p % 32 in {0, 2, 4, 6}, else 0: DraStic's st4 of v19 / v23 =
+ * (each << 2 within its byte), alpha(p) = 0xff for p % 16 in {0, 2, 4, 6}, else 0: DraStic's st4 of v19 / v23 =
  * movi .4h #0xff (the low 8 bytes ff 00 ff 00 ..., the high 8 bytes zero) as the 4th byte of every 16 pixels.
  * The original's loop (ld1 with writeback, 32 pixels a step) models at 50 cycles a step; this one loads with ldr q at
  * a register offset, one step ahead (the zips of step k beside the loads of step k+1, the shifts of k+1 under the
@@ -411,3 +411,403 @@ ds2d_span4_orig:
     movi  v1.16b, #0xf
     br    x16
     .size ds2d_span4_orig, . - ds2d_span4_orig
+
+/* void ds2d_pal8(uint16_t *dst, const uint8_t *src, const uint16_t *pal, int n)
+ * render_scanline_palette_lookup_8bpp_asm (0x9f504): dst[i] = pal[src[i]] for 8 pixels an iteration, as many
+ * iterations as DraStic's loop runs: n -= 8 first, another iteration while the result is still > 0 (n <= 8: one
+ * iteration; 256: 32). Callers (C, through bl): render_scanline_tiled_ext (dst = the layer's u16 line, src = its
+ * 8bpp index line at line + 0x110, n = 256) and render_scanline_affine_normal_ext / _extended_ext (dst = line +
+ * 2 * x0, src = line + 0x100 + x0, n = the clipped run's pixels + 1). The original's iteration (ldr x with
+ * writeback, eight ands, eight ldrh, four orr, three stores, one dependence chain) models at 26 cycles; this one is
+ * software pipelined over two register sets: an iteration's word is loaded and its eight indexes computed while the
+ * previous iteration's gathers are in flight and their halfwords stored (16 modeled cycles per 8 pixels). Relative
+ * to the original, that moves one iteration's source load ahead of the previous iteration's stores, which the
+ * callers' buffers never make visible (the tiled source lies 0x110 bytes above the destination; an affine run's
+ * source lies 256 bytes above its start and the run ends before reaching it); arguments where it could (dst
+ * within 8 * iterations - 9 bytes below or 15 above src), and dst over the palette (each iteration's halfword
+ * stores are interleaved with its own gathers; DraStic's palettes never overlap a line buffer), go to
+ * ds2d_pal8_plain, the original's order. Reads exactly what the original reads; writes exactly dst[0 ..
+ * 8 * iterations). Clobbers x4-x17 (the original: x4-x13) and saves x19-x22 on the stack (a frame the original
+ * does not have; all callers are C). */
+    .p2align 4
+    .globl ds2d_pal8
+    .hidden ds2d_pal8
+    .type ds2d_pal8, %function
+ds2d_pal8:
+    add   w7, w3, #7
+    asr   w7, w7, #3                 /* the iterations (n > 8), else <= 1 */
+    sxtw  x7, w7
+    sub   x6, x0, x1                 /* d = dst - src: a store of iteration k meets the load of k + 1 iff */
+    add   x6, x6, x7, lsl #3         /* -7 <= d + 8k <= 15 for some k <= iterations - 2 */
+    sub   x6, x6, #9
+    lsl   x9, x7, #3
+    add   x9, x9, #6
+    cmp   x6, x9
+    b.ls  ds2d_pal8_plain
+    cmp   x7, #1                     /* dst over the palette (an iteration's stores among its own gathers): */
+    csinc x8, x7, xzr, ge            /* dst - pal in (-16 * iterations, 512) */
+    sub   x6, x0, x2
+    add   x6, x6, x8, lsl #4
+    sub   x6, x6, #1
+    lsl   x9, x8, #4
+    add   x9, x9, #510
+    cmp   x6, x9
+    b.ls  ds2d_pal8_plain
+    mov   x4, #0x1fe
+    stp   x19, x20, [sp, #-32]!
+    stp   x21, x22, [sp, #16]
+    ldr   x5, [x1], #8
+    subs  w3, w3, #8
+    and   x6, x4, x5, lsl #1
+    and   x7, x4, x5, lsr #7
+    and   x8, x4, x5, lsr #15
+    and   x9, x4, x5, lsr #23
+    and   x10, x4, x5, lsr #31
+    and   x11, x4, x5, lsr #39
+    and   x12, x4, x5, lsr #47
+    and   x13, x4, x5, lsr #55
+    b.le  9f                         /* one iteration */
+1:
+    ldr   x5, [x1], #8
+    ldrh  w6, [x2, x6]
+    subs  w3, w3, #8
+    ldrh  w7, [x2, x7]
+    add   x0, x0, #16
+    ldrh  w8, [x2, x8]
+    and   x14, x4, x5, lsl #1
+    ldrh  w9, [x2, x9]
+    and   x15, x4, x5, lsr #7
+    ldrh  w10, [x2, x10]
+    strh  w6, [x0, #-16]
+    ldrh  w11, [x2, x11]
+    and   x16, x4, x5, lsr #15
+    ldrh  w12, [x2, x12]
+    strh  w7, [x0, #-14]
+    ldrh  w13, [x2, x13]
+    and   x17, x4, x5, lsr #23
+    strh  w8, [x0, #-12]
+    and   x19, x4, x5, lsr #31
+    strh  w9, [x0, #-10]
+    and   x20, x4, x5, lsr #39
+    strh  w10, [x0, #-8]
+    and   x21, x4, x5, lsr #47
+    strh  w11, [x0, #-6]
+    and   x22, x4, x5, lsr #55
+    strh  w12, [x0, #-4]
+    strh  w13, [x0, #-2]
+    b.le  7f
+    ldr   x5, [x1], #8
+    ldrh  w14, [x2, x14]
+    subs  w3, w3, #8
+    ldrh  w15, [x2, x15]
+    add   x0, x0, #16
+    ldrh  w16, [x2, x16]
+    and   x6, x4, x5, lsl #1
+    ldrh  w17, [x2, x17]
+    and   x7, x4, x5, lsr #7
+    ldrh  w19, [x2, x19]
+    strh  w14, [x0, #-16]
+    ldrh  w20, [x2, x20]
+    and   x8, x4, x5, lsr #15
+    ldrh  w21, [x2, x21]
+    strh  w15, [x0, #-14]
+    ldrh  w22, [x2, x22]
+    and   x9, x4, x5, lsr #23
+    strh  w16, [x0, #-12]
+    and   x10, x4, x5, lsr #31
+    strh  w17, [x0, #-10]
+    and   x11, x4, x5, lsr #39
+    strh  w19, [x0, #-8]
+    and   x12, x4, x5, lsr #47
+    strh  w20, [x0, #-6]
+    and   x13, x4, x5, lsr #55
+    strh  w21, [x0, #-4]
+    strh  w22, [x0, #-2]
+    b.gt  1b
+9:
+    ldrh  w6, [x2, x6]
+    ldrh  w7, [x2, x7]
+    ldrh  w8, [x2, x8]
+    ldrh  w9, [x2, x9]
+    strh  w6, [x0, #0]
+    ldrh  w10, [x2, x10]
+    strh  w7, [x0, #2]
+    ldrh  w11, [x2, x11]
+    strh  w8, [x0, #4]
+    ldrh  w12, [x2, x12]
+    strh  w9, [x0, #6]
+    ldrh  w13, [x2, x13]
+    strh  w10, [x0, #8]
+    strh  w11, [x0, #10]
+    strh  w12, [x0, #12]
+    strh  w13, [x0, #14]
+    ldp   x21, x22, [sp, #16]
+    ldp   x19, x20, [sp], #32
+    ret
+7:
+    ldrh  w14, [x2, x14]
+    ldrh  w15, [x2, x15]
+    ldrh  w16, [x2, x16]
+    ldrh  w17, [x2, x17]
+    strh  w14, [x0, #0]
+    ldrh  w19, [x2, x19]
+    strh  w15, [x0, #2]
+    ldrh  w20, [x2, x20]
+    strh  w16, [x0, #4]
+    ldrh  w21, [x2, x21]
+    strh  w17, [x0, #6]
+    ldrh  w22, [x2, x22]
+    strh  w19, [x0, #8]
+    strh  w20, [x0, #10]
+    strh  w21, [x0, #12]
+    strh  w22, [x0, #14]
+    ldp   x21, x22, [sp, #16]
+    ldp   x19, x20, [sp], #32
+    ret
+    .size ds2d_pal8, . - ds2d_pal8
+
+/* the original's order (its loop, instruction for instruction) for the overlapping arguments above */
+    .p2align 4
+    .globl ds2d_pal8_plain
+    .hidden ds2d_pal8_plain
+    .type ds2d_pal8_plain, %function
+ds2d_pal8_plain:
+    mov   x4, #0x1fe
+1:  ldr   x5, [x1], #8
+    subs  w3, w3, #8
+    and   x6, x4, x5, lsl #1
+    and   x7, x4, x5, lsr #7
+    and   x8, x4, x5, lsr #15
+    and   x9, x4, x5, lsr #23
+    ldrh  w6, [x2, x6]
+    and   x10, x4, x5, lsr #31
+    ldrh  w7, [x2, x7]
+    and   x11, x4, x5, lsr #39
+    ldrh  w8, [x2, x8]
+    and   x12, x4, x5, lsr #47
+    ldrh  w9, [x2, x9]
+    and   x13, x4, x5, lsr #55
+    ldrh  w10, [x2, x10]
+    orr   w6, w6, w7, lsl #16
+    ldrh  w11, [x2, x11]
+    orr   w7, w8, w9, lsl #16
+    ldrh  w12, [x2, x12]
+    str   w6, [x0], #4
+    ldrh  w13, [x2, x13]
+    orr   w8, w10, w11, lsl #16
+    str   w7, [x0], #4
+    orr   w9, w12, w13, lsl #16
+    stp   w8, w9, [x0], #8
+    b.gt  1b
+    ret
+    .size ds2d_pal8_plain, . - ds2d_pal8_plain
+
+/* void ds2d_pal12(uint16_t *dst, const uint16_t *src, const uint16_t *pal, int n)
+ * render_scanline_palette_lookup_12bpp_asm (0x9f574): dst[i] = pal[src[i] & 0xfff] (the extended palettes: a
+ * palette number in the index's high byte), 8 pixels an iteration from two 8-byte loads, the iteration count as
+ * ds2d_pal8's. Callers (C, bl): render_scanline_tiled_ext (in place: dst = src = the layer's line, n = 256) and
+ * render_scanline_affine_extended_ext (in place at line + 2 * x0, n = the run + 1). Pipelined as ds2d_pal8 (the
+ * original 28 modeled cycles an iteration, this 17); the reordering is visible only with dst 1 to 31 bytes above
+ * src: those arguments, and dst over the palette, take ds2d_pal12_plain. Clobbers x4-x17 (the original: x4-x14),
+ * saves x19-x22 on the stack. */
+    .p2align 4
+    .globl ds2d_pal12
+    .hidden ds2d_pal12
+    .type ds2d_pal12, %function
+ds2d_pal12:
+    sub   x6, x0, x1
+    sub   x6, x6, #1
+    cmp   x6, #31
+    b.lo  ds2d_pal12_plain
+    add   w7, w3, #7                 /* dst over the 8 KiB palette, as ds2d_pal8 */
+    asr   w7, w7, #3
+    sxtw  x7, w7
+    cmp   x7, #1
+    csinc x8, x7, xzr, ge
+    sub   x6, x0, x2
+    add   x6, x6, x8, lsl #4
+    sub   x6, x6, #1
+    add   x9, x8, #512
+    lsl   x9, x9, #4
+    sub   x9, x9, #2
+    cmp   x6, x9
+    b.ls  ds2d_pal12_plain
+    mov   x4, #0x1ffe
+    stp   x19, x20, [sp, #-32]!
+    stp   x21, x22, [sp, #16]
+    ldr   x5, [x1], #8
+    ldr   x10, [x1], #8
+    subs  w3, w3, #8
+    and   x6, x4, x5, lsl #1
+    and   x7, x4, x5, lsr #15
+    and   x8, x4, x5, lsr #31
+    and   x9, x4, x5, lsr #47
+    and   x11, x4, x10, lsr #15
+    and   x12, x4, x10, lsr #31
+    and   x13, x4, x10, lsr #47
+    and   x10, x4, x10, lsl #1
+    b.le  9f
+1:
+    ldr   x5, [x1], #8
+    ldr   x19, [x1], #8
+    ldrh  w6, [x2, x6]
+    subs  w3, w3, #8
+    ldrh  w7, [x2, x7]
+    add   x0, x0, #16
+    ldrh  w8, [x2, x8]
+    and   x14, x4, x5, lsl #1
+    ldrh  w9, [x2, x9]
+    and   x15, x4, x5, lsr #15
+    ldrh  w10, [x2, x10]
+    strh  w6, [x0, #-16]
+    ldrh  w11, [x2, x11]
+    and   x16, x4, x5, lsr #31
+    ldrh  w12, [x2, x12]
+    strh  w7, [x0, #-14]
+    ldrh  w13, [x2, x13]
+    and   x17, x4, x5, lsr #47
+    strh  w8, [x0, #-12]
+    and   x20, x4, x19, lsr #15
+    strh  w9, [x0, #-10]
+    and   x21, x4, x19, lsr #31
+    strh  w10, [x0, #-8]
+    and   x22, x4, x19, lsr #47
+    strh  w11, [x0, #-6]
+    and   x19, x4, x19, lsl #1
+    strh  w12, [x0, #-4]
+    strh  w13, [x0, #-2]
+    b.le  7f
+    ldr   x5, [x1], #8
+    ldr   x10, [x1], #8
+    ldrh  w14, [x2, x14]
+    subs  w3, w3, #8
+    ldrh  w15, [x2, x15]
+    add   x0, x0, #16
+    ldrh  w16, [x2, x16]
+    and   x6, x4, x5, lsl #1
+    ldrh  w17, [x2, x17]
+    and   x7, x4, x5, lsr #15
+    ldrh  w19, [x2, x19]
+    strh  w14, [x0, #-16]
+    ldrh  w20, [x2, x20]
+    and   x8, x4, x5, lsr #31
+    ldrh  w21, [x2, x21]
+    strh  w15, [x0, #-14]
+    ldrh  w22, [x2, x22]
+    and   x9, x4, x5, lsr #47
+    strh  w16, [x0, #-12]
+    and   x11, x4, x10, lsr #15
+    strh  w17, [x0, #-10]
+    and   x12, x4, x10, lsr #31
+    strh  w19, [x0, #-8]
+    and   x13, x4, x10, lsr #47
+    strh  w20, [x0, #-6]
+    and   x10, x4, x10, lsl #1
+    strh  w21, [x0, #-4]
+    strh  w22, [x0, #-2]
+    b.gt  1b
+9:
+    ldrh  w6, [x2, x6]
+    ldrh  w7, [x2, x7]
+    ldrh  w8, [x2, x8]
+    ldrh  w9, [x2, x9]
+    strh  w6, [x0, #0]
+    ldrh  w10, [x2, x10]
+    strh  w7, [x0, #2]
+    ldrh  w11, [x2, x11]
+    strh  w8, [x0, #4]
+    ldrh  w12, [x2, x12]
+    strh  w9, [x0, #6]
+    ldrh  w13, [x2, x13]
+    strh  w10, [x0, #8]
+    strh  w11, [x0, #10]
+    strh  w12, [x0, #12]
+    strh  w13, [x0, #14]
+    ldp   x21, x22, [sp, #16]
+    ldp   x19, x20, [sp], #32
+    ret
+7:
+    ldrh  w14, [x2, x14]
+    ldrh  w15, [x2, x15]
+    ldrh  w16, [x2, x16]
+    ldrh  w17, [x2, x17]
+    strh  w14, [x0, #0]
+    ldrh  w19, [x2, x19]
+    strh  w15, [x0, #2]
+    ldrh  w20, [x2, x20]
+    strh  w16, [x0, #4]
+    ldrh  w21, [x2, x21]
+    strh  w17, [x0, #6]
+    ldrh  w22, [x2, x22]
+    strh  w19, [x0, #8]
+    strh  w20, [x0, #10]
+    strh  w21, [x0, #12]
+    strh  w22, [x0, #14]
+    ldp   x21, x22, [sp, #16]
+    ldp   x19, x20, [sp], #32
+    ret
+    .size ds2d_pal12, . - ds2d_pal12
+
+    .p2align 4
+    .globl ds2d_pal12_plain
+    .hidden ds2d_pal12_plain
+    .type ds2d_pal12_plain, %function
+ds2d_pal12_plain:
+    mov   x4, #0x1ffe
+1:  ldr   x5, [x1], #8
+    subs  w3, w3, #8
+    ldr   x6, [x1], #8
+    and   x7, x4, x5, lsl #1
+    and   x8, x4, x5, lsr #15
+    and   x9, x4, x5, lsr #31
+    and   x10, x4, x5, lsr #47
+    ldrh  w7, [x2, x7]
+    and   x11, x4, x6, lsl #1
+    ldrh  w8, [x2, x8]
+    and   x12, x4, x6, lsr #15
+    ldrh  w9, [x2, x9]
+    and   x13, x4, x6, lsr #31
+    ldrh  w10, [x2, x10]
+    and   x14, x4, x6, lsr #47
+    ldrh  w11, [x2, x11]
+    orr   w7, w7, w8, lsl #16
+    ldrh  w12, [x2, x12]
+    orr   w8, w9, w10, lsl #16
+    ldrh  w13, [x2, x13]
+    str   w7, [x0], #4
+    ldrh  w14, [x2, x14]
+    orr   w9, w11, w12, lsl #16
+    str   w8, [x0], #4
+    orr   w10, w13, w14, lsl #16
+    stp   w9, w10, [x0], #8
+    b.gt  1b
+    ret
+    .size ds2d_pal12_plain, . - ds2d_pal12_plain
+
+/* The check mode's entries to the originals whose first instruction is an adr (rast_hook()'s trampoline would copy
+ * it with a wrong target): each does what the original's first four instructions do, with the adr's address from a
+ * variable ds2d.c sets (ds2d_orig_vars: DraStic's constant and the original's fifth instruction, per routine), and
+ * jumps to the fifth. */
+.macro ORIG4 name, idx, i1, i2, i3
+    .p2align 4
+    .globl \name
+    .hidden \name
+    .type \name, %function
+\name:
+    adrp  x16, ds2d_orig_vars
+    add   x16, x16, :lo12:ds2d_orig_vars
+    ldp   x17, x16, [x16, #(\idx) * 16]
+    \i1
+    \i2
+    \i3
+    br    x16
+    .size \name, . - \name
+.endm
+/* render_scanline_color_effects_setup_alpha_base_asm (0xa042c): adr x4, bits; movi v25, 0x1f; ld1 {v24}, [x4]; movi v26, 1 */
+ORIG4 ds2d_alpha_base_orig, 0, "mov x4, x17", "movi v25.16b, #0x1f", "ld1 {v24.16b}, [x4]; movi v26.16b, #1"
+/* render_scanline_color_effects_setup_alpha_asm (0xa04b4): adr x4, bits; movi v29, 0x1f; ld1 {v28}, [x4]; movi v30, 1 */
+ORIG4 ds2d_alpha_orig, 1, "mov x4, x17", "movi v29.16b, #0x1f", "ld1 {v28.16b}, [x4]; movi v30.16b, #1"
+/* render_scanline_tiled_span_8bpp_normal_palette_asm (0x9f0f0): adr x5, c; mov w4, 32; ld1 {v0.4s}, [x5]; shl v1.4s, v0.4s, 16 */
+ORIG4 ds2d_span8n_orig, 2, "mov x5, x17", "mov w4, #0x20", "ld1 {v0.4s}, [x5]; shl v1.4s, v0.4s, #16"
+/* render_scanline_tiled_span_8bpp_ext_palette_asm (0x9f188): adr x5, c; movi v18, 1; ld1 {v0.4s}, [x5]; mov v18.d[0], xzr */
+ORIG4 ds2d_span8e_orig, 3, "mov x5, x17", "movi v18.16b, #1", "ld1 {v0.4s}, [x5]; mov v18.d[0], xzr"
