@@ -39,6 +39,25 @@ else()
     endif()
     set(MELONDS_SRC ${melonds_SOURCE_DIR})
 endif()
+# BananaDS's changes to melonDS itself (patches/melonds/*.patch, in order; docs/PERF.md says what they do): applied
+# once to the melonDS tree, left alone where they already are (git apply --reverse --check). OFF builds stock
+# melonDS, for A/B runs (in a build directory of its own: the fetched tree is per build directory).
+option(BANANADS_MELONDS_PATCHES "Apply patches/melonds/*.patch to melonDS" ON)
+if(BANANADS_MELONDS_PATCHES)
+    file(GLOB MELONDS_PATCHES ${CMAKE_CURRENT_SOURCE_DIR}/patches/melonds/*.patch)
+    list(SORT MELONDS_PATCHES)
+    foreach(P ${MELONDS_PATCHES})
+        execute_process(COMMAND git apply --reverse --check ${P} WORKING_DIRECTORY ${MELONDS_SRC}
+            RESULT_VARIABLE ALREADY OUTPUT_QUIET ERROR_QUIET)
+        if(NOT ALREADY EQUAL 0)
+            execute_process(COMMAND git apply ${P} WORKING_DIRECTORY ${MELONDS_SRC} RESULT_VARIABLE R)
+            if(NOT R EQUAL 0)
+                message(FATAL_ERROR "${P} doesn't apply to ${MELONDS_SRC}")
+            endif()
+            message(STATUS "melonDS: applied ${P}")
+        endif()
+    endforeach()
+endif()
 add_subdirectory(${MELONDS_SRC} melonds EXCLUDE_FROM_ALL)
 
 # BananaJIT: our own code generator in melonDS's JIT framework, in place of melonDS's ARMJIT_A64 compiler.

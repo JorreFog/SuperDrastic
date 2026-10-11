@@ -2,7 +2,8 @@
 
 BananaDS runs the DS's two CPUs through a JIT (`jit=off` gives melonDS's interpreter). There are two to pick
 from at build time:
-- `-DBANANADS_JIT=melonds` (the default) is melonDS's own `ARMJIT_A64` compiler.
+- `-DBANANADS_JIT=melonds` (the default) is melonDS's own `ARMJIT_A64` compiler, with BananaDS's patches to it
+  (`patches/melonds/`: block linking, host flags; docs/PERF.md).
 - `-DBANANADS_JIT=banana` is **BananaJIT**, BananaDS's own code generator (below).
 
 ## BananaJIT
