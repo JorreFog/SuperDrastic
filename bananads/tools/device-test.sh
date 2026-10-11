@@ -138,9 +138,10 @@ diffrom() {  # diffrom <binary> <jit on|off> <rom> <tests.txt>: every result as 
     python3 "$HERE/tools/check_results.py" "$4" "$WORK/dump.txt"
 }
 for v in arm thumb arm7 arm7-thumb; do check "pictures, stress L5 ($v)" pictures "$ROMS/stress/$v/dsstress-L5.nds"; done
-for g in fastloads faststores link mul; do check "exact: jit.$g off = on (L5, Thumb)" gate $g "$ROMS/stress/thumb/dsstress-L5.nds"; done
+for g in fastloads faststores link mul ldm; do check "exact: jit.$g off = on (L5, Thumb)" gate $g "$ROMS/stress/thumb/dsstress-L5.nds"; done
 check "exact: jit.fastmem7 off = on (ARM7 workload)" gate fastmem7 "$ROMS/stress/arm7-thumb/dsstress-L5.nds"
 check "exact: jit.mul off = on (ARM7 workload)" gate mul "$ROMS/stress/arm7-thumb/dsstress-L5.nds"
+check "exact: jit.ldm off = on (ARM7 workload)" gate ldm "$ROMS/stress/arm7-thumb/dsstress-L5.nds"
 if command -v python3 >/dev/null 2>&1 && [ -f "$ROMS/diff/diff.nds" ]; then
     for d in "diff.nds tests.txt" "diff_extra.nds tests_extra.txt"; do
         set -- $d

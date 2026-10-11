@@ -60,7 +60,7 @@ sh device-test.sh /storage/roms/nds/Game1.nds /storage/roms/nds/Game2.nds   # ch
    - The stress ROM's pictures at frames 150/300/450/600, BananaJIT against the interpreter, for all four ROM
      variants.
    - Each BananaJIT fast path off against on, with main RAM compared after every frame: `fastloads`,
-     `faststores`, `link`, `mul`, `fastmem7`.
+     `faststores`, `link`, `mul`, `ldm`, `fastmem7`.
    - The differential ROMs on the interpreter, BananaJIT and melonDS's JIT, against the ARMv5TE values.
    - On qemu all of these pass. On the handheld, a failure would point at something only real hardware does, such
      as instruction-cache flushing after code is written.
