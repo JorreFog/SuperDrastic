@@ -77,12 +77,23 @@
  *   H_VIS4, H_VIS8, H_VIS12  render_scanline_set_visibility_4bpp_asm (0x9f278), _8bpp_asm (0x9f390), _12bpp_asm
  *           (0x9f468): a layer line's 256-bit visibility bitmap from its nibbles / bytes / u16 indexes ->
  *           ds2d_vis4() etc.: the originals' instructions from ldr q loads. Callers: tiled_ext, the affine renderers (C).
+ *   H_AFF_NN, H_AFF_EN, H_AFF_EE  render_scanline_affine_render_tiles_normal_normal_asm (0x9f9bc),
+ *           _extended_normal_asm (0x9fbf8), _extended_extended_asm (0x9fd30): an affine BG line's runs of pixels per
+ *           tile by tbl over the tile's 64 bytes -> ds2d_aff_nn / _en / _ee (ds2d_asm.S): the originals with the
+ *           tiles by ldr q instead of ld1 of four registers (51 -> 31 modeled cycles per two runs), the same loads
+ *           and stores in the same order. Callers: render_scanline_affine_normal_ext / _extended_ext (C). Their third
+ *           instruction is a cbz: the check mode reaches the originals through ds2d_aff_*_orig.
+ *   H_CAPB, H_CAPB3D  render_scanline_capture_blended (0x3bc60) / _blended_3d (0x3bdb0): the display capture with
+ *           blending (EVA / EVB), a line of source A (the 2D planes or the 3D line) with source B (VRAM or main
+ *           memory) -> ds2d_capb() / ds2d_capb3d(): the originals' scalar loops (~9000 modeled cycles a line) as
+ *           NEON, 16 pixels a step. Callers: render_scanline_2d, render_scanline_capture (C).
  *
  * RAST_2D (or DSFLIP_RAST_2D): 0 leaves DraStic's functions alone; otherwise a mask of the hooks (default all but
  * the five that do not pay, DS2D_DEFAULT below; -1 all):
  * 1 H_CONV, 2 H_SELECT, 4 H_EFFECTS, 8 H_BLEND, 16 H_PRIO, 32 H_CONV1X, 64 H_SPAN4, 128 H_PAL8, 256 H_PAL12,
  * 512 H_PRIO2, 1024 H_ALPHA_BASE, 2048 H_ALPHA, 4096 H_BLEND_BASE, 8192 H_BLEND_SET, 16384 H_SHADE, 32768 H_SPAN8N,
- * 65536 H_SPAN8E, 0x20000 H_TME4, 0x40000 H_TME8, 0x80000 H_DBL, 0x100000 H_VIS4, 0x200000 H_VIS8, 0x400000 H_VIS12.
+ * 65536 H_SPAN8E, 0x20000 H_TME4, 0x40000 H_TME8, 0x80000 H_DBL, 0x100000 H_VIS4, 0x200000 H_VIS8, 0x400000 H_VIS12, 0x800000 H_CAPB,
+ * 0x1000000 H_CAPB3D, 0x2000000 H_AFF_NN, 0x4000000 H_AFF_EN, 0x8000000 H_AFF_EE.
  * RAST_2DCHECK=1: every call of a hooked function runs ours, then DraStic's original (through the
  * trampoline rast_hook() returns; through an ORIG4 stub of ds2d_asm.S for the entries that start with an adr, as
  * ds2d_span4_orig; through a private copy of the whole routine for the two palette lookups, whose loops re-enter the
@@ -104,7 +115,8 @@
 #include "ds2d.h"
 
 enum { H_CONV, H_SELECT, H_EFFECTS, H_BLEND, H_PRIO, H_CONV1X, H_SPAN4, H_PAL8, H_PAL12, H_PRIO2, H_ALPHA_BASE, H_ALPHA,
-       H_BLEND_BASE, H_BLEND_SET, H_SHADE, H_SPAN8N, H_SPAN8E, H_TME4, H_TME8, H_DBL, H_VIS4, H_VIS8, H_VIS12, H_N };
+       H_BLEND_BASE, H_BLEND_SET, H_SHADE, H_SPAN8N, H_SPAN8E, H_TME4, H_TME8, H_DBL, H_VIS4, H_VIS8, H_VIS12, H_CAPB,
+       H_CAPB3D, H_AFF_NN, H_AFF_EN, H_AFF_EE, H_N };
 
 /* the originals (trampolines) */
 typedef void (*conv_fn)(const uint8_t *a, const uint8_t *b, uint32_t *out);
@@ -125,7 +137,7 @@ typedef void (*span4_fn)(uint16_t *dst, uint8_t *rows, const uint16_t *pal, cons
 /* DraStic's span_4bpp: its constant and its fifth instruction, for ds2d_span4_orig (ds2d_asm.S) */
 __attribute__((visibility("hidden"))) uintptr_t ds2d_span4_consts, ds2d_span4_cont;
 /* the same for the ORIG4 stubs of ds2d_asm.S: { the adr's target, the fifth instruction } per stub */
-__attribute__((visibility("hidden"))) uintptr_t ds2d_orig_vars[9][2];
+__attribute__((visibility("hidden"))) uintptr_t ds2d_orig_vars[12][2];
 typedef void (*dbl_fn)(const uint8_t *masks, uint8_t *word);
 static dbl_fn orig_dbl;
 typedef void (*pal8_fn)(uint16_t *dst, const uint8_t *src, const uint16_t *pal, int n);
@@ -153,7 +165,9 @@ static const char *hname[H_N] = { "color_convert_direct_32_2x", "select_pixels",
                                     "priority_encode_double", "effects_setup_alpha_base", "effects_setup_alpha", "effects_setup_blend_base",
                                     "effects_setup_blend", "shade", "tiled_span_8bpp_normal", "tiled_span_8bpp_ext",
                                     "tile_map_entries_4bpp", "tile_map_entries_8bpp", "disable_blank_layers", "set_visibility_4bpp",
-                                    "set_visibility_8bpp", "set_visibility_12bpp" };
+                                    "set_visibility_8bpp", "set_visibility_12bpp", "capture_blended", "capture_blended_3d",
+                                    "affine_render_tiles_normal_normal", "affine_render_tiles_extended_normal",
+                                    "affine_render_tiles_extended_extended" };
 static int ds2d_check, ds2d_mask;
 
 /* a region with up to CHK_PAD bytes either side, as far as the pages of its first and last byte go (always mapped) */
@@ -1117,6 +1131,158 @@ static void chk_vis12(uint8_t *out, const uint16_t *src) {
     pthread_mutex_unlock(&chk_lock);
 }
 
+/* ---- H_CAPB, H_CAPB3D: the blended display capture, a line at a time ----
+ * render_scanline_capture_blended(cap, out, srcb, planes) and _blended_3d(cap, out, srcb, px) (C): with eva = byte
+ * [cap+0x54], evb2 = 2 * byte [cap+0x55] and w = u16 [cap+0x4c]: evb2 = 0 and eva = 16 -> DraStic's direct capture
+ * (render_scanline_capture_direct_asm / _3d_asm (cap, out, source A), a tail call). Else per pixel i < w, with source
+ * A's 6-bit channels a_r, a_g, a_b (planes[i], planes[0x100 + i], planes[0x200 + i]; or bytes 0, 1, 2 of px[i]):
+ *   no source B ([cap+0x40] == 0, resp. srcb == NULL): out[i] = (u16)(0x8000 | (a_r * eva) >> 5 | ((a_g * eva) >> 5)
+ *     << 5 | (((a_b * eva) >> 5) & 0x3f) << 10)  (the channels are not clamped: any byte values carry into the next)
+ *   else, b = srcb[i]: c = a_c * eva + (b's 5-bit c) * evb2 (32 bits; up to 80835), out[i] = 0x8000 | min(r >> 5, 31)
+ *     | min(g >> 5, 31) << 5 | min(b >> 5, 31) << 10.
+ * The originals are scalar loops (~36 modeled cycles a pixel, the width re-read every pixel); here 16 pixels a step
+ * in NEON (umull for the source A products, mul .8h for B's (31 * 510 fits), uhadd + ushr #4 for the 17-bit sum's
+ * >> 5, umin), the last w % 16 pixels by the scalar formula. Only out[0..w) is written. Arguments where the result
+ * could depend on the order (out over the width field or over a source, other than out == srcb exactly, which the
+ * originals and this both do pixel by pixel in place) go to the original. Callers: render_scanline_2d (C) and
+ * render_scanline_capture (C, a tail call). */
+typedef void (*capb_fn)(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const void *srca);
+typedef void (*capd_fn)(uint8_t *cap, uint16_t *out, const void *srca);
+static capb_fn orig_capb, orig_capb3d;
+
+static inline uint16_t capb_px(uint32_t ar, uint32_t ag, uint32_t ab, uint32_t eva, const uint16_t *pb, uint32_t evb2) {
+    if (!pb) return (uint16_t)(0x8000 | (ar * eva) >> 5 | ((ag * eva) >> 5) << 5 | (((ab * eva) >> 5) & 0x3f) << 10);
+    uint32_t b = *pb, r = ar * eva + (b & 0x1f) * evb2, g = ag * eva + (b >> 5 & 0x1f) * evb2, bl = ab * eva + (b >> 10 & 0x1f) * evb2;
+    r >>= 5; g >>= 5; bl >>= 5;
+    return (uint16_t)(0x8000 | (r < 31 ? r : 31) | (g < 31 ? g : 31) << 5 | (bl < 31 ? bl : 31) << 10);
+}
+/* 8 pixels: the products of source A (u16, exact) and the colour */
+static inline uint16x8_t capb_v(uint16x8_t ra, uint16x8_t ga, uint16x8_t ba, const uint16_t *pb, uint16x8_t evb2) {
+    if (!pb)
+        return vorrq_u16(vorrq_u16(vshrq_n_u16(ra, 5), vbicq_u16(ga, vdupq_n_u16(0x1f))),
+                         vorrq_u16(vshlq_n_u16(vshrq_n_u16(ba, 5), 10), vdupq_n_u16(0x8000)));
+    const uint16x8_t c1f = vdupq_n_u16(0x1f);
+    uint16x8_t sb = LDQ16(pb, 0);
+    uint16x8_t rb = vmulq_u16(vandq_u16(sb, c1f), evb2), gb = vmulq_u16(vandq_u16(vshrq_n_u16(sb, 5), c1f), evb2);
+    uint16x8_t bb = vmulq_u16(vshrq_n_u16(vshlq_n_u16(sb, 1), 11), evb2);
+    uint16x8_t r = vminq_u16(vshrq_n_u16(vhaddq_u16(ra, rb), 4), c1f), g = vminq_u16(vshrq_n_u16(vhaddq_u16(ga, gb), 4), c1f);
+    uint16x8_t b = vminq_u16(vshrq_n_u16(vhaddq_u16(ba, bb), 4), c1f);
+    return vorrq_u16(vsliq_n_u16(vsliq_n_u16(r, g, 5), b, 10), vdupq_n_u16(0x8000));
+}
+static int capb_overlap(const uint8_t *cap, const uint16_t *out, const uint16_t *srcb, const uint8_t *a, size_t an, size_t ast,
+                        unsigned w) {
+    size_t on = 2 * (size_t)w;
+    if (ov(out, on, cap + 0x4c, 2)) return 1;
+    if (srcb && srcb != out && ov(out, on, srcb, on)) return 1;
+    for (int k = 0; k < 3; k++) if (ov(out, on, a + k * ast, an)) return 1;
+    return 0;
+}
+void ds2d_capb(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const uint8_t *planes) {
+    uint32_t eva = cap[0x54], evb2 = 2u * cap[0x55];
+    if (!evb2 && eva == 16) { ((capd_fn)(ds_base + DS_CAP_DIRECT))(cap, out, planes); return; }
+    unsigned w; uint16_t w16; memcpy(&w16, cap + 0x4c, 2); w = w16;
+    uint64_t hb; memcpy(&hb, cap + 0x40, 8);
+    const uint16_t *pb = hb ? srcb : 0;
+    if (__builtin_expect(capb_overlap(cap, out, pb, planes, w, 0x100, w), 0)) { orig_capb(cap, out, srcb, planes); return; }
+    const uint8x16_t ve = vdupq_n_u8((uint8_t)eva);
+    const uint16x8_t vb = vdupq_n_u16((uint16_t)evb2);
+    unsigned i = 0;
+    for (; i + 16 <= w; i += 16) {
+        uint8x16_t r = LDQ(planes + i, 0), g = LDQ(planes + i, 0x100), b = LDQ(planes + i, 0x200);
+        vst1q_u16(out + i, capb_v(vmull_u8(vget_low_u8(r), vget_low_u8(ve)), vmull_u8(vget_low_u8(g), vget_low_u8(ve)),
+                                  vmull_u8(vget_low_u8(b), vget_low_u8(ve)), pb ? pb + i : 0, vb));
+        vst1q_u16(out + i + 8, capb_v(vmull_high_u8(r, ve), vmull_high_u8(g, ve), vmull_high_u8(b, ve), pb ? pb + i + 8 : 0, vb));
+    }
+    for (; i < w; i++) out[i] = capb_px(planes[i], planes[0x100 + i], planes[0x200 + i], eva, pb ? pb + i : 0, evb2);
+}
+void ds2d_capb3d(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const uint32_t *px) {
+    uint32_t eva = cap[0x54], evb2 = 2u * cap[0x55];
+    if (!evb2 && eva == 16) { ((capd_fn)(ds_base + DS_CAP_DIRECT3D))(cap, out, px); return; }
+    unsigned w; uint16_t w16; memcpy(&w16, cap + 0x4c, 2); w = w16;
+    if (__builtin_expect(capb_overlap(cap, out, srcb, (const uint8_t *)px, 4 * (size_t)w, 0, w), 0)) {
+        orig_capb3d(cap, out, srcb, px);
+        return;
+    }
+    const uint8x16_t ve = vdupq_n_u8((uint8_t)eva);
+    const uint16x8_t vb = vdupq_n_u16((uint16_t)evb2);
+    unsigned i = 0;
+    for (; i + 16 <= w; i += 16) {
+        const uint32_t *pp = px + i;
+        uint8x16_t q0 = LDQ(pp, 0), q1 = LDQ(pp, 16), q2 = LDQ(pp, 32), q3 = LDQ(pp, 48);
+        uint8x16_t e01 = vuzp1q_u8(q0, q1), o01 = vuzp2q_u8(q0, q1), e23 = vuzp1q_u8(q2, q3), o23 = vuzp2q_u8(q2, q3);
+        uint8x16_t r = vuzp1q_u8(e01, e23), g = vuzp1q_u8(o01, o23), b = vuzp2q_u8(e01, e23);
+        vst1q_u16(out + i, capb_v(vmull_u8(vget_low_u8(r), vget_low_u8(ve)), vmull_u8(vget_low_u8(g), vget_low_u8(ve)),
+                                  vmull_u8(vget_low_u8(b), vget_low_u8(ve)), srcb ? srcb + i : 0, vb));
+        vst1q_u16(out + i + 8, capb_v(vmull_high_u8(r, ve), vmull_high_u8(g, ve), vmull_high_u8(b, ve), srcb ? srcb + i + 8 : 0, vb));
+    }
+    for (; i < w; i++) out[i] = capb_px(px[i] & 0xff, px[i] >> 8 & 0xff, px[i] >> 16 & 0xff, eva, srcb ? srcb + i : 0, evb2);
+}
+static void chk_capb_any(int h, int is3d, uint8_t *cap, uint16_t *out, const uint16_t *srcb, const void *a) {
+    uint16_t w16; memcpy(&w16, cap + 0x4c, 2);
+    size_t on = 2 * (((size_t)w16 + 31) & ~(size_t)31);     /* the direct captures store 32 pixels a step */
+    rgn r[2] = { padded(out, on ? on : 64), { cap + 0x40, 0x20 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 2, chk_in);
+    if (is3d) ds2d_capb3d(cap, out, srcb, a); else ds2d_capb(cap, out, srcb, a);
+    rg_save(r, 2, chk_ours);
+    rg_load(r, 2, chk_in);
+    (is3d ? orig_capb3d : orig_capb)(cap, out, srcb, a);
+    chk_finish(h, r, 2, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_capb(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const uint8_t *planes) { chk_capb_any(H_CAPB, 0, cap, out, srcb, planes); }
+static void chk_capb3d(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const uint32_t *px) { chk_capb_any(H_CAPB3D, 1, cap, out, srcb, px); }
+
+/* ---- H_AFF_NN, H_AFF_EN, H_AFF_EE: the affine BG tile renderers (ds2d_asm.S) ----
+ * The check mode's region: the bytes the original stores, from its pointer arithmetic: widths[0] == 0: 256 pixels;
+ * else runs = n (n <= 0: the loop's one pair, 2), run k storing 16 * max(1, ceil(w_k / 16)) pixels from its start and
+ * advancing by w_k (u16 pixels for extended_extended). */
+static size_t aff_extent(const uint8_t *widths, int n) {
+    if (!widths[0]) return 256;
+    int runs = n >= 1 ? n : 2;
+    size_t pos = 0, end = 0;
+    for (int k = 0; k < runs; k++) {
+        unsigned w = widths[k];
+        size_t e = pos + 16 * (w > 16 ? (w + 15) / 16 : 1);
+        if (e > end) end = e;
+        pos += w;
+    }
+    return end;
+}
+typedef void (*affn_fn)(uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, int, const uint8_t *);
+typedef void (*affe_fn)(void *, const uint8_t *, const uint8_t *, const uint16_t *, const uint8_t *, int, const uint8_t *);
+static void chk_aff_nn(uint8_t *dst, const uint8_t *offs, const uint8_t *widths, const uint8_t *entries, int n, const uint8_t *tiles) {
+    rgn r[1] = { padded(dst, aff_extent(widths, n)) };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 1, chk_in);
+    ds2d_aff_nn(dst, offs, widths, entries, n, tiles);
+    rg_save(r, 1, chk_ours);
+    rg_load(r, 1, chk_in);
+    ds2d_aff_nn_orig(dst, offs, widths, entries, n, tiles);
+    chk_finish(H_AFF_NN, r, 1, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_aff_e(int h, int ee, void *dst, const uint8_t *offs, const uint8_t *widths, const uint16_t *entries,
+                      const uint8_t *flips, int n, const uint8_t *tiles) {
+    rgn r[1] = { padded(dst, (ee ? 2 : 1) * aff_extent(widths, n)) };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 1, chk_in);
+    if (ee) ds2d_aff_ee(dst, offs, widths, entries, flips, n, tiles); else ds2d_aff_en(dst, offs, widths, entries, flips, n, tiles);
+    rg_save(r, 1, chk_ours);
+    rg_load(r, 1, chk_in);
+    if (ee) ds2d_aff_ee_orig(dst, offs, widths, entries, flips, n, tiles); else ds2d_aff_en_orig(dst, offs, widths, entries, flips, n, tiles);
+    chk_finish(h, r, 1, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_aff_en(uint8_t *dst, const uint8_t *offs, const uint8_t *widths, const uint16_t *entries, const uint8_t *flips, int n,
+                       const uint8_t *tiles) {
+    chk_aff_e(H_AFF_EN, 0, dst, offs, widths, entries, flips, n, tiles);
+}
+static void chk_aff_ee(uint16_t *dst, const uint8_t *offs, const uint8_t *widths, const uint16_t *entries, const uint8_t *flips, int n,
+                       const uint8_t *tiles) {
+    chk_aff_e(H_AFF_EE, 1, dst, offs, widths, entries, flips, n, tiles);
+}
+
 /* ---- install ---- */
 static const uint32_t expect_conv[4] = { 0x91040004, 0x91040025, 0x91080006, 0x91080027 };
 static const uint32_t expect_select[4] = { 0xd10a03ff, 0xa9007bfd, 0x910003fd, 0xa9025bf5 };
@@ -1140,6 +1306,11 @@ static const uint32_t expect_dbl[4] = { 0x4cdf2000, 0x4c402004, 0xbd400030, 0x4f
 static const uint32_t expect_vis4[4] = { 0x10ffffc4, 0x52800103, 0x4b020063, 0x4b0203e2 };
 static const uint32_t expect_vis8[4] = { 0x10ffff82, 0x4c407058, 0x4cdf2020, 0x4cdf2024 };
 static const uint32_t expect_vis12[4] = { 0x10fff8c2, 0x4c407058, 0x52800043, 0xd503201f };
+static const uint32_t expect_aff_nn[4] = { 0x39400047, 0x5287f80c, 0x340006a7, 0x71000484 };
+static const uint32_t expect_aff_en[4] = { 0x39400048, 0x529ff80d, 0x340007a8, 0x710004a5 };
+static const uint32_t expect_aff_ee[4] = { 0x39400048, 0x529ff80f, 0x340008a8, 0x710004a5 };
+static const uint32_t expect_capb[4] = { 0x3941540a, 0x39415009, 0x2b0a014a, 0xaa0003ec };
+static const uint32_t expect_capb3d[4] = { 0x3941540d, 0x3941500a, 0x2b0d01ad, 0xaa0003eb };
 
 /* one hook: the message names the routine; `orig` receives the trampoline (or stays as set) */
 static void *hook1(int h, uintptr_t off, const uint32_t expect[4], void *ours, void *chk) {
@@ -1242,4 +1413,15 @@ void ds2d_init(void) {
     hook1(H_VIS4, DS_VIS4, expect_vis4, (void *)ds2d_vis4, (void *)chk_vis4);
     hook1(H_VIS8, DS_VIS8, expect_vis8, (void *)ds2d_vis8, (void *)chk_vis8);
     hook1(H_VIS12, DS_VIS12, expect_vis12, (void *)ds2d_vis12, (void *)chk_vis12);
+    ds2d_orig_vars[9][0] = ds_base + DS_AFF_NN + 0xdc;     /* the cbz's target, the fifth instruction */
+    ds2d_orig_vars[9][1] = ds_base + DS_AFF_NN + 16;
+    ds2d_orig_vars[10][0] = ds_base + DS_AFF_EN + 0xfc;
+    ds2d_orig_vars[10][1] = ds_base + DS_AFF_EN + 16;
+    ds2d_orig_vars[11][0] = ds_base + DS_AFF_EE + 0x11c;
+    ds2d_orig_vars[11][1] = ds_base + DS_AFF_EE + 16;
+    hook1(H_AFF_NN, DS_AFF_NN, expect_aff_nn, (void *)ds2d_aff_nn, (void *)chk_aff_nn);
+    hook1(H_AFF_EN, DS_AFF_EN, expect_aff_en, (void *)ds2d_aff_en, (void *)chk_aff_en);
+    hook1(H_AFF_EE, DS_AFF_EE, expect_aff_ee, (void *)ds2d_aff_ee, (void *)chk_aff_ee);
+    orig_capb = (capb_fn)hook1(H_CAPB, DS_CAPB, expect_capb, (void *)ds2d_capb, (void *)chk_capb);
+    orig_capb3d = (capb_fn)hook1(H_CAPB3D, DS_CAPB3D, expect_capb3d, (void *)ds2d_capb3d, (void *)chk_capb3d);
 }

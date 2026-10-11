@@ -528,6 +528,14 @@ tile-map-entry setups (DraStic's table of map-row loaders is cheap: 44 modeled c
 disable_blank_layers (45 against ~60 with the jump into ours), set_visibility_4bpp (95 against ~98) and
 setup_blend_base (176 against ~200: both are bound by the same 16 128-bit operations per 64 pixels). A leaf of
 fewer than ~100 cycles a call gains little from a hook: the patched entry's jump costs a few cycles of its own.
+A fourth: the blended display capture (`render_scanline_capture_blended` / `_blended_3d`, C: a scalar loop with
+the width re-read every pixel, ~9000 modeled cycles a line; as NEON, 16 pixels a step: 9270 -> 1590 modeled cycles a call for the 3D line, 8640 -> 1770 for the 2D planes; the EVA = 16, EVB = 0
+case still tail-calls DraStic's direct capture; a game that captures with blending every frame, for trails or motion
+blur, runs it on every line) and the affine BG tile renderers (`render_scanline_affine_render_tiles_normal_normal_asm`,
+`_extended_normal_asm`, `_extended_extended_asm`: the originals with each tile loaded by four ldr q instead of ld1
+of four registers, the same loads and stores in the same order: 51 -> 31, 56 -> 36, 61 -> 46 modeled cycles per two
+runs of pixels). Their entries start with a cbz, so the check mode reaches the originals through stubs that take the
+branch themselves.
 
 `RAST_2D=0` (or `DSFLIP_RAST_2D=0`) leaves them alone (otherwise a bit mask of the hooks, default `DS2D_DEFAULT`);
 `RAST_2DCHECK=1` runs every call twice, ours and then DraStic's (through the trampoline) on the same input bytes, and
