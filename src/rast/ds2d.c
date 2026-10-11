@@ -44,26 +44,56 @@
  *           whose top layer is a blending target) -> ds2d_blend_enable(): the original walks all six masks with ld1
  *           of two registers and writeback (~45 modeled cycles); ours skips the layers whose bit in the first
  *           argument is clear (they change nothing) and loads with ldr q. Callers: render_scanline_2d_composite (C).
+ *   H_PAL8   render_scanline_palette_lookup_8bpp_asm (0x9f504: 8bpp indexes to u16 colours, 8 a step) -> ds2d_pal8
+ *           (ds2d_asm.S): software pipelined over two register sets, 16 modeled cycles a step against 26. Callers:
+ *           render_scanline_tiled_ext (the 8bpp text BG line) and the affine BG renderers (C, bl). Its loop
+ *           re-enters its second instruction (b.gt at +0x68 to +0x4), so the check mode runs a private copy of the
+ *           whole original (copy_orig, 112 bytes: register code, that one branch inside the copy, no literal or
+ *           pc-relative address).
+ *   H_PAL12  render_scanline_palette_lookup_12bpp_asm (0x9f574: the extended palettes' 12-bit indexes, in place)
+ *           -> ds2d_pal12, the same way (19 against 28; its copy: 116 bytes, b.gt at +0x6c to +0x4). Callers:
+ *           tiled_ext, affine_extended_ext (C).
+ *   H_PRIO2  render_scanline_priority_encode_double_asm (0x9fe98: the single encoder with a second output, the layer
+ *           below the top one, for the effects path) -> ds2d_prio_double(): as ds2d_prio_single. Caller:
+ *           render_scanline_2d_composite (C).
+ *   H_ALPHA_BASE, H_ALPHA, H_BLEND_BASE, H_BLEND_SET  render_scanline_color_effects_setup_alpha_base_asm (0xa042c),
+ *           _setup_alpha_asm (0xa04b4), _setup_blend_base_asm (0xa0254), _setup_blend_asm (0xa02e0): the blend's
+ *           per-pixel weight arrays (wa, wb: 256 bytes each) from the 3D alpha line or BLDALPHA where the enable
+ *           mask is set -> ds2d_setup_alpha_base() etc.: the same per 64-pixel block, from ldr q, the all-zero
+ *           mask blocks shortcut. Caller: render_scanline_2d_composite (C).
+ *   H_SHADE  render_scanline_shade_asm (0xa0108: the brightness effect on three planar quarters where the mask is
+ *           set) -> ds2d_shade(): the same umlal / shrn arithmetic per 32 pixels, the unmasked blocks copied. Caller:
+ *           a tail branch from render_scanline_2d_composite (C).
+ *   H_SPAN8N, H_SPAN8E  render_scanline_tiled_span_8bpp_normal_palette_asm (0x9f0f0) and _ext_palette_asm
+ *           (0x9f188): an 8bpp text BG line's 33 tile rows (index bytes; with the palette number as the high byte
+ *           for the extended palettes) -> ds2d_span8n() / ds2d_span8e(): the rows loaded straight into vector
+ *           lanes instead of through general registers, the interleave by zip + str q. Caller: tiled_ext (C).
  *
  * RAST_2D (or DSFLIP_RAST_2D): 0 leaves DraStic's functions alone; otherwise a mask of the hooks (default all):
- * 1 H_CONV, 2 H_SELECT, 4 H_EFFECTS, 8 H_BLEND, 16 H_PRIO, 32 H_CONV1X, 64 H_SPAN4. RAST_2DCHECK=1: every call of a
- * hooked function runs ours, then DraStic's original (through the trampoline rast_hook() returns, or
- * ds2d_span4_orig) on the same input bytes (every region either may write, and the inputs of the routines whose
- * outputs could reach them, is saved before ours and restored before the original), and compares those regions
- * afterwards (the outputs with up to 64 bytes either side, within their pages); ours is left in place.
- * "[ds2d] check:" counts every 2 s, "[ds2dcheck]" lines name the first differing byte. The 2D routines run on the
- * emulation thread only; the check's buffers are under a mutex all the same. */
+ * 1 H_CONV, 2 H_SELECT, 4 H_EFFECTS, 8 H_BLEND, 16 H_PRIO, 32 H_CONV1X, 64 H_SPAN4, 128 H_PAL8, 256 H_PAL12,
+ * 512 H_PRIO2, 1024 H_ALPHA_BASE, 2048 H_ALPHA, 4096 H_BLEND_BASE, 8192 H_BLEND_SET, 16384 H_SHADE, 32768 H_SPAN8N,
+ * 65536 H_SPAN8E. RAST_2DCHECK=1: every call of a hooked function runs ours, then DraStic's original (through the
+ * trampoline rast_hook() returns; through an ORIG4 stub of ds2d_asm.S for the entries that start with an adr, as
+ * ds2d_span4_orig; through a private copy of the whole routine for the two palette lookups, whose loops re-enter the
+ * patched entry: copy_orig(), check mode only, both routines position independent in every instruction) on the same
+ * input bytes (every region either may write, and the inputs of the routines whose outputs could reach them, is
+ * saved before ours and restored before the original), and compares those regions afterwards (the outputs with up
+ * to 64 bytes either side, within their pages); ours is left in place. "[ds2d] check:" counts every 2 s,
+ * "[ds2dcheck]" lines name the first differing byte. The 2D routines run on the emulation thread only; the check's
+ * buffers are under a mutex all the same. */
 #define _GNU_SOURCE
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/mman.h>
 #include <arm_neon.h>
 #include "rast.h"
 #include "ds2d.h"
 
-enum { H_CONV, H_SELECT, H_EFFECTS, H_BLEND, H_PRIO, H_CONV1X, H_SPAN4, H_N };
+enum { H_CONV, H_SELECT, H_EFFECTS, H_BLEND, H_PRIO, H_CONV1X, H_SPAN4, H_PAL8, H_PAL12, H_PRIO2, H_ALPHA_BASE, H_ALPHA,
+       H_BLEND_BASE, H_BLEND_SET, H_SHADE, H_SPAN8N, H_SPAN8E, H_N };
 
 /* the originals (trampolines) */
 typedef void (*conv_fn)(const uint8_t *a, const uint8_t *b, uint32_t *out);
@@ -83,6 +113,19 @@ typedef void (*span4_fn)(uint16_t *dst, uint8_t *rows, const uint16_t *pal, cons
                          const uint8_t *flags);
 /* DraStic's span_4bpp: its constant and its fifth instruction, for ds2d_span4_orig (ds2d_asm.S) */
 __attribute__((visibility("hidden"))) uintptr_t ds2d_span4_consts, ds2d_span4_cont;
+/* the same for the ORIG4 stubs of ds2d_asm.S: { the adr's target, the fifth instruction } per stub */
+__attribute__((visibility("hidden"))) uintptr_t ds2d_orig_vars[4][2];
+typedef void (*pal8_fn)(uint16_t *dst, const uint8_t *src, const uint16_t *pal, int n);
+typedef void (*pal12_fn)(uint16_t *dst, const uint16_t *src, const uint16_t *pal, int n);
+static pal8_fn orig_pal8;                  /* private copies of the originals (see copy_orig) */
+static pal12_fn orig_pal12;
+typedef void (*prio2_fn)(uint8_t *eng, uint8_t *vis, uint8_t *excl, uint8_t *excl2);
+static prio2_fn orig_prio2;
+typedef void (*alpha_fn)(uint8_t *wa, uint8_t *wb, const uint8_t *alpha, const uint8_t *mask);
+typedef void (*blendset_fn)(uint32_t bldalpha, uint8_t *wa, uint8_t *wb, const uint8_t *mask);
+static blendset_fn orig_blend_base, orig_blend_set;
+typedef void (*shade_fn)(const uint8_t *eng, uint8_t *out, const uint8_t *in, const uint8_t *mask);
+static shade_fn orig_shade;
 
 /* ---- check mode ---- */
 typedef struct { uint8_t *p; size_t n; } rgn;
@@ -93,7 +136,9 @@ static uint8_t chk_in[CHK_BYTES], chk_ours[CHK_BYTES], chk_ref[CHK_BYTES];
 static unsigned long chk_n[H_N], chk_bad[H_N];
 static struct timespec chk_last;
 static const char *hname[H_N] = { "color_convert_direct_32_2x", "select_pixels", "color_effects_apply", "select_blend_enable", "priority_encode_single",
-                                    "color_convert_direct_32_1x", "tiled_span_4bpp" };
+                                    "color_convert_direct_32_1x", "tiled_span_4bpp", "palette_lookup_8bpp", "palette_lookup_12bpp",
+                                    "priority_encode_double", "effects_setup_alpha_base", "effects_setup_alpha", "effects_setup_blend_base",
+                                    "effects_setup_blend", "shade", "tiled_span_8bpp_normal", "tiled_span_8bpp_ext" };
 static int ds2d_check, ds2d_mask;
 
 /* a region with up to CHK_PAD bytes either side, as far as the pages of its first and last byte go (always mapped) */
@@ -229,6 +274,15 @@ static inline uint8x16_t tst8(uint8x16_t a, uint8x16_t b) {
     __asm__("cmtst %0.16b, %1.16b, %2.16b" : "=w"(r) : "w"(a), "w"(b));
     return r;
 }
+/* m ? a : b per bit as one bit instruction (clang turns vbslq with a compare's mask into and + bic + orr). bit's
+ * operands are (destination = the else value, the then value, the mask), the mask last, unlike vbslq's. */
+static inline uint8x16_t sel8(uint8x16_t m, uint8x16_t a, uint8x16_t b) {
+    __asm__("bit %0.16b, %1.16b, %2.16b" : "+w"(b) : "w"(a), "w"(m));
+    return b;
+}
+static inline uint16x8_t sel16(uint16x8_t m, uint16x8_t a, uint16x8_t b) {
+    return vreinterpretq_u16_u8(sel8(vreinterpretq_u8_u16(m), vreinterpretq_u8_u16(a), vreinterpretq_u8_u16(b)));
+}
 
 /* render_scanline_select_pixels(eng, out, excl, layers, p3d, alpha, lmask), per 32 pixels in registers (see the top;
  * spec/composite.c has the original's passes). lmask arrives in w6 (the upper half undefined), cut to 32 bits as
@@ -253,8 +307,8 @@ static inline __attribute__((always_inline)) void sel_steps(uint8_t *out, const 
      * arrays (clang kept small arrays on the stack) */
 #define SEL4(mw, l0, l1, l2, l3) do {                                                                          \
         uint16x8_t m0_ = vdupq_n_u16((uint16_t)(mw)), m1_ = vdupq_n_u16((uint16_t)((mw) >> 16));             \
-        c0 = vbslq_u16(tst16(m0_, bl), l0, c0); c2 = vbslq_u16(tst16(m1_, bl), l2, c2);                       \
-        c1 = vbslq_u16(tst16(m0_, bh), l1, c1); c3 = vbslq_u16(tst16(m1_, bh), l3, c3);                       \
+        c0 = sel16(tst16(m0_, bl), l0, c0); c2 = sel16(tst16(m1_, bl), l2, c2);                               \
+        c1 = sel16(tst16(m0_, bh), l1, c1); c3 = sel16(tst16(m1_, bh), l3, c3);                               \
     } while (0)
 #define PLANES(ca, cb, r, g, bb_) do {                                                                         \
         uint8x16_t a_ = vreinterpretq_u8_u16(ca), b_ = vreinterpretq_u8_u16(cb);                              \
@@ -269,10 +323,10 @@ static inline __attribute__((always_inline)) void sel_steps(uint8_t *out, const 
         uint8x16_t q0_ = LDQ(pp_, 0), q1_ = LDQ(pp_, 16), q2_ = LDQ(pp_, 32), q3_ = LDQ(pp_, 48);               \
         uint8x16_t e01_ = vuzp1q_u8(q0_, q1_), o01_ = vuzp2q_u8(q0_, q1_);                                    \
         uint8x16_t e23_ = vuzp1q_u8(q2_, q3_), o23_ = vuzp2q_u8(q2_, q3_);                                    \
-        r = vbslq_u8(mb_, vuzp1q_u8(e01_, e23_), r);                                                          \
-        g = vbslq_u8(mb_, vuzp1q_u8(o01_, o23_), g);                                                          \
-        bb_ = vbslq_u8(mb_, vuzp2q_u8(e01_, e23_), bb_);                                                      \
-        if (alpha) vst1q_u8(alpha + (i0), vbslq_u8(mb_, vuzp2q_u8(o01_, o23_), LDQ(alpha + (i0), 0)));          \
+        r = sel8(mb_, vuzp1q_u8(e01_, e23_), r);                                                              \
+        g = sel8(mb_, vuzp1q_u8(o01_, o23_), g);                                                              \
+        bb_ = sel8(mb_, vuzp2q_u8(e01_, e23_), bb_);                                                          \
+        if (alpha) vst1q_u8(alpha + (i0), sel8(mb_, vuzp2q_u8(o01_, o23_), LDQ(alpha + (i0), 0)));              \
     } while (0)
     for (int b = 0; b < 8; b++) {
         uint16x8_t c0, c1, c2, c3;
@@ -448,6 +502,391 @@ static void chk_prio(uint8_t *eng, uint8_t *vis, uint8_t *excl) {
     pthread_mutex_unlock(&chk_lock);
 }
 
+
+/* ---- H_PAL8, H_PAL12: the palette lookups (ds2d_asm.S) ---- */
+/* DraStic's iteration count: n -= 8, another iteration while the result is > 0 */
+static inline int pal_iters(int n) { return n <= 8 ? 1 : (n + 7) >> 3; }
+
+/* a private executable copy of one of DraStic's routines, for the check mode: palette_lookup_8bpp / _12bpp loop
+ * back into their second instruction, which the patched entry has overwritten, so the trampoline cannot run them;
+ * both are position independent (register code and a branch within). Taken before the entry is patched. */
+static void *copy_orig(uintptr_t off, size_t len) {
+    static uint8_t *page; static size_t used;
+    if (!page) page = mmap(0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (page == MAP_FAILED || used + len > 4096) return 0;
+    uint8_t *p = page + used;
+    used += (len + 15) & ~(size_t)15;
+    memcpy(p, (const void *)(ds_base + off), len);
+    __builtin___clear_cache((char *)p, (char *)(p + len));
+    return p;
+}
+
+static void chk_pal8(uint16_t *dst, const uint8_t *src, const uint16_t *pal, int n) {
+    size_t it = pal_iters(n);
+    rgn r[2] = { padded(dst, 16 * it), { (uint8_t *)src, 8 * it } };     /* the palette is only read */
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 2, chk_in);
+    ds2d_pal8(dst, src, pal, n);
+    rg_save(r, 2, chk_ours);
+    rg_load(r, 2, chk_in);
+    orig_pal8(dst, src, pal, n);
+    chk_finish(H_PAL8, r, 2, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_pal12(uint16_t *dst, const uint16_t *src, const uint16_t *pal, int n) {
+    size_t it = pal_iters(n);
+    rgn r[2] = { padded(dst, 16 * it), { (uint8_t *)src, 16 * it } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 2, chk_in);
+    ds2d_pal12(dst, src, pal, n);
+    rg_save(r, 2, chk_ours);
+    rg_load(r, 2, chk_in);
+    orig_pal12(dst, src, pal, n);
+    chk_finish(H_PAL12, r, 2, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+
+/* ---- H_PRIO2: render_scanline_priority_encode_double_asm(eng, vis, excl, excl2) ----
+ * The single encoder's walk (ds2d_prio_single) with a second output: per listed layer k, s = [eng+0x84+k], o = s*32,
+ * with covered c, covered-twice d, objcovered oc, objex ox, objex2 oy all 0 at the start:
+ *   BG:  excl[o] = v & ~c;  excl2[o] = v & ~d & c;  d |= c & v;  c |= v           (v = vis[o..o+31])
+ *   OBJ: v = vis[o] & ~oc;  ox |= v & ~c;  oy |= v & ~d & c;  d |= c & v;  c |= v;  oc |= v
+ * then excl+0xa0 = ~c, excl2+0xa0 = c & ~d, excl+0x80 = ox, excl2+0x80 = oy (that order). excl2 is the layer
+ * below the top one (the blend's second target). Caller: render_scanline_2d_composite (C), the effects path. */
+void ds2d_prio_double(uint8_t *eng, uint8_t *vis, uint8_t *ea, uint8_t *eb) {
+    unsigned n = eng[0xb3];
+    const uint8_t *list = eng + 0x84;
+    uint8x16_t z = vdupq_n_u8(0), c0 = z, c1 = z, d0 = z, d1 = z, oc0 = z, oc1 = z, ox0 = z, ox1 = z, oy0 = z, oy1 = z;
+    for (unsigned k = 0; k < n; k++) {
+        uint32_t o = (uint32_t)list[k] << 5;
+        const uint8_t *v = vis + o;
+        uint8x16_t v0 = LDQ(v, 0), v1 = LDQ(v, 16);
+        if (!(o & 0x80)) {
+            vst1q_u8(ea + o, vbicq_u8(v0, c0));
+            vst1q_u8(ea + o + 16, vbicq_u8(v1, c1));
+            vst1q_u8(eb + o, vandq_u8(vbicq_u8(v0, d0), c0));
+            vst1q_u8(eb + o + 16, vandq_u8(vbicq_u8(v1, d1), c1));
+        } else {
+            v0 = vbicq_u8(v0, oc0); v1 = vbicq_u8(v1, oc1);
+            ox0 = vorrq_u8(ox0, vbicq_u8(v0, c0)); ox1 = vorrq_u8(ox1, vbicq_u8(v1, c1));
+            oy0 = vorrq_u8(oy0, vandq_u8(vbicq_u8(v0, d0), c0)); oy1 = vorrq_u8(oy1, vandq_u8(vbicq_u8(v1, d1), c1));
+            oc0 = vorrq_u8(oc0, v0); oc1 = vorrq_u8(oc1, v1);
+        }
+        d0 = vorrq_u8(d0, vandq_u8(c0, v0)); d1 = vorrq_u8(d1, vandq_u8(c1, v1));
+        c0 = vorrq_u8(c0, v0); c1 = vorrq_u8(c1, v1);
+    }
+    vst1q_u8(ea + 0xa0, vmvnq_u8(c0));
+    vst1q_u8(ea + 0xb0, vmvnq_u8(c1));
+    vst1q_u8(eb + 0xa0, vbicq_u8(c0, d0));
+    vst1q_u8(eb + 0xb0, vbicq_u8(c1, d1));
+    vst1q_u8(ea + 0x80, ox0);
+    vst1q_u8(ea + 0x90, ox1);
+    vst1q_u8(eb + 0x80, oy0);
+    vst1q_u8(eb + 0x90, oy1);
+}
+
+static void chk_prio2(uint8_t *eng, uint8_t *vis, uint8_t *ea, uint8_t *eb) {
+    unsigned n = eng[0xb3], hi = 0xc0;
+    for (unsigned k = 0; k < n; k++) if (eng[0x84 + k] * 32u + 32 > hi) hi = eng[0x84 + k] * 32u + 32;
+    rgn r[4] = { padded(ea, hi), padded(eb, hi), { vis, hi }, { eng, 0x100 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 4, chk_in);
+    ds2d_prio_double(eng, vis, ea, eb);
+    rg_save(r, 4, chk_ours);
+    rg_load(r, 4, chk_in);
+    orig_prio2(eng, vis, ea, eb);
+    chk_finish(H_PRIO2, r, 4, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+
+/* ---- the colour effects' per-pixel weights ----
+ * The masks are the compositor's 256-bit bitmaps (bit i = pixel i); the originals expand a u16 of one (ld4r / ld2r,
+ * tbl to bytes, cmtst with 1, 2, 4, ... 128) into 16 enable bytes; here a block's mask bytes are loaded by one ld1r
+ * (replicated) and each 16 enable bytes made by tbl + cmtst: EN_BLOCK. Each original loads a block's inputs (64
+ * pixels, 32 for the shade; its mask bytes included) and then stores it, so a block is handled the same way here
+ * (the callers' buffers do not alias, but a block's order is kept all the same: the unit test aliases them). */
+static const uint8_t en_bits[16] = { 1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128 };
+static const uint8_t en_idx[4][16] = { { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1 }, { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3 },
+                                       { 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5 }, { 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7 } };
+/* mask bytes p[0..7] (64 pixels) or p[0..3] (32: S = "4s") replicated over a q register by one ld1r */
+#define LD1R(p, S) __extension__({                                                                             \
+        uint8x16_t v_;                                                                                        \
+        __asm__("ld1r {%0." S "}, [%1]" : "=w"(v_) : "r"(p), "m"(*(const uint8_t (*)[8])(p)));              \
+        v_; })
+#define EN16(t, k) tst8(vqtbl1q_u8(t, vld1q_u8(en_idx[k])), vld1q_u8(en_bits))
+
+/* render_scanline_color_effects_setup_alpha_base_asm(wa, wb, alpha, mask): per pixel a = enabled ? alpha[i] : 31;
+ * wa[i] = a + 1, wb[i] = 31 - a (bytes). The 3D layer's per-pixel alpha where it is the blend's top layer. A block
+ * with no enabled pixel reads no alpha (the constants). */
+void ds2d_setup_alpha_base(uint8_t *wa, uint8_t *wb, const uint8_t *alpha, const uint8_t *mask) {
+    const uint8x16_t c1f = vdupq_n_u8(0x1f), c1 = vdupq_n_u8(1);
+    for (int b = 0; b < 4; b++) {
+        uint32_t m0, m1;
+        memcpy(&m0, mask + 8 * b, 4); memcpy(&m1, mask + 8 * b + 4, 4);
+        uint8_t *pa = wa + 64 * b, *pb = wb + 64 * b;
+        if (!(m0 | m1)) {
+            uint8x16_t a = vdupq_n_u8(0x20), z = vdupq_n_u8(0);
+            vst1q_u8(pa, a); vst1q_u8(pa + 16, a); vst1q_u8(pa + 32, a); vst1q_u8(pa + 48, a);
+            vst1q_u8(pb, z); vst1q_u8(pb + 16, z); vst1q_u8(pb + 32, z); vst1q_u8(pb + 48, z);
+            continue;
+        }
+        const uint8_t *ap = alpha + 64 * b;
+        uint8x16_t t = LD1R(mask + 8 * b, "2d");
+        uint8x16_t a0 = sel8(EN16(t, 0), LDQ(ap, 0), c1f), a1 = sel8(EN16(t, 1), LDQ(ap, 16), c1f);
+        uint8x16_t a2 = sel8(EN16(t, 2), LDQ(ap, 32), c1f), a3 = sel8(EN16(t, 3), LDQ(ap, 48), c1f);
+        vst1q_u8(pa, vaddq_u8(a0, c1)); vst1q_u8(pa + 16, vaddq_u8(a1, c1));
+        vst1q_u8(pa + 32, vaddq_u8(a2, c1)); vst1q_u8(pa + 48, vaddq_u8(a3, c1));
+        vst1q_u8(pb, vsubq_u8(c1f, a0)); vst1q_u8(pb + 16, vsubq_u8(c1f, a1));
+        vst1q_u8(pb + 32, vsubq_u8(c1f, a2)); vst1q_u8(pb + 48, vsubq_u8(c1f, a3));
+    }
+}
+
+/* render_scanline_color_effects_setup_alpha_asm(wa, wb, alpha, mask): the same over existing weights: enabled
+ * pixels get alpha[i] + 1 and 31 - alpha[i], the others keep wa[i], wb[i] (a block with no enabled pixel is left). */
+void ds2d_setup_alpha(uint8_t *wa, uint8_t *wb, const uint8_t *alpha, const uint8_t *mask) {
+    const uint8x16_t c1f = vdupq_n_u8(0x1f), c1 = vdupq_n_u8(1);
+    for (int b = 0; b < 4; b++) {
+        uint32_t m0, m1;
+        memcpy(&m0, mask + 8 * b, 4); memcpy(&m1, mask + 8 * b + 4, 4);
+        if (!(m0 | m1)) continue;
+        uint8_t *pa = wa + 64 * b, *pb = wb + 64 * b;
+        const uint8_t *ap = alpha + 64 * b;
+        uint8x16_t t = LD1R(mask + 8 * b, "2d");
+        uint8x16_t e0 = EN16(t, 0), e1 = EN16(t, 1), e2 = EN16(t, 2), e3 = EN16(t, 3);
+        uint8x16_t a0 = LDQ(ap, 0), a1 = LDQ(ap, 16), a2 = LDQ(ap, 32), a3 = LDQ(ap, 48);
+        uint8x16_t w0 = LDQ(pa, 0), w1 = LDQ(pa, 16), w2 = LDQ(pa, 32), w3 = LDQ(pa, 48);
+        uint8x16_t x0 = LDQ(pb, 0), x1 = LDQ(pb, 16), x2 = LDQ(pb, 32), x3 = LDQ(pb, 48);
+        vst1q_u8(pa, sel8(e0, vaddq_u8(a0, c1), w0)); vst1q_u8(pa + 16, sel8(e1, vaddq_u8(a1, c1), w1));
+        vst1q_u8(pa + 32, sel8(e2, vaddq_u8(a2, c1), w2)); vst1q_u8(pa + 48, sel8(e3, vaddq_u8(a3, c1), w3));
+        vst1q_u8(pb, sel8(e0, vsubq_u8(c1f, a0), x0)); vst1q_u8(pb + 16, sel8(e1, vsubq_u8(c1f, a1), x1));
+        vst1q_u8(pb + 32, sel8(e2, vsubq_u8(c1f, a2), x2)); vst1q_u8(pb + 48, sel8(e3, vsubq_u8(c1f, a3), x3));
+    }
+}
+
+/* BLDALPHA's two weights as the originals take them from w0: eva = (w0 << 1) & 0x3f, evb = ((w0 << 1) >> 8) &
+ * 0x3f (32-bit shifts: bit 7 of w0 reaches evb's bit 0), each at most 32 */
+static inline void bld_weights(uint32_t w, uint8x16_t *eva, uint8x16_t *evb) {
+    uint32_t a = (w << 1) & 0x3f, b = ((w << 1) >> 8) & 0x3f;
+    *eva = vdupq_n_u8(a > 32 ? 32 : a);
+    *evb = vdupq_n_u8(b > 32 ? 32 : b);
+}
+
+/* render_scanline_color_effects_setup_blend_base_asm(bldalpha, wa, wb, mask): wa[i] = enabled ? eva : 32,
+ * wb[i] = enabled ? evb : 0 (wb's block stored before wa's, as the original). */
+void ds2d_setup_blend_base(uint32_t bldalpha, uint8_t *wa, uint8_t *wb, const uint8_t *mask) {
+    uint8x16_t eva, evb;
+    bld_weights(bldalpha, &eva, &evb);
+    const uint8x16_t c20 = vdupq_n_u8(0x20);
+    for (int b = 0; b < 4; b++) {
+        uint8_t *pa = wa + 64 * b, *pb = wb + 64 * b;
+        uint8x16_t t = LD1R(mask + 8 * b, "2d");
+        uint8x16_t e0 = EN16(t, 0), e1 = EN16(t, 1), e2 = EN16(t, 2), e3 = EN16(t, 3);
+        vst1q_u8(pb, vandq_u8(e0, evb)); vst1q_u8(pb + 16, vandq_u8(e1, evb));
+        vst1q_u8(pb + 32, vandq_u8(e2, evb)); vst1q_u8(pb + 48, vandq_u8(e3, evb));
+        vst1q_u8(pa, sel8(e0, eva, c20)); vst1q_u8(pa + 16, sel8(e1, eva, c20));
+        vst1q_u8(pa + 32, sel8(e2, eva, c20)); vst1q_u8(pa + 48, sel8(e3, eva, c20));
+    }
+}
+
+/* render_scanline_color_effects_setup_blend_asm(bldalpha, wa, wb, mask): enabled pixels get eva / evb, the others
+ * keep their weights (wa's block stored first). */
+void ds2d_setup_blend(uint32_t bldalpha, uint8_t *wa, uint8_t *wb, const uint8_t *mask) {
+    uint8x16_t eva, evb;
+    bld_weights(bldalpha, &eva, &evb);
+    for (int b = 0; b < 4; b++) {
+        uint32_t m0, m1;
+        memcpy(&m0, mask + 8 * b, 4); memcpy(&m1, mask + 8 * b + 4, 4);
+        if (!(m0 | m1)) continue;
+        uint8_t *pa = wa + 64 * b, *pb = wb + 64 * b;
+        uint8x16_t t = LD1R(mask + 8 * b, "2d");
+        uint8x16_t e0 = EN16(t, 0), e1 = EN16(t, 1), e2 = EN16(t, 2), e3 = EN16(t, 3);
+        uint8x16_t w0 = LDQ(pa, 0), w1 = LDQ(pa, 16), w2 = LDQ(pa, 32), w3 = LDQ(pa, 48);
+        uint8x16_t x0 = LDQ(pb, 0), x1 = LDQ(pb, 16), x2 = LDQ(pb, 32), x3 = LDQ(pb, 48);
+        vst1q_u8(pa, sel8(e0, eva, w0)); vst1q_u8(pa + 16, sel8(e1, eva, w1));
+        vst1q_u8(pa + 32, sel8(e2, eva, w2)); vst1q_u8(pa + 48, sel8(e3, eva, w3));
+        vst1q_u8(pb, sel8(e0, evb, x0)); vst1q_u8(pb + 16, sel8(e1, evb, x1));
+        vst1q_u8(pb + 32, sel8(e2, evb, x2)); vst1q_u8(pb + 48, sel8(e3, evb, x3));
+    }
+}
+
+static void chk_alpha(int h, alpha_fn ours, alpha_fn orig, uint8_t *wa, uint8_t *wb, const uint8_t *alpha, const uint8_t *mask) {
+    rgn r[4] = { padded(wa, 256), padded(wb, 256), { (uint8_t *)alpha, 256 }, { (uint8_t *)mask, 32 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 4, chk_in);
+    ours(wa, wb, alpha, mask);
+    rg_save(r, 4, chk_ours);
+    rg_load(r, 4, chk_in);
+    orig(wa, wb, alpha, mask);
+    chk_finish(h, r, 4, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_alpha_base(uint8_t *wa, uint8_t *wb, const uint8_t *alpha, const uint8_t *mask) {
+    chk_alpha(H_ALPHA_BASE, ds2d_setup_alpha_base, ds2d_alpha_base_orig, wa, wb, alpha, mask);
+}
+static void chk_alpha_set(uint8_t *wa, uint8_t *wb, const uint8_t *alpha, const uint8_t *mask) {
+    chk_alpha(H_ALPHA, ds2d_setup_alpha, ds2d_alpha_orig, wa, wb, alpha, mask);
+}
+static void chk_blendw(int h, blendset_fn ours, blendset_fn orig, uint32_t w, uint8_t *wa, uint8_t *wb, const uint8_t *mask) {
+    rgn r[3] = { padded(wa, 256), padded(wb, 256), { (uint8_t *)mask, 32 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 3, chk_in);
+    ours(w, wa, wb, mask);
+    rg_save(r, 3, chk_ours);
+    rg_load(r, 3, chk_in);
+    orig(w, wa, wb, mask);
+    chk_finish(h, r, 3, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_blend_base(uint32_t w, uint8_t *wa, uint8_t *wb, const uint8_t *mask) {
+    chk_blendw(H_BLEND_BASE, ds2d_setup_blend_base, orig_blend_base, w, wa, wb, mask);
+}
+static void chk_blend_set(uint32_t w, uint8_t *wa, uint8_t *wb, const uint8_t *mask) {
+    chk_blendw(H_BLEND_SET, ds2d_setup_blend, orig_blend_set, w, wa, wb, mask);
+}
+
+/* ---- H_SHADE: render_scanline_shade_asm(eng, out, in, mask) ----
+ * The brightness effect on three planar quarters (256 bytes each at +0, +0x100, +0x200): with e = min(2 * BLDY
+ * ([eng+0xa2], u16), 32), and e' = 0 when BLDCNT ([eng+0xa0]) bit 6 is set (the darken effect), else e:
+ *     out[i] = low byte of ((enabled ? e' * 63 + 16 : 0) + in[i] * (enabled ? 32 - e : 32)) >> 5
+ * (umlal into 16 bits and shrn #5: the original's instructions). Disabled pixels come out unchanged, so a 32-pixel
+ * block with no enabled pixel is copied. Caller: a tail branch from render_scanline_2d_composite (C). */
+void ds2d_shade(const uint8_t *eng, uint8_t *out, const uint8_t *in, const uint8_t *mask) {
+    uint32_t evy, bldcnt;
+    memcpy(&evy, eng + 0xa2, 2); evy &= 0xffff;
+    memcpy(&bldcnt, eng + 0xa0, 2); bldcnt &= 0xffff;
+    uint32_t e = evy * 2;
+    if (e > 32) e = 32;
+    uint32_t base = ((bldcnt & 0x40) ? 0 : e) * 63 + 16;
+    const uint8x16_t ven = vdupq_n_u8((uint8_t)(32 - e)), v32 = vdupq_n_u8(32);
+    const uint16x8_t vb = vdupq_n_u16((uint16_t)base);
+    for (int b = 0; b < 8; b++) {
+        uint32_t mw;
+        memcpy(&mw, mask + 4 * b, 4);
+        const uint8_t *ip = in + 32 * b;
+        uint8_t *op = out + 32 * b;
+        uint8x16_t p0 = LDQ(ip, 0), p1 = LDQ(ip, 16), p2 = LDQ(ip, 0x100), p3 = LDQ(ip, 0x110), p4 = LDQ(ip, 0x200), p5 = LDQ(ip, 0x210);
+        if (!mw) {
+            vst1q_u8(op, p0); vst1q_u8(op + 16, p1); vst1q_u8(op + 0x100, p2); vst1q_u8(op + 0x110, p3);
+            vst1q_u8(op + 0x200, p4); vst1q_u8(op + 0x210, p5);
+            continue;
+        }
+        uint8x16_t t = LD1R(mask + 4 * b, "4s");
+        uint8x16_t e0 = EN16(t, 0), e1 = EN16(t, 1);
+        uint8x16_t w0 = sel8(e0, ven, v32), w1 = sel8(e1, ven, v32);
+        uint16x8_t b0l = vandq_u16(vb, vreinterpretq_u16_s16(vmovl_s8(vreinterpret_s8_u8(vget_low_u8(e0)))));
+        uint16x8_t b0h = vandq_u16(vb, vreinterpretq_u16_s16(vmovl_s8(vreinterpret_s8_u8(vget_high_u8(e0)))));
+        uint16x8_t b1l = vandq_u16(vb, vreinterpretq_u16_s16(vmovl_s8(vreinterpret_s8_u8(vget_low_u8(e1)))));
+        uint16x8_t b1h = vandq_u16(vb, vreinterpretq_u16_s16(vmovl_s8(vreinterpret_s8_u8(vget_high_u8(e1)))));
+#define SHADE1(p, bl, bh, w) vcombine_u8(vshrn_n_u16(vmlal_u8(bl, vget_low_u8(p), vget_low_u8(w)), 5),            \
+                                         vshrn_n_u16(vmlal_u8(bh, vget_high_u8(p), vget_high_u8(w)), 5))
+        vst1q_u8(op, SHADE1(p0, b0l, b0h, w0)); vst1q_u8(op + 16, SHADE1(p1, b1l, b1h, w1));
+        vst1q_u8(op + 0x100, SHADE1(p2, b0l, b0h, w0)); vst1q_u8(op + 0x110, SHADE1(p3, b1l, b1h, w1));
+        vst1q_u8(op + 0x200, SHADE1(p4, b0l, b0h, w0)); vst1q_u8(op + 0x210, SHADE1(p5, b1l, b1h, w1));
+#undef SHADE1
+    }
+}
+
+static void chk_shade(const uint8_t *eng, uint8_t *out, const uint8_t *in, const uint8_t *mask) {
+    rgn r[3] = { padded(out, 0x300), { (uint8_t *)in, 0x300 }, { (uint8_t *)mask, 32 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 3, chk_in);
+    ds2d_shade(eng, out, in, mask);
+    rg_save(r, 3, chk_ours);
+    rg_load(r, 3, chk_in);
+    orig_shade(eng, out, in, mask);
+    chk_finish(H_SHADE, r, 3, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+
+/* ---- H_SPAN8N, H_SPAN8E: the 8bpp text BG spans ----
+ * render_scanline_tiled_span_8bpp_normal_palette_asm(dst, tiles, entries, flags): 33 tiles' rows of 8 index bytes,
+ * tile t's from tiles + entries[t] (a u16 byte offset), reversed when bit 2 of flags[t] is set, to dst[8t..8t+7];
+ * four tiles a step (the flags as one word tested per 32-bit lane with the original's constants), the 33rd as the
+ * original's tail (entries[32], flags[32]). The original moves each row through a general register into a vector
+ * lane (mov v.d[i], x: ~30 modeled cycles a step); here the rows load straight into the lanes (ldr d / ld1 lane).
+ * Caller: render_scanline_tiled_ext (C), dst = the layer's index line (line + 0x110 - the sub-tile shift). */
+static inline uint8x16_t rows2(const uint8_t *tiles, uint64_t e, int sh) {
+    uint64_t a, b;                                   /* ldr d + ld1 {v.d}[1] (vcombine of two loads costs a mov + ins) */
+    memcpy(&a, tiles + ((e >> sh) & 0xffff), 8);
+    memcpy(&b, tiles + ((e >> (sh + 16)) & 0xffff), 8);
+    uint64x2_t v = vcombine_u64(vcreate_u64(a), vdup_n_u64(0));
+    v = vld1q_lane_u64(&b, v, 1);
+    return vreinterpretq_u8_u64(v);
+}
+void ds2d_span8n(uint8_t *dst, const uint8_t *tiles, const uint16_t *entries, const uint8_t *flags) {
+    static const uint32_t fb[4] = { 4, 4, 0x400, 0x400 };
+    const uint32x4_t fb0 = vld1q_u32(fb), fb1 = vshlq_n_u32(fb0, 16);
+    for (int t = 0; t < 32; t += 4) {
+        uint32_t f; uint64_t e;
+        memcpy(&f, flags + t, 4); memcpy(&e, entries + t, 8);
+        uint8x16_t v2 = rows2(tiles, e, 0), v3 = rows2(tiles, e, 32);
+        uint32x4_t fd = vdupq_n_u32(f);
+        v2 = sel8(vreinterpretq_u8_u32(vtstq_u32(fd, fb0)), vrev64q_u8(v2), v2);
+        v3 = sel8(vreinterpretq_u8_u32(vtstq_u32(fd, fb1)), vrev64q_u8(v3), v3);
+        vst1q_u8(dst + 8 * t, v2);
+        vst1q_u8(dst + 8 * t + 16, v3);
+    }
+    uint64_t r;
+    memcpy(&r, tiles + entries[32], 8);
+    if (flags[32] & 4) r = __builtin_bswap64(r);
+    memcpy(dst + 256, &r, 8);
+}
+
+/* render_scanline_tiled_span_8bpp_ext_palette_asm(dst, tiles, entries, flags): the same rows as u16 pixels,
+ * index | palette << 8 with the palette number from flags[t] >> 4 (the extended palettes' 12-bit index); the 33rd
+ * tile's palette byte is the original's: (flags[32] >> 4 | flags[33] << 4) & 0xff, from its 32-bit load of
+ * flags[32..35] (and it loads entries[32..35] as 8 bytes). Writes dst[0..263]. Caller: render_scanline_tiled_ext (C). */
+void ds2d_span8e(uint16_t *dst, const uint8_t *tiles, const uint16_t *entries, const uint8_t *flags) {
+    static const uint32_t fb[4] = { 4, 4, 0x400, 0x400 };
+    static const uint8_t t01[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1 };
+    const uint32x4_t fb0 = vld1q_u32(fb), fb1 = vshlq_n_u32(fb0, 16);
+    const uint8x16_t s01 = vld1q_u8(t01), s23 = vaddq_u8(s01, vdupq_n_u8(2));
+    uint8_t *d = (uint8_t *)dst;
+    for (int t = 0; t < 32; t += 4) {
+        uint32_t f; uint64_t e;
+        memcpy(&f, flags + t, 4); memcpy(&e, entries + t, 8);
+        uint8x16_t v2 = rows2(tiles, e, 0), v3 = rows2(tiles, e, 32);
+        uint32x4_t fd = vdupq_n_u32(f);
+        uint8x16_t pn = vreinterpretq_u8_u32(vdupq_n_u32((f >> 4) & 0x0f0f0f0f));
+        uint8x16_t p2 = vqtbl1q_u8(pn, s01), p3 = vqtbl1q_u8(pn, s23);
+        v2 = sel8(vreinterpretq_u8_u32(vtstq_u32(fd, fb0)), vrev64q_u8(v2), v2);
+        v3 = sel8(vreinterpretq_u8_u32(vtstq_u32(fd, fb1)), vrev64q_u8(v3), v3);
+        vst1q_u8(d + 16 * t, vzip1q_u8(v2, p2));
+        vst1q_u8(d + 16 * t + 16, vzip2q_u8(v2, p2));
+        vst1q_u8(d + 16 * t + 32, vzip1q_u8(v3, p3));
+        vst1q_u8(d + 16 * t + 48, vzip2q_u8(v3, p3));
+    }
+    uint32_t f; uint64_t e, r;
+    memcpy(&f, flags + 32, 4); memcpy(&e, entries + 32, 8);
+    memcpy(&r, tiles + (e & 0xffff), 8);
+    if (f & 4) r = __builtin_bswap64(r);
+    uint8x8_t row = vcreate_u8(r), pal = vdup_n_u8((uint8_t)(f >> 4));
+    vst1q_u8(d + 512, vcombine_u8(vzip1_u8(row, pal), vzip2_u8(row, pal)));
+}
+
+static void chk_span8n(uint8_t *dst, const uint8_t *tiles, const uint16_t *entries, const uint8_t *flags) {
+    rgn r[3] = { padded(dst, 264), { (uint8_t *)entries, 66 }, { (uint8_t *)flags, 33 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 3, chk_in);
+    ds2d_span8n(dst, tiles, entries, flags);
+    rg_save(r, 3, chk_ours);
+    rg_load(r, 3, chk_in);
+    ds2d_span8n_orig(dst, tiles, entries, flags);
+    chk_finish(H_SPAN8N, r, 3, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_span8e(uint16_t *dst, const uint8_t *tiles, const uint16_t *entries, const uint8_t *flags) {
+    rgn r[3] = { padded(dst, 528), { (uint8_t *)entries, 72 }, { (uint8_t *)flags, 36 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 3, chk_in);
+    ds2d_span8e(dst, tiles, entries, flags);
+    rg_save(r, 3, chk_ours);
+    rg_load(r, 3, chk_in);
+    ds2d_span8e_orig(dst, tiles, entries, flags);
+    chk_finish(H_SPAN8E, r, 3, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+
 /* ---- install ---- */
 static const uint32_t expect_conv[4] = { 0x91040004, 0x91040025, 0x91080006, 0x91080027 };
 static const uint32_t expect_select[4] = { 0xd10a03ff, 0xa9007bfd, 0x910003fd, 0xa9025bf5 };
@@ -456,6 +895,24 @@ static const uint32_t expect_blend[4] = { 0x4f00e434, 0x528000a4, 0x4e010c42, 0x
 static const uint32_t expect_prio[4] = { 0x3942cc06, 0x91021007, 0x4f000400, 0x4f000401 };
 static const uint32_t expect_conv1[4] = { 0x91040003, 0x91080004, 0x4f07e7e3, 0x4f07e7e7 };
 static const uint32_t expect_span4[4] = { 0x10ffff87, 0x52800406, 0x4c4078e0, 0x4f00e5e1 };
+static const uint32_t expect_pal8[4] = { 0xd2803fc4, 0xf8408425, 0x71002063, 0x8a050486 };
+static const uint32_t expect_pal12[4] = { 0xd283ffc4, 0xf8408425, 0x71002063, 0xf8408426 };
+static const uint32_t expect_prio2[4] = { 0x3942cc04, 0x91021005, 0x4f000400, 0x4f000401 };
+static const uint32_t expect_alpha_base[4] = { 0x10ffe664, 0x4f00e7f9, 0x4c407098, 0x4f00e43a };
+static const uint32_t expect_alpha[4] = { 0x10ffe224, 0x4f00e7fd, 0x4c40709c, 0x4f00e43e };
+static const uint32_t expect_blendw[4] = { 0x0b000000, 0x4f01e411, 0x53001404, 0x53083405 };   /* _blend_base and _blend */
+static const uint32_t expect_shade[4] = { 0xfc1f0fe8, 0x79414404, 0x52800408, 0x79414005 };
+static const uint32_t expect_span8n[4] = { 0x10ffff85, 0x52800404, 0x4c4078a0, 0x4f305401 };
+static const uint32_t expect_span8e[4] = { 0x10fffac5, 0x4f00e432, 0x4c4078a0, 0x4e081ff2 };
+
+/* one hook: the message names the routine; `orig` receives the trampoline (or stays as set) */
+static void *hook1(int h, uintptr_t off, const uint32_t expect[4], void *ours, void *chk) {
+    if (!(ds2d_mask & (1 << h))) return 0;
+    void *t = rast_hook(off, expect, ds2d_check ? chk : ours);
+    fprintf(stderr, t ? "[ds2d] %s replaced%s\n" : "[ds2d] unknown %s, not hooked%s\n", hname[h],
+            ds2d_check ? ", checking every call against DraStic's" : "");
+    return t;
+}
 
 void ds2d_init(void) {
     const char *e = getenv("DSFLIP_RAST_2D");
@@ -505,4 +962,28 @@ void ds2d_init(void) {
         fprintf(stderr, ok ? "[ds2d] tiled_span_4bpp replaced%s\n" : "[ds2d] unknown tiled_span_4bpp, not hooked%s\n",
                 ds2d_check ? ", checking every call against DraStic's" : "");
     }
+    /* the palette lookups: the check mode runs private copies of the originals (their loops re-enter the patched
+     * entry), taken before the patch; without a copy they stay DraStic's */
+    if (ds2d_check) {
+        orig_pal8 = (pal8_fn)copy_orig(DS_PAL8, 112);
+        orig_pal12 = (pal12_fn)copy_orig(DS_PAL12, 116);
+        if (!orig_pal8 || !orig_pal12) { fprintf(stderr, "[ds2d] no room for the palette lookups' copies, not hooked\n"); ds2d_mask &= ~(1 << H_PAL8 | 1 << H_PAL12); }
+    }
+    hook1(H_PAL8, DS_PAL8, expect_pal8, (void *)ds2d_pal8, (void *)chk_pal8);
+    hook1(H_PAL12, DS_PAL12, expect_pal12, (void *)ds2d_pal12, (void *)chk_pal12);
+    orig_prio2 = (prio2_fn)hook1(H_PRIO2, DS_PRIO_DOUBLE, expect_prio2, (void *)ds2d_prio_double, (void *)chk_prio2);
+    /* the ORIG4 stubs' constants and continuation addresses (ds2d_asm.S) */
+    ds2d_orig_vars[0][0] = ds2d_orig_vars[1][0] = ds_base + DS_SHADE_BITS;
+    ds2d_orig_vars[0][1] = ds_base + DS_SETUP_ALPHA_BASE + 16;
+    ds2d_orig_vars[1][1] = ds_base + DS_SETUP_ALPHA + 16;
+    ds2d_orig_vars[2][0] = ds2d_orig_vars[3][0] = ds_base + DS_SPAN8_CONSTS;
+    ds2d_orig_vars[2][1] = ds_base + DS_SPAN8N + 16;
+    ds2d_orig_vars[3][1] = ds_base + DS_SPAN8E + 16;
+    hook1(H_ALPHA_BASE, DS_SETUP_ALPHA_BASE, expect_alpha_base, (void *)ds2d_setup_alpha_base, (void *)chk_alpha_base);
+    hook1(H_ALPHA, DS_SETUP_ALPHA, expect_alpha, (void *)ds2d_setup_alpha, (void *)chk_alpha_set);
+    orig_blend_base = (blendset_fn)hook1(H_BLEND_BASE, DS_SETUP_BLEND_BASE, expect_blendw, (void *)ds2d_setup_blend_base, (void *)chk_blend_base);
+    orig_blend_set = (blendset_fn)hook1(H_BLEND_SET, DS_SETUP_BLEND, expect_blendw, (void *)ds2d_setup_blend, (void *)chk_blend_set);
+    orig_shade = (shade_fn)hook1(H_SHADE, DS_SHADE, expect_shade, (void *)ds2d_shade, (void *)chk_shade);
+    hook1(H_SPAN8N, DS_SPAN8N, expect_span8n, (void *)ds2d_span8n, (void *)chk_span8n);
+    hook1(H_SPAN8E, DS_SPAN8E, expect_span8e, (void *)ds2d_span8e, (void *)chk_span8e);
 }

@@ -354,6 +354,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   the compositor's checks 0 differ, with deferred shading to 40800, S4 0 bins in 7200, the stress ROM's 3 in 2400 (90
   s runs under the same load reach one checkpoint), the four 3x runs without signals. Generating the kernels takes
   about 2.5 minutes (the climb; `KERNSCHED=0` skips scheduling and climbing).
+  Fifth round, 2D: `ds2d.c` (the section "DraStic's 2D scanline routines" below) replaces seven of DraStic's 2D
+  routines in a first commit and ten more in a second, each exact (`t_ds2d.c`, RAST_2DCHECK=1 over the 2D and 3D
+  scenes); modeled A55 cycles a frame: every 2x / 3x game's conversion 0.62 -> 0.29 M, the field scene S7 frame 4.49
+  -> 4.21 M, the 2D scene cycle 3.44 -> 2.82 M (DraStic's 2D routines and ours together).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -500,6 +504,22 @@ all a replacement keeps; `ds2d.c`'s header lists the callers):
   per 4 tiles against 94. Its first instruction is an `adr`, so the check mode reaches the original through
   `ds2d_span4_orig` (its first four instructions' effects, then a jump to its fifth) instead of the trampoline.
 
+A second batch (the fifth round's second commit) takes ten more leaves the same way, all called from C:
+`render_scanline_palette_lookup_8bpp_asm` / `_12bpp_asm` (8bpp and extended-palette indexes to colours: the
+original's iteration is one dependence chain, 26 / 28 modeled cycles per 8 pixels; ours is software pipelined over
+two register sets, an iteration's word loaded and its indexes computed while the previous gathers land, 16 / 19;
+arguments where that reordering could show, dst just below or over the source or over the palette, take a verbatim
+copy of the original's loop), the 8bpp text BG spans (`_span_8bpp_normal_palette_asm`, `_ext_palette_asm`: rows
+loaded straight into vector lanes instead of through general registers, zip + str q instead of st2), the double
+priority encoder, the blend weights' four setups and the brightness shade (per block as the originals, the mask
+bytes by ld1r + tbl, empty mask blocks shortcut). In the check mode the entries that start with an adr reach the
+original through an ORIG4 stub of `ds2d_asm.S` (as `ds2d_span4_orig`), and the two palette lookups, whose loops
+re-enter the patched entry, through a private executable copy of the whole routine (both position independent in
+every instruction; check mode only, nothing is written into DraStic). Per call, modeled cycles (2D scene cycle,
+calls a frame): palette_lookup_8bpp 770 -> 540 (132), _12bpp 838 -> 636 (52), span_8bpp 329 -> 276 (105) and
+418 -> 356 (48), shade 699 -> 401 (32), double encoder ~330 -> 230 (48); S4: setup_alpha_base 194 -> 85, the double
+encoder 70 -> 54 (129 each).
+
 `RAST_2D=0` (or `DSFLIP_RAST_2D=0`) leaves them alone (otherwise a bit mask of the hooks, default all);
 `RAST_2DCHECK=1` runs every call twice, ours and then DraStic's (through the trampoline) on the same input bytes, and
 compares the outputs with 64 bytes either side (`[ds2d] check:` counts every 2 s, `[ds2dcheck]` lines for a
@@ -605,9 +625,16 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
   S7). ds2d.c now owns the conversion hook, so it could take the rows by plane pointer; first prove that nothing
   reads the planes between the composite and the conversion (render_scanline memsets and reuses them in some
   display modes; display capture reads them).
-- DraStic's 2D path after `ds2d.c` (the section above): render_scanline_2d itself (C, 0.10-0.34 M; its costliest
-  blocks are inlined NEON over the layer lines, not a function a hook can take); in 2D games render_scanline_obj_c
-  (C, 0.23 M on the 2D scene cycle), palette_lookup_8bpp (0.10 M), the 8bpp spans and render_scanline_bg.
+- DraStic's 2D path after `ds2d.c` (the section above): what is left is C. render_scanline_obj_c (6.8 KB, 0.26 M
+  on the 2D scene cycle and the largest 2D item of any sprite-heavy game: its per-pixel loops store the colour, the
+  index and the attribute byte per sprite pixel) can only be taken whole: DraStic's OBJ renderer re-implemented
+  exactly (1D / 2D mapping, bitmap and affine sprites, mosaic, the OBJ window) against the decompiler's C, with
+  RAST_2DCHECK over sprite scenes; next render_scanline_bitmap_8bpp / _16bpp (3.5 KB each, 0.06 / 0.05 M, mode 3-5
+  games), render_scanline_capture_blended_3d (324 B, 0.04 M when a game captures every frame), the affine tile
+  renderers (render_scanline_affine_render_tiles_*_asm, 0.036 M: variable-length runs with overlapping 16-byte
+  stores) and render_scanline_bg (0.10 M on the 2D cycle, nearly all of it its horizontal mosaic loops).
+  render_scanline_2d (0.10-0.34 M) and render_scanline (0.06 M) are per-line drivers whose cost is prologue and
+  inlined NEON (L4: the OBJ lines' bit-15 visibility bitmaps): not hookable without replacing them whole.
 - The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate; IPC
   ~0.8-0.98 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
   finds 0.1% more). Across blocks the translucent tail, the alpha stages and the st4 stores are done (Status); the
