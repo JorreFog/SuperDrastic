@@ -57,7 +57,14 @@ private:
     void FlushRegs(bool forget);  // store dirty registers; forget = they must be reloaded (after a call)
     void LoadFlags();          // host NZCV <- CPSR, unless the host's NZCV still holds them
     u32 FlagsEpoch = ~0u;      // host NZCV == CPSR's NZCV while this equals A.flagEpoch
-    void ExitBlock(bool known = false, u32 knownPC = 0);  // knownPC: the R15 it leaves, when constant
+    // knownPC: the R15 it leaves, when constant; thumbAfter: the Thumb state then (-1: the block's)
+    void ExitBlock(bool known = false, u32 knownPC = 0, int thumbAfter = -1);
+    // block timing: B, BL, BLX imm and Thumb B, B<cond>, BL (merged) with their target known when compiled, as
+    // melonDS's JIT does them (fetch cycles counted at compile time); the taken path leaves the block itself unless
+    // the framework follows the branch. Returns whether it did (the rest of the taken path is then dead).
+    bool CompileBranch();
+    static bool StaticBranch(bool thumb, u16 kind, int num);
+    void StoreCPU(Reg r, size_t off);  // a u32 field of the CPU at any offset
     void Fallback(bool thumb);
     void CompileALU();
     void CompileMul();         // MUL/MLA/UMULL/UMLAL/SMULL/SMLAL, and Thumb MUL

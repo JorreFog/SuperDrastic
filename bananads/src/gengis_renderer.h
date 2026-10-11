@@ -54,6 +54,7 @@ private:
     // the frame's bins: claimed by the workers (and by the emulator's thread while it waits for one)
     std::atomic<unsigned> Next{GX_NBINS};
     std::atomic<unsigned> Done[GX_NBINS];
+    std::atomic<int> Converted{2};  // the frame's conversion: 0 to do, 1 being done, 2 done
     unsigned Gen = 0;
     std::mutex M;
     std::condition_variable Wake, BinDone;

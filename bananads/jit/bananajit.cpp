@@ -319,7 +319,8 @@ s32 Compiler::CyclesC() const {
 // stored on the way back only, and instrAddr is a constant.
 static constexpr u32 PrologueBytes = 8;
 
-void Compiler::ExitBlock(bool known, u32 knownPC) {
+void Compiler::ExitBlock(bool known, u32 knownPC, int thumbAfter) {
+    const bool thumbExit = thumbAfter < 0 ? Thumb : thumbAfter != 0;
     FlushCycles();
     FlushRegs(false);
     auto back = [&]() {  // to the loop, with the state it reads in memory
@@ -344,7 +345,7 @@ void Compiler::ExitBlock(bool known, u32 knownPC) {
     auto late = A.bcond_fwd(CS);  // Timestamp >= Target (unsigned)
 
     if (known) {
-        A.movi(X0r, knownPC - (Thumb ? 2 : 4));  // instrAddr
+        A.movi(X0r, knownPC - (thumbExit ? 2 : 4));  // instrAddr
     } else {
         A.ldr(X0r, RCPU, off_R(15));
         A.ubfx(X17, RCPSR, 5, 1);     // Thumb: 2, ARM: 4
@@ -1546,6 +1547,105 @@ void Compiler::CompileBlockTransfer() {
     }
 }
 
+
+// --- block timing: branches with a static target ---
+
+bool Compiler::StaticBranch(bool thumb, u16 kind, int num) {
+    using namespace ARMInstrInfo;
+    if (thumb) return kind == tk_B || kind == tk_BCOND || kind == tk_BL_LONG;
+    return kind == ak_B || kind == ak_BL || (kind == ak_BLX_IMM && num == 0);
+}
+
+void Compiler::StoreCPU(Reg r, size_t off) {
+    if (off % 4 == 0 && off < 16384) { A.str(r, RCPU, off); return; }
+    A.movix((Reg)17, (uint64_t)(uintptr_t)((u8*)CurCPU + off));
+    A.str(r, (Reg)17, 0);
+}
+
+bool Compiler::CompileBranch() {
+    using namespace ARMInstrInfo;
+    const u32 in = CurInstr.Instr;
+    const u16 kind = CurInstr.Info.Kind;
+    u32 target, lr = 0;
+    bool link = false;
+    s32 extra = 0;  // the merged Thumb BL's first half: its own AddCycles_C
+    if (!Thumb) {
+        target = R15 + ((s32)(in << 8) >> 6);
+        link = kind != ak_B;
+        if (kind == ak_BLX_IMM) target += (((in >> 24) & 1) << 1) + 1;  // to Thumb
+        lr = R15 - 4;
+    } else if (kind == tk_B) {
+        target = R15 + ((s32)((in & 0x7FF) << 21) >> 20) + 1;
+    } else if (kind == tk_BCOND) {
+        target = R15 + ((s32)(in << 24) >> 23) + 1;
+    } else {  // tk_BL_LONG: the framework merged BL's two halves (Instr = first | second << 16)
+        extra = CyclesC();
+        const u32 r15 = R15 + 2, upper = in >> 16;
+        target = (r15 - 2) + ((s32)((in & 0x7FF) << 21) >> 9) + ((upper & 0x7FF) << 1);
+        if (CurCPU->Num == 1 || (upper & (1 << 12))) target |= 1;  // BL; ARM9 BLX: to ARM
+        link = true;
+        lr = (r15 - 2) | 1;
+    }
+    const bool toThumb = target & 1;
+    u32 addr, newPC;
+    s32 cycles = extra;
+    // the fetch cycles at the target, as melonDS's Comp_JumpTo works them out (ARMv5/ARMv4::JumpTo at run time)
+    if (CurCPU->Num == 0) {
+        ARMv5* cpu9 = (ARMv5*)CurCPU;
+        const u32 region = cpu9->MemTimings[target >> 12][0];
+        const s32 keep = cpu9->RegionCodeCycles;
+        cpu9->RegionCodeCycles = region;
+        const bool setup = (target >> 24) != (R15 >> 24);
+        if (setup) cpu9->SetupCodeMem(target);
+        if (toThumb) {
+            addr = target & ~1u;
+            newPC = addr + 2;
+            if (addr & 2) {
+                cpu9->CodeRead32(addr - 2, true); cycles += cpu9->CodeCycles;
+                cpu9->CodeRead32(addr + 2, false); cycles += cpu9->CodeCycles;
+            } else {
+                cpu9->CodeRead32(addr, true); cycles += cpu9->CodeCycles;
+            }
+        } else {
+            addr = target & ~3u;
+            newPC = addr + 4;
+            cpu9->CodeRead32(addr, true); cycles += cpu9->CodeCycles;
+            cpu9->CodeRead32(addr + 4, false); cycles += cpu9->CodeCycles;
+        }
+        cpu9->RegionCodeCycles = keep;
+        if (setup) cpu9->SetupCodeMem(R15);
+        A.movi((Reg)16, region);
+        StoreCPU((Reg)16, offsetof(ARMv5, RegionCodeCycles));
+    } else {
+        const u32 codeCycles = target >> 15;
+        addr = toThumb ? target & ~1u : target & ~3u;
+        newPC = addr + (toThumb ? 2 : 4);
+        cycles += toThumb ? NDS.ARM7MemTimings[codeCycles][0] + NDS.ARM7MemTimings[codeCycles][1]
+                          : NDS.ARM7MemTimings[codeCycles][2] + NDS.ARM7MemTimings[codeCycles][3];
+        A.movi((Reg)16, target >> 24);
+        StoreCPU((Reg)16, offsetof(ARM, CodeRegion));
+        A.movi((Reg)16, codeCycles);
+        StoreCPU((Reg)16, offsetof(ARM, CodeCycles));
+    }
+    if (link) {
+        A.movi(host(14), lr);
+        Dirty(14);
+    }
+    if (toThumb != Thumb) toThumb ? A.orri(RCPSR, RCPSR, 0x20) : A.andi(RCPSR, RCPSR, ~0x20u);
+    ChargeTaken(cycles);
+    if (CurInstr.BranchFlags & branch_IdleBranch) {
+        A.movz(W0, 1);
+        A.strb(W0, RCPU, offsetof(ARM, IdleLoop));
+    }
+    if (CurInstr.BranchFlags & branch_FollowCondTaken) return false;  // the block goes on at the target
+    const s32 keep = ConstantCycles;
+    const u16 keepDirt = Dirt;
+    ExitBlock(true, newPC, toThumb);
+    ConstantCycles = keep;
+    Dirt = keepDirt;
+    return true;
+}
+
 // --- a block ---
 
 static const char* TraceName(bool thumb, const FetchedInstr& f) {
@@ -1583,7 +1683,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
                           instrs[i].Info.Kind, TraceName(thumb, instrs[i]),
                           instrs[i].SetFlags, instrs[i].BranchFlags);
 
-    bool exitKnown = false;
+    bool exitKnown = false, lastExited = false;
     u32 exitPC = 0;
     for (int i = 0; i < count; i++) {
         CurInstr = instrs[i];
@@ -1598,7 +1698,9 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
                        : NativeKindARM(CurInstr.Instr, kind);
         if (!DoMul && (nk == 3 || nk == 4)) nk = 0;  // jit.mul=off: multiply and register-shift through the interpreter
         if (!DoLDM && nk == 5) nk = 0;               // jit.ldm=off: block transfers through the interpreter
+        if (!nk && !Exact && FastMem && StaticBranch(thumb, kind, cpu->Num)) nk = 6;  // block timing: native
         const bool native = nk != 0;
+        bool branchExited = false;
         const bool selfCycles = nk != 1;  // the interpreter or a memory helper charges this one's cycles
 
         u32 cond = 0xE;
@@ -1641,7 +1743,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             skip = A.bcond_fwd((Cond)(cond ^ 1));
         }
 
-        if (thumb && nk && nk != 5) {  // compiled as the ARM instruction it means; flags, registers and cycles stay Thumb's
+        if (thumb && nk && nk != 5 && nk != 6) {  // compiled as the ARM instruction it means; flags, registers and cycles stay Thumb's
             CurInstr.Instr = armInstr;
             if (nk == 2) CurInstr.Info.Kind = armKind;
         }
@@ -1656,12 +1758,23 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             CompileALU();          // register-shifted operand; CompileALU charges its own AddCycles_CI(1)
         } else if (nk == 5) {
             CompileBlockTransfer();  // charges its own AddCycles_CDI/CD (loads/stores) through the helper
+        } else if (nk == 6) {
+            branchExited = CompileBranch();
         } else {
             Fallback(thumb);
         }
 
         // after it ran: idle-loop marking, and leaving a block that followed the other way
         auto special = [&](bool taken) {
+            if (taken && branchExited) return;  // CompileBranch's taken path has left the block
+            if (!taken && nk == 6 && (CurInstr.BranchFlags & branch_FollowCondTaken)) {
+                s32 keep = ConstantCycles;  // not taken, the block leaves to the next instruction
+                u16 keepDirt = Dirt;
+                ExitBlock(true, R15);
+                ConstantCycles = keep;
+                Dirt = keepDirt;
+                return;
+            }
             if (taken && (CurInstr.BranchFlags & branch_IdleBranch)) {
                 A.movz(W0, 1);
                 A.strb(W0, RCPU, offsetof(ARM, IdleLoop));
@@ -1676,6 +1789,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             }
         };
 
+        lastExited = branchExited && !conditional;
         if (conditional) {
             u16 dirt = Dirt;
             s32 cyc = ConstantCycles;
@@ -1696,7 +1810,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
         }
     }
 
-    ExitBlock(exitKnown, exitPC);
+    if (!lastExited) ExitBlock(exitKnown, exitPC);
 
     // the fast-memory accesses' slow paths, out of the way of the block's own code
     for (auto& d : SlowPaths) {

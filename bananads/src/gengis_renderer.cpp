@@ -246,6 +246,16 @@ void GengisRenderer3D::Convert() {
 bool GengisRenderer3D::RenderOne() {
     const unsigned b = Next.fetch_add(1, std::memory_order_acq_rel);
     if (b >= GX_NBINS) return false;
+    // the frame's polygons and textures, converted by the first thread to claim a bin of it (melonDS's state stays
+    // until VBlank, where Finish3DRendering waits for the frame first)
+    int expect = 0;
+    if (Converted.compare_exchange_strong(expect, 1, std::memory_order_acq_rel)) {
+        Convert();
+        gx_begin_frame(&Frame);
+        Converted.store(2, std::memory_order_release);
+    } else {
+        while (Converted.load(std::memory_order_acquire) != 2) std::this_thread::yield();
+    }
     gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);
     Done[b].store(Frame.gen, std::memory_order_release);
     { std::lock_guard<std::mutex> l(M); }  // (a waiter between its test and its wait sees the notify)
@@ -287,9 +297,8 @@ void GengisRenderer3D::RenderFrame() {
     const bool texPalChanged = GPU.MakeVRAMFlat_TexPalCoherent(texPalDirty);
     if (!(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical) return;  // the lines are the last frame's
     if (textureChanged || texPalChanged) Textures.clear();
-    Convert();
     Frame.gen = ++Gen;
-    gx_begin_frame(&Frame);
+    Converted.store(0, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> l(M);
         Next.store(0, std::memory_order_release);
