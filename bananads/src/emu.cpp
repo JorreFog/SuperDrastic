@@ -214,6 +214,14 @@ bool Emu::load_rom(const std::string& path) {
         if (iofast == "on") setenv("MELONDS_IOFAST", "1", 1);
         else if (iofast == "off") setenv("MELONDS_IOFAST", "0", 1);
     }
+    // jit.codegen=new|old sets MELONDS_JIT_OLDCODEGEN (melonDS patch 0007: the AArch64 JIT's code generation
+    // improvements, each also off by its own MELONDS_JIT_NO* variable), read as the JIT compiler is created; unset,
+    // the environment decides (default new). For A/B runs, bananads-difftest --a jit.codegen=old --b jit.codegen=new.
+    {
+        const std::string codegen = cfg_.str("jit.codegen", "");
+        if (codegen == "new") setenv("MELONDS_JIT_OLDCODEGEN", "0", 1);
+        else if (codegen == "old") setenv("MELONDS_JIT_OLDCODEGEN", "1", 1);
+    }
 
     setup_wifi();
     setup_local();
