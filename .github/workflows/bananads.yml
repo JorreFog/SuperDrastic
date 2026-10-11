@@ -1,0 +1,53 @@
+# BananaDS (bananads/): builds it for the PC and for aarch64, runs the host tests on both (aarch64 under qemu), and
+# boots the 3D stress-test ROM headless as a smoke test. Only runs when bananads/ or this file changes.
+name: bananads
+on:
+  push:
+    branches: [main]
+    paths: ['bananads/**', 'stressrom/**', '.github/workflows/bananads.yml']
+  pull_request:
+    paths: ['bananads/**', 'stressrom/**', '.github/workflows/bananads.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake g++ clang lld python3 pkg-config \
+            libsdl2-dev libasound2-dev libenet-dev g++-aarch64-linux-gnu qemu-user
+      - name: PC build
+        run: |
+          cmake -S bananads -B build-pc -DBANANADS_LAN=ON
+          cmake --build build-pc -j"$(nproc)"
+      - name: Host tests
+        run: ./build-pc/bananads-tests
+      - name: Smoke test (the stress ROM, headless)
+        run: |
+          python3 stressrom/build.py
+          mkdir -p smoke
+          ./build-pc/bananads --frontend headless --set headless.frames=600 --set headless.dump_dir=smoke \
+            --set headless.dump_every=600 --set save.dir=smoke --set wifi.dns=off stressrom/out/dsstress-L5.nds \
+            2>&1 | tee smoke/log.txt
+          grep -q '600 frames' smoke/log.txt
+          test -s smoke/frame600.ppm
+      - name: aarch64 build
+        run: |
+          PKG_CONFIG_LIBDIR=/nonexistent cmake -S bananads -B build-a64 \
+            -DCMAKE_TOOLCHAIN_FILE=$PWD/bananads/cmake/aarch64-linux-gnu.cmake -DBANANADS_SDL=OFF -DBANANADS_ALSA=OFF
+          cmake --build build-a64 -j"$(nproc)"
+      - name: aarch64 tests and smoke test (qemu, ARM64 JIT)
+        run: |
+          qemu-aarch64 -L /usr/aarch64-linux-gnu build-a64/bananads-tests
+          qemu-aarch64 -L /usr/aarch64-linux-gnu build-a64/bananads --frontend headless --set headless.frames=120 \
+            --set save.dir=smoke --set wifi.dns=off stressrom/out/dsstress-L5.nds 2>&1 | grep '120 frames'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bananads-aarch64
+          path: |
+            build-a64/bananads
+            bananads/README.md
+            bananads/docs/SETTINGS.md
