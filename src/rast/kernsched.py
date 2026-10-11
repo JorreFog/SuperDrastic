@@ -525,3 +525,78 @@ def schedule(lines):
         for I in order: m.issue(I)
         k = e
     return out
+
+CLIMB = {}
+
+def climb_loop(lines, start, end, evals, seed=1):
+    """A loop's steady path, lines[start:end] (from its head label to its jump back; its conditional branches not
+    taken, kerngen.py's pipelined loops), reordered as a whole: the blocks were scheduled one at a time, each for its
+    own branch, but in the loop the next group's head (whose results the next step reads first) competes with the
+    current group's colour stage in one block. A hill climb on the machine model running the path three times over:
+    each step moves one instruction of a block to another place its dependences (dag()) allow, after its last
+    predecessor and before its first successor (labels and branches stay), and keeps the order when the loop runs no
+    slower; `evals` such moves, fewer when a quarter of them pass without a gain. Deterministic (its own xorshift
+    generator, seeded); identical paths are climbed once."""
+    seg, cur = [], []
+    for k in range(start, end):
+        it = parse(lines[k], k)
+        if it is None:
+            if cur: seg.append(cur); cur = []
+            seg.append(k)
+        else: cur.append(k)
+    if cur: seg.append(cur)
+    key = tuple(lines[start:end])
+    if key in CLIMB:
+        new = CLIMB[key]
+    else:
+        items, orders, preds, succ = [], [], [], []
+        for sg in seg:
+            if isinstance(sg, int):
+                t = lines[sg].strip()
+                items.append(None if t.endswith(":") else BR); orders.append(None); preds.append(None); succ.append(None)
+                continue
+            ins = [parse(lines[k], i) for i, k in enumerate(sg)]
+            p = dag(ins)[0]
+            sc = [[] for _ in ins]
+            for i, pi in enumerate(p):
+                for j, _ in pi: sc[j].append(i)
+            items.append(ins); orders.append(list(range(len(ins)))); preds.append([[j for j, _ in pi] for pi in p]); succ.append(sc)
+        def run(orders):
+            m = Machine()
+            for _ in range(3):
+                for it, o in zip(items, orders):
+                    if o is None:
+                        if it is BR: m.issue(BR)
+                    else:
+                        for i in o: m.issue(it[i])
+            return m.cycle
+        big = [i for i, o in enumerate(orders) if o is not None and len(o) > 8]
+        x = (seed * 0x9e3779b97f4a7c15 | 1) & 0xffffffffffffffff
+        def rnd(n):
+            nonlocal x
+            x ^= (x << 13) & 0xffffffffffffffff; x ^= x >> 7; x ^= (x << 17) & 0xffffffffffffffff
+            return (x >> 11) % n
+        best = run(orders)
+        done = since = tries = 0
+        while done < evals and since < evals // 4 and tries < 50 * evals:
+            tries += 1
+            b = big[rnd(len(big))]; o = orders[b]; n = len(o)
+            k = rnd(n); x_ = o[k]
+            pos = {v: i for i, v in enumerate(o)}
+            lo = max([pos[j] for j in preds[b][x_]] + [-1]) + 1          # the places its dependences allow
+            hi = min([pos[j] for j in succ[b][x_]] + [n]) - 1
+            if hi <= lo: continue
+            t = lo + rnd(hi - lo)                                        # one of them other than k
+            if t >= k: t += 1
+            q = o[:k] + o[k + 1:]; q.insert(t, x_)
+            o2 = list(orders); o2[b] = q
+            c = run(o2); done += 1; since += 1
+            if c <= best:
+                if c < best: since = 0
+                best, orders = c, o2
+        new = []
+        for sg, o in zip(seg, orders):
+            if o is None: new.append(lines[sg])
+            else: new += [lines[sg[i]] for i in o]
+        CLIMB[key] = new
+    lines[start:end] = new

@@ -6,7 +6,9 @@
  *   - the vertices' 3x screen coordinates, computed by hr_vertices() from the same clip-space values and viewport as
  *     DraStic's geometry_perspective_apply_hires_asm (hooked in rast.c; its math in the comment there);
  *   - our own polygon walker, hr_polygon(): render_polygon_4x's edge walks and span setup from spec/edges.c, with
- *     the line width 768 and span arrays of 64 entries, a chain's lines stopped at the window (EDGES_LINE_CAP);
+ *     the line width 768 and span arrays of 64 entries, a chain's lines stopped at the window (EDGES_LINE_CAP), on
+ *     walk.c's fused routines (walk_impl.h: an edge's five routines in one pass over its lines; edges_impl.h's
+ *     per-routine NEON form, the reference, with RAST_WALK=0);
  *   - the pixel kernels of fused_asm.c in their hi-res instantiation (rast_kern_h*, strides from the kernel
  *     arguments) through f_run() with layout_3x, including deferred shading and bilinear filtering;
  *   - the bin resolve (edge marking, fog) as spec/resolve.c's, over 768-pixel lines, into a 48 x 768 buffer;
@@ -24,7 +26,9 @@
 #include "rast.h"
 #include "fused.h"
 #include "comp.h"
+#include "binsched.h"
 #include "spec/edges.h"
+#include "fogzero.h"
 
 /* the 3x layout: 50 context lines (bin line l is frame line hy0 - 1 + l), 768 pixels; the span arrays 64 entries */
 #define HR_N        3
@@ -47,10 +51,22 @@
 /* the edge heights' reciprocals (0x3fffffff + i) / i: DraStic's table stops at 512 lines (its 2x frame has 384), a 3x
  * edge can be 575 lines tall */
 static uint32_t hr_recip[1024];
-__attribute__((constructor)) static void hr_recip_init(void) { for (uint32_t i = 1; i < 1024; i++) hr_recip[i] = (0x3fffffffu + i) / i; }
+static int hr_fused = 1;                /* RAST_WALK=0: edges_impl.h's per-routine walker (the reference) */
+__attribute__((constructor)) static void hr_recip_init(void) {
+    for (uint32_t i = 1; i < 1024; i++) hr_recip[i] = (0x3fffffffu + i) / i;
+    const char *e = getenv("RAST_WALK");
+    if (e) hr_fused = atoi(e) != 0;
+}
 #define EDGES_RECIP_TABLE hr_recip
 #define EDGES_LINE_CAP 1                /* a chain's lines stop at the window (edges_impl.h, interpolate_edges) */
 #include "spec/edges_impl.h"
+/* the fused walker (walk.c's, walk_impl.h) in the 3x layout, the same bytes on the lines f_run reads */
+#define WALK_ARR   HR_SPS
+#define WALK_XMAX  HR_W
+#define WALK_RECIP hr_recip
+#define WALK_CAP   1
+#define WALK_HR    1
+#include "walk_impl.h"
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
 #define U16(p, o) (*(uint16_t *)((uint8_t *)(p) + (o)))
@@ -176,7 +192,24 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     int lines = (int)y_end - (int)(y_top > bin_top ? y_top : bin_top);
     if (lines <= 0) return;
     uint8_t *span = H->spans, *scratch = span + 10 * HR_SPS, *sp = span;
-    if ((d3 >> 5) & 1) {
+    if (hr_fused) {
+        /* walk.c's fused walker: per edge one pass over its lines in registers (edges_impl.h's routines each make a
+         * pass over the chain's lines through the scratch), and the span setup and markers 4 lines a step */
+        const int marks = (d3 >> 5) & 1;
+        const unsigned ys0 = marks ? bin_top - top_clip : bin_top, ye = marks ? y_end + bot_clip : y_end;
+        if (!(flags & 0x18)) {
+            walk_chain(span, &vptr[0], 1, ys0, ye, 1);
+            walk_chain(span + HR_SPS, &vptr[count], -1, ys0, ye, 1);
+        } else {
+            walk_chain(span, &vptr[0], 1, ys0, ye, 0);
+            walk_chain(span + HR_SPS, &vptr[count], -1, ys0, ye, 0);
+        }
+        if (marks) {
+            walk_spans(span, lines + top_clip + bot_clip, 1);
+            sp = span + 4 * top_clip;
+            walk_markers(sp, (uint32_t)lines, (uint32_t)(bot_clip << 1 | top_clip));
+        } else walk_spans(span, lines, 0);
+    } else if ((d3 >> 5) & 1) {
         unsigned ys0 = bin_top - top_clip, ye = y_end + bot_clip, nl = lines + top_clip + bot_clip;
         hr_render_polygon_interpolate_edges_constprop_0(span, scratch, &vptr[0], ys0, ye, flags);
         hr_render_polygon_interpolate_edges_constprop_1(span + HR_SPS, scratch, &vptr[count], ys0, ye, flags);
@@ -286,7 +319,7 @@ static inline __attribute__((always_inline)) uint8x16_t fog_ch16(uint8x16_t c, u
     return vaddq_u8(c, vreinterpretq_u8_s8(vshrn_high_n_s16(vshrn_n_s16(lo, 7), hi, 7)));
 }
 static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
-                                                             uint32_t fogc, int full) {
+                                                             uint32_t fogc, int zb, int full) {
     static const uint8_t idx[32] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
                                      16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
     const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16));
@@ -294,17 +327,17 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
     const uint8x16x2_t dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
     const uint8x16x2_t ntab = { { vsubq_u8(vmulq_u8(dlt.val[0], vld1q_u8(idx)), vld1q_u8(table)),
                                   vsubq_u8(vmulq_u8(dlt.val[1], vld1q_u8(idx + 16)), vld1q_u8(table + 16)) } };
-    const uint8x16_t fr = vdupq_n_u8((uint8_t)fogc), fg = vdupq_n_u8((uint8_t)(fogc >> 8)), fb = vdupq_n_u8((uint8_t)(fogc >> 16));
-    const uint8x16_t fa = vdupq_n_u8((uint8_t)(fogc >> 24)), x81 = vdupq_n_u8(0x81), x7f = vdupq_n_u8(0x7f);
+    const uint8x16_t fog4 = vreinterpretq_u8_u32(vdupq_n_u32(fogc)), x81 = vdupq_n_u8(0x81);
+    const uint32x4_t m7f = vdupq_n_u32(0x7fffffff);                         /* the words without their fog flag */
     uint8_t *c8 = (uint8_t *)c, *end = c8 + 4 * HR_W;
     const ptrdiff_t ad = (const uint8_t *)attr - c8;                        /* one pointer: attr at c8 + ad */
-    /* the factor of 16 pixels in two parts: FOG_D, the saturated depth differences d - off of the attribute words at
-     * at (u16 lanes, pixels 0-7 and 8-15), and FOG_K, the factor from them and the pixels' alpha plane t (the flags) */
-#define FOG_D(u0, u1, at) do { \
-        uint8x16x4_t a = vld4q_u8(at); \
-        u0 = vqsubq_u16(vshrq_n_u16(vreinterpretq_u16_u8(vzip1q_u8(a.val[1], a.val[2])), 1), off); \
-        u1 = vqsubq_u16(vshrq_n_u16(vreinterpretq_u16_u8(vzip2q_u8(a.val[1], a.val[2])), 1), off); \
-    } while (0)
+    /* a fog colour byte broadcast where the modulate needs it (the fog colour in one register; four held across the
+     * step make the compiler spill a colour group) */
+#define FOGB(k) ({ uint8x16_t f_; __asm__ volatile("dup %0.16b, %1.b[" #k "]" : "=w"(f_) : "w"(fog4)); f_; })
+    /* the factor of 16 pixels in two parts: FOG_D, the saturated depth differences d - off of the attribute words w0,
+     * w1 (8 pixels; shrn #8 narrows each word to its bits 8-23, >> 1 gives the 15-bit depth; u16 lanes), and FOG_K,
+     * the factor from two of them (pixels 0-7 and 8-15) and the pixels' alpha plane t (the flags) */
+#define FOG_D(w0, w1) vqsubq_u16(vshrq_n_u16(vshrn_high_n_u32(vshrn_n_u32(w0, 8), w1, 8), 1), off)
 #define FOG_K(t, u0, u1) ({ \
         uint16x8_t v0 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(u0), sh)); \
         uint16x8_t v1 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(u1), sh)); \
@@ -317,38 +350,82 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
         vreinterpretq_s8_u8(vaddq_u8(k, vceqq_u8(k, x81)));                 /* -128 for w = 127 */ \
     })
     /* two groups a step, so that the in-order core has two independent chains to interleave (a group's own chain,
-     * from the attribute load to the store, is about 70 cycles long); a step without any fog flag is skipped, and in
-     * a step that is fogged a group without flags is unchanged (k = 0). With table[0] = 0 (fog density tables start
-     * at 0), a step whose 32 depths are all at most the offset (d - off saturates to 0, so v = 0, i = 0, f = 0 and
-     * w = table[0] = 0 for every flagged pixel) has all factors 0: its colours are the input with the flags cleared,
-     * without the rest of the factor and the modulates (S4 at 3x: 73% of the fogged steps) */
+     * from the attribute load to the store, is about 70 cycles long). The step's 16 words, attributes and colours,
+     * come by ldr q at immediate offsets (one asm block each: clang pairs them into ldp q otherwise, which holds the
+     * A55's load pipe 6 cycles; an ld4 of the planes holds it 8 and its result comes 11 cycles later), the planes the
+     * step needs are gathered from them by tbl (a cycle each): first the attributes' depth bytes (bits 16-23): a step
+     * whose 32 are all at most zb (fogzero.h's bound: from the table, the offset and the shift; -1 when there is
+     * none) has every factor 0 whatever its flags, so it is its colours with the fog flags cleared, by word, without
+     * the factors (S4 at 3x: 84% of the steps; ~40 modeled cycles against 80 with ld4 planes and the depths' u16
+     * compare). Otherwise the colours' alpha planes: a step without any fog flag is skipped, in a step that is fogged
+     * a group without flags is unchanged (k = 0), and the groups' r, g, b planes are gathered for the modulate and
+     * stored interleaved by st4. */
+    static const uint8_t plane_idx[32] = { 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62,
+                                           3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63 };
+    const uint8x16_t didx = vld1q_u8(plane_idx);
+    /* the alpha index (didx + 1) and the colour planes' (didx - 2, - 1, 0) loaded where they are used, not held
+     * across the loop (the A55's load pipe is free there; held, they cost a colour group a spill) */
+#define PIDX(k) ({ uint8x16_t i_; __asm__ volatile("ldr %q0, [%1, #%2]" : "=w"(i_) : "r"(plane_idx), "i"(k)); i_; })
     _Static_assert(HR_W % 32 == 0, "fog: 32 pixels a step");
-    const int t0z = table[0] == 0;
     for (; c8 != end; c8 += 128) {
-        uint8x16x4_t px = vld4q_u8(c8), py = vld4q_u8(c8 + 64);
-        if (__builtin_expect(vmaxvq_u8(vorrq_u8(px.val[3], py.val[3])) < 0x80, 0)) continue;     /* no fog flag in the step */
-        uint16x8_t ux0, ux1, uy0, uy1;
-        FOG_D(ux0, ux1, c8 + ad); FOG_D(uy0, uy1, c8 + 64 + ad);
-        if (t0z && !vmaxvq_u16(vorrq_u16(vorrq_u16(ux0, ux1), vorrq_u16(uy0, uy1)))) {
-            px.val[3] = vandq_u8(px.val[3], x7f); py.val[3] = vandq_u8(py.val[3], x7f);
-            vst4q_u8(c8, px); vst4q_u8(c8 + 64, py);
+        const uint8_t *at = c8 + ad;
+        uint32x4_t a0, a1, a2, a3, a4, a5, a6, a7, c0, c1, c2, c3, c4, c5, c6, c7;
+        __asm__("ldr %q0, [%8]\n\tldr %q1, [%8, #16]\n\tldr %q2, [%8, #32]\n\tldr %q3, [%8, #48]\n\t"
+                "ldr %q4, [%8, #64]\n\tldr %q5, [%8, #80]\n\tldr %q6, [%8, #96]\n\tldr %q7, [%8, #112]"
+                : "=&w"(a0), "=&w"(a1), "=&w"(a2), "=&w"(a3), "=&w"(a4), "=&w"(a5), "=&w"(a6), "=&w"(a7)
+                : "r"(at), "m"(*(const uint8_t (*)[128])at));
+        __asm__("ldr %q0, [%8]\n\tldr %q1, [%8, #16]\n\tldr %q2, [%8, #32]\n\tldr %q3, [%8, #48]\n\t"
+                "ldr %q4, [%8, #64]\n\tldr %q5, [%8, #80]\n\tldr %q6, [%8, #96]\n\tldr %q7, [%8, #112]"
+                : "=&w"(c0), "=&w"(c1), "=&w"(c2), "=&w"(c3), "=&w"(c4), "=&w"(c5), "=&w"(c6), "=&w"(c7)
+                : "r"(c8), "m"(*(const uint8_t (*)[128])c8));
+        const uint8x16x4_t wx = { { vreinterpretq_u8_u32(a0), vreinterpretq_u8_u32(a1), vreinterpretq_u8_u32(a2), vreinterpretq_u8_u32(a3) } };
+        const uint8x16x4_t wy = { { vreinterpretq_u8_u32(a4), vreinterpretq_u8_u32(a5), vreinterpretq_u8_u32(a6), vreinterpretq_u8_u32(a7) } };
+        if (__builtin_expect((int)vmaxvq_u8(vmaxq_u8(vqtbl4q_u8(wx, didx), vqtbl4q_u8(wy, didx))) <= zb, 1)) {
+            /* the fog flags (bit 31 of the words) cleared (and with the mask into other registers: the immediate bic
+             * is destructive and the words are still wanted on the other path, so clang copied them first) */
+            uint32x4_t w0 = vandq_u32(c0, m7f), w1 = vandq_u32(c1, m7f), w2 = vandq_u32(c2, m7f), w3 = vandq_u32(c3, m7f);
+            uint32x4_t w4 = vandq_u32(c4, m7f), w5 = vandq_u32(c5, m7f), w6 = vandq_u32(c6, m7f), w7 = vandq_u32(c7, m7f);
+            __asm__("str %q1, [%9]\n\tstr %q2, [%9, #16]\n\tstr %q3, [%9, #32]\n\tstr %q4, [%9, #48]\n\t"
+                    "str %q5, [%9, #64]\n\tstr %q6, [%9, #80]\n\tstr %q7, [%9, #96]\n\tstr %q8, [%9, #112]"
+                    : "=m"(*(uint8_t (*)[128])c8)
+                    : "w"(w0), "w"(w1), "w"(w2), "w"(w3), "w"(w4), "w"(w5), "w"(w6), "w"(w7), "r"(c8));
             continue;
         }
-        int8x16_t kx = FOG_K(px.val[3], ux0, ux1), ky = FOG_K(py.val[3], uy0, uy1);
-        px.val[3] = fog_ch16(vandq_u8(px.val[3], x7f), fa, kx);
-        py.val[3] = fog_ch16(vandq_u8(py.val[3], x7f), fa, ky);
+        const uint8x16x4_t cx = { { vreinterpretq_u8_u32(c0), vreinterpretq_u8_u32(c1), vreinterpretq_u8_u32(c2), vreinterpretq_u8_u32(c3) } };
+        const uint8x16x4_t cy = { { vreinterpretq_u8_u32(c4), vreinterpretq_u8_u32(c5), vreinterpretq_u8_u32(c6), vreinterpretq_u8_u32(c7) } };
+        const uint8x16_t aidx = PIDX(16);
+        uint8x16_t tx = vqtbl4q_u8(cx, aidx), ty = vqtbl4q_u8(cy, aidx);              /* the alpha planes */
+        if (__builtin_expect(vmaxvq_u8(vorrq_u8(tx, ty)) < 0x80, 0)) continue;     /* no fog flag in the step */
+        uint16x8_t ux0 = FOG_D(a0, a1), ux1 = FOG_D(a2, a3), uy0 = FOG_D(a4, a5), uy1 = FOG_D(a6, a7);
+        int8x16_t kx = FOG_K(tx, ux0, ux1), ky = FOG_K(ty, uy0, uy1);
+        uint8x16x4_t px, py;
+        px.val[3] = fog_ch16(vshrq_n_u8(vshlq_n_u8(tx, 1), 1), FOGB(3), kx);       /* (the flag cleared: no mask held) */
+        py.val[3] = fog_ch16(vshrq_n_u8(vshlq_n_u8(ty, 1), 1), FOGB(3), ky);
+        const uint8x16_t ridx = vsubq_u8(didx, vdupq_n_u8(2)), gidx = vsubq_u8(didx, vdupq_n_u8(1));
+        px.val[0] = vqtbl4q_u8(cx, ridx); px.val[1] = vqtbl4q_u8(cx, gidx); px.val[2] = vqtbl4q_u8(cx, didx);
+        py.val[0] = vqtbl4q_u8(cy, ridx); py.val[1] = vqtbl4q_u8(cy, gidx); py.val[2] = vqtbl4q_u8(cy, didx);
         if (full) {
+            const uint8x16_t fr = FOGB(0), fg = FOGB(1), fb = FOGB(2);
             px.val[0] = fog_ch16(px.val[0], fr, kx), px.val[1] = fog_ch16(px.val[1], fg, kx), px.val[2] = fog_ch16(px.val[2], fb, kx);
             py.val[0] = fog_ch16(py.val[0], fr, ky), py.val[1] = fog_ch16(py.val[1], fg, ky), py.val[2] = fog_ch16(py.val[2], fb, ky);
         }
         vst4q_u8(c8, px); vst4q_u8(c8 + 64, py);
     }
+#undef PIDX
+#undef FOGB
 #undef FOG_D
 #undef FOG_K
 }
-static __attribute__((noinline)) void fog_line(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc, int full) {
-    if (full) fog_line16(c, attr, table, params, fogc, 1);
-    else fog_line16(c, attr, table, params, fogc, 0);
+/* fog of a colour line in place with the weights of the attribute line attr (full: r, g, b and alpha; else alpha);
+ * zb from fog_zero_b2() */
+static __attribute__((noinline)) void fog_line_zb(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc,
+                                                  int zb, int full) {
+    if (full) fog_line16(c, attr, table, params, fogc, zb, 1);
+    else fog_line16(c, attr, table, params, fogc, zb, 0);
+}
+/* the same with the bound derived here (ut/hr_ab's fog test; the resolve derives it once per bin) */
+static void fog_line(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc, int full) {
+    fog_line_zb(c, attr, table, params, fogc, fog_zero_b2(table, params), full);
 }
 /* edge marking (spec/resolve.c's edge_identify + edge_mark): a pixel C is an edge against a neighbour N (left, right,
  * above, below; the clear attribute beyond the line's ends) when N's 24-bit key is larger and the polygon ids differ
@@ -512,13 +589,14 @@ static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
     uint32_t params = 0, fogc = U32(geom, 0x9a9c), clear = U32(sys, SYS_CLEAR_ATTR);
     if (fog) { uint32_t sh = (d3 >> 8) & 0xf; params = sh | ((U16(geom, 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16; }
+    const int zb = fog ? fog_zero_b2(geom + 0x9974, params) : -1;      /* the fog's depth screen bound (fogzero.h) */
     (void)bin;
 #define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
 #define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
     _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
     if (edges) edge_tplanes(H->tp, ATT(0), HR_CL);     /* (the resolve writes colours only: the attributes stay) */
     for (int l = 1; l <= HR_BL; l += 2) {               /* two lines a step: the edge marking shares their compares */
-        if (fog) for (int k = l; k <= l + 1; k++) fog_line(COL(k), ATT(k), geom + 0x9974, params, fogc, fog == 1);
+        if (fog) for (int k = l; k <= l + 1; k++) fog_line_zb(COL(k), ATT(k), geom + 0x9974, params, fogc, zb, fog == 1);
         if (edges) edge_lines(COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), H->tp + (l - 1) * HR_W, clear, geom + 0x99b4);
     }
     return COL(1);
@@ -657,10 +735,16 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
     }
 }
 
+/* RAST_DCHECK=1 (development): every bin's opaque list is rendered both ways, in one pass and deferred, from the same
+ * context, and the context's colours, attribute words, ids and fog-used word compared (3x has no DraStic reference:
+ * deferred shading, chosen per bin, must give the one pass's bytes) */
+static int hr_dcheck;
+static unsigned long dc_bins, dc_bad;
+__attribute__((constructor)) static void hr_dcheck_init(void) { hr_dcheck = getenv("RAST_DCHECK") != 0; }
+
 /* ---- the bin loop (in place of rast.c's render_bins when the scale is 3) ---- */
-void hr_render_bins(uint8_t *ctx) {
+void hr_render_bins(uint8_t *ctx, int dyn) {
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
-    unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride;
     unsigned buf = U8(geom, GEOM_SWAP_BUF) ^ 1;
     uint8_t *verts = geom + GEOM_VERTS + buf * GEOM_VERTS_BUF;
     uint8_t *opa = geom + GEOM_POLYS_OPA + buf * GEOM_POLYS_BUF, *trl = geom + GEOM_POLYS_TRL + buf * GEOM_POLYS_BUF;
@@ -669,8 +753,10 @@ void hr_render_bins(uint8_t *ctx) {
     hr_t *H = hr_get();
     U64(H->ctx, HR_HDR) = (uint64_t)(uintptr_t)sys; U64(H->ctx, HR_HDR + 8) = (uint64_t)(uintptr_t)geom;
     f_begin_frame();
-    for (unsigned k = 0; k < nb; k++) {
-        unsigned bin = U8(ctx, CTX_FIRST_BIN) + k * stride, hy0 = bin * HR_BL;
+    sched_it it;
+    sched_start(&it, ctx, dyn);         /* DraStic's fixed bins, or claimed from the frame's queue (binsched.c) */
+    for (int b; (b = sched_next(&it)) >= 0;) {
+        unsigned bin = (unsigned)b, hy0 = bin * HR_BL;
         /* context line l is frame line lb + l; the walks cover the bin and its neighbour lines */
         int lb = (int)hy0 - 1;
         unsigned bin_top = hy0 ? hy0 - 1 : 0, bin_bot = hy0 + HR_BL + 1;
@@ -678,7 +764,23 @@ void hr_render_bins(uint8_t *ctx) {
         hr_clear_bin(H, sys, geom, hy0);
         U32(H->ctx, HR_HDR + 0x10) = 0xffffffffu; U32(H->ctx, HR_HDR + 0x14) = 0;
         U64(H->ctx, HR_HDR + 0x18) = ~0ull;             /* the shadow line mask (fused.c line_px): all lines clean */
-        hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, rast_defer);
+        /* deferred shading: rast_defer, or per bin (RAST_DEFER=2, defer.c: where the opaque polygons' pixels of the
+         * frame before are above twice the bin's) */
+        const int defer = defer_bin(bin, 2 * HR_BL * HR_W);
+        static __thread uint8_t *dc_save, *dc_ref;
+        if (hr_dcheck) {
+            if (!dc_save) { dc_save = malloc(HR_CTX_SIZE); dc_ref = malloc(HR_CTX_SIZE); }
+            memcpy(dc_save, H->ctx, HR_CTX_SIZE);
+            hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, !defer);
+            memcpy(dc_ref, H->ctx, HR_CTX_SIZE); memcpy(H->ctx, dc_save, HR_CTX_SIZE);
+            defer_measure_reset();          /* (defer_bin's measures: the chosen render's only, as without the check) */
+        }
+        hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, defer);
+        if (hr_dcheck) {
+            int bad = memcmp(dc_ref, H->ctx, HR_HDR) || U32(dc_ref, HR_HDR + 0x14) != U32(H->ctx, HR_HDR + 0x14);
+            unsigned long n = __atomic_add_fetch(&dc_bins, 1, __ATOMIC_RELAXED), b = __atomic_add_fetch(&dc_bad, bad, __ATOMIC_RELAXED);
+            if (n % 1200 == 0) fprintf(stderr, "[rast] dcheck: %lu bins, %lu differ\n", n, b);
+        }
         if (ntrl) {
             memset(H->ctx + HR_ID, 0xff, HR_CL * HR_W);
             hr_render_list(H, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);
