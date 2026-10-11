@@ -23,8 +23,16 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
   nzcv`), and only for the flags a later instruction reads (the framework's SetFlags analysis).
 - **Cycles:** each instruction costs what melonDS's interpreter charges for it, taken or skipped.
 - **What is native:**
-  - ARM data processing: all 16 operations, immediate and immediate-shift operands, RRX and the #32 shift forms,
-    with the shifter's carry, when Rd isn't the PC.
+  - ARM data processing: all 16 operations, immediate, immediate-shift and register-shift operands, RRX and the
+    #32 shift forms, with the shifter's carry, when Rd isn't the PC. A register-specified shift costs the
+    interpreter's `AddCycles_CI(1)`, and its >= 32 and carry edge cases follow the `LSL/LSR/ASR/ROR_REG(_S)`
+    macros exactly.
+  - Multiply: MUL/MLA/UMULL/UMLAL/SMULL/SMLAL (and Thumb MUL). The result uses MADD / SMULL / UMULL /
+    SMADDL / UMADDL, splitting the 64-bit product to RdLo/RdHi; S sets N/Z from the full result and, on ARM7,
+    clears C. Cycles are the interpreter's: ARM9 `AddCycles_CI(S ? 3 : 1)`; ARM7 counts leading sign/zero bits
+    of the multiplier at run time (`cls`/`clz`) for the interpreter's per-operand-size cost. `jit.mul=off`
+    sends multiply and register-shift back to the interpreter; with it on or off, `bananads-difftest --every`
+    finds main RAM byte-identical after every frame (CI, L5 and ramp, ARM and Thumb).
   - ARM loads and stores: LDR/STR/LDRB/STRB (immediate and shifted-register offsets, pre/post-indexed,
     write-back) and LDRH/STRH/LDRSB/LDRSH. The address is computed natively. The access goes through the same
     functions the interpreter calls (`DataRead*`/`DataWrite*` and `AddCycles_CD/CDI`), so its timing and
@@ -58,15 +66,16 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
     doesn't rotate an unaligned word, so it uses its own helper.
 - **Everything else** runs through melonDS's interpreter, one instruction at a time, using the framework's
   protocol (R15, CurInstr and CodeCycles set first, and the PC stored before the condition check). Today that
-  is branches, LDM/STM/PUSH/POP, multiplies, shifts by a register, MSR/MRS, coprocessor and DSP instructions.
+  is branches, LDM/STM/PUSH/POP, MSR/MRS, the DSP multiplies (SMLAxy and friends), coprocessor instructions.
 - **Fastmem:** off with BananaJIT for now.
 
 **Checked (aarch64 under qemu):** the stress ROMs (`dsstress-L1`, `L5`, `L10`, `dsswap`, `dsstress-ramp`)
 give pictures identical to the interpreter's at frames 150, 300, 450 and 600. They were checked both as ARM code
 and compiled as Thumb (`STRESS_THUMB=1 stressrom/build.py`); CI checks L5 both ways. Native share of compiled
-instructions in `dsstress-L5`:
+instructions in `dsstress-L5` (measured before native multiply/register-shift; CI re-measures):
 - **ARM:** 1,533 of 1,598 (96%).
-- **Thumb:** 3,782 of 4,266 (89%). Most of the rest is conditional branches, MUL, B and PUSH/POP.
+- **Thumb:** 3,782 of 4,266 (89%). With multiply and the register shifts now native, the remaining fallbacks
+  are the branches and PUSH/POP; the share rises toward the branch/PUSH-POP floor on both.
 
 RAM drifts from frame 9 on through block-granularity timing, as with melonDS's JIT (frame 6), with the same
 pictures.
@@ -81,9 +90,13 @@ stress ROMs are bound by 3D, not by the CPUs.
    instruction-cache model; melonDS's JIT precomputes them, which is an approximation. A native branch has
    to keep the run-time cost to stay exact.
 2. LDM/STM and PUSH/POP.
-3. MUL/MLA (the interpreter charges by operand size), shifts by a register.
-4. PUSH/POP/LDM/STM: the next big share of what the interpreter still runs. `ARMv4`'s cycle formula depends on the code and data regions at run time.
-5. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
+3. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
+
+**The one known difference from the interpreter.** Native ARM7 instructions charge their code-fetch cycles from
+the `CodeCycles` the framework recorded when it compiled the block. The interpreter uses the CPU's current
+`CodeCycles`, set by the last jump. The two only differ when ARM7 code runs on sequentially into a block
+after a jump into another 32 KB chunk. melonDS's own JIT makes the same approximation. The ARM7 memory fast
+path reads it at run time.
 
 ## The DraStic JIT study (2026-10-11)
 

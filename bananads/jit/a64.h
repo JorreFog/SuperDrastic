@@ -59,7 +59,9 @@ struct A64 {
     void ands(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(logic_reg(false, 6, d, n, m, sh, a)); }
     void mov(Reg d, Reg m) { orr(d, ZR, m); }
     void movx(Reg d, Reg m) { put(logic_reg(true, 2, d, ZR, m, LSL, 0)); }
+    void orrx(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(logic_reg(true, 2, d, n, m, sh, a)); }
     void tst(Reg n, Reg m) { ands(ZR, n, m); }
+    void tstx(Reg n) { put(logic_reg(true, 6, ZR, n, n, LSL, 0)); }  // ANDS XZR, Xn, Xn (64-bit N/Z)
 
     // ADC/SBC (flags in, optionally out)
     static uint32_t adcsbc(int op, Reg d, Reg n, Reg m) {  // 0 ADC, 1 ADCS, 2 SBC, 3 SBCS
@@ -77,6 +79,20 @@ struct A64 {
     void lsrv(Reg d, Reg n, Reg m) { put(shiftv(LSR, d, n, m)); }
     void asrv(Reg d, Reg n, Reg m) { put(shiftv(ASR, d, n, m)); }
     void rorv(Reg d, Reg n, Reg m) { put(shiftv(ROR, d, n, m)); }
+
+    // Count leading sign/zero bits
+    void cls(Reg d, Reg n) { put(0x5AC01400 | n << 5 | d); }
+    void clz(Reg d, Reg n) { put(0x5AC01000 | n << 5 | d); }
+
+    // Multiply. MADD/MUL are 32-bit (W); the long forms take W sources and write an X pair (SMULL/UMULL have
+    // XZR as the addend). d and a of the long forms are X registers, n and m are W.
+    static uint32_t madd_(uint32_t base, Reg d, Reg n, Reg m, Reg a) { return base | m << 16 | a << 10 | n << 5 | d; }
+    void madd(Reg d, Reg n, Reg m, Reg a) { put(madd_(0x1B000000, d, n, m, a)); }
+    void mul(Reg d, Reg n, Reg m) { put(madd_(0x1B000000, d, n, m, ZR)); }
+    void smaddl(Reg d, Reg n, Reg m, Reg a) { put(madd_(0x9B200000, d, n, m, a)); }
+    void smull(Reg d, Reg n, Reg m) { put(madd_(0x9B200000, d, n, m, ZR)); }
+    void umaddl(Reg d, Reg n, Reg m, Reg a) { put(madd_(0x9BA00000, d, n, m, a)); }
+    void umull(Reg d, Reg n, Reg m) { put(madd_(0x9BA00000, d, n, m, ZR)); }
 
     // Bitfield moves
     static uint32_t bfm(uint32_t base, Reg d, Reg n, uint32_t immr, uint32_t imms) {

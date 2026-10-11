@@ -166,6 +166,9 @@ bool Emu::load_rom(const std::string& path) {
     else setenv("BANANAJIT_NO_FASTMEM7", "1", 1);
     if (cfg_.flag("jit.link", true)) unsetenv("BANANAJIT_NO_LINK");  // jit.link=off: back to the loop each block
     else setenv("BANANAJIT_NO_LINK", "1", 1);
+    // jit.mul=off: multiply and register-shift through the interpreter (for bananads-difftest: both must agree)
+    if (cfg_.flag("jit.mul", true)) unsetenv("BANANAJIT_NO_MUL");
+    else setenv("BANANAJIT_NO_MUL", "1", 1);
 #endif
 
     auto& hdr = args.Firmware.GetHeader();

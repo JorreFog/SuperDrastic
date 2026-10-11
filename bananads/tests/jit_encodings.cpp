@@ -105,5 +105,15 @@ int main() {
     E("strh w2, [x3, x17]", a.strh_reg((Reg)2, (Reg)3, (Reg)17));
     E("strb w2, [x3, x17]", a.strb_reg((Reg)2, (Reg)3, (Reg)17));
     E("mul x0, x0, x4", a.mulx((Reg)0, (Reg)0, (Reg)4));
+    E("cls w0, w1", a.cls((Reg)0, (Reg)1));
+    E("clz w5, w9", a.clz((Reg)5, (Reg)9));
+    E("madd w0, w1, w2, w3", a.madd((Reg)0, (Reg)1, (Reg)2, (Reg)3));
+    E("mul w9, w10, w11", a.mul((Reg)9, (Reg)10, (Reg)11));
+    E("smull x0, w1, w2", a.smull((Reg)0, (Reg)1, (Reg)2));
+    E("smaddl x19, w20, w21, x19", a.smaddl((Reg)19, (Reg)20, (Reg)21, (Reg)19));
+    E("umull x9, w10, w11", a.umull((Reg)9, (Reg)10, (Reg)11));
+    E("umaddl x0, w1, w2, x17", a.umaddl((Reg)0, (Reg)1, (Reg)2, (Reg)17));
+    E("orr x17, x19, x9, lsl #32", a.orrx((Reg)17, (Reg)19, (Reg)9, LSL, 32));
+    E("tst x17, x17", a.tstx((Reg)17));
     return 0;
 }

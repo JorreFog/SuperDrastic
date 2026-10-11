@@ -56,8 +56,10 @@ private:
     void ExitBlock();
     void Fallback(bool thumb);
     void CompileALU();
+    void CompileMul();         // MUL/MLA/UMULL/UMLAL/SMULL/SMLAL, and Thumb MUL
     void CompileMem();
     Reg Shifter(u32 instr, bool wantC, bool& carry_changes, Reg dst);
+    Reg RegShifter(u32 instr, bool wantC);  // operand 2 shifted by a register; writes C itself when wantC
     void StoreHigh();             // store dirty r8-r14 (they live in caller-saved registers)
     void CallOut(const void* fn);  // fn(cpu, w1, w2) with the interpreter's state in memory
     void FastLoad9(int size, bool sign, bool rotate, const void* slowfn);  // ARM9 TCM/main-RAM loads inline
@@ -67,7 +69,9 @@ private:
     void FastMem7(bool load, int size, bool sign, bool rotate, const void* slowfn);  // ARM7 main RAM/WRAM
     void FastStore9(int size, const void* slowfn);  // ARM9 DTCM/main-RAM stores inline
     bool LinkBlocks = false;
+    bool DoMul = true;  // jit.mul=off sends multiply and register-shift to the interpreter (difftest gate)
     void AddCycles(s32 n) { ConstantCycles += n; }
+    void AddCyclesCI(s32 internal);  // emit AddCycles_CI(internal) to RCycles now (taken-path cycles)
     void FlushCycles();
     s32 CyclesC() const;       // what the interpreter's AddCycles_C charges for CurInstr
 
