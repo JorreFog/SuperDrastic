@@ -415,6 +415,7 @@ __attribute__((constructor)) static void rast_init(void) {
     sched_init(mode == 1 ? worker_render : 0);  /* the bins' queue (binsched.c; opened by comp.c's frame wrapper) */
     comp_init();                         /* the compositor's 3D visibility step (comp.c) */
     ds2d_init();                         /* DraStic's 2D scanline routines (ds2d.c) */
+    { extern void geom_init(void); geom_init(); }   /* DraStic's geometry stage (dsgeom.c) */
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
     fprintf(stderr, "[rast] Gengis Engine: hooked video_3d_render_bins_4x, mode %s, scale %d\n", e, rast_scale);
 }

@@ -27,6 +27,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   written in one NEON pass instead of DraStic's five-stage chain (`render_scanline_2d_composite` hooked,
   `RAST_COMPFUSE=0` off): on the stress ROM the chain's 0.81 M a frame become 0.39 M, on the field
   scene 0.47 M become 0.07 M, checked byte for byte against the original in the running emulator.
+- **DraStic's geometry stage, cheaper.** Four of its functions on the emulation thread are replaced by exact
+  ones (the command queue's fast paths, the vertex batch, the A55-scheduled vertex transform, the polygon binning;
+  `RAST_GEOM=0` off, `RAST_GEOMCHECK=1` checks every call against DraStic's): 0.063 M modeled cycles a frame less
+  on the field scene, 0.166 M on the stress ROM (below).
 - **Scheduled for the handhelds' in-order core.** The RG DS and RG DS Plus run Cortex-A55 cores, which issue in
   program order, at most two instructions a cycle, and stall on every operand that is not ready: instruction counts
   miss that. `tools/rast/dev/cycles.py` models it (every executed block of a simulator profile through llvm-mca's
@@ -395,6 +399,13 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   routines in a first commit and ten more in a second, each exact (`t_ds2d.c`, RAST_2DCHECK=1 over the 2D and 3D
   scenes); modeled A55 cycles a frame: every 2x / 3x game's conversion 0.62 -> 0.29 M, the field scene S7 frame 4.49
   -> 4.21 M, the 2D scene cycle 3.44 -> 2.82 M (DraStic's 2D routines and ours together).
+  Fifth round, the geometry stage: four of DraStic's geometry functions on the emulation thread are replaced through
+  the same hook mechanism (`dsgeom.c`, the section below): the command queue's fast paths, the vertex batch's append,
+  the vertex block's transform rescheduled for the A55 and the polygon binning visiting only occupied rows; checked
+  call by call against the originals in the running emulator (`RAST_GEOMCHECK=1`) and in `ut/t_geom.c`. Modeled A55
+  cycles a frame, base -> ours, on the stress ROM L4: the queue 0.314 -> 0.204 M (46.6 -> 30.3 cycles a call, 6740
+  calls a frame), add_vertex 0.077 -> 0.050 M, the vertex block 0.058 -> 0.031 M, the y-sort 0.151 -> 0.148 M;
+  together 0.167 M a frame less on L4, 0.088 M on S4, 0.063 M on S7.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -573,6 +584,51 @@ scene S4 1.09 -> 0.57 M (conversion, merge chain 0.23 -> 0.18, colour effects 0.
 0.008, encoder 0.030 -> 0.023); the stress ROM L4 1.17 -> 0.67 M (merge chain 0.48 -> 0.33); the 2D scene cycle 1.32
 -> 0.79 M (4bpp spans 0.27 -> 0.19, merge chain 0.32 -> 0.25; frame 3.42 -> 2.95 M).
 
+## DraStic's geometry stage (`src/rast/dsgeom.c`, `geom_tvb.S`, exact)
+
+The emulation thread also runs DraStic's DS geometry engine: the command queue, the vertex batches, their transform
+and lighting, clipping, and the binning of the finished polygons for the render threads. With the renderer hooked,
+`geom_init()` replaces four of its functions (`DSFLIP_RAST_GEOM` / `RAST_GEOM=0` leaves them alone):
+
+- `queue_geometry_command` (one call per word written to the command ports): the paths that neither run
+  process_geometry nor touch the SWAP_BUFFERS flag do the original's stores in its order, without its stack frame;
+  every other call goes to the original through the trampoline before anything is written.
+- `geometry_add_vertex`: the same for a vertex appended to a batch that is not full, with no matrix update pending
+  (texture coordinate mode 3's two dot products included).
+- `geometry_transform_vertex_block_asm` (`geom_tvb.S`): the batch through the clip matrix, four vertices a step as
+  the original (the group past a multiple of 4 included), its 24 multiply-accumulates in eight independent chains
+  instead of eight chains of three, the translation added after the narrowing (the same bits): 130 -> 66 modeled
+  cycles a step (llvm-mca, Cortex-A55).
+- `video_3d_bin_polygons_y_sort_4x` (the opaque and the y-sorted translucent lists, a frame each): DraStic's three
+  passes (per polygon: y range, shading flags, texture lookup, top row; rows down: by bottom y; rows up: into the
+  bins) on its own sort arrays, step by step, but visiting only the rows that hold polygons (a byte a row and a bit
+  per 8 rows) where the original walks all 385 rows twice.
+
+The callers assume the AAPCS and nothing more (from the disassembly: the JIT's 32-bit store helper saves w12-w18, x30
+and NZCV around its call; the C callers keep only callee-saved registers across the calls; each original calls code
+compiled outside its unit, so GCC's IPA-RA cannot have narrowed its clobber set), so plain C is a valid replacement.
+Modeled A55 cycles (`dev/cycles.py`, 90 s profiles of
+4f63ae7's build and this one from the same session; the patched entries' jumps included), the stress ROM L4: the
+queue 46.6 -> 30.3 cycles a call (6740 calls a frame: 0.314 -> 0.204 M a frame), add_vertex 47.1 -> 30.6 (1633:
+0.077 -> 0.050 M), the vertex block 2071 -> 1107 (28: 0.058 -> 0.031 M), the y-sort 0.151 -> 0.148 M (L4's rows
+are nearly all occupied: there the per-polygon work, which is DraStic's, dominates); the fog and edge scene S4:
+0.132 -> 0.086, 0.032 -> 0.021, 0.025 -> 0.013, 0.043 -> 0.024 M; the field scene S7: 0.073 -> 0.047, 0.021 ->
+0.014, 0.017 -> 0.009, 0.046 -> 0.024 M. Together 0.167, 0.088 and 0.063 M a frame less on the emulation thread
+(L4, S4, S7). Exactness: `tools/rast/ut/t_geom.c` runs each replacement against DraStic's original in its process on
+random states (queue states at the 0x400-byte limit, every parameter count and the swap flag; full batches and
+pending matrices; any matrix and coordinates, the 64-bit sums wrapping; polygons of 0..15 vertices with y beyond
+0x180, repeated texture keys, quads' sprite path and stale sort rows, with DraStic's texture_cache_lookup and
+render_sprite_check patched to logging stubs so the calls are compared too), then DraStic's entry patched as
+`geom_init()` patches it (seeds 1, 3, 5; seven mutants, one per path, fail it). `RAST_GEOMCHECK=1` runs every call
+ours handles twice in the emulator, ours and then the original through the trampoline on the same input bytes, and
+compares everything either may write (`[geom]` counts every 2 s, `[geomcheck]` for a difference): at 2x over the ten
+scenes (60 s each), the scene cycle (330 s) and the stress ROMs L4 and L10 (90 s), 18.6 M calls of the queue, 4.09
+M of add_vertex, 24647 of the y-sort and 173276 of the vertex block checked, 0 differ; at 3x (hr.c's vertex hook
+active too) the same ROMs, 15.8 M, 3.52 M, 24093 and 156416, 0 differ; at 1x (hi-res off: DraStic's 1x binning, the
+same queue and batch) the stress ROM, 8.48 M, 2.02 M and 35296, 0 differ (the 2D cycle's test ROM never writes the
+geometry ports). The scene cycle's frame diff gives exactly DraStic's renderer's counts at every checkpoint reached
+(to 132000 bins).
+
 ## How it works
 
 `src/rast/spec/`: DraStic's ~85 raster routines ported to exact C, each unit-tested bit for bit against the
@@ -625,6 +681,15 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
 
 ## Next
 
+- DraStic's geometry stage, next (`dsgeom.c`): geometry_transform_vertexes' lighting (L4 0.24 M, S4 0.09 M modeled
+  cycles a frame: per vertex and light a chain of dependent multiplies; the whole function would have to be
+  replaced, its batch bookkeeping too), process_geometry_commands' dispatch (L4 0.13 M) and geometry_flush_polygons
+  (L4 0.23 M; 12 KiB of code), geometry_clipped_vertex_interpolate_edge (L4 0.07 M; a static function: check its
+  callers' register assumptions first). The y-sort's per-polygon work is still DraStic's in C (L4 0.148 M): a
+  row's loads first into a local array, to overlap the entries' load chains, modeled worse (0.162 M; clang keeps
+  that loop one entry a block). Games feed the geometry engine by DMA into GXFIFO (`queue_geometry_command_packed`
+  and `_packed_multi`, not replaced; the test ROMs write the command ports), so the queue's share there is
+  unmeasured.
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
 - The render threads' bins (`binsched.c`): the queue's order is the previous frame's bin times; S7's largest bin is
   ~65% of a thread's share, so no order of whole bins gets S7 below ~1.06 of the mean thread. Splitting the heaviest
