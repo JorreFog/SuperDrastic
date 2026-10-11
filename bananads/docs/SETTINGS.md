@@ -16,6 +16,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `core.slice_stats` | `0` | every this many frames, log the IPC accesses per frame and the share of time near one (the short slice's share), for tuning `auto` per game |
 | `core.fast_gxdma` | `off` | DMA words from main RAM to the geometry FIFO go straight to the 3D engine instead of through melonDS's bus and IO dispatch (patches/melonds/0004). Exact: the same results and timing; off until measured on the handheld |
 | `core.fast_spu` | `off` | the mixer skips sound channels that are off (patches/melonds/0004). Exact; off until measured |
+| `core.fast_sched` | `off` | the scheduler keeps the time of its next event instead of walking its event list twice every slice (patches/melonds/0006). Exact; off until measured |
 | `render.2d` | `banana` | the 2D renderer: `banana` (the Banana 2D engine, gpu2d/: melonDS's picture, pixel for pixel, in about a third of the time) or `melonds` (melonDS's own) |
 | `render.renderer` | `gengis` | the 3D renderer: `gengis` (Gengis Engine, SuperDrastic's rasterizer, on several threads; aarch64 builds) or `soft` (melonDS's software renderer) |
 | `render.gengis_threads` | `3` | Gengis Engine's render threads (the emulator's thread also renders a bin when it has to wait for one) |

@@ -20,6 +20,11 @@ void main(void) {
         RES[0]++; inframe++;
         /* quiet work: no IPC for a while */
         for (u32 k = 0; k < 40; k++) work[k & 255] = work[(k * 7) & 255] * 3 + k + i;
+        /* and the divider, restarted before it finishes (its event is cancelled and rescheduled) */
+        REG32(0x04000290) = i * 2654435761u; REG32(0x04000298) = i | 1;
+        REG32(0x04000290) = i;
+        while (REG16(0x04000280) & 0x8000) {}
+        work[i & 255] += REG32(0x040002A0);
         u16 v = VCOUNT;
         if (v < lastv) { RES[16 + (frame & 127)] = inframe; inframe = 0; frame++; RES[4] = frame; }
         lastv = v; i++;

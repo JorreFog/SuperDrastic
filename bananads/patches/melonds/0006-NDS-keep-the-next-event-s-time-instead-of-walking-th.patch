@@ -1,0 +1,142 @@
+From a856c3be32e6b0bba76e09a3856e89b1222552f9 Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 18:24:55 +0000
+Subject: [PATCH] NDS: keep the next event's time instead of walking the event
+ list every slice
+
+With FastSched on, SchedNext holds the earliest timestamp among the
+scheduled events: ScheduleEvent lowers it, CancelEvent recomputes it when
+it cancels that event, RunSystem recomputes it after firing events and
+returns at once when nothing is due, and RunSystemSleep and savestates
+recompute it. NextTarget then reads it instead of walking the list. The
+list walk in RunSystem fires nothing before SchedNext, so the results are
+the same; off by default (SetFastSched).
+---
+ src/NDS.cpp | 32 ++++++++++++++++++++++++++++++++
+ src/NDS.h   |  6 ++++++
+ 2 files changed, 38 insertions(+)
+
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 153999b..db54f21 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -537,6 +537,7 @@ void NDS::Reset()
+         evt.Param = 0;
+     }
+     SchedListMask = 0;
++    SchedNext = UINT64_MAX;
+ 
+     KeyInput = 0x007F03FF;
+     KeyCnt[0] = 0;
+@@ -710,6 +711,7 @@ bool NDS::DoSavestate(Savestate* file)
+         file->Var32(&evt.Param);
+     }
+     file->Var32(&SchedListMask);
++    SchedNextUpdate();
+     file->Var64(&ARM9Timestamp);
+     file->Var64(&ARM9Target);
+     file->Var64(&ARM7Timestamp);
+@@ -824,11 +826,26 @@ void NDS::SetSlice(s32 slice, s32 idle, u32 hold) noexcept
+     SliceNearIPCUntil = 0;
+ }
+ 
++void NDS::SchedNextUpdate() noexcept
++{
++    u64 next = UINT64_MAX;
++    u32 mask = SchedListMask;
++    for (int i = 0; mask; i++, mask >>= 1)
++    {
++        if ((mask & 0x1) && SchedList[i].Timestamp < next)
++            next = SchedList[i].Timestamp;
++    }
++    SchedNext = next;
++}
++
+ u64 NDS::NextTarget()
+ {
+     u64 minEvent = UINT64_MAX;
+ 
+     u32 mask = SchedListMask;
++    if (FastSched)
++        minEvent = SchedNext;
++    else
+     for (int i = 0; i < Event_MAX; i++)
+     {
+         if (!mask) break;
+@@ -863,6 +880,10 @@ void NDS::RunSystem(u64 timestamp)
+ {
+     SysTimestamp = timestamp;
+ 
++    // FastSched: nothing is due before SchedNext, so the walk below would fire nothing
++    if (FastSched && timestamp < SchedNext)
++        return;
++
+     u32 mask = SchedListMask;
+     for (int i = 0; i < Event_MAX; i++)
+     {
+@@ -882,6 +903,9 @@ void NDS::RunSystem(u64 timestamp)
+ 
+         mask >>= 1;
+     }
++
++    if (FastSched)
++        SchedNextUpdate();
+ }
+ 
+ u64 NDS::NextTargetSleep()
+@@ -941,6 +965,9 @@ void NDS::RunSystemSleep(u64 timestamp)
+ 
+         mask >>= 1;
+     }
++
++    if (FastSched)
++        SchedNextUpdate();
+ }
+ 
+ template <CPUExecuteMode cpuMode>
+@@ -1173,13 +1200,18 @@ void NDS::ScheduleEvent(u32 id, bool periodic, s32 delay, u32 funcid, u32 param)
+     evt.Param = param;
+ 
+     SchedListMask |= (1<<id);
++    if (evt.Timestamp < SchedNext)
++        SchedNext = evt.Timestamp;
+ 
+     Reschedule(evt.Timestamp);
+ }
+ 
+ void NDS::CancelEvent(u32 id)
+ {
++    const bool wasnext = (SchedListMask & (1<<id)) && SchedList[id].Timestamp == SchedNext;
+     SchedListMask &= ~(1<<id);
++    if (FastSched && wasnext)
++        SchedNextUpdate();
+ }
+ 
+ 
+diff --git a/src/NDS.h b/src/NDS.h
+index 0bf5918..3fa2f5b 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -291,6 +291,9 @@ public: // TODO: Encapsulate the rest of these members
+     // sound channels that are off (their output is 0 either way).
+     bool FastGXDMA = false;
+     bool FastSPU = false;
++    // FastSched (exact, BananaDS): NextTarget and RunSystem use SchedNext, the earliest pending event, kept up to
++    // date by ScheduleEvent, CancelEvent and RunSystem, instead of walking the event list every iteration.
++    void SetFastSched(bool on) noexcept { FastSched = on; SchedNextUpdate(); }
+ 
+     u32 IME[2];
+     u32 IE[2];
+@@ -528,6 +531,9 @@ protected:
+     s32 SliceIdle = 64;
+     u32 SliceHold = 0;
+     u64 SliceNearIPCUntil = 0; // the short slice is used while SysTimestamp is below this
++    bool FastSched = false;
++    u64 SchedNext = UINT64_MAX; // the earliest Timestamp of the events in SchedListMask (exact while FastSched)
++    void SchedNextUpdate() noexcept;
+     void SliceIPC(u32 cpu) noexcept
+     {
+         const u64 now = cpu ? ARM7Timestamp : (ARM9Timestamp >> ARM9ClockShift);
+-- 
+2.43.0
+

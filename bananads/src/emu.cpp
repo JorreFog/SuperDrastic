@@ -217,6 +217,8 @@ bool Emu::load_rom(const std::string& path) {
     // default until measured on the handheld
     nds_->FastGXDMA = cfg_.flag("core.fast_gxdma", false);
     nds_->FastSPU = cfg_.flag("core.fast_spu", false);
+    // core.fast_sched: the scheduler keeps its next event instead of walking its list every slice (patch 0006; exact)
+    nds_->SetFastSched(cfg_.flag("core.fast_sched", false));
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;

@@ -1,5 +1,6 @@
 /* dmasnd's ARM9 (build.py): every frame a list of triangles, built in main RAM, goes to the geometry engine by
- * DMA: half in GXFIFO mode (start mode 7), half as an immediate DMA to 0x04000400. */
+ * DMA: half in GXFIFO mode (start mode 7), half as an immediate DMA to 0x04000400. It also runs the divider and
+ * square root unit. */
 typedef unsigned int u32; typedef unsigned short u16; typedef int s32;
 #define R32(a) (*(volatile u32 *)(a))
 #define R16(a) (*(volatile u16 *)(a))
@@ -10,6 +11,25 @@ typedef unsigned int u32; typedef unsigned short u16; typedef int s32;
 #define FRAMES ((volatile u32 *)0x02320000)   /* [0] frames, [1] words sent */
 
 static u32 list[2][4096];
+
+/* the hardware divider and square root, restarted before they finish now and then (their events get cancelled
+ * and rescheduled), results and busy flags kept in main RAM at 0x02321000 */
+#define DIVOUT ((volatile u32 *)0x02321000)
+static void maths(u32 frame) {
+    for (u32 i = 0; i < 64; i++) {
+        R16(0x04000280) = (u16)(i % 3);                       /* 32/32, 64/32, 64/64 */
+        R32(0x04000290) = frame * 2654435761u + i; R32(0x04000294) = i;
+        R32(0x04000298) = (i & 7) ? 3 + i * 17 : 0; R32(0x0400029C) = 0;
+        if (i & 1) { R32(0x04000290) = i * 77; }               /* restart before it is done */
+        DIVOUT[i * 4] = R16(0x04000280);                       /* busy? */
+        R16(0x040002B0) = (u16)(i & 1);
+        R32(0x040002B8) = frame * 40503u + i * 9; R32(0x040002BC) = i;
+        DIVOUT[i * 4 + 1] = R32(0x040002B4) | (u32)R16(0x040002B0) << 31;
+        while (R16(0x04000280) & 0x8000) {}
+        DIVOUT[i * 4 + 2] = R32(0x040002A0);
+        DIVOUT[i * 4 + 3] = R32(0x040002A8);
+    }
+}
 
 static void wait_vblank(void) { while (VCOUNT >= 192) {} while (VCOUNT < 192) {} }
 
@@ -54,6 +74,7 @@ int main(void) {
         DMA_SAD(1) = (u32)list[1]; DMA_DAD(1) = 0x04000400;
         DMA_CNT(1) = n1 | 2u << 21 | 1u << 26 | 1u << 31;              /* immediate */
         while (DMA_CNT(1) & (1u << 31)) {}
+        maths(frame);
         R32(0x04000540) = 1;                                  /* SWAP_BUFFERS, manual sort */
         FRAMES[0] = frame; FRAMES[1] += n0 + n1;
         wait_vblank();
