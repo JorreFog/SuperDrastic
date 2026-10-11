@@ -1,4 +1,4 @@
-From 8dfda431341099a03ddf052360837ee74b473e66 Mon Sep 17 00:00:00 2001
+From a5f466d24feb5fffd56cfb772a801612d1c4991b Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Sun, 11 Oct 2026 22:23:54 +0000
 Subject: [PATCH] GPU3D: the geometry engine's fast paths (MELONDS_GEOMFAST)
@@ -16,13 +16,6 @@ plain paths; BananaDS sets it from render.geom_fast (default on).
   CheckFIFODMA (NDS::CheckDMAs(0, 7) for the DS's four ARM9 DMAs; the DSi's virtual call otherwise). The DMAs aren't looked at while none can wait for the GX
   FIFO: GXFIFODMAMaybe is set by CheckFIFODMA, which DMA::WriteCnt calls when it enables a DMA in that mode (the
   only place StartMode changes), and by Reset and a state load, and cleared when none of the four is in it.
-- The GX FIFO is one queue in arrival order: the pipe is its first GXPipeN entries and CmdFIFO the next
-  GXFifoN, so a refill moves a count instead of entries. A state holds exactly what CmdFIFO and CmdPIPE would
-  write: CmdFIFO's array and positions are kept as its Write does, and CmdPIPE's slots and positions are derived
-  (every entry goes through the pipe in queue order, so its last four are the slots; before them, the slots it
-  had at the last reset or state load). A load sets the queue up from them. The real CmdFIFO and CmdPIPE stay
-  empty, which the slice loop's idle check (CmdPIPE empty and GXSTAT bit 27 clear) can take: bit 27 is set by
-  every FIFO write and cleared only with an empty pipe.
 - NEON (GPU3D_NEON.h, with a plain C fallback) for MTX_MULT_4x4/4x3/3x3 and MTX_TRANS, the clip matrix and
   the vertex transform: s32 x s32 -> s64 products (smull/smlal), s64 sums, then >> 12 truncated to 32 bits
   (shrn), as the C code does.
@@ -37,10 +30,10 @@ plain paths; BananaDS sets it from render.geom_fast (default on).
 - CalculateLighting goes through the enabled lights only.
 ---
  src/CMakeLists.txt |   1 +
- src/GPU3D.cpp      | 693 +++++++++++++++++++++++++++++++++++++--------
- src/GPU3D.h        |  91 +++++-
- src/GPU3D_NEON.h   | 158 +++++++++++
- 4 files changed, 817 insertions(+), 126 deletions(-)
+ src/GPU3D.cpp      | 596 +++++++++++++++++++++++++++++++++++++--------
+ src/GPU3D.h        |  76 +++++-
+ src/GPU3D_NEON.h   | 158 ++++++++++++
+ 4 files changed, 714 insertions(+), 117 deletions(-)
  create mode 100644 src/GPU3D_NEON.h
 
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
@@ -56,7 +49,7 @@ index c1e1357..d865f4d 100644
      GPU3D_Texcache.h
      Mic.cpp
 diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
-index 3272a34..81f7f41 100644
+index 3272a34..9d21107 100644
 --- a/src/GPU3D.cpp
 +++ b/src/GPU3D.cpp
 @@ -25,6 +25,7 @@
@@ -77,15 +70,7 @@ index 3272a34..81f7f41 100644
  }
  
  void Vertex::DoSavestate(Savestate* file) noexcept
-@@ -183,6 +187,7 @@ void GPU3D::Reset() noexcept
- {
-     CmdFIFO.Clear();
-     CmdPIPE.Clear();
-+    if (GeomFast) GXQueueClear();
- 
-     CmdStallQueue.Clear();
- 
-@@ -298,14 +303,22 @@ void GPU3D::Reset() noexcept
+@@ -298,6 +302,9 @@ void GPU3D::Reset() noexcept
      FlushAttributes = 0;
  
      RenderXPos = 0;
@@ -95,22 +80,7 @@ index 3272a34..81f7f41 100644
  }
  
  void GPU3D::DoSavestate(Savestate* file) noexcept
- {
-     file->Section("GP3D");
- 
--    CmdFIFO.DoSavestate(file);
--    CmdPIPE.DoSavestate(file);
-+    if (GeomFast)
-+        GXQueueSavestate(file);
-+    else
-+    {
-+        CmdFIFO.DoSavestate(file);
-+        CmdPIPE.DoSavestate(file);
-+    }
- 
-     file->Var32(&NumCommands);
-     file->Var32(&CurCommand);
-@@ -542,6 +555,8 @@ void GPU3D::DoSavestate(Savestate* file) noexcept
+@@ -542,6 +549,8 @@ void GPU3D::DoSavestate(Savestate* file) noexcept
      file->Var32(&TexPalette);
  
      RenderFrameIdentical = false;
@@ -119,7 +89,7 @@ index 3272a34..81f7f41 100644
  }
  
  
-@@ -682,12 +697,36 @@ void MatrixTranslate(s32* m, s32* s)
+@@ -682,12 +691,36 @@ void MatrixTranslate(s32* m, s32* s)
  void GPU3D::UpdateClipMatrix() noexcept
  {
      if (!ClipMatrixDirty) return;
@@ -156,7 +126,7 @@ index 3272a34..81f7f41 100644
  
  
  void GPU3D::AddCycles(s32 num) noexcept
-@@ -818,7 +857,7 @@ void ClipSegment(Vertex* outbuf, Vertex* vin, Vertex* vout)
+@@ -818,7 +851,7 @@ void ClipSegment(Vertex* outbuf, Vertex* vin, Vertex* vout)
  #undef INTERPOLATE
  }
  
@@ -165,7 +135,7 @@ index 3272a34..81f7f41 100644
  int ClipAgainstPlane(const GPU3D& gpu, Vertex* vertices, int nverts, int clipstart)
  {
      Vertex temp[10];
-@@ -924,6 +963,20 @@ int ClipPolygon(GPU3D& gpu, Vertex* vertices, int nverts, int clipstart)
+@@ -924,6 +957,20 @@ int ClipPolygon(GPU3D& gpu, Vertex* vertices, int nverts, int clipstart)
      return nverts;
  }
  
@@ -186,7 +156,7 @@ index 3272a34..81f7f41 100644
  bool ClipCoordsEqual(Vertex* a, Vertex* b)
  {
      return a->Position[0] == b->Position[0] &&
-@@ -933,6 +986,12 @@ bool ClipCoordsEqual(Vertex* a, Vertex* b)
+@@ -933,6 +980,12 @@ bool ClipCoordsEqual(Vertex* a, Vertex* b)
  }
  
  void GPU3D::SubmitPolygon() noexcept
@@ -199,7 +169,7 @@ index 3272a34..81f7f41 100644
  {
      Vertex clippedvertices[10];
      Vertex* reusedvertices[2];
-@@ -1043,6 +1102,19 @@ void GPU3D::SubmitPolygon() noexcept
+@@ -1043,6 +1096,19 @@ void GPU3D::SubmitPolygon() noexcept
          }
      }
  
@@ -219,7 +189,7 @@ index 3272a34..81f7f41 100644
      for (int i = clipstart; i < nverts; i++)
          clippedvertices[i] = TempVertexBuffer[i];
  
-@@ -1065,7 +1137,34 @@ void GPU3D::SubmitPolygon() noexcept
+@@ -1065,7 +1131,34 @@ void GPU3D::SubmitPolygon() noexcept
  
      // clipping
  
@@ -255,7 +225,7 @@ index 3272a34..81f7f41 100644
      if (nverts == 0)
      {
          LastStripPolygon = NULL;
-@@ -1091,6 +1190,28 @@ void GPU3D::SubmitPolygon() noexcept
+@@ -1091,6 +1184,28 @@ void GPU3D::SubmitPolygon() noexcept
          // if this W is zero, the polygon isn't rendered
          vtx->Position[3] &= 0x00FFFFFF;
  
@@ -284,7 +254,7 @@ index 3272a34..81f7f41 100644
          // viewport transform
          // note: the DS performs these divisions using a 32-bit divider
          // thus, if W is greater than 0xFFFF, some precision is sacrificed
-@@ -1279,6 +1400,14 @@ void GPU3D::SubmitPolygon() noexcept
+@@ -1279,6 +1394,14 @@ void GPU3D::SubmitPolygon() noexcept
          u32 w = (u32)vtx->Position[3];
          if (w == 0) poly->Degenerate = true;
  
@@ -299,7 +269,7 @@ index 3272a34..81f7f41 100644
          while ((w >> wsize) && (wsize < 32))
              wsize += 4;
      }
-@@ -1294,6 +1423,13 @@ void GPU3D::SubmitPolygon() noexcept
+@@ -1294,6 +1417,13 @@ void GPU3D::SubmitPolygon() noexcept
  
      poly->WBuffer = (FlushAttributes & 0x2);
  
@@ -313,7 +283,7 @@ index 3272a34..81f7f41 100644
      for (int i = 0; i < nverts; i++)
      {
          Vertex* vtx = poly->Vertices[i];
-@@ -1318,6 +1454,12 @@ void GPU3D::SubmitPolygon() noexcept
+@@ -1318,6 +1448,12 @@ void GPU3D::SubmitPolygon() noexcept
          s32 z;
          if (FlushAttributes & 0x2)
              z = wshifted;
@@ -326,7 +296,7 @@ index 3272a34..81f7f41 100644
          else if (vtx->Position[3])
              z = ((((s64)vtx->Position[2] * 0x4000) / vtx->Position[3]) + 0x3FFF) * 0x200;
          else
-@@ -1338,15 +1480,29 @@ void GPU3D::SubmitPolygon() noexcept
+@@ -1338,15 +1474,29 @@ void GPU3D::SubmitPolygon() noexcept
  }
  
  void GPU3D::SubmitVertex() noexcept
@@ -356,7 +326,7 @@ index 3272a34..81f7f41 100644
  
      // this probably shouldn't be.
      // the way color is handled during clipping needs investigation. TODO
-@@ -1376,7 +1532,7 @@ void GPU3D::SubmitVertex() noexcept
+@@ -1376,7 +1526,7 @@ void GPU3D::SubmitVertex() noexcept
          if (VertexNumInPoly == 3)
          {
              VertexNumInPoly = 0;
@@ -365,7 +335,7 @@ index 3272a34..81f7f41 100644
              NumConsecutivePolygons++;
          }
          break;
-@@ -1385,7 +1541,7 @@ void GPU3D::SubmitVertex() noexcept
+@@ -1385,7 +1535,7 @@ void GPU3D::SubmitVertex() noexcept
          if (VertexNumInPoly == 4)
          {
              VertexNumInPoly = 0;
@@ -374,7 +344,7 @@ index 3272a34..81f7f41 100644
              NumConsecutivePolygons++;
          }
          break;
-@@ -1398,7 +1554,7 @@ void GPU3D::SubmitVertex() noexcept
+@@ -1398,7 +1548,7 @@ void GPU3D::SubmitVertex() noexcept
              TempVertexBuffer[0] = tmp;
  
              VertexNumInPoly = 2;
@@ -383,7 +353,7 @@ index 3272a34..81f7f41 100644
              NumConsecutivePolygons++;
  
              TempVertexBuffer[1] = TempVertexBuffer[2];
-@@ -1406,7 +1562,7 @@ void GPU3D::SubmitVertex() noexcept
+@@ -1406,7 +1556,7 @@ void GPU3D::SubmitVertex() noexcept
          else if (VertexNumInPoly == 3)
          {
              VertexNumInPoly = 2;
@@ -392,7 +362,7 @@ index 3272a34..81f7f41 100644
              NumConsecutivePolygons++;
  
              TempVertexBuffer[0] = TempVertexBuffer[1];
-@@ -1422,7 +1578,7 @@ void GPU3D::SubmitVertex() noexcept
+@@ -1422,7 +1572,7 @@ void GPU3D::SubmitVertex() noexcept
              TempVertexBuffer[2] = tmp;
  
              VertexNumInPoly = 2;
@@ -401,7 +371,7 @@ index 3272a34..81f7f41 100644
              NumConsecutivePolygons++;
  
              TempVertexBuffer[0] = TempVertexBuffer[3];
-@@ -1432,10 +1588,16 @@ void GPU3D::SubmitVertex() noexcept
+@@ -1432,10 +1582,16 @@ void GPU3D::SubmitVertex() noexcept
      }
  
      VertexPipeline = 7;
@@ -419,7 +389,7 @@ index 3272a34..81f7f41 100644
  {
      if ((TexParam >> 30) == 2)
      {
-@@ -1455,10 +1617,15 @@ void GPU3D::CalculateLighting() noexcept
+@@ -1455,10 +1611,15 @@ void GPU3D::CalculateLighting() noexcept
          (u32)MatEmission[1] << 14,
          (u32)MatEmission[2] << 14
      };
@@ -438,7 +408,7 @@ index 3272a34..81f7f41 100644
  
          // (credit to azusa for working out most of the details of the diff. algorithm, and essentially the entire spec. algorithm)
          
-@@ -1525,7 +1692,7 @@ void GPU3D::CalculateLighting() noexcept
+@@ -1525,7 +1686,7 @@ void GPU3D::CalculateLighting() noexcept
  
      if (c < 1) c = 1;
      NormalPipeline = 7;
@@ -447,7 +417,7 @@ index 3272a34..81f7f41 100644
  }
  
  
-@@ -1724,16 +1891,215 @@ GPU3D::CmdFIFOEntry GPU3D::CmdFIFORead() noexcept
+@@ -1724,16 +1885,142 @@ GPU3D::CmdFIFOEntry GPU3D::CmdFIFORead() noexcept
                  NDS.GXFIFOUnstall();
          }
  
@@ -469,94 +439,24 @@ index 3272a34..81f7f41 100644
 +};
 +}
 +
-+// GeomFast's GX FIFO: GXQ holds the entries in the order they came, the pipe's GXPipeN then CmdFIFO's GXFifoN,
-+// so a refill moves a count. What a state holds is what CmdFIFO and CmdPIPE would: CmdFIFO's array is kept as
-+// they write it (GXFifoArr, GXFifoR/W), and CmdPIPE's four slots and positions are derived: every entry passes
-+// through the pipe in queue order, so its last four are the pipe's slots; before them, the slots it had when the
-+// queue was last set up (a reset or a state load: GXPipeOld, with the queue's index 0 at slot GXPipeBase).
-+void GPU3D::GXPipeState(u64* slots, u32& rd, u32& wr) const noexcept
-+{
-+    const u64 in = GXQR + GXPipeN;                  // entries that went into the pipe since the setup
-+    wr = (u32)((GXPipeBase + in) & 3);
-+    rd = (wr - GXPipeN) & 3;
-+    for (u32 k = 0; k < 4; k++)
-+    {
-+        const u64 back = ((wr - 1 - k) & 3) + 1;    // how many entries back the last one in slot k went in
-+        slots[k] = back <= in ? GXQ[(in - back) & (GXQSize - 1)] : GXPipeOld[k];
-+    }
-+}
-+
-+void GPU3D::GXQueueClear() noexcept
-+{
-+    // CmdFIFO::Clear and CmdPIPE::Clear: positions to 0, the entry at 0 cleared, the other slots kept
-+    u64 slots[4]; u32 rd, wr;
-+    GXPipeState(slots, rd, wr);
-+    memcpy(GXPipeOld, slots, sizeof(slots));
-+    GXPipeOld[0] = 0;
-+    GXPipeBase = 0;
-+    GXQR = GXQW = 0;
-+    GXPipeN = 0;
-+    GXFifoArr[0] = 0;
-+    GXFifoR = GXFifoW = GXFifoN = 0;
-+}
-+
-+void GPU3D::GXQueueSavestate(Savestate* file) noexcept
-+{
-+    // CmdFIFO::DoSavestate and CmdPIPE::DoSavestate's layout: occupancy, read and write positions, the array
-+    if (file->Saving)
-+    {
-+        file->Var32(&GXFifoN); file->Var32(&GXFifoR); file->Var32(&GXFifoW);
-+        file->VarArray(GXFifoArr, sizeof(GXFifoArr));
-+        u64 slots[4]; u32 rd, wr, n = GXPipeN;
-+        GXPipeState(slots, rd, wr);
-+        file->Var32(&n); file->Var32(&rd); file->Var32(&wr);
-+        file->VarArray(slots, sizeof(slots));
-+        return;
-+    }
-+
-+    file->Var32(&GXFifoN); file->Var32(&GXFifoR); file->Var32(&GXFifoW);
-+    file->VarArray(GXFifoArr, sizeof(GXFifoArr));
-+    u32 n, rd, wr;
-+    file->Var32(&n); file->Var32(&rd); file->Var32(&wr);
-+    file->VarArray(GXPipeOld, sizeof(GXPipeOld));
-+    GXFifoN &= 511; GXFifoR &= 255; GXFifoW &= 255; n &= 7; rd &= 3;
-+    if (GXFifoN > 256) GXFifoN = 256;
-+    if (n > 4) n = 4;
-+    // the queue: the pipe's entries, then CmdFIFO's, with index 0 at the pipe's read slot
-+    GXPipeBase = rd;
-+    GXQR = 0;
-+    GXQW = 0;
-+    for (u32 i = 0; i < n; i++) GXQ[GXQW++] = GXPipeOld[(rd + i) & 3];
-+    for (u32 i = 0; i < GXFifoN; i++) GXQ[GXQW++] = GXFifoArr[(GXFifoR + i) & 255];
-+    // GXPipeState counts the loaded pipe entries as gone in at their slots, which hold them already
-+    GXPipeN = n;
-+    (void)wr;
-+    CmdFIFO.Clear();
-+    CmdPIPE.Clear();
-+}
-+
 +inline __attribute__((always_inline)) void GPU3D::CmdFIFOWriteFast(CmdFIFOEntry entry) noexcept
 +{
-+    // CmdFIFOWrite, inline, on GeomFast's queue (GXQueue in GPU3D.h): every entry goes into the queue; one that
-+    // CmdFIFOWrite puts into CmdFIFO also goes into its array, as CmdFIFO::Write does
-+    if (GXFifoN == 0 && GXPipeN < 4)
++    // CmdFIFOWrite, inline
++    if (CmdFIFO.IsEmpty() && !CmdPIPE.IsFull())
 +    {
-+        GXPipeN++;
++        CmdPIPE.Write(entry);
 +    }
 +    else
 +    {
-+        if (GXFifoN >= 256)
++        if (CmdFIFO.IsFull())
 +        {
 +            CmdStallQueue.Write(entry);
 +            NDS.GXFIFOStall();
 +            return;
 +        }
 +
-+        GXFifoArr[GXFifoW] = entry._contents;
-+        GXFifoW = (GXFifoW + 1) & 255;
-+        GXFifoN++;
++        CmdFIFO.Write(entry);
 +    }
-+    GXQ[GXQW++ & (GXQSize - 1)] = entry._contents;
 +
 +    GXStat |= (1<<27);
 +
@@ -574,7 +474,7 @@ index 3272a34..81f7f41 100644
 +
 +inline __attribute__((always_inline)) void GPU3D::CheckFIFODMAFast() noexcept
 +{
-+    if (GXFifoN < 128 && GXFIFODMAMaybe)
++    if (CmdFIFO.Level() < 128 && GXFIFODMAMaybe)
 +    {
 +        if (NDS.ConsoleType == 0)
 +        {
@@ -598,8 +498,8 @@ index 3272a34..81f7f41 100644
 +    bool irq = false;
 +    switch (GXStat >> 30)
 +    {
-+    case 1: irq = (GXFifoN < 128); break;
-+    case 2: irq = GXFifoN == 0; break;
++    case 1: irq = (CmdFIFO.Level() < 128); break;
++    case 2: irq = CmdFIFO.IsEmpty(); break;
 +    }
 +
 +    // NDS::SetIRQ/ClearIRQ(0, IRQ_GXFIFO) and their UpdateIRQ(0), inline (the ARM9's: no DSi part, no wake-up).
@@ -617,26 +517,23 @@ index 3272a34..81f7f41 100644
 +
 +inline __attribute__((always_inline)) GPU3D::CmdFIFOEntry GPU3D::CmdFIFOReadFast() noexcept
 +{
-+    // CmdFIFORead, with the DMA and IRQ checks inline, on GeomFast's queue: the pipe is the queue's first
-+    // GXPipeN entries, CmdFIFO the next GXFifoN, so moving entries from CmdFIFO to CmdPIPE is moving the count
-+    CmdFIFOEntry ret;
-+    ret._contents = GXQ[GXQR++ & (GXQSize - 1)];
-+    GXPipeN--;
++    // CmdFIFORead, with the DMA and IRQ checks inline
++    CmdFIFOEntry ret = CmdPIPE.Read();
 +
-+    if (GXPipeN <= 2)
++    if (CmdPIPE.Level() <= 2)
 +    {
-+        const u32 moved = GXFifoN < 2 ? GXFifoN : 2;
-+        GXPipeN += moved;
-+        GXFifoN -= moved;
-+        GXFifoR = (GXFifoR + moved) & 255;
++        if (!CmdFIFO.IsEmpty())
++            CmdPIPE.Write(CmdFIFO.Read());
++        if (!CmdFIFO.IsEmpty())
++            CmdPIPE.Write(CmdFIFO.Read());
 +
 +        if (!CmdStallQueue.IsEmpty()) [[unlikely]]
 +        {
 +            while (!CmdStallQueue.IsEmpty())
 +            {
-+                if (GXFifoN >= 256) break;
++                if (CmdFIFO.IsFull()) break;
 +                CmdFIFOEntry entry = CmdStallQueue.Read();
-+                CmdFIFOWriteFast(entry);
++                CmdFIFOWrite(entry);
 +            }
 +
 +            if (CmdStallQueue.IsEmpty())
@@ -665,7 +562,7 @@ index 3272a34..81f7f41 100644
  
      //printf("FIFO: processing %02X %08X. Levels: FIFO=%d, PIPE=%d\n", entry.Command, entry.Param, CmdFIFO->Level(), CmdPIPE->Level());
  
-@@ -1751,12 +2117,12 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1751,12 +2038,12 @@ void GPU3D::ExecuteCommand() noexcept
          switch (entry.Command)
          {
          case 0x10: // matrix mode
@@ -680,7 +577,7 @@ index 3272a34..81f7f41 100644
              NumPushPopCommands--;
              if (MatrixMode == 0)
              {
-@@ -1783,11 +2149,11 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1783,11 +2070,11 @@ void GPU3D::ExecuteCommand() noexcept
                  PosMatrixStackPointer++;
                  PosMatrixStackPointer &= 0x3F;
              }
@@ -694,7 +591,7 @@ index 3272a34..81f7f41 100644
              NumPushPopCommands--;
              if (MatrixMode == 0)
              {
-@@ -1797,7 +2163,7 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1797,7 +2084,7 @@ void GPU3D::ExecuteCommand() noexcept
                  ProjMatrixStackPointer &= 0x1;
                  memcpy(ProjMatrix, ProjMatrixStack, 16*4);
                  ClipMatrixDirty = true;
@@ -703,7 +600,7 @@ index 3272a34..81f7f41 100644
              }
              else if (MatrixMode == 3)
              {
-@@ -1806,7 +2172,7 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1806,7 +2093,7 @@ void GPU3D::ExecuteCommand() noexcept
                  TexMatrixStackPointer--;
                  TexMatrixStackPointer &= 0x1;
                  memcpy(TexMatrix, TexMatrixStack, 16*4);
@@ -712,7 +609,7 @@ index 3272a34..81f7f41 100644
              }
              else
              {
-@@ -1819,12 +2185,12 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1819,12 +2106,12 @@ void GPU3D::ExecuteCommand() noexcept
                  memcpy(PosMatrix, PosMatrixStack[PosMatrixStackPointer & 0x1F], 16*4);
                  memcpy(VecMatrix, VecMatrixStack[PosMatrixStackPointer & 0x1F], 16*4);
                  ClipMatrixDirty = true;
@@ -727,7 +624,7 @@ index 3272a34..81f7f41 100644
              if (MatrixMode == 0)
              {
                  memcpy(ProjMatrixStack, ProjMatrix, 16*4);
-@@ -1841,21 +2207,21 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1841,21 +2128,21 @@ void GPU3D::ExecuteCommand() noexcept
                  memcpy(PosMatrixStack[addr], PosMatrix, 16*4);
                  memcpy(VecMatrixStack[addr], VecMatrix, 16*4);
              }
@@ -753,7 +650,7 @@ index 3272a34..81f7f41 100644
              }
              else
              {
-@@ -1865,17 +2231,17 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1865,17 +2152,17 @@ void GPU3D::ExecuteCommand() noexcept
                  memcpy(PosMatrix, PosMatrixStack[addr], 16*4);
                  memcpy(VecMatrix, VecMatrixStack[addr], 16*4);
                  ClipMatrixDirty = true;
@@ -774,7 +671,7 @@ index 3272a34..81f7f41 100644
              }
              else if (MatrixMode == 3)
                  MatrixLoadIdentity(TexMatrix);
-@@ -1885,12 +2251,12 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1885,12 +2172,12 @@ void GPU3D::ExecuteCommand() noexcept
                  if (MatrixMode == 2)
                      MatrixLoadIdentity(VecMatrix);
                  ClipMatrixDirty = true;
@@ -789,7 +686,7 @@ index 3272a34..81f7f41 100644
              {
                  u32 c = entry.Param;
                  u32 r = c & 0x1F;
-@@ -1903,15 +2269,15 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1903,15 +2190,15 @@ void GPU3D::ExecuteCommand() noexcept
              break;
  
          case 0x21: // normal
@@ -808,7 +705,7 @@ index 3272a34..81f7f41 100644
              RawTexCoords[0] = entry.Param & 0xFFFF;
              RawTexCoords[1] = entry.Param >> 16;
              if ((TexParam >> 30) == 1)
-@@ -1927,59 +2293,59 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1927,59 +2214,59 @@ void GPU3D::ExecuteCommand() noexcept
              break;
  
          case 0x24: // 10-bit vertex
@@ -882,7 +779,7 @@ index 3272a34..81f7f41 100644
              MatDiffuse[0] = entry.Param & 0x1F;
              MatDiffuse[1] = (entry.Param >> 5) & 0x1F;
              MatDiffuse[2] = (entry.Param >> 10) & 0x1F;
-@@ -1992,11 +2358,11 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -1992,11 +2279,11 @@ void GPU3D::ExecuteCommand() noexcept
                  VertexColor[1] = MatDiffuse[1];
                  VertexColor[2] = MatDiffuse[2];
              }
@@ -896,7 +793,7 @@ index 3272a34..81f7f41 100644
              MatSpecular[0] = entry.Param & 0x1F;
              MatSpecular[1] = (entry.Param >> 5) & 0x1F;
              MatSpecular[2] = (entry.Param >> 10) & 0x1F;
-@@ -2004,7 +2370,7 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2004,7 +2291,7 @@ void GPU3D::ExecuteCommand() noexcept
              MatEmission[1] = (entry.Param >> 21) & 0x1F;
              MatEmission[2] = (entry.Param >> 26) & 0x1F;
              UseShininessTable = (entry.Param & 0x8000) != 0;
@@ -905,7 +802,7 @@ index 3272a34..81f7f41 100644
              break;
  
          case 0x32: // light direction
-@@ -2025,18 +2391,18 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2025,18 +2312,18 @@ void GPU3D::ExecuteCommand() noexcept
                  if (den == 0) SpecRecip[l] = 0;
                  else SpecRecip[l] = (1<<18) / den;
              }
@@ -927,7 +824,7 @@ index 3272a34..81f7f41 100644
              break;
  
          case 0x40: // begin polygons
-@@ -2052,7 +2418,7 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2052,7 +2339,7 @@ void GPU3D::ExecuteCommand() noexcept
              break;
  
          case 0x41: // end polygons
@@ -936,7 +833,7 @@ index 3272a34..81f7f41 100644
              // TODO: research this?
              // it doesn't seem to have any effect whatsoever, but
              // its timing characteristics are different from those of other
-@@ -2060,7 +2426,7 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2060,7 +2347,7 @@ void GPU3D::ExecuteCommand() noexcept
              break;
  
          case 0x50: // flush
@@ -945,7 +842,7 @@ index 3272a34..81f7f41 100644
              FlushRequest = 1;
              FlushAttributes = entry.Param & 0x3;
              CycleCount = 325;
-@@ -2074,7 +2440,7 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2074,7 +2361,7 @@ void GPU3D::ExecuteCommand() noexcept
              break;
  
          case 0x60: // viewport x1,y1,x2,y2
@@ -954,7 +851,7 @@ index 3272a34..81f7f41 100644
              // note: viewport Y coordinates are upside-down
              Viewport[0] = entry.Param & 0xFF;                             // x0
              Viewport[1] = (191 - ((entry.Param >> 8) & 0xFF)) & 0xFF;     // y0
-@@ -2085,13 +2451,13 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2085,13 +2372,13 @@ void GPU3D::ExecuteCommand() noexcept
              break;
  
          case 0x72: // vec test
@@ -970,7 +867,7 @@ index 3272a34..81f7f41 100644
              //printf("!! UNKNOWN GX COMMAND %02X %08X\n", entry.Command, entry.Param);
              break;
          }
-@@ -2107,18 +2473,18 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2107,18 +2394,18 @@ void GPU3D::ExecuteCommand() noexcept
              switch (entry.Command)
              {
              // commands that stall the polygon pipeline
@@ -993,7 +890,7 @@ index 3272a34..81f7f41 100644
  
              if (ExecParamCount >= paramsRequiredCount)
              {
-@@ -2135,12 +2501,12 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2135,12 +2422,12 @@ void GPU3D::ExecuteCommand() noexcept
                      {
                          MatrixLoad4x4(ProjMatrix, (s32*)ExecParams);
                          ClipMatrixDirty = true;
@@ -1008,7 +905,7 @@ index 3272a34..81f7f41 100644
                      }
                      else
                      {
-@@ -2148,7 +2514,7 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2148,7 +2435,7 @@ void GPU3D::ExecuteCommand() noexcept
                          if (MatrixMode == 2)
                              MatrixLoad4x4(VecMatrix, (s32*)ExecParams);
                          ClipMatrixDirty = true;
@@ -1017,7 +914,7 @@ index 3272a34..81f7f41 100644
                      }
                      break;
  
-@@ -2157,12 +2523,12 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2157,12 +2444,12 @@ void GPU3D::ExecuteCommand() noexcept
                      {
                          MatrixLoad4x3(ProjMatrix, (s32*)ExecParams);
                          ClipMatrixDirty = true;
@@ -1032,7 +929,7 @@ index 3272a34..81f7f41 100644
                      }
                      else
                      {
-@@ -2170,31 +2536,31 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2170,31 +2457,31 @@ void GPU3D::ExecuteCommand() noexcept
                          if (MatrixMode == 2)
                              MatrixLoad4x3(VecMatrix, (s32*)ExecParams);
                          ClipMatrixDirty = true;
@@ -1073,7 +970,7 @@ index 3272a34..81f7f41 100644
                          ClipMatrixDirty = true;
                      }
                      break;
-@@ -2202,24 +2568,24 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2202,24 +2489,24 @@ void GPU3D::ExecuteCommand() noexcept
                  case 0x19: // mult 4x3
                      if (MatrixMode == 0)
                      {
@@ -1106,7 +1003,7 @@ index 3272a34..81f7f41 100644
                          ClipMatrixDirty = true;
                      }
                      break;
-@@ -2227,24 +2593,24 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2227,24 +2514,24 @@ void GPU3D::ExecuteCommand() noexcept
                  case 0x1A: // mult 3x3
                      if (MatrixMode == 0)
                      {
@@ -1139,7 +1036,7 @@ index 3272a34..81f7f41 100644
                          ClipMatrixDirty = true;
                      }
                      break;
-@@ -2254,42 +2620,42 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2254,42 +2541,42 @@ void GPU3D::ExecuteCommand() noexcept
                      {
                          MatrixScale(ProjMatrix, (s32*)ExecParams);
                          ClipMatrixDirty = true;
@@ -1193,7 +1090,7 @@ index 3272a34..81f7f41 100644
                          ClipMatrixDirty = true;
                      }
                      break;
-@@ -2298,7 +2664,7 @@ void GPU3D::ExecuteCommand() noexcept
+@@ -2298,7 +2585,7 @@ void GPU3D::ExecuteCommand() noexcept
                      CurVertex[0] = ExecParams[0] & 0xFFFF;
                      CurVertex[1] = ExecParams[0] >> 16;
                      CurVertex[2] = ExecParams[1] & 0xFFFF;
@@ -1202,7 +1099,7 @@ index 3272a34..81f7f41 100644
                      break;
  
                  case 0x34: // shininess table
-@@ -2355,8 +2721,59 @@ void GPU3D::FinishWork(s32 cycles) noexcept
+@@ -2355,8 +2642,59 @@ void GPU3D::FinishWork(s32 cycles) noexcept
      GXStat &= ~(1<<27);
  }
  
@@ -1211,7 +1108,7 @@ index 3272a34..81f7f41 100644
 +    // Run, with the commands' work inline
 +    const u64 now = NDS.ARM9Timestamp >> NDS.ARM9ClockShift;
 +    if (!GeometryEnabled || FlushRequest ||
-+        (GXPipeN == 0 && !(GXStat & (1<<27))))
++        (CmdPIPE.IsEmpty() && !(GXStat & (1<<27))))
 +    {
 +        Timestamp = now;
 +        return;
@@ -1221,14 +1118,14 @@ index 3272a34..81f7f41 100644
 +    CycleCount -= cycles;
 +    Timestamp = now;
 +
-+    while (CycleCount <= 0 && GXPipeN != 0)
++    while (CycleCount <= 0 && !CmdPIPE.IsEmpty())
 +    {
 +        GXStat &= ~(((u32)(NumPushPopCommands == 0) << 14) | (u32)(NumTestCommands == 0));
 +
 +        ExecuteCommandBody<true>();
 +    }
 +
-+    if (CycleCount <= 0 && GXPipeN == 0)
++    if (CycleCount <= 0 && CmdPIPE.IsEmpty())
 +    {
 +        if (GXStat & (1<<27))
 +        {
@@ -1262,33 +1159,20 @@ index 3272a34..81f7f41 100644
      if (!GeometryEnabled || FlushRequest ||
          (CmdPIPE.IsEmpty() && !(GXStat & (1<<27))))
      {
-@@ -2395,8 +2812,8 @@ void GPU3D::CheckFIFOIRQ() noexcept
-     bool irq = false;
-     switch (GXStat >> 30)
-     {
--    case 1: irq = (CmdFIFO.Level() < 128); break;
--    case 2: irq = CmdFIFO.IsEmpty(); break;
-+    case 1: irq = (GXFifoLevel() < 128); break;
-+    case 2: irq = GXFifoLevel() == 0; break;
-     }
- 
-     if (irq) NDS.SetIRQ(0, IRQ_GXFIFO);
-@@ -2405,7 +2822,13 @@ void GPU3D::CheckFIFOIRQ() noexcept
+@@ -2404,6 +2742,12 @@ void GPU3D::CheckFIFOIRQ() noexcept
+ }
  
  void GPU3D::CheckFIFODMA() noexcept
- {
--    if (CmdFIFO.Level() < 128)
++{
 +    GXFIFODMAMaybe = true;
 +    CheckFIFODMAPlain();
 +}
 +
 +void GPU3D::CheckFIFODMAPlain() noexcept
-+{
-+    if (GXFifoLevel() < 128)
+ {
+     if (CmdFIFO.Level() < 128)
          NDS.CheckDMAs(0, 0x07);
- }
- 
-@@ -2509,6 +2932,13 @@ void GPU3D::SetRenderXPos(u16 xpos, u16 mask) noexcept
+@@ -2509,6 +2853,13 @@ void GPU3D::SetRenderXPos(u16 xpos, u16 mask) noexcept
  
  
  void GPU3D::WriteToGXFIFO(u32 val) noexcept
@@ -1302,7 +1186,7 @@ index 3272a34..81f7f41 100644
  {
      if (NumCommands == 0)
      {
-@@ -2529,7 +2959,8 @@ void GPU3D::WriteToGXFIFO(u32 val) noexcept
+@@ -2529,7 +2880,8 @@ void GPU3D::WriteToGXFIFO(u32 val) noexcept
              CmdFIFOEntry entry;
              entry.Command = CurCommand & 0xFF;
              entry.Param = val;
@@ -1312,43 +1196,7 @@ index 3272a34..81f7f41 100644
          }
  
          if (ParamCount >= TotalParams)
-@@ -2565,7 +2996,7 @@ u8 GPU3D::Read8(u32 addr) noexcept
-         {
-             Run();
- 
--            u32 fifolevel = CmdFIFO.Level();
-+            u32 fifolevel = GXFifoLevel();
- 
-             return fifolevel & 0xFF;
-         }
-@@ -2573,7 +3004,7 @@ u8 GPU3D::Read8(u32 addr) noexcept
-         {
-             Run();
- 
--            u32 fifolevel = CmdFIFO.Level();
-+            u32 fifolevel = GXFifoLevel();
- 
-             return ((GXStat >> 24) & 0xFF) |
-                    (fifolevel >> 8) |
-@@ -2608,7 +3039,7 @@ u16 GPU3D::Read16(u32 addr) noexcept
-         {
-             Run();
- 
--            u32 fifolevel = CmdFIFO.Level();
-+            u32 fifolevel = GXFifoLevel();
- 
-             return (GXStat >> 16) |
-                    fifolevel |
-@@ -2644,7 +3075,7 @@ u32 GPU3D::Read32(u32 addr) noexcept
-         {
-             Run();
- 
--            u32 fifolevel = CmdFIFO.Level();
-+            u32 fifolevel = GXFifoLevel();
- 
-             return GXStat |
-                    ((PosMatrixStackPointer & 0x1F) << 8) |
-@@ -2820,7 +3251,37 @@ void GPU3D::Write16(u32 addr, u16 val) noexcept
+@@ -2820,7 +3172,37 @@ void GPU3D::Write16(u32 addr, u16 val) noexcept
      Log(LogLevel::Debug, "unknown GPU3D write16 %08X %04X\n", addr, val);
  }
  
@@ -1388,10 +1236,10 @@ index 3272a34..81f7f41 100644
      if (!RenderingEnabled && addr >= 0x04000320 && addr < 0x04000400) return;
      if (!GeometryEnabled  && addr >= 0x04000400 && addr < 0x04000700) return;
 diff --git a/src/GPU3D.h b/src/GPU3D.h
-index 73eff2f..21af29c 100644
+index 73eff2f..9247c6a 100644
 --- a/src/GPU3D.h
 +++ b/src/GPU3D.h
-@@ -133,6 +133,57 @@ private:
+@@ -133,6 +133,54 @@ private:
      void UpdateClipMatrix() noexcept;
      void ResetRenderingState() noexcept;
      void AddCycles(s32 num) noexcept;
@@ -1411,11 +1259,8 @@ index 73eff2f..21af29c 100644
 +    CmdFIFOEntry CmdFIFOReadFast() noexcept;
 +    void CheckFIFODMAFast() noexcept;
 +    void CheckFIFODMAPlain() noexcept;
-+    void GXPipeState(u64* slots, u32& rd, u32& wr) const noexcept;
-+    void GXQueueClear() noexcept;
-+    void GXQueueSavestate(Savestate* file) noexcept;
 +    void CheckFIFOIRQFast() noexcept;
-+    template<bool Fast> [[gnu::always_inline]] void AddCyclesT(s32 num) noexcept
++    template<bool Fast> void AddCyclesT(s32 num) noexcept
 +    {
 +        if constexpr (!Fast) { AddCycles(num); return; }
 +        // AddCycles, inline
@@ -1449,12 +1294,12 @@ index 73eff2f..21af29c 100644
      void NextVertexSlot() noexcept;
      void StallPolygonPipeline(s32 delay, s32 nonstalldelay) noexcept;
      void SubmitPolygon() noexcept;
-@@ -144,35 +195,35 @@ private:
+@@ -144,35 +192,35 @@ private:
      void CmdFIFOWrite(const CmdFIFOEntry& entry) noexcept;
      CmdFIFOEntry CmdFIFORead() noexcept;
      void FinishWork(s32 cycles) noexcept;
 -    void VertexPipelineSubmitCmd() noexcept
-+    template<bool Fast = false> [[gnu::always_inline]] void VertexPipelineSubmitCmd() noexcept
++    template<bool Fast = false> void VertexPipelineSubmitCmd() noexcept
      {
          // vertex commands 0x24, 0x25, 0x26, 0x27, 0x28
          if (!(VertexSlotsFree & 0x1)) NextVertexSlot();
@@ -1464,7 +1309,7 @@ index 73eff2f..21af29c 100644
      }
  
 -    void VertexPipelineCmdDelayed6() noexcept
-+    template<bool Fast = false> [[gnu::always_inline]] void VertexPipelineCmdDelayed6() noexcept
++    template<bool Fast = false> void VertexPipelineCmdDelayed6() noexcept
      {
          // commands 0x20, 0x30, 0x31, 0x72 that can run 6 cycles after a vertex
 -        if (VertexPipeline > 2) AddCycles((VertexPipeline - 2) + 1);
@@ -1475,7 +1320,7 @@ index 73eff2f..21af29c 100644
      }
  
 -    void VertexPipelineCmdDelayed8() noexcept
-+    template<bool Fast = false> [[gnu::always_inline]] void VertexPipelineCmdDelayed8() noexcept
++    template<bool Fast = false> void VertexPipelineCmdDelayed8() noexcept
      {
          // commands 0x29, 0x2A, 0x2B, 0x33, 0x34, 0x41, 0x60, 0x71 that can run 8 cycles after a vertex
 -        if (VertexPipeline > 0) AddCycles(VertexPipeline + 1);
@@ -1486,7 +1331,7 @@ index 73eff2f..21af29c 100644
      }
  
 -    void VertexPipelineCmdDelayed4() noexcept
-+    template<bool Fast = false> [[gnu::always_inline]] void VertexPipelineCmdDelayed4() noexcept
++    template<bool Fast = false> void VertexPipelineCmdDelayed4() noexcept
      {
          // all other commands can run 4 cycles after a vertex
          // no need to do much here since that is the minimum
@@ -1495,24 +1340,7 @@ index 73eff2f..21af29c 100644
          NormalPipeline = 0;
      }
  
-@@ -185,6 +236,16 @@ public:
- 
-     FIFO<CmdFIFOEntry, 64> CmdStallQueue {};
- 
-+    // GeomFast's GX FIFO (GXPipeState in GPU3D.cpp): the real CmdFIFO and CmdPIPE stay empty while it's on
-+    static constexpr u32 GXQSize = 512;
-+    u64 GXQR = 0, GXQW = 0;
-+    u32 GXPipeN = 0;
-+    u32 GXFifoN = 0, GXFifoR = 0, GXFifoW = 0;
-+    u64 GXPipeOld[4] {};
-+    u32 GXPipeBase = 0;
-+    u64 GXQ[GXQSize] {};
-+    u64 GXFifoArr[256] {};
-+
-     u32 ZeroDotWLimit = 0xFFFFFF;
- 
-     u32 GXStat = 0;
-@@ -316,6 +377,16 @@ public:
+@@ -316,6 +364,14 @@ public:
  
      u32 FlushRequest = 0;
      u32 FlushAttributes = 0;
@@ -1524,8 +1352,6 @@ index 73eff2f..21af29c 100644
 +    bool GXFIFODMAMaybe = true;
 +    // whether the ARM9's IRQ line was brought up to date by CheckFIFOIRQFast since the last reset or state load
 +    bool GXIRQSynced = false;
-+
-+    u32 GXFifoLevel() const noexcept { return GeomFast ? GXFifoN : CmdFIFO.Level(); }
  };
  
  class Renderer3D
