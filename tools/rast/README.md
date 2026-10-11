@@ -220,18 +220,42 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   taking the steps as two 4-step additions, the same u64 sums), two copies of the step alternate the current and the
   next group's registers, a full group whose next group passes falls through (one ccmp tests both masks), and
   `kernsched.py`'s climb_loop() orders the loop's steady path as a whole (a hill climb on its machine model over the
-  whole loop, 24000 evaluated moves a loop, deterministic: the per-block list schedules alone gave 02000 106
-  cycles a group, the climb 93). kpath (`loop=51`, two groups a pass), cycles a group: 02000 122 -> 93,
-  02010 122 -> 90.5, 04010 133 -> 98.5 (16 colours, `loop=81`: 130 -> 92.5), 14010 142 -> 100 (98),
-  12000 133 -> 96; the hi-res set's the same; every other flag path of these kernels, and every other kernel,
-  as before (the depth-equal path too: a first version tested the line's flags at 28:, which the depth-equal head
-  joins every group). `ut/kern_ab` against 4f63ae7 (its batches now with the pipelined loops' flags forced
-  on a quarter, lines of 1-25 pixels at the buffer's edge and groups that pass or fail whole): 0 of 255000 batches
-  differ (three seeds, 500 batches a kernel, 90157 with the pipelined flags); the scene cycle's differing bins as DraStic's renderer's
-  at every checkpoint to 24000 (a 330 s run beside the other agents' simulator jobs; the same code before the climb's final
-  reorder and the flag test's move reached 62400 bins with the same counts) bins with the compositor's checks 0 differ, with deferred shading to 40800, S4 0 bins
-  in 7200, the stress ROM's 3 in 2400 (90 s runs under the same load reach one checkpoint), the four 3x runs without signals. Generating the kernels takes about
-  2.5 minutes (the climb; `KERNSCHED=0` skips scheduling and climbing).
+  whole loop, 24000 evaluated moves a loop, deterministic: the per-block list schedules alone gave 02000 106 cycles
+  a group, the climb 93). kpath (`loop=51`, two groups a pass), cycles a group: 02000 122 -> 93, 02010 122 -> 90.5,
+  04010 133 -> 98.5 (16 colours, `loop=81`: 130 -> 92.5), 14010 142 -> 100 (98), 12000 133 -> 96; the hi-res set's
+  the same; every other flag path of these kernels, and every other kernel, as before (the depth-equal path too: a
+  first version tested the line's flags at 28:, which the depth-equal head joins every group). `ut/kern_ab` against
+  4f63ae7 (its batches now with the pipelined loops' flags forced on a quarter, lines of 1-25 pixels at the buffer's
+  edge and groups that pass or fail whole): 0 of 255000 batches differ (three seeds, 500 batches a kernel, 90157
+  with the pipelined flags); the scene cycle's differing bins as DraStic's renderer's at every checkpoint to 60000
+  bins (a 600 s run) with the compositor's checks 0 differ, with deferred shading to 40800, S4 0 bins in 7200, the
+  stress ROM's 3 in 2400 (one checkpoint under the load of the time), the four 3x runs without signals. Generating
+  the kernels takes about 2.5 minutes (the climb; `KERNSCHED=0` skips scheduling and climbing).
+  Then the lit paletted kernels (04000 14000 and their hi-res twins, keep_dep()'s "litp"; S4's second kernel) got
+  the pipelined loop too: their spare registers hold the vertex colour and its modulate scratch, so the next group's
+  head takes v13 v14 v12 (the line's ub vb b0 splats, loaded from the stack where the colour stage uses them) for
+  its results and v23 and v10 (the fog bytes and the r0 splat, from the stack too) for its scratch, the weights'
+  second half and reciprocal scratch doubling as the depth test's two word registers (as 14010's head did); one
+  register set serves both palette forms. kpath, cycles a group: 04000 136 -> 108 (16 colours 133 -> 98), 14000 145
+  -> 106 (142 -> 95); `ut/kern_ab` caught the first version's register clash (with w depth the modulate scratch is
+  v9 and v22 keeps pid << 24, which the loop's vb load overwrote: 14000 alone, 6 of 68000 batches). `kernsched.py`'s
+  model got two figures of llvm-mca's A55 it lacked (the pipelined loop's path through llvm-mca's timeline and the
+  model side by side, instruction by instruction): umov's result takes 4 cycles, not 3 (the texel gather's eight
+  umov -> ldr pairs), and st2/st4 hold the store pipe a cycle a register (the full group's st4 delayed the attribute
+  words' stp q 4 cycles the model did not see); it now matches llvm-mca on the pipelined loops within a cycle a pass
+  (02000 182.7 vs 184.0 cycles for two groups, before 171.7). Every block rescheduled on it: the 56 bilinear kernels
+  with clamped textures (T 1 and 3; 28 a set) 3-5 cycles a group faster in kpath (01001 436 -> 431, 03101 525 ->
+  522), the others the same; the pipelined loops re-climbed within the climb's run-to-run noise (1-2 cycles a group:
+  02000 94, 02010 90.5, 04010 100/90, 12000 93.5, 14010 104/96.5). The climb's inner loop (Machine.when/issue)
+  without generators: the same schedules, 1.5x faster; generating the kernels takes about 2.3 minutes with 11
+  distinct loops. Modeled A55 cycles a frame (90 s profiles of this build and of 4f63ae7's, same session): stress
+  ROM L4 at 2x, 02000 4.54 -> 4.03 M (-11%; IPC 0.92 -> 1.15), the frame net of [other] 17.66 -> 17.12 M (-3.1%); at
+  3x h02000 9.69 -> 8.41 M (-13%), the frame net 33.78 -> 32.34 M (-4.3%); fog and edge marking S4 at 2x, 04010 3.21
+  -> 2.50 M (-22%), 04000 0.95 -> 0.80 M (-16%; instructions +4-7%: a different span of the scene), the frame net
+  9.16 -> 8.27 M (-9.7%); the field scene S7's 14010 (white lines: the next step) the same. `ut/kern_ab` against
+  4f63ae7: 0 of 323000 batches differ (four seeds); the scene cycle's differing bins as DraStic's renderer's at
+  every checkpoint to 74400 bins with the compositor's checks 0 differ, with deferred shading to 67200, S4 0 bins in
+  12000, the stress ROM's 6 bins in 4800, the four 3x runs without signals.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
