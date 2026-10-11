@@ -35,8 +35,13 @@ static void note(u32 ch, u32 seed) {
     if (ch == 13) vol = 127;
     CH_CNT(ch) = 0;
     CH_SAD(ch) = ch == 7 ? WRAMSMP : ch == 6 && (seed & 1) ? 0x00000100 : SAMPLES + ch * 0x1000;
-    /* 11-44 kHz for samples, PSG and noise higher */
-    CH_TMR(ch) = (u16)(0x10000 - (ch < 8 ? 380 + ((seed * 3 + ch * 41) % 1100) : 200 + ch * 23 + (seed & 127)));
+    /* the rates a game's driver uses: samples at 8-32 kHz (channel 0 at 44 kHz), PSG notes at musical pitches
+     * (8 steps a period: 110-1760 Hz), noise at 4-16 kHz */
+    static const u16 a2[12] = {19042, 17973, 16965, 16012, 15114, 14265, 13465, 12709, 11996, 11322, 10687, 10087};   /* timer periods of 110 Hz..208 Hz */
+    u32 per = ch == 0 ? 380 : ch < 8 ? 512 + ((seed * 37 + ch * 41) % 1580)
+            : ch < 14 ? a2[(seed + ch) % 12] >> ((seed + ch) % 5)
+            : 1047 + ((seed * 13 + ch) % 3100);
+    CH_TMR(ch) = (u16)(0x10000 - per);
     CH_PNT(ch) = ch == 2 || ch == 5 ? 1 + (seed & 3) : (seed + ch) & 7;
     CH_LEN(ch) = 0x80 + ((seed * 5 + ch * 13) & 0x1FF);
     env[ch] = (u8)vol;
