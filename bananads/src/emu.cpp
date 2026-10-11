@@ -212,6 +212,7 @@ bool Emu::load_rom(const std::string& path) {
     nds_->SetNDSCart(std::move(cart));
     nds_->Reset();
     nds_->SetupDirectBoot(game_ + ".nds");
+    setup_slice();
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;
@@ -263,12 +264,44 @@ bool Emu::load_rom(const std::string& path) {
     return true;
 }
 
+// core.slice: the scheduler slice, the most system cycles (33.5 MHz) the ARM9 and then the ARM7 run before they
+// are interleaved again (patches/melonds/0003). 64 is melonDS's. Longer is faster and coarser: each CPU sees the
+// other's writes up to a slice late. auto (or any core.slice_idle) is adaptive: core.slice_idle cycles while
+// neither CPU has touched the IPC registers or WRAMCNT for core.slice_hold cycles, core.slice (64 for auto) near them.
+void Emu::setup_slice() {
+    const std::string s = cfg_.str("core.slice", "64");
+    const bool adaptive = s == "auto";
+    const long slice = adaptive ? 64 : cfg_.num("core.slice", 64);
+    long idle = cfg_.num("core.slice_idle", adaptive ? 512 : slice);
+    long hold = cfg_.num("core.slice_hold", 4096);
+    auto ok = [](long v) { return v >= 1 && v <= 16384; };
+    if (!ok(slice) || !ok(idle) || hold < 0 || hold > (1 << 24)) {
+        Log(LogLevel::Warn, "[emu] core.slice=%s / slice_idle=%ld / slice_hold=%ld out of range; using 64\n", s.c_str(),
+            idle, hold);
+        nds_->SetSlice(64, 64, 0);
+        return;
+    }
+    nds_->SetSlice((s32)slice, (s32)idle, (u32)hold);
+    if (slice != 64 || idle != slice)
+        Log(LogLevel::Info, "[emu] scheduler slice %ld, %ld while %ld cycles away from IPC\n", slice, idle, hold);
+    slice_stats_ = cfg_.num("core.slice_stats", 0);
+}
+
 void Emu::run_frame() {
 #ifdef BANANADS_LAN
     if (local_) MPInterface::Get().Process();
 #endif
     nds_->RunFrame();
     flush_save(false);
+    if (slice_stats_ > 0 && ++slice_frames_ % slice_stats_ == 0) {
+        // the share of emulated time within core.slice_hold cycles of an IPC access (where the short slice runs)
+        const double near = 100.0 * (double)nds_->SliceNearIPCCycles / (560190.0 * (double)slice_stats_);
+        Log(LogLevel::Info, "[emu] slice: frames %ld-%ld, %.0f IPC accesses a frame, %.1f%% of the time near one\n",
+            slice_frames_ - slice_stats_ + 1, slice_frames_, (double)nds_->SliceIPCAccesses / (double)slice_stats_,
+            near);
+        nds_->SliceIPCAccesses = 0;
+        nds_->SliceNearIPCCycles = 0;
+    }
 }
 
 void Emu::set_keys(uint32_t pressed) { nds_->SetKeyMask(~pressed & 0xFFF); }

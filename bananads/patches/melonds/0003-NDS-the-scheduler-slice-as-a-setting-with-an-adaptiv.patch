@@ -1,0 +1,313 @@
+From d1418bc5b462bd605cca99904a3cc702d31fdb1a Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 17:43:24 +0000
+Subject: [PATCH] NDS: the scheduler slice as a setting, with an adaptive mode
+
+kMaxIterationCycles (64) becomes NDS::SetSlice(slice, idle, hold): the
+slice, and a longer one used while neither CPU has touched the IPC
+registers or WRAMCNT for hold system cycles. idle == slice (the default)
+is melonDS's fixed slice. The hooks sit on the IPC case labels of the IO
+handlers, so other IO costs nothing; NextTarget gains one load and
+compare. SliceIPCAccesses and SliceNearIPCCycles count, for statistics.
+---
+ src/NDS.cpp | 73 +++++++++++++++++++++++++++++++++--------------------
+ src/NDS.h   | 24 ++++++++++++++++++
+ 2 files changed, 70 insertions(+), 27 deletions(-)
+
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index c6dc85f..0408504 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -49,7 +49,8 @@ namespace melonDS
+ {
+ using namespace Platform;
+ 
+-const s32 kMaxIterationCycles = 64;
++// kMaxIterationCycles (64) is now NDS::SliceShort/SliceIdle (SetSlice). An event due within
++// kIterationCycleMargin cycles after a slice's end ends that iteration itself, so no iteration is shorter than this.
+ const s32 kIterationCycleMargin = 8;
+ 
+ // timing notes
+@@ -507,6 +508,7 @@ void NDS::Reset()
+     IPCFIFOCnt7 = 0;
+     IPCFIFO9.Clear();
+     IPCFIFO7.Clear();
++    SliceNearIPCUntil = 0;
+ 
+     DivCnt = 0;
+     SqrtCnt = 0;
+@@ -813,6 +815,14 @@ void NDS::SetARM9BIOS(const std::array<u8, ARM9BIOSSize>& bios) noexcept
+     ARM9BIOSNative = CRC32(ARM9BIOS.data(), ARM9BIOS.size()) == ARM9BIOSCRC32;
+ }
+ 
++void NDS::SetSlice(s32 slice, s32 idle, u32 hold) noexcept
++{
++    SliceShort = slice > 0 ? slice : 64;
++    SliceIdle = idle > 0 ? idle : SliceShort;
++    SliceHold = hold;
++    SliceNearIPCUntil = 0;
++}
++
+ u64 NDS::NextTarget()
+ {
+     u64 minEvent = UINT64_MAX;
+@@ -830,7 +840,16 @@ u64 NDS::NextTarget()
+         mask >>= 1;
+     }
+ 
+-    u64 max = SysTimestamp + kMaxIterationCycles;
++    // The adaptive slice (SetSlice): long slices only while neither CPU has touched the IPC registers or WRAMCNT
++    // for SliceHold cycles. Scheduled events (timers, DMA, the GPU, IRQs from them) still end a slice exactly,
++    // as nothing below changes the minEvent path; what a longer slice coarsens is only how the two CPUs'
++    // instruction streams interleave. The CPUs talk through the IPC registers, which the hooks see, and through
++    // main RAM, which they can't (fast memory): a handshake polled purely in main RAM (spinlocks, flags) still
++    // sees the other CPU's writes up to one idle slice late, and so does the first IPC access after a quiet
++    // period (the slice it lands in is already long). Shared WRAM is never visible to both CPUs at once
++    // (WRAMCNT gives each half to one of them), so only WRAMCNT writes, the hand-overs, are hooked.
++    // Hot path cost: one load and compare (and a select) per iteration; SliceIdle == SliceShort is melonDS's.
++    u64 max = SysTimestamp + (SysTimestamp < SliceNearIPCUntil ? SliceShort : SliceIdle);
+ 
+     if (minEvent < max + kIterationCycleMargin)
+         return minEvent;
+@@ -2832,8 +2851,8 @@ u8 NDS::ARM9IORead8(u32 addr)
+     case 0x04000132: return KeyCnt[0] & 0xFF;
+     case 0x04000133: return KeyCnt[0] >> 8;
+ 
+-    case 0x04000180: return IPCSync9 & 0xFF;
+-    case 0x04000181: return IPCSync9 >> 8;
++    case 0x04000180: SliceIPC(0); return IPCSync9 & 0xFF;
++    case 0x04000181: SliceIPC(0); return IPCSync9 >> 8;
+ 
+     case 0x040001A0: return NDSCartSlots[0]->ReadSPICnt(0) & 0xFF;
+     case 0x040001A1: return NDSCartSlots[0]->ReadSPICnt(0) >> 8;
+@@ -2943,8 +2962,8 @@ u16 NDS::ARM9IORead16(u32 addr)
+     case 0x04000130: LagFrameFlag = false; return KeyInput & 0xFFFF;
+     case 0x04000132: return KeyCnt[0];
+ 
+-    case 0x04000180: return IPCSync9;
+-    case 0x04000184:
++    case 0x04000180: SliceIPC(0); return IPCSync9;
++    case 0x04000184: SliceIPC(0);
+         {
+             u16 val = IPCFIFOCnt9;
+             if (IPCFIFO9.IsEmpty())     val |= 0x0001;
+@@ -3064,7 +3083,7 @@ u32 NDS::ARM9IORead32(u32 addr)
+ 
+     case 0x04000130: LagFrameFlag = false; return (KeyInput & 0xFFFF) | (KeyCnt[0] << 16);
+ 
+-    case 0x04000180: return IPCSync9;
++    case 0x04000180: SliceIPC(0); return IPCSync9;
+     case 0x04000184: return NDS::ARM9IORead16(addr);
+ 
+     case 0x040001A0: return NDSCartSlots[0]->ReadSPICnt(0) | (NDSCartSlots[0]->ReadSPIData(0) << 16);
+@@ -3096,7 +3115,7 @@ u32 NDS::ARM9IORead32(u32 addr)
+     case 0x04000300: return PostFlag9;
+     case 0x04000304: return PowerControl9;
+ 
+-    case 0x04100000:
++    case 0x04100000: SliceIPC(0);
+         if (IPCFIFOCnt9 & 0x8000)
+         {
+             u32 ret;
+@@ -3181,7 +3200,7 @@ void NDS::ARM9IOWrite8(u32 addr, u8 val)
+         KeyCnt[0] = (KeyCnt[0] & 0x00FF) | (val << 8);
+         return;
+ 
+-    case 0x04000181:
++    case 0x04000181: SliceIPC(0);
+         IPCSync7 &= 0xFFF0;
+         IPCSync7 |= (val & 0x0F);
+         IPCSync9 &= 0xB0FF;
+@@ -3237,7 +3256,7 @@ void NDS::ARM9IOWrite8(u32 addr, u8 val)
+     case 0x04000244: GPU.MapVRAM_E(4, val); return;
+     case 0x04000245: GPU.MapVRAM_FG(5, val); return;
+     case 0x04000246: GPU.MapVRAM_FG(6, val); return;
+-    case 0x04000247: MapSharedWRAM(val); return;
++    case 0x04000247: SliceIPC(0); MapSharedWRAM(val); return;
+     case 0x04000248: GPU.MapVRAM_H(7, val); return;
+     case 0x04000249: GPU.MapVRAM_I(8, val); return;
+ 
+@@ -3315,7 +3334,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+         KeyCnt[0] = val;
+         return;
+ 
+-    case 0x04000180:
++    case 0x04000180: SliceIPC(0);
+         IPCSync7 &= 0xFFF0;
+         IPCSync7 |= ((val & 0x0F00) >> 8);
+         IPCSync9 &= 0xB0FF;
+@@ -3326,7 +3345,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+         }
+         return;
+ 
+-    case 0x04000184:
++    case 0x04000184: SliceIPC(0);
+         if (val & 0x0008)
+             IPCFIFO9.Clear();
+         if ((val & 0x0004) && (!(IPCFIFOCnt9 & 0x0004)) && IPCFIFO9.IsEmpty())
+@@ -3338,7 +3357,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+         IPCFIFOCnt9 = (val & 0x8404) | (IPCFIFOCnt9 & 0x4000);
+         return;
+ 
+-    case 0x04000188:
++    case 0x04000188: SliceIPC(0);
+         NDS::ARM9IOWrite32(addr, val | (val << 16));
+         return;
+ 
+@@ -3403,7 +3422,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+         GPU.MapVRAM_E(4, val & 0xFF);
+         GPU.MapVRAM_FG(5, val >> 8);
+         return;
+-    case 0x04000246:
++    case 0x04000246: SliceIPC(0);
+         GPU.MapVRAM_FG(6, val & 0xFF);
+         MapSharedWRAM(val >> 8);
+         return;
+@@ -3504,7 +3523,7 @@ void NDS::ARM9IOWrite32(u32 addr, u32 val)
+     case 0x04000184:
+         NDS::ARM9IOWrite16(addr, val);
+         return;
+-    case 0x04000188:
++    case 0x04000188: SliceIPC(0);
+         if (IPCFIFOCnt9 & 0x8000)
+         {
+             if (IPCFIFO9.IsFull())
+@@ -3557,7 +3576,7 @@ void NDS::ARM9IOWrite32(u32 addr, u32 val)
+         GPU.MapVRAM_CD(2, (val >> 16) & 0xFF);
+         GPU.MapVRAM_CD(3, val >> 24);
+         return;
+-    case 0x04000244:
++    case 0x04000244: SliceIPC(0);
+         GPU.MapVRAM_E(4, val & 0xFF);
+         GPU.MapVRAM_FG(5, (val >> 8) & 0xFF);
+         GPU.MapVRAM_FG(6, (val >> 16) & 0xFF);
+@@ -3656,8 +3675,8 @@ u8 NDS::ARM7IORead8(u32 addr)
+ 
+     case 0x04000138: return RTC.Read() & 0xFF;
+ 
+-    case 0x04000180: return IPCSync7 & 0xFF;
+-    case 0x04000181: return IPCSync7 >> 8;
++    case 0x04000180: SliceIPC(1); return IPCSync7 & 0xFF;
++    case 0x04000181: SliceIPC(1); return IPCSync7 >> 8;
+ 
+     case 0x040001A0: return NDSCartSlots[0]->ReadSPICnt(1) & 0xFF;
+     case 0x040001A1: return NDSCartSlots[0]->ReadSPICnt(1) >> 8;
+@@ -3720,8 +3739,8 @@ u16 NDS::ARM7IORead16(u32 addr)
+ 
+     case 0x04000138: return RTC.Read();
+ 
+-    case 0x04000180: return IPCSync7;
+-    case 0x04000184:
++    case 0x04000180: SliceIPC(1); return IPCSync7;
++    case 0x04000184: SliceIPC(1);
+         {
+             u16 val = IPCFIFOCnt7;
+             if (IPCFIFO7.IsEmpty())     val |= 0x0001;
+@@ -3791,7 +3810,7 @@ u32 NDS::ARM7IORead32(u32 addr)
+     case 0x04000134: return RCnt | (KeyInput & 0xFFFF0000);
+     case 0x04000138: return RTC.Read();
+ 
+-    case 0x04000180: return IPCSync7;
++    case 0x04000180: SliceIPC(1); return IPCSync7;
+     case 0x04000184: return NDS::ARM7IORead16(addr);
+ 
+     case 0x040001A0: return NDSCartSlots[0]->ReadSPICnt(1) | (NDSCartSlots[0]->ReadSPIData(1) << 16);
+@@ -3807,7 +3826,7 @@ u32 NDS::ARM7IORead32(u32 addr)
+     case 0x04000304: return PowerControl7;
+     case 0x04000308: return ARM7BIOSProt;
+ 
+-    case 0x04100000:
++    case 0x04100000: SliceIPC(1);
+         if (IPCFIFOCnt7 & 0x8000)
+         {
+             u32 ret;
+@@ -3866,7 +3885,7 @@ void NDS::ARM7IOWrite8(u32 addr, u8 val)
+ 
+     case 0x04000138: RTC.Write(val, true); return;
+ 
+-    case 0x04000181:
++    case 0x04000181: SliceIPC(1);
+         IPCSync9 &= 0xFFF0;
+         IPCSync9 |= (val & 0x0F);
+         IPCSync7 &= 0xB0FF;
+@@ -3973,7 +3992,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
+ 
+     case 0x04000138: RTC.Write(val, false); return;
+ 
+-    case 0x04000180:
++    case 0x04000180: SliceIPC(1);
+         IPCSync9 &= 0xFFF0;
+         IPCSync9 |= ((val & 0x0F00) >> 8);
+         IPCSync7 &= 0xB0FF;
+@@ -3984,7 +4003,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
+         }
+         return;
+ 
+-    case 0x04000184:
++    case 0x04000184: SliceIPC(1);
+         if (val & 0x0008)
+             IPCFIFO7.Clear();
+         if ((val & 0x0004) && (!(IPCFIFOCnt7 & 0x0004)) && IPCFIFO7.IsEmpty())
+@@ -3996,7 +4015,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
+         IPCFIFOCnt7 = (val & 0x8404) | (IPCFIFOCnt7 & 0x4000);
+         return;
+ 
+-    case 0x04000188:
++    case 0x04000188: SliceIPC(1);
+         NDS::ARM7IOWrite32(addr, val | (val << 16));
+         return;
+ 
+@@ -4138,7 +4157,7 @@ void NDS::ARM7IOWrite32(u32 addr, u32 val)
+     case 0x04000184:
+         NDS::ARM7IOWrite16(addr, val);
+         return;
+-    case 0x04000188:
++    case 0x04000188: SliceIPC(1);
+         if (IPCFIFOCnt7 & 0x8000)
+         {
+             if (IPCFIFO7.IsFull())
+diff --git a/src/NDS.h b/src/NDS.h
+index 729706b..30b0ddd 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -277,6 +277,15 @@ public: // TODO: Encapsulate the rest of these members
+     u64 ARM7Timestamp, ARM7Target;
+     u32 ARM9ClockShift;
+ 
++    // The scheduler slice (BananaDS): the most system cycles one iteration of RunFrame's loop runs the CPUs for
++    // before they are interleaved again (melonDS: 64). slice is used within hold cycles of either CPU's last
++    // access to the IPC registers (IPCSYNC, IPCFIFOCNT, IPCFIFOSEND, IPCFIFORECV) or to WRAMCNT, idle the rest of
++    // the time; idle == slice (the default) is a fixed slice. SliceIPCAccesses and SliceNearIPCCycles count, for
++    // statistics (the frontend may reset them), the accesses and roughly how much emulated time ran near one.
++    void SetSlice(s32 slice, s32 idle, u32 hold) noexcept;
++    u64 SliceIPCAccesses = 0;
++    u64 SliceNearIPCCycles = 0;
++
+     u32 IME[2];
+     u32 IE[2];
+     u32 IF[2];
+@@ -509,6 +518,21 @@ protected:
+     void InitTimings();
+     u32 SchedListMask;
+     u64 SysTimestamp;
++    s32 SliceShort = 64;
++    s32 SliceIdle = 64;
++    u32 SliceHold = 0;
++    u64 SliceNearIPCUntil = 0; // the short slice is used while SysTimestamp is below this
++    void SliceIPC(u32 cpu) noexcept
++    {
++        const u64 now = cpu ? ARM7Timestamp : (ARM9Timestamp >> ARM9ClockShift);
++        const u64 until = now + SliceHold;
++        SliceIPCAccesses++;
++        if (until > SliceNearIPCUntil)
++        {
++            SliceNearIPCCycles += until - (now > SliceNearIPCUntil ? now : SliceNearIPCUntil);
++            SliceNearIPCUntil = until;
++        }
++    }
+     u8 WRAMCnt;
+     u8 PostFlag9;
+     u8 PostFlag7;
+-- 
+2.43.0
+
