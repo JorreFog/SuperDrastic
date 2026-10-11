@@ -209,6 +209,29 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   M cycles a frame, the frame net of `[other]` with both changes 9.62 -> 9.34 M. `t_resolve.c` (its rectangles of
   polygon ids; a screen that drops the next pixel's id fails it), S4's frame diff 0 bins, the scene cycle as before to
   55200 bins with the compositor's checks 0 differ.
+  Fifth round, the kernels: software-pipelined group loops (`kerngen.py`'s pipe()). Each group of 8 pixels was one
+  chain of dependent stages (depth test, reciprocal weights, coordinates, gather, modulates, store) and the in-order
+  core overlaps only what interleaves in program order. The hottest kernels (02000 02010 04010 12000 14010 and their
+  hi-res twins) now have a second group loop for the lines whose flags allow it (perspective, no depth-equal test,
+  no white line, no alpha stage: pipe_check(), once per line at the lazy entry 27:, or at the line's start with w
+  depth): a step stores the current group while the next group's head (its depth test, weights and steps) runs in
+  the same block. The registers come from constants the colour stage now loads where it uses them (the line's ub vb
+  b0 splats from the stack, the texture masks and pid from the kernel arguments; z depth's 8-step register freed by
+  taking the steps as two 4-step additions, the same u64 sums), two copies of the step alternate the current and the
+  next group's registers, a full group whose next group passes falls through (one ccmp tests both masks), and
+  `kernsched.py`'s climb_loop() orders the loop's steady path as a whole (a hill climb on its machine model over the
+  whole loop, 24000 evaluated moves a loop, deterministic: the per-block list schedules alone gave 02000 106
+  cycles a group, the climb 93). kpath (`loop=51`, two groups a pass), cycles a group: 02000 122 -> 93,
+  02010 122 -> 90.5, 04010 133 -> 98.5 (16 colours, `loop=81`: 130 -> 92.5), 14010 142 -> 100 (98),
+  12000 133 -> 96; the hi-res set's the same; every other flag path of these kernels, and every other kernel,
+  as before (the depth-equal path too: a first version tested the line's flags at 28:, which the depth-equal head
+  joins every group). `ut/kern_ab` against 4f63ae7 (its batches now with the pipelined loops' flags forced
+  on a quarter, lines of 1-25 pixels at the buffer's edge and groups that pass or fail whole): 0 of 255000 batches
+  differ (three seeds, 500 batches a kernel, 90157 with the pipelined flags); the scene cycle's differing bins as DraStic's renderer's
+  at every checkpoint to 24000 (a 330 s run beside the other agents' simulator jobs; the same code before the climb's final
+  reorder and the flag test's move reached 62400 bins with the same counts) bins with the compositor's checks 0 differ, with deferred shading to 40800, S4 0 bins
+  in 7200, the stress ROM's 3 in 2400 (90 s runs under the same load reach one checkpoint), the four 3x runs without signals. Generating the kernels takes about
+  2.5 minutes (the climb; `KERNSCHED=0` skips scheduling and climbing).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -351,7 +374,9 @@ stack apart; the branches stay where they are, but an out-of-line block's jump b
 of the instructions after its join, which makes one block of the code on both sides of the join): of several
 candidate orders it keeps the one that runs fastest on its model of llvm-mca's in-order Cortex-A55 (issue groups, the
 FP and load pipes' occupancy, the in-order writeback; it matches llvm-mca's cycles on the group loops within a
-cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py` writes the kernels unscheduled.
+cycle), with the state the block before leaves; the pipelined loops' steady paths are then climbed as a whole (climb_loop(),
+24000 evaluated moves a loop: nearly all of the 2.5 minutes a generation takes); `KERNSCHED=0 python3 kerngen.py`
+writes the kernels unscheduled and unclimbed.
 
 ## Simulator usage (see `tools/sim/` for setup; `dev/` holds the scripts used during development)
 
@@ -403,8 +428,13 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   only frees v28; kerngen.py's keep_dep()), and the paletted ones store with st4 (Status); ORing pid in at the depth
   test instead of the store models 1-2 cycles worse. Left: the texel gather's ld2 (7 cycles with nothing
   independent left; ldr q and uzp model 2 worse); the 16-colour gather's bytes through the stack (stp w and ld2 to
-  assemble 8 bytes; ORed together in x9 and moved by fmov they model the same). Overlapping consecutive groups
-  needs registers the kernels do not have (the bilinear kernels use them all). Hoisting the fall-through code over the
+  assemble 8 bytes; ORed together in x9 and moved by fmov they model the same). Consecutive groups now overlap in
+  the hottest kernels' pipelined loops (Status, fifth round); left for them: the other kernels (03010 13010 with
+  clamped textures, whose clamp branches would need a loop per mode; 01000 11000; the lit paletted 04000 family,
+  whose spare registers hold the vertex colour; the visibility and shade passes; bilinear, which uses every
+  register), the w-depth kernels' lines with 64-bit products, and the loops' steady path itself (FP-pipe bound
+  ~73 cycles a group for 02000 in llvm-mca's model, 92 now; the climb's model and llvm-mca differ by a few cycles).
+  Hoisting the fall-through code over the
   w7 flag branches does not pay (llvm-mca: +1-8% on most kernels, the hoisted work lands above taken branches; -4-6%
   on the bilinear ones).
 - A device A/B of the scheduling (llvm-mca's model is what it is: its integer latencies are 3, the A55's 1-2), and
