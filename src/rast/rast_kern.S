@@ -55,9 +55,12 @@ rast_kern_00000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -250,9 +253,12 @@ rast_kern_00000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -325,14 +331,17 @@ rast_kern_00000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -347,9 +356,12 @@ rast_kern_00000:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -563,9 +575,12 @@ rast_kern_00010:
 	shl v8.2d, v25.2d, #2
 0:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -746,9 +761,12 @@ rast_kern_00100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -938,9 +956,12 @@ rast_kern_00100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -1077,14 +1098,17 @@ rast_kern_00100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -1099,9 +1123,12 @@ rast_kern_00100:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -1254,9 +1281,12 @@ rast_kern_00110:
 	shl v8.2d, v25.2d, #2
 0:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -1456,9 +1486,12 @@ rast_kern_01000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -1687,9 +1720,12 @@ rast_kern_01000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -1838,14 +1874,17 @@ rast_kern_01000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -1863,9 +1902,12 @@ rast_kern_01000:
 	b 118b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -2101,9 +2143,12 @@ rast_kern_01001:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -2321,9 +2366,12 @@ rast_kern_01001:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -2708,14 +2756,17 @@ rast_kern_01001:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -2729,9 +2780,12 @@ rast_kern_01001:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -2949,9 +3003,12 @@ rast_kern_01010:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -3151,9 +3208,12 @@ rast_kern_01010:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -3291,14 +3351,17 @@ rast_kern_01010:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -3318,9 +3381,12 @@ rast_kern_01010:
 	b 140b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -3527,9 +3593,12 @@ rast_kern_01011:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -3718,9 +3787,12 @@ rast_kern_01011:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -4097,14 +4169,17 @@ rast_kern_01011:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -4118,9 +4193,12 @@ rast_kern_01011:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -4308,9 +4386,12 @@ rast_kern_01100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -4535,9 +4616,12 @@ rast_kern_01100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -4755,14 +4839,17 @@ rast_kern_01100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -4781,9 +4868,12 @@ rast_kern_01100:
 	b 163b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -4951,9 +5041,12 @@ rast_kern_01101:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -5168,9 +5261,12 @@ rast_kern_01101:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -5633,14 +5729,17 @@ rast_kern_01101:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -5654,9 +5753,12 @@ rast_kern_01101:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -5814,9 +5916,12 @@ rast_kern_01110:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -6013,9 +6118,12 @@ rast_kern_01110:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -6223,14 +6331,17 @@ rast_kern_01110:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -6250,9 +6361,12 @@ rast_kern_01110:
 	b 173b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -6391,9 +6505,12 @@ rast_kern_01111:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -6579,9 +6696,12 @@ rast_kern_01111:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -7036,14 +7156,17 @@ rast_kern_01111:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -7057,9 +7180,12 @@ rast_kern_01111:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -7185,9 +7311,12 @@ rast_kern_02000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -7410,9 +7539,12 @@ rast_kern_02000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -7536,14 +7668,17 @@ rast_kern_02000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -7556,9 +7691,12 @@ rast_kern_02000:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -7704,118 +7842,121 @@ rast_kern_02000:
 51:
 	add v16.2d, v6.2d, v8.2d
 	ldr q21, [sp, #112]
-	frecpe v22.4s, v2.4s
-	frecpe v23.4s, v3.4s
 	smull v27.4s, v24.4h, v15.h[5]
+	frecpe v23.4s, v3.4s
+	frecpe v22.4s, v2.4s
+	cmp x5, #16
+	mov x17, #16
+	add v17.2d, v7.2d, v8.2d
+	ldr q31, [sp, #96]
 	smull v30.4s, v24.4h, v15.h[4]
 	frecps v9.4s, v22.4s, v2.4s
-	frecps v12.4s, v23.4s, v3.4s
-	addhn v27.4h, v27.4s, v21.4s
-	ldr q31, [sp, #96]
-	add v17.2d, v7.2d, v8.2d
-	ldr q28, [x19, #64]
+	sqdmulh v20.8h, v24.8h, v15.h[3]
 	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	fmul v22.4s, v22.4s, v9.4s
-	fmul v23.4s, v23.4s, v12.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	mov x17, #16
-	smull2 v29.4s, v24.8h, v15.h[5]
-	sqdmulh v19.8h, v24.8h, v15.h[1]
+	csel x17, x5, x17, lo
 	frecps v12.4s, v23.4s, v3.4s
+	fmul v22.4s, v22.4s, v9.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	subs x17, x17, #8
+	smull2 v29.4s, v24.8h, v15.h[5]
+	addhn v27.4h, v27.4s, v21.4s
+	ldr q28, [x19, #64]
+	fmul v23.4s, v23.4s, v12.4s
 	frecps v9.4s, v22.4s, v2.4s
 	addhn2 v27.8h, v29.4s, v21.4s
-	cmp x5, #16
-	add v19.8h, v19.8h, v11.8h
-	ldr q31, [sp, #128]
-	sshr v30.8h, v30.8h, #3
-	add x26, x2, #32
-	add v7.2d, v17.2d, v8.2d
+	csel x17, x17, xzr, hi
 	shrn v13.2s, v16.2d, #30
+	add x26, x2, #32
+	sshr v30.8h, v30.8h, #3
+	ldr q31, [sp, #128]
+	add v7.2d, v17.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	sshr v27.8h, v27.8h, #3
-	csel x17, x5, x17, lo
-	add v6.2d, v16.2d, v8.2d
 	shrn2 v13.4s, v17.2d, #30
+	ldr q28, [x19, #80]
+	add v6.2d, v16.2d, v8.2d
+	sshr v27.8h, v27.8h, #3
+	add v20.8h, v20.8h, v31.8h
 	and v27.16b, v27.16b, v28.16b
+	csel x26, x26, x2, hi
+	fmul v22.4s, v22.4s, v9.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v23.4s, v23.4s, v12.4s
-	fmul v22.4s, v22.4s, v9.4s
+	frecps v12.4s, v23.4s, v3.4s
+	fmul v22.4s, v0.4s, v22.4s
 	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	subs x17, x17, #8
-	shrn v14.2s, v6.2d, #30
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	csel x26, x26, x2, hi
-	umov w14, v27.s[1]
+	ldp q16, q17, [x26]
+	fmul v23.4s, v23.4s, v12.4s
 	umov w12, v29.s[3]
-	umov w13, v27.s[0]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	sub x18, x26, #15, lsl #12
+	bic v16.4s, #0xff, lsl #24
+	umov w11, v29.s[2]
+	orr x0, x0, x8
+	umov w14, v27.s[1]
+	prfm pstl1keep, [x18, #0]
 	umov w16, v27.s[3]
 	umov w15, v27.s[2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w10, [x6, w10, uxtw #2]
-	fmul v22.4s, v0.4s, v22.4s
-	ldr w14, [x6, w14, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w11, [x6, w11, uxtw #2]
-	umov w9, v29.s[0]
-	ldr w15, [x6, w15, uxtw #2]
+	umov w13, v27.s[0]
 	fmul v23.4s, v1.4s, v23.4s
-	ldr w13, [x6, w13, uxtw #2]
-	sqdmulh v18.8h, v24.8h, v15.h[0]
-	ldr w16, [x6, w16, uxtw #2]
-	sqdmulh v20.8h, v24.8h, v15.h[3]
-	ldr w12, [x6, w12, uxtw #2]
+	umov w9, v29.s[0]
 	fadd v1.4s, v1.4s, v4.4s
-	ldr w9, [x6, w9, uxtw #2]
-	ldp q16, q17, [x26]
+	ldr w14, [x6, w14, uxtw #2]
+	umov w10, v29.s[1]
+	ldr w16, [x6, w16, uxtw #2]
 	fsub v3.4s, v3.4s, v5.4s
-	csel x17, x17, xzr, hi
-	stp w9, w10, [sp, #32]
-	add v20.8h, v20.8h, v31.8h
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	fcvtzs v22.4s, v22.4s, #15
+	sqdmulh v18.8h, v24.8h, v15.h[0]
+	ldr w12, [x6, w12, uxtw #2]
+	sqdmulh v19.8h, v24.8h, v15.h[1]
+	ldr w10, [x6, w10, uxtw #2]
+	fcvtzs v23.4s, v23.4s, #15
+	ldr w9, [x6, w9, uxtw #2]
+	ldr w11, [x6, w11, uxtw #2]
 	stp w13, w14, [sp, #48]
-	bic v16.4s, #0xff, lsl #24
 	stp w15, w16, [sp, #56]
+	cmhi v16.4s, v16.4s, v13.4s
+	shrn v14.2s, v6.2d, #30
 	add v18.8h, v18.8h, v10.8h
+	stp w9, w10, [sp, #32]
+	add v19.8h, v19.8h, v11.8h
 	stp w11, w12, [sp, #40]
 	bic v17.4s, #0xff, lsl #24
 	ld2 {v29.8h, v30.8h}, [x28]
-	fcvtzs v23.4s, v23.4s, #15
-	fcvtzs v22.4s, v22.4s, #15
+	fadd v0.4s, v0.4s, v4.4s
 	shrn2 v14.4s, v7.2d, #30
 	shrn v20.8b, v20.8h, #3
-	cmhi v16.4s, v16.4s, v13.4s
 	shrn v18.8b, v18.8h, #3
+	xtn v22.4h, v22.4s
 	shrn v27.8b, v29.8h, #8
-	shrn v19.8b, v19.8h, #3
-	xtn v29.8b, v29.8h
-	cmhi v17.4s, v17.4s, v14.4s
 	xtn v31.8b, v30.8h
-	uaddl v21.8h, v19.8b, v27.8b
-	cmn x8, #1
-	uaddl v24.8h, v18.8b, v29.8b
+	shrn v19.8b, v19.8h, #3
+	xtn2 v22.8h, v23.4s
+	cmhi v17.4s, v17.4s, v14.4s
+	xtn v29.8b, v29.8h
 	uaddl v28.8h, v20.8b, v31.8b
-	orr x0, x0, x8
+	uaddl v24.8h, v18.8b, v29.8b
+	cmn x8, #1
+	fsub v2.4s, v2.4s, v5.4s
 	uzp1 v16.8h, v16.8h, v17.8h
+	umlal v28.8h, v20.8b, v31.8b
 	ldr q17, [x20, x17, lsl #4]
 	umlal v24.8h, v18.8b, v29.8b
-	umlal v28.8h, v20.8b, v31.8b
-	umlal v21.8h, v19.8b, v27.8b
-	xtn v22.4h, v22.4s
-	shrn v18.8b, v24.8h, #6
+	uaddl v21.8h, v19.8b, v27.8b
+	prfm pldl1keep, [x26, #4096]
 	and v16.16b, v16.16b, v17.16b
 	shrn v20.8b, v28.8h, #6
 	xtn v17.8b, v16.8h
 	ldr q28, [x19, #32]
-	ldr d24, [sp, #144]
-	xtn2 v22.8h, v23.4s
+	umlal v21.8h, v19.8b, v27.8b
 	fmov x17, d17
 	shrn v30.8b, v30.8h, #8
-	orr v25.16b, v25.16b, v28.16b
+	shrn v18.8b, v24.8h, #6
 	orr v26.16b, v26.16b, v28.16b
+	orr v25.16b, v25.16b, v28.16b
+	ldr d24, [sp, #144]
 	ccmp x17, #0, #4, eq
 	shrn v19.8b, v21.8h, #6
 	orr v21.8b, v30.8b, v24.8b
@@ -7829,116 +7970,119 @@ rast_kern_02000:
 	add x2, x2, #32
 53:
 	ldr q31, [sp, #96]
-	smull v27.4s, v22.4h, v15.h[5]
+	smull2 v29.4s, v22.8h, v15.h[4]
+	frecpe v23.4s, v3.4s
 	frecpe v24.4s, v2.4s
 	smull v30.4s, v22.4h, v15.h[4]
-	frecpe v23.4s, v3.4s
-	ldr q28, [x19, #64]
-	smull2 v29.4s, v22.8h, v15.h[4]
-	ldr q21, [sp, #112]
-	cmp x5, #16
+	sqdmulh v20.8h, v22.8h, v15.h[3]
 	frecps v12.4s, v23.4s, v3.4s
+	frecps v9.4s, v24.4s, v2.4s
 	addhn v30.4h, v30.4s, v31.4s
 	mov x8, #16
 	add v16.2d, v6.2d, v8.2d
-	frecps v9.4s, v24.4s, v2.4s
+	smull v27.4s, v22.4h, v15.h[5]
 	addhn2 v30.8h, v29.4s, v31.4s
-	csel x8, x5, x8, lo
+	ldr q21, [sp, #112]
+	fmul v24.4s, v24.4s, v9.4s
 	smull2 v29.4s, v22.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v21.4s
-	fmul v24.4s, v24.4s, v9.4s
+	cmp x5, #16
 	fmul v23.4s, v23.4s, v12.4s
+	frecps v9.4s, v24.4s, v2.4s
 	addhn2 v27.8h, v29.4s, v21.4s
-	add v6.2d, v16.2d, v8.2d
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
+	add x26, x2, #32
 	add v17.2d, v7.2d, v8.2d
 	sshr v27.8h, v27.8h, #3
+	csel x8, x5, x8, lo
+	add v7.2d, v17.2d, v8.2d
+	shrn v25.2s, v16.2d, #30
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	add v7.2d, v17.2d, v8.2d
+	add v6.2d, v16.2d, v8.2d
 	subs x8, x8, #8
-	shrn v25.2s, v16.2d, #30
 	and v27.16b, v27.16b, v28.16b
-	add x26, x2, #32
+	shrn2 v25.4s, v17.2d, #30
+	shrn v26.2s, v6.2d, #30
+	csel x26, x26, x2, hi
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	frecps v12.4s, v23.4s, v3.4s
-	frecps v9.4s, v24.4s, v2.4s
+	fmul v24.4s, v24.4s, v9.4s
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	ldr q31, [sp, #128]
-	shrn v26.2s, v6.2d, #30
-	csel x26, x26, x2, hi
-	umov w10, v29.s[1]
+	ldp q16, q17, [x26]
 	umov w12, v29.s[3]
-	umov w13, v27.s[0]
-	umov w15, v27.s[2]
-	umov w16, v27.s[3]
-	umov w14, v27.s[1]
-	umov w9, v29.s[0]
 	umov w11, v29.s[2]
-	sqdmulh v20.8h, v22.8h, v15.h[3]
-	ldr w12, [x6, w12, uxtw #2]
-	fmul v24.4s, v24.4s, v9.4s
-	ldr w13, [x6, w13, uxtw #2]
+	umov w13, v27.s[0]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
+	umov w16, v27.s[3]
 	fmul v23.4s, v23.4s, v12.4s
-	ldr w15, [x6, w15, uxtw #2]
-	sqdmulh v18.8h, v22.8h, v15.h[0]
-	ldr w14, [x6, w14, uxtw #2]
-	sqdmulh v19.8h, v22.8h, v15.h[1]
-	ldr w10, [x6, w10, uxtw #2]
+	umov w9, v29.s[0]
 	fsub v3.4s, v3.4s, v5.4s
 	ldr w11, [x6, w11, uxtw #2]
 	fmul v24.4s, v0.4s, v24.4s
+	umov w15, v27.s[2]
 	ldr w16, [x6, w16, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w9, [x6, w9, uxtw #2]
-	csel x8, x8, xzr, hi
-	stp w13, w14, [sp, #48]
-	stp w11, w12, [sp, #40]
-	shrn2 v25.4s, v17.2d, #30
-	add v19.8h, v19.8h, v11.8h
-	stp w15, w16, [sp, #56]
-	add v20.8h, v20.8h, v31.8h
-	stp w9, w10, [sp, #32]
 	fmul v23.4s, v1.4s, v23.4s
+	ldr w10, [x6, w10, uxtw #2]
+	sub x18, x26, #15, lsl #12
+	ldr w14, [x6, w14, uxtw #2]
+	fsub v2.4s, v2.4s, v5.4s
+	ldr w13, [x6, w13, uxtw #2]
+	fadd v0.4s, v0.4s, v4.4s
+	ldr w15, [x6, w15, uxtw #2]
+	sqdmulh v18.8h, v22.8h, v15.h[0]
+	ldr w9, [x6, w9, uxtw #2]
+	sqdmulh v19.8h, v22.8h, v15.h[1]
+	ldr w12, [x6, w12, uxtw #2]
+	prfm pstl1keep, [x18, #0]
+	add v20.8h, v20.8h, v31.8h
+	csel x8, x8, xzr, hi
+	stp w9, w10, [sp, #32]
+	shrn2 v26.4s, v7.2d, #30
+	bic v16.4s, #0xff, lsl #24
+	stp w15, w16, [sp, #56]
+	add v18.8h, v18.8h, v10.8h
+	stp w13, w14, [sp, #48]
+	add v19.8h, v19.8h, v11.8h
+	stp w11, w12, [sp, #40]
+	bic v17.4s, #0xff, lsl #24
 	ld2 {v29.8h, v30.8h}, [x28]
 	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
-	ldp q16, q17, [x26]
-	fsub v2.4s, v2.4s, v5.4s
-	fcvtzs v23.4s, v23.4s, #15
+	shrn v19.8b, v19.8h, #3
+	cmhi v17.4s, v17.4s, v26.4s
+	shrn v18.8b, v18.8h, #3
 	shrn v20.8b, v20.8h, #3
-	shrn2 v26.4s, v7.2d, #30
 	shrn v27.8b, v29.8h, #8
 	xtn v31.8b, v30.8h
-	bic v16.4s, #0xff, lsl #24
-	bic v17.4s, #0xff, lsl #24
 	cmhi v16.4s, v16.4s, v25.4s
-	cmhi v17.4s, v17.4s, v26.4s
-	add v18.8h, v18.8h, v10.8h
+	xtn v29.8b, v29.8h
+	uaddl v21.8h, v19.8b, v27.8b
 	uzp1 v16.8h, v16.8h, v17.8h
 	ldr q17, [x20, x8, lsl #4]
-	cmn x17, #1
-	shrn v18.8b, v18.8h, #3
-	shrn v30.8b, v30.8h, #8
-	xtn v29.8b, v29.8h
-	xtn v24.4h, v24.4s
-	and v16.16b, v16.16b, v17.16b
-	shrn v19.8b, v19.8h, #3
-	uaddl v28.8h, v20.8b, v31.8b
-	orr x0, x0, x17
 	uaddl v22.8h, v18.8b, v29.8b
+	uaddl v28.8h, v20.8b, v31.8b
+	shrn v30.8b, v30.8h, #8
+	and v16.16b, v16.16b, v17.16b
+	xtn v24.4h, v24.4s
 	xtn v17.8b, v16.8h
-	uaddl v21.8h, v19.8b, v27.8b
+	prfm pldl1keep, [x26, #4096]
 	umlal v22.8h, v18.8b, v29.8b
+	fcvtzs v23.4s, v23.4s, #15
 	umlal v28.8h, v20.8b, v31.8b
 	umlal v21.8h, v19.8b, v27.8b
 	fmov x8, d17
+	cmn x17, #1
 	shrn v18.8b, v22.8h, #6
 	ldr d22, [sp, #144]
 	shrn v20.8b, v28.8h, #6
 	ldr q28, [x19, #32]
+	orr x0, x0, x17
 	ccmp x8, #0, #4, eq
 	shrn v19.8b, v21.8h, #6
 	xtn2 v24.8h, v23.4s
@@ -7965,10 +8109,13 @@ rast_kern_02000:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -8198,9 +8345,12 @@ rast_kern_02001:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -8418,9 +8568,12 @@ rast_kern_02001:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -8765,14 +8918,17 @@ rast_kern_02001:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -8786,9 +8942,12 @@ rast_kern_02001:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -9006,9 +9165,12 @@ rast_kern_02010:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -9206,9 +9368,12 @@ rast_kern_02010:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -9321,14 +9486,17 @@ rast_kern_02010:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -9343,9 +9511,12 @@ rast_kern_02010:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -9458,110 +9629,113 @@ rast_kern_02010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 51:
-	cmp x5, #16
-	mov x17, #16
-	add v16.2d, v6.2d, v8.2d
+	smull v30.4s, v24.4h, v15.h[4]
 	ldr q31, [sp, #96]
-	add v17.2d, v7.2d, v8.2d
-	add x26, x2, #32
-	add v6.2d, v16.2d, v8.2d
-	csel x17, x5, x17, lo
+	cmp x5, #16
 	smull v27.4s, v24.4h, v15.h[5]
 	smull2 v29.4s, v24.8h, v15.h[4]
-	smull v30.4s, v24.4h, v15.h[4]
-	subs x17, x17, #8
-	add v7.2d, v17.2d, v8.2d
-	shrn v13.2s, v16.2d, #30
-	frecpe v22.4s, v2.4s
-	csel x26, x26, x2, hi
-	ldr q25, [x19, #64]
-	shrn v14.2s, v6.2d, #30
-	shrn2 v13.4s, v17.2d, #30
 	addhn v30.4h, v30.4s, v31.4s
+	add v16.2d, v6.2d, v8.2d
 	ldr q26, [sp, #112]
-	ldp q16, q17, [x26]
-	frecps v9.4s, v22.4s, v2.4s
+	frecpe v22.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
+	mov x17, #16
 	smull2 v29.4s, v24.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v26.4s
+	ldr q25, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	bic v16.4s, #0xff, lsl #24
-	shrn2 v14.4s, v7.2d, #30
-	bic v17.4s, #0xff, lsl #24
-	csel x17, x17, xzr, hi
-	cmhi v17.4s, v17.4s, v14.4s
-	cmhi v16.4s, v16.4s, v13.4s
-	fmul v22.4s, v22.4s, v9.4s
-	uzp1 v16.8h, v16.8h, v17.8h
-	ldr q17, [x20, x17, lsl #4]
-	addhn2 v27.8h, v29.4s, v26.4s
-	cmn x8, #1
+	csel x17, x5, x17, lo
+	add v6.2d, v16.2d, v8.2d
+	shrn v13.2s, v16.2d, #30
 	and v30.16b, v30.16b, v25.16b
+	add x26, x2, #32
+	addhn2 v27.8h, v29.4s, v26.4s
+	shrn v14.2s, v6.2d, #30
+	subs x17, x17, #8
+	add v17.2d, v7.2d, v8.2d
 	ldr q25, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	and v16.16b, v16.16b, v17.16b
-	xtn v17.8b, v16.8h
+	add v7.2d, v17.2d, v8.2d
+	shrn2 v13.4s, v17.2d, #30
 	and v27.16b, v27.16b, v25.16b
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmov x17, d17
-	orr x0, x0, x8
+	csel x26, x26, x2, hi
 	frecps v9.4s, v22.4s, v2.4s
 	uaddw v29.4s, v29.4s, v30.4h
-	ldr q17, [x19, #32]
 	uaddw2 v27.4s, v27.4s, v30.8h
-	orr v14.16b, v14.16b, v17.16b
-	orr v13.16b, v13.16b, v17.16b
-	umov w14, v27.s[1]
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
-	umov w12, v29.s[3]
-	umov w10, v29.s[1]
-	frecpe v23.4s, v3.4s
+	ldp q16, q17, [x26]
 	umov w9, v29.s[0]
-	umov w16, v27.s[3]
-	ldr w14, [x6, w14, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w11, [x6, w11, uxtw #2]
-	ldr w12, [x6, w12, uxtw #2]
+	umov w10, v29.s[1]
+	umov w13, v27.s[0]
+	fmul v22.4s, v22.4s, v9.4s
+	umov w14, v27.s[1]
+	sub x18, x26, #15, lsl #12
 	umov w15, v27.s[2]
 	ldr w10, [x6, w10, uxtw #2]
-	frecps v17.4s, v23.4s, v3.4s
-	ldr w16, [x6, w16, uxtw #2]
-	fmul v22.4s, v22.4s, v9.4s
-	ldr w13, [x6, w13, uxtw #2]
+	umov w16, v27.s[3]
+	umov w12, v29.s[3]
 	ldr w9, [x6, w9, uxtw #2]
-	stp w11, w12, [sp, #40]
+	frecps v9.4s, v22.4s, v2.4s
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	umov w11, v29.s[2]
+	csel x17, x17, xzr, hi
 	ldr w15, [x6, w15, uxtw #2]
-	ccmp x17, #0, #4, eq
-	fmul v22.4s, v0.4s, v22.4s
+	ldr w16, [x6, w16, uxtw #2]
+	ldr w12, [x6, w12, uxtw #2]
+	fmul v22.4s, v22.4s, v9.4s
+	ldr w11, [x6, w11, uxtw #2]
+	prfm pstl1keep, [x18, #0]
 	stp w13, w14, [sp, #48]
-	fmul v23.4s, v23.4s, v17.4s
+	shrn2 v14.4s, v7.2d, #30
+	bic v17.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
+	bic v16.4s, #0xff, lsl #24
+	stp w11, w12, [sp, #40]
+	cmhi v16.4s, v16.4s, v13.4s
 	stp w15, w16, [sp, #56]
+	cmhi v17.4s, v17.4s, v14.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fadd v0.4s, v0.4s, v4.4s
-	frecps v17.4s, v23.4s, v3.4s
-	fsub v3.4s, v3.4s, v5.4s
+	fmul v22.4s, v0.4s, v22.4s
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x17, lsl #4]
+	frecpe v23.4s, v3.4s
+	and v16.16b, v16.16b, v17.16b
+	xtn v17.8b, v16.8h
 	xtn v31.8b, v30.8h
+	fmov x17, d17
+	ldr q17, [x19, #32]
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
-	shrn v30.8b, v30.8h, #8
-	uaddl v18.8h, v11.8b, v27.8b
-	fcvtzs v22.4s, v22.4s, #15
+	orr v13.16b, v13.16b, v17.16b
+	orr v14.16b, v14.16b, v17.16b
+	frecps v17.4s, v23.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fadd v0.4s, v0.4s, v4.4s
+	cmn x8, #1
+	prfm pldl1keep, [x26, #4096]
 	fmul v23.4s, v23.4s, v17.4s
+	fcvtzs v22.4s, v22.4s, #15
+	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v26.8h, v10.8b, v29.8b
+	frecps v17.4s, v23.4s, v3.4s
+	umlal v26.8h, v10.8b, v29.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v18.8h, v11.8b, v27.8b
-	fmul v23.4s, v1.4s, v23.4s
-	umlal v26.8h, v10.8b, v29.8b
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v19.8h, v12.8b, v31.8b
+	fmul v23.4s, v23.4s, v17.4s
 	ldr d29, [sp, #144]
-	fcvtzs v23.4s, v23.4s, #15
-	xtn v22.4h, v22.4s
 	shrn v24.8b, v26.8h, #6
+	ccmp x17, #0, #4, eq
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v23.4s, v1.4s, v23.4s
+	umlal v19.8h, v12.8b, v31.8b
+	orr x0, x0, x8
+	xtn v22.4h, v22.4s
+	fadd v1.4s, v1.4s, v4.4s
+	fcvtzs v23.4s, v23.4s, #15
 	shrn v25.8b, v18.8h, #6
+	shrn v30.8b, v30.8h, #8
 	shrn v26.8b, v19.8h, #6
 	orr v27.8b, v30.8b, v29.8b
 	xtn2 v22.8h, v23.4s
@@ -9575,112 +9749,115 @@ rast_kern_02010:
 	add x2, x2, #32
 	mov v24.16b, v22.16b
 53:
-	mov x8, #16
-	add v16.2d, v6.2d, v8.2d
-	cmp x5, #16
-	frecpe v22.4s, v2.4s
-	smull v30.4s, v24.4h, v15.h[4]
-	add x26, x2, #32
-	csel x8, x5, x8, lo
-	shrn v20.2s, v16.2d, #30
 	ldr q31, [sp, #96]
-	smull2 v29.4s, v24.8h, v15.h[4]
+	smull v30.4s, v24.4h, v15.h[4]
 	smull v27.4s, v24.4h, v15.h[5]
+	frecpe v22.4s, v2.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	subs x8, x8, #8
-	add v17.2d, v7.2d, v8.2d
 	ldr q26, [sp, #112]
-	add v6.2d, v16.2d, v8.2d
-	shrn2 v20.4s, v17.2d, #30
-	csel x26, x26, x2, hi
-	add v7.2d, v17.2d, v8.2d
-	shrn v21.2s, v6.2d, #30
-	addhn2 v30.8h, v29.4s, v31.4s
-	ldp q16, q17, [x26]
-	smull2 v29.4s, v24.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v26.4s
-	orr x0, x0, x17
-	sshr v30.8h, v30.8h, #3
-	bic v16.4s, #0xff, lsl #24
-	shrn2 v21.4s, v7.2d, #30
-	bic v17.4s, #0xff, lsl #24
-	cmhi v17.4s, v17.4s, v21.4s
-	csel x8, x8, xzr, hi
-	frecps v9.4s, v22.4s, v2.4s
-	addhn2 v27.8h, v29.4s, v26.4s
+	add v16.2d, v6.2d, v8.2d
 	ldr q25, [x19, #64]
-	cmhi v16.4s, v16.4s, v20.4s
+	frecps v9.4s, v22.4s, v2.4s
+	addhn v27.4h, v27.4s, v26.4s
+	cmp x5, #16
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v24.8h, v15.h[5]
+	mov x8, #16
+	add v17.2d, v7.2d, v8.2d
+	shrn v20.2s, v16.2d, #30
+	sshr v30.8h, v30.8h, #3
+	addhn2 v27.8h, v29.4s, v26.4s
+	add x26, x2, #32
+	add v6.2d, v16.2d, v8.2d
 	and v30.16b, v30.16b, v25.16b
 	ldr q25, [x19, #80]
-	uzp1 v16.8h, v16.8h, v17.8h
-	ldr q17, [x20, x8, lsl #4]
-	fmul v22.4s, v22.4s, v9.4s
 	sshr v27.8h, v27.8h, #3
-	and v16.16b, v16.16b, v17.16b
+	csel x8, x5, x8, lo
+	add v7.2d, v17.2d, v8.2d
+	shrn2 v20.4s, v17.2d, #30
 	and v27.16b, v27.16b, v25.16b
-	xtn v17.8b, v16.8h
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmov x8, d17
-	frecps v9.4s, v22.4s, v2.4s
+	subs x8, x8, #8
 	uaddw v29.4s, v29.4s, v30.4h
-	ldr q17, [x19, #32]
 	uaddw2 v27.4s, v27.4s, v30.8h
-	orr v20.16b, v20.16b, v17.16b
-	orr v21.16b, v21.16b, v17.16b
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
-	umov w16, v27.s[3]
-	frecpe v23.4s, v3.4s
-	umov w12, v29.s[3]
-	umov w9, v29.s[0]
 	fmul v22.4s, v22.4s, v9.4s
-	ldr w11, [x6, w11, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
+	umov w9, v29.s[0]
+	csel x26, x26, x2, hi
+	umov w16, v27.s[3]
+	umov w12, v29.s[3]
+	umov w11, v29.s[2]
+	frecps v9.4s, v22.4s, v2.4s
 	umov w14, v27.s[1]
-	ldr w12, [x6, w12, uxtw #2]
 	umov w10, v29.s[1]
+	ldr w9, [x6, w9, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	umov w15, v27.s[2]
-	fmul v22.4s, v0.4s, v22.4s
-	ldr w9, [x6, w9, uxtw #2]
-	frecps v17.4s, v23.4s, v3.4s
+	sub x18, x26, #15, lsl #12
+	ldr w12, [x6, w12, uxtw #2]
+	ldr w11, [x6, w11, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
+	umov w13, v27.s[0]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
-	stp w11, w12, [sp, #40]
-	fmul v23.4s, v23.4s, v17.4s
-	stp w13, w14, [sp, #48]
-	fcvtzs v22.4s, v22.4s, #15
+	csel x8, x8, xzr, hi
+	prfm pstl1keep, [x18, #0]
+	shrn v21.2s, v6.2d, #30
+	ldr w13, [x6, w13, uxtw #2]
+	ldp q16, q17, [x26]
 	stp w9, w10, [sp, #32]
+	fmul v22.4s, v22.4s, v9.4s
+	shrn2 v21.4s, v7.2d, #30
 	stp w15, w16, [sp, #56]
+	bic v16.4s, #0xff, lsl #24
+	bic v17.4s, #0xff, lsl #24
+	stp w13, w14, [sp, #48]
+	cmhi v16.4s, v16.4s, v20.4s
+	stp w11, w12, [sp, #40]
+	cmhi v17.4s, v17.4s, v21.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	frecps v17.4s, v23.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
-	fsub v3.4s, v3.4s, v5.4s
+	fmul v22.4s, v0.4s, v22.4s
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x8, lsl #4]
+	frecpe v23.4s, v3.4s
+	cmn x17, #1
 	xtn v31.8b, v30.8h
 	shrn v27.8b, v29.8h, #8
-	shrn v30.8b, v30.8h, #8
-	xtn v29.8b, v29.8h
-	fmul v23.4s, v23.4s, v17.4s
+	and v16.16b, v16.16b, v17.16b
+	xtn v17.8b, v16.8h
 	uaddl v19.8h, v12.8b, v31.8b
+	fmov x8, d17
+	ldr q17, [x19, #32]
+	orr v21.16b, v21.16b, v17.16b
+	xtn v29.8b, v29.8h
+	orr v20.16b, v20.16b, v17.16b
+	frecps v17.4s, v23.4s, v3.4s
 	uaddl v26.8h, v10.8b, v29.8b
-	cmn x17, #1
-	uaddl v18.8h, v11.8b, v27.8b
-	fmul v23.4s, v1.4s, v23.4s
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v18.8h, v11.8b, v27.8b
-	umlal v26.8h, v10.8b, v29.8b
 	umlal v19.8h, v12.8b, v31.8b
-	fcvtzs v23.4s, v23.4s, #15
-	ccmp x8, #0, #4, eq
+	fmul v23.4s, v23.4s, v17.4s
+	uaddl v18.8h, v11.8b, v27.8b
+	umlal v26.8h, v10.8b, v29.8b
 	ldr d29, [sp, #144]
-	shrn v25.8b, v18.8h, #6
-	xtn v22.4h, v22.4s
+	frecps v17.4s, v23.4s, v3.4s
 	shrn v24.8b, v26.8h, #6
-	shrn v26.8b, v19.8h, #6
+	shrn v30.8b, v30.8h, #8
+	fsub v2.4s, v2.4s, v5.4s
+	fmul v23.4s, v23.4s, v17.4s
+	umlal v18.8h, v11.8b, v27.8b
+	fcvtzs v22.4s, v22.4s, #15
+	fadd v0.4s, v0.4s, v4.4s
+	fmul v23.4s, v1.4s, v23.4s
+	fsub v3.4s, v3.4s, v5.4s
+	prfm pldl1keep, [x26, #4096]
+	ccmp x8, #0, #4, eq
+	shrn v25.8b, v18.8h, #6
+	orr x0, x0, x17
+	fadd v1.4s, v1.4s, v4.4s
+	fcvtzs v23.4s, v23.4s, #15
+	xtn v22.4h, v22.4s
 	orr v27.8b, v30.8b, v29.8b
+	shrn v26.8b, v19.8h, #6
 	xtn2 v22.8h, v23.4s
 	b.eq 71f
 	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
@@ -9703,10 +9880,13 @@ rast_kern_02010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v20.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -9847,33 +10027,32 @@ rast_kern_02010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 121:
-	frecpe v22.4s, v2.4s
-	cmp x5, #16
 	mov x17, #16
-	add v16.2d, v6.2d, v8.2d
-	ldr q31, [sp, #96]
-	frecpe v23.4s, v3.4s
-	smull v30.4s, v24.4h, v15.h[4]
-	smull2 v29.4s, v24.8h, v15.h[4]
 	add x26, x2, #32
+	add v16.2d, v6.2d, v8.2d
+	cmp x5, #16
+	smull2 v29.4s, v24.8h, v15.h[4]
+	smull v30.4s, v24.4h, v15.h[4]
+	frecpe v22.4s, v2.4s
 	csel x17, x5, x17, lo
-	smull v27.4s, v24.4h, v15.h[5]
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q26, [sp, #112]
-	subs x17, x17, #8
-	orr x0, x0, x8
+	ldr q31, [sp, #96]
 	add v6.2d, v16.2d, v8.2d
 	shrn v13.2s, v16.2d, #30
 	add v17.2d, v7.2d, v8.2d
-	shrn v14.2s, v6.2d, #30
-	csel x26, x26, x2, hi
-	add v7.2d, v17.2d, v8.2d
-	shrn2 v13.4s, v17.2d, #30
-	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q26, [sp, #112]
+	addhn v30.4h, v30.4s, v31.4s
 	ldr q25, [x19, #64]
-	ldp q16, q17, [x26]
-	smull2 v29.4s, v24.8h, v15.h[5]
+	shrn2 v13.4s, v17.2d, #30
+	subs x17, x17, #8
+	add v7.2d, v17.2d, v8.2d
+	shrn v14.2s, v6.2d, #30
 	frecps v9.4s, v22.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	csel x26, x26, x2, hi
+	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[5]
+	ldp q16, q17, [x26]
+	fmul v22.4s, v22.4s, v9.4s
 	addhn v27.4h, v27.4s, v26.4s
 	csel x17, x17, xzr, hi
 	sshr v30.8h, v30.8h, #3
@@ -9889,64 +10068,68 @@ rast_kern_02010:
 	addhn2 v27.8h, v29.4s, v26.4s
 	and v16.16b, v16.16b, v17.16b
 	sshr v27.8h, v27.8h, #3
-	and v27.16b, v27.16b, v25.16b
 	xtn v17.8b, v16.8h
-	fmul v22.4s, v22.4s, v9.4s
+	and v27.16b, v27.16b, v25.16b
 	umull v29.4s, v27.4h, v15.h[6]
-	umull2 v27.4s, v27.8h, v15.h[6]
-	cmn x8, #1
 	fmov x17, d17
-	frecps v9.4s, v22.4s, v2.4s
-	uaddw v29.4s, v29.4s, v30.4h
 	ldr q17, [x19, #32]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	orr v14.16b, v14.16b, v17.16b
+	umull2 v27.4s, v27.8h, v15.h[6]
+	frecpe v23.4s, v3.4s
+	uaddw v29.4s, v29.4s, v30.4h
+	cmn x8, #1
 	orr v13.16b, v13.16b, v17.16b
-	umov w9, v29.s[0]
-	frecps v17.4s, v23.4s, v3.4s
-	umov w12, v29.s[3]
+	orr v14.16b, v14.16b, v17.16b
+	orr x0, x0, x8
 	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	umov w13, v27.s[0]
-	fsub v2.4s, v2.4s, v5.4s
-	umov w14, v27.s[1]
+	frecps v17.4s, v23.4s, v3.4s
+	umov w9, v29.s[0]
+	frecps v9.4s, v22.4s, v2.4s
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldr w11, [x6, w11, uxtw #2]
+	umov w12, v29.s[3]
 	fmul v23.4s, v23.4s, v17.4s
+	umov w10, v29.s[1]
+	fmul v22.4s, v22.4s, v9.4s
+	umov w14, v27.s[1]
 	ldr w12, [x6, w12, uxtw #2]
 	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
-	ldr w10, [x6, w10, uxtw #2]
-	umov w15, v27.s[2]
-	fmul v22.4s, v22.4s, v9.4s
-	ldr w11, [x6, w11, uxtw #2]
+	umov w13, v27.s[0]
 	frecps v17.4s, v23.4s, v3.4s
+	ldr w10, [x6, w10, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
+	umov w15, v27.s[2]
+	prfm pldl1keep, [x26, #4096]
+	sub x18, x26, #15, lsl #12
 	fsub v3.4s, v3.4s, v5.4s
-	ldr w15, [x6, w15, uxtw #2]
-	fmul v22.4s, v0.4s, v22.4s
-	ldr w16, [x6, w16, uxtw #2]
+	ldr w13, [x6, w13, uxtw #2]
 	fmul v23.4s, v23.4s, v17.4s
+	ldr w16, [x6, w16, uxtw #2]
+	fsub v2.4s, v2.4s, v5.4s
+	ldr w15, [x6, w15, uxtw #2]
+	prfm pstl1keep, [x18, #0]
 	stp w11, w12, [sp, #40]
+	fmul v22.4s, v0.4s, v22.4s
 	stp w13, w14, [sp, #48]
+	fmul v23.4s, v1.4s, v23.4s
 	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	fmul v23.4s, v1.4s, v23.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fadd v0.4s, v0.4s, v4.4s
 	fcvtzs v22.4s, v22.4s, #15
-	ccmp x17, #0, #4, eq
 	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v23.4s, v23.4s, #15
+	fadd v0.4s, v0.4s, v4.4s
+	ccmp x17, #0, #4, eq
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
-	xtn v31.8b, v30.8h
 	xtn v22.4h, v22.4s
+	xtn v31.8b, v30.8h
 	mov v24.8b, v29.8b
 	ldr d29, [sp, #144]
 	xtn2 v22.8h, v23.4s
 	shrn v30.8b, v30.8h, #8
-	mov v26.8b, v31.8b
 	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 	orr v27.8b, v30.8b, v29.8b
 	b.eq 131f
 	subs x5, x5, #8
@@ -9958,105 +10141,108 @@ rast_kern_02010:
 	add x2, x2, #32
 	mov v24.16b, v22.16b
 123:
+	mov x8, #16
+	add v17.2d, v7.2d, v8.2d
 	cmp x5, #16
 	add v16.2d, v6.2d, v8.2d
-	mov x8, #16
-	ldr q26, [sp, #112]
 	add x26, x2, #32
-	add v6.2d, v16.2d, v8.2d
-	shrn v20.2s, v16.2d, #30
-	add v17.2d, v7.2d, v8.2d
+	smull2 v29.4s, v24.8h, v15.h[4]
+	ldr q31, [sp, #96]
 	csel x8, x5, x8, lo
 	frecpe v22.4s, v2.4s
 	smull v30.4s, v24.4h, v15.h[4]
+	ldr q26, [sp, #112]
 	subs x8, x8, #8
-	ldr q31, [sp, #96]
-	shrn v21.2s, v6.2d, #30
-	shrn2 v20.4s, v17.2d, #30
-	smull2 v29.4s, v24.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
-	add v7.2d, v17.2d, v8.2d
-	csel x26, x26, x2, hi
+	add v6.2d, v16.2d, v8.2d
+	shrn v20.2s, v16.2d, #30
 	smull v27.4s, v24.4h, v15.h[5]
+	addhn v30.4h, v30.4s, v31.4s
+	csel x26, x26, x2, hi
+	shrn v21.2s, v6.2d, #30
+	csel x8, x8, xzr, hi
+	add v7.2d, v17.2d, v8.2d
+	shrn2 v20.4s, v17.2d, #30
 	addhn2 v30.8h, v29.4s, v31.4s
+	cmn x17, #1
+	frecps v9.4s, v22.4s, v2.4s
 	ldp q16, q17, [x26]
 	smull2 v29.4s, v24.8h, v15.h[5]
-	frecps v9.4s, v22.4s, v2.4s
 	addhn v27.4h, v27.4s, v26.4s
-	shrn2 v21.4s, v7.2d, #30
-	bic v16.4s, #0xff, lsl #24
 	sshr v30.8h, v30.8h, #3
+	bic v16.4s, #0xff, lsl #24
+	shrn2 v21.4s, v7.2d, #30
 	bic v17.4s, #0xff, lsl #24
 	ldr q25, [x19, #64]
-	cmhi v17.4s, v17.4s, v21.4s
-	csel x8, x8, xzr, hi
 	cmhi v16.4s, v16.4s, v20.4s
-	and v30.16b, v30.16b, v25.16b
-	uzp1 v16.8h, v16.8h, v17.8h
+	orr x0, x0, x17
+	cmhi v17.4s, v17.4s, v21.4s
+	sub x18, x26, #15, lsl #12
 	fmul v22.4s, v22.4s, v9.4s
+	uzp1 v16.8h, v16.8h, v17.8h
 	ldr q17, [x20, x8, lsl #4]
 	addhn2 v27.8h, v29.4s, v26.4s
-	ldr q25, [x19, #80]
+	prfm pstl1keep, [x18, #0]
+	and v30.16b, v30.16b, v25.16b
 	and v16.16b, v16.16b, v17.16b
+	ldr q25, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	and v27.16b, v27.16b, v25.16b
 	xtn v17.8b, v16.8h
+	and v27.16b, v27.16b, v25.16b
 	umull v29.4s, v27.4h, v15.h[6]
 	fmov x8, d17
 	ldr q17, [x19, #32]
 	frecpe v23.4s, v3.4s
 	umull2 v27.4s, v27.8h, v15.h[6]
+	frecps v9.4s, v22.4s, v2.4s
 	uaddw v29.4s, v29.4s, v30.4h
-	orr v20.16b, v20.16b, v17.16b
+	ccmp x8, #0, #4, eq
 	orr v21.16b, v21.16b, v17.16b
+	orr v20.16b, v20.16b, v17.16b
 	uaddw2 v27.4s, v27.4s, v30.8h
-	orr x0, x0, x17
-	cmn x17, #1
-	umov w9, v29.s[0]
-	umov w10, v29.s[1]
+	frecps v17.4s, v23.4s, v3.4s
 	umov w12, v29.s[3]
+	umov w10, v29.s[1]
+	umov w15, v27.s[2]
+	umov w9, v29.s[0]
 	umov w13, v27.s[0]
+	umov w11, v29.s[2]
+	umov w14, v27.s[1]
+	fmul v23.4s, v23.4s, v17.4s
+	ldr w12, [x6, w12, uxtw #2]
+	ldr w10, [x6, w10, uxtw #2]
+	fmul v22.4s, v22.4s, v9.4s
+	ldr w9, [x6, w9, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	umov w16, v27.s[3]
 	frecps v17.4s, v23.4s, v3.4s
-	umov w14, v27.s[1]
-	frecps v9.4s, v22.4s, v2.4s
-	ldr w9, [x6, w9, uxtw #2]
-	umov w11, v29.s[2]
-	ldr w10, [x6, w10, uxtw #2]
-	fmul v23.4s, v23.4s, v17.4s
-	ldr w14, [x6, w14, uxtw #2]
 	ldr w13, [x6, w13, uxtw #2]
-	umov w15, v27.s[2]
-	stp w9, w10, [sp, #32]
-	ldr w11, [x6, w11, uxtw #2]
-	fmul v22.4s, v22.4s, v9.4s
-	ldr w12, [x6, w12, uxtw #2]
-	frecps v17.4s, v23.4s, v3.4s
-	ldr w16, [x6, w16, uxtw #2]
 	fsub v2.4s, v2.4s, v5.4s
 	ldr w15, [x6, w15, uxtw #2]
-	stp w13, w14, [sp, #48]
+	fsub v3.4s, v3.4s, v5.4s
+	ldr w11, [x6, w11, uxtw #2]
 	fmul v22.4s, v0.4s, v22.4s
-	stp w11, w12, [sp, #40]
+	ldr w16, [x6, w16, uxtw #2]
+	stp w13, w14, [sp, #48]
+	fadd v0.4s, v0.4s, v4.4s
+	stp w9, w10, [sp, #32]
 	fmul v23.4s, v23.4s, v17.4s
+	stp w11, w12, [sp, #40]
 	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v23.4s, v1.4s, v23.4s
 	fcvtzs v22.4s, v22.4s, #15
-	fadd v0.4s, v0.4s, v4.4s
-	fsub v3.4s, v3.4s, v5.4s
-	shrn v27.8b, v29.8h, #8
-	xtn v29.8b, v29.8h
 	fadd v1.4s, v1.4s, v4.4s
+	shrn v27.8b, v29.8h, #8
 	fcvtzs v23.4s, v23.4s, #15
-	ccmp x8, #0, #4, eq
-	xtn v22.4h, v22.4s
+	prfm pldl1keep, [x26, #4096]
+	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
+	mov v25.8b, v27.8b
+	xtn v22.4h, v22.4s
 	mov v24.8b, v29.8b
 	ldr d29, [sp, #144]
 	xtn2 v22.8h, v23.4s
 	shrn v30.8b, v30.8h, #8
-	mov v25.8b, v27.8b
 	mov v26.8b, v31.8b
 	orr v27.8b, v30.8b, v29.8b
 	b.eq 141f
@@ -10080,10 +10266,13 @@ rast_kern_02010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v20.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -10318,9 +10507,12 @@ rast_kern_02011:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -10509,9 +10701,12 @@ rast_kern_02011:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -10848,14 +11043,17 @@ rast_kern_02011:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -10869,9 +11067,12 @@ rast_kern_02011:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -11059,9 +11260,12 @@ rast_kern_02100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -11281,9 +11485,12 @@ rast_kern_02100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -11476,14 +11683,17 @@ rast_kern_02100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -11497,9 +11707,12 @@ rast_kern_02100:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -11621,181 +11834,184 @@ rast_kern_02100:
 	xtn2 v24.8h, v25.4s
 	orr v11.16b, v11.16b, v12.16b
 51:
-	add v16.2d, v6.2d, v8.2d
-	ldr q28, [sp, #112]
-	frecpe v23.4s, v3.4s
-	sqdmulh v18.8h, v24.8h, v15.h[1]
-	frecpe v22.4s, v2.4s
 	smull v30.4s, v24.4h, v15.h[4]
-	mov x17, #16
+	cmp x5, #16
 	ldr q31, [sp, #96]
 	smull v27.4s, v24.4h, v15.h[5]
+	frecpe v23.4s, v3.4s
 	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	ldr q21, [sp, #176]
-	add v17.2d, v7.2d, v8.2d
-	cmp x5, #16
-	frecps v12.4s, v23.4s, v3.4s
-	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q28, [sp, #112]
 	ldr q25, [x19, #64]
+	add x16, x2, #32
+	frecpe v22.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q20, [sp, #160]
 	smull2 v29.4s, v24.8h, v15.h[5]
-	frecps v9.4s, v22.4s, v2.4s
 	addhn v27.4h, v27.4s, v28.4s
-	csel x17, x5, x17, lo
+	mov x17, #16
 	sshr v30.8h, v30.8h, #3
 	ldr q26, [sp, #128]
+	frecps v12.4s, v23.4s, v3.4s
+	csel x17, x5, x17, lo
+	addhn2 v27.8h, v29.4s, v28.4s
+	ldr q21, [sp, #176]
+	add v16.2d, v6.2d, v8.2d
+	and v30.16b, v30.16b, v25.16b
+	subs x17, x17, #8
+	add v17.2d, v7.2d, v8.2d
+	ldr q25, [x19, #80]
+	sshr v27.8h, v27.8h, #3
 	add v6.2d, v16.2d, v8.2d
 	shrn v13.2s, v16.2d, #30
-	and v30.16b, v30.16b, v25.16b
-	add v18.8h, v18.8h, v21.8h
-	ldr q25, [x19, #80]
-	addhn2 v27.8h, v29.4s, v28.4s
-	subs x17, x17, #8
-	fmul v22.4s, v22.4s, v9.4s
-	add x16, x2, #32
-	sshr v27.8h, v27.8h, #3
-	shrn2 v13.4s, v17.2d, #30
-	add v7.2d, v17.2d, v8.2d
-	shrn v14.2s, v6.2d, #30
 	and v27.16b, v27.16b, v25.16b
 	csel x16, x16, x2, hi
+	frecps v9.4s, v22.4s, v2.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	ldp q16, q17, [x16]
-	frecps v9.4s, v22.4s, v2.4s
-	uaddw2 v27.4s, v27.4s, v30.8h
+	sub x18, x16, #15, lsl #12
+	csel x17, x17, xzr, hi
+	add v7.2d, v17.2d, v8.2d
+	shrn2 v13.4s, v17.2d, #30
 	uaddw v29.4s, v29.4s, v30.4h
-	fmul v23.4s, v23.4s, v12.4s
-	ldr q20, [sp, #160]
-	umov w14, v27.s[1]
-	umov w9, v29.s[0]
-	umov w13, v27.s[0]
-	umov w10, v29.s[1]
+	prfm pldl1keep, [x16, #4096]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
+	ldp q16, q17, [x16]
 	umov w11, v29.s[2]
-	umov w12, v29.s[3]
-	umov w15, v27.s[2]
-	sqdmulh v25.8h, v24.8h, v15.h[0]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
 	umov w16, v27.s[3]
-	sqdmulh v19.8h, v24.8h, v15.h[3]
+	umov w15, v27.s[2]
+	umov w14, v27.s[1]
+	umov w12, v29.s[3]
+	fmul v23.4s, v23.4s, v12.4s
 	ldr w9, [x6, w9, uxtw #2]
-	frecps v12.4s, v23.4s, v3.4s
+	sqdmulh v18.8h, v24.8h, v15.h[1]
+	ldr w16, [x6, w16, uxtw #2]
+	umov w13, v27.s[0]
 	ldr w10, [x6, w10, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
+	sqdmulh v25.8h, v24.8h, v15.h[0]
 	ldr w12, [x6, w12, uxtw #2]
+	sqdmulh v19.8h, v24.8h, v15.h[3]
+	ldr w11, [x6, w11, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	fmul v22.4s, v22.4s, v9.4s
 	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w13, w14, [sp, #48]
-	ldr w11, [x6, w11, uxtw #2]
-	stp w9, w10, [sp, #32]
-	add v25.8h, v25.8h, v20.8h
-	bic v17.4s, #0xff, lsl #24
-	stp w15, w16, [sp, #56]
-	stp w11, w12, [sp, #40]
-	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v22.4s, v0.4s, v22.4s
+	frecps v12.4s, v23.4s, v3.4s
+	ldr w13, [x6, w13, uxtw #2]
 	add v19.8h, v19.8h, v26.8h
-	shrn2 v14.4s, v7.2d, #30
+	stp w9, w10, [sp, #32]
+	add v18.8h, v18.8h, v21.8h
+	stp w15, w16, [sp, #56]
+	add v25.8h, v25.8h, v20.8h
+	stp w11, w12, [sp, #40]
+	stp w13, w14, [sp, #48]
+	ld2 {v29.8h, v30.8h}, [x28]
+	fsub v3.4s, v3.4s, v5.4s
 	shrn v25.8b, v25.8h, #3
-	shrn v27.8b, v29.8h, #8
 	shrn v18.8b, v18.8h, #3
+	bic v17.4s, #0xff, lsl #24
+	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
+	shrn v14.2s, v6.2d, #30
 	uaddl v20.8h, v18.8b, v27.8b
 	uaddl v26.8h, v25.8b, v29.8b
-	cmhi v17.4s, v17.4s, v14.4s
+	frecps v9.4s, v22.4s, v2.4s
 	umlal v20.8h, v18.8b, v27.8b
 	umlal v26.8h, v25.8b, v29.8b
 	ldr d25, [x19, #48]
+	shrn2 v14.4s, v7.2d, #30
+	shrn v27.8b, v20.8h, #6
+	shrn v29.8b, v26.8h, #6
 	xtn v31.8b, v30.8h
 	bic v16.4s, #0xff, lsl #24
-	movi v18.8b, #0x1f
 	dup v25.8b, v25.b[0]
+	cmhi v17.4s, v17.4s, v14.4s
 	shrn v30.8b, v30.8h, #8
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v20.8h, #6
-	shrn v19.8b, v19.8h, #3
-	uaddl v26.8h, v25.8b, v30.8b
 	ushll v20.8h, v29.8b, #0
-	umlal v26.8h, v25.8b, v30.8b
-	fmul v23.4s, v23.4s, v12.4s
-	uaddl v21.8h, v19.8b, v31.8b
-	csel x17, x17, xzr, hi
+	uaddl v26.8h, v25.8b, v30.8b
+	shrn v19.8b, v19.8h, #3
 	cmhi v16.4s, v16.4s, v13.4s
+	movi v18.8b, #0x1f
+	umlal v26.8h, v25.8b, v30.8b
+	uzp1 v16.8h, v16.8h, v17.8h
+	fmul v22.4s, v22.4s, v9.4s
+	ldr q17, [x20, x17, lsl #4]
+	uaddl v21.8h, v19.8b, v31.8b
 	shrn v30.8b, v26.8h, #5
 	ld2 {v25.8h, v26.8h}, [x1]
-	uzp1 v16.8h, v16.8h, v17.8h
+	fmul v23.4s, v23.4s, v12.4s
+	fmul v22.4s, v0.4s, v22.4s
 	umlal v21.8h, v19.8b, v31.8b
-	fmul v23.4s, v1.4s, v23.4s
-	ldr q17, [x20, x17, lsl #4]
 	xtn v24.8b, v26.8h
 	shrn v26.8b, v26.8h, #8
-	sub v19.8b, v18.8b, v30.8b
-	shrn v31.8b, v21.8h, #6
-	and v16.16b, v16.16b, v17.16b
 	and v26.8b, v26.8b, v18.8b
+	shrn v31.8b, v21.8h, #6
 	cmeq v28.8b, v26.8b, #0
-	xtn v17.8b, v16.8h
+	sub v19.8b, v18.8b, v30.8b
 	bic v19.8b, v19.8b, v28.8b
 	bif v18.8b, v30.8b, v28.8b
 	ushll v28.8h, v31.8b, #0
-	fcvtzs v22.4s, v22.4s, #15
+	and v16.16b, v16.16b, v17.16b
 	umlal v28.8h, v31.8b, v18.8b
-	fadd v0.4s, v0.4s, v4.4s
-	fsub v3.4s, v3.4s, v5.4s
 	umlal v20.8h, v29.8b, v18.8b
-	umlal v28.8h, v24.8b, v19.8b
-	ushll v24.8h, v27.8b, #0
 	xtn v21.8b, v25.8h
+	umlal v28.8h, v24.8b, v19.8b
+	orr x0, x0, x8
+	ushll v24.8h, v27.8b, #0
+	xtn v17.8b, v16.8h
+	fmul v23.4s, v1.4s, v23.4s
 	umlal v24.8h, v27.8b, v18.8b
-	fmov x17, d17
-	ldr q17, [x19, #32]
 	shrn v31.8b, v28.8h, #5
 	shrn v28.8b, v25.8h, #8
 	umlal v20.8h, v21.8b, v19.8b
-	fcvtzs v23.4s, v23.4s, #15
 	umlal v24.8h, v28.8b, v19.8b
-	fmov d28, x8
-	subs x5, x5, #8
 	shrn v29.8b, v20.8h, #5
+	fmov x17, d17
 	shrn v27.8b, v24.8h, #5
 	umax v24.8b, v30.8b, v26.8b
-	orr v14.16b, v14.16b, v17.16b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	ldp q18, q19, [x1]
-	movi v24.8b, #0x1f
-	zip1 v27.8h, v29.8h, v25.8h
-	zip2 v29.8h, v29.8h, v25.8h
+	zip1 v25.16b, v31.16b, v24.16b
+	fcvtzs v22.4s, v22.4s, #15
+	zip1 v29.16b, v29.16b, v27.16b
+	fadd v0.4s, v0.4s, v4.4s
 	fadd v1.4s, v1.4s, v4.4s
+	subs x5, x5, #8
+	ldr d31, [x3, x4]
+	zip1 v27.8h, v29.8h, v25.8h
+	movi v24.8b, #0x1f
+	zip2 v29.8h, v29.8h, v25.8h
 	ldr d25, [x19, #48]
-	ldp q20, q21, [x2]
-	dup v25.8b, v25.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	fmov d28, x8
+	fcvtzs v23.4s, v23.4s, #15
+	dup v25.8b, v25.b[3]
 	cmeq v26.8b, v31.8b, v25.8b
+	ldr q17, [x19, #32]
 	bic v26.8b, v26.8b, v24.8b
-	bic v28.8b, v28.8b, v26.8b
 	xtn v22.4h, v22.4s
-	bic v30.8b, v28.8b, v24.8b
 	orr v13.16b, v13.16b, v17.16b
-	bsl v30.8b, v25.8b, v31.8b
-	str d30, [x3, x4]
+	bic v28.8b, v28.8b, v26.8b
+	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	bsl v30.8b, v25.8b, v31.8b
+	ldp q20, q21, [x2]
+	fsub v2.4s, v2.4s, v5.4s
+	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
+	xtn2 v22.8h, v23.4s
 	sshll v31.8h, v26.8b, #0
-	sshll2 v26.4s, v30.8h, #0
 	sshll v25.4s, v30.4h, #0
+	sshll2 v26.4s, v30.8h, #0
 	sshll v30.4s, v31.4h, #0
 	sshll2 v31.4s, v31.8h, #0
-	orr x0, x0, x8
-	bit v18.16b, v27.16b, v25.16b
 	bit v19.16b, v29.16b, v26.16b
-	bit v21.16b, v11.16b, v31.16b
+	bit v18.16b, v27.16b, v25.16b
 	bit v20.16b, v10.16b, v30.16b
+	bit v21.16b, v11.16b, v31.16b
+	orr v14.16b, v14.16b, v17.16b
 	stp q18, q19, [x1]
-	xtn2 v22.8h, v23.4s
 	stp q20, q21, [x2]
 	b.ls 59f
 	add x1, x1, #32
@@ -11804,180 +12020,183 @@ rast_kern_02100:
 	cbz x17, 52f
 53:
 	ldr q31, [sp, #96]
-	smull v30.4s, v22.4h, v15.h[4]
-	smull v27.4s, v22.4h, v15.h[5]
-	sqdmulh v18.8h, v22.8h, v15.h[1]
-	mov x8, #16
-	orr x0, x0, x17
-	frecpe v24.4s, v2.4s
-	cmp x5, #16
-	ldr q28, [sp, #112]
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q21, [sp, #176]
-	smull2 v29.4s, v22.8h, v15.h[4]
-	addhn v27.4h, v27.4s, v28.4s
-	ldr q20, [sp, #160]
-	frecpe v23.4s, v3.4s
-	frecps v9.4s, v24.4s, v2.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	csel x8, x5, x8, lo
 	add v16.2d, v6.2d, v8.2d
-	ldr q25, [x19, #64]
-	smull2 v29.4s, v22.8h, v15.h[5]
+	ldr q28, [sp, #112]
+	smull v30.4s, v22.4h, v15.h[4]
+	sqdmulh v18.8h, v22.8h, v15.h[1]
+	smull v27.4s, v22.4h, v15.h[5]
+	smull2 v29.4s, v22.8h, v15.h[4]
+	frecpe v23.4s, v3.4s
+	addhn v30.4h, v30.4s, v31.4s
+	mov x8, #16
+	addhn v27.4h, v27.4s, v28.4s
+	cmp x5, #16
+	frecpe v24.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
 	add x16, x2, #32
+	smull2 v29.4s, v22.8h, v15.h[5]
+	csel x8, x5, x8, lo
+	ldr q25, [x19, #64]
 	add v17.2d, v7.2d, v8.2d
 	sshr v30.8h, v30.8h, #3
-	add v18.8h, v18.8h, v21.8h
-	ldr q26, [sp, #128]
+	frecps v12.4s, v23.4s, v3.4s
 	addhn2 v27.8h, v29.4s, v28.4s
-	subs x8, x8, #8
-	add v6.2d, v16.2d, v8.2d
+	ldr q21, [sp, #176]
+	shrn v10.2s, v16.2d, #30
 	and v30.16b, v30.16b, v25.16b
-	add v7.2d, v17.2d, v8.2d
+	subs x8, x8, #8
 	ldr q25, [x19, #80]
+	add v7.2d, v17.2d, v8.2d
 	sshr v27.8h, v27.8h, #3
 	csel x16, x16, x2, hi
-	shrn v10.2s, v16.2d, #30
+	ldr q26, [sp, #128]
+	add v6.2d, v16.2d, v8.2d
+	shrn2 v10.4s, v17.2d, #30
 	and v27.16b, v27.16b, v25.16b
+	sub x18, x16, #15, lsl #12
+	ldr q20, [sp, #160]
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	csel x8, x8, xzr, hi
-	shrn2 v10.4s, v17.2d, #30
-	sqdmulh v19.8h, v22.8h, v15.h[3]
-	uaddw2 v27.4s, v27.4s, v30.8h
+	frecps v9.4s, v24.4s, v2.4s
 	uaddw v29.4s, v29.4s, v30.4h
+	prfm pldl1keep, [x16, #4096]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	add v18.8h, v18.8h, v21.8h
+	prfm pstl1keep, [x18, #0]
 	ldp q16, q17, [x16]
-	umov w13, v27.s[0]
 	umov w11, v29.s[2]
-	frecps v12.4s, v23.4s, v3.4s
-	umov w12, v29.s[3]
-	umov w9, v29.s[0]
-	umov w10, v29.s[1]
-	umov w14, v27.s[1]
-	ldr w13, [x6, w13, uxtw #2]
-	umov w15, v27.s[2]
-	ldr w12, [x6, w12, uxtw #2]
 	umov w16, v27.s[3]
-	ldr w11, [x6, w11, uxtw #2]
+	fmul v24.4s, v24.4s, v9.4s
+	umov w9, v29.s[0]
+	umov w12, v29.s[3]
 	fmul v23.4s, v23.4s, v12.4s
+	umov w10, v29.s[1]
+	umov w15, v27.s[2]
+	ldr w16, [x6, w16, uxtw #2]
+	umov w13, v27.s[0]
+	frecps v9.4s, v24.4s, v2.4s
+	ldr w11, [x6, w11, uxtw #2]
+	frecps v12.4s, v23.4s, v3.4s
+	ldr w12, [x6, w12, uxtw #2]
+	umov w14, v27.s[1]
 	ldr w10, [x6, w10, uxtw #2]
 	sqdmulh v25.8h, v22.8h, v15.h[0]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
-	stp w11, w12, [sp, #40]
-	frecps v12.4s, v23.4s, v3.4s
-	ldr w16, [x6, w16, uxtw #2]
-	stp w13, w14, [sp, #48]
-	add v19.8h, v19.8h, v26.8h
-	shrn v11.2s, v6.2d, #30
-	bic v16.4s, #0xff, lsl #24
-	stp w9, w10, [sp, #32]
-	stp w15, w16, [sp, #56]
-	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v23.4s, v23.4s, v12.4s
-	add v25.8h, v25.8h, v20.8h
-	shrn2 v11.4s, v7.2d, #30
-	shrn v19.8b, v19.8h, #3
-	shrn v27.8b, v29.8h, #8
-	xtn v31.8b, v30.8h
-	xtn v29.8b, v29.8h
-	shrn v25.8b, v25.8h, #3
-	bic v17.4s, #0xff, lsl #24
-	shrn v18.8b, v18.8h, #3
-	uaddl v26.8h, v25.8b, v29.8b
-	cmhi v17.4s, v17.4s, v11.4s
+	ldr w15, [x6, w15, uxtw #2]
+	sqdmulh v19.8h, v22.8h, v15.h[3]
+	ldr w13, [x6, w13, uxtw #2]
 	fmul v24.4s, v24.4s, v9.4s
+	ldr w14, [x6, w14, uxtw #2]
+	stp w9, w10, [sp, #32]
+	add v25.8h, v25.8h, v20.8h
+	stp w15, w16, [sp, #56]
+	shrn v18.8b, v18.8h, #3
+	stp w11, w12, [sp, #40]
+	bic v17.4s, #0xff, lsl #24
+	stp w13, w14, [sp, #48]
+	bic v16.4s, #0xff, lsl #24
+	ld2 {v29.8h, v30.8h}, [x28]
+	add v19.8h, v19.8h, v26.8h
+	shrn v25.8b, v25.8h, #3
+	csel x8, x8, xzr, hi
+	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
+	shrn v19.8b, v19.8h, #3
+	uaddl v26.8h, v25.8b, v29.8b
+	uaddl v20.8h, v18.8b, v27.8b
+	subs x5, x5, #8
+	shrn v11.2s, v6.2d, #30
 	umlal v26.8h, v25.8b, v29.8b
 	ldr d25, [x19, #48]
-	shrn v30.8b, v30.8h, #8
-	fmul v23.4s, v1.4s, v23.4s
-	uaddl v21.8h, v19.8b, v31.8b
-	dup v25.8b, v25.b[0]
 	cmhi v16.4s, v16.4s, v10.4s
+	xtn v31.8b, v30.8h
+	shrn2 v11.4s, v7.2d, #30
+	fmul v24.4s, v0.4s, v24.4s
+	dup v25.8b, v25.b[0]
+	cmhi v17.4s, v17.4s, v11.4s
+	shrn v30.8b, v30.8h, #8
 	shrn v29.8b, v26.8h, #6
 	uaddl v26.8h, v25.8b, v30.8b
-	frecps v9.4s, v24.4s, v2.4s
-	uaddl v20.8h, v18.8b, v27.8b
+	umlal v20.8h, v18.8b, v27.8b
+	uaddl v21.8h, v19.8b, v31.8b
 	umlal v26.8h, v25.8b, v30.8b
-	umlal v21.8h, v19.8b, v31.8b
-	fmul v24.4s, v24.4s, v9.4s
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x8, lsl #4]
+	fsub v3.4s, v3.4s, v5.4s
 	shrn v30.8b, v26.8h, #5
 	ld2 {v25.8h, v26.8h}, [x1]
-	umlal v20.8h, v18.8b, v27.8b
+	umlal v21.8h, v19.8b, v31.8b
 	movi v18.8b, #0x1f
-	uzp1 v16.8h, v16.8h, v17.8h
-	fadd v1.4s, v1.4s, v4.4s
-	ldr q17, [x20, x8, lsl #4]
+	shrn v27.8b, v20.8h, #6
 	xtn v22.8b, v26.8h
 	shrn v26.8b, v26.8h, #8
 	shrn v31.8b, v21.8h, #6
 	sub v19.8b, v18.8b, v30.8b
 	and v26.8b, v26.8b, v18.8b
+	xtn v21.8b, v25.8h
 	and v16.16b, v16.16b, v17.16b
 	cmeq v28.8b, v26.8b, #0
+	xtn v17.8b, v16.8h
 	bic v19.8b, v19.8b, v28.8b
 	bif v18.8b, v30.8b, v28.8b
 	ushll v28.8h, v31.8b, #0
-	shrn v27.8b, v20.8h, #6
-	ushll v20.8h, v29.8b, #0
+	fmul v23.4s, v23.4s, v12.4s
 	umlal v28.8h, v31.8b, v18.8b
-	fmul v24.4s, v0.4s, v24.4s
-	umlal v20.8h, v29.8b, v18.8b
+	ushll v20.8h, v29.8b, #0
+	fsub v2.4s, v2.4s, v5.4s
 	umlal v28.8h, v22.8b, v19.8b
+	fmov x8, d17
 	ushll v22.8h, v27.8b, #0
-	xtn v21.8b, v25.8h
-	subs x5, x5, #8
+	ldr q17, [x19, #32]
+	umlal v20.8h, v29.8b, v18.8b
 	umlal v22.8h, v27.8b, v18.8b
 	shrn v31.8b, v28.8h, #5
 	shrn v28.8b, v25.8h, #8
-	umlal v20.8h, v21.8b, v19.8b
 	umlal v22.8h, v28.8b, v19.8b
-	shrn v29.8b, v20.8h, #5
-	xtn v17.8b, v16.8h
+	umlal v20.8h, v21.8b, v19.8b
+	fmov d28, x17
 	shrn v27.8b, v22.8h, #5
 	umax v22.8b, v30.8b, v26.8b
-	ldp q20, q21, [x2]
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v25.16b, v31.16b, v22.16b
-	fmov x8, d17
-	fmov d28, x17
-	ldr q17, [x19, #32]
+	shrn v29.8b, v20.8h, #5
 	fcvtzs v24.4s, v24.4s, #15
+	zip1 v25.16b, v31.16b, v22.16b
+	zip1 v29.16b, v29.16b, v27.16b
+	fmul v23.4s, v1.4s, v23.4s
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	movi v22.8b, #0x1f
 	zip2 v29.8h, v29.8h, v25.8h
-	ldr d31, [x3, x4]
+	orr x0, x0, x17
 	ldr d25, [x19, #48]
-	ldp q18, q19, [x1]
+	ldp q20, q21, [x2]
+	fcvtzs v23.4s, v23.4s, #15
 	dup v25.8b, v25.b[3]
-	cmeq v26.8b, v31.8b, v25.8b
+	fadd v1.4s, v1.4s, v4.4s
 	cmeq v22.8b, v30.8b, v22.8b
-	orr v11.16b, v11.16b, v17.16b
+	cmeq v26.8b, v31.8b, v25.8b
+	xtn v24.4h, v24.4s
 	bic v26.8b, v26.8b, v22.8b
-	orr v10.16b, v10.16b, v17.16b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v22.8b
+	xtn2 v24.8h, v23.4s
 	and v26.8b, v28.8b, v22.8b
 	bsl v30.8b, v25.8b, v31.8b
-	fsub v2.4s, v2.4s, v5.4s
-	fcvtzs v23.4s, v23.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	xtn v24.4h, v24.4s
+	ldp q18, q19, [x1]
+	fadd v0.4s, v0.4s, v4.4s
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
-	sshll v25.4s, v30.4h, #0
 	sshll2 v26.4s, v30.8h, #0
+	sshll v25.4s, v30.4h, #0
 	sshll v30.4s, v31.4h, #0
 	sshll2 v31.4s, v31.8h, #0
-	bit v20.16b, v13.16b, v30.16b
-	bit v18.16b, v27.16b, v25.16b
 	bit v19.16b, v29.16b, v26.16b
 	bit v21.16b, v14.16b, v31.16b
-	fadd v0.4s, v0.4s, v4.4s
+	bit v18.16b, v27.16b, v25.16b
+	bit v20.16b, v13.16b, v30.16b
+	orr v10.16b, v10.16b, v17.16b
 	stp q18, q19, [x1]
-	xtn2 v24.8h, v23.4s
+	orr v11.16b, v11.16b, v17.16b
 	stp q20, q21, [x2]
 	b.ls 59f
 	add x1, x1, #32
@@ -11994,15 +12213,17 @@ rast_kern_02100:
 	mov x8, #8
 	cmp x5, #8
 	add v27.2d, v6.2d, v8.2d
-	add x1, x1, #32
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
-	add x4, x4, #8
+	add x1, x1, #32
 	add v28.2d, v7.2d, v8.2d
 	shrn v10.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
+	add x4, x4, #8
+	prfm pldl1keep, [x2, #4096]
 	add v6.2d, v27.2d, v8.2d
 	shrn2 v10.4s, v28.2d, #30
 	frecps v30.4s, v24.4s, v2.4s
@@ -12011,6 +12232,7 @@ rast_kern_02100:
 	fsub v3.4s, v3.4s, v5.4s
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
+	prfm pstl1keep, [x18, #0]
 	add v7.2d, v28.2d, v8.2d
 	shrn v11.2s, v6.2d, #30
 	ldp q27, q28, [x2]
@@ -12122,9 +12344,12 @@ rast_kern_02101:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -12339,9 +12564,12 @@ rast_kern_02101:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -12764,14 +12992,17 @@ rast_kern_02101:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -12785,9 +13016,12 @@ rast_kern_02101:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -12945,9 +13179,12 @@ rast_kern_02110:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -13139,9 +13376,12 @@ rast_kern_02110:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -13324,14 +13564,17 @@ rast_kern_02110:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -13346,9 +13589,12 @@ rast_kern_02110:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -13434,117 +13680,120 @@ rast_kern_02110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 51:
-	add v16.2d, v6.2d, v8.2d
-	mov x17, #16
-	add v17.2d, v7.2d, v8.2d
-	cmp x5, #16
-	smull2 v29.4s, v24.8h, v15.h[4]
 	smull v30.4s, v24.4h, v15.h[4]
-	smull v27.4s, v24.4h, v15.h[5]
-	csel x17, x5, x17, lo
+	mov x17, #16
 	ldr q31, [sp, #96]
-	add v7.2d, v17.2d, v8.2d
-	shrn v13.2s, v16.2d, #30
-	add v6.2d, v16.2d, v8.2d
-	ldr q28, [sp, #112]
+	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	subs x17, x17, #8
-	ldr q25, [x19, #64]
-	add x16, x2, #32
-	shrn2 v13.4s, v17.2d, #30
-	shrn v14.2s, v6.2d, #30
-	addhn v27.4h, v27.4s, v28.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	csel x16, x16, x2, hi
+	cmp x5, #16
+	add v17.2d, v7.2d, v8.2d
+	ldr q28, [sp, #112]
 	frecpe v22.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	csel x17, x5, x17, lo
+	add v16.2d, v6.2d, v8.2d
 	smull2 v29.4s, v24.8h, v15.h[5]
-	ldp q16, q17, [x16]
+	addhn v27.4h, v27.4s, v28.4s
+	ldr q25, [x19, #64]
+	sshr v30.8h, v30.8h, #3
+	ldr d10, [x19, #48]
 	frecps v9.4s, v22.4s, v2.4s
 	addhn2 v27.8h, v29.4s, v28.4s
-	sshr v30.8h, v30.8h, #3
-	bic v16.4s, #0xff, lsl #24
+	add x16, x2, #32
+	shrn v13.2s, v16.2d, #30
 	and v30.16b, v30.16b, v25.16b
+	subs x17, x17, #8
+	shrn2 v13.4s, v17.2d, #30
+	fmul v22.4s, v22.4s, v9.4s
+	csel x16, x16, x2, hi
 	ldr q25, [x19, #80]
+	add v7.2d, v17.2d, v8.2d
 	sshr v27.8h, v27.8h, #3
-	bic v17.4s, #0xff, lsl #24
-	shrn2 v14.4s, v7.2d, #30
+	add v6.2d, v16.2d, v8.2d
 	and v27.16b, v27.16b, v25.16b
-	ldr d25, [x19, #48]
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v22.4s, v22.4s, v9.4s
-	csel x17, x17, xzr, hi
-	orr x0, x0, x8
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	cmhi v17.4s, v17.4s, v14.4s
-	subs x5, x5, #8
-	ldr d10, [x19, #48]
-	umov w9, v29.s[0]
-	umov w15, v27.s[2]
-	umov w12, v29.s[3]
-	umov w14, v27.s[1]
-	umov w13, v27.s[0]
-	frecps v9.4s, v22.4s, v2.4s
-	umov w10, v29.s[1]
-	umov w11, v29.s[2]
-	ldr w9, [x6, w9, uxtw #2]
 	frecpe v23.4s, v3.4s
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w12, [x6, w12, uxtw #2]
-	umov w16, v27.s[3]
-	fmul v22.4s, v22.4s, v9.4s
-	ldr w10, [x6, w10, uxtw #2]
-	dup v25.8b, v25.b[4]
-	ldr w11, [x6, w11, uxtw #2]
-	frecps v9.4s, v23.4s, v3.4s
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	stp w9, w10, [sp, #32]
-	ldr w16, [x6, w16, uxtw #2]
+	frecps v9.4s, v22.4s, v2.4s
+	uaddw v29.4s, v29.4s, v30.4h
 	ldr d11, [x19, #48]
-	cmhi v16.4s, v16.4s, v13.4s
-	stp w11, w12, [sp, #40]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldr d25, [x19, #48]
+	prfm pldl1keep, [x16, #4096]
+	sub x18, x16, #15, lsl #12
+	umov w9, v29.s[0]
+	umov w11, v29.s[2]
+	umov w14, v27.s[1]
+	umov w12, v29.s[3]
+	fmul v22.4s, v22.4s, v9.4s
+	umov w13, v27.s[0]
+	prfm pstl1keep, [x18, #0]
+	frecps v9.4s, v23.4s, v3.4s
+	ldr w11, [x6, w11, uxtw #2]
+	ldr w9, [x6, w9, uxtw #2]
+	umov w10, v29.s[1]
+	csel x17, x17, xzr, hi
+	ldr w13, [x6, w13, uxtw #2]
+	umov w15, v27.s[2]
+	ldr w12, [x6, w12, uxtw #2]
+	dup v25.8b, v25.b[4]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w10, [x6, w10, uxtw #2]
+	dup v11.8b, v11.b[6]
+	ldp q16, q17, [x16]
+	fmul v23.4s, v23.4s, v9.4s
+	umov w16, v27.s[3]
+	shrn v14.2s, v6.2d, #30
+	bic v17.4s, #0xff, lsl #24
+	ldr w16, [x6, w16, uxtw #2]
 	fmul v22.4s, v0.4s, v22.4s
+	ldr w15, [x6, w15, uxtw #2]
+	frecps v9.4s, v23.4s, v3.4s
+	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	dup v10.8b, v10.b[5]
+	fadd v0.4s, v0.4s, v4.4s
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
-	uzp1 v16.8h, v16.8h, v17.8h
-	dup v10.8b, v10.b[5]
 	fmul v23.4s, v23.4s, v9.4s
-	dup v11.8b, v11.b[6]
+	fcvtzs v22.4s, v22.4s, #15
+	fsub v3.4s, v3.4s, v5.4s
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
-	fadd v0.4s, v0.4s, v4.4s
-	uaddl v26.8h, v25.8b, v29.8b
 	xtn v31.8b, v30.8h
-	shrn v30.8b, v30.8h, #8
-	fcvtzs v22.4s, v22.4s, #15
+	uaddl v26.8h, v25.8b, v29.8b
+	bic v16.4s, #0xff, lsl #24
 	umlal v26.8h, v25.8b, v29.8b
 	ldr d25, [x19, #48]
-	frecps v9.4s, v23.4s, v3.4s
-	dup v25.8b, v25.b[0]
-	uaddl v18.8h, v11.8b, v31.8b
-	ldr q17, [x20, x17, lsl #4]
-	uaddl v12.8h, v10.8b, v27.8b
+	shrn v30.8b, v30.8h, #8
+	shrn2 v14.4s, v7.2d, #30
 	shrn v29.8b, v26.8h, #6
+	dup v25.8b, v25.b[0]
+	uaddl v12.8h, v10.8b, v27.8b
+	uaddl v18.8h, v11.8b, v31.8b
+	cmhi v16.4s, v16.4s, v13.4s
 	uaddl v26.8h, v25.8b, v30.8b
-	fmul v23.4s, v23.4s, v9.4s
-	umlal v12.8h, v10.8b, v27.8b
+	cmhi v17.4s, v17.4s, v14.4s
+	fmul v23.4s, v1.4s, v23.4s
 	umlal v26.8h, v25.8b, v30.8b
-	and v16.16b, v16.16b, v17.16b
+	umlal v18.8h, v11.8b, v31.8b
+	fadd v1.4s, v1.4s, v4.4s
 	shrn v30.8b, v26.8h, #5
 	ld2 {v25.8h, v26.8h}, [x1]
-	fsub v3.4s, v3.4s, v5.4s
-	umlal v18.8h, v11.8b, v31.8b
+	umlal v12.8h, v10.8b, v27.8b
 	movi v10.8b, #0x1f
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x17, lsl #4]
+	fsub v2.4s, v2.4s, v5.4s
 	xtn v24.8b, v26.8h
 	shrn v26.8b, v26.8h, #8
-	xtn v17.8b, v16.8h
-	shrn v31.8b, v18.8h, #6
+	sub v11.8b, v10.8b, v30.8b
+	xtn v22.4h, v22.4s
 	and v26.8b, v26.8b, v10.8b
 	shrn v27.8b, v12.8h, #6
-	sub v11.8b, v10.8b, v30.8b
+	shrn v31.8b, v18.8h, #6
 	cmeq v28.8b, v26.8b, #0
 	bic v11.8b, v11.8b, v28.8b
 	bif v10.8b, v30.8b, v28.8b
@@ -13552,57 +13801,57 @@ rast_kern_02110:
 	xtn v18.8b, v25.8h
 	ushll v12.8h, v29.8b, #0
 	umlal v28.8h, v31.8b, v10.8b
-	fmul v23.4s, v1.4s, v23.4s
-	fmov x17, d17
 	umlal v12.8h, v29.8b, v10.8b
 	umlal v28.8h, v24.8b, v11.8b
 	ushll v24.8h, v27.8b, #0
-	fadd v1.4s, v1.4s, v4.4s
+	umlal v12.8h, v18.8b, v11.8b
 	umlal v24.8h, v27.8b, v10.8b
-	ldr q17, [x19, #32]
 	shrn v31.8b, v28.8h, #5
 	shrn v28.8b, v25.8h, #8
-	umlal v12.8h, v18.8b, v11.8b
-	umlal v24.8h, v28.8b, v11.8b
-	shrn v27.8b, v24.8h, #5
-	shrn v29.8b, v12.8h, #5
-	orr v14.16b, v14.16b, v17.16b
-	umax v24.8b, v30.8b, v26.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v25.16b, v31.16b, v24.16b
-	fsub v2.4s, v2.4s, v5.4s
-	movi v24.8b, #0x1f
-	ldr d31, [x3, x4]
+	and v16.16b, v16.16b, v17.16b
 	fcvtzs v23.4s, v23.4s, #15
+	umlal v24.8h, v28.8b, v11.8b
+	shrn v29.8b, v12.8h, #5
+	xtn v17.8b, v16.8h
+	shrn v27.8b, v24.8h, #5
+	umax v24.8b, v30.8b, v26.8b
+	ldp q12, q18, [x2]
+	zip1 v25.16b, v31.16b, v24.16b
+	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov x17, d17
+	fmov d28, x8
+	cmeq v24.8b, v30.8b, v24.8b
+	ldr q17, [x19, #32]
 	zip1 v27.8h, v29.8h, v25.8h
+	ldr d31, [x3, x4]
 	zip2 v29.8h, v29.8h, v25.8h
 	ldr d25, [x19, #48]
+	subs x5, x5, #8
 	ldp q10, q11, [x1]
 	dup v25.8b, v25.b[3]
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v25.8b
-	fmov d28, x8
-	xtn v22.4h, v22.4s
 	orr v13.16b, v13.16b, v17.16b
+	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
+	orr v14.16b, v14.16b, v17.16b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
-	ldp q12, q18, [x2]
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
+	xtn2 v22.8h, v23.4s
 	sshll v31.8h, v26.8b, #0
-	sshll v25.4s, v30.4h, #0
 	sshll2 v26.4s, v30.8h, #0
+	orr x0, x0, x8
+	sshll v25.4s, v30.4h, #0
 	sshll v30.4s, v31.4h, #0
 	sshll2 v31.4s, v31.8h, #0
-	bit v11.16b, v29.16b, v26.16b
 	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
 	bit v18.16b, v20.16b, v31.16b
 	bit v12.16b, v19.16b, v30.16b
 	stp q10, q11, [x1]
-	xtn2 v22.8h, v23.4s
 	stp q12, q18, [x2]
 	b.ls 59f
 	add x1, x1, #32
@@ -13610,176 +13859,179 @@ rast_kern_02110:
 	add x4, x4, #8
 	cbz x17, 52f
 53:
-	mov x8, #16
-	add v17.2d, v7.2d, v8.2d
-	cmp x5, #16
-	add v16.2d, v6.2d, v8.2d
-	smull2 v29.4s, v22.8h, v15.h[4]
-	smull v30.4s, v22.4h, v15.h[4]
-	add x16, x2, #32
-	csel x8, x5, x8, lo
-	shrn v19.2s, v16.2d, #30
-	ldr q28, [sp, #112]
-	smull v27.4s, v22.4h, v15.h[5]
-	subs x8, x8, #8
 	ldr q31, [sp, #96]
-	add v6.2d, v16.2d, v8.2d
-	shrn2 v19.4s, v17.2d, #30
-	frecpe v24.4s, v2.4s
+	smull v30.4s, v22.4h, v15.h[4]
+	smull v27.4s, v22.4h, v15.h[5]
+	smull2 v29.4s, v22.8h, v15.h[4]
+	ldr q28, [sp, #112]
+	mov x8, #16
 	addhn v30.4h, v30.4s, v31.4s
-	ldr q25, [x19, #64]
-	add v7.2d, v17.2d, v8.2d
+	frecpe v24.4s, v2.4s
 	addhn v27.4h, v27.4s, v28.4s
-	csel x16, x16, x2, hi
+	ldr q25, [x19, #64]
 	addhn2 v30.8h, v29.4s, v31.4s
 	smull2 v29.4s, v22.8h, v15.h[5]
-	ldp q16, q17, [x16]
 	frecps v9.4s, v24.4s, v2.4s
-	addhn2 v27.8h, v29.4s, v28.4s
+	ldr d11, [x19, #48]
+	add v16.2d, v6.2d, v8.2d
 	sshr v30.8h, v30.8h, #3
-	bic v16.4s, #0xff, lsl #24
-	shrn v20.2s, v6.2d, #30
+	addhn2 v27.8h, v29.4s, v28.4s
+	add v17.2d, v7.2d, v8.2d
 	and v30.16b, v30.16b, v25.16b
 	ldr q25, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	bic v17.4s, #0xff, lsl #24
-	shrn2 v20.4s, v7.2d, #30
+	shrn v19.2s, v16.2d, #30
 	and v27.16b, v27.16b, v25.16b
+	cmp x5, #16
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
+	frecpe v23.4s, v3.4s
 	fmul v24.4s, v24.4s, v9.4s
-	uaddw v29.4s, v29.4s, v30.4h
-	ldr d10, [x19, #48]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	cmhi v17.4s, v17.4s, v20.4s
 	ldr d25, [x19, #48]
-	umov w10, v29.s[1]
-	umov w11, v29.s[2]
-	umov w9, v29.s[0]
-	umov w15, v27.s[2]
-	umov w14, v27.s[1]
+	add x16, x2, #32
+	uaddw v29.4s, v29.4s, v30.4h
+	csel x8, x5, x8, lo
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldr d10, [x19, #48]
 	frecps v9.4s, v24.4s, v2.4s
-	umov w12, v29.s[3]
-	umov w16, v27.s[3]
-	ldr w10, [x6, w10, uxtw #2]
-	ldr w9, [x6, w9, uxtw #2]
+	subs x8, x8, #8
+	umov w15, v27.s[2]
+	umov w11, v29.s[2]
+	umov w14, v27.s[1]
 	umov w13, v27.s[0]
-	dup v10.8b, v10.b[5]
+	csel x16, x16, x2, hi
+	add v6.2d, v16.2d, v8.2d
+	umov w9, v29.s[0]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w10, v29.s[1]
+	umov w12, v29.s[3]
 	ldr w11, [x6, w11, uxtw #2]
+	prfm pldl1keep, [x16, #4096]
+	sub x18, x16, #15, lsl #12
+	add v7.2d, v17.2d, v8.2d
+	ldr w13, [x6, w13, uxtw #2]
 	fmul v24.4s, v24.4s, v9.4s
 	ldr w14, [x6, w14, uxtw #2]
-	ldr w12, [x6, w12, uxtw #2]
-	frecpe v23.4s, v3.4s
-	ldr w15, [x6, w15, uxtw #2]
-	stp w9, w10, [sp, #32]
-	ldr w16, [x6, w16, uxtw #2]
-	fmul v24.4s, v0.4s, v24.4s
-	ldr w13, [x6, w13, uxtw #2]
-	stp w11, w12, [sp, #40]
-	cmhi v16.4s, v16.4s, v19.4s
 	frecps v9.4s, v23.4s, v3.4s
-	stp w15, w16, [sp, #56]
-	stp w13, w14, [sp, #48]
-	ld2 {v29.8h, v30.8h}, [x28]
-	ldr d11, [x19, #48]
-	fmul v23.4s, v23.4s, v9.4s
-	dup v25.8b, v25.b[4]
-	shrn v27.8b, v29.8h, #8
-	xtn v29.8b, v29.8h
-	xtn v31.8b, v30.8h
+	ldr w9, [x6, w9, uxtw #2]
+	prfm pstl1keep, [x18, #0]
+	shrn2 v19.4s, v17.2d, #30
+	ldr w12, [x6, w12, uxtw #2]
+	ldr w10, [x6, w10, uxtw #2]
 	dup v11.8b, v11.b[6]
-	uaddl v26.8h, v25.8b, v29.8b
+	ldp q16, q17, [x16]
+	stp w13, w14, [sp, #48]
+	stp w11, w12, [sp, #40]
+	umov w16, v27.s[3]
+	shrn v20.2s, v6.2d, #30
+	dup v10.8b, v10.b[5]
+	fmul v23.4s, v23.4s, v9.4s
+	ldr w16, [x6, w16, uxtw #2]
+	fsub v2.4s, v2.4s, v5.4s
+	dup v25.8b, v25.b[4]
+	stp w9, w10, [sp, #32]
+	fmul v24.4s, v0.4s, v24.4s
+	stp w15, w16, [sp, #56]
+	ld2 {v29.8h, v30.8h}, [x28]
 	fcvtzs v24.4s, v24.4s, #15
 	frecps v9.4s, v23.4s, v3.4s
-	uaddl v12.8h, v10.8b, v27.8b
-	umlal v26.8h, v25.8b, v29.8b
+	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
+	bic v17.4s, #0xff, lsl #24
+	xtn v31.8b, v30.8h
+	uaddl v26.8h, v25.8b, v29.8b
 	csel x8, x8, xzr, hi
-	ldr d25, [x19, #48]
-	shrn v30.8b, v30.8h, #8
-	xtn v24.4h, v24.4s
-	shrn v29.8b, v26.8h, #6
-	dup v25.8b, v25.b[0]
-	fmul v23.4s, v23.4s, v9.4s
-	fsub v3.4s, v3.4s, v5.4s
-	uaddl v26.8h, v25.8b, v30.8b
-	fadd v0.4s, v0.4s, v4.4s
-	uzp1 v16.8h, v16.8h, v17.8h
-	umlal v26.8h, v25.8b, v30.8b
-	umlal v12.8h, v10.8b, v27.8b
-	movi v10.8b, #0x1f
-	ldr q17, [x20, x8, lsl #4]
 	uaddl v18.8h, v11.8b, v31.8b
+	umlal v26.8h, v25.8b, v29.8b
+	ldr d25, [x19, #48]
+	fmul v23.4s, v23.4s, v9.4s
+	uaddl v12.8h, v10.8b, v27.8b
+	dup v25.8b, v25.b[0]
+	shrn2 v20.4s, v7.2d, #30
+	shrn v30.8b, v30.8h, #8
+	bic v16.4s, #0xff, lsl #24
+	shrn v29.8b, v26.8h, #6
+	uaddl v26.8h, v25.8b, v30.8b
+	cmhi v16.4s, v16.4s, v19.4s
+	umlal v18.8h, v11.8b, v31.8b
+	umlal v26.8h, v25.8b, v30.8b
+	fmul v23.4s, v1.4s, v23.4s
+	cmhi v17.4s, v17.4s, v20.4s
+	shrn v31.8b, v18.8h, #6
 	shrn v30.8b, v26.8h, #5
 	ld2 {v25.8h, v26.8h}, [x1]
-	fmul v23.4s, v1.4s, v23.4s
-	umlal v18.8h, v11.8b, v31.8b
-	sub v11.8b, v10.8b, v30.8b
+	umlal v12.8h, v10.8b, v27.8b
+	movi v10.8b, #0x1f
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x8, lsl #4]
 	xtn v22.8b, v26.8h
 	shrn v26.8b, v26.8h, #8
 	and v16.16b, v16.16b, v17.16b
+	sub v11.8b, v10.8b, v30.8b
 	and v26.8b, v26.8b, v10.8b
-	shrn v27.8b, v12.8h, #6
 	cmeq v28.8b, v26.8b, #0
-	shrn v31.8b, v18.8h, #6
+	xtn v18.8b, v25.8h
+	shrn v27.8b, v12.8h, #6
 	xtn v17.8b, v16.8h
 	bic v11.8b, v11.8b, v28.8b
 	bif v10.8b, v30.8b, v28.8b
-	fmov x8, d17
-	subs x5, x5, #8
 	ushll v28.8h, v31.8b, #0
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v28.8h, v31.8b, v10.8b
+	fmov x8, d17
 	ushll v12.8h, v29.8b, #0
-	xtn v18.8b, v25.8h
+	umlal v28.8h, v31.8b, v10.8b
 	umlal v28.8h, v22.8b, v11.8b
 	ushll v22.8h, v27.8b, #0
 	umlal v12.8h, v29.8b, v10.8b
 	umlal v22.8h, v27.8b, v10.8b
-	ldr q17, [x19, #32]
 	shrn v31.8b, v28.8h, #5
 	shrn v28.8b, v25.8h, #8
-	umlal v12.8h, v18.8b, v11.8b
+	fcvtzs v23.4s, v23.4s, #15
 	umlal v22.8h, v28.8b, v11.8b
-	fsub v2.4s, v2.4s, v5.4s
+	umlal v12.8h, v18.8b, v11.8b
+	orr x0, x0, x17
+	ldr q17, [x19, #32]
 	shrn v27.8b, v22.8h, #5
 	umax v22.8b, v30.8b, v26.8b
 	shrn v29.8b, v12.8h, #5
-	fmov d28, x17
 	zip1 v25.16b, v31.16b, v22.16b
 	zip1 v29.16b, v29.16b, v27.16b
-	orr x0, x0, x17
-	orr v19.16b, v19.16b, v17.16b
+	fsub v3.4s, v3.4s, v5.4s
+	fadd v0.4s, v0.4s, v4.4s
 	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	ldr d25, [x19, #48]
 	movi v22.8b, #0x1f
 	ldp q12, q18, [x2]
-	fcvtzs v23.4s, v23.4s, #15
 	dup v25.8b, v25.b[3]
-	orr v20.16b, v20.16b, v17.16b
+	fmov d28, x17
 	cmeq v22.8b, v30.8b, v22.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v20.16b, v20.16b, v17.16b
 	bic v26.8b, v26.8b, v22.8b
-	xtn2 v24.8h, v23.4s
 	bic v28.8b, v28.8b, v26.8b
-	bic v30.8b, v28.8b, v22.8b
 	and v26.8b, v28.8b, v22.8b
+	bic v30.8b, v28.8b, v22.8b
 	bsl v30.8b, v25.8b, v31.8b
 	ldp q10, q11, [x1]
+	fadd v1.4s, v1.4s, v4.4s
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
+	xtn v24.4h, v24.4s
 	sshll v31.8h, v26.8b, #0
-	sshll v25.4s, v30.4h, #0
+	subs x5, x5, #8
 	sshll2 v26.4s, v30.8h, #0
+	sshll v25.4s, v30.4h, #0
 	sshll v30.4s, v31.4h, #0
 	sshll2 v31.4s, v31.8h, #0
-	bit v10.16b, v27.16b, v25.16b
-	bit v11.16b, v29.16b, v26.16b
-	bit v18.16b, v14.16b, v31.16b
 	bit v12.16b, v13.16b, v30.16b
-	stp q10, q11, [x1]
+	bit v18.16b, v14.16b, v31.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v10.16b, v27.16b, v25.16b
+	orr v19.16b, v19.16b, v17.16b
 	stp q12, q18, [x2]
+	stp q10, q11, [x1]
+	xtn2 v24.8h, v23.4s
 	b.ls 59f
 	add x1, x1, #32
 	add x2, x2, #32
@@ -13795,15 +14047,17 @@ rast_kern_02110:
 	mov x8, #8
 	cmp x5, #8
 	add v27.2d, v6.2d, v8.2d
-	add x1, x1, #32
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
-	add x4, x4, #8
+	add x1, x1, #32
 	add v28.2d, v7.2d, v8.2d
 	shrn v19.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
+	add x4, x4, #8
+	prfm pldl1keep, [x2, #4096]
 	add v6.2d, v27.2d, v8.2d
 	shrn2 v19.4s, v28.2d, #30
 	frecps v30.4s, v24.4s, v2.4s
@@ -13812,6 +14066,7 @@ rast_kern_02110:
 	fsub v3.4s, v3.4s, v5.4s
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
+	prfm pstl1keep, [x18, #0]
 	add v7.2d, v28.2d, v8.2d
 	shrn v20.2s, v6.2d, #30
 	ldp q27, q28, [x2]
@@ -13923,9 +14178,12 @@ rast_kern_02111:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -14111,9 +14369,12 @@ rast_kern_02111:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -14528,14 +14789,17 @@ rast_kern_02111:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -14549,9 +14813,12 @@ rast_kern_02111:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -14677,9 +14944,12 @@ rast_kern_03000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -14918,9 +15188,12 @@ rast_kern_03000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -15097,14 +15370,17 @@ rast_kern_03000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -15123,9 +15399,12 @@ rast_kern_03000:
 	b 216b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -15360,9 +15639,12 @@ rast_kern_03001:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -15580,9 +15862,12 @@ rast_kern_03001:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -15999,14 +16284,17 @@ rast_kern_03001:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -16020,9 +16308,12 @@ rast_kern_03001:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -16242,9 +16533,12 @@ rast_kern_03010:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -16452,9 +16746,12 @@ rast_kern_03010:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -16617,14 +16914,17 @@ rast_kern_03010:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -16642,9 +16942,12 @@ rast_kern_03010:
 	b 229b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -16852,9 +17155,12 @@ rast_kern_03011:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -17043,9 +17349,12 @@ rast_kern_03011:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -17454,14 +17763,17 @@ rast_kern_03011:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -17475,9 +17787,12 @@ rast_kern_03011:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -17665,9 +17980,12 @@ rast_kern_03100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -17902,9 +18220,12 @@ rast_kern_03100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -18150,14 +18471,17 @@ rast_kern_03100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -18177,9 +18501,12 @@ rast_kern_03100:
 	b 242b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -18347,9 +18674,12 @@ rast_kern_03101:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -18564,9 +18894,12 @@ rast_kern_03101:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -19061,14 +19394,17 @@ rast_kern_03101:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -19082,9 +19418,12 @@ rast_kern_03101:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -19242,9 +19581,12 @@ rast_kern_03110:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -19452,9 +19794,12 @@ rast_kern_03110:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -19690,14 +20035,17 @@ rast_kern_03110:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -19719,9 +20067,12 @@ rast_kern_03110:
 	b 249b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -19861,9 +20212,12 @@ rast_kern_03111:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -20049,9 +20403,12 @@ rast_kern_03111:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -20538,14 +20895,17 @@ rast_kern_03111:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -20559,9 +20919,12 @@ rast_kern_03111:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -20687,9 +21050,12 @@ rast_kern_04000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -20924,9 +21290,12 @@ rast_kern_04000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -21077,14 +21446,17 @@ rast_kern_04000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -21097,9 +21469,12 @@ rast_kern_04000:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -21244,131 +21619,134 @@ rast_kern_04000:
 	xtn2 v24.8h, v29.4s
 51:
 	ldr q31, [sp, #96]
-	smull v30.4s, v24.4h, v15.h[4]
-	ldr q22, [sp, #112]
-	smull v27.4s, v24.4h, v15.h[5]
 	smull2 v29.4s, v24.8h, v15.h[4]
+	smull v30.4s, v24.4h, v15.h[4]
+	smull v27.4s, v24.4h, v15.h[5]
+	cmp x5, #16
+	mov x17, #16
+	add v23.2d, v6.2d, v8.2d
+	ldr q22, [sp, #112]
 	addhn v30.4h, v30.4s, v31.4s
 	add v10.2d, v7.2d, v8.2d
 	addhn v27.4h, v27.4s, v22.4s
-	ldr q28, [x19, #64]
-	addhn2 v30.8h, v29.4s, v31.4s
-	cmp x5, #16
-	smull2 v29.4s, v24.8h, v15.h[5]
-	mov x17, #16
-	add v23.2d, v6.2d, v8.2d
-	sshr v30.8h, v30.8h, #3
-	sqdmulh v16.8h, v24.8h, v15.h[0]
-	addhn2 v27.8h, v29.4s, v22.4s
-	and v30.16b, v30.16b, v28.16b
 	csel x17, x5, x17, lo
-	shrn v13.2s, v23.2d, #30
-	ldr q28, [x19, #80]
-	add v6.2d, v23.2d, v8.2d
-	sshr v27.8h, v27.8h, #3
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v24.8h, v15.h[5]
+	add x26, x2, #32
+	subs x17, x17, #8
 	add v7.2d, v10.2d, v8.2d
+	shrn v13.2s, v23.2d, #30
+	sshr v30.8h, v30.8h, #3
+	ldr q28, [x19, #64]
+	add v6.2d, v23.2d, v8.2d
+	csel x26, x26, x2, hi
+	addhn2 v27.8h, v29.4s, v22.4s
+	shrn2 v13.4s, v10.2d, #30
+	and v30.16b, v30.16b, v28.16b
+	ldr q28, [x19, #80]
+	ldp q23, q10, [x26]
+	sshr v27.8h, v27.8h, #3
+	shrn v14.2s, v6.2d, #30
+	bic v23.4s, #0xff, lsl #24
 	and v27.16b, v27.16b, v28.16b
+	ldr q28, [sp, #160]
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	subs x17, x17, #8
-	add x26, x2, #32
-	shrn v14.2s, v6.2d, #30
-	shrn2 v13.4s, v10.2d, #30
-	uaddw v29.4s, v29.4s, v30.4h
-	ldr q28, [sp, #160]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	shrn2 v14.4s, v7.2d, #30
-	add v16.8h, v16.8h, v28.8h
-	ldr q31, [sp, #128]
-	umov w11, v29.s[2]
-	umov w15, v27.s[2]
-	umov w14, v27.s[1]
-	umov w13, v27.s[0]
-	umov w12, v29.s[3]
-	umov w10, v29.s[1]
-	umov w9, v29.s[0]
-	umov w16, v27.s[3]
-	ldrb w11, [x6, w11, uxtw]
+	sub x18, x26, #15, lsl #12
 	frecpe v12.4s, v2.4s
-	ldrb w14, [x6, w14, uxtw]
-	csel x26, x26, x2, hi
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	csel x17, x17, xzr, hi
-	ldrb w10, [x6, w10, uxtw]
-	ldr w11, [x21, w11, uxtw #2]
-	sqdmulh v9.8h, v24.8h, v15.h[3]
-	ldr w14, [x21, w14, uxtw #2]
-	ldrb w16, [x6, w16, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	sqdmulh v17.8h, v24.8h, v15.h[1]
-	ldr w12, [x21, w12, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	ldr w16, [x21, w16, uxtw #2]
-	ldr w9, [x21, w9, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
-	stp w13, w14, [sp, #48]
-	ldr w10, [x21, w10, uxtw #2]
-	ldp q23, q10, [x26]
-	stp w15, w16, [sp, #56]
-	stp w11, w12, [sp, #40]
-	add v17.8h, v17.8h, v11.8h
-	stp w9, w10, [sp, #32]
-	bic v23.4s, #0xff, lsl #24
-	cmhi v23.4s, v23.4s, v13.4s
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v14.4s, v7.2d, #30
 	bic v10.4s, #0xff, lsl #24
+	umov w10, v29.s[1]
+	sqdmulh v17.8h, v24.8h, v15.h[1]
+	umov w9, v29.s[0]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	add v17.8h, v17.8h, v11.8h
 	cmhi v10.4s, v10.4s, v14.4s
+	ldrb w10, [x6, w10, uxtw]
+	umov w16, v27.s[3]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	ldrb w11, [x6, w11, uxtw]
+	ldr w10, [x21, w10, uxtw #2]
+	ldr w9, [x21, w9, uxtw #2]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w16, [x6, w16, uxtw]
+	umov w15, v27.s[2]
+	ldrb w14, [x6, w14, uxtw]
+	ldr w11, [x21, w11, uxtw #2]
+	sqdmulh v16.8h, v24.8h, v15.h[0]
+	ldr w13, [x21, w13, uxtw #2]
+	csel x17, x17, xzr, hi
+	ldrb w15, [x6, w15, uxtw]
+	ldr w14, [x21, w14, uxtw #2]
+	ldr w12, [x21, w12, uxtw #2]
+	cmn x8, #1
+	ldr w16, [x21, w16, uxtw #2]
+	sqdmulh v9.8h, v24.8h, v15.h[3]
+	ldr w15, [x21, w15, uxtw #2]
+	stp w9, w10, [sp, #32]
+	stp w11, w12, [sp, #40]
+	ldr q31, [sp, #128]
+	cmhi v23.4s, v23.4s, v13.4s
+	stp w13, w14, [sp, #48]
+	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
 	uzp1 v23.8h, v23.8h, v10.8h
 	ldr q10, [x20, x17, lsl #4]
+	add v9.8h, v9.8h, v31.8h
 	shrn v27.8b, v29.8h, #8
 	and v23.16b, v23.16b, v10.16b
-	shrn v17.8b, v17.8h, #3
-	xtn v10.8b, v23.8h
 	xtn v29.8b, v29.8h
-	shrn v16.8b, v16.8h, #3
-	uaddl v22.8h, v17.8b, v27.8b
+	xtn v10.8b, v23.8h
+	add v16.8h, v16.8h, v28.8h
 	fmov x17, d10
 	frecps v10.4s, v12.4s, v2.4s
-	uaddl v24.8h, v16.8b, v29.8b
-	orr x0, x0, x8
-	add v9.8h, v9.8h, v31.8h
-	xtn v31.8b, v30.8h
-	shrn v9.8b, v9.8h, #3
+	shrn v17.8b, v17.8h, #3
 	fmul v12.4s, v12.4s, v10.4s
-	umlal v24.8h, v16.8b, v29.8b
+	shrn v16.8b, v16.8h, #3
+	xtn v31.8b, v30.8h
 	frecpe v23.4s, v3.4s
-	umlal v22.8h, v17.8b, v27.8b
 	frecps v10.4s, v12.4s, v2.4s
-	uaddl v27.8h, v9.8b, v31.8b
-	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
-	shrn v29.8b, v22.8h, #6
-	cmn x8, #1
+	uaddl v24.8h, v16.8b, v29.8b
+	uaddl v22.8h, v17.8b, v27.8b
+	fsub v2.4s, v2.4s, v5.4s
 	fmul v12.4s, v12.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	shrn v30.8b, v30.8h, #8
+	orr x0, x0, x8
+	umlal v24.8h, v16.8b, v29.8b
+	umlal v22.8h, v17.8b, v27.8b
 	fmul v23.4s, v23.4s, v10.4s
-	fsub v2.4s, v2.4s, v5.4s
+	shrn v30.8b, v30.8h, #8
+	shrn v28.8b, v24.8h, #6
+	shrn v9.8b, v9.8h, #3
+	shrn v29.8b, v22.8h, #6
+	frecps v10.4s, v23.4s, v3.4s
 	fmul v12.4s, v0.4s, v12.4s
 	fadd v0.4s, v0.4s, v4.4s
-	frecps v10.4s, v23.4s, v3.4s
-	ccmp x17, #0, #4, eq
-	umlal v27.8h, v9.8b, v31.8b
-	fmul v23.4s, v23.4s, v10.4s
+	uaddl v27.8h, v9.8b, v31.8b
 	ldr q22, [x19, #32]
-	orr v31.8b, v30.8b, v24.8b
+	fmul v23.4s, v23.4s, v10.4s
+	orr v25.16b, v25.16b, v22.16b
 	fcvtzs v12.4s, v12.4s, #15
 	fmul v23.4s, v1.4s, v23.4s
-	fsub v3.4s, v3.4s, v5.4s
-	shrn v30.8b, v27.8h, #6
-	xtn v12.4h, v12.4s
-	orr v25.16b, v25.16b, v22.16b
-	fcvtzs v23.4s, v23.4s, #15
 	fadd v1.4s, v1.4s, v4.4s
-	orr v26.16b, v26.16b, v22.16b
+	fsub v3.4s, v3.4s, v5.4s
+	ldr d24, [sp, #144]
+	umlal v27.8h, v9.8b, v31.8b
+	fcvtzs v23.4s, v23.4s, #15
+	prfm pldl1keep, [x26, #4096]
+	ccmp x17, #0, #4, eq
+	xtn v12.4h, v12.4s
+	orr v31.8b, v30.8b, v24.8b
 	xtn2 v12.8h, v23.4s
+	shrn v30.8b, v27.8h, #6
+	orr v26.16b, v26.16b, v22.16b
 	b.eq 61f
 	subs x5, x5, #8
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -21378,135 +21756,138 @@ rast_kern_04000:
 	add x1, x1, #32
 	add x2, x2, #32
 53:
-	mov x8, #16
-	add v23.2d, v6.2d, v8.2d
-	cmp x5, #16
-	add v10.2d, v7.2d, v8.2d
+	ldr q31, [sp, #96]
 	smull v30.4s, v12.4h, v15.h[4]
 	smull v27.4s, v12.4h, v15.h[5]
-	csel x8, x5, x8, lo
-	ldr q22, [sp, #112]
-	shrn v25.2s, v23.2d, #30
-	ldr q31, [sp, #96]
-	add v7.2d, v10.2d, v8.2d
-	shrn2 v25.4s, v10.2d, #30
-	add x26, x2, #32
-	add v6.2d, v23.2d, v8.2d
-	subs x8, x8, #8
 	smull2 v29.4s, v12.8h, v15.h[4]
+	cmp x5, #16
+	ldr q22, [sp, #112]
 	addhn v30.4h, v30.4s, v31.4s
-	shrn v26.2s, v6.2d, #30
-	ldr q28, [x19, #64]
+	mov x8, #16
 	addhn v27.4h, v27.4s, v22.4s
-	csel x26, x26, x2, hi
 	addhn2 v30.8h, v29.4s, v31.4s
+	csel x8, x5, x8, lo
 	smull2 v29.4s, v12.8h, v15.h[5]
-	ldp q23, q10, [x26]
-	sqdmulh v16.8h, v12.8h, v15.h[0]
-	addhn2 v27.8h, v29.4s, v22.4s
-	csel x8, x8, xzr, hi
-	shrn2 v26.4s, v7.2d, #30
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
-	sshr v27.8h, v27.8h, #3
+	add v23.2d, v6.2d, v8.2d
+	subs x8, x8, #8
+	addhn2 v27.8h, v29.4s, v22.4s
+	add x26, x2, #32
+	add v10.2d, v7.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	cmhi v23.4s, v23.4s, v25.4s
-	bic v10.4s, #0xff, lsl #24
+	sshr v27.8h, v27.8h, #3
+	csel x26, x26, x2, hi
 	and v27.16b, v27.16b, v28.16b
-	cmhi v10.4s, v10.4s, v26.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	uzp1 v23.8h, v23.8h, v10.8h
-	ldr q10, [x20, x8, lsl #4]
 	ldr q28, [sp, #160]
+	sub x18, x26, #15, lsl #12
+	add v7.2d, v10.2d, v8.2d
+	shrn v25.2s, v23.2d, #30
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	and v23.16b, v23.16b, v10.16b
-	umov w12, v29.s[3]
-	umov w13, v27.s[0]
-	umov w11, v29.s[2]
-	umov w14, v27.s[1]
-	umov w15, v27.s[2]
-	umov w16, v27.s[3]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldr q31, [sp, #128]
-	add v16.8h, v16.8h, v28.8h
-	xtn v10.8b, v23.8h
+	prfm pstl1keep, [x18, #0]
+	add v6.2d, v23.2d, v8.2d
+	csel x8, x8, xzr, hi
 	umov w9, v29.s[0]
-	ldrb w16, [x6, w16, uxtw]
-	ldrb w11, [x6, w11, uxtw]
-	ldr w12, [x21, w12, uxtw #2]
 	umov w10, v29.s[1]
+	umov w12, v29.s[3]
 	sqdmulh v17.8h, v12.8h, v15.h[1]
-	ldrb w14, [x6, w14, uxtw]
-	cmn x17, #1
-	ldrb w15, [x6, w15, uxtw]
+	umov w16, v27.s[3]
+	umov w13, v27.s[0]
 	ldrb w9, [x6, w9, uxtw]
+	umov w11, v29.s[2]
 	frecpe v24.4s, v2.4s
 	ldrb w10, [x6, w10, uxtw]
-	fmov x8, d10
+	ldrb w12, [x6, w12, uxtw]
+	ldrb w13, [x6, w13, uxtw]
+	umov w15, v27.s[2]
+	sqdmulh v16.8h, v12.8h, v15.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	add v17.8h, v17.8h, v11.8h
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w14, v27.s[1]
+	ldrb w16, [x6, w16, uxtw]
+	ldr w12, [x21, w12, uxtw #2]
 	ldr w13, [x21, w13, uxtw #2]
 	sqdmulh v9.8h, v12.8h, v15.h[3]
-	ldr w14, [x21, w14, uxtw #2]
-	ldr w9, [x21, w9, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
-	frecpe v23.4s, v3.4s
-	ldr w16, [x21, w16, uxtw #2]
-	frecps v10.4s, v24.4s, v2.4s
+	ldrb w14, [x6, w14, uxtw]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
-	stp w13, w14, [sp, #48]
-	add v17.8h, v17.8h, v11.8h
+	ldr q31, [sp, #128]
+	shrn v26.2s, v6.2d, #30
+	shrn2 v25.4s, v10.2d, #30
+	add v16.8h, v16.8h, v28.8h
+	ldr w16, [x21, w16, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
+	ldp q23, q10, [x26]
+	stp w11, w12, [sp, #40]
 	stp w15, w16, [sp, #56]
 	add v9.8h, v9.8h, v31.8h
+	shrn2 v26.4s, v7.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	bic v10.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
+	cmhi v23.4s, v23.4s, v25.4s
+	stp w13, w14, [sp, #48]
+	cmhi v10.4s, v10.4s, v26.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v24.4s, v24.4s, v10.4s
-	shrn v17.8b, v17.8h, #3
-	shrn v16.8b, v16.8h, #3
-	shrn v27.8b, v29.8h, #8
-	shrn v9.8b, v9.8h, #3
-	xtn v31.8b, v30.8h
-	xtn v29.8b, v29.8h
-	uaddl v22.8h, v17.8b, v27.8b
-	frecps v10.4s, v24.4s, v2.4s
-	uaddl v12.8h, v16.8b, v29.8b
+	uzp1 v23.8h, v23.8h, v10.8h
+	ldr q10, [x20, x8, lsl #4]
+	cmn x17, #1
 	orr x0, x0, x17
-	umlal v22.8h, v17.8b, v27.8b
-	uaddl v27.8h, v9.8b, v31.8b
+	and v23.16b, v23.16b, v10.16b
+	shrn v27.8b, v29.8h, #8
+	xtn v10.8b, v23.8h
+	xtn v29.8b, v29.8h
+	shrn v17.8b, v17.8h, #3
+	fmov x8, d10
+	frecps v10.4s, v24.4s, v2.4s
+	uaddl v22.8h, v17.8b, v27.8b
+	xtn v31.8b, v30.8h
+	shrn v9.8b, v9.8h, #3
+	shrn v16.8b, v16.8h, #3
 	fmul v24.4s, v24.4s, v10.4s
-	frecps v10.4s, v23.4s, v3.4s
+	uaddl v12.8h, v16.8b, v29.8b
+	ccmp x8, #0, #4, eq
+	umlal v22.8h, v17.8b, v27.8b
+	frecpe v23.4s, v3.4s
+	frecps v10.4s, v24.4s, v2.4s
 	umlal v12.8h, v16.8b, v29.8b
-	umlal v27.8h, v9.8b, v31.8b
-	fmul v24.4s, v0.4s, v24.4s
-	fmul v23.4s, v23.4s, v10.4s
-	shrn v28.8b, v12.8h, #6
-	shrn v30.8b, v30.8h, #8
-	fadd v0.4s, v0.4s, v4.4s
-	frecps v10.4s, v23.4s, v3.4s
 	shrn v29.8b, v22.8h, #6
 	ldr q22, [x19, #32]
-	ccmp x8, #0, #4, eq
+	fmul v24.4s, v24.4s, v10.4s
+	frecps v10.4s, v23.4s, v3.4s
+	uaddl v27.8h, v9.8b, v31.8b
+	shrn v28.8b, v12.8h, #6
+	orr v13.16b, v13.16b, v22.16b
+	shrn v30.8b, v30.8h, #8
+	fmul v23.4s, v23.4s, v10.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fmul v24.4s, v0.4s, v24.4s
 	ldr d12, [sp, #144]
+	frecps v10.4s, v23.4s, v3.4s
 	fmul v23.4s, v23.4s, v10.4s
 	fcvtzs v24.4s, v24.4s, #15
-	orr v14.16b, v14.16b, v22.16b
-	orr v31.8b, v30.8b, v12.8b
+	umlal v27.8h, v9.8b, v31.8b
+	fadd v0.4s, v0.4s, v4.4s
+	fsub v3.4s, v3.4s, v5.4s
 	fmul v23.4s, v1.4s, v23.4s
 	fadd v1.4s, v1.4s, v4.4s
-	shrn v30.8b, v27.8h, #6
+	prfm pldl1keep, [x26, #4096]
 	xtn v24.4h, v24.4s
-	fsub v3.4s, v3.4s, v5.4s
 	fcvtzs v23.4s, v23.4s, #15
-	fsub v2.4s, v2.4s, v5.4s
-	orr v13.16b, v13.16b, v22.16b
+	orr v31.8b, v30.8b, v12.8b
 	xtn2 v24.8h, v23.4s
+	shrn v30.8b, v27.8h, #6
+	orr v14.16b, v14.16b, v22.16b
 	b.eq 71f
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	stp q13, q14, [x2]
 	str x17, [x3], #8
 	b.ls 59f
@@ -21524,10 +21905,13 @@ rast_kern_04000:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -21666,125 +22050,128 @@ rast_kern_04000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v29.4s
 81:
-	cmp x5, #16
-	mov x17, #16
-	add v23.2d, v6.2d, v8.2d
-	ldr q31, [sp, #96]
-	smull2 v29.4s, v24.8h, v15.h[4]
-	smull v30.4s, v24.4h, v15.h[4]
-	csel x17, x5, x17, lo
-	ldr q22, [sp, #112]
 	add v10.2d, v7.2d, v8.2d
-	shrn v13.2s, v23.2d, #30
+	cmp x5, #16
+	smull v30.4s, v24.4h, v15.h[4]
+	ldr q31, [sp, #96]
+	mov x17, #16
+	sqdmulh v17.8h, v24.8h, v15.h[1]
 	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	subs x17, x17, #8
+	ldr q22, [sp, #112]
+	csel x17, x5, x17, lo
 	add x26, x2, #32
-	add v7.2d, v10.2d, v8.2d
-	shrn2 v13.4s, v10.2d, #30
-	addhn v27.4h, v27.4s, v22.4s
+	add v23.2d, v6.2d, v8.2d
 	ldr q28, [x19, #64]
-	add v6.2d, v23.2d, v8.2d
-	csel x26, x26, x2, hi
+	addhn v27.4h, v27.4s, v22.4s
 	addhn2 v30.8h, v29.4s, v31.4s
 	smull2 v29.4s, v24.8h, v15.h[5]
-	ldp q23, q10, [x26]
-	sqdmulh v16.8h, v24.8h, v15.h[0]
-	addhn2 v27.8h, v29.4s, v22.4s
+	subs x17, x17, #8
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
-	shrn v14.2s, v6.2d, #30
-	bic v10.4s, #0xff, lsl #24
+	shrn v13.2s, v23.2d, #30
+	add v6.2d, v23.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
+	addhn2 v27.8h, v29.4s, v22.4s
+	add v17.8h, v17.8h, v11.8h
 	ldr q28, [x19, #80]
-	shrn2 v14.4s, v7.2d, #30
+	shrn2 v13.4s, v10.2d, #30
 	csel x17, x17, xzr, hi
-	cmhi v23.4s, v23.4s, v13.4s
 	sshr v27.8h, v27.8h, #3
-	cmhi v10.4s, v10.4s, v14.4s
+	csel x26, x26, x2, hi
+	add v7.2d, v10.2d, v8.2d
+	shrn v14.2s, v6.2d, #30
 	and v27.16b, v27.16b, v28.16b
 	ldr q28, [sp, #160]
 	umull v29.4s, v27.4h, v15.h[6]
-	uzp1 v23.8h, v23.8h, v10.8h
-	ldr q10, [x20, x17, lsl #4]
-	frecpe v12.4s, v2.4s
+	ldp q23, q10, [x26]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
-	add v16.8h, v16.8h, v28.8h
-	and v23.16b, v23.16b, v10.16b
-	xtn v10.8b, v23.8h
-	ldr q31, [sp, #128]
+	sub x18, x26, #15, lsl #12
+	shrn2 v14.4s, v7.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	umov w9, v29.s[0]
 	umov w10, v29.s[1]
+	umov w12, v29.s[3]
+	sqdmulh v16.8h, v24.8h, v15.h[0]
 	umov w11, v29.s[2]
 	uaddw2 v27.4s, v27.4s, v30.8h
-	fmov x17, d10
-	orr x0, x0, x8
-	umov w9, v29.s[0]
-	sqdmulh v9.8h, v24.8h, v15.h[3]
-	umov w12, v29.s[3]
-	umov w13, v27.s[0]
+	prfm pstl1keep, [x18, #0]
+	cmhi v23.4s, v23.4s, v13.4s
+	bic v10.4s, #0xff, lsl #24
+	ldr q31, [sp, #128]
+	cmhi v10.4s, v10.4s, v14.4s
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w14, v27.s[1]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
-	umov w14, v27.s[1]
-	frecps v10.4s, v12.4s, v2.4s
-	umov w15, v27.s[2]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w9, [x6, w9, uxtw]
 	umov w16, v27.s[3]
-	ldrb w13, [x6, w13, uxtw]
-	sqdmulh v17.8h, v24.8h, v15.h[1]
+	sqdmulh v9.8h, v24.8h, v15.h[3]
+	umov w13, v27.s[0]
 	ldrb w14, [x6, w14, uxtw]
+	umov w15, v27.s[2]
+	uzp1 v23.8h, v23.8h, v10.8h
+	ldr q10, [x20, x17, lsl #4]
 	stp w11, w12, [sp, #40]
-	ldrb w15, [x6, w15, uxtw]
-	fmul v12.4s, v12.4s, v10.4s
 	ldrb w16, [x6, w16, uxtw]
+	frecpe v12.4s, v2.4s
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	prfm pldl1keep, [x26, #4096]
 	stp w9, w10, [sp, #32]
 	add v9.8h, v9.8h, v31.8h
-	cmn x8, #1
-	shrn v16.8b, v16.8h, #3
+	shrn v17.8b, v17.8h, #3
+	and v23.16b, v23.16b, v10.16b
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
-	frecps v10.4s, v12.4s, v2.4s
-	frecpe v23.4s, v3.4s
-	add v17.8h, v17.8h, v11.8h
-	xtn v29.8b, v29.8h
-	shrn v17.8b, v17.8h, #3
+	cmn x8, #1
+	add v16.8h, v16.8h, v28.8h
+	xtn v10.8b, v23.8h
 	shrn v9.8b, v9.8h, #3
+	xtn v29.8b, v29.8h
+	fmov x17, d10
+	frecps v10.4s, v12.4s, v2.4s
 	tbl v27.8b, {v19.16b}, v29.8b
+	shrn v16.8b, v16.8h, #3
 	tbl v31.8b, {v20.16b}, v29.8b
+	fmul v12.4s, v12.4s, v10.4s
 	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v29.8b, {v18.16b}, v29.8b
+	frecpe v23.4s, v3.4s
+	uaddl v22.8h, v17.8b, v27.8b
+	frecps v10.4s, v12.4s, v2.4s
+	uaddl v24.8h, v16.8b, v29.8b
+	fsub v2.4s, v2.4s, v5.4s
 	fmul v12.4s, v12.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	uaddl v22.8h, v17.8b, v27.8b
-	uaddl v24.8h, v16.8b, v29.8b
+	umlal v22.8h, v17.8b, v27.8b
+	uaddl v27.8h, v9.8b, v31.8b
 	fmul v12.4s, v0.4s, v12.4s
 	fmul v23.4s, v23.4s, v10.4s
-	umlal v22.8h, v17.8b, v27.8b
-	fsub v2.4s, v2.4s, v5.4s
 	umlal v24.8h, v16.8b, v29.8b
-	frecps v10.4s, v23.4s, v3.4s
-	uaddl v27.8h, v9.8b, v31.8b
 	shrn v29.8b, v22.8h, #6
+	frecps v10.4s, v23.4s, v3.4s
+	fsub v3.4s, v3.4s, v5.4s
+	ldr q22, [x19, #32]
 	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
 	fmul v23.4s, v23.4s, v10.4s
 	fcvtzs v12.4s, v12.4s, #15
-	ldr q22, [x19, #32]
 	umlal v27.8h, v9.8b, v31.8b
+	orr x0, x0, x8
+	ldr d24, [sp, #144]
 	fadd v0.4s, v0.4s, v4.4s
 	fmul v23.4s, v1.4s, v23.4s
-	orr v31.8b, v30.8b, v24.8b
-	xtn v12.4h, v12.4s
-	orr v26.16b, v26.16b, v22.16b
-	fcvtzs v23.4s, v23.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fadd v1.4s, v1.4s, v4.4s
 	ccmp x17, #0, #4, eq
-	shrn v30.8b, v27.8h, #6
-	xtn2 v12.8h, v23.4s
+	xtn v12.4h, v12.4s
 	orr v25.16b, v25.16b, v22.16b
+	orr v31.8b, v30.8b, v24.8b
+	fcvtzs v23.4s, v23.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
+	shrn v30.8b, v27.8h, #6
+	orr v26.16b, v26.16b, v22.16b
+	xtn2 v12.8h, v23.4s
 	b.eq 91f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
@@ -21794,123 +22181,126 @@ rast_kern_04000:
 	add x1, x1, #32
 	add x2, x2, #32
 83:
-	ldr q31, [sp, #96]
-	add v23.2d, v6.2d, v8.2d
 	cmp x5, #16
-	add v10.2d, v7.2d, v8.2d
-	ldr q22, [sp, #112]
-	add v6.2d, v23.2d, v8.2d
+	ldr q31, [sp, #96]
 	mov x8, #16
-	smull2 v29.4s, v12.8h, v15.h[4]
 	smull v30.4s, v12.4h, v15.h[4]
-	ldr q28, [x19, #64]
-	csel x8, x5, x8, lo
-	shrn v26.2s, v6.2d, #30
-	shrn v25.2s, v23.2d, #30
 	smull v27.4s, v12.4h, v15.h[5]
+	smull2 v29.4s, v12.8h, v15.h[4]
+	csel x8, x5, x8, lo
+	orr x0, x0, x17
 	addhn v30.4h, v30.4s, v31.4s
-	subs x8, x8, #8
-	shrn2 v25.4s, v10.2d, #30
 	add x26, x2, #32
-	sqdmulh v9.8h, v12.8h, v15.h[3]
+	add v23.2d, v6.2d, v8.2d
+	ldr q22, [sp, #112]
+	sqdmulh v17.8h, v12.8h, v15.h[1]
 	addhn2 v30.8h, v29.4s, v31.4s
-	add v7.2d, v10.2d, v8.2d
-	csel x26, x26, x2, hi
+	subs x8, x8, #8
 	smull2 v29.4s, v12.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v22.4s
-	ldr q31, [sp, #128]
-	ldp q23, q10, [x26]
-	sqdmulh v16.8h, v12.8h, v15.h[0]
-	addhn2 v27.8h, v29.4s, v22.4s
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	shrn2 v26.4s, v7.2d, #30
 	csel x8, x8, xzr, hi
-	cmhi v23.4s, v23.4s, v25.4s
+	add v10.2d, v7.2d, v8.2d
+	shrn v25.2s, v23.2d, #30
+	addhn2 v27.8h, v29.4s, v22.4s
+	add v6.2d, v23.2d, v8.2d
+	and v30.16b, v30.16b, v28.16b
+	csel x26, x26, x2, hi
+	shrn2 v25.4s, v10.2d, #30
+	ldr q28, [x19, #80]
+	add v17.8h, v17.8h, v11.8h
 	sshr v27.8h, v27.8h, #3
-	bic v10.4s, #0xff, lsl #24
+	add v7.2d, v10.2d, v8.2d
 	and v27.16b, v27.16b, v28.16b
-	cmhi v10.4s, v10.4s, v26.4s
 	umull v29.4s, v27.4h, v15.h[6]
+	ldp q23, q10, [x26]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	uzp1 v23.8h, v23.8h, v10.8h
-	ldr q10, [x20, x8, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
-	cmn x17, #1
-	add v9.8h, v9.8h, v31.8h
-	and v23.16b, v23.16b, v10.16b
+	sub x18, x26, #15, lsl #12
+	shrn v26.2s, v6.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	bic v10.4s, #0xff, lsl #24
+	shrn2 v26.4s, v7.2d, #30
 	ldr q28, [sp, #160]
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
 	umov w12, v29.s[3]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	add v16.8h, v16.8h, v28.8h
-	xtn v10.8b, v23.8h
-	umov w14, v27.s[1]
-	umov w15, v27.s[2]
-	fmov x8, d10
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w11, [x6, w11, uxtw]
-	umov w13, v27.s[0]
 	umov w9, v29.s[0]
+	sqdmulh v9.8h, v12.8h, v15.h[3]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
+	cmhi v10.4s, v10.4s, v26.4s
+	ldr q31, [sp, #128]
+	umov w10, v29.s[1]
+	ldrb w9, [x6, w9, uxtw]
+	umov w11, v29.s[2]
+	umov w14, v27.s[1]
+	cmhi v23.4s, v23.4s, v25.4s
 	ldrb w12, [x6, w12, uxtw]
 	umov w16, v27.s[3]
-	ldrb w15, [x6, w15, uxtw]
+	ldrb w10, [x6, w10, uxtw]
 	ldrb w14, [x6, w14, uxtw]
-	frecpe v24.4s, v2.4s
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	stp w11, w12, [sp, #40]
-	sqdmulh v17.8h, v12.8h, v15.h[1]
+	umov w15, v27.s[2]
+	umov w13, v27.s[0]
+	ldrb w11, [x6, w11, uxtw]
+	uzp1 v23.8h, v23.8h, v10.8h
+	ldr q10, [x20, x8, lsl #4]
+	sqdmulh v16.8h, v12.8h, v15.h[0]
 	ldrb w16, [x6, w16, uxtw]
-	frecpe v23.4s, v3.4s
-	frecps v10.4s, v24.4s, v2.4s
-	stp w13, w14, [sp, #48]
+	frecpe v24.4s, v2.4s
+	ldrb w15, [x6, w15, uxtw]
+	stp w11, w12, [sp, #40]
+	ldrb w13, [x6, w13, uxtw]
 	stp w9, w10, [sp, #32]
-	stp w15, w16, [sp, #56]
-	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v24.4s, v24.4s, v10.4s
-	add v17.8h, v17.8h, v11.8h
-	shrn v16.8b, v16.8h, #3
-	shrn v9.8b, v9.8h, #3
-	xtn v29.8b, v29.8h
+	add v16.8h, v16.8h, v28.8h
 	shrn v17.8b, v17.8h, #3
+	and v23.16b, v23.16b, v10.16b
+	stp w15, w16, [sp, #56]
+	stp w13, w14, [sp, #48]
+	xtn v10.8b, v23.8h
+	add v9.8h, v9.8h, v31.8h
+	ld2 {v29.8h, v30.8h}, [x28]
+	cmn x17, #1
+	fmov x8, d10
 	frecps v10.4s, v24.4s, v2.4s
-	tbl v31.8b, {v20.16b}, v29.8b
+	shrn v16.8b, v16.8h, #3
+	xtn v29.8b, v29.8h
+	fmul v24.4s, v24.4s, v10.4s
 	tbl v27.8b, {v19.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v29.8b, {v18.16b}, v29.8b
+	frecpe v23.4s, v3.4s
+	uaddl v22.8h, v17.8b, v27.8b
+	frecps v10.4s, v24.4s, v2.4s
+	umlal v22.8h, v17.8b, v27.8b
+	uaddl v12.8h, v16.8b, v29.8b
 	fmul v24.4s, v24.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	uaddl v22.8h, v17.8b, v27.8b
-	ccmp x8, #0, #4, eq
-	uaddl v12.8h, v16.8b, v29.8b
-	orr x0, x0, x17
-	fmul v24.4s, v0.4s, v24.4s
+	umlal v12.8h, v16.8b, v29.8b
+	shrn v9.8b, v9.8h, #3
+	shrn v29.8b, v22.8h, #6
 	fmul v23.4s, v23.4s, v10.4s
 	fsub v2.4s, v2.4s, v5.4s
-	umlal v12.8h, v16.8b, v29.8b
-	umlal v22.8h, v17.8b, v27.8b
+	ldr q22, [x19, #32]
+	fmul v24.4s, v0.4s, v24.4s
 	frecps v10.4s, v23.4s, v3.4s
 	uaddl v27.8h, v9.8b, v31.8b
+	prfm pldl1keep, [x26, #4096]
 	shrn v28.8b, v12.8h, #6
-	shrn v29.8b, v22.8h, #6
-	ldr d12, [sp, #144]
-	fmul v23.4s, v23.4s, v10.4s
+	orr v14.16b, v14.16b, v22.16b
 	fcvtzs v24.4s, v24.4s, #15
+	fmul v23.4s, v23.4s, v10.4s
 	umlal v27.8h, v9.8b, v31.8b
 	fadd v0.4s, v0.4s, v4.4s
 	fsub v3.4s, v3.4s, v5.4s
 	fmul v23.4s, v1.4s, v23.4s
-	ldr q22, [x19, #32]
+	ldr d12, [sp, #144]
+	ccmp x8, #0, #4, eq
 	xtn v24.4h, v24.4s
 	orr v31.8b, v30.8b, v12.8b
-	shrn v30.8b, v27.8h, #6
-	orr v14.16b, v14.16b, v22.16b
 	fcvtzs v23.4s, v23.4s, #15
 	fadd v1.4s, v1.4s, v4.4s
+	shrn v30.8b, v27.8h, #6
 	orr v13.16b, v13.16b, v22.16b
 	xtn2 v24.8h, v23.4s
 	b.eq 101f
@@ -21933,10 +22323,13 @@ rast_kern_04000:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -22166,9 +22559,12 @@ rast_kern_04001:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -22386,9 +22782,12 @@ rast_kern_04001:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -22765,14 +23164,17 @@ rast_kern_04001:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -22786,9 +23188,12 @@ rast_kern_04001:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -23008,9 +23413,12 @@ rast_kern_04010:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -23222,9 +23630,12 @@ rast_kern_04010:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -23362,14 +23773,17 @@ rast_kern_04010:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -23382,9 +23796,12 @@ rast_kern_04010:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -23498,118 +23915,121 @@ rast_kern_04010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v29.4s
 51:
-	cmp x5, #16
 	mov x17, #16
 	add v17.2d, v6.2d, v8.2d
-	ldr q31, [sp, #96]
+	cmp x5, #16
 	smull2 v29.4s, v24.8h, v15.h[4]
-	smull v30.4s, v24.4h, v15.h[4]
-	csel x17, x5, x17, lo
-	shrn v13.2s, v17.2d, #30
-	add v23.2d, v7.2d, v8.2d
-	subs x17, x17, #8
+	ldr q31, [sp, #96]
 	add x26, x2, #32
-	add v7.2d, v23.2d, v8.2d
-	ldr q28, [x19, #64]
-	addhn v30.4h, v30.4s, v31.4s
-	csel x26, x26, x2, hi
-	ldr q22, [sp, #112]
-	add v6.2d, v17.2d, v8.2d
-	shrn2 v13.4s, v23.2d, #30
-	addhn2 v30.8h, v29.4s, v31.4s
+	add v23.2d, v7.2d, v8.2d
+	csel x17, x5, x17, lo
+	smull v30.4s, v24.4h, v15.h[4]
 	smull v27.4s, v24.4h, v15.h[5]
-	ldp q17, q23, [x26]
+	subs x17, x17, #8
+	add v6.2d, v17.2d, v8.2d
+	shrn v13.2s, v17.2d, #30
+	addhn v30.4h, v30.4s, v31.4s
+	ldr q22, [sp, #112]
+	shrn2 v13.4s, v23.2d, #30
+	csel x26, x26, x2, hi
+	add v7.2d, v23.2d, v8.2d
+	shrn v14.2s, v6.2d, #30
+	addhn2 v30.8h, v29.4s, v31.4s
 	smull2 v29.4s, v24.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v22.4s
-	csel x17, x17, xzr, hi
-	bic v17.4s, #0xff, lsl #24
-	shrn v14.2s, v6.2d, #30
+	ldr q28, [x19, #64]
+	ldp q17, q23, [x26]
+	addhn2 v27.8h, v29.4s, v22.4s
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
-	shrn2 v14.4s, v7.2d, #30
+	bic v17.4s, #0xff, lsl #24
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	addhn2 v27.8h, v29.4s, v22.4s
-	cmhi v23.4s, v23.4s, v14.4s
-	cmhi v17.4s, v17.4s, v13.4s
 	sshr v27.8h, v27.8h, #3
+	cmhi v17.4s, v17.4s, v13.4s
+	shrn2 v14.4s, v7.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	cmhi v23.4s, v23.4s, v14.4s
 	and v27.16b, v27.16b, v28.16b
+	csel x17, x17, xzr, hi
 	umull v29.4s, v27.4h, v15.h[6]
-	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x17, lsl #4]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	and v17.16b, v17.16b, v23.16b
-	cmn x8, #1
+	uzp1 v17.8h, v17.8h, v23.8h
+	sub x18, x26, #15, lsl #12
+	ldr q23, [x20, x17, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn v23.8b, v17.8h
-	umov w10, v29.s[1]
+	orr x0, x0, x8
+	and v17.16b, v17.16b, v23.16b
 	umov w9, v29.s[0]
-	umov w13, v27.s[0]
-	umov w14, v27.s[1]
+	umov w10, v29.s[1]
 	umov w11, v29.s[2]
-	umov w15, v27.s[2]
+	prfm pstl1keep, [x18, #0]
+	umov w13, v27.s[0]
 	ldrb w9, [x6, w9, uxtw]
-	umov w12, v29.s[3]
-	ldrb w14, [x6, w14, uxtw]
+	umov w14, v27.s[1]
 	ldrb w10, [x6, w10, uxtw]
+	umov w12, v29.s[3]
 	umov w16, v27.s[3]
-	ldrb w15, [x6, w15, uxtw]
-	frecpe v16.4s, v2.4s
-	ldrb w12, [x6, w12, uxtw]
-	ldr w14, [x21, w14, uxtw #2]
-	fmov x17, d23
 	ldrb w11, [x6, w11, uxtw]
-	frecpe v17.4s, v3.4s
-	ldrb w16, [x6, w16, uxtw]
-	frecps v23.4s, v16.4s, v2.4s
+	frecpe v16.4s, v2.4s
 	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	umov w15, v27.s[2]
+	ldrb w12, [x6, w12, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
-	orr x0, x0, x8
+	ldrb w16, [x6, w16, uxtw]
+	ldrb w15, [x6, w15, uxtw]
 	ldr w11, [x21, w11, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	fmul v16.4s, v16.4s, v23.4s
 	ldr w12, [x21, w12, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
 	stp w9, w10, [sp, #32]
-	ldr w16, [x21, w16, uxtw #2]
-	stp w13, w14, [sp, #48]
-	ccmp x17, #0, #4, eq
+	cmn x8, #1
+	ldr w13, [x21, w13, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
 	stp w11, w12, [sp, #40]
-	frecps v23.4s, v16.4s, v2.4s
+	ldr w16, [x21, w16, uxtw #2]
+	xtn v23.8b, v17.8h
+	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
+	fmov x17, d23
+	frecps v23.4s, v16.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v16.4s, v16.4s, v23.4s
-	frecps v23.4s, v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
-	xtn v31.8b, v30.8h
+	ccmp x17, #0, #4, eq
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
-	shrn v30.8b, v30.8h, #8
-	fmul v17.4s, v17.4s, v23.4s
-	uaddl v22.8h, v12.8b, v31.8b
-	uaddl v24.8h, v10.8b, v29.8b
+	frecps v23.4s, v16.4s, v2.4s
+	frecpe v17.4s, v3.4s
 	uaddl v9.8h, v11.8b, v27.8b
+	uaddl v24.8h, v10.8b, v29.8b
+	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	fmul v16.4s, v0.4s, v16.4s
 	umlal v24.8h, v10.8b, v29.8b
-	fadd v0.4s, v0.4s, v4.4s
+	prfm pldl1keep, [x26, #4096]
+	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
+	xtn v31.8b, v30.8h
 	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
 	umlal v9.8h, v11.8b, v27.8b
-	fcvtzs v16.4s, v16.4s, #15
-	fmul v17.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v22.8h, v12.8b, v31.8b
+	frecps v23.4s, v17.4s, v3.4s
+	uaddl v22.8h, v12.8b, v31.8b
 	ldr q27, [x19, #32]
+	fsub v2.4s, v2.4s, v5.4s
+	fmul v17.4s, v17.4s, v23.4s
+	fadd v0.4s, v0.4s, v4.4s
+	ldr d24, [sp, #144]
+	fcvtzs v16.4s, v16.4s, #15
+	umlal v22.8h, v12.8b, v31.8b
+	fmul v17.4s, v1.4s, v17.4s
+	fsub v3.4s, v3.4s, v5.4s
 	xtn v16.4h, v16.4s
-	orr v31.8b, v30.8b, v24.8b
+	shrn v30.8b, v30.8h, #8
 	shrn v29.8b, v9.8h, #6
 	orr v25.16b, v25.16b, v27.16b
+	orr v31.8b, v30.8b, v24.8b
 	fcvtzs v17.4s, v17.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
+	fadd v1.4s, v1.4s, v4.4s
 	shrn v30.8b, v22.8h, #6
 	orr v26.16b, v26.16b, v27.16b
 	xtn2 v16.8h, v17.4s
@@ -23622,120 +24042,123 @@ rast_kern_04010:
 	add x1, x1, #32
 	add x2, x2, #32
 53:
-	cmp x5, #16
-	add v17.2d, v6.2d, v8.2d
 	mov x8, #16
-	add v23.2d, v7.2d, v8.2d
-	ldr q28, [x19, #64]
-	add v6.2d, v17.2d, v8.2d
-	ldr q31, [sp, #96]
-	add x26, x2, #32
-	csel x8, x5, x8, lo
-	add v7.2d, v23.2d, v8.2d
-	shrn v25.2s, v17.2d, #30
-	shrn v26.2s, v6.2d, #30
-	subs x8, x8, #8
+	add v17.2d, v6.2d, v8.2d
+	cmp x5, #16
 	smull v30.4s, v16.4h, v15.h[4]
-	smull2 v29.4s, v16.8h, v15.h[4]
-	csel x26, x26, x2, hi
-	csel x8, x8, xzr, hi
-	shrn2 v25.4s, v23.2d, #30
-	shrn2 v26.4s, v7.2d, #30
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q22, [sp, #112]
-	ldp q17, q23, [x26]
 	smull v27.4s, v16.4h, v15.h[5]
+	ldr q28, [x19, #64]
+	csel x8, x5, x8, lo
+	smull2 v29.4s, v16.8h, v15.h[4]
+	ldr q31, [sp, #96]
+	add v6.2d, v17.2d, v8.2d
+	add x26, x2, #32
+	ldr q22, [sp, #112]
+	subs x8, x8, #8
+	add v23.2d, v7.2d, v8.2d
+	shrn v25.2s, v17.2d, #30
+	addhn v30.4h, v30.4s, v31.4s
+	add v7.2d, v23.2d, v8.2d
+	csel x26, x26, x2, hi
+	shrn2 v25.4s, v23.2d, #30
+	csel x8, x8, xzr, hi
 	addhn2 v30.8h, v29.4s, v31.4s
+	addhn v27.4h, v27.4s, v22.4s
 	smull2 v29.4s, v16.8h, v15.h[5]
+	ldp q17, q23, [x26]
+	addhn2 v27.8h, v29.4s, v22.4s
 	sshr v30.8h, v30.8h, #3
 	bic v17.4s, #0xff, lsl #24
-	and v30.16b, v30.16b, v28.16b
-	bic v23.4s, #0xff, lsl #24
-	addhn v27.4h, v27.4s, v22.4s
-	cmhi v23.4s, v23.4s, v26.4s
-	orr x0, x0, x17
-	cmhi v17.4s, v17.4s, v25.4s
-	ldr q28, [x19, #80]
-	addhn2 v27.8h, v29.4s, v22.4s
-	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x8, lsl #4]
+	shrn v26.2s, v6.2d, #30
 	sshr v27.8h, v27.8h, #3
-	cmn x17, #1
+	bic v23.4s, #0xff, lsl #24
+	shrn2 v26.4s, v7.2d, #30
+	and v30.16b, v30.16b, v28.16b
+	ldr q28, [x19, #80]
+	cmhi v17.4s, v17.4s, v25.4s
+	sub x18, x26, #15, lsl #12
+	cmhi v23.4s, v23.4s, v26.4s
 	and v27.16b, v27.16b, v28.16b
-	and v17.16b, v17.16b, v23.16b
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
+	frecpe v24.4s, v2.4s
+	uzp1 v17.8h, v17.8h, v23.8h
+	ldr q23, [x20, x8, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn v23.8b, v17.8h
+	and v17.16b, v17.16b, v23.16b
 	umov w9, v29.s[0]
+	prfm pstl1keep, [x18, #0]
 	umov w10, v29.s[1]
-	umov w16, v27.s[3]
-	umov w11, v29.s[2]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
 	umov w13, v27.s[0]
 	umov w12, v29.s[3]
-	fmov x8, d23
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
-	frecpe v24.4s, v2.4s
 	ldrb w10, [x6, w10, uxtw]
-	umov w14, v27.s[1]
-	ldrb w16, [x6, w16, uxtw]
-	umov w15, v27.s[2]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w11, [x6, w11, uxtw]
-	frecps v23.4s, v24.4s, v2.4s
 	ldrb w14, [x6, w14, uxtw]
-	ldr w16, [x21, w16, uxtw #2]
-	ldrb w15, [x6, w15, uxtw]
+	umov w11, v29.s[2]
+	cmn x17, #1
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w16, [x6, w16, uxtw]
+	ldrb w12, [x6, w12, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
-	fmul v24.4s, v24.4s, v23.4s
-	ldr w11, [x21, w11, uxtw #2]
-	frecpe v17.4s, v3.4s
+	ldrb w11, [x6, w11, uxtw]
 	ldr w10, [x21, w10, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	frecps v23.4s, v24.4s, v2.4s
+	ldrb w15, [x6, w15, uxtw]
+	ldr w16, [x21, w16, uxtw #2]
 	ldr w12, [x21, w12, uxtw #2]
+	ldr w11, [x21, w11, uxtw #2]
 	ldr w15, [x21, w15, uxtw #2]
-	ccmp x8, #0, #4, eq
+	ldr w13, [x21, w13, uxtw #2]
 	stp w9, w10, [sp, #32]
-	stp w13, w14, [sp, #48]
-	fmul v24.4s, v24.4s, v23.4s
-	stp w11, w12, [sp, #40]
+	ldr w14, [x21, w14, uxtw #2]
+	xtn v23.8b, v17.8h
 	stp w15, w16, [sp, #56]
+	frecpe v17.4s, v3.4s
+	stp w11, w12, [sp, #40]
+	stp w13, w14, [sp, #48]
+	fmov x8, d23
+	frecps v23.4s, v24.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fsub v2.4s, v2.4s, v5.4s
-	frecps v23.4s, v17.4s, v3.4s
-	fmul v24.4s, v0.4s, v24.4s
+	ccmp x8, #0, #4, eq
+	fmul v24.4s, v24.4s, v23.4s
+	prfm pldl1keep, [x26, #4096]
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
-	shrn v30.8b, v30.8h, #8
-	uaddl v9.8h, v11.8b, v27.8b
-	fmul v17.4s, v17.4s, v23.4s
+	orr x0, x0, x17
+	frecps v23.4s, v24.4s, v2.4s
 	uaddl v16.8h, v10.8b, v29.8b
-	fadd v0.4s, v0.4s, v4.4s
-	umlal v9.8h, v11.8b, v27.8b
-	frecps v23.4s, v17.4s, v3.4s
 	uaddl v22.8h, v12.8b, v31.8b
-	ldr q27, [x19, #32]
+	uaddl v9.8h, v11.8b, v27.8b
+	fmul v24.4s, v24.4s, v23.4s
+	frecps v23.4s, v17.4s, v3.4s
 	umlal v16.8h, v10.8b, v29.8b
-	fcvtzs v24.4s, v24.4s, #15
-	fmul v17.4s, v17.4s, v23.4s
-	shrn v28.8b, v16.8h, #6
-	orr v13.16b, v13.16b, v27.16b
-	ldr d16, [sp, #144]
-	fsub v3.4s, v3.4s, v5.4s
 	umlal v22.8h, v12.8b, v31.8b
+	umlal v9.8h, v11.8b, v27.8b
+	fmul v17.4s, v17.4s, v23.4s
+	fmul v24.4s, v0.4s, v24.4s
+	shrn v28.8b, v16.8h, #6
+	shrn v30.8b, v30.8h, #8
+	frecps v23.4s, v17.4s, v3.4s
+	ldr d16, [sp, #144]
+	fadd v0.4s, v0.4s, v4.4s
+	fcvtzs v24.4s, v24.4s, #15
+	fsub v2.4s, v2.4s, v5.4s
+	fmul v17.4s, v17.4s, v23.4s
+	orr v31.8b, v30.8b, v16.8b
+	ldr q27, [x19, #32]
 	fmul v17.4s, v1.4s, v17.4s
+	fsub v3.4s, v3.4s, v5.4s
 	shrn v29.8b, v9.8h, #6
 	xtn v24.4h, v24.4s
-	orr v31.8b, v30.8b, v16.8b
-	shrn v30.8b, v22.8h, #6
-	fadd v1.4s, v1.4s, v4.4s
-	fcvtzs v17.4s, v17.4s, #15
 	orr v14.16b, v14.16b, v27.16b
+	fcvtzs v17.4s, v17.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
+	shrn v30.8b, v22.8h, #6
+	orr v13.16b, v13.16b, v27.16b
 	xtn2 v24.8h, v17.4s
 	b.eq 71f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -23757,10 +24180,13 @@ rast_kern_04010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -23897,114 +24323,117 @@ rast_kern_04010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v29.4s
 81:
-	cmp x5, #16
 	add v17.2d, v6.2d, v8.2d
-	add x26, x2, #32
-	ldr q31, [sp, #96]
 	mov x17, #16
+	cmp x5, #16
+	ldr q28, [x19, #64]
+	smull v30.4s, v24.4h, v15.h[4]
+	smull2 v29.4s, v24.8h, v15.h[4]
+	ldr q22, [sp, #112]
+	csel x17, x5, x17, lo
 	add v23.2d, v7.2d, v8.2d
 	shrn v13.2s, v17.2d, #30
-	smull v30.4s, v24.4h, v15.h[4]
-	csel x17, x5, x17, lo
-	ldr q22, [sp, #112]
-	add v6.2d, v17.2d, v8.2d
+	ldr q31, [sp, #96]
+	add x26, x2, #32
 	shrn2 v13.4s, v23.2d, #30
-	smull2 v29.4s, v24.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
 	subs x17, x17, #8
-	shrn v14.2s, v6.2d, #30
 	smull v27.4s, v24.4h, v15.h[5]
-	addhn2 v30.8h, v29.4s, v31.4s
-	csel x26, x26, x2, hi
+	addhn v30.4h, v30.4s, v31.4s
 	add v7.2d, v23.2d, v8.2d
-	frecpe v16.4s, v2.4s
-	ldp q17, q23, [x26]
-	smull2 v29.4s, v24.8h, v15.h[5]
+	add v6.2d, v17.2d, v8.2d
+	csel x26, x26, x2, hi
 	addhn v27.4h, v27.4s, v22.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v24.8h, v15.h[5]
+	ldp q17, q23, [x26]
+	addhn2 v27.8h, v29.4s, v22.4s
 	sshr v30.8h, v30.8h, #3
 	bic v17.4s, #0xff, lsl #24
-	shrn2 v14.4s, v7.2d, #30
-	bic v23.4s, #0xff, lsl #24
-	ldr q28, [x19, #64]
-	cmhi v23.4s, v23.4s, v14.4s
-	csel x17, x17, xzr, hi
-	cmhi v17.4s, v17.4s, v13.4s
+	shrn v14.2s, v6.2d, #30
 	and v30.16b, v30.16b, v28.16b
-	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x17, lsl #4]
-	addhn2 v27.8h, v29.4s, v22.4s
 	ldr q28, [x19, #80]
-	and v17.16b, v17.16b, v23.16b
+	cmhi v17.4s, v17.4s, v13.4s
 	sshr v27.8h, v27.8h, #3
-	xtn v23.8b, v17.8h
+	bic v23.4s, #0xff, lsl #24
+	shrn2 v14.4s, v7.2d, #30
 	and v27.16b, v27.16b, v28.16b
+	csel x17, x17, xzr, hi
+	cmhi v23.4s, v23.4s, v14.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmov x17, d23
-	orr x0, x0, x8
-	frecps v23.4s, v16.4s, v2.4s
+	sub x18, x26, #15, lsl #12
+	uzp1 v17.8h, v17.8h, v23.8h
+	ldr q23, [x20, x17, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
+	orr x0, x0, x8
 	uaddw2 v27.4s, v27.4s, v30.8h
-	umov w11, v29.s[2]
-	umov w9, v29.s[0]
-	umov w13, v27.s[0]
+	and v17.16b, v17.16b, v23.16b
 	umov w12, v29.s[3]
-	umov w14, v27.s[1]
+	umov w9, v29.s[0]
 	umov w10, v29.s[1]
-	fmul v16.4s, v16.4s, v23.4s
-	ldrb w9, [x6, w9, uxtw]
+	umov w11, v29.s[2]
 	umov w15, v27.s[2]
-	frecpe v17.4s, v3.4s
 	ldrb w12, [x6, w12, uxtw]
-	umov w16, v27.s[3]
+	umov w14, v27.s[1]
+	ldrb w9, [x6, w9, uxtw]
+	umov w13, v27.s[0]
 	ldrb w10, [x6, w10, uxtw]
+	umov w16, v27.s[3]
+	frecpe v16.4s, v2.4s
+	ldrb w11, [x6, w11, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w13, [x6, w13, uxtw]
-	frecps v23.4s, v16.4s, v2.4s
-	ldrb w11, [x6, w11, uxtw]
-	fsub v2.4s, v2.4s, v5.4s
-	ldrb w16, [x6, w16, uxtw]
 	ldrb w15, [x6, w15, uxtw]
-	stp w9, w10, [sp, #32]
-	stp w13, w14, [sp, #48]
-	cmn x8, #1
-	fmul v16.4s, v16.4s, v23.4s
-	frecps v23.4s, v17.4s, v3.4s
+	ldrb w16, [x6, w16, uxtw]
+	prfm pstl1keep, [x18, #0]
 	stp w11, w12, [sp, #40]
+	stp w9, w10, [sp, #32]
+	xtn v23.8b, v17.8h
+	stp w13, w14, [sp, #48]
+	fmov x17, d23
 	stp w15, w16, [sp, #56]
+	frecps v23.4s, v16.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v17.4s, v17.4s, v23.4s
-	fmul v16.4s, v0.4s, v16.4s
-	fadd v0.4s, v0.4s, v4.4s
+	frecpe v17.4s, v3.4s
+	fmul v16.4s, v16.4s, v23.4s
+	cmn x8, #1
 	xtn v29.8b, v29.8h
-	frecps v23.4s, v17.4s, v3.4s
+	frecps v23.4s, v16.4s, v2.4s
 	tbl v31.8b, {v20.16b}, v29.8b
-	tbl v27.8b, {v19.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
-	fcvtzs v16.4s, v16.4s, #15
+	tbl v27.8b, {v19.16b}, v29.8b
+	fmul v16.4s, v16.4s, v23.4s
 	tbl v29.8b, {v18.16b}, v29.8b
-	fsub v3.4s, v3.4s, v5.4s
+	frecps v23.4s, v17.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
 	uaddl v22.8h, v12.8b, v31.8b
-	fmul v17.4s, v17.4s, v23.4s
 	uaddl v24.8h, v10.8b, v29.8b
 	ccmp x17, #0, #4, eq
+	fmul v17.4s, v17.4s, v23.4s
+	fmul v16.4s, v0.4s, v16.4s
 	uaddl v9.8h, v11.8b, v27.8b
+	prfm pldl1keep, [x26, #4096]
 	umlal v22.8h, v12.8b, v31.8b
-	umlal v24.8h, v10.8b, v29.8b
-	fmul v17.4s, v1.4s, v17.4s
+	frecps v23.4s, v17.4s, v3.4s
 	umlal v9.8h, v11.8b, v27.8b
+	umlal v24.8h, v10.8b, v29.8b
+	fadd v0.4s, v0.4s, v4.4s
 	ldr q27, [x19, #32]
+	fcvtzs v16.4s, v16.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
 	shrn v28.8b, v24.8h, #6
 	ldr d24, [sp, #144]
-	fadd v1.4s, v1.4s, v4.4s
-	fcvtzs v17.4s, v17.4s, #15
-	shrn v29.8b, v9.8h, #6
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v17.4s, v1.4s, v17.4s
 	xtn v16.4h, v16.4s
 	orr v31.8b, v30.8b, v24.8b
+	orr v26.16b, v26.16b, v27.16b
+	fcvtzs v17.4s, v17.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
+	shrn v29.8b, v9.8h, #6
 	shrn v30.8b, v22.8h, #6
 	orr v25.16b, v25.16b, v27.16b
 	xtn2 v16.8h, v17.4s
-	orr v26.16b, v26.16b, v27.16b
 	b.eq 91f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
@@ -24014,114 +24443,117 @@ rast_kern_04010:
 	add x1, x1, #32
 	add x2, x2, #32
 83:
-	mov x8, #16
-	add v17.2d, v6.2d, v8.2d
-	cmp x5, #16
-	smull v30.4s, v16.4h, v15.h[4]
-	smull v27.4s, v16.4h, v15.h[5]
-	ldr q31, [sp, #96]
-	csel x8, x5, x8, lo
-	add v6.2d, v17.2d, v8.2d
-	shrn v25.2s, v17.2d, #30
-	add v23.2d, v7.2d, v8.2d
-	ldr q28, [x19, #64]
-	subs x8, x8, #8
-	add x26, x2, #32
-	smull2 v29.4s, v16.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
 	ldr q22, [sp, #112]
-	shrn2 v25.4s, v23.2d, #30
-	csel x26, x26, x2, hi
-	add v7.2d, v23.2d, v8.2d
-	shrn v26.2s, v6.2d, #30
-	addhn2 v30.8h, v29.4s, v31.4s
-	ldp q17, q23, [x26]
-	smull2 v29.4s, v16.8h, v15.h[5]
+	ldr q31, [sp, #96]
+	cmp x5, #16
+	add v17.2d, v6.2d, v8.2d
+	mov x8, #16
+	smull v30.4s, v16.4h, v15.h[4]
+	smull2 v29.4s, v16.8h, v15.h[4]
+	smull v27.4s, v16.4h, v15.h[5]
+	add x26, x2, #32
+	csel x8, x5, x8, lo
+	add v23.2d, v7.2d, v8.2d
+	shrn v25.2s, v17.2d, #30
+	add v6.2d, v17.2d, v8.2d
+	ldr q28, [x19, #64]
+	addhn v30.4h, v30.4s, v31.4s
+	subs x8, x8, #8
 	addhn v27.4h, v27.4s, v22.4s
-	csel x8, x8, xzr, hi
-	shrn2 v26.4s, v7.2d, #30
+	shrn2 v25.4s, v23.2d, #30
+	add v7.2d, v23.2d, v8.2d
+	csel x26, x26, x2, hi
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v16.8h, v15.h[5]
+	ldp q17, q23, [x26]
+	addhn2 v27.8h, v29.4s, v22.4s
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
+	bic v17.4s, #0xff, lsl #24
+	shrn v26.2s, v6.2d, #30
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	addhn2 v27.8h, v29.4s, v22.4s
-	cmhi v23.4s, v23.4s, v26.4s
-	cmn x17, #1
-	bic v17.4s, #0xff, lsl #24
-	sshr v27.8h, v27.8h, #3
+	shrn2 v26.4s, v7.2d, #30
 	cmhi v17.4s, v17.4s, v25.4s
+	sshr v27.8h, v27.8h, #3
+	bic v23.4s, #0xff, lsl #24
+	csel x8, x8, xzr, hi
+	cmhi v23.4s, v23.4s, v26.4s
 	and v27.16b, v27.16b, v28.16b
+	sub x18, x26, #15, lsl #12
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x8, lsl #4]
 	frecpe v24.4s, v2.4s
+	ldr q23, [x20, x8, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
 	and v17.16b, v17.16b, v23.16b
-	xtn v23.8b, v17.8h
-	umov w13, v27.s[0]
-	umov w15, v27.s[2]
-	fmov x8, d23
 	umov w11, v29.s[2]
-	umov w14, v27.s[1]
-	umov w9, v29.s[0]
-	frecps v23.4s, v24.4s, v2.4s
-	umov w12, v29.s[3]
-	ldrb w15, [x6, w15, uxtw]
-	umov w10, v29.s[1]
-	umov w16, v27.s[3]
-	ldrb w11, [x6, w11, uxtw]
-	ldrb w9, [x6, w9, uxtw]
 	orr x0, x0, x17
-	ldrb w13, [x6, w13, uxtw]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
+	umov w13, v27.s[0]
+	umov w16, v27.s[3]
+	umov w15, v27.s[2]
+	ldrb w11, [x6, w11, uxtw]
+	umov w9, v29.s[0]
+	umov w12, v29.s[3]
 	ldrb w10, [x6, w10, uxtw]
-	fmul v24.4s, v24.4s, v23.4s
-	ldrb w12, [x6, w12, uxtw]
 	ldrb w14, [x6, w14, uxtw]
-	frecpe v17.4s, v3.4s
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w9, [x6, w9, uxtw]
 	ldrb w16, [x6, w16, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	ldrb w15, [x6, w15, uxtw]
 	stp w9, w10, [sp, #32]
-	frecps v23.4s, v24.4s, v2.4s
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	xtn v23.8b, v17.8h
+	frecpe v17.4s, v3.4s
+	stp w11, w12, [sp, #40]
+	fmov x8, d23
 	stp w15, w16, [sp, #56]
+	frecps v23.4s, v24.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v24.4s, v24.4s, v23.4s
-	frecps v23.4s, v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
 	xtn v29.8b, v29.8h
-	fmul v17.4s, v17.4s, v23.4s
-	tbl v31.8b, {v20.16b}, v29.8b
 	tbl v27.8b, {v19.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
-	fmul v24.4s, v0.4s, v24.4s
 	tbl v29.8b, {v18.16b}, v29.8b
+	frecps v23.4s, v24.4s, v2.4s
+	fsub v2.4s, v2.4s, v5.4s
+	uaddl v9.8h, v11.8b, v27.8b
+	uaddl v16.8h, v10.8b, v29.8b
+	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
+	cmn x17, #1
+	umlal v16.8h, v10.8b, v29.8b
+	fmul v24.4s, v0.4s, v24.4s
+	fmul v17.4s, v17.4s, v23.4s
+	umlal v9.8h, v11.8b, v27.8b
 	uaddl v22.8h, v12.8b, v31.8b
 	ccmp x8, #0, #4, eq
-	fadd v0.4s, v0.4s, v4.4s
-	uaddl v16.8h, v10.8b, v29.8b
-	fmul v17.4s, v17.4s, v23.4s
-	uaddl v9.8h, v11.8b, v27.8b
-	umlal v22.8h, v12.8b, v31.8b
-	umlal v16.8h, v10.8b, v29.8b
-	fmul v17.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v9.8h, v11.8b, v27.8b
-	ldr q27, [x19, #32]
 	shrn v28.8b, v16.8h, #6
-	fcvtzs v24.4s, v24.4s, #15
+	ldr q27, [x19, #32]
+	frecps v23.4s, v17.4s, v3.4s
 	ldr d16, [sp, #144]
-	fcvtzs v17.4s, v17.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	xtn v24.4h, v24.4s
+	orr v13.16b, v13.16b, v27.16b
 	shrn v29.8b, v9.8h, #6
+	fmul v17.4s, v17.4s, v23.4s
+	fadd v0.4s, v0.4s, v4.4s
+	fmul v17.4s, v1.4s, v17.4s
+	fcvtzs v24.4s, v24.4s, #15
+	fsub v3.4s, v3.4s, v5.4s
+	umlal v22.8h, v12.8b, v31.8b
+	prfm pldl1keep, [x26, #4096]
+	fadd v1.4s, v1.4s, v4.4s
+	fcvtzs v17.4s, v17.4s, #15
+	xtn v24.4h, v24.4s
 	orr v31.8b, v30.8b, v16.8b
 	shrn v30.8b, v22.8h, #6
 	orr v14.16b, v14.16b, v27.16b
 	xtn2 v24.8h, v17.4s
-	orr v13.16b, v13.16b, v27.16b
 	b.eq 101f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
@@ -24142,10 +24574,13 @@ rast_kern_04010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -24284,112 +24719,115 @@ rast_kern_04010:
 121:
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q31, [sp, #96]
-	smull2 v29.4s, v24.8h, v15.h[4]
 	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	ldr q22, [sp, #112]
-	add v17.2d, v6.2d, v8.2d
-	cmp x5, #16
-	add v23.2d, v7.2d, v8.2d
-	addhn2 v30.8h, v29.4s, v31.4s
 	ldr q28, [x19, #64]
+	cmp x5, #16
+	mov x17, #16
+	add v23.2d, v7.2d, v8.2d
+	add x26, x2, #32
+	add v17.2d, v6.2d, v8.2d
+	ldr q22, [sp, #112]
+	addhn2 v30.8h, v29.4s, v31.4s
+	csel x17, x5, x17, lo
 	smull2 v29.4s, v24.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v22.4s
-	mov x17, #16
-	sshr v30.8h, v30.8h, #3
-	add x26, x2, #32
-	add v6.2d, v17.2d, v8.2d
-	ldr d24, [sp, #144]
-	addhn2 v27.8h, v29.4s, v22.4s
-	csel x17, x5, x17, lo
 	shrn v13.2s, v17.2d, #30
+	add v7.2d, v23.2d, v8.2d
+	sshr v30.8h, v30.8h, #3
+	addhn2 v27.8h, v29.4s, v22.4s
+	subs x17, x17, #8
+	add v6.2d, v17.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
 	sshr v27.8h, v27.8h, #3
+	csel x26, x26, x2, hi
 	shrn v14.2s, v6.2d, #30
 	and v27.16b, v27.16b, v28.16b
-	subs x17, x17, #8
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	orr x0, x0, x8
-	csel x26, x26, x2, hi
-	add v7.2d, v23.2d, v8.2d
+	sub x18, x26, #15, lsl #12
 	shrn2 v13.4s, v23.2d, #30
 	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
 	ldp q17, q23, [x26]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
+	umov w13, v27.s[0]
+	umov w16, v27.s[3]
 	umov w9, v29.s[0]
 	umov w12, v29.s[3]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	frecpe v16.4s, v2.4s
-	umov w13, v27.s[0]
-	ldrb w12, [x6, w12, uxtw]
-	umov w16, v27.s[3]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w11, [x6, w11, uxtw]
-	umov w14, v27.s[1]
-	umov w15, v27.s[2]
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w16, [x6, w16, uxtw]
-	ldr w12, [x21, w12, uxtw #2]
-	ldrb w15, [x6, w15, uxtw]
-	csel x17, x17, xzr, hi
-	ldr w11, [x21, w11, uxtw #2]
 	ldrb w14, [x6, w14, uxtw]
-	ldr w16, [x21, w16, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
+	ldrb w16, [x6, w16, uxtw]
+	frecpe v16.4s, v2.4s
+	ldrb w10, [x6, w10, uxtw]
+	umov w15, v27.s[2]
+	ldrb w12, [x6, w12, uxtw]
+	csel x17, x17, xzr, hi
+	ldrb w9, [x6, w9, uxtw]
+	umov w11, v29.s[2]
+	ldrb w13, [x6, w13, uxtw]
+	ldr w10, [x21, w10, uxtw #2]
+	ldrb w15, [x6, w15, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w14, [x21, w14, uxtw #2]
-	ldr w10, [x21, w10, uxtw #2]
+	ldrb w11, [x6, w11, uxtw]
+	ldr w12, [x21, w12, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
+	orr x0, x0, x8
 	ldr w13, [x21, w13, uxtw #2]
-	stp w11, w12, [sp, #40]
-	stp w15, w16, [sp, #56]
+	ldr w11, [x21, w11, uxtw #2]
+	ldr w16, [x21, w16, uxtw #2]
+	stp w9, w10, [sp, #32]
 	shrn2 v14.4s, v7.2d, #30
-	bic v23.4s, #0xff, lsl #24
-	cmhi v23.4s, v23.4s, v14.4s
 	stp w13, w14, [sp, #48]
 	bic v17.4s, #0xff, lsl #24
-	stp w9, w10, [sp, #32]
+	ldr d24, [sp, #144]
 	cmhi v17.4s, v17.4s, v13.4s
+	stp w15, w16, [sp, #56]
+	bic v23.4s, #0xff, lsl #24
+	stp w11, w12, [sp, #40]
+	cmhi v23.4s, v23.4s, v14.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x17, lsl #4]
+	xtn v31.8b, v30.8h
 	shrn v27.8b, v29.8h, #8
 	and v17.16b, v17.16b, v23.16b
-	xtn v29.8b, v29.8h
 	xtn v23.8b, v17.8h
-	xtn v31.8b, v30.8h
 	fmov x17, d23
-	cmn x8, #1
-	frecps v23.4s, v16.4s, v2.4s
-	mov v28.8b, v29.8b
-	mov v29.8b, v27.8b
-	fmul v16.4s, v16.4s, v23.4s
-	shrn v30.8b, v30.8h, #8
-	ccmp x17, #0, #4, eq
 	frecps v23.4s, v16.4s, v2.4s
 	frecpe v17.4s, v3.4s
+	xtn v29.8b, v29.8h
+	cmn x8, #1
+	fmul v16.4s, v16.4s, v23.4s
+	frecps v23.4s, v16.4s, v2.4s
+	ushll v22.8h, v31.8b, #6
+	shrn v30.8b, v30.8h, #8
+	mov v28.8b, v29.8b
 	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	ushll v22.8h, v31.8b, #6
-	fmul v17.4s, v17.4s, v23.4s
+	prfm pldl1keep, [x26, #4096]
 	fmul v16.4s, v0.4s, v16.4s
-	frecps v23.4s, v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
 	fmul v17.4s, v17.4s, v23.4s
-	fsub v3.4s, v3.4s, v5.4s
-	ldr q27, [x19, #32]
-	fcvtzs v16.4s, v16.4s, #15
-	fmul v17.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v4.4s
-	xtn v16.4h, v16.4s
 	orr v31.8b, v30.8b, v24.8b
-	fcvtzs v17.4s, v17.4s, #15
+	mov v29.8b, v27.8b
+	frecps v23.4s, v17.4s, v3.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fcvtzs v16.4s, v16.4s, #15
+	ccmp x17, #0, #4, eq
+	fmul v17.4s, v17.4s, v23.4s
+	xtn v16.4h, v16.4s
+	ldr q27, [x19, #32]
+	fmul v17.4s, v1.4s, v17.4s
 	fadd v0.4s, v0.4s, v4.4s
-	shrn v30.8b, v22.8h, #6
+	fadd v1.4s, v1.4s, v4.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fcvtzs v17.4s, v17.4s, #15
 	orr v25.16b, v25.16b, v27.16b
+	shrn v30.8b, v22.8h, #6
 	xtn2 v16.8h, v17.4s
 	orr v26.16b, v26.16b, v27.16b
 	b.eq 131f
@@ -24401,113 +24839,116 @@ rast_kern_04010:
 	add x1, x1, #32
 	add x2, x2, #32
 123:
-	smull v30.4s, v16.4h, v15.h[4]
 	ldr q31, [sp, #96]
-	smull2 v29.4s, v16.8h, v15.h[4]
-	smull v27.4s, v16.4h, v15.h[5]
-	addhn v30.4h, v30.4s, v31.4s
-	add x26, x2, #32
-	add v23.2d, v7.2d, v8.2d
+	smull v30.4s, v16.4h, v15.h[4]
 	ldr q22, [sp, #112]
 	mov x8, #16
-	ldr q28, [x19, #64]
-	addhn2 v30.8h, v29.4s, v31.4s
+	smull v27.4s, v16.4h, v15.h[5]
+	smull2 v29.4s, v16.8h, v15.h[4]
+	addhn v30.4h, v30.4s, v31.4s
 	cmp x5, #16
 	add v17.2d, v6.2d, v8.2d
+	frecpe v24.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	csel x8, x5, x8, lo
 	smull2 v29.4s, v16.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v22.4s
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	add v7.2d, v23.2d, v8.2d
-	addhn2 v27.8h, v29.4s, v22.4s
-	csel x8, x5, x8, lo
 	add v6.2d, v17.2d, v8.2d
+	subs x8, x8, #8
+	addhn2 v27.8h, v29.4s, v22.4s
+	add x26, x2, #32
+	add v23.2d, v7.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	subs x8, x8, #8
-	and v27.16b, v27.16b, v28.16b
+	csel x8, x8, xzr, hi
 	shrn v25.2s, v17.2d, #30
+	and v27.16b, v27.16b, v28.16b
+	csel x26, x26, x2, hi
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	csel x8, x8, xzr, hi
-	csel x26, x26, x2, hi
+	add v7.2d, v23.2d, v8.2d
 	shrn2 v25.4s, v23.2d, #30
-	shrn v26.2s, v6.2d, #30
 	uaddw v29.4s, v29.4s, v30.4h
-	ldp q17, q23, [x26]
-	umov w9, v29.s[0]
-	umov w10, v29.s[1]
 	uaddw2 v27.4s, v27.4s, v30.8h
-	umov w11, v29.s[2]
-	umov w12, v29.s[3]
-	ldrb w10, [x6, w10, uxtw]
-	umov w14, v27.s[1]
-	umov w16, v27.s[3]
-	ldrb w9, [x6, w9, uxtw]
-	cmn x17, #1
-	ldrb w11, [x6, w11, uxtw]
-	ldrb w12, [x6, w12, uxtw]
+	ldp q17, q23, [x26]
 	umov w15, v27.s[2]
-	ldrb w14, [x6, w14, uxtw]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
+	umov w9, v29.s[0]
+	umov w11, v29.s[2]
 	umov w13, v27.s[0]
-	ldrb w16, [x6, w16, uxtw]
-	ldr w10, [x21, w10, uxtw #2]
+	umov w16, v27.s[3]
+	umov w12, v29.s[3]
 	ldrb w15, [x6, w15, uxtw]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w10, [x6, w10, uxtw]
+	ldrb w11, [x6, w11, uxtw]
 	ldrb w13, [x6, w13, uxtw]
-	ldr w12, [x21, w12, uxtw #2]
-	ldr w16, [x21, w16, uxtw #2]
-	frecpe v24.4s, v2.4s
-	ldr w11, [x21, w11, uxtw #2]
+	sub x18, x26, #15, lsl #12
+	ldrb w16, [x6, w16, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	cmn x17, #1
+	ldr w10, [x21, w10, uxtw #2]
 	ldr w9, [x21, w9, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
-	stp w9, w10, [sp, #32]
-	shrn2 v26.4s, v7.2d, #30
+	ldr w16, [x21, w16, uxtw #2]
+	ldr w12, [x21, w12, uxtw #2]
+	ldrb w14, [x6, w14, uxtw]
+	prfm pstl1keep, [x18, #0]
+	orr x0, x0, x17
+	shrn v26.2s, v6.2d, #30
 	bic v17.4s, #0xff, lsl #24
-	stp w11, w12, [sp, #40]
-	bic v23.4s, #0xff, lsl #24
-	stp w13, w14, [sp, #48]
-	cmhi v23.4s, v23.4s, v26.4s
+	ldr w15, [x21, w15, uxtw #2]
 	cmhi v17.4s, v17.4s, v25.4s
+	shrn2 v26.4s, v7.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	stp w9, w10, [sp, #32]
+	cmhi v23.4s, v23.4s, v26.4s
+	ldr w11, [x21, w11, uxtw #2]
 	stp w15, w16, [sp, #56]
+	ldr w13, [x21, w13, uxtw #2]
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
+	ldr w14, [x21, w14, uxtw #2]
 	and v17.16b, v17.16b, v23.16b
 	xtn v23.8b, v17.8h
-	ld2 {v29.8h, v30.8h}, [x28]
-	ldr d16, [sp, #144]
+	stp w11, w12, [sp, #40]
 	fmov x8, d23
+	stp w13, w14, [sp, #48]
 	frecps v23.4s, v24.4s, v2.4s
-	shrn v27.8b, v29.8h, #8
+	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v24.4s, v24.4s, v23.4s
-	ccmp x8, #0, #4, eq
-	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
-	frecpe v17.4s, v3.4s
+	shrn v27.8b, v29.8h, #8
 	frecps v23.4s, v24.4s, v2.4s
+	frecpe v17.4s, v3.4s
 	shrn v30.8b, v30.8h, #8
-	ushll v22.8h, v31.8b, #6
-	orr x0, x0, x17
+	xtn v29.8b, v29.8h
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
 	mov v28.8b, v29.8b
-	orr v31.8b, v30.8b, v16.8b
-	fmul v17.4s, v17.4s, v23.4s
 	mov v29.8b, v27.8b
-	frecps v23.4s, v17.4s, v3.4s
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v17.4s, v17.4s, v23.4s
-	fadd v0.4s, v0.4s, v4.4s
-	fcvtzs v24.4s, v24.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmul v17.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v4.4s
-	ldr q27, [x19, #32]
-	shrn v30.8b, v22.8h, #6
+	ldr d16, [sp, #144]
+	fmul v24.4s, v0.4s, v24.4s
+	frecps v23.4s, v17.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
-	fcvtzs v17.4s, v17.4s, #15
+	ldr q27, [x19, #32]
+	ushll v22.8h, v31.8b, #6
+	fcvtzs v24.4s, v24.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
+	fsub v3.4s, v3.4s, v5.4s
+	prfm pldl1keep, [x26, #4096]
+	fadd v0.4s, v0.4s, v4.4s
+	fmul v17.4s, v1.4s, v17.4s
+	ccmp x8, #0, #4, eq
+	orr v31.8b, v30.8b, v16.8b
 	xtn v24.4h, v24.4s
+	shrn v30.8b, v22.8h, #6
+	fcvtzs v17.4s, v17.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	orr v13.16b, v13.16b, v27.16b
 	xtn2 v24.8h, v17.4s
 	orr v14.16b, v14.16b, v27.16b
@@ -24531,10 +24972,13 @@ rast_kern_04010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -24671,26 +25115,26 @@ rast_kern_04010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v29.4s
 151:
-	cmp x5, #16
 	add v17.2d, v6.2d, v8.2d
 	mov x17, #16
-	add v23.2d, v7.2d, v8.2d
-	add x26, x2, #32
-	add v6.2d, v17.2d, v8.2d
-	csel x17, x5, x17, lo
-	shrn v14.2s, v6.2d, #30
-	shrn v13.2s, v17.2d, #30
-	add v7.2d, v23.2d, v8.2d
+	cmp x5, #16
 	ldr q31, [sp, #96]
+	add v23.2d, v7.2d, v8.2d
+	shrn v13.2s, v17.2d, #30
+	add v6.2d, v17.2d, v8.2d
 	shrn2 v13.4s, v23.2d, #30
+	csel x17, x5, x17, lo
+	add x26, x2, #32
+	add v7.2d, v23.2d, v8.2d
+	ldr q28, [x19, #64]
+	shrn v14.2s, v6.2d, #30
 	subs x17, x17, #8
 	smull v30.4s, v24.4h, v15.h[4]
 	smull v27.4s, v24.4h, v15.h[5]
-	ldr q22, [sp, #112]
 	csel x26, x26, x2, hi
+	ldr q22, [sp, #112]
 	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	ldr q28, [x19, #64]
 	ldp q17, q23, [x26]
 	frecpe v16.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
@@ -24700,79 +25144,82 @@ rast_kern_04010:
 	sshr v30.8h, v30.8h, #3
 	bic v23.4s, #0xff, lsl #24
 	shrn2 v14.4s, v7.2d, #30
-	and v30.16b, v30.16b, v28.16b
 	addhn2 v27.8h, v29.4s, v22.4s
-	ldr q28, [x19, #80]
+	ldr d24, [sp, #144]
 	cmhi v23.4s, v23.4s, v14.4s
-	orr x0, x0, x8
-	bic v17.4s, #0xff, lsl #24
+	and v30.16b, v30.16b, v28.16b
+	ldr q28, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	cmhi v17.4s, v17.4s, v13.4s
+	bic v17.4s, #0xff, lsl #24
 	and v27.16b, v27.16b, v28.16b
+	sub x18, x26, #15, lsl #12
+	cmhi v17.4s, v17.4s, v13.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uzp1 v17.8h, v17.8h, v23.8h
+	cmn x8, #1
 	ldr q23, [x20, x17, lsl #4]
-	ldr d24, [sp, #144]
 	uaddw v29.4s, v29.4s, v30.4h
+	prfm pstl1keep, [x18, #0]
 	uaddw2 v27.4s, v27.4s, v30.8h
 	and v17.16b, v17.16b, v23.16b
-	umov w9, v29.s[0]
-	cmn x8, #1
+	umov w12, v29.s[3]
+	xtn v23.8b, v17.8h
 	umov w11, v29.s[2]
 	umov w14, v27.s[1]
-	umov w16, v27.s[3]
-	umov w13, v27.s[0]
 	umov w10, v29.s[1]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w11, [x6, w11, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w9, v29.s[0]
+	umov w13, v27.s[0]
 	umov w15, v27.s[2]
-	umov w12, v29.s[3]
-	ldrb w16, [x6, w16, uxtw]
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	umov w16, v27.s[3]
+	fmov x17, d23
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	stp w9, w10, [sp, #32]
+	ldrb w9, [x6, w9, uxtw]
+	stp w11, w12, [sp, #40]
+	orr x0, x0, x8
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w15, [x6, w15, uxtw]
 	stp w13, w14, [sp, #48]
-	xtn v23.8b, v17.8h
+	prfm pldl1keep, [x26, #4096]
 	frecpe v17.4s, v3.4s
-	stp w11, w12, [sp, #40]
-	stp w15, w16, [sp, #56]
-	fmov x17, d23
 	frecps v23.4s, v16.4s, v2.4s
+	stp w9, w10, [sp, #32]
+	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v16.4s, v16.4s, v23.4s
 	xtn v29.8b, v29.8h
 	frecps v23.4s, v16.4s, v2.4s
-	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v27.8b, {v19.16b}, v29.8b
-	tbl v31.8b, {v20.16b}, v29.8b
 	fsub v2.4s, v2.4s, v5.4s
-	tbl v29.8b, {v18.16b}, v29.8b
+	tbl v30.8b, {v21.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
 	fmul v16.4s, v16.4s, v23.4s
+	tbl v29.8b, {v18.16b}, v29.8b
 	frecps v23.4s, v17.4s, v3.4s
-	ushll v22.8h, v31.8b, #6
 	mov v28.8b, v29.8b
-	fmul v17.4s, v17.4s, v23.4s
 	mov v29.8b, v27.8b
-	orr v31.8b, v30.8b, v24.8b
-	frecps v23.4s, v17.4s, v3.4s
-	fmul v16.4s, v0.4s, v16.4s
-	ldr q27, [x19, #32]
-	fsub v3.4s, v3.4s, v5.4s
 	fmul v17.4s, v17.4s, v23.4s
+	ldr q27, [x19, #32]
 	ccmp x17, #0, #4, eq
-	orr v25.16b, v25.16b, v27.16b
+	fmul v16.4s, v0.4s, v16.4s
+	frecps v23.4s, v17.4s, v3.4s
+	fsub v3.4s, v3.4s, v5.4s
+	ushll v22.8h, v31.8b, #6
 	fcvtzs v16.4s, v16.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
+	orr v25.16b, v25.16b, v27.16b
+	orr v31.8b, v30.8b, v24.8b
 	fmul v17.4s, v1.4s, v17.4s
 	xtn v16.4h, v16.4s
-	fadd v1.4s, v1.4s, v4.4s
+	orr v26.16b, v26.16b, v27.16b
+	shrn v30.8b, v22.8h, #6
 	fcvtzs v17.4s, v17.4s, #15
 	fadd v0.4s, v0.4s, v4.4s
-	shrn v30.8b, v22.8h, #6
-	orr v26.16b, v26.16b, v27.16b
+	fadd v1.4s, v1.4s, v4.4s
 	xtn2 v16.8h, v17.4s
 	b.eq 161f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -24783,108 +25230,111 @@ rast_kern_04010:
 	add x1, x1, #32
 	add x2, x2, #32
 153:
-	mov x8, #16
-	add v17.2d, v6.2d, v8.2d
-	cmp x5, #16
-	add v23.2d, v7.2d, v8.2d
 	ldr q31, [sp, #96]
-	add v6.2d, v17.2d, v8.2d
-	ldr q28, [x19, #64]
-	add v7.2d, v23.2d, v8.2d
-	csel x8, x5, x8, lo
-	smull v27.4s, v16.4h, v15.h[5]
-	add x26, x2, #32
+	add v17.2d, v6.2d, v8.2d
+	mov x8, #16
+	cmp x5, #16
 	ldr q22, [sp, #112]
+	add v23.2d, v7.2d, v8.2d
 	shrn v25.2s, v17.2d, #30
-	subs x8, x8, #8
 	smull v30.4s, v16.4h, v15.h[4]
+	csel x8, x5, x8, lo
+	add x26, x2, #32
+	add v7.2d, v23.2d, v8.2d
+	smull v27.4s, v16.4h, v15.h[5]
+	ldr q28, [x19, #64]
+	subs x8, x8, #8
+	add v6.2d, v17.2d, v8.2d
 	shrn2 v25.4s, v23.2d, #30
-	csel x26, x26, x2, hi
 	smull2 v29.4s, v16.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	csel x8, x8, xzr, hi
-	ldp q17, q23, [x26]
-	addhn2 v30.8h, v29.4s, v31.4s
-	smull2 v29.4s, v16.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v22.4s
+	csel x26, x26, x2, hi
 	shrn v26.2s, v6.2d, #30
-	bic v17.4s, #0xff, lsl #24
+	addhn v27.4h, v27.4s, v22.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	ldp q17, q23, [x26]
+	smull2 v29.4s, v16.8h, v15.h[5]
 	sshr v30.8h, v30.8h, #3
+	shrn2 v26.4s, v7.2d, #30
+	bic v17.4s, #0xff, lsl #24
 	addhn2 v27.8h, v29.4s, v22.4s
+	csel x8, x8, xzr, hi
 	cmhi v17.4s, v17.4s, v25.4s
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	shrn2 v26.4s, v7.2d, #30
-	bic v23.4s, #0xff, lsl #24
 	sshr v27.8h, v27.8h, #3
+	bic v23.4s, #0xff, lsl #24
 	cmhi v23.4s, v23.4s, v26.4s
 	and v27.16b, v27.16b, v28.16b
+	sub x18, x26, #15, lsl #12
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
+	prfm pldl1keep, [x26, #4096]
 	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
 	and v17.16b, v17.16b, v23.16b
-	umov w10, v29.s[1]
-	umov w11, v29.s[2]
 	umov w9, v29.s[0]
-	umov w12, v29.s[3]
 	umov w14, v27.s[1]
-	umov w13, v27.s[0]
-	ldrb w10, [x6, w10, uxtw]
-	umov w15, v27.s[2]
-	ldrb w11, [x6, w11, uxtw]
-	umov w16, v27.s[3]
-	frecpe v24.4s, v2.4s
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	orr x0, x0, x17
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w16, [x6, w16, uxtw]
-	stp w9, w10, [sp, #32]
-	ldr d16, [sp, #144]
-	xtn v23.8b, v17.8h
-	stp w11, w12, [sp, #40]
-	stp w13, w14, [sp, #48]
+	umov w12, v29.s[3]
+	umov w11, v29.s[2]
 	cmn x17, #1
+	umov w10, v29.s[1]
+	umov w15, v27.s[2]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w13, v27.s[0]
+	umov w16, v27.s[3]
+	ldrb w10, [x6, w10, uxtw]
+	frecpe v24.4s, v2.4s
+	ldrb w11, [x6, w11, uxtw]
+	orr x0, x0, x17
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w13, [x6, w13, uxtw]
+	stp w9, w10, [sp, #32]
+	ldrb w16, [x6, w16, uxtw]
+	stp w11, w12, [sp, #40]
+	xtn v23.8b, v17.8h
+	stp w13, w14, [sp, #48]
 	fmov x8, d23
 	stp w15, w16, [sp, #56]
 	frecps v23.4s, v24.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v24.4s, v24.4s, v23.4s
-	frecpe v17.4s, v3.4s
+	ldr d16, [sp, #144]
 	xtn v29.8b, v29.8h
 	frecps v23.4s, v24.4s, v2.4s
-	tbl v31.8b, {v20.16b}, v29.8b
+	frecpe v17.4s, v3.4s
 	tbl v27.8b, {v19.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
 	fmul v24.4s, v24.4s, v23.4s
 	tbl v29.8b, {v18.16b}, v29.8b
 	frecps v23.4s, v17.4s, v3.4s
 	mov v28.8b, v29.8b
 	mov v29.8b, v27.8b
 	fmul v17.4s, v17.4s, v23.4s
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v0.4s, v24.4s
-	fadd v0.4s, v0.4s, v4.4s
-	frecps v23.4s, v17.4s, v3.4s
-	ldr q27, [x19, #32]
 	ushll v22.8h, v31.8b, #6
+	ldr q27, [x19, #32]
+	fmul v24.4s, v0.4s, v24.4s
+	frecps v23.4s, v17.4s, v3.4s
 	orr v31.8b, v30.8b, v16.8b
 	fmul v17.4s, v17.4s, v23.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fadd v0.4s, v0.4s, v4.4s
+	ccmp x8, #0, #4, eq
 	fcvtzs v24.4s, v24.4s, #15
-	orr v13.16b, v13.16b, v27.16b
 	fmul v17.4s, v1.4s, v17.4s
 	fadd v1.4s, v1.4s, v4.4s
-	shrn v30.8b, v22.8h, #6
 	xtn v24.4h, v24.4s
+	shrn v30.8b, v22.8h, #6
 	orr v14.16b, v14.16b, v27.16b
 	fcvtzs v17.4s, v17.4s, #15
-	ccmp x8, #0, #4, eq
-	fsub v3.4s, v3.4s, v5.4s
+	fsub v2.4s, v2.4s, v5.4s
+	orr v13.16b, v13.16b, v27.16b
 	xtn2 v24.8h, v17.4s
 	b.eq 171f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -24906,10 +25356,13 @@ rast_kern_04010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -25139,9 +25592,12 @@ rast_kern_04011:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -25330,9 +25786,12 @@ rast_kern_04011:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -25701,14 +26160,17 @@ rast_kern_04011:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -25722,9 +26184,12 @@ rast_kern_04011:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -25912,9 +26377,12 @@ rast_kern_04100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -26137,9 +26605,12 @@ rast_kern_04100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -26359,14 +26830,17 @@ rast_kern_04100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -26380,9 +26854,12 @@ rast_kern_04100:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -26550,9 +27027,12 @@ rast_kern_04101:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -26767,9 +27247,12 @@ rast_kern_04101:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -27224,14 +27707,17 @@ rast_kern_04101:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -27245,9 +27731,12 @@ rast_kern_04101:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -27405,9 +27894,12 @@ rast_kern_04110:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -27603,9 +28095,12 @@ rast_kern_04110:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -27815,14 +28310,17 @@ rast_kern_04110:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -27838,9 +28336,12 @@ rast_kern_04110:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -27980,9 +28481,12 @@ rast_kern_04111:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -28168,9 +28672,12 @@ rast_kern_04111:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #15, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -28617,14 +29124,17 @@ rast_kern_04111:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #4096]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -28638,9 +29148,12 @@ rast_kern_04111:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #15, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -28810,9 +29323,12 @@ rast_kern_10000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -28904,14 +29420,17 @@ rast_kern_10000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 299:
 	tbnz w7, #1, 30f
@@ -28984,9 +29503,12 @@ rast_kern_10000:
 	b 298b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -29159,9 +29681,12 @@ rast_kern_10010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -29238,14 +29763,17 @@ rast_kern_10010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 306:
 	tbnz w7, #1, 30f
@@ -29294,9 +29822,12 @@ rast_kern_10010:
 	b 305b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -29478,9 +30009,12 @@ rast_kern_10100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -29636,14 +30170,17 @@ rast_kern_10100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 311:
 	tbnz w7, #1, 30f
@@ -29701,9 +30238,12 @@ rast_kern_10100:
 	b 310b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -29832,9 +30372,12 @@ rast_kern_10110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -29984,14 +30527,17 @@ rast_kern_10110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 315:
 	tbnz w7, #1, 30f
@@ -30029,9 +30575,12 @@ rast_kern_10110:
 	b 314b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -30199,9 +30748,12 @@ rast_kern_11000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -30369,14 +30921,17 @@ rast_kern_11000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 321:
 	tbnz w7, #1, 30f
@@ -30480,9 +31035,12 @@ rast_kern_11000:
 	b 320b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -30690,9 +31248,12 @@ rast_kern_11001:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -31096,14 +31657,17 @@ rast_kern_11001:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 326:
 	tbnz w7, #1, 30f
@@ -31178,9 +31742,12 @@ rast_kern_11001:
 	b 325b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -31367,9 +31934,12 @@ rast_kern_11010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -31525,14 +32095,17 @@ rast_kern_11010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 333:
 	tbnz w7, #1, 30f
@@ -31606,9 +32179,12 @@ rast_kern_11010:
 	b 332b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -31787,9 +32363,12 @@ rast_kern_11011:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -32185,14 +32764,17 @@ rast_kern_11011:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 338:
 	tbnz w7, #1, 30f
@@ -32238,9 +32820,12 @@ rast_kern_11011:
 	b 337b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -32454,9 +33039,12 @@ rast_kern_11100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -32691,14 +33279,17 @@ rast_kern_11100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 345:
 	tbnz w7, #1, 30f
@@ -32778,9 +33369,12 @@ rast_kern_11100:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -32948,9 +33542,12 @@ rast_kern_11101:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -33432,14 +34029,17 @@ rast_kern_11101:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 347:
 	tbnz w7, #1, 30f
@@ -33499,9 +34099,12 @@ rast_kern_11101:
 	b 38b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -33646,9 +34249,12 @@ rast_kern_11110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -33872,14 +34478,17 @@ rast_kern_11110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 351:
 	tbnz w7, #1, 30f
@@ -33930,9 +34539,12 @@ rast_kern_11110:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -34071,9 +34683,12 @@ rast_kern_11111:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -34547,14 +35162,17 @@ rast_kern_11111:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 353:
 	tbnz w7, #1, 30f
@@ -34585,9 +35203,12 @@ rast_kern_11111:
 	b 352b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -34759,9 +35380,12 @@ rast_kern_12000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -34904,14 +35528,17 @@ rast_kern_12000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 359:
 	tbnz w7, #1, 30f
@@ -35016,11 +35643,12 @@ rast_kern_12000:
 	str d16, [sp, #144]
 	b 55f
 51:
-	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	frecpe v22.4s, v2.4s
 	frecpe v23.4s, v3.4s
-	ldr q21, [sp, #112]
 	cmp x5, #16
+	ldr q21, [sp, #112]
+	smull v27.4s, v24.4h, v15.h[5]
 	frecps v9.4s, v22.4s, v2.4s
 	frecps v12.4s, v23.4s, v3.4s
 	smull v30.4s, v24.4h, v15.h[4]
@@ -35028,10 +35656,9 @@ rast_kern_12000:
 	ldr q31, [sp, #96]
 	fmul v22.4s, v22.4s, v9.4s
 	fmul v23.4s, v23.4s, v12.4s
-	addhn v30.4h, v30.4s, v31.4s
+	ldr q28, [x19, #64]
 	mov x17, #16
-	smull2 v29.4s, v24.8h, v15.h[4]
-	sqdmulh v19.8h, v24.8h, v15.h[1]
+	addhn v30.4h, v30.4s, v31.4s
 	frecps v9.4s, v22.4s, v2.4s
 	frecps v12.4s, v23.4s, v3.4s
 	addhn2 v30.8h, v29.4s, v31.4s
@@ -35039,98 +35666,101 @@ rast_kern_12000:
 	smull2 v29.4s, v24.8h, v15.h[5]
 	fmul v22.4s, v22.4s, v9.4s
 	fmul v23.4s, v23.4s, v12.4s
-	ldr q28, [x19, #64]
-	subs x17, x17, #8
-	addhn2 v27.8h, v29.4s, v21.4s
 	add x26, x2, #32
-	fmul v22.4s, v0.4s, v22.4s
-	fmul v23.4s, v1.4s, v23.4s
-	csel x26, x26, x2, hi
-	orr x0, x0, x8
+	subs x17, x17, #8
 	sshr v30.8h, v30.8h, #3
-	sshr v27.8h, v27.8h, #3
-	sqdmulh v20.8h, v24.8h, v15.h[3]
+	fmul v22.4s, v0.4s, v22.4s
+	addhn2 v27.8h, v29.4s, v21.4s
+	csel x26, x26, x2, hi
+	sqdmulh v18.8h, v24.8h, v15.h[0]
+	fmul v23.4s, v1.4s, v23.4s
 	fcvtzs v22.4s, v22.4s, #15
 	ldp q16, q17, [x26]
-	sqdmulh v18.8h, v24.8h, v15.h[0]
+	fsub v3.4s, v3.4s, v5.4s
 	fcvtzs v23.4s, v23.4s, #15
-	add v19.8h, v19.8h, v11.8h
-	xtn v22.4h, v22.4s
-	and v30.16b, v30.16b, v28.16b
-	xtn2 v22.8h, v23.4s
-	bic v17.4s, #0xff, lsl #24
-	ldr q28, [x19, #80]
 	add v18.8h, v18.8h, v10.8h
-	bic v16.4s, #0xff, lsl #24
-	and v27.16b, v27.16b, v28.16b
-	umull v29.4s, v27.4h, v15.h[6]
-	umull2 v27.4s, v27.8h, v15.h[6]
+	xtn v22.4h, v22.4s
+	sshr v27.8h, v27.8h, #3
+	xtn2 v22.8h, v23.4s
+	and v30.16b, v30.16b, v28.16b
+	ldr q28, [x19, #80]
 	smull v13.4s, v22.4h, v6.h[0]
 	smull2 v14.4s, v22.8h, v6.h[0]
-	uaddw v29.4s, v29.4s, v30.4h
+	prfm pldl1keep, [x26, #4096]
+	and v27.16b, v27.16b, v28.16b
+	sshr v13.4s, v13.4s, #15
+	bic v17.4s, #0xff, lsl #24
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
 	ldr q31, [sp, #128]
+	add v13.4s, v13.4s, v7.4s
+	sshr v14.4s, v14.4s, #15
+	uaddw v29.4s, v29.4s, v30.4h
+	sub x18, x26, #15, lsl #12
 	uaddw2 v27.4s, v27.4s, v30.8h
 	csel x17, x17, xzr, hi
-	sshr v13.4s, v13.4s, #15
-	sshr v14.4s, v14.4s, #15
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	umov w9, v29.s[0]
-	umov w14, v27.s[1]
-	umov w15, v27.s[2]
-	add v13.4s, v13.4s, v7.4s
-	shrn v19.8b, v19.8h, #3
-	ldr w9, [x6, w9, uxtw #2]
-	umov w16, v27.s[3]
-	umov w12, v29.s[3]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w10, [x6, w10, uxtw #2]
-	fsub v3.4s, v3.4s, v5.4s
-	ldr w11, [x6, w11, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w16, [x6, w16, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	umov w13, v27.s[0]
-	stp w9, w10, [sp, #32]
-	cmn x8, #1
 	add v14.4s, v14.4s, v7.4s
-	cmhi v16.4s, v16.4s, v13.4s
-	ldr w12, [x6, w12, uxtw #2]
-	fadd v1.4s, v1.4s, v4.4s
+	umov w11, v29.s[2]
+	sqdmulh v20.8h, v24.8h, v15.h[3]
+	umov w13, v27.s[0]
+	prfm pstl1keep, [x18, #0]
+	umov w9, v29.s[0]
+	umov w15, v27.s[2]
+	umov w12, v29.s[3]
+	ldr w11, [x6, w11, uxtw #2]
+	umov w14, v27.s[1]
+	fadd v0.4s, v0.4s, v4.4s
+	umov w16, v27.s[3]
 	ldr w13, [x6, w13, uxtw #2]
-	stp w15, w16, [sp, #56]
-	add v20.8h, v20.8h, v31.8h
-	shrn v18.8b, v18.8h, #3
-	stp w11, w12, [sp, #40]
-	stp w13, w14, [sp, #48]
-	shrn v20.8b, v20.8h, #3
-	cmhi v17.4s, v17.4s, v14.4s
-	ld2 {v29.8h, v30.8h}, [x28]
-	uzp1 v16.8h, v16.8h, v17.8h
+	umov w10, v29.s[1]
+	orr x0, x0, x8
+	ldr w12, [x6, w12, uxtw #2]
+	cmn x8, #1
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
 	fsub v2.4s, v2.4s, v5.4s
+	ldr w10, [x6, w10, uxtw #2]
+	sqdmulh v19.8h, v24.8h, v15.h[1]
+	ldr w9, [x6, w9, uxtw #2]
+	stp w11, w12, [sp, #40]
+	ldr w16, [x6, w16, uxtw #2]
+	add v20.8h, v20.8h, v31.8h
+	stp w13, w14, [sp, #48]
+	bic v16.4s, #0xff, lsl #24
+	shrn v20.8b, v20.8h, #3
+	stp w9, w10, [sp, #32]
+	cmhi v17.4s, v17.4s, v14.4s
+	cmhi v16.4s, v16.4s, v13.4s
+	stp w15, w16, [sp, #56]
+	add v19.8h, v19.8h, v11.8h
+	ld2 {v29.8h, v30.8h}, [x28]
+	fadd v1.4s, v1.4s, v4.4s
+	uzp1 v16.8h, v16.8h, v17.8h
 	ldr q17, [x20, x17, lsl #4]
-	xtn v31.8b, v30.8h
+	shrn v18.8b, v18.8h, #3
+	shrn v19.8b, v19.8h, #3
 	shrn v27.8b, v29.8h, #8
-	and v16.16b, v16.16b, v17.16b
 	xtn v29.8b, v29.8h
-	uaddl v21.8h, v19.8b, v27.8b
+	and v16.16b, v16.16b, v17.16b
+	xtn v31.8b, v30.8h
 	uaddl v24.8h, v18.8b, v29.8b
 	uaddl v28.8h, v20.8b, v31.8b
 	xtn v17.8b, v16.8h
+	uaddl v21.8h, v19.8b, v27.8b
 	umlal v24.8h, v18.8b, v29.8b
 	umlal v28.8h, v20.8b, v31.8b
 	umlal v21.8h, v19.8b, v27.8b
 	fmov x17, d17
 	shrn v18.8b, v24.8h, #6
-	shrn v20.8b, v28.8h, #6
-	ldr d24, [sp, #144]
 	shrn v30.8b, v30.8h, #8
+	shrn v20.8b, v28.8h, #6
 	ldr q28, [x19, #32]
+	ldr d24, [sp, #144]
 	ccmp x17, #0, #4, eq
-	shrn v19.8b, v21.8h, #6
-	orr v25.16b, v25.16b, v28.16b
-	orr v21.8b, v30.8b, v24.8b
 	orr v26.16b, v26.16b, v28.16b
+	shrn v19.8b, v21.8h, #6
+	orr v21.8b, v30.8b, v24.8b
+	orr v25.16b, v25.16b, v28.16b
 	b.eq 61f
 	subs x5, x5, #8
 	st4 {v18.8b, v19.8b, v20.8b, v21.8b}, [x1]
@@ -35142,119 +35772,122 @@ rast_kern_12000:
 53:
 	ldr q21, [sp, #112]
 	frecpe v24.4s, v2.4s
-	smull v30.4s, v22.4h, v15.h[4]
 	frecpe v23.4s, v3.4s
-	cmp x5, #16
-	ldr q31, [sp, #96]
+	smull v30.4s, v22.4h, v15.h[4]
 	smull v27.4s, v22.4h, v15.h[5]
 	frecps v9.4s, v24.4s, v2.4s
 	frecps v12.4s, v23.4s, v3.4s
 	smull2 v29.4s, v22.8h, v15.h[4]
-	addhn v27.4h, v27.4s, v21.4s
+	ldr q31, [sp, #96]
+	mov x8, #16
 	fmul v24.4s, v24.4s, v9.4s
 	fmul v23.4s, v23.4s, v12.4s
-	add x26, x2, #32
-	mov x8, #16
 	addhn v30.4h, v30.4s, v31.4s
+	cmp x5, #16
+	addhn v27.4h, v27.4s, v21.4s
 	frecps v9.4s, v24.4s, v2.4s
+	sqdmulh v18.8h, v22.8h, v15.h[0]
 	frecps v12.4s, v23.4s, v3.4s
 	addhn2 v30.8h, v29.4s, v31.4s
 	csel x8, x5, x8, lo
-	smull2 v29.4s, v22.8h, v15.h[5]
 	fmul v24.4s, v24.4s, v9.4s
-	ldr q28, [x19, #64]
-	subs x8, x8, #8
-	sshr v30.8h, v30.8h, #3
+	smull2 v29.4s, v22.8h, v15.h[5]
 	fmul v23.4s, v23.4s, v12.4s
+	sqdmulh v19.8h, v22.8h, v15.h[1]
+	fmul v24.4s, v0.4s, v24.4s
+	ldr q28, [x19, #64]
+	fmul v23.4s, v1.4s, v23.4s
 	addhn2 v27.8h, v29.4s, v21.4s
-	csel x26, x26, x2, hi
+	add x26, x2, #32
+	ldr q31, [sp, #128]
+	fcvtzs v24.4s, v24.4s, #15
+	subs x8, x8, #8
+	add v19.8h, v19.8h, v11.8h
+	fcvtzs v23.4s, v23.4s, #15
+	add v18.8h, v18.8h, v10.8h
+	xtn v24.4h, v24.4s
+	sshr v30.8h, v30.8h, #3
+	sshr v27.8h, v27.8h, #3
+	shrn v18.8b, v18.8h, #3
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	fmul v24.4s, v0.4s, v24.4s
-	fmul v23.4s, v1.4s, v23.4s
-	ldp q16, q17, [x26]
-	fcvtzs v24.4s, v24.4s, #15
-	fcvtzs v23.4s, v23.4s, #15
-	sshr v27.8h, v27.8h, #3
-	bic v16.4s, #0xff, lsl #24
-	xtn v24.4h, v24.4s
-	and v27.16b, v27.16b, v28.16b
 	xtn2 v24.8h, v23.4s
-	ldr q31, [sp, #128]
+	csel x26, x26, x2, hi
+	and v27.16b, v27.16b, v28.16b
+	ldp q16, q17, [x26]
 	umull v29.4s, v27.4h, v15.h[6]
+	sub x18, x26, #15, lsl #12
 	umull2 v27.4s, v27.8h, v15.h[6]
-	smull v25.4s, v24.4h, v6.h[0]
-	sqdmulh v19.8h, v22.8h, v15.h[1]
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	sshr v25.4s, v25.4s, #15
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	umov w16, v27.s[3]
-	umov w15, v27.s[2]
-	fsub v2.4s, v2.4s, v5.4s
-	umov w12, v29.s[3]
-	fsub v3.4s, v3.4s, v5.4s
-	umov w9, v29.s[0]
-	ldr w10, [x6, w10, uxtw #2]
-	umov w13, v27.s[0]
-	ldr w15, [x6, w15, uxtw #2]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldr w12, [x6, w12, uxtw #2]
-	sqdmulh v18.8h, v22.8h, v15.h[0]
-	ldr w16, [x6, w16, uxtw #2]
-	sqdmulh v20.8h, v22.8h, v15.h[3]
-	ldr w9, [x6, w9, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w11, [x6, w11, uxtw #2]
-	umov w14, v27.s[1]
-	stp w15, w16, [sp, #56]
-	add v20.8h, v20.8h, v31.8h
+	uaddw v29.4s, v29.4s, v30.4h
+	smull v25.4s, v24.4h, v6.h[0]
+	uaddw2 v27.4s, v27.4s, v30.8h
 	sshr v26.4s, v26.4s, #15
-	add v25.4s, v25.4s, v7.4s
-	stp w9, w10, [sp, #32]
-	bic v17.4s, #0xff, lsl #24
-	ldr w14, [x6, w14, uxtw #2]
-	stp w11, w12, [sp, #40]
-	add v19.8h, v19.8h, v11.8h
-	add v18.8h, v18.8h, v10.8h
-	stp w13, w14, [sp, #48]
-	shrn v20.8b, v20.8h, #3
-	cmhi v16.4s, v16.4s, v25.4s
-	ld2 {v29.8h, v30.8h}, [x28]
-	fadd v1.4s, v1.4s, v4.4s
-	add v26.4s, v26.4s, v7.4s
-	shrn v18.8b, v18.8h, #3
-	shrn v19.8b, v19.8h, #3
 	csel x8, x8, xzr, hi
+	umov w12, v29.s[3]
+	umov w10, v29.s[1]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	prfm pstl1keep, [x18, #0]
+	cmn x17, #1
+	sshr v25.4s, v25.4s, #15
+	shrn v19.8b, v19.8h, #3
+	bic v16.4s, #0xff, lsl #24
+	umov w9, v29.s[0]
+	umov w16, v27.s[3]
+	ldr w14, [x6, w14, uxtw #2]
+	fadd v0.4s, v0.4s, v4.4s
+	umov w15, v27.s[2]
+	ldr w12, [x6, w12, uxtw #2]
+	umov w11, v29.s[2]
+	sqdmulh v20.8h, v22.8h, v15.h[3]
+	ldr w13, [x6, w13, uxtw #2]
+	fadd v1.4s, v1.4s, v4.4s
+	ldr w10, [x6, w10, uxtw #2]
+	ldr w16, [x6, w16, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	ldr w9, [x6, w9, uxtw #2]
+	stp w13, w14, [sp, #48]
+	add v20.8h, v20.8h, v31.8h
+	add v25.4s, v25.4s, v7.4s
+	ldr w11, [x6, w11, uxtw #2]
+	prfm pldl1keep, [x26, #4096]
+	add v26.4s, v26.4s, v7.4s
+	stp w15, w16, [sp, #56]
+	bic v17.4s, #0xff, lsl #24
+	stp w9, w10, [sp, #32]
+	cmhi v16.4s, v16.4s, v25.4s
+	stp w11, w12, [sp, #40]
 	cmhi v17.4s, v17.4s, v26.4s
-	shrn v27.8b, v29.8h, #8
-	xtn v31.8b, v30.8h
+	ld2 {v29.8h, v30.8h}, [x28]
+	fsub v2.4s, v2.4s, v5.4s
 	uzp1 v16.8h, v16.8h, v17.8h
 	ldr q17, [x20, x8, lsl #4]
-	fadd v0.4s, v0.4s, v4.4s
-	uaddl v28.8h, v20.8b, v31.8b
-	cmn x17, #1
+	fsub v3.4s, v3.4s, v5.4s
+	shrn v27.8b, v29.8h, #8
+	shrn v20.8b, v20.8h, #3
+	xtn v31.8b, v30.8h
 	xtn v29.8b, v29.8h
 	and v16.16b, v16.16b, v17.16b
-	orr x0, x0, x17
-	uaddl v22.8h, v18.8b, v29.8b
-	uaddl v21.8h, v19.8b, v27.8b
+	shrn v30.8b, v30.8h, #8
 	xtn v17.8b, v16.8h
+	uaddl v22.8h, v18.8b, v29.8b
+	uaddl v28.8h, v20.8b, v31.8b
+	uaddl v21.8h, v19.8b, v27.8b
 	umlal v22.8h, v18.8b, v29.8b
-	umlal v21.8h, v19.8b, v27.8b
 	umlal v28.8h, v20.8b, v31.8b
-	shrn v18.8b, v22.8h, #6
+	umlal v21.8h, v19.8b, v27.8b
 	fmov x8, d17
-	shrn v19.8b, v21.8h, #6
+	orr x0, x0, x17
+	shrn v18.8b, v22.8h, #6
 	ldr d22, [sp, #144]
 	shrn v20.8b, v28.8h, #6
 	ldr q28, [x19, #32]
-	shrn v30.8b, v30.8h, #8
+	shrn v19.8b, v21.8h, #6
 	ccmp x8, #0, #4, eq
-	orr v14.16b, v14.16b, v28.16b
-	orr v21.8b, v30.8b, v22.8b
 	orr v13.16b, v13.16b, v28.16b
+	orr v21.8b, v30.8b, v22.8b
+	orr v14.16b, v14.16b, v28.16b
 	b.eq 71f
 	subs x5, x5, #8
 	st4 {v18.8b, v19.8b, v20.8b, v21.8b}, [x1]
@@ -35278,9 +35911,12 @@ rast_kern_12000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -35386,9 +36022,12 @@ rast_kern_12000:
 	b 52b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -35596,9 +36235,12 @@ rast_kern_12001:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -35962,14 +36604,17 @@ rast_kern_12001:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 364:
 	tbnz w7, #1, 30f
@@ -36044,9 +36689,12 @@ rast_kern_12001:
 	b 363b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -36233,9 +36881,12 @@ rast_kern_12010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -36366,14 +37017,17 @@ rast_kern_12010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 369:
 	tbnz w7, #1, 30f
@@ -36442,9 +37096,12 @@ rast_kern_12010:
 	b 368b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -36623,9 +37280,12 @@ rast_kern_12011:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -36981,14 +37641,17 @@ rast_kern_12011:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 374:
 	tbnz w7, #1, 30f
@@ -37034,9 +37697,12 @@ rast_kern_12011:
 	b 373b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -37250,9 +37916,12 @@ rast_kern_12100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -37462,14 +38131,17 @@ rast_kern_12100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 379:
 	tbnz w7, #1, 30f
@@ -37544,9 +38216,12 @@ rast_kern_12100:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -37714,9 +38389,12 @@ rast_kern_12101:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -38158,14 +38836,17 @@ rast_kern_12101:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 381:
 	tbnz w7, #1, 30f
@@ -38225,9 +38906,12 @@ rast_kern_12101:
 	b 38b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -38372,9 +39056,12 @@ rast_kern_12110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -38573,14 +39260,17 @@ rast_kern_12110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 383:
 	tbnz w7, #1, 30f
@@ -38626,9 +39316,12 @@ rast_kern_12110:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -38767,9 +39460,12 @@ rast_kern_12111:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -39203,14 +39899,17 @@ rast_kern_12111:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 385:
 	tbnz w7, #1, 30f
@@ -39241,9 +39940,12 @@ rast_kern_12111:
 	b 384b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -39413,9 +40115,12 @@ rast_kern_13000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -39608,14 +40313,17 @@ rast_kern_13000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 391:
 	tbnz w7, #1, 30f
@@ -39719,9 +40427,12 @@ rast_kern_13000:
 	b 390b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -39929,9 +40640,12 @@ rast_kern_13001:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -40367,14 +41081,17 @@ rast_kern_13001:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 396:
 	tbnz w7, #1, 30f
@@ -40449,9 +41166,12 @@ rast_kern_13001:
 	b 395b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -40640,9 +41360,12 @@ rast_kern_13010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -40821,14 +41544,17 @@ rast_kern_13010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 403:
 	tbnz w7, #1, 30f
@@ -40903,9 +41629,12 @@ rast_kern_13010:
 	b 402b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -41084,9 +41813,12 @@ rast_kern_13011:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -41514,14 +42246,17 @@ rast_kern_13011:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 408:
 	tbnz w7, #1, 30f
@@ -41567,9 +42302,12 @@ rast_kern_13011:
 	b 407b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -41785,9 +42523,12 @@ rast_kern_13100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -42049,14 +42790,17 @@ rast_kern_13100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 415:
 	tbnz w7, #1, 30f
@@ -42136,9 +42880,12 @@ rast_kern_13100:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -42306,9 +43053,12 @@ rast_kern_13101:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -42822,14 +43572,17 @@ rast_kern_13101:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 417:
 	tbnz w7, #1, 30f
@@ -42889,9 +43642,12 @@ rast_kern_13101:
 	b 38b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -43036,9 +43792,12 @@ rast_kern_13110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -43290,14 +44049,17 @@ rast_kern_13110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 421:
 	tbnz w7, #1, 30f
@@ -43348,9 +44110,12 @@ rast_kern_13110:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -43489,9 +44254,12 @@ rast_kern_13111:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -43997,14 +44765,17 @@ rast_kern_13111:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 423:
 	tbnz w7, #1, 30f
@@ -44035,9 +44806,12 @@ rast_kern_13111:
 	b 422b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -44215,9 +44989,12 @@ rast_kern_14000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -44384,14 +45161,17 @@ rast_kern_14000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 431:
 	tbnz w7, #1, 30f
@@ -44498,254 +45278,260 @@ rast_kern_14000:
 51:
 	frecpe v12.4s, v2.4s
 	cmp x5, #16
-	mov x17, #16
-	ldr q9, [sp, #112]
-	smull v30.4s, v24.4h, v15.h[4]
-	frecps v10.4s, v12.4s, v2.4s
-	frecpe v23.4s, v3.4s
 	ldr q31, [sp, #96]
-	smull2 v29.4s, v24.8h, v15.h[4]
-	fmul v12.4s, v12.4s, v10.4s
+	smull v30.4s, v24.4h, v15.h[4]
+	mov x17, #16
+	ldr q28, [x19, #64]
+	frecps v10.4s, v12.4s, v2.4s
 	smull v27.4s, v24.4h, v15.h[5]
+	sqdmulh v17.8h, v24.8h, v15.h[1]
 	addhn v30.4h, v30.4s, v31.4s
+	fmul v12.4s, v12.4s, v10.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
+	ldr q9, [sp, #112]
+	frecpe v23.4s, v3.4s
 	frecps v10.4s, v12.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
-	sqdmulh v8.8h, v24.8h, v15.h[3]
 	smull2 v29.4s, v24.8h, v15.h[5]
+	addhn v27.4h, v27.4s, v9.4s
+	csel x17, x5, x17, lo
 	fmul v12.4s, v12.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	addhn v27.4h, v27.4s, v9.4s
-	ldr q28, [x19, #64]
+	addhn2 v27.8h, v29.4s, v9.4s
+	subs x17, x17, #8
+	sshr v30.8h, v30.8h, #3
 	fmul v12.4s, v0.4s, v12.4s
 	fmul v23.4s, v23.4s, v10.4s
-	csel x17, x5, x17, lo
-	addhn2 v27.8h, v29.4s, v9.4s
-	ldr q31, [sp, #128]
-	sshr v30.8h, v30.8h, #3
-	frecps v10.4s, v23.4s, v3.4s
-	fcvtzs v12.4s, v12.4s, #15
-	subs x17, x17, #8
 	add x26, x2, #32
-	and v30.16b, v30.16b, v28.16b
-	fmul v23.4s, v23.4s, v10.4s
-	ldr q28, [x19, #80]
-	fadd v0.4s, v0.4s, v4.4s
-	csel x17, x17, xzr, hi
-	fmul v23.4s, v1.4s, v23.4s
-	csel x26, x26, x2, hi
-	xtn v12.4h, v12.4s
+	add v17.8h, v17.8h, v11.8h
 	sshr v27.8h, v27.8h, #3
-	and v27.16b, v27.16b, v28.16b
-	fcvtzs v23.4s, v23.4s, #15
-	umull v29.4s, v27.4h, v15.h[6]
-	umull2 v27.4s, v27.8h, v15.h[6]
-	ldr q28, [sp, #160]
+	and v30.16b, v30.16b, v28.16b
+	frecps v10.4s, v23.4s, v3.4s
+	ldr q31, [sp, #128]
+	sqdmulh v8.8h, v24.8h, v15.h[3]
+	fcvtzs v12.4s, v12.4s, #15
+	ldr q28, [x19, #80]
+	fmul v23.4s, v23.4s, v10.4s
 	add v8.8h, v8.8h, v31.8h
-	xtn2 v12.8h, v23.4s
+	and v27.16b, v27.16b, v28.16b
+	csel x26, x26, x2, hi
+	fmul v23.4s, v1.4s, v23.4s
+	umull v29.4s, v27.4h, v15.h[6]
+	sub x18, x26, #15, lsl #12
+	shrn v17.8b, v17.8h, #3
+	ldr q28, [sp, #160]
+	xtn v12.4h, v12.4s
+	fcvtzs v23.4s, v23.4s, #15
+	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
+	prfm pstl1keep, [x18, #0]
+	xtn2 v12.8h, v23.4s
 	uaddw2 v27.4s, v27.4s, v30.8h
 	ldp q23, q10, [x26]
-	umov w14, v27.s[1]
-	umov w9, v29.s[0]
-	fsub v3.4s, v3.4s, v5.4s
-	umov w15, v27.s[2]
+	umov w11, v29.s[2]
+	fadd v0.4s, v0.4s, v4.4s
 	umov w10, v29.s[1]
 	umov w16, v27.s[3]
-	umov w12, v29.s[3]
-	umov w11, v29.s[2]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w10, [x6, w10, uxtw]
 	umov w13, v27.s[0]
-	fadd v1.4s, v1.4s, v4.4s
-	ldrb w11, [x6, w11, uxtw]
-	smull v13.4s, v12.4h, v6.h[0]
-	ldrb w16, [x6, w16, uxtw]
-	ldr w12, [x21, w12, uxtw #2]
-	sqdmulh v17.8h, v24.8h, v15.h[1]
-	ldrb w13, [x6, w13, uxtw]
-	ldr w9, [x21, w9, uxtw #2]
-	ldr w16, [x21, w16, uxtw #2]
-	sqdmulh v16.8h, v24.8h, v15.h[0]
-	ldr w10, [x21, w10, uxtw #2]
+	umov w14, v27.s[1]
 	fsub v2.4s, v2.4s, v5.4s
-	ldr w15, [x21, w15, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	smull2 v14.4s, v12.8h, v6.h[0]
+	ldrb w11, [x6, w11, uxtw]
+	umov w15, v27.s[2]
+	ldrb w10, [x6, w10, uxtw]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
+	umov w9, v29.s[0]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w13, [x6, w13, uxtw]
 	ldr w11, [x21, w11, uxtw #2]
+	csel x17, x17, xzr, hi
+	ldrb w12, [x6, w12, uxtw]
+	fsub v3.4s, v3.4s, v5.4s
+	ldrb w9, [x6, w9, uxtw]
+	orr x0, x0, x8
+	ldrb w15, [x6, w15, uxtw]
+	smull v13.4s, v12.4h, v6.h[0]
 	ldr w13, [x21, w13, uxtw #2]
-	add v16.8h, v16.8h, v28.8h
+	ldr w16, [x21, w16, uxtw #2]
+	smull2 v14.4s, v12.8h, v6.h[0]
+	ldr w12, [x21, w12, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
+	sqdmulh v16.8h, v24.8h, v15.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	cmn x8, #1
+	ldr w15, [x21, w15, uxtw #2]
+	stp w11, w12, [sp, #40]
+	ldr w10, [x21, w10, uxtw #2]
+	stp w13, w14, [sp, #48]
 	sshr v13.4s, v13.4s, #15
+	sshr v14.4s, v14.4s, #15
+	add v16.8h, v16.8h, v28.8h
+	stp w15, w16, [sp, #56]
 	bic v10.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
-	add v13.4s, v13.4s, v7.4s
-	stp w11, w12, [sp, #40]
-	bic v23.4s, #0xff, lsl #24
-	stp w13, w14, [sp, #48]
-	stp w15, w16, [sp, #56]
-	ld2 {v29.8h, v30.8h}, [x28]
-	shrn v8.8b, v8.8h, #3
-	sshr v14.4s, v14.4s, #15
-	add v17.8h, v17.8h, v11.8h
-	shrn v16.8b, v16.8h, #3
-	shrn v27.8b, v29.8h, #8
-	xtn v29.8b, v29.8h
-	shrn v17.8b, v17.8h, #3
-	cmhi v23.4s, v23.4s, v13.4s
-	xtn v31.8b, v30.8h
-	uaddl v24.8h, v16.8b, v29.8b
-	uaddl v9.8h, v17.8b, v27.8b
 	add v14.4s, v14.4s, v7.4s
-	umlal v24.8h, v16.8b, v29.8b
-	cmn x8, #1
-	umlal v9.8h, v17.8b, v27.8b
-	uaddl v27.8h, v8.8b, v31.8b
+	ld2 {v29.8h, v30.8h}, [x28]
+	fadd v1.4s, v1.4s, v4.4s
+	add v13.4s, v13.4s, v7.4s
+	shrn v16.8b, v16.8h, #3
+	shrn v8.8b, v8.8h, #3
+	shrn v27.8b, v29.8h, #8
+	xtn v31.8b, v30.8h
+	bic v23.4s, #0xff, lsl #24
+	xtn v29.8b, v29.8h
+	uaddl v9.8h, v17.8b, v27.8b
+	uaddl v24.8h, v16.8b, v29.8b
+	cmhi v23.4s, v23.4s, v13.4s
 	cmhi v10.4s, v10.4s, v14.4s
-	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
+	umlal v24.8h, v16.8b, v29.8b
 	uzp1 v23.8h, v23.8h, v10.8h
 	ldr q10, [x20, x17, lsl #4]
-	umlal v27.8h, v8.8b, v31.8b
-	shrn v29.8b, v9.8h, #6
-	shrn v30.8b, v30.8h, #8
+	umlal v9.8h, v17.8b, v27.8b
+	uaddl v27.8h, v8.8b, v31.8b
+	shrn v28.8b, v24.8h, #6
 	and v23.16b, v23.16b, v10.16b
 	xtn v10.8b, v23.8h
-	orr v26.16b, v26.16b, v22.16b
-	orr v31.8b, v30.8b, v24.8b
+	prfm pldl1keep, [x26, #4096]
+	umlal v27.8h, v8.8b, v31.8b
 	fmov x17, d10
-	shrn v30.8b, v27.8h, #6
+	ldr d24, [sp, #144]
+	shrn v30.8b, v30.8h, #8
 	orr v25.16b, v25.16b, v22.16b
-	orr x0, x0, x8
+	shrn v29.8b, v9.8h, #6
+	orr v31.8b, v30.8b, v24.8b
 	ccmp x17, #0, #4, eq
+	shrn v30.8b, v27.8h, #6
+	orr v26.16b, v26.16b, v22.16b
 	b.eq 61f
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	stp q25, q26, [x2]
 	str x8, [x3], #8
 	b.ls 59f
 	add x1, x1, #32
 	add x2, x2, #32
 53:
-	ldr q9, [sp, #112]
 	frecpe v24.4s, v2.4s
 	smull v27.4s, v12.4h, v15.h[5]
-	smull v30.4s, v12.4h, v15.h[4]
-	sqdmulh v16.8h, v12.8h, v15.h[0]
-	frecps v10.4s, v24.4s, v2.4s
-	addhn v27.4h, v27.4s, v9.4s
+	mov x8, #16
 	ldr q31, [sp, #96]
-	add x26, x2, #32
-	frecpe v23.4s, v3.4s
-	fmul v24.4s, v24.4s, v10.4s
-	smull2 v29.4s, v12.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q28, [x19, #64]
+	sqdmulh v17.8h, v12.8h, v15.h[1]
+	frecps v10.4s, v24.4s, v2.4s
+	smull v30.4s, v12.4h, v15.h[4]
 	cmp x5, #16
+	ldr q9, [sp, #112]
+	smull2 v29.4s, v12.8h, v15.h[4]
+	fmul v24.4s, v24.4s, v10.4s
+	addhn v30.4h, v30.4s, v31.4s
+	addhn v27.4h, v27.4s, v9.4s
+	csel x8, x5, x8, lo
+	frecpe v23.4s, v3.4s
 	frecps v10.4s, v24.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q31, [sp, #128]
 	smull2 v29.4s, v12.8h, v15.h[5]
-	sqdmulh v17.8h, v12.8h, v15.h[1]
+	add x26, x2, #32
 	fmul v24.4s, v24.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
+	sqdmulh v8.8h, v12.8h, v15.h[3]
 	addhn2 v27.8h, v29.4s, v9.4s
-	orr v13.16b, v13.16b, v22.16b
-	mov x8, #16
-	fmul v23.4s, v23.4s, v10.4s
-	sshr v30.8h, v30.8h, #3
-	sshr v27.8h, v27.8h, #3
+	subs x8, x8, #8
 	fmul v24.4s, v0.4s, v24.4s
+	fmul v23.4s, v23.4s, v10.4s
+	add v8.8h, v8.8h, v31.8h
+	csel x8, x8, xzr, hi
+	csel x26, x26, x2, hi
+	fcvtzs v24.4s, v24.4s, #15
 	frecps v10.4s, v23.4s, v3.4s
+	sub x18, x26, #15, lsl #12
+	ldr q28, [x19, #64]
 	add v17.8h, v17.8h, v11.8h
+	sshr v30.8h, v30.8h, #3
+	fmul v23.4s, v23.4s, v10.4s
+	sshr v27.8h, v27.8h, #3
+	shrn v8.8b, v8.8h, #3
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	fmul v23.4s, v23.4s, v10.4s
-	and v27.16b, v27.16b, v28.16b
-	fcvtzs v24.4s, v24.4s, #15
 	fmul v23.4s, v1.4s, v23.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v24.4h, v24.4s
+	ldr q28, [sp, #160]
+	fcvtzs v23.4s, v23.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	csel x8, x5, x8, lo
-	ldr q31, [sp, #128]
-	xtn v24.4h, v24.4s
-	fcvtzs v23.4s, v23.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
-	ldr q28, [sp, #160]
-	uaddw2 v27.4s, v27.4s, v30.8h
 	xtn2 v24.8h, v23.4s
-	umov w12, v29.s[3]
+	shrn v17.8b, v17.8h, #3
+	uaddw v29.4s, v29.4s, v30.4h
+	prfm pstl1keep, [x18, #0]
+	ldp q23, q10, [x26]
 	umov w9, v29.s[0]
-	umov w10, v29.s[1]
-	add v16.8h, v16.8h, v28.8h
+	umov w12, v29.s[3]
+	uaddw2 v27.4s, v27.4s, v30.8h
 	umov w11, v29.s[2]
-	umov w14, v27.s[1]
-	ldrb w10, [x6, w10, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	umov w10, v29.s[1]
+	fsub v3.4s, v3.4s, v5.4s
 	umov w13, v27.s[0]
 	ldrb w9, [x6, w9, uxtw]
 	umov w16, v27.s[3]
 	ldrb w12, [x6, w12, uxtw]
+	umov w14, v27.s[1]
+	fsub v2.4s, v2.4s, v5.4s
+	ldrb w10, [x6, w10, uxtw]
+	ldrb w11, [x6, w11, uxtw]
 	umov w15, v27.s[2]
 	fadd v0.4s, v0.4s, v4.4s
-	ldrb w11, [x6, w11, uxtw]
-	subs x8, x8, #8
-	ldrb w13, [x6, w13, uxtw]
-	smull2 v26.4s, v24.8h, v6.h[0]
 	ldrb w16, [x6, w16, uxtw]
+	ldrb w13, [x6, w13, uxtw]
 	ldr w10, [x21, w10, uxtw #2]
-	csel x26, x26, x2, hi
-	ldr w9, [x21, w9, uxtw #2]
-	sqdmulh v8.8h, v12.8h, v15.h[3]
 	ldr w11, [x21, w11, uxtw #2]
-	smull v25.4s, v24.4h, v6.h[0]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
-	ldr w13, [x21, w13, uxtw #2]
-	stp w9, w10, [sp, #32]
-	fsub v3.4s, v3.4s, v5.4s
+	sqdmulh v16.8h, v12.8h, v15.h[0]
 	ldr w16, [x21, w16, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w15, [x21, w15, uxtw #2]
 	ldr w12, [x21, w12, uxtw #2]
-	ldp q23, q10, [x26]
-	stp w13, w14, [sp, #48]
-	fadd v1.4s, v1.4s, v4.4s
-	stp w15, w16, [sp, #56]
-	sshr v25.4s, v25.4s, #15
+	smull v25.4s, v24.4h, v6.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
+	cmn x17, #1
+	ldr w14, [x21, w14, uxtw #2]
+	ldr w13, [x21, w13, uxtw #2]
+	stp w11, w12, [sp, #40]
+	orr x0, x0, x17
+	add v16.8h, v16.8h, v28.8h
 	sshr v26.4s, v26.4s, #15
 	bic v23.4s, #0xff, lsl #24
-	csel x8, x8, xzr, hi
+	stp w9, w10, [sp, #32]
 	add v26.4s, v26.4s, v7.4s
+	stp w15, w16, [sp, #56]
 	bic v10.4s, #0xff, lsl #24
-	stp w11, w12, [sp, #40]
-	add v25.4s, v25.4s, v7.4s
-	cmhi v10.4s, v10.4s, v26.4s
-	cmhi v23.4s, v23.4s, v25.4s
+	stp w13, w14, [sp, #48]
+	shrn v16.8b, v16.8h, #3
 	ld2 {v29.8h, v30.8h}, [x28]
-	uzp1 v23.8h, v23.8h, v10.8h
-	cmn x17, #1
-	ldr q10, [x20, x8, lsl #4]
-	add v8.8h, v8.8h, v31.8h
-	shrn v17.8b, v17.8h, #3
+	fadd v1.4s, v1.4s, v4.4s
+	cmhi v10.4s, v10.4s, v26.4s
+	sshr v25.4s, v25.4s, #15
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
+	add v25.4s, v25.4s, v7.4s
 	xtn v31.8b, v30.8h
-	and v23.16b, v23.16b, v10.16b
-	shrn v16.8b, v16.8h, #3
-	uaddl v9.8h, v17.8b, v27.8b
 	uaddl v12.8h, v16.8b, v29.8b
-	shrn v8.8b, v8.8h, #3
-	shrn v30.8b, v30.8h, #8
+	uaddl v9.8h, v17.8b, v27.8b
+	cmhi v23.4s, v23.4s, v25.4s
 	umlal v12.8h, v16.8b, v29.8b
+	uzp1 v23.8h, v23.8h, v10.8h
+	ldr q10, [x20, x8, lsl #4]
 	umlal v9.8h, v17.8b, v27.8b
 	uaddl v27.8h, v8.8b, v31.8b
-	xtn v10.8b, v23.8h
+	and v23.16b, v23.16b, v10.16b
 	shrn v28.8b, v12.8h, #6
-	orr x0, x0, x17
-	fmov x8, d10
+	xtn v10.8b, v23.8h
 	ldr d12, [sp, #144]
 	umlal v27.8h, v8.8b, v31.8b
+	prfm pldl1keep, [x26, #4096]
+	fmov x8, d10
+	shrn v30.8b, v30.8h, #8
+	orr v13.16b, v13.16b, v22.16b
 	orr v31.8b, v30.8b, v12.8b
 	ccmp x8, #0, #4, eq
 	shrn v30.8b, v27.8h, #6
@@ -44774,9 +45560,12 @@ rast_kern_14000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -44890,109 +45679,111 @@ rast_kern_14000:
 	b 85f
 81:
 	frecpe v12.4s, v2.4s
-	smull v30.4s, v24.4h, v15.h[4]
+	sqdmulh v8.8h, v24.8h, v15.h[3]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	ldr q9, [sp, #112]
+	frecps v10.4s, v12.4s, v2.4s
 	cmp x5, #16
 	mov x17, #16
+	smull v30.4s, v24.4h, v15.h[4]
 	ldr q31, [sp, #96]
-	frecps v10.4s, v12.4s, v2.4s
-	smull2 v29.4s, v24.8h, v15.h[4]
-	ldr q28, [x19, #64]
-	sqdmulh v17.8h, v24.8h, v15.h[1]
 	fmul v12.4s, v12.4s, v10.4s
-	smull v27.4s, v24.4h, v15.h[5]
-	addhn v30.4h, v30.4s, v31.4s
-	orr x0, x0, x8
 	frecpe v23.4s, v3.4s
+	addhn v30.4h, v30.4s, v31.4s
+	sqdmulh v16.8h, v24.8h, v15.h[0]
 	frecps v10.4s, v12.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
-	smull2 v29.4s, v24.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v9.4s
+	smull v27.4s, v24.4h, v15.h[5]
 	csel x17, x5, x17, lo
+	ldr q28, [x19, #64]
 	fmul v12.4s, v12.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
+	smull2 v29.4s, v24.8h, v15.h[5]
+	addhn v27.4h, v27.4s, v9.4s
+	fmul v12.4s, v0.4s, v12.4s
+	fmul v23.4s, v23.4s, v10.4s
+	sqdmulh v17.8h, v24.8h, v15.h[1]
 	addhn2 v27.8h, v29.4s, v9.4s
 	sshr v30.8h, v30.8h, #3
-	orr v26.16b, v26.16b, v22.16b
+	add x26, x2, #32
+	frecps v10.4s, v23.4s, v3.4s
+	fcvtzs v12.4s, v12.4s, #15
+	ldr q31, [sp, #128]
+	add v17.8h, v17.8h, v11.8h
+	sshr v27.8h, v27.8h, #3
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	sshr v27.8h, v27.8h, #3
-	add x26, x2, #32
-	add v17.8h, v17.8h, v11.8h
-	and v27.16b, v27.16b, v28.16b
-	ldr q28, [sp, #160]
-	umull v29.4s, v27.4h, v15.h[6]
-	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v23.4s, v23.4s, v10.4s
 	fsub v2.4s, v2.4s, v5.4s
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	frecps v10.4s, v23.4s, v3.4s
-	fmul v12.4s, v0.4s, v12.4s
-	umov w12, v29.s[3]
-	sqdmulh v16.8h, v24.8h, v15.h[0]
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
 	fmul v23.4s, v23.4s, v10.4s
-	umov w10, v29.s[1]
 	subs x17, x17, #8
-	ldrb w12, [x6, w12, uxtw]
+	add v8.8h, v8.8h, v31.8h
+	and v27.16b, v27.16b, v28.16b
+	fmul v23.4s, v1.4s, v23.4s
+	umull v29.4s, v27.4h, v15.h[6]
+	xtn v12.4h, v12.4s
+	csel x26, x26, x2, hi
+	shrn v17.8b, v17.8h, #3
+	fcvtzs v23.4s, v23.4s, #15
+	umull2 v27.4s, v27.8h, v15.h[6]
+	uaddw v29.4s, v29.4s, v30.4h
+	sub x18, x26, #15, lsl #12
+	xtn2 v12.8h, v23.4s
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
+	ldp q23, q10, [x26]
 	umov w9, v29.s[0]
 	umov w14, v27.s[1]
-	fcvtzs v12.4s, v12.4s, #15
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w11, [x6, w11, uxtw]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w10, v29.s[1]
 	umov w15, v27.s[2]
-	ldr q31, [sp, #128]
-	umov w16, v27.s[3]
-	fmul v23.4s, v1.4s, v23.4s
-	ldrb w14, [x6, w14, uxtw]
-	sqdmulh v8.8h, v24.8h, v15.h[3]
-	ldrb w10, [x6, w10, uxtw]
-	fadd v0.4s, v0.4s, v4.4s
-	ldrb w9, [x6, w9, uxtw]
 	fadd v1.4s, v1.4s, v4.4s
-	ldrb w16, [x6, w16, uxtw]
-	fcvtzs v23.4s, v23.4s, #15
+	umov w13, v27.s[0]
+	orr x0, x0, x8
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	ldrb w9, [x6, w9, uxtw]
+	umov w16, v27.s[3]
+	ldrb w13, [x6, w13, uxtw]
+	smull2 v14.4s, v12.8h, v6.h[0]
+	ldrb w10, [x6, w10, uxtw]
+	smull v13.4s, v12.4h, v6.h[0]
 	ldrb w15, [x6, w15, uxtw]
-	stp w11, w12, [sp, #40]
-	csel x26, x26, x2, hi
-	add v8.8h, v8.8h, v31.8h
+	ldrb w11, [x6, w11, uxtw]
+	fadd v0.4s, v0.4s, v4.4s
+	ldrb w16, [x6, w16, uxtw]
 	stp w9, w10, [sp, #32]
-	add v16.8h, v16.8h, v28.8h
+	ldr q28, [sp, #160]
+	sshr v13.4s, v13.4s, #15
 	stp w13, w14, [sp, #48]
+	bic v10.4s, #0xff, lsl #24
+	stp w11, w12, [sp, #40]
+	add v16.8h, v16.8h, v28.8h
+	bic v23.4s, #0xff, lsl #24
 	stp w15, w16, [sp, #56]
+	add v13.4s, v13.4s, v7.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	fsub v3.4s, v3.4s, v5.4s
-	shrn v17.8b, v17.8h, #3
-	xtn v12.4h, v12.4s
+	cmhi v23.4s, v23.4s, v13.4s
+	sshr v14.4s, v14.4s, #15
 	shrn v8.8b, v8.8h, #3
 	csel x17, x17, xzr, hi
-	xtn2 v12.8h, v23.4s
+	add v14.4s, v14.4s, v7.4s
 	xtn v29.8b, v29.8h
-	smull2 v14.4s, v12.8h, v6.h[0]
 	tbl v27.8b, {v19.16b}, v29.8b
-	ldp q23, q10, [x26]
-	smull v13.4s, v12.4h, v6.h[0]
 	tbl v31.8b, {v20.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
-	uaddl v9.8h, v17.8b, v27.8b
 	tbl v29.8b, {v18.16b}, v29.8b
-	sshr v14.4s, v14.4s, #15
-	sshr v13.4s, v13.4s, #15
-	bic v23.4s, #0xff, lsl #24
-	shrn v16.8b, v16.8h, #3
-	add v13.4s, v13.4s, v7.4s
-	uaddl v24.8h, v16.8b, v29.8b
-	add v14.4s, v14.4s, v7.4s
-	bic v10.4s, #0xff, lsl #24
-	cmhi v10.4s, v10.4s, v14.4s
 	cmn x8, #1
-	cmhi v23.4s, v23.4s, v13.4s
-	umlal v24.8h, v16.8b, v29.8b
+	prfm pldl1keep, [x26, #4096]
+	cmhi v10.4s, v10.4s, v14.4s
+	shrn v16.8b, v16.8h, #3
+	uaddl v9.8h, v17.8b, v27.8b
+	uaddl v24.8h, v16.8b, v29.8b
 	uzp1 v23.8h, v23.8h, v10.8h
 	ldr q10, [x20, x17, lsl #4]
 	umlal v9.8h, v17.8b, v27.8b
+	umlal v24.8h, v16.8b, v29.8b
 	uaddl v27.8h, v8.8b, v31.8b
 	and v23.16b, v23.16b, v10.16b
 	shrn v28.8b, v24.8h, #6
@@ -45000,15 +45791,16 @@ rast_kern_14000:
 	ldr d24, [sp, #144]
 	umlal v27.8h, v8.8b, v31.8b
 	fmov x17, d10
+	orr v25.16b, v25.16b, v22.16b
 	orr v31.8b, v30.8b, v24.8b
 	shrn v29.8b, v9.8h, #6
-	orr v25.16b, v25.16b, v22.16b
 	ccmp x17, #0, #4, eq
 	shrn v30.8b, v27.8h, #6
+	orr v26.16b, v26.16b, v22.16b
 	b.eq 91f
-	stp q25, q26, [x2]
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
+	stp q25, q26, [x2]
 	str x8, [x3], #8
 	b.ls 89f
 	add x1, x1, #32
@@ -45016,124 +45808,127 @@ rast_kern_14000:
 83:
 	mov x8, #16
 	frecpe v24.4s, v2.4s
-	smull v27.4s, v12.4h, v15.h[5]
-	cmp x5, #16
-	ldr q9, [sp, #112]
-	smull2 v29.4s, v12.8h, v15.h[4]
-	frecps v10.4s, v24.4s, v2.4s
-	smull v30.4s, v12.4h, v15.h[4]
-	csel x8, x5, x8, lo
-	addhn v27.4h, v27.4s, v9.4s
-	ldr q31, [sp, #96]
-	fmul v24.4s, v24.4s, v10.4s
-	sqdmulh v8.8h, v12.8h, v15.h[3]
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q28, [x19, #64]
 	frecpe v23.4s, v3.4s
+	add x26, x2, #32
+	cmp x5, #16
+	ldr q31, [sp, #96]
+	frecps v10.4s, v24.4s, v2.4s
+	smull2 v29.4s, v12.8h, v15.h[4]
+	smull v30.4s, v12.4h, v15.h[4]
+	smull v27.4s, v12.4h, v15.h[5]
+	fmul v24.4s, v24.4s, v10.4s
+	sqdmulh v17.8h, v12.8h, v15.h[1]
+	addhn v30.4h, v30.4s, v31.4s
+	ldr q9, [sp, #112]
+	csel x8, x5, x8, lo
 	frecps v10.4s, v24.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
-	ldr q31, [sp, #128]
 	smull2 v29.4s, v12.8h, v15.h[5]
-	sqdmulh v17.8h, v12.8h, v15.h[1]
+	sqdmulh v8.8h, v12.8h, v15.h[3]
 	fmul v24.4s, v24.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	addhn2 v27.8h, v29.4s, v9.4s
+	ldr q31, [sp, #128]
 	sshr v30.8h, v30.8h, #3
-	orr v13.16b, v13.16b, v22.16b
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	sshr v27.8h, v27.8h, #3
-	and v27.16b, v27.16b, v28.16b
-	ldr q28, [sp, #160]
-	fmul v23.4s, v23.4s, v10.4s
-	umull v29.4s, v27.4h, v15.h[6]
-	sqdmulh v16.8h, v12.8h, v15.h[0]
-	umull2 v27.4s, v27.8h, v15.h[6]
-	frecps v10.4s, v23.4s, v3.4s
-	uaddw v29.4s, v29.4s, v30.4h
-	add v8.8h, v8.8h, v31.8h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	add x26, x2, #32
-	fmul v24.4s, v0.4s, v24.4s
 	subs x8, x8, #8
-	umov w10, v29.s[1]
-	umov w13, v27.s[0]
+	fmul v24.4s, v0.4s, v24.4s
+	fmul v23.4s, v23.4s, v10.4s
+	csel x26, x26, x2, hi
+	add v17.8h, v17.8h, v11.8h
+	ldr q28, [x19, #64]
+	add v8.8h, v8.8h, v31.8h
+	csel x8, x8, xzr, hi
+	frecps v10.4s, v23.4s, v3.4s
+	addhn v27.4h, v27.4s, v9.4s
+	sub x18, x26, #15, lsl #12
+	shrn v8.8b, v8.8h, #3
+	and v30.16b, v30.16b, v28.16b
+	fmul v23.4s, v23.4s, v10.4s
+	ldr q28, [x19, #80]
+	addhn2 v27.8h, v29.4s, v9.4s
+	fcvtzs v24.4s, v24.4s, #15
+	fmul v23.4s, v1.4s, v23.4s
+	shrn v17.8b, v17.8h, #3
+	sshr v27.8h, v27.8h, #3
+	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	fcvtzs v23.4s, v23.4s, #15
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
+	ldr q28, [sp, #160]
+	xtn2 v24.8h, v23.4s
+	prfm pstl1keep, [x18, #0]
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldp q23, q10, [x26]
 	umov w9, v29.s[0]
-	umov w15, v27.s[2]
 	umov w11, v29.s[2]
 	umov w16, v27.s[3]
-	umov w14, v27.s[1]
-	ldrb w10, [x6, w10, uxtw]
 	umov w12, v29.s[3]
-	fmul v23.4s, v23.4s, v10.4s
-	ldrb w9, [x6, w9, uxtw]
-	fadd v0.4s, v0.4s, v4.4s
-	ldrb w15, [x6, w15, uxtw]
-	fcvtzs v24.4s, v24.4s, #15
-	ldrb w11, [x6, w11, uxtw]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
 	fsub v3.4s, v3.4s, v5.4s
+	umov w15, v27.s[2]
+	fadd v0.4s, v0.4s, v4.4s
+	ldrb w9, [x6, w9, uxtw]
+	smull v25.4s, v24.4h, v6.h[0]
+	ldrb w16, [x6, w16, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w13, v27.s[0]
+	sqdmulh v16.8h, v12.8h, v15.h[0]
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w10, [x6, w10, uxtw]
+	fsub v2.4s, v2.4s, v5.4s
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w13, [x6, w13, uxtw]
-	fmul v23.4s, v1.4s, v23.4s
-	ldrb w12, [x6, w12, uxtw]
-	fadd v1.4s, v1.4s, v4.4s
-	ldrb w16, [x6, w16, uxtw]
-	stp w13, w14, [sp, #48]
-	xtn v24.4h, v24.4s
-	add v16.8h, v16.8h, v28.8h
-	stp w11, w12, [sp, #40]
-	add v17.8h, v17.8h, v11.8h
-	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v29.8h, v30.8h}, [x28]
-	fsub v2.4s, v2.4s, v5.4s
-	fcvtzs v23.4s, v23.4s, #15
-	shrn v16.8b, v16.8h, #3
-	csel x26, x26, x2, hi
-	shrn v17.8b, v17.8h, #3
-	xtn2 v24.8h, v23.4s
-	xtn v29.8b, v29.8h
-	ldp q23, q10, [x26]
-	smull v25.4s, v24.4h, v6.h[0]
-	tbl v31.8b, {v20.16b}, v29.8b
-	smull2 v26.4s, v24.8h, v6.h[0]
-	tbl v30.8b, {v21.16b}, v29.8b
-	tbl v27.8b, {v19.16b}, v29.8b
-	tbl v29.8b, {v18.16b}, v29.8b
 	sshr v25.4s, v25.4s, #15
+	stp w9, w10, [sp, #32]
+	stp w11, w12, [sp, #40]
+	add v16.8h, v16.8h, v28.8h
+	stp w13, w14, [sp, #48]
+	bic v10.4s, #0xff, lsl #24
+	ld2 {v29.8h, v30.8h}, [x28]
+	fadd v1.4s, v1.4s, v4.4s
+	add v25.4s, v25.4s, v7.4s
 	sshr v26.4s, v26.4s, #15
 	bic v23.4s, #0xff, lsl #24
-	shrn v8.8b, v8.8h, #3
-	add v25.4s, v25.4s, v7.4s
-	bic v10.4s, #0xff, lsl #24
-	csel x8, x8, xzr, hi
-	add v26.4s, v26.4s, v7.4s
 	orr x0, x0, x17
+	shrn v16.8b, v16.8h, #3
+	add v26.4s, v26.4s, v7.4s
+	xtn v29.8b, v29.8h
+	tbl v27.8b, {v19.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
+	tbl v30.8b, {v21.16b}, v29.8b
+	tbl v29.8b, {v18.16b}, v29.8b
+	cmn x17, #1
+	cmhi v10.4s, v10.4s, v26.4s
+	cmhi v23.4s, v23.4s, v25.4s
 	uaddl v12.8h, v16.8b, v29.8b
 	uaddl v9.8h, v17.8b, v27.8b
-	cmhi v23.4s, v23.4s, v25.4s
-	cmhi v10.4s, v10.4s, v26.4s
-	umlal v12.8h, v16.8b, v29.8b
+	prfm pldl1keep, [x26, #4096]
 	uzp1 v23.8h, v23.8h, v10.8h
 	ldr q10, [x20, x8, lsl #4]
+	umlal v12.8h, v16.8b, v29.8b
 	umlal v9.8h, v17.8b, v27.8b
 	uaddl v27.8h, v8.8b, v31.8b
-	shrn v28.8b, v12.8h, #6
 	and v23.16b, v23.16b, v10.16b
+	shrn v28.8b, v12.8h, #6
 	xtn v10.8b, v23.8h
-	orr v14.16b, v14.16b, v22.16b
-	cmn x17, #1
 	umlal v27.8h, v8.8b, v31.8b
-	ldr d12, [sp, #144]
 	fmov x8, d10
-	shrn v29.8b, v9.8h, #6
+	ldr d12, [sp, #144]
+	orr v13.16b, v13.16b, v22.16b
 	orr v31.8b, v30.8b, v12.8b
 	ccmp x8, #0, #4, eq
 	shrn v30.8b, v27.8h, #6
+	shrn v29.8b, v9.8h, #6
+	orr v14.16b, v14.16b, v22.16b
 	b.eq 101f
-	stp q13, q14, [x2]
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
+	stp q13, q14, [x2]
 	str x17, [x3], #8
 	b.ls 89f
 	add x1, x1, #32
@@ -45153,9 +45948,12 @@ rast_kern_14000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -45261,9 +46059,12 @@ rast_kern_14000:
 	b 82b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -45471,9 +46272,12 @@ rast_kern_14001:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -45869,14 +46673,17 @@ rast_kern_14001:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 436:
 	tbnz w7, #1, 30f
@@ -45951,9 +46758,12 @@ rast_kern_14001:
 	b 435b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -46156,9 +46966,12 @@ rast_kern_14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -46312,14 +47125,17 @@ rast_kern_14010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 449:
 	tbnz w7, #1, 30f
@@ -46395,117 +47211,120 @@ rast_kern_14010:
 	b 55f
 51:
 	frecpe v16.4s, v2.4s
-	frecpe v17.4s, v3.4s
 	smull v30.4s, v24.4h, v15.h[4]
+	ldr q28, [x19, #64]
 	ldr q31, [sp, #96]
-	add x26, x2, #32
 	frecps v23.4s, v16.4s, v2.4s
-	smull2 v29.4s, v24.8h, v15.h[4]
+	frecpe v17.4s, v3.4s
+	fmul v16.4s, v16.4s, v23.4s
 	smull v27.4s, v24.4h, v15.h[5]
 	addhn v30.4h, v30.4s, v31.4s
 	ldr q9, [sp, #112]
-	fmul v16.4s, v16.4s, v23.4s
-	cmp x5, #16
-	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
 	frecps v23.4s, v16.4s, v2.4s
-	addhn v27.4h, v27.4s, v9.4s
-	mov x17, #16
-	ldr q28, [x19, #64]
-	sshr v30.8h, v30.8h, #3
+	orr v25.16b, v25.16b, v22.16b
 	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	smull2 v29.4s, v24.8h, v15.h[5]
-	csel x17, x5, x17, lo
+	addhn2 v30.8h, v29.4s, v31.4s
+	add x26, x2, #32
+	addhn v27.4h, v27.4s, v9.4s
 	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
-	addhn2 v27.8h, v29.4s, v9.4s
+	cmp x5, #16
+	mov x17, #16
+	sshr v30.8h, v30.8h, #3
+	smull2 v29.4s, v24.8h, v15.h[5]
 	frecps v23.4s, v17.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	csel x17, x5, x17, lo
+	addhn2 v27.8h, v29.4s, v9.4s
 	fcvtzs v16.4s, v16.4s, #15
-	orr v25.16b, v25.16b, v22.16b
-	subs x17, x17, #8
 	fmul v17.4s, v17.4s, v23.4s
+	orr x0, x0, x8
+	subs x17, x17, #8
+	and v30.16b, v30.16b, v28.16b
+	fmul v17.4s, v1.4s, v17.4s
+	ldr q28, [x19, #80]
+	csel x26, x26, x2, hi
 	xtn v16.4h, v16.4s
 	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	fmul v17.4s, v1.4s, v17.4s
 	and v27.16b, v27.16b, v28.16b
-	umull v29.4s, v27.4h, v15.h[6]
 	fcvtzs v17.4s, v17.4s, #15
+	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	uaddw v29.4s, v29.4s, v30.4h
+	prfm pldl1keep, [x26, #4096]
 	xtn2 v16.8h, v17.4s
+	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
+	ldp q17, q23, [x26]
+	umov w12, v29.s[3]
+	umov w16, v27.s[3]
+	umov w15, v27.s[2]
+	umov w14, v27.s[1]
 	umov w9, v29.s[0]
 	umov w10, v29.s[1]
-	umov w12, v29.s[3]
-	umov w15, v27.s[2]
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
-	umov w14, v27.s[1]
-	ldrb w9, [x6, w9, uxtw]
 	csel x17, x17, xzr, hi
-	ldrb w10, [x6, w10, uxtw]
-	umov w16, v27.s[3]
-	ldrb w11, [x6, w11, uxtw]
-	csel x26, x26, x2, hi
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	fsub v3.4s, v3.4s, v5.4s
-	ldr w10, [x21, w10, uxtw #2]
-	ldrb w14, [x6, w14, uxtw]
-	smull v13.4s, v16.4h, v6.h[0]
-	ldrb w15, [x6, w15, uxtw]
-	ldr w11, [x21, w11, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w13, [x21, w13, uxtw #2]
+	umov w11, v29.s[2]
 	ldrb w16, [x6, w16, uxtw]
-	smull2 v14.4s, v16.8h, v6.h[0]
-	ldr w12, [x21, w12, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
-	ldr w16, [x21, w16, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w9, [x21, w9, uxtw #2]
-	ldp q17, q23, [x26]
-	stp w15, w16, [sp, #56]
-	stp w11, w12, [sp, #40]
-	stp w9, w10, [sp, #32]
-	sshr v14.4s, v14.4s, #15
-	bic v17.4s, #0xff, lsl #24
-	sshr v13.4s, v13.4s, #15
-	add v14.4s, v14.4s, v7.4s
-	stp w13, w14, [sp, #48]
-	bic v23.4s, #0xff, lsl #24
-	add v13.4s, v13.4s, v7.4s
-	ld2 {v29.8h, v30.8h}, [x28]
 	fadd v1.4s, v1.4s, v4.4s
+	ldrb w15, [x6, w15, uxtw]
+	smull v13.4s, v16.4h, v6.h[0]
+	ldrb w12, [x6, w12, uxtw]
+	sub x18, x26, #15, lsl #12
+	ldrb w9, [x6, w9, uxtw]
+	umov w13, v27.s[0]
+	ldrb w14, [x6, w14, uxtw]
+	fsub v3.4s, v3.4s, v5.4s
+	ldrb w10, [x6, w10, uxtw]
+	ldrb w11, [x6, w11, uxtw]
+	fadd v0.4s, v0.4s, v4.4s
+	ldr w12, [x21, w12, uxtw #2]
+	ldrb w13, [x6, w13, uxtw]
+	ldr w15, [x21, w15, uxtw #2]
+	smull2 v14.4s, v16.8h, v6.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	ldr w16, [x21, w16, uxtw #2]
+	ldr w11, [x21, w11, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
+	ldr w13, [x21, w13, uxtw #2]
+	ldr w10, [x21, w10, uxtw #2]
+	prfm pstl1keep, [x18, #0]
+	sshr v13.4s, v13.4s, #15
+	sshr v14.4s, v14.4s, #15
+	orr v26.16b, v26.16b, v22.16b
+	stp w11, w12, [sp, #40]
+	add v13.4s, v13.4s, v7.4s
+	stp w9, w10, [sp, #32]
+	bic v23.4s, #0xff, lsl #24
+	stp w15, w16, [sp, #56]
+	bic v17.4s, #0xff, lsl #24
+	stp w13, w14, [sp, #48]
+	ld2 {v29.8h, v30.8h}, [x28]
 	cmhi v17.4s, v17.4s, v13.4s
-	cmhi v23.4s, v23.4s, v14.4s
 	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
+	add v14.4s, v14.4s, v7.4s
+	xtn v31.8b, v30.8h
+	uaddl v24.8h, v10.8b, v29.8b
+	cmhi v23.4s, v23.4s, v14.4s
+	uaddl v9.8h, v12.8b, v31.8b
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x17, lsl #4]
-	uaddl v8.8h, v11.8b, v27.8b
-	xtn v29.8b, v29.8h
-	xtn v31.8b, v30.8h
-	and v17.16b, v17.16b, v23.16b
-	uaddl v24.8h, v10.8b, v29.8b
-	xtn v23.8b, v17.8h
-	orr x0, x0, x8
-	shrn v30.8b, v30.8h, #8
-	cmn x8, #1
-	uaddl v9.8h, v12.8b, v31.8b
-	fmov x17, d23
 	umlal v24.8h, v10.8b, v29.8b
-	umlal v8.8h, v11.8b, v27.8b
 	umlal v9.8h, v12.8b, v31.8b
+	uaddl v8.8h, v11.8b, v27.8b
+	cmn x8, #1
+	and v17.16b, v17.16b, v23.16b
 	shrn v28.8b, v24.8h, #6
+	xtn v23.8b, v17.8h
+	umlal v8.8h, v11.8b, v27.8b
 	ldr d24, [sp, #144]
-	shrn v29.8b, v8.8h, #6
-	ccmp x17, #0, #4, eq
+	fmov x17, d23
+	shrn v30.8b, v30.8h, #8
 	orr v31.8b, v30.8b, v24.8b
+	ccmp x17, #0, #4, eq
 	shrn v30.8b, v9.8h, #6
-	orr v26.16b, v26.16b, v22.16b
+	shrn v29.8b, v8.8h, #6
 	b.eq 61f
 	subs x5, x5, #8
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -46517,115 +47336,118 @@ rast_kern_14010:
 53:
 	cmp x5, #16
 	frecpe v24.4s, v2.4s
-	smull2 v29.4s, v16.8h, v15.h[4]
-	smull v30.4s, v16.4h, v15.h[4]
+	frecpe v17.4s, v3.4s
 	ldr q31, [sp, #96]
 	mov x8, #16
+	smull v30.4s, v16.4h, v15.h[4]
 	frecps v23.4s, v24.4s, v2.4s
-	frecpe v17.4s, v3.4s
 	smull v27.4s, v16.4h, v15.h[5]
+	csel x8, x5, x8, lo
+	smull2 v29.4s, v16.8h, v15.h[4]
 	fmul v24.4s, v24.4s, v23.4s
-	addhn v30.4h, v30.4s, v31.4s
-	orr x0, x0, x17
 	ldr q9, [sp, #112]
+	addhn v30.4h, v30.4s, v31.4s
 	frecps v23.4s, v24.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
 	smull2 v29.4s, v16.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v9.4s
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	sshr v30.8h, v30.8h, #3
-	ldr q28, [x19, #64]
-	fmul v24.4s, v0.4s, v24.4s
-	fmul v17.4s, v17.4s, v23.4s
-	addhn2 v27.8h, v29.4s, v9.4s
 	add x26, x2, #32
-	orr v14.16b, v14.16b, v22.16b
-	fcvtzs v24.4s, v24.4s, #15
-	frecps v23.4s, v17.4s, v3.4s
-	csel x8, x5, x8, lo
-	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
+	sshr v30.8h, v30.8h, #3
+	subs x8, x8, #8
 	fmul v17.4s, v17.4s, v23.4s
-	and v27.16b, v27.16b, v28.16b
-	umull v29.4s, v27.4h, v15.h[6]
-	fmul v17.4s, v1.4s, v17.4s
-	umull2 v27.4s, v27.8h, v15.h[6]
-	uaddw v29.4s, v29.4s, v30.4h
-	fcvtzs v17.4s, v17.4s, #15
+	fmul v24.4s, v0.4s, v24.4s
+	addhn v27.4h, v27.4s, v9.4s
+	frecps v23.4s, v17.4s, v3.4s
+	fcvtzs v24.4s, v24.4s, #15
+	addhn2 v27.8h, v29.4s, v9.4s
+	ldr q28, [x19, #64]
+	fmul v17.4s, v17.4s, v23.4s
+	csel x26, x26, x2, hi
 	xtn v24.4h, v24.4s
+	and v30.16b, v30.16b, v28.16b
+	sshr v27.8h, v27.8h, #3
+	fmul v17.4s, v1.4s, v17.4s
+	sub x18, x26, #15, lsl #12
+	ldr q28, [x19, #80]
+	and v27.16b, v27.16b, v28.16b
+	fcvtzs v17.4s, v17.4s, #15
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
+	xtn2 v24.8h, v17.4s
+	prfm pstl1keep, [x18, #0]
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	csel x8, x8, xzr, hi
+	ldp q17, q23, [x26]
+	umov w16, v27.s[3]
+	umov w9, v29.s[0]
+	umov w13, v27.s[0]
 	umov w11, v29.s[2]
 	umov w10, v29.s[1]
-	umov w9, v29.s[0]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn2 v24.8h, v17.4s
 	umov w12, v29.s[3]
-	ldrb w11, [x6, w11, uxtw]
-	umov w14, v27.s[1]
-	umov w13, v27.s[0]
+	fadd v0.4s, v0.4s, v4.4s
 	ldrb w9, [x6, w9, uxtw]
-	ldrb w10, [x6, w10, uxtw]
-	ldr w11, [x21, w11, uxtw #2]
-	umov w15, v27.s[2]
-	smull v25.4s, v24.4h, v6.h[0]
-	ldrb w12, [x6, w12, uxtw]
-	umov w16, v27.s[3]
+	umov w14, v27.s[1]
+	fadd v1.4s, v1.4s, v4.4s
 	ldrb w13, [x6, w13, uxtw]
+	umov w15, v27.s[2]
+	ldrb w11, [x6, w11, uxtw]
+	cmn x17, #1
+	ldrb w10, [x6, w10, uxtw]
 	fsub v3.4s, v3.4s, v5.4s
-	ldr w10, [x21, w10, uxtw #2]
 	ldr w9, [x21, w9, uxtw #2]
-	ldrb w15, [x6, w15, uxtw]
-	fsub v2.4s, v2.4s, v5.4s
-	ldrb w14, [x6, w14, uxtw]
-	subs x8, x8, #8
-	ldr w12, [x21, w12, uxtw #2]
-	stp w9, w10, [sp, #32]
+	ldrb w12, [x6, w12, uxtw]
+	smull v25.4s, v24.4h, v6.h[0]
 	ldrb w16, [x6, w16, uxtw]
 	smull2 v26.4s, v24.8h, v6.h[0]
+	ldr w10, [x21, w10, uxtw #2]
 	ldr w13, [x21, w13, uxtw #2]
-	csel x26, x26, x2, hi
-	ldr w15, [x21, w15, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w14, [x21, w14, uxtw #2]
-	csel x8, x8, xzr, hi
+	fsub v2.4s, v2.4s, v5.4s
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldr w11, [x21, w11, uxtw #2]
+	ldr w12, [x21, w12, uxtw #2]
 	ldr w16, [x21, w16, uxtw #2]
-	ldp q17, q23, [x26]
-	stp w15, w16, [sp, #56]
-	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
+	orr x0, x0, x17
+	ldr w14, [x21, w14, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
+	stp w11, w12, [sp, #40]
+	sshr v26.4s, v26.4s, #15
+	bic v23.4s, #0xff, lsl #24
 	sshr v25.4s, v25.4s, #15
 	bic v17.4s, #0xff, lsl #24
-	sshr v26.4s, v26.4s, #15
+	stp w15, w16, [sp, #56]
 	add v25.4s, v25.4s, v7.4s
-	stp w11, w12, [sp, #40]
+	stp w13, w14, [sp, #48]
 	add v26.4s, v26.4s, v7.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fadd v1.4s, v1.4s, v4.4s
 	cmhi v17.4s, v17.4s, v25.4s
-	bic v23.4s, #0xff, lsl #24
-	cmhi v23.4s, v23.4s, v26.4s
 	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
+	cmhi v23.4s, v23.4s, v26.4s
+	xtn v31.8b, v30.8h
+	uaddl v16.8h, v10.8b, v29.8b
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
-	uaddl v8.8h, v11.8b, v27.8b
-	xtn v31.8b, v30.8h
-	xtn v29.8b, v29.8h
-	and v17.16b, v17.16b, v23.16b
-	uaddl v16.8h, v10.8b, v29.8b
 	uaddl v9.8h, v12.8b, v31.8b
-	cmn x17, #1
-	xtn v23.8b, v17.8h
 	umlal v16.8h, v10.8b, v29.8b
-	umlal v9.8h, v12.8b, v31.8b
-	umlal v8.8h, v11.8b, v27.8b
-	fmov x8, d23
-	shrn v28.8b, v16.8h, #6
-	ldr d16, [sp, #144]
+	uaddl v8.8h, v11.8b, v27.8b
 	shrn v30.8b, v30.8h, #8
+	and v17.16b, v17.16b, v23.16b
+	xtn v23.8b, v17.8h
+	orr v14.16b, v14.16b, v22.16b
+	shrn v28.8b, v16.8h, #6
+	umlal v8.8h, v11.8b, v27.8b
+	ldr d16, [sp, #144]
+	fmov x8, d23
+	umlal v9.8h, v12.8b, v31.8b
+	prfm pldl1keep, [x26, #4096]
 	orr v31.8b, v30.8b, v16.8b
 	ccmp x8, #0, #4, eq
-	shrn v30.8b, v9.8h, #6
 	shrn v29.8b, v8.8h, #6
+	shrn v30.8b, v9.8h, #6
 	orr v13.16b, v13.16b, v22.16b
 	b.eq 71f
 	subs x5, x5, #8
@@ -46650,9 +47472,12 @@ rast_kern_14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -46764,113 +47589,116 @@ rast_kern_14010:
 	b 85f
 81:
 	frecpe v16.4s, v2.4s
-	smull v30.4s, v24.4h, v15.h[4]
-	frecps v23.4s, v16.4s, v2.4s
-	ldr q31, [sp, #96]
-	cmp x5, #16
-	ldr q9, [sp, #112]
-	frecpe v17.4s, v3.4s
-	fmul v16.4s, v16.4s, v23.4s
-	smull2 v29.4s, v24.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
-	mov x17, #16
 	smull v27.4s, v24.4h, v15.h[5]
+	ldr q9, [sp, #112]
+	mov x17, #16
+	ldr q28, [x19, #64]
+	cmp x5, #16
 	frecps v23.4s, v16.4s, v2.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	add x26, x2, #32
-	smull2 v29.4s, v24.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v9.4s
 	csel x17, x5, x17, lo
+	smull v30.4s, v24.4h, v15.h[4]
+	fmul v16.4s, v16.4s, v23.4s
+	ldr q31, [sp, #96]
+	frecpe v17.4s, v3.4s
+	frecps v23.4s, v16.4s, v2.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
+	addhn v27.4h, v27.4s, v9.4s
+	addhn v30.4h, v30.4s, v31.4s
 	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	addhn2 v27.8h, v29.4s, v9.4s
-	sshr v30.8h, v30.8h, #3
-	ldr q28, [x19, #64]
+	fsub v2.4s, v2.4s, v5.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	subs x17, x17, #8
 	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
-	sshr v27.8h, v27.8h, #3
+	smull2 v29.4s, v24.8h, v15.h[5]
+	add x26, x2, #32
+	csel x17, x17, xzr, hi
+	sshr v30.8h, v30.8h, #3
+	frecps v23.4s, v17.4s, v3.4s
+	addhn2 v27.8h, v29.4s, v9.4s
+	csel x26, x26, x2, hi
+	orr v26.16b, v26.16b, v22.16b
+	fcvtzs v16.4s, v16.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
+	sub x18, x26, #15, lsl #12
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	frecps v23.4s, v17.4s, v3.4s
-	subs x17, x17, #8
+	fmul v17.4s, v1.4s, v17.4s
+	sshr v27.8h, v27.8h, #3
+	xtn v16.4h, v16.4s
 	and v27.16b, v27.16b, v28.16b
-	fmul v17.4s, v17.4s, v23.4s
+	fcvtzs v17.4s, v17.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v17.4s, v1.4s, v17.4s
-	fcvtzs v16.4s, v16.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn v16.4h, v16.4s
-	umov w10, v29.s[1]
-	umov w13, v27.s[0]
-	umov w9, v29.s[0]
-	umov w14, v27.s[1]
-	umov w16, v27.s[3]
-	fadd v0.4s, v0.4s, v4.4s
-	umov w15, v27.s[2]
-	umov w11, v29.s[2]
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	fcvtzs v17.4s, v17.4s, #15
-	fadd v1.4s, v1.4s, v4.4s
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w16, [x6, w16, uxtw]
-	umov w12, v29.s[3]
-	fsub v2.4s, v2.4s, v5.4s
-	ldrb w11, [x6, w11, uxtw]
-	csel x26, x26, x2, hi
 	xtn2 v16.8h, v17.4s
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	stp w9, w10, [sp, #32]
-	smull v13.4s, v16.4h, v6.h[0]
-	ldrb w15, [x6, w15, uxtw]
+	uaddw v29.4s, v29.4s, v30.4h
+	prfm pstl1keep, [x18, #0]
+	uaddw2 v27.4s, v27.4s, v30.8h
 	ldp q17, q23, [x26]
-	csel x17, x17, xzr, hi
-	stp w13, w14, [sp, #48]
-	stp w11, w12, [sp, #40]
-	smull2 v14.4s, v16.8h, v6.h[0]
-	stp w15, w16, [sp, #56]
-	fsub v3.4s, v3.4s, v5.4s
-	ld2 {v29.8h, v30.8h}, [x28]
-	bic v17.4s, #0xff, lsl #24
-	sshr v14.4s, v14.4s, #15
-	xtn v29.8b, v29.8h
+	umov w12, v29.s[3]
+	umov w10, v29.s[1]
+	umov w9, v29.s[0]
+	umov w11, v29.s[2]
+	smull v13.4s, v16.4h, v6.h[0]
+	umov w14, v27.s[1]
+	fadd v1.4s, v1.4s, v4.4s
+	umov w15, v27.s[2]
+	ldrb w12, [x6, w12, uxtw]
+	umov w13, v27.s[0]
+	ldrb w11, [x6, w11, uxtw]
 	orr x0, x0, x8
+	ldrb w10, [x6, w10, uxtw]
+	umov w16, v27.s[3]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	smull2 v14.4s, v16.8h, v6.h[0]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w16, [x6, w16, uxtw]
+	stp w9, w10, [sp, #32]
+	stp w11, w12, [sp, #40]
 	sshr v13.4s, v13.4s, #15
-	tbl v30.8b, {v21.16b}, v29.8b
+	sshr v14.4s, v14.4s, #15
+	bic v17.4s, #0xff, lsl #24
+	stp w13, w14, [sp, #48]
+	bic v23.4s, #0xff, lsl #24
+	stp w15, w16, [sp, #56]
+	add v14.4s, v14.4s, v7.4s
+	ld2 {v29.8h, v30.8h}, [x28]
+	fsub v3.4s, v3.4s, v5.4s
+	cmhi v23.4s, v23.4s, v14.4s
+	add v13.4s, v13.4s, v7.4s
+	xtn v29.8b, v29.8h
 	tbl v27.8b, {v19.16b}, v29.8b
 	tbl v31.8b, {v20.16b}, v29.8b
+	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v29.8b, {v18.16b}, v29.8b
-	add v13.4s, v13.4s, v7.4s
-	bic v23.4s, #0xff, lsl #24
-	uaddl v9.8h, v12.8b, v31.8b
-	uaddl v24.8h, v10.8b, v29.8b
-	add v14.4s, v14.4s, v7.4s
-	umlal v9.8h, v12.8b, v31.8b
-	umlal v24.8h, v10.8b, v29.8b
-	uaddl v8.8h, v11.8b, v27.8b
-	cmhi v23.4s, v23.4s, v14.4s
 	cmhi v17.4s, v17.4s, v13.4s
-	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
+	prfm pldl1keep, [x26, #4096]
+	fadd v0.4s, v0.4s, v4.4s
+	uaddl v24.8h, v10.8b, v29.8b
+	uaddl v9.8h, v12.8b, v31.8b
+	cmn x8, #1
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x17, lsl #4]
-	umlal v8.8h, v11.8b, v27.8b
+	umlal v24.8h, v10.8b, v29.8b
+	umlal v9.8h, v12.8b, v31.8b
+	uaddl v8.8h, v11.8b, v27.8b
 	and v17.16b, v17.16b, v23.16b
-	cmn x8, #1
+	shrn v28.8b, v24.8h, #6
 	xtn v23.8b, v17.8h
-	orr v31.8b, v30.8b, v24.8b
-	shrn v29.8b, v8.8h, #6
+	ldr d24, [sp, #144]
+	umlal v8.8h, v11.8b, v27.8b
 	fmov x17, d23
 	orr v25.16b, v25.16b, v22.16b
-	shrn v30.8b, v9.8h, #6
-	orr v26.16b, v26.16b, v22.16b
+	orr v31.8b, v30.8b, v24.8b
+	shrn v29.8b, v8.8h, #6
 	ccmp x17, #0, #4, eq
+	shrn v30.8b, v9.8h, #6
 	b.eq 91f
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	stp q25, q26, [x2]
 	str x8, [x3], #8
 	b.ls 89f
@@ -46878,113 +47706,116 @@ rast_kern_14010:
 	add x2, x2, #32
 83:
 	frecpe v24.4s, v2.4s
-	smull v27.4s, v16.4h, v15.h[5]
-	ldr q9, [sp, #112]
-	smull2 v29.4s, v16.8h, v15.h[4]
-	frecps v23.4s, v24.4s, v2.4s
 	ldr q31, [sp, #96]
-	mov x8, #16
 	smull v30.4s, v16.4h, v15.h[4]
-	frecpe v17.4s, v3.4s
-	fmul v24.4s, v24.4s, v23.4s
-	addhn v30.4h, v30.4s, v31.4s
-	frecps v23.4s, v24.4s, v2.4s
-	addhn v27.4h, v27.4s, v9.4s
-	addhn2 v30.8h, v29.4s, v31.4s
 	cmp x5, #16
-	smull2 v29.4s, v16.8h, v15.h[5]
+	mov x8, #16
+	frecps v23.4s, v24.4s, v2.4s
+	addhn v30.4h, v30.4s, v31.4s
+	csel x8, x5, x8, lo
+	fmul v24.4s, v24.4s, v23.4s
+	smull2 v29.4s, v16.8h, v15.h[4]
+	subs x8, x8, #8
+	add x26, x2, #32
+	ldr q9, [sp, #112]
+	orr x0, x0, x17
+	frecps v23.4s, v24.4s, v2.4s
+	frecpe v17.4s, v3.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull v27.4s, v16.4h, v15.h[5]
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	ldr q28, [x19, #64]
-	addhn2 v27.8h, v29.4s, v9.4s
+	smull2 v29.4s, v16.8h, v15.h[5]
+	addhn v27.4h, v27.4s, v9.4s
 	fmul v24.4s, v0.4s, v24.4s
 	fmul v17.4s, v17.4s, v23.4s
-	csel x8, x5, x8, lo
-	add x26, x2, #32
+	addhn2 v27.8h, v29.4s, v9.4s
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	orr v14.16b, v14.16b, v22.16b
-	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
 	frecps v23.4s, v17.4s, v3.4s
+	csel x26, x26, x2, hi
+	and v30.16b, v30.16b, v28.16b
+	fmul v17.4s, v17.4s, v23.4s
+	csel x8, x8, xzr, hi
+	fcvtzs v24.4s, v24.4s, #15
+	sshr v27.8h, v27.8h, #3
+	sub x18, x26, #15, lsl #12
+	fmul v17.4s, v1.4s, v17.4s
+	ldr q28, [x19, #80]
+	xtn v24.4h, v24.4s
 	and v27.16b, v27.16b, v28.16b
-	subs x8, x8, #8
+	fcvtzs v17.4s, v17.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v17.4s, v17.4s, v23.4s
-	fcvtzs v24.4s, v24.4s, #15
+	prfm pldl1keep, [x26, #4096]
+	xtn2 v24.8h, v17.4s
+	prfm pstl1keep, [x18, #0]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	fmul v17.4s, v1.4s, v17.4s
-	umov w10, v29.s[1]
-	umov w16, v27.s[3]
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
-	umov w12, v29.s[3]
-	umov w15, v27.s[2]
-	umov w14, v27.s[1]
+	ldp q17, q23, [x26]
 	umov w9, v29.s[0]
-	ldrb w10, [x6, w10, uxtw]
+	umov w16, v27.s[3]
+	umov w13, v27.s[0]
+	umov w10, v29.s[1]
 	fadd v1.4s, v1.4s, v4.4s
+	umov w11, v29.s[2]
+	smull v25.4s, v24.4h, v6.h[0]
+	umov w14, v27.s[1]
+	ldrb w9, [x6, w9, uxtw]
+	fsub v2.4s, v2.4s, v5.4s
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w10, [x6, w10, uxtw]
+	umov w15, v27.s[2]
+	umov w12, v29.s[3]
 	ldrb w11, [x6, w11, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	ldrb w14, [x6, w14, uxtw]
 	fsub v3.4s, v3.4s, v5.4s
 	ldrb w16, [x6, w16, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	xtn v24.4h, v24.4s
-	ldrb w12, [x6, w12, uxtw]
-	fcvtzs v17.4s, v17.4s, #15
-	ldrb w9, [x6, w9, uxtw]
 	ldrb w15, [x6, w15, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	csel x26, x26, x2, hi
-	stp w11, w12, [sp, #40]
 	stp w9, w10, [sp, #32]
-	xtn2 v24.8h, v17.4s
-	fadd v0.4s, v0.4s, v4.4s
-	stp w15, w16, [sp, #56]
+	ldrb w12, [x6, w12, uxtw]
 	stp w13, w14, [sp, #48]
-	ld2 {v29.8h, v30.8h}, [x28]
-	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q17, q23, [x26]
-	smull v25.4s, v24.4h, v6.h[0]
-	xtn v29.8b, v29.8h
-	bic v17.4s, #0xff, lsl #24
-	sshr v26.4s, v26.4s, #15
+	cmn x17, #1
 	sshr v25.4s, v25.4s, #15
 	bic v23.4s, #0xff, lsl #24
-	tbl v31.8b, {v20.16b}, v29.8b
-	tbl v27.8b, {v19.16b}, v29.8b
-	add v26.4s, v26.4s, v7.4s
-	tbl v30.8b, {v21.16b}, v29.8b
-	tbl v29.8b, {v18.16b}, v29.8b
-	uaddl v9.8h, v12.8b, v31.8b
-	uaddl v8.8h, v11.8b, v27.8b
+	stp w15, w16, [sp, #56]
+	stp w11, w12, [sp, #40]
+	ld2 {v29.8h, v30.8h}, [x28]
+	fadd v0.4s, v0.4s, v4.4s
 	add v25.4s, v25.4s, v7.4s
-	uaddl v16.8h, v10.8b, v29.8b
-	csel x8, x8, xzr, hi
-	umlal v8.8h, v11.8b, v27.8b
-	umlal v9.8h, v12.8b, v31.8b
-	umlal v16.8h, v10.8b, v29.8b
-	cmhi v23.4s, v23.4s, v26.4s
+	sshr v26.4s, v26.4s, #15
+	add v26.4s, v26.4s, v7.4s
+	xtn v29.8b, v29.8h
+	bic v17.4s, #0xff, lsl #24
+	tbl v30.8b, {v21.16b}, v29.8b
+	tbl v27.8b, {v19.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
+	tbl v29.8b, {v18.16b}, v29.8b
 	cmhi v17.4s, v17.4s, v25.4s
-	orr v13.16b, v13.16b, v22.16b
+	cmhi v23.4s, v23.4s, v26.4s
+	uaddl v16.8h, v10.8b, v29.8b
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
-	shrn v28.8b, v16.8h, #6
-	ldr d16, [sp, #144]
+	uaddl v9.8h, v12.8b, v31.8b
+	uaddl v8.8h, v11.8b, v27.8b
+	umlal v16.8h, v10.8b, v29.8b
+	umlal v9.8h, v12.8b, v31.8b
+	umlal v8.8h, v11.8b, v27.8b
 	and v17.16b, v17.16b, v23.16b
-	shrn v29.8b, v8.8h, #6
+	shrn v28.8b, v16.8h, #6
 	xtn v23.8b, v17.8h
-	orr v31.8b, v30.8b, v16.8b
-	cmn x17, #1
+	ldr d16, [sp, #144]
+	orr v14.16b, v14.16b, v22.16b
 	fmov x8, d23
+	orr v31.8b, v30.8b, v16.8b
+	shrn v29.8b, v8.8h, #6
 	shrn v30.8b, v9.8h, #6
-	fsub v2.4s, v2.4s, v5.4s
 	ccmp x8, #0, #4, eq
-	orr x0, x0, x17
+	orr v13.16b, v13.16b, v22.16b
 	b.eq 101f
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	stp q13, q14, [x2]
 	str x17, [x3], #8
 	b.ls 89f
@@ -47005,9 +47836,12 @@ rast_kern_14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -47119,109 +47953,112 @@ rast_kern_14010:
 	b 125f
 121:
 	frecpe v16.4s, v2.4s
-	frecpe v17.4s, v3.4s
 	smull v30.4s, v24.4h, v15.h[4]
+	add x26, x2, #32
+	ldr q28, [x19, #64]
 	ldr q31, [sp, #96]
 	frecps v23.4s, v16.4s, v2.4s
-	cmp x5, #16
+	smull v27.4s, v24.4h, v15.h[5]
 	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
+	cmp x5, #16
 	fmul v16.4s, v16.4s, v23.4s
+	frecpe v17.4s, v3.4s
+	ldr q9, [sp, #112]
 	mov x17, #16
 	addhn2 v30.8h, v29.4s, v31.4s
-	smull v27.4s, v24.4h, v15.h[5]
 	frecps v23.4s, v16.4s, v2.4s
-	ldr q9, [sp, #112]
-	orr x0, x0, x8
+	csel x17, x5, x17, lo
 	smull2 v29.4s, v24.8h, v15.h[5]
 	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
 	addhn v27.4h, v27.4s, v9.4s
 	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
-	csel x17, x5, x17, lo
-	sshr v30.8h, v30.8h, #3
-	ldr q28, [x19, #64]
-	addhn2 v27.8h, v29.4s, v9.4s
-	fcvtzs v16.4s, v16.4s, #15
-	frecps v23.4s, v17.4s, v3.4s
-	add x26, x2, #32
+	ldr d24, [sp, #144]
 	subs x17, x17, #8
+	sshr v30.8h, v30.8h, #3
+	frecps v23.4s, v17.4s, v3.4s
+	addhn2 v27.8h, v29.4s, v9.4s
+	csel x26, x26, x2, hi
+	orr v25.16b, v25.16b, v22.16b
+	fmul v17.4s, v17.4s, v23.4s
 	sshr v27.8h, v27.8h, #3
 	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	fmul v17.4s, v17.4s, v23.4s
-	and v27.16b, v27.16b, v28.16b
-	csel x26, x26, x2, hi
+	fcvtzs v16.4s, v16.4s, #15
 	fmul v17.4s, v1.4s, v17.4s
-	umull v29.4s, v27.4h, v15.h[6]
-	fadd v1.4s, v1.4s, v4.4s
-	umull2 v27.4s, v27.8h, v15.h[6]
-	fcvtzs v17.4s, v17.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
+	ldr q28, [x19, #80]
 	xtn v16.4h, v16.4s
-	uaddw2 v27.4s, v27.4s, v30.8h
-	ldr d24, [sp, #144]
+	and v27.16b, v27.16b, v28.16b
+	fcvtzs v17.4s, v17.4s, #15
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
+	orr x0, x0, x8
 	xtn2 v16.8h, v17.4s
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pldl1keep, [x26, #4096]
 	ldp q17, q23, [x26]
-	umov w13, v27.s[0]
 	umov w11, v29.s[2]
+	umov w15, v27.s[2]
 	umov w16, v27.s[3]
-	umov w10, v29.s[1]
+	umov w12, v29.s[3]
+	umov w9, v29.s[0]
+	umov w13, v27.s[0]
+	sub x18, x26, #15, lsl #12
 	umov w14, v27.s[1]
 	smull2 v14.4s, v16.8h, v6.h[0]
-	umov w9, v29.s[0]
-	smull v13.4s, v16.4h, v6.h[0]
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	fsub v3.4s, v3.4s, v5.4s
 	ldrb w11, [x6, w11, uxtw]
-	umov w15, v27.s[2]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
+	fadd v0.4s, v0.4s, v4.4s
 	ldrb w16, [x6, w16, uxtw]
-	umov w12, v29.s[3]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w13, [x6, w13, uxtw]
+	umov w10, v29.s[1]
+	ldrb w14, [x6, w14, uxtw]
+	ldr w12, [x21, w12, uxtw #2]
+	smull v13.4s, v16.4h, v6.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	ldr w11, [x21, w11, uxtw #2]
+	ldrb w10, [x6, w10, uxtw]
+	prfm pstl1keep, [x18, #0]
 	sshr v14.4s, v14.4s, #15
 	sshr v13.4s, v13.4s, #15
-	bic v23.4s, #0xff, lsl #24
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	ldr w11, [x21, w11, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	fsub v3.4s, v3.4s, v5.4s
+	bic v17.4s, #0xff, lsl #24
+	ldr w15, [x21, w15, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
-	ldr w12, [x21, w12, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldrb w15, [x6, w15, uxtw]
+	ldr w13, [x21, w13, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
+	add v13.4s, v13.4s, v7.4s
 	ldr w16, [x21, w16, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w9, [x21, w9, uxtw #2]
+	stp w11, w12, [sp, #40]
 	csel x17, x17, xzr, hi
 	add v14.4s, v14.4s, v7.4s
-	ldr w15, [x21, w15, uxtw #2]
 	stp w13, w14, [sp, #48]
-	cmhi v23.4s, v23.4s, v14.4s
+	bic v23.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
-	add v13.4s, v13.4s, v7.4s
-	stp w11, w12, [sp, #40]
-	bic v17.4s, #0xff, lsl #24
+	cmhi v23.4s, v23.4s, v14.4s
 	stp w15, w16, [sp, #56]
 	cmhi v17.4s, v17.4s, v13.4s
 	ld2 {v29.8h, v30.8h}, [x28]
+	fsub v2.4s, v2.4s, v5.4s
 	uzp1 v17.8h, v17.8h, v23.8h
-	cmn x8, #1
 	ldr q23, [x20, x17, lsl #4]
-	xtn v31.8b, v30.8h
+	fadd v1.4s, v1.4s, v4.4s
 	shrn v27.8b, v29.8h, #8
+	xtn v31.8b, v30.8h
 	and v17.16b, v17.16b, v23.16b
-	xtn v29.8b, v29.8h
-	xtn v23.8b, v17.8h
-	mov v28.8b, v29.8b
 	shrn v30.8b, v30.8h, #8
+	xtn v23.8b, v17.8h
 	ushll v9.8h, v31.8b, #6
+	xtn v29.8b, v29.8h
+	cmn x8, #1
 	fmov x17, d23
-	orr v25.16b, v25.16b, v22.16b
-	orr v31.8b, v30.8b, v24.8b
+	mov v28.8b, v29.8b
 	mov v29.8b, v27.8b
+	orr v31.8b, v30.8b, v24.8b
 	ccmp x17, #0, #4, eq
 	shrn v30.8b, v9.8h, #6
 	orr v26.16b, v26.16b, v22.16b
@@ -47235,109 +48072,112 @@ rast_kern_14010:
 	add x2, x2, #32
 123:
 	frecpe v24.4s, v2.4s
-	cmp x5, #16
-	frecpe v17.4s, v3.4s
-	ldr q9, [sp, #112]
+	smull v27.4s, v16.4h, v15.h[5]
+	smull v30.4s, v16.4h, v15.h[4]
+	ldr q31, [sp, #96]
 	mov x8, #16
 	frecps v23.4s, v24.4s, v2.4s
-	ldr q31, [sp, #96]
-	smull v30.4s, v16.4h, v15.h[4]
-	smull v27.4s, v16.4h, v15.h[5]
-	fmul v24.4s, v24.4s, v23.4s
 	smull2 v29.4s, v16.8h, v15.h[4]
+	cmp x5, #16
+	ldr q28, [x19, #64]
 	addhn v30.4h, v30.4s, v31.4s
-	frecps v23.4s, v24.4s, v2.4s
-	addhn v27.4h, v27.4s, v9.4s
-	add x26, x2, #32
+	ldr q9, [sp, #112]
+	fmul v24.4s, v24.4s, v23.4s
+	frecpe v17.4s, v3.4s
+	csel x8, x5, x8, lo
 	addhn2 v30.8h, v29.4s, v31.4s
-	smull2 v29.4s, v16.8h, v15.h[5]
+	add x26, x2, #32
+	frecps v23.4s, v24.4s, v2.4s
+	orr v13.16b, v13.16b, v22.16b
+	subs x8, x8, #8
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
+	addhn v27.4h, v27.4s, v9.4s
+	csel x8, x8, xzr, hi
+	smull2 v29.4s, v16.8h, v15.h[5]
 	fmul v24.4s, v0.4s, v24.4s
 	fmul v17.4s, v17.4s, v23.4s
-	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	addhn2 v27.8h, v29.4s, v9.4s
-	fcvtzs v24.4s, v24.4s, #15
 	frecps v23.4s, v17.4s, v3.4s
-	ldr d16, [sp, #144]
-	csel x8, x5, x8, lo
-	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	fmul v17.4s, v17.4s, v23.4s
+	fcvtzs v24.4s, v24.4s, #15
+	addhn2 v27.8h, v29.4s, v9.4s
 	orr x0, x0, x17
+	and v30.16b, v30.16b, v28.16b
+	ldr d16, [sp, #144]
+	fmul v17.4s, v17.4s, v23.4s
+	fsub v3.4s, v3.4s, v5.4s
+	csel x26, x26, x2, hi
+	ldr q28, [x19, #80]
+	sshr v27.8h, v27.8h, #3
+	fmul v17.4s, v1.4s, v17.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v24.4h, v24.4s
-	fmul v17.4s, v1.4s, v17.4s
+	fcvtzs v17.4s, v17.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	subs x8, x8, #8
-	fadd v1.4s, v1.4s, v4.4s
-	fcvtzs v17.4s, v17.4s, #15
-	uaddw2 v27.4s, v27.4s, v30.8h
-	csel x26, x26, x2, hi
-	uaddw v29.4s, v29.4s, v30.4h
+	sub x18, x26, #15, lsl #12
 	xtn2 v24.8h, v17.4s
-	ldp q17, q23, [x26]
-	umov w16, v27.s[3]
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	umov w9, v29.s[0]
-	umov w13, v27.s[0]
-	umov w15, v27.s[2]
-	ldrb w11, [x6, w11, uxtw]
-	umov w14, v27.s[1]
-	smull2 v26.4s, v24.8h, v6.h[0]
-	ldrb w10, [x6, w10, uxtw]
-	umov w12, v29.s[3]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	fadd v0.4s, v0.4s, v4.4s
-	ldrb w16, [x6, w16, uxtw]
-	ldr w10, [x21, w10, uxtw #2]
-	smull v25.4s, v24.4h, v6.h[0]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	csel x8, x8, xzr, hi
-	ldr w16, [x21, w16, uxtw #2]
 	cmn x17, #1
-	ldr w15, [x21, w15, uxtw #2]
-	ldr w12, [x21, w12, uxtw #2]
-	ldr w9, [x21, w9, uxtw #2]
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldp q17, q23, [x26]
+	umov w11, v29.s[2]
+	umov w13, v27.s[0]
+	umov w9, v29.s[0]
+	umov w12, v29.s[3]
+	smull v25.4s, v24.4h, v6.h[0]
+	umov w10, v29.s[1]
+	umov w15, v27.s[2]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w9, [x6, w9, uxtw]
+	umov w14, v27.s[1]
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w16, v27.s[3]
+	ldrb w10, [x6, w10, uxtw]
 	ldr w13, [x21, w13, uxtw #2]
-	stp w15, w16, [sp, #56]
+	fsub v2.4s, v2.4s, v5.4s
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w16, [x6, w16, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
 	ldr w11, [x21, w11, uxtw #2]
+	ldr w10, [x21, w10, uxtw #2]
+	ldr w16, [x21, w16, uxtw #2]
 	ldr w14, [x21, w14, uxtw #2]
-	sshr v25.4s, v25.4s, #15
+	ldr w9, [x21, w9, uxtw #2]
+	fadd v1.4s, v1.4s, v4.4s
+	ldr w15, [x21, w15, uxtw #2]
+	fadd v0.4s, v0.4s, v4.4s
+	ldr w12, [x21, w12, uxtw #2]
+	prfm pstl1keep, [x18, #0]
 	sshr v26.4s, v26.4s, #15
+	sshr v25.4s, v25.4s, #15
 	bic v23.4s, #0xff, lsl #24
-	stp w9, w10, [sp, #32]
-	add v26.4s, v26.4s, v7.4s
 	stp w13, w14, [sp, #48]
 	add v25.4s, v25.4s, v7.4s
+	stp w9, w10, [sp, #32]
+	add v26.4s, v26.4s, v7.4s
 	stp w11, w12, [sp, #40]
 	bic v17.4s, #0xff, lsl #24
+	stp w15, w16, [sp, #56]
 	cmhi v17.4s, v17.4s, v25.4s
 	cmhi v23.4s, v23.4s, v26.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fsub v3.4s, v3.4s, v5.4s
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
-	shrn v27.8b, v29.8h, #8
+	prfm pldl1keep, [x26, #4096]
 	xtn v31.8b, v30.8h
 	and v17.16b, v17.16b, v23.16b
-	xtn v29.8b, v29.8h
 	xtn v23.8b, v17.8h
-	mov v28.8b, v29.8b
-	shrn v30.8b, v30.8h, #8
-	orr v13.16b, v13.16b, v22.16b
-	fmov x8, d23
+	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
 	ushll v9.8h, v31.8b, #6
-	orr v31.8b, v30.8b, v16.8b
+	fmov x8, d23
+	shrn v30.8b, v30.8h, #8
+	mov v28.8b, v29.8b
 	mov v29.8b, v27.8b
+	orr v31.8b, v30.8b, v16.8b
 	ccmp x8, #0, #4, eq
 	shrn v30.8b, v9.8h, #6
 	orr v14.16b, v14.16b, v22.16b
@@ -47364,9 +48204,12 @@ rast_kern_14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -47478,105 +48321,108 @@ rast_kern_14010:
 	b 155f
 151:
 	frecpe v16.4s, v2.4s
-	ldr q31, [sp, #96]
-	smull v27.4s, v24.4h, v15.h[5]
+	cmp x5, #16
 	mov x17, #16
+	smull v30.4s, v24.4h, v15.h[4]
+	ldr q31, [sp, #96]
 	frecps v23.4s, v16.4s, v2.4s
 	ldr q9, [sp, #112]
-	ldr q28, [x19, #64]
-	cmp x5, #16
-	fmul v16.4s, v16.4s, v23.4s
-	smull v30.4s, v24.4h, v15.h[4]
-	addhn v27.4h, v27.4s, v9.4s
-	csel x17, x5, x17, lo
-	smull2 v29.4s, v24.8h, v15.h[4]
-	frecps v23.4s, v16.4s, v2.4s
-	frecpe v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
+	orr x0, x0, x8
 	addhn v30.4h, v30.4s, v31.4s
 	fmul v16.4s, v16.4s, v23.4s
-	frecps v23.4s, v17.4s, v3.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
+	smull v27.4s, v24.4h, v15.h[5]
+	frecpe v17.4s, v3.4s
+	frecps v23.4s, v16.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
+	addhn v27.4h, v27.4s, v9.4s
 	add x26, x2, #32
 	smull2 v29.4s, v24.8h, v15.h[5]
+	fmul v16.4s, v16.4s, v23.4s
+	frecps v23.4s, v17.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	addhn2 v27.8h, v29.4s, v9.4s
+	ldr q28, [x19, #64]
 	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
-	sshr v30.8h, v30.8h, #3
-	subs x17, x17, #8
-	addhn2 v27.8h, v29.4s, v9.4s
-	frecps v23.4s, v17.4s, v3.4s
-	csel x17, x17, xzr, hi
+	csel x17, x5, x17, lo
 	sshr v27.8h, v27.8h, #3
+	sshr v30.8h, v30.8h, #3
+	frecps v23.4s, v17.4s, v3.4s
+	fcvtzs v16.4s, v16.4s, #15
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
 	fmul v17.4s, v17.4s, v23.4s
-	and v27.16b, v27.16b, v28.16b
-	fcvtzs v16.4s, v16.4s, #15
-	fmul v17.4s, v1.4s, v17.4s
-	umull v29.4s, v27.4h, v15.h[6]
-	fadd v1.4s, v1.4s, v4.4s
-	umull2 v27.4s, v27.8h, v15.h[6]
-	csel x26, x26, x2, hi
-	fcvtzs v17.4s, v17.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
-	xtn v16.4h, v16.4s
-	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn2 v16.8h, v17.4s
 	ldr d24, [sp, #144]
-	ldp q17, q23, [x26]
+	subs x17, x17, #8
+	xtn v16.4h, v16.4s
+	and v27.16b, v27.16b, v28.16b
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
+	fmul v17.4s, v1.4s, v17.4s
+	csel x26, x26, x2, hi
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	sub x18, x26, #15, lsl #12
+	fcvtzs v17.4s, v17.4s, #15
+	umov w10, v29.s[1]
+	umov w12, v29.s[3]
+	umov w16, v27.s[3]
+	umov w11, v29.s[2]
 	umov w13, v27.s[0]
 	umov w9, v29.s[0]
-	smull v13.4s, v16.4h, v6.h[0]
-	umov w10, v29.s[1]
+	prfm pstl1keep, [x18, #0]
+	xtn2 v16.8h, v17.4s
+	ldrb w10, [x6, w10, uxtw]
+	ldrb w16, [x6, w16, uxtw]
 	umov w14, v27.s[1]
-	orr x0, x0, x8
-	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	umov w15, v27.s[2]
 	smull2 v14.4s, v16.8h, v6.h[0]
-	ldrb w10, [x6, w10, uxtw]
-	fadd v0.4s, v0.4s, v4.4s
 	ldrb w13, [x6, w13, uxtw]
-	ldrb w16, [x6, w16, uxtw]
-	umov w12, v29.s[3]
-	umov w11, v29.s[2]
+	ldrb w12, [x6, w12, uxtw]
+	smull v13.4s, v16.4h, v6.h[0]
 	ldrb w14, [x6, w14, uxtw]
+	ldrb w11, [x6, w11, uxtw]
 	fsub v3.4s, v3.4s, v5.4s
 	ldrb w15, [x6, w15, uxtw]
-	sshr v13.4s, v13.4s, #15
-	sshr v14.4s, v14.4s, #15
-	orr v25.16b, v25.16b, v22.16b
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w11, [x6, w11, uxtw]
+	ldp q17, q23, [x26]
 	stp w13, w14, [sp, #48]
-	add v13.4s, v13.4s, v7.4s
+	fadd v1.4s, v1.4s, v4.4s
+	stp w11, w12, [sp, #40]
 	stp w15, w16, [sp, #56]
+	csel x17, x17, xzr, hi
+	sshr v14.4s, v14.4s, #15
+	sshr v13.4s, v13.4s, #15
+	bic v17.4s, #0xff, lsl #24
 	bic v23.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
-	add v14.4s, v14.4s, v7.4s
-	stp w11, w12, [sp, #40]
-	bic v17.4s, #0xff, lsl #24
+	add v13.4s, v13.4s, v7.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	cmhi v17.4s, v17.4s, v13.4s
+	fadd v0.4s, v0.4s, v4.4s
+	add v14.4s, v14.4s, v7.4s
 	cmhi v23.4s, v23.4s, v14.4s
 	xtn v29.8b, v29.8h
-	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x17, lsl #4]
-	tbl v31.8b, {v20.16b}, v29.8b
-	tbl v30.8b, {v21.16b}, v29.8b
+	cmhi v17.4s, v17.4s, v13.4s
 	tbl v27.8b, {v19.16b}, v29.8b
+	uzp1 v17.8h, v17.8h, v23.8h
+	tbl v31.8b, {v20.16b}, v29.8b
+	ldr q23, [x20, x17, lsl #4]
+	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v29.8b, {v18.16b}, v29.8b
+	prfm pldl1keep, [x26, #4096]
 	cmn x8, #1
+	ushll v9.8h, v31.8b, #6
 	and v17.16b, v17.16b, v23.16b
 	xtn v23.8b, v17.8h
-	mov v28.8b, v29.8b
-	fmov x17, d23
-	ushll v9.8h, v31.8b, #6
 	orr v31.8b, v30.8b, v24.8b
+	orr v26.16b, v26.16b, v22.16b
+	fmov x17, d23
+	mov v28.8b, v29.8b
 	mov v29.8b, v27.8b
+	orr v25.16b, v25.16b, v22.16b
 	ccmp x17, #0, #4, eq
 	shrn v30.8b, v9.8h, #6
-	orr v26.16b, v26.16b, v22.16b
 	b.eq 161f
 	subs x5, x5, #8
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -47587,105 +48433,108 @@ rast_kern_14010:
 	add x2, x2, #32
 153:
 	frecpe v24.4s, v2.4s
-	ldr q31, [sp, #96]
-	smull v30.4s, v16.4h, v15.h[4]
-	ldr q9, [sp, #112]
-	cmp x5, #16
-	frecps v23.4s, v24.4s, v2.4s
-	smull2 v29.4s, v16.8h, v15.h[4]
-	fmul v24.4s, v24.4s, v23.4s
-	addhn v30.4h, v30.4s, v31.4s
 	mov x8, #16
-	orr v13.16b, v13.16b, v22.16b
+	cmp x5, #16
+	smull v30.4s, v16.4h, v15.h[4]
 	frecps v23.4s, v24.4s, v2.4s
 	frecpe v17.4s, v3.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	ldr q28, [x19, #64]
+	ldr q9, [sp, #112]
+	fmul v24.4s, v24.4s, v23.4s
+	ldr q31, [sp, #96]
+	csel x8, x5, x8, lo
 	smull v27.4s, v16.4h, v15.h[5]
+	frecps v23.4s, v24.4s, v2.4s
+	add x26, x2, #32
+	subs x8, x8, #8
+	addhn v30.4h, v30.4s, v31.4s
+	smull2 v29.4s, v16.8h, v15.h[4]
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	smull2 v29.4s, v16.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v9.4s
-	csel x8, x5, x8, lo
-	sshr v30.8h, v30.8h, #3
+	csel x26, x26, x2, hi
+	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q28, [x19, #64]
+	smull2 v29.4s, v16.8h, v15.h[5]
 	fmul v17.4s, v17.4s, v23.4s
-	addhn2 v27.8h, v29.4s, v9.4s
-	subs x8, x8, #8
+	fsub v2.4s, v2.4s, v5.4s
 	fmul v24.4s, v0.4s, v24.4s
-	fadd v0.4s, v0.4s, v4.4s
+	sub x18, x26, #15, lsl #12
 	frecps v23.4s, v17.4s, v3.4s
-	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	fmul v17.4s, v17.4s, v23.4s
-	add x26, x2, #32
-	and v27.16b, v27.16b, v28.16b
+	addhn2 v27.8h, v29.4s, v9.4s
+	sshr v30.8h, v30.8h, #3
 	fcvtzs v24.4s, v24.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
+	prfm pstl1keep, [x18, #0]
+	and v30.16b, v30.16b, v28.16b
 	fmul v17.4s, v1.4s, v17.4s
+	ldr q28, [x19, #80]
+	xtn v24.4h, v24.4s
+	sshr v27.8h, v27.8h, #3
+	and v27.16b, v27.16b, v28.16b
+	fcvtzs v17.4s, v17.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	xtn v24.4h, v24.4s
-	fcvtzs v17.4s, v17.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	csel x26, x26, x2, hi
 	xtn2 v24.8h, v17.4s
-	umov w11, v29.s[2]
-	umov w9, v29.s[0]
-	umov w16, v27.s[3]
+	uaddw v29.4s, v29.4s, v30.4h
+	orr x0, x0, x17
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldp q17, q23, [x26]
 	umov w10, v29.s[1]
 	umov w13, v27.s[0]
-	fsub v2.4s, v2.4s, v5.4s
-	umov w12, v29.s[3]
-	umov w15, v27.s[2]
-	ldrb w11, [x6, w11, uxtw]
-	ldrb w9, [x6, w9, uxtw]
 	umov w14, v27.s[1]
-	csel x8, x8, xzr, hi
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w12, [x6, w12, uxtw]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w16, v27.s[3]
 	smull v25.4s, v24.4h, v6.h[0]
-	ldrb w16, [x6, w16, uxtw]
-	smull2 v26.4s, v24.8h, v6.h[0]
 	ldrb w13, [x6, w13, uxtw]
-	fadd v1.4s, v1.4s, v4.4s
-	ldrb w15, [x6, w15, uxtw]
-	orr x0, x0, x17
 	ldrb w14, [x6, w14, uxtw]
-	ldp q17, q23, [x26]
-	stp w11, w12, [sp, #40]
+	umov w9, v29.s[0]
+	umov w15, v27.s[2]
+	ldrb w16, [x6, w16, uxtw]
+	fadd v0.4s, v0.4s, v4.4s
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	ldrb w9, [x6, w9, uxtw]
 	fsub v3.4s, v3.4s, v5.4s
-	stp w9, w10, [sp, #32]
-	sshr v25.4s, v25.4s, #15
+	ldrb w15, [x6, w15, uxtw]
+	fadd v1.4s, v1.4s, v4.4s
+	ldrb w10, [x6, w10, uxtw]
 	stp w13, w14, [sp, #48]
-	bic v17.4s, #0xff, lsl #24
+	stp w11, w12, [sp, #40]
 	sshr v26.4s, v26.4s, #15
-	add v25.4s, v25.4s, v7.4s
 	bic v23.4s, #0xff, lsl #24
-	stp w15, w16, [sp, #56]
+	sshr v25.4s, v25.4s, #15
 	add v26.4s, v26.4s, v7.4s
+	stp w9, w10, [sp, #32]
+	add v25.4s, v25.4s, v7.4s
+	stp w15, w16, [sp, #56]
+	bic v17.4s, #0xff, lsl #24
 	ld2 {v29.8h, v30.8h}, [x28]
-	cmhi v23.4s, v23.4s, v26.4s
+	csel x8, x8, xzr, hi
 	cmhi v17.4s, v17.4s, v25.4s
+	cmhi v23.4s, v23.4s, v26.4s
+	prfm pldl1keep, [x26, #4096]
 	xtn v29.8b, v29.8h
 	uzp1 v17.8h, v17.8h, v23.8h
+	tbl v31.8b, {v20.16b}, v29.8b
 	ldr q23, [x20, x8, lsl #4]
 	ldr d16, [sp, #144]
 	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v27.8b, {v19.16b}, v29.8b
-	tbl v31.8b, {v20.16b}, v29.8b
-	cmn x17, #1
-	and v17.16b, v17.16b, v23.16b
-	xtn v23.8b, v17.8h
-	ushll v9.8h, v31.8b, #6
 	tbl v29.8b, {v18.16b}, v29.8b
-	fmov x8, d23
-	orr v14.16b, v14.16b, v22.16b
+	ushll v9.8h, v31.8b, #6
+	and v17.16b, v17.16b, v23.16b
+	cmn x17, #1
+	xtn v23.8b, v17.8h
 	orr v31.8b, v30.8b, v16.8b
 	mov v28.8b, v29.8b
-	ccmp x8, #0, #4, eq
-	shrn v30.8b, v9.8h, #6
+	fmov x8, d23
+	orr v13.16b, v13.16b, v22.16b
 	mov v29.8b, v27.8b
+	shrn v30.8b, v9.8h, #6
+	ccmp x8, #0, #4, eq
+	orr v14.16b, v14.16b, v22.16b
 	b.eq 171f
 	subs x5, x5, #8
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -47709,9 +48558,12 @@ rast_kern_14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -47817,9 +48669,12 @@ rast_kern_14010:
 	b 152b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -47998,9 +48853,12 @@ rast_kern_14011:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -48388,14 +49246,17 @@ rast_kern_14011:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 454:
 	tbnz w7, #1, 30f
@@ -48441,9 +49302,12 @@ rast_kern_14011:
 	b 453b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -48659,9 +49523,12 @@ rast_kern_14100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -48897,14 +49764,17 @@ rast_kern_14100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 459:
 	tbnz w7, #1, 30f
@@ -48978,9 +49848,12 @@ rast_kern_14100:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -49148,9 +50021,12 @@ rast_kern_14101:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -49624,14 +50500,17 @@ rast_kern_14101:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 461:
 	tbnz w7, #1, 30f
@@ -49691,9 +50570,12 @@ rast_kern_14101:
 	b 38b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -49838,9 +50720,12 @@ rast_kern_14110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -50066,14 +50951,17 @@ rast_kern_14110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 463:
 	tbnz w7, #1, 30f
@@ -50118,9 +51006,12 @@ rast_kern_14110:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -50259,9 +51150,12 @@ rast_kern_14111:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #15, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -50727,14 +51621,17 @@ rast_kern_14111:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 465:
 	tbnz w7, #1, 30f
@@ -50765,9 +51662,12 @@ rast_kern_14111:
 	b 464b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -50841,9 +51741,12 @@ rast_kern_20000:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -51003,39 +51906,42 @@ rast_kern_20000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	tbz w7, #14, 37f
@@ -51070,26 +51976,32 @@ rast_kern_20000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -51282,9 +52194,12 @@ rast_kern_20010:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 0:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 24f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -51442,9 +52357,12 @@ rast_kern_20100:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -51601,39 +52519,42 @@ rast_kern_20100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	tbz w7, #14, 37f
@@ -51732,26 +52653,32 @@ rast_kern_20100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -51883,9 +52810,12 @@ rast_kern_20110:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 0:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 24f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -52061,9 +52991,12 @@ rast_kern_21000:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -52259,39 +53192,42 @@ rast_kern_21000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -52403,20 +53339,23 @@ rast_kern_21000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -52425,9 +53364,12 @@ rast_kern_21000:
 	sshr v30.8h, v30.8h, #3
 	b 481b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -52641,9 +53583,12 @@ rast_kern_21001:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -52829,39 +53774,42 @@ rast_kern_21001:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -53207,26 +54155,32 @@ rast_kern_21001:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -53427,9 +54381,12 @@ rast_kern_21010:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -53596,39 +54553,42 @@ rast_kern_21010:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -53727,20 +54687,23 @@ rast_kern_21010:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -53749,9 +54712,12 @@ rast_kern_21010:
 	sshr v30.8h, v30.8h, #3
 	b 494b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -53934,9 +54900,12 @@ rast_kern_21011:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -54093,39 +55062,42 @@ rast_kern_21011:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -54463,26 +55435,32 @@ rast_kern_21011:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -54652,9 +55630,12 @@ rast_kern_21100:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -54847,39 +55828,42 @@ rast_kern_21100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -55056,20 +56040,23 @@ rast_kern_21100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -55078,9 +56065,12 @@ rast_kern_21100:
 	sshr v30.8h, v30.8h, #3
 	b 506b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -55226,9 +56216,12 @@ rast_kern_21101:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -55411,39 +56404,42 @@ rast_kern_21101:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -55867,26 +56863,32 @@ rast_kern_21101:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -56028,9 +57030,12 @@ rast_kern_21110:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -56194,39 +57199,42 @@ rast_kern_21110:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -56392,20 +57400,23 @@ rast_kern_21110:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -56414,9 +57425,12 @@ rast_kern_21110:
 	sshr v30.8h, v30.8h, #3
 	b 513b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -56533,9 +57547,12 @@ rast_kern_21111:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -56689,39 +57706,42 @@ rast_kern_21111:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -57137,26 +58157,32 @@ rast_kern_21111:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -57261,9 +58287,12 @@ rast_kern_22000:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -57449,39 +58478,42 @@ rast_kern_22000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -57568,26 +58600,32 @@ rast_kern_22000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -57801,9 +58839,12 @@ rast_kern_22001:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -57989,39 +59030,42 @@ rast_kern_22001:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -58327,26 +59371,32 @@ rast_kern_22001:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -58547,9 +59597,12 @@ rast_kern_22010:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -58706,39 +59759,42 @@ rast_kern_22010:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -58812,26 +59868,32 @@ rast_kern_22010:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -59014,9 +60076,12 @@ rast_kern_22011:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -59173,39 +60238,42 @@ rast_kern_22011:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -59503,26 +60571,32 @@ rast_kern_22011:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -59692,9 +60766,12 @@ rast_kern_22100:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -59877,39 +60954,42 @@ rast_kern_22100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -60061,26 +61141,32 @@ rast_kern_22100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -60226,9 +61312,12 @@ rast_kern_22101:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -60411,39 +61500,42 @@ rast_kern_22101:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -60827,26 +61919,32 @@ rast_kern_22101:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -60988,9 +62086,12 @@ rast_kern_22110:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -61144,39 +62245,42 @@ rast_kern_22110:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -61317,26 +62421,32 @@ rast_kern_22110:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -61453,9 +62563,12 @@ rast_kern_22111:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -61609,39 +62722,42 @@ rast_kern_22111:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -62017,26 +63133,32 @@ rast_kern_22111:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -62143,9 +63265,12 @@ rast_kern_23000:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -62343,39 +63468,42 @@ rast_kern_23000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -62516,20 +63644,23 @@ rast_kern_23000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -62539,9 +63670,12 @@ rast_kern_23000:
 	sshr v30.8h, v30.8h, #3
 	b 549b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -62746,9 +63880,12 @@ rast_kern_23001:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -62934,39 +64071,42 @@ rast_kern_23001:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -63344,26 +64484,32 @@ rast_kern_23001:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -63565,9 +64711,12 @@ rast_kern_23010:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -63734,39 +64883,42 @@ rast_kern_23010:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -63888,20 +65040,23 @@ rast_kern_23010:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -63910,9 +65065,12 @@ rast_kern_23010:
 	sshr v30.8h, v30.8h, #3
 	b 562b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -64097,9 +65255,12 @@ rast_kern_23011:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -64256,39 +65417,42 @@ rast_kern_23011:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -64658,26 +65822,32 @@ rast_kern_23011:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -64847,9 +66017,12 @@ rast_kern_23100:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -65044,39 +66217,42 @@ rast_kern_23100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -65279,20 +66455,23 @@ rast_kern_23100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -65302,9 +66481,12 @@ rast_kern_23100:
 	sshr v30.8h, v30.8h, #3
 	b 574b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -65451,9 +66633,12 @@ rast_kern_23101:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -65636,39 +66821,42 @@ rast_kern_23101:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -66124,26 +67312,32 @@ rast_kern_23101:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -66285,9 +67479,12 @@ rast_kern_23110:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -66453,39 +67650,42 @@ rast_kern_23110:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -66677,20 +67877,23 @@ rast_kern_23110:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -66700,9 +67903,12 @@ rast_kern_23110:
 	sshr v30.8h, v30.8h, #3
 	b 581b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -66820,9 +68026,12 @@ rast_kern_23111:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -66976,39 +68185,42 @@ rast_kern_23111:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -67456,26 +68668,32 @@ rast_kern_23111:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -67582,9 +68800,12 @@ rast_kern_24000:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -67770,39 +68991,42 @@ rast_kern_24000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	ldr q25, [x19, #64]
@@ -67917,26 +69141,32 @@ rast_kern_24000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -68141,9 +69371,12 @@ rast_kern_24001:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -68329,39 +69562,42 @@ rast_kern_24001:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -68699,26 +69935,32 @@ rast_kern_24001:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -68920,9 +70162,12 @@ rast_kern_24010:
 	add x2, x1, #0x10, lsl #12
 	add x3, sp, #256
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -69079,39 +70324,42 @@ rast_kern_24010:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -69208,26 +70456,32 @@ rast_kern_24010:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -69412,9 +70666,12 @@ rast_kern_24011:
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -69571,39 +70828,42 @@ rast_kern_24011:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -69933,26 +71193,32 @@ rast_kern_24011:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -70122,9 +71388,12 @@ rast_kern_24100:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -70307,39 +71576,42 @@ rast_kern_24100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	ldr q25, [x19, #64]
@@ -70516,26 +71788,32 @@ rast_kern_24100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -70682,9 +71960,12 @@ rast_kern_24101:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -70867,39 +72148,42 @@ rast_kern_24101:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -71315,26 +72599,32 @@ rast_kern_24101:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -71476,9 +72766,12 @@ rast_kern_24110:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -71632,39 +72925,42 @@ rast_kern_24110:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	ldr q25, [x19, #64]
@@ -71830,26 +73126,32 @@ rast_kern_24110:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -71967,9 +73269,12 @@ rast_kern_24111:
 	add x2, x1, #0x10, lsl #12
 	add x3, x3, x8
 20:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -72123,39 +73428,42 @@ rast_kern_24111:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #15, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -72563,26 +73871,32 @@ rast_kern_24111:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -72712,10 +74026,11 @@ rast_kern_v00:
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	and v27.16b, v29.16b, v13.16b
-	and v28.16b, v30.16b, v13.16b
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	cmhi v27.4s, v27.4s, v25.4s
 	subs x5, x5, #8
+	cmhi v27.4s, v27.4s, v25.4s
+	and v28.16b, v30.16b, v13.16b
 	cmhi v28.4s, v28.4s, v26.4s
 	ldr q31, [x20, x9, lsl #4]
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -72750,10 +74065,10 @@ rast_kern_v00:
 	shrn2 v26.4s, v27.2d, #30
 	and v27.16b, v29.16b, v13.16b
 	and v28.16b, v30.16b, v13.16b
-	mov x9, #8
 	sub v27.4s, v25.4s, v27.4s
-	cmp x5, #8
 	sub v28.4s, v26.4s, v28.4s
+	mov x9, #8
+	cmp x5, #8
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
 	csel x9, x5, x9, lo
@@ -72765,22 +74080,23 @@ rast_kern_v00:
 	and v27.16b, v27.16b, v31.16b
 	xtn v28.8b, v27.8h
 	sshll v31.4s, v27.4h, #0
-	fmov x8, d28
-	bit v24.16b, v10.16b, v27.16b
-	sshll2 v27.4s, v27.8h, #0
 	orr v25.16b, v25.16b, v22.16b
 	orr v26.16b, v26.16b, v22.16b
+	fmov x8, d28
+	prfm pldl1keep, [x2, #4096]
+	bit v24.16b, v10.16b, v27.16b
+	sshll2 v27.4s, v27.8h, #0
+	orr x0, x0, x8
 	bit v29.16b, v25.16b, v31.16b
 	bit v30.16b, v26.16b, v27.16b
-	orr x0, x0, x8
-	subs x5, x5, #8
-	add v6.2d, v6.2d, v9.2d
 	str q24, [x1]
+	str d28, [x3], #8
+	add v6.2d, v6.2d, v9.2d
 	add x1, x1, #16
 	add v7.2d, v7.2d, v9.2d
+	subs x5, x5, #8
 	stp q29, q30, [x2]
 	add x2, x2, #32
-	str d28, [x3], #8
 	b.hi 24b
 9:
 	sub x2, x2, #32
@@ -72897,6 +74213,7 @@ rast_kern_v01:
 	ldr w8, [x22, #352]
 	mul x12, x10, x11
 	asr x13, x10, #63
+	prfm pldl1keep, [x2, #4096]
 	lsl x8, x8, #30
 	add x12, x12, x13, lsr #34
 	dup v6.2d, x8
@@ -72942,6 +74259,7 @@ rast_kern_v01:
 	add x1, x1, #16
 	add v26.2d, v6.2d, v8.2d
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
 	shrn2 v25.4s, v7.2d, #30
@@ -73073,6 +74391,7 @@ rast_kern_v01:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
@@ -73210,6 +74529,7 @@ rast_kern_v01:
 	shrn2 v25.4s, v7.2d, #30
 	shrn v24.4h, v4.4s, #16
 	shrn2 v26.4s, v27.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
@@ -73235,6 +74555,7 @@ rast_kern_v01:
 	b 620b
 24:
 	add v26.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	shrn v25.2s, v6.2d, #30
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
@@ -73414,6 +74735,7 @@ rast_kern_v02:
 	ldr w8, [x22, #352]
 	mul x12, x10, x11
 	asr x13, x10, #63
+	prfm pldl1keep, [x2, #4096]
 	lsl x8, x8, #30
 	add x12, x12, x13, lsr #34
 	dup v6.2d, x8
@@ -73459,6 +74781,7 @@ rast_kern_v02:
 	add x1, x1, #16
 	add v26.2d, v6.2d, v8.2d
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
 	shrn2 v25.4s, v7.2d, #30
@@ -73580,6 +74903,7 @@ rast_kern_v02:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
@@ -73692,6 +75016,7 @@ rast_kern_v02:
 	shrn2 v25.4s, v7.2d, #30
 	shrn v24.4h, v4.4s, #16
 	shrn2 v26.4s, v27.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
@@ -73712,6 +75037,7 @@ rast_kern_v02:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	shrn v25.2s, v6.2d, #30
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
@@ -73893,6 +75219,7 @@ rast_kern_v03:
 	ldr w8, [x22, #352]
 	mul x12, x10, x11
 	asr x13, x10, #63
+	prfm pldl1keep, [x2, #4096]
 	lsl x8, x8, #30
 	add x12, x12, x13, lsr #34
 	dup v6.2d, x8
@@ -73938,6 +75265,7 @@ rast_kern_v03:
 	add x1, x1, #16
 	add v26.2d, v6.2d, v8.2d
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
 	shrn2 v25.4s, v7.2d, #30
@@ -74069,6 +75397,7 @@ rast_kern_v03:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
@@ -74230,6 +75559,7 @@ rast_kern_v03:
 	shrn2 v25.4s, v7.2d, #30
 	shrn v24.4h, v4.4s, #16
 	shrn2 v26.4s, v27.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
@@ -74255,6 +75585,7 @@ rast_kern_v03:
 	b 634b
 24:
 	add v26.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	shrn v25.2s, v6.2d, #30
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
@@ -74436,6 +75767,7 @@ rast_kern_v04:
 	ldr w8, [x22, #352]
 	mul x12, x10, x11
 	asr x13, x10, #63
+	prfm pldl1keep, [x2, #4096]
 	lsl x8, x8, #30
 	add x12, x12, x13, lsr #34
 	dup v6.2d, x8
@@ -74481,6 +75813,7 @@ rast_kern_v04:
 	add x1, x1, #16
 	add v26.2d, v6.2d, v8.2d
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
 	shrn2 v25.4s, v7.2d, #30
@@ -74602,6 +75935,7 @@ rast_kern_v04:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
@@ -74738,6 +76072,7 @@ rast_kern_v04:
 	shrn2 v25.4s, v7.2d, #30
 	shrn v24.4h, v4.4s, #16
 	shrn2 v26.4s, v27.2d, #30
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
@@ -74758,6 +76093,7 @@ rast_kern_v04:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #4096]
 	shrn v25.2s, v6.2d, #30
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
@@ -74981,6 +76317,7 @@ rast_kern_v10:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -75057,14 +76394,17 @@ rast_kern_v10:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 650:
 	tbnz w7, #1, 30f
@@ -75112,9 +76452,12 @@ rast_kern_v10:
 	b 649b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -75302,6 +76645,7 @@ rast_kern_v11:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -75453,14 +76797,17 @@ rast_kern_v11:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 657:
 	tbnz w7, #1, 30f
@@ -75511,9 +76858,12 @@ rast_kern_v11:
 	b 656b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -75701,6 +77051,7 @@ rast_kern_v12:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -75827,14 +77178,17 @@ rast_kern_v12:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 662:
 	tbnz w7, #1, 30f
@@ -75880,9 +77234,12 @@ rast_kern_v12:
 	b 661b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -76074,6 +77431,7 @@ rast_kern_v13:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -76247,14 +77605,17 @@ rast_kern_v13:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 669:
 	tbnz w7, #1, 30f
@@ -76305,9 +77666,12 @@ rast_kern_v13:
 	b 668b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -76499,6 +77863,7 @@ rast_kern_v14:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -76647,14 +78012,17 @@ rast_kern_v14:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #15, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #4096]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 674:
 	tbnz w7, #1, 30f
@@ -76700,9 +78068,12 @@ rast_kern_v14:
 	b 673b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #15, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #4096]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -76825,31 +78196,32 @@ rast_kern_v20:
 0:
 	ldr q29, [x2]
 	ldr q30, [x2, #16]
-	cmp x5, #8
-	ldr q24, [x1]
 	mov x9, #8
+	cmp x5, #8
 	and v27.16b, v29.16b, v13.16b
 	and v28.16b, v30.16b, v13.16b
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
-	subs x5, x5, #8
 	cmhi v28.4s, v28.4s, v6.4s
 	ldr q31, [x20, x9, lsl #4]
 	uzp1 v27.8h, v27.8h, v28.8h
+	ldr q24, [x1]
 	and v27.16b, v27.16b, v31.16b
 	xtn v28.8b, v27.8h
 	sshll v31.4s, v27.4h, #0
-	bit v24.16b, v10.16b, v27.16b
 	fmov x8, d28
+	bit v24.16b, v10.16b, v27.16b
 	sshll2 v27.4s, v27.8h, #0
 	bit v29.16b, v11.16b, v31.16b
 	bit v30.16b, v11.16b, v27.16b
-	str q24, [x1]
+	prfm pldl1keep, [x2, #4096]
 	orr x0, x0, x8
+	subs x5, x5, #8
+	str q24, [x1]
 	add x1, x1, #16
-	str d28, [x3], #8
 	stp q29, q30, [x2]
 	add x2, x2, #32
+	str d28, [x3], #8
 	b.hi 0b
 	b 9f
 24:
@@ -76877,13 +78249,14 @@ rast_kern_v20:
 	sshll2 v27.4s, v27.8h, #0
 	bit v29.16b, v11.16b, v31.16b
 	bit v30.16b, v11.16b, v27.16b
+	prfm pldl1keep, [x2, #4096]
 	orr x0, x0, x8
 	subs x5, x5, #8
 	str q24, [x1]
 	add x1, x1, #16
-	str d28, [x3], #8
 	stp q29, q30, [x2]
 	add x2, x2, #32
+	str d28, [x3], #8
 	b.hi 24b
 9:
 	sub x2, x2, #32
@@ -76991,13 +78364,14 @@ rast_kern_v21:
 	ldrh w8, [x22, #1408]
 	add x1, x25, x24, lsl #11
 	ldr x10, [x19, #208]
-	add x3, sp, #256
 	ldrh w5, [x22, #1584]
+	add x3, sp, #256
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 	add x1, x10, x24, lsl #10
-	ldp q27, q28, [x2]
 	add x1, x1, x8, lsl #1
+	prfm pldl1keep, [x2, #4096]
+	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 679:
@@ -77020,6 +78394,7 @@ rast_kern_v21:
 	b.ls 15f
 	add x2, x2, #32
 	add x1, x1, #16
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -77141,39 +78516,40 @@ rast_kern_v21:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -77273,6 +78649,7 @@ rast_kern_v21:
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
+	prfm pldl1keep, [x2, #4096]
 	cmhi v28.4s, v28.4s, v6.4s
 	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -77290,6 +78667,7 @@ rast_kern_v21:
 	sshr v30.8h, v30.8h, #3
 	b 681b
 24:
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -77453,13 +78831,14 @@ rast_kern_v22:
 	ldrh w8, [x22, #1408]
 	add x1, x25, x24, lsl #11
 	ldr x10, [x19, #208]
-	add x3, sp, #256
 	ldrh w5, [x22, #1584]
+	add x3, sp, #256
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 	add x1, x10, x24, lsl #10
-	ldp q27, q28, [x2]
 	add x1, x1, x8, lsl #1
+	prfm pldl1keep, [x2, #4096]
+	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 687:
@@ -77482,6 +78861,7 @@ rast_kern_v22:
 	b.ls 15f
 	add x2, x2, #32
 	add x1, x1, #16
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -77593,39 +78973,40 @@ rast_kern_v22:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -77700,6 +79081,7 @@ rast_kern_v22:
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
+	prfm pldl1keep, [x2, #4096]
 	cmhi v28.4s, v28.4s, v6.4s
 	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -77712,6 +79094,7 @@ rast_kern_v22:
 	cbz x8, 8b
 	b 5b
 24:
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -77879,13 +79262,14 @@ rast_kern_v23:
 	ldrh w8, [x22, #1408]
 	add x1, x25, x24, lsl #11
 	ldr x10, [x19, #208]
-	add x3, sp, #256
 	ldrh w5, [x22, #1584]
+	add x3, sp, #256
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 	add x1, x10, x24, lsl #10
-	ldp q27, q28, [x2]
 	add x1, x1, x8, lsl #1
+	prfm pldl1keep, [x2, #4096]
+	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 693:
@@ -77908,6 +79292,7 @@ rast_kern_v23:
 	b.ls 15f
 	add x2, x2, #32
 	add x1, x1, #16
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -78029,39 +79414,40 @@ rast_kern_v23:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -78183,6 +79569,7 @@ rast_kern_v23:
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
+	prfm pldl1keep, [x2, #4096]
 	cmhi v28.4s, v28.4s, v6.4s
 	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -78200,6 +79587,7 @@ rast_kern_v23:
 	sshr v30.8h, v30.8h, #3
 	b 695b
 24:
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -78367,13 +79755,14 @@ rast_kern_v24:
 	ldrh w8, [x22, #1408]
 	add x1, x25, x24, lsl #11
 	ldr x10, [x19, #208]
-	add x3, sp, #256
 	ldrh w5, [x22, #1584]
+	add x3, sp, #256
 	add x1, x1, x8, lsl #2
 	add x2, x1, #0x10, lsl #12
 	add x1, x10, x24, lsl #10
-	ldp q27, q28, [x2]
 	add x1, x1, x8, lsl #1
+	prfm pldl1keep, [x2, #4096]
+	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 701:
@@ -78396,6 +79785,7 @@ rast_kern_v24:
 	b.ls 15f
 	add x2, x2, #32
 	add x1, x1, #16
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -78507,39 +79897,40 @@ rast_kern_v24:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -78636,6 +80027,7 @@ rast_kern_v24:
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
+	prfm pldl1keep, [x2, #4096]
 	cmhi v28.4s, v28.4s, v6.4s
 	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -78648,6 +80040,7 @@ rast_kern_v24:
 	cbz x8, 8b
 	b 5b
 24:
+	prfm pldl1keep, [x2, #4096]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -78928,9 +80321,12 @@ rast_kern_s000:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v14.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -78982,13 +80378,16 @@ rast_kern_s000:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v14.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -79337,9 +80736,12 @@ rast_kern_s100:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v6.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -79473,13 +80875,16 @@ rast_kern_s100:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v6.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -79735,10 +81140,13 @@ rast_kern_s101:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -80092,16 +81500,19 @@ rast_kern_s101:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -80334,9 +81745,12 @@ rast_kern_s110:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v20.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -80459,13 +81873,16 @@ rast_kern_s110:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v20.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -80663,10 +82080,13 @@ rast_kern_s111:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -81012,16 +82432,19 @@ rast_kern_s111:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -81241,9 +82664,12 @@ rast_kern_s200:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v6.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -81352,13 +82778,16 @@ rast_kern_s200:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v6.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -81609,10 +83038,13 @@ rast_kern_s201:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -81926,16 +83358,19 @@ rast_kern_s201:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -82158,9 +83593,12 @@ rast_kern_s210:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v20.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -82258,13 +83696,16 @@ rast_kern_s210:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v20.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -82457,10 +83898,13 @@ rast_kern_s211:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -82766,16 +84210,19 @@ rast_kern_s211:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -83008,9 +84455,12 @@ rast_kern_s300:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v6.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -83170,13 +84620,16 @@ rast_kern_s300:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v6.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -83433,10 +84886,13 @@ rast_kern_s301:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -83822,16 +85278,19 @@ rast_kern_s301:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -84067,9 +85526,12 @@ rast_kern_s310:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v8.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -84215,13 +85677,16 @@ rast_kern_s310:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v8.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -84419,10 +85884,13 @@ rast_kern_s311:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -84800,16 +86268,19 @@ rast_kern_s311:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -85030,9 +86501,12 @@ rast_kern_s400:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v6.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -85166,13 +86640,16 @@ rast_kern_s400:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v6.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -85423,10 +86900,13 @@ rast_kern_s401:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -85772,16 +87252,19 @@ rast_kern_s401:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -86007,9 +87490,12 @@ rast_kern_s410:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
+	prfm pldl1keep, [x2, #4096]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v8.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -86130,13 +87616,16 @@ rast_kern_s410:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #15, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v8.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -86329,10 +87818,13 @@ rast_kern_s411:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #15, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #4096]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -86670,16 +88162,19 @@ rast_kern_s411:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #15, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #4096]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -86768,9 +88263,12 @@ rast_kern_h00000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -86964,9 +88462,12 @@ rast_kern_h00000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -87039,14 +88540,17 @@ rast_kern_h00000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -87061,9 +88565,12 @@ rast_kern_h00000:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -87280,9 +88787,12 @@ rast_kern_h00010:
 	shl v8.2d, v25.2d, #2
 0:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -87469,9 +88979,12 @@ rast_kern_h00100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -87662,9 +89175,12 @@ rast_kern_h00100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -87801,14 +89317,17 @@ rast_kern_h00100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -87823,9 +89342,12 @@ rast_kern_h00100:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -87984,9 +89506,12 @@ rast_kern_h00110:
 	shl v8.2d, v25.2d, #2
 0:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -88189,9 +89714,12 @@ rast_kern_h01000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -88421,9 +89949,12 @@ rast_kern_h01000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -88572,14 +90103,17 @@ rast_kern_h01000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -88597,9 +90131,12 @@ rast_kern_h01000:
 	b 752b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -88838,9 +90375,12 @@ rast_kern_h01001:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -89059,9 +90599,12 @@ rast_kern_h01001:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -89446,14 +90989,17 @@ rast_kern_h01001:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -89467,9 +91013,12 @@ rast_kern_h01001:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -89690,9 +91239,12 @@ rast_kern_h01010:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -89893,9 +91445,12 @@ rast_kern_h01010:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -90033,14 +91588,17 @@ rast_kern_h01010:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -90060,9 +91618,12 @@ rast_kern_h01010:
 	b 765b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -90272,9 +91833,12 @@ rast_kern_h01011:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -90464,9 +92028,12 @@ rast_kern_h01011:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -90843,14 +92410,17 @@ rast_kern_h01011:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -90864,9 +92434,12 @@ rast_kern_h01011:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -91060,9 +92633,12 @@ rast_kern_h01100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -91288,9 +92864,12 @@ rast_kern_h01100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -91508,14 +93087,17 @@ rast_kern_h01100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -91534,9 +93116,12 @@ rast_kern_h01100:
 	b 777b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -91710,9 +93295,12 @@ rast_kern_h01101:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -91928,9 +93516,12 @@ rast_kern_h01101:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -92393,14 +93984,17 @@ rast_kern_h01101:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -92414,9 +94008,12 @@ rast_kern_h01101:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -92580,9 +94177,12 @@ rast_kern_h01110:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -92780,9 +94380,12 @@ rast_kern_h01110:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -92990,14 +94593,17 @@ rast_kern_h01110:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -93017,9 +94623,12 @@ rast_kern_h01110:
 	b 784b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -93164,9 +94773,12 @@ rast_kern_h01111:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -93353,9 +94965,12 @@ rast_kern_h01111:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -93810,14 +95425,17 @@ rast_kern_h01111:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -93831,9 +95449,12 @@ rast_kern_h01111:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -93962,9 +95583,12 @@ rast_kern_h02000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -94188,9 +95812,12 @@ rast_kern_h02000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -94314,14 +95941,17 @@ rast_kern_h02000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -94334,9 +95964,12 @@ rast_kern_h02000:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -94482,118 +96115,121 @@ rast_kern_h02000:
 51:
 	add v16.2d, v6.2d, v8.2d
 	ldr q21, [sp, #112]
-	frecpe v22.4s, v2.4s
-	frecpe v23.4s, v3.4s
 	smull v27.4s, v24.4h, v15.h[5]
+	frecpe v23.4s, v3.4s
+	frecpe v22.4s, v2.4s
+	cmp x5, #16
+	mov x17, #16
+	add v17.2d, v7.2d, v8.2d
+	ldr q31, [sp, #96]
 	smull v30.4s, v24.4h, v15.h[4]
 	frecps v9.4s, v22.4s, v2.4s
-	frecps v12.4s, v23.4s, v3.4s
-	addhn v27.4h, v27.4s, v21.4s
-	ldr q31, [sp, #96]
-	add v17.2d, v7.2d, v8.2d
-	ldr q28, [x19, #64]
+	sqdmulh v20.8h, v24.8h, v15.h[3]
 	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	fmul v22.4s, v22.4s, v9.4s
-	fmul v23.4s, v23.4s, v12.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	mov x17, #16
-	smull2 v29.4s, v24.8h, v15.h[5]
-	sqdmulh v19.8h, v24.8h, v15.h[1]
+	csel x17, x5, x17, lo
 	frecps v12.4s, v23.4s, v3.4s
+	fmul v22.4s, v22.4s, v9.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	subs x17, x17, #8
+	smull2 v29.4s, v24.8h, v15.h[5]
+	addhn v27.4h, v27.4s, v21.4s
+	ldr q28, [x19, #64]
+	fmul v23.4s, v23.4s, v12.4s
 	frecps v9.4s, v22.4s, v2.4s
 	addhn2 v27.8h, v29.4s, v21.4s
-	cmp x5, #16
-	add v19.8h, v19.8h, v11.8h
-	ldr q31, [sp, #128]
-	sshr v30.8h, v30.8h, #3
-	add x26, x2, #32
-	add v7.2d, v17.2d, v8.2d
+	csel x17, x17, xzr, hi
 	shrn v13.2s, v16.2d, #30
+	add x26, x2, #32
+	sshr v30.8h, v30.8h, #3
+	ldr q31, [sp, #128]
+	add v7.2d, v17.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	sshr v27.8h, v27.8h, #3
-	csel x17, x5, x17, lo
-	add v6.2d, v16.2d, v8.2d
 	shrn2 v13.4s, v17.2d, #30
+	ldr q28, [x19, #80]
+	add v6.2d, v16.2d, v8.2d
+	sshr v27.8h, v27.8h, #3
+	add v20.8h, v20.8h, v31.8h
 	and v27.16b, v27.16b, v28.16b
+	csel x26, x26, x2, hi
+	fmul v22.4s, v22.4s, v9.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v23.4s, v23.4s, v12.4s
-	fmul v22.4s, v22.4s, v9.4s
+	frecps v12.4s, v23.4s, v3.4s
+	fmul v22.4s, v0.4s, v22.4s
 	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	subs x17, x17, #8
-	shrn v14.2s, v6.2d, #30
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	csel x26, x26, x2, hi
-	umov w14, v27.s[1]
+	ldp q16, q17, [x26]
+	fmul v23.4s, v23.4s, v12.4s
 	umov w12, v29.s[3]
-	umov w13, v27.s[0]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	sub x18, x26, #36, lsl #12
+	bic v16.4s, #0xff, lsl #24
+	umov w11, v29.s[2]
+	orr x0, x0, x8
+	umov w14, v27.s[1]
+	prfm pstl1keep, [x18, #0]
 	umov w16, v27.s[3]
 	umov w15, v27.s[2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w10, [x6, w10, uxtw #2]
-	fmul v22.4s, v0.4s, v22.4s
-	ldr w14, [x6, w14, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w11, [x6, w11, uxtw #2]
-	umov w9, v29.s[0]
-	ldr w15, [x6, w15, uxtw #2]
+	umov w13, v27.s[0]
 	fmul v23.4s, v1.4s, v23.4s
-	ldr w13, [x6, w13, uxtw #2]
-	sqdmulh v18.8h, v24.8h, v15.h[0]
-	ldr w16, [x6, w16, uxtw #2]
-	sqdmulh v20.8h, v24.8h, v15.h[3]
-	ldr w12, [x6, w12, uxtw #2]
+	umov w9, v29.s[0]
 	fadd v1.4s, v1.4s, v4.4s
-	ldr w9, [x6, w9, uxtw #2]
-	ldp q16, q17, [x26]
+	ldr w14, [x6, w14, uxtw #2]
+	umov w10, v29.s[1]
+	ldr w16, [x6, w16, uxtw #2]
 	fsub v3.4s, v3.4s, v5.4s
-	csel x17, x17, xzr, hi
-	stp w9, w10, [sp, #32]
-	add v20.8h, v20.8h, v31.8h
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	fcvtzs v22.4s, v22.4s, #15
+	sqdmulh v18.8h, v24.8h, v15.h[0]
+	ldr w12, [x6, w12, uxtw #2]
+	sqdmulh v19.8h, v24.8h, v15.h[1]
+	ldr w10, [x6, w10, uxtw #2]
+	fcvtzs v23.4s, v23.4s, #15
+	ldr w9, [x6, w9, uxtw #2]
+	ldr w11, [x6, w11, uxtw #2]
 	stp w13, w14, [sp, #48]
-	bic v16.4s, #0xff, lsl #24
 	stp w15, w16, [sp, #56]
+	cmhi v16.4s, v16.4s, v13.4s
+	shrn v14.2s, v6.2d, #30
 	add v18.8h, v18.8h, v10.8h
+	stp w9, w10, [sp, #32]
+	add v19.8h, v19.8h, v11.8h
 	stp w11, w12, [sp, #40]
 	bic v17.4s, #0xff, lsl #24
 	ld2 {v29.8h, v30.8h}, [x28]
-	fcvtzs v23.4s, v23.4s, #15
-	fcvtzs v22.4s, v22.4s, #15
+	fadd v0.4s, v0.4s, v4.4s
 	shrn2 v14.4s, v7.2d, #30
 	shrn v20.8b, v20.8h, #3
-	cmhi v16.4s, v16.4s, v13.4s
 	shrn v18.8b, v18.8h, #3
+	xtn v22.4h, v22.4s
 	shrn v27.8b, v29.8h, #8
-	shrn v19.8b, v19.8h, #3
-	xtn v29.8b, v29.8h
-	cmhi v17.4s, v17.4s, v14.4s
 	xtn v31.8b, v30.8h
-	uaddl v21.8h, v19.8b, v27.8b
-	cmn x8, #1
-	uaddl v24.8h, v18.8b, v29.8b
+	shrn v19.8b, v19.8h, #3
+	xtn2 v22.8h, v23.4s
+	cmhi v17.4s, v17.4s, v14.4s
+	xtn v29.8b, v29.8h
 	uaddl v28.8h, v20.8b, v31.8b
-	orr x0, x0, x8
+	uaddl v24.8h, v18.8b, v29.8b
+	cmn x8, #1
+	fsub v2.4s, v2.4s, v5.4s
 	uzp1 v16.8h, v16.8h, v17.8h
+	umlal v28.8h, v20.8b, v31.8b
 	ldr q17, [x20, x17, lsl #4]
 	umlal v24.8h, v18.8b, v29.8b
-	umlal v28.8h, v20.8b, v31.8b
-	umlal v21.8h, v19.8b, v27.8b
-	xtn v22.4h, v22.4s
-	shrn v18.8b, v24.8h, #6
+	uaddl v21.8h, v19.8b, v27.8b
+	prfm pldl1keep, [x26, #6144]
 	and v16.16b, v16.16b, v17.16b
 	shrn v20.8b, v28.8h, #6
 	xtn v17.8b, v16.8h
 	ldr q28, [x19, #32]
-	ldr d24, [sp, #144]
-	xtn2 v22.8h, v23.4s
+	umlal v21.8h, v19.8b, v27.8b
 	fmov x17, d17
 	shrn v30.8b, v30.8h, #8
-	orr v25.16b, v25.16b, v28.16b
+	shrn v18.8b, v24.8h, #6
 	orr v26.16b, v26.16b, v28.16b
+	orr v25.16b, v25.16b, v28.16b
+	ldr d24, [sp, #144]
 	ccmp x17, #0, #4, eq
 	shrn v19.8b, v21.8h, #6
 	orr v21.8b, v30.8b, v24.8b
@@ -94607,116 +96243,119 @@ rast_kern_h02000:
 	add x2, x2, #32
 53:
 	ldr q31, [sp, #96]
-	smull v27.4s, v22.4h, v15.h[5]
+	smull2 v29.4s, v22.8h, v15.h[4]
+	frecpe v23.4s, v3.4s
 	frecpe v24.4s, v2.4s
 	smull v30.4s, v22.4h, v15.h[4]
-	frecpe v23.4s, v3.4s
-	ldr q28, [x19, #64]
-	smull2 v29.4s, v22.8h, v15.h[4]
-	ldr q21, [sp, #112]
-	cmp x5, #16
+	sqdmulh v20.8h, v22.8h, v15.h[3]
 	frecps v12.4s, v23.4s, v3.4s
+	frecps v9.4s, v24.4s, v2.4s
 	addhn v30.4h, v30.4s, v31.4s
 	mov x8, #16
 	add v16.2d, v6.2d, v8.2d
-	frecps v9.4s, v24.4s, v2.4s
+	smull v27.4s, v22.4h, v15.h[5]
 	addhn2 v30.8h, v29.4s, v31.4s
-	csel x8, x5, x8, lo
+	ldr q21, [sp, #112]
+	fmul v24.4s, v24.4s, v9.4s
 	smull2 v29.4s, v22.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v21.4s
-	fmul v24.4s, v24.4s, v9.4s
+	cmp x5, #16
 	fmul v23.4s, v23.4s, v12.4s
+	frecps v9.4s, v24.4s, v2.4s
 	addhn2 v27.8h, v29.4s, v21.4s
-	add v6.2d, v16.2d, v8.2d
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
+	add x26, x2, #32
 	add v17.2d, v7.2d, v8.2d
 	sshr v27.8h, v27.8h, #3
+	csel x8, x5, x8, lo
+	add v7.2d, v17.2d, v8.2d
+	shrn v25.2s, v16.2d, #30
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	add v7.2d, v17.2d, v8.2d
+	add v6.2d, v16.2d, v8.2d
 	subs x8, x8, #8
-	shrn v25.2s, v16.2d, #30
 	and v27.16b, v27.16b, v28.16b
-	add x26, x2, #32
+	shrn2 v25.4s, v17.2d, #30
+	shrn v26.2s, v6.2d, #30
+	csel x26, x26, x2, hi
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	frecps v12.4s, v23.4s, v3.4s
-	frecps v9.4s, v24.4s, v2.4s
+	fmul v24.4s, v24.4s, v9.4s
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
 	ldr q31, [sp, #128]
-	shrn v26.2s, v6.2d, #30
-	csel x26, x26, x2, hi
-	umov w10, v29.s[1]
+	ldp q16, q17, [x26]
 	umov w12, v29.s[3]
-	umov w13, v27.s[0]
-	umov w15, v27.s[2]
-	umov w16, v27.s[3]
-	umov w14, v27.s[1]
-	umov w9, v29.s[0]
 	umov w11, v29.s[2]
-	sqdmulh v20.8h, v22.8h, v15.h[3]
-	ldr w12, [x6, w12, uxtw #2]
-	fmul v24.4s, v24.4s, v9.4s
-	ldr w13, [x6, w13, uxtw #2]
+	umov w13, v27.s[0]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
+	umov w16, v27.s[3]
 	fmul v23.4s, v23.4s, v12.4s
-	ldr w15, [x6, w15, uxtw #2]
-	sqdmulh v18.8h, v22.8h, v15.h[0]
-	ldr w14, [x6, w14, uxtw #2]
-	sqdmulh v19.8h, v22.8h, v15.h[1]
-	ldr w10, [x6, w10, uxtw #2]
+	umov w9, v29.s[0]
 	fsub v3.4s, v3.4s, v5.4s
 	ldr w11, [x6, w11, uxtw #2]
 	fmul v24.4s, v0.4s, v24.4s
+	umov w15, v27.s[2]
 	ldr w16, [x6, w16, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w9, [x6, w9, uxtw #2]
-	csel x8, x8, xzr, hi
-	stp w13, w14, [sp, #48]
-	stp w11, w12, [sp, #40]
-	shrn2 v25.4s, v17.2d, #30
-	add v19.8h, v19.8h, v11.8h
-	stp w15, w16, [sp, #56]
-	add v20.8h, v20.8h, v31.8h
-	stp w9, w10, [sp, #32]
 	fmul v23.4s, v1.4s, v23.4s
+	ldr w10, [x6, w10, uxtw #2]
+	sub x18, x26, #36, lsl #12
+	ldr w14, [x6, w14, uxtw #2]
+	fsub v2.4s, v2.4s, v5.4s
+	ldr w13, [x6, w13, uxtw #2]
+	fadd v0.4s, v0.4s, v4.4s
+	ldr w15, [x6, w15, uxtw #2]
+	sqdmulh v18.8h, v22.8h, v15.h[0]
+	ldr w9, [x6, w9, uxtw #2]
+	sqdmulh v19.8h, v22.8h, v15.h[1]
+	ldr w12, [x6, w12, uxtw #2]
+	prfm pstl1keep, [x18, #0]
+	add v20.8h, v20.8h, v31.8h
+	csel x8, x8, xzr, hi
+	stp w9, w10, [sp, #32]
+	shrn2 v26.4s, v7.2d, #30
+	bic v16.4s, #0xff, lsl #24
+	stp w15, w16, [sp, #56]
+	add v18.8h, v18.8h, v10.8h
+	stp w13, w14, [sp, #48]
+	add v19.8h, v19.8h, v11.8h
+	stp w11, w12, [sp, #40]
+	bic v17.4s, #0xff, lsl #24
 	ld2 {v29.8h, v30.8h}, [x28]
 	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
-	ldp q16, q17, [x26]
-	fsub v2.4s, v2.4s, v5.4s
-	fcvtzs v23.4s, v23.4s, #15
+	shrn v19.8b, v19.8h, #3
+	cmhi v17.4s, v17.4s, v26.4s
+	shrn v18.8b, v18.8h, #3
 	shrn v20.8b, v20.8h, #3
-	shrn2 v26.4s, v7.2d, #30
 	shrn v27.8b, v29.8h, #8
 	xtn v31.8b, v30.8h
-	bic v16.4s, #0xff, lsl #24
-	bic v17.4s, #0xff, lsl #24
 	cmhi v16.4s, v16.4s, v25.4s
-	cmhi v17.4s, v17.4s, v26.4s
-	add v18.8h, v18.8h, v10.8h
+	xtn v29.8b, v29.8h
+	uaddl v21.8h, v19.8b, v27.8b
 	uzp1 v16.8h, v16.8h, v17.8h
 	ldr q17, [x20, x8, lsl #4]
-	cmn x17, #1
-	shrn v18.8b, v18.8h, #3
-	shrn v30.8b, v30.8h, #8
-	xtn v29.8b, v29.8h
-	xtn v24.4h, v24.4s
-	and v16.16b, v16.16b, v17.16b
-	shrn v19.8b, v19.8h, #3
-	uaddl v28.8h, v20.8b, v31.8b
-	orr x0, x0, x17
 	uaddl v22.8h, v18.8b, v29.8b
+	uaddl v28.8h, v20.8b, v31.8b
+	shrn v30.8b, v30.8h, #8
+	and v16.16b, v16.16b, v17.16b
+	xtn v24.4h, v24.4s
 	xtn v17.8b, v16.8h
-	uaddl v21.8h, v19.8b, v27.8b
+	prfm pldl1keep, [x26, #6144]
 	umlal v22.8h, v18.8b, v29.8b
+	fcvtzs v23.4s, v23.4s, #15
 	umlal v28.8h, v20.8b, v31.8b
 	umlal v21.8h, v19.8b, v27.8b
 	fmov x8, d17
+	cmn x17, #1
 	shrn v18.8b, v22.8h, #6
 	ldr d22, [sp, #144]
 	shrn v20.8b, v28.8h, #6
 	ldr q28, [x19, #32]
+	orr x0, x0, x17
 	ccmp x8, #0, #4, eq
 	shrn v19.8b, v21.8h, #6
 	xtn2 v24.8h, v23.4s
@@ -94743,10 +96382,13 @@ rast_kern_h02000:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -94979,9 +96621,12 @@ rast_kern_h02001:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -95200,9 +96845,12 @@ rast_kern_h02001:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -95547,14 +97195,17 @@ rast_kern_h02001:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -95568,9 +97219,12 @@ rast_kern_h02001:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -95791,9 +97445,12 @@ rast_kern_h02010:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -95992,9 +97649,12 @@ rast_kern_h02010:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -96107,14 +97767,17 @@ rast_kern_h02010:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -96129,9 +97792,12 @@ rast_kern_h02010:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -96244,110 +97910,113 @@ rast_kern_h02010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 51:
-	cmp x5, #16
-	mov x17, #16
-	add v16.2d, v6.2d, v8.2d
+	smull v30.4s, v24.4h, v15.h[4]
 	ldr q31, [sp, #96]
-	add v17.2d, v7.2d, v8.2d
-	add x26, x2, #32
-	add v6.2d, v16.2d, v8.2d
-	csel x17, x5, x17, lo
+	cmp x5, #16
 	smull v27.4s, v24.4h, v15.h[5]
 	smull2 v29.4s, v24.8h, v15.h[4]
-	smull v30.4s, v24.4h, v15.h[4]
-	subs x17, x17, #8
-	add v7.2d, v17.2d, v8.2d
-	shrn v13.2s, v16.2d, #30
-	frecpe v22.4s, v2.4s
-	csel x26, x26, x2, hi
-	ldr q25, [x19, #64]
-	shrn v14.2s, v6.2d, #30
-	shrn2 v13.4s, v17.2d, #30
 	addhn v30.4h, v30.4s, v31.4s
+	add v16.2d, v6.2d, v8.2d
 	ldr q26, [sp, #112]
-	ldp q16, q17, [x26]
-	frecps v9.4s, v22.4s, v2.4s
+	frecpe v22.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
+	mov x17, #16
 	smull2 v29.4s, v24.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v26.4s
+	ldr q25, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	bic v16.4s, #0xff, lsl #24
-	shrn2 v14.4s, v7.2d, #30
-	bic v17.4s, #0xff, lsl #24
-	csel x17, x17, xzr, hi
-	cmhi v17.4s, v17.4s, v14.4s
-	cmhi v16.4s, v16.4s, v13.4s
-	fmul v22.4s, v22.4s, v9.4s
-	uzp1 v16.8h, v16.8h, v17.8h
-	ldr q17, [x20, x17, lsl #4]
-	addhn2 v27.8h, v29.4s, v26.4s
-	cmn x8, #1
+	csel x17, x5, x17, lo
+	add v6.2d, v16.2d, v8.2d
+	shrn v13.2s, v16.2d, #30
 	and v30.16b, v30.16b, v25.16b
+	add x26, x2, #32
+	addhn2 v27.8h, v29.4s, v26.4s
+	shrn v14.2s, v6.2d, #30
+	subs x17, x17, #8
+	add v17.2d, v7.2d, v8.2d
 	ldr q25, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	and v16.16b, v16.16b, v17.16b
-	xtn v17.8b, v16.8h
+	add v7.2d, v17.2d, v8.2d
+	shrn2 v13.4s, v17.2d, #30
 	and v27.16b, v27.16b, v25.16b
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmov x17, d17
-	orr x0, x0, x8
+	csel x26, x26, x2, hi
 	frecps v9.4s, v22.4s, v2.4s
 	uaddw v29.4s, v29.4s, v30.4h
-	ldr q17, [x19, #32]
 	uaddw2 v27.4s, v27.4s, v30.8h
-	orr v14.16b, v14.16b, v17.16b
-	orr v13.16b, v13.16b, v17.16b
-	umov w14, v27.s[1]
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
-	umov w12, v29.s[3]
-	umov w10, v29.s[1]
-	frecpe v23.4s, v3.4s
+	ldp q16, q17, [x26]
 	umov w9, v29.s[0]
-	umov w16, v27.s[3]
-	ldr w14, [x6, w14, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w11, [x6, w11, uxtw #2]
-	ldr w12, [x6, w12, uxtw #2]
+	umov w10, v29.s[1]
+	umov w13, v27.s[0]
+	fmul v22.4s, v22.4s, v9.4s
+	umov w14, v27.s[1]
+	sub x18, x26, #36, lsl #12
 	umov w15, v27.s[2]
 	ldr w10, [x6, w10, uxtw #2]
-	frecps v17.4s, v23.4s, v3.4s
-	ldr w16, [x6, w16, uxtw #2]
-	fmul v22.4s, v22.4s, v9.4s
-	ldr w13, [x6, w13, uxtw #2]
+	umov w16, v27.s[3]
+	umov w12, v29.s[3]
 	ldr w9, [x6, w9, uxtw #2]
-	stp w11, w12, [sp, #40]
+	frecps v9.4s, v22.4s, v2.4s
+	ldr w13, [x6, w13, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
+	umov w11, v29.s[2]
+	csel x17, x17, xzr, hi
 	ldr w15, [x6, w15, uxtw #2]
-	ccmp x17, #0, #4, eq
-	fmul v22.4s, v0.4s, v22.4s
+	ldr w16, [x6, w16, uxtw #2]
+	ldr w12, [x6, w12, uxtw #2]
+	fmul v22.4s, v22.4s, v9.4s
+	ldr w11, [x6, w11, uxtw #2]
+	prfm pstl1keep, [x18, #0]
 	stp w13, w14, [sp, #48]
-	fmul v23.4s, v23.4s, v17.4s
+	shrn2 v14.4s, v7.2d, #30
+	bic v17.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
+	bic v16.4s, #0xff, lsl #24
+	stp w11, w12, [sp, #40]
+	cmhi v16.4s, v16.4s, v13.4s
 	stp w15, w16, [sp, #56]
+	cmhi v17.4s, v17.4s, v14.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fadd v0.4s, v0.4s, v4.4s
-	frecps v17.4s, v23.4s, v3.4s
-	fsub v3.4s, v3.4s, v5.4s
+	fmul v22.4s, v0.4s, v22.4s
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x17, lsl #4]
+	frecpe v23.4s, v3.4s
+	and v16.16b, v16.16b, v17.16b
+	xtn v17.8b, v16.8h
 	xtn v31.8b, v30.8h
+	fmov x17, d17
+	ldr q17, [x19, #32]
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
-	shrn v30.8b, v30.8h, #8
-	uaddl v18.8h, v11.8b, v27.8b
-	fcvtzs v22.4s, v22.4s, #15
+	orr v13.16b, v13.16b, v17.16b
+	orr v14.16b, v14.16b, v17.16b
+	frecps v17.4s, v23.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fadd v0.4s, v0.4s, v4.4s
+	cmn x8, #1
+	prfm pldl1keep, [x26, #6144]
 	fmul v23.4s, v23.4s, v17.4s
+	fcvtzs v22.4s, v22.4s, #15
+	uaddl v18.8h, v11.8b, v27.8b
 	uaddl v26.8h, v10.8b, v29.8b
+	frecps v17.4s, v23.4s, v3.4s
+	umlal v26.8h, v10.8b, v29.8b
 	uaddl v19.8h, v12.8b, v31.8b
 	umlal v18.8h, v11.8b, v27.8b
-	fmul v23.4s, v1.4s, v23.4s
-	umlal v26.8h, v10.8b, v29.8b
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v19.8h, v12.8b, v31.8b
+	fmul v23.4s, v23.4s, v17.4s
 	ldr d29, [sp, #144]
-	fcvtzs v23.4s, v23.4s, #15
-	xtn v22.4h, v22.4s
 	shrn v24.8b, v26.8h, #6
+	ccmp x17, #0, #4, eq
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v23.4s, v1.4s, v23.4s
+	umlal v19.8h, v12.8b, v31.8b
+	orr x0, x0, x8
+	xtn v22.4h, v22.4s
+	fadd v1.4s, v1.4s, v4.4s
+	fcvtzs v23.4s, v23.4s, #15
 	shrn v25.8b, v18.8h, #6
+	shrn v30.8b, v30.8h, #8
 	shrn v26.8b, v19.8h, #6
 	orr v27.8b, v30.8b, v29.8b
 	xtn2 v22.8h, v23.4s
@@ -96361,112 +98030,115 @@ rast_kern_h02010:
 	add x2, x2, #32
 	mov v24.16b, v22.16b
 53:
-	mov x8, #16
-	add v16.2d, v6.2d, v8.2d
-	cmp x5, #16
-	frecpe v22.4s, v2.4s
-	smull v30.4s, v24.4h, v15.h[4]
-	add x26, x2, #32
-	csel x8, x5, x8, lo
-	shrn v20.2s, v16.2d, #30
 	ldr q31, [sp, #96]
-	smull2 v29.4s, v24.8h, v15.h[4]
+	smull v30.4s, v24.4h, v15.h[4]
 	smull v27.4s, v24.4h, v15.h[5]
+	frecpe v22.4s, v2.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	subs x8, x8, #8
-	add v17.2d, v7.2d, v8.2d
 	ldr q26, [sp, #112]
-	add v6.2d, v16.2d, v8.2d
-	shrn2 v20.4s, v17.2d, #30
-	csel x26, x26, x2, hi
-	add v7.2d, v17.2d, v8.2d
-	shrn v21.2s, v6.2d, #30
-	addhn2 v30.8h, v29.4s, v31.4s
-	ldp q16, q17, [x26]
-	smull2 v29.4s, v24.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v26.4s
-	orr x0, x0, x17
-	sshr v30.8h, v30.8h, #3
-	bic v16.4s, #0xff, lsl #24
-	shrn2 v21.4s, v7.2d, #30
-	bic v17.4s, #0xff, lsl #24
-	cmhi v17.4s, v17.4s, v21.4s
-	csel x8, x8, xzr, hi
-	frecps v9.4s, v22.4s, v2.4s
-	addhn2 v27.8h, v29.4s, v26.4s
+	add v16.2d, v6.2d, v8.2d
 	ldr q25, [x19, #64]
-	cmhi v16.4s, v16.4s, v20.4s
+	frecps v9.4s, v22.4s, v2.4s
+	addhn v27.4h, v27.4s, v26.4s
+	cmp x5, #16
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v24.8h, v15.h[5]
+	mov x8, #16
+	add v17.2d, v7.2d, v8.2d
+	shrn v20.2s, v16.2d, #30
+	sshr v30.8h, v30.8h, #3
+	addhn2 v27.8h, v29.4s, v26.4s
+	add x26, x2, #32
+	add v6.2d, v16.2d, v8.2d
 	and v30.16b, v30.16b, v25.16b
 	ldr q25, [x19, #80]
-	uzp1 v16.8h, v16.8h, v17.8h
-	ldr q17, [x20, x8, lsl #4]
-	fmul v22.4s, v22.4s, v9.4s
 	sshr v27.8h, v27.8h, #3
-	and v16.16b, v16.16b, v17.16b
+	csel x8, x5, x8, lo
+	add v7.2d, v17.2d, v8.2d
+	shrn2 v20.4s, v17.2d, #30
 	and v27.16b, v27.16b, v25.16b
-	xtn v17.8b, v16.8h
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmov x8, d17
-	frecps v9.4s, v22.4s, v2.4s
+	subs x8, x8, #8
 	uaddw v29.4s, v29.4s, v30.4h
-	ldr q17, [x19, #32]
 	uaddw2 v27.4s, v27.4s, v30.8h
-	orr v20.16b, v20.16b, v17.16b
-	orr v21.16b, v21.16b, v17.16b
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
-	umov w16, v27.s[3]
-	frecpe v23.4s, v3.4s
-	umov w12, v29.s[3]
-	umov w9, v29.s[0]
 	fmul v22.4s, v22.4s, v9.4s
-	ldr w11, [x6, w11, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
+	umov w9, v29.s[0]
+	csel x26, x26, x2, hi
+	umov w16, v27.s[3]
+	umov w12, v29.s[3]
+	umov w11, v29.s[2]
+	frecps v9.4s, v22.4s, v2.4s
 	umov w14, v27.s[1]
-	ldr w12, [x6, w12, uxtw #2]
 	umov w10, v29.s[1]
+	ldr w9, [x6, w9, uxtw #2]
 	ldr w16, [x6, w16, uxtw #2]
 	umov w15, v27.s[2]
-	fmul v22.4s, v0.4s, v22.4s
-	ldr w9, [x6, w9, uxtw #2]
-	frecps v17.4s, v23.4s, v3.4s
+	sub x18, x26, #36, lsl #12
+	ldr w12, [x6, w12, uxtw #2]
+	ldr w11, [x6, w11, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
+	umov w13, v27.s[0]
 	ldr w10, [x6, w10, uxtw #2]
 	ldr w15, [x6, w15, uxtw #2]
-	stp w11, w12, [sp, #40]
-	fmul v23.4s, v23.4s, v17.4s
-	stp w13, w14, [sp, #48]
-	fcvtzs v22.4s, v22.4s, #15
+	csel x8, x8, xzr, hi
+	prfm pstl1keep, [x18, #0]
+	shrn v21.2s, v6.2d, #30
+	ldr w13, [x6, w13, uxtw #2]
+	ldp q16, q17, [x26]
 	stp w9, w10, [sp, #32]
+	fmul v22.4s, v22.4s, v9.4s
+	shrn2 v21.4s, v7.2d, #30
 	stp w15, w16, [sp, #56]
+	bic v16.4s, #0xff, lsl #24
+	bic v17.4s, #0xff, lsl #24
+	stp w13, w14, [sp, #48]
+	cmhi v16.4s, v16.4s, v20.4s
+	stp w11, w12, [sp, #40]
+	cmhi v17.4s, v17.4s, v21.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	frecps v17.4s, v23.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
-	fsub v3.4s, v3.4s, v5.4s
+	fmul v22.4s, v0.4s, v22.4s
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x8, lsl #4]
+	frecpe v23.4s, v3.4s
+	cmn x17, #1
 	xtn v31.8b, v30.8h
 	shrn v27.8b, v29.8h, #8
-	shrn v30.8b, v30.8h, #8
-	xtn v29.8b, v29.8h
-	fmul v23.4s, v23.4s, v17.4s
+	and v16.16b, v16.16b, v17.16b
+	xtn v17.8b, v16.8h
 	uaddl v19.8h, v12.8b, v31.8b
+	fmov x8, d17
+	ldr q17, [x19, #32]
+	orr v21.16b, v21.16b, v17.16b
+	xtn v29.8b, v29.8h
+	orr v20.16b, v20.16b, v17.16b
+	frecps v17.4s, v23.4s, v3.4s
 	uaddl v26.8h, v10.8b, v29.8b
-	cmn x17, #1
-	uaddl v18.8h, v11.8b, v27.8b
-	fmul v23.4s, v1.4s, v23.4s
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v18.8h, v11.8b, v27.8b
-	umlal v26.8h, v10.8b, v29.8b
 	umlal v19.8h, v12.8b, v31.8b
-	fcvtzs v23.4s, v23.4s, #15
-	ccmp x8, #0, #4, eq
+	fmul v23.4s, v23.4s, v17.4s
+	uaddl v18.8h, v11.8b, v27.8b
+	umlal v26.8h, v10.8b, v29.8b
 	ldr d29, [sp, #144]
-	shrn v25.8b, v18.8h, #6
-	xtn v22.4h, v22.4s
+	frecps v17.4s, v23.4s, v3.4s
 	shrn v24.8b, v26.8h, #6
-	shrn v26.8b, v19.8h, #6
+	shrn v30.8b, v30.8h, #8
+	fsub v2.4s, v2.4s, v5.4s
+	fmul v23.4s, v23.4s, v17.4s
+	umlal v18.8h, v11.8b, v27.8b
+	fcvtzs v22.4s, v22.4s, #15
+	fadd v0.4s, v0.4s, v4.4s
+	fmul v23.4s, v1.4s, v23.4s
+	fsub v3.4s, v3.4s, v5.4s
+	prfm pldl1keep, [x26, #6144]
+	ccmp x8, #0, #4, eq
+	shrn v25.8b, v18.8h, #6
+	orr x0, x0, x17
+	fadd v1.4s, v1.4s, v4.4s
+	fcvtzs v23.4s, v23.4s, #15
+	xtn v22.4h, v22.4s
 	orr v27.8b, v30.8b, v29.8b
+	shrn v26.8b, v19.8h, #6
 	xtn2 v22.8h, v23.4s
 	b.eq 71f
 	st4 {v24.8b, v25.8b, v26.8b, v27.8b}, [x1]
@@ -96489,10 +98161,13 @@ rast_kern_h02010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v20.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -96633,33 +98308,32 @@ rast_kern_h02010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 121:
-	frecpe v22.4s, v2.4s
-	cmp x5, #16
 	mov x17, #16
-	add v16.2d, v6.2d, v8.2d
-	ldr q31, [sp, #96]
-	frecpe v23.4s, v3.4s
-	smull v30.4s, v24.4h, v15.h[4]
-	smull2 v29.4s, v24.8h, v15.h[4]
 	add x26, x2, #32
+	add v16.2d, v6.2d, v8.2d
+	cmp x5, #16
+	smull2 v29.4s, v24.8h, v15.h[4]
+	smull v30.4s, v24.4h, v15.h[4]
+	frecpe v22.4s, v2.4s
 	csel x17, x5, x17, lo
-	smull v27.4s, v24.4h, v15.h[5]
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q26, [sp, #112]
-	subs x17, x17, #8
-	orr x0, x0, x8
+	ldr q31, [sp, #96]
 	add v6.2d, v16.2d, v8.2d
 	shrn v13.2s, v16.2d, #30
 	add v17.2d, v7.2d, v8.2d
-	shrn v14.2s, v6.2d, #30
-	csel x26, x26, x2, hi
-	add v7.2d, v17.2d, v8.2d
-	shrn2 v13.4s, v17.2d, #30
-	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q26, [sp, #112]
+	addhn v30.4h, v30.4s, v31.4s
 	ldr q25, [x19, #64]
-	ldp q16, q17, [x26]
-	smull2 v29.4s, v24.8h, v15.h[5]
+	shrn2 v13.4s, v17.2d, #30
+	subs x17, x17, #8
+	add v7.2d, v17.2d, v8.2d
+	shrn v14.2s, v6.2d, #30
 	frecps v9.4s, v22.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	csel x26, x26, x2, hi
+	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[5]
+	ldp q16, q17, [x26]
+	fmul v22.4s, v22.4s, v9.4s
 	addhn v27.4h, v27.4s, v26.4s
 	csel x17, x17, xzr, hi
 	sshr v30.8h, v30.8h, #3
@@ -96675,64 +98349,68 @@ rast_kern_h02010:
 	addhn2 v27.8h, v29.4s, v26.4s
 	and v16.16b, v16.16b, v17.16b
 	sshr v27.8h, v27.8h, #3
-	and v27.16b, v27.16b, v25.16b
 	xtn v17.8b, v16.8h
-	fmul v22.4s, v22.4s, v9.4s
+	and v27.16b, v27.16b, v25.16b
 	umull v29.4s, v27.4h, v15.h[6]
-	umull2 v27.4s, v27.8h, v15.h[6]
-	cmn x8, #1
 	fmov x17, d17
-	frecps v9.4s, v22.4s, v2.4s
-	uaddw v29.4s, v29.4s, v30.4h
 	ldr q17, [x19, #32]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	orr v14.16b, v14.16b, v17.16b
+	umull2 v27.4s, v27.8h, v15.h[6]
+	frecpe v23.4s, v3.4s
+	uaddw v29.4s, v29.4s, v30.4h
+	cmn x8, #1
 	orr v13.16b, v13.16b, v17.16b
-	umov w9, v29.s[0]
-	frecps v17.4s, v23.4s, v3.4s
-	umov w12, v29.s[3]
+	orr v14.16b, v14.16b, v17.16b
+	orr x0, x0, x8
 	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	umov w13, v27.s[0]
-	fsub v2.4s, v2.4s, v5.4s
-	umov w14, v27.s[1]
+	frecps v17.4s, v23.4s, v3.4s
+	umov w9, v29.s[0]
+	frecps v9.4s, v22.4s, v2.4s
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldr w11, [x6, w11, uxtw #2]
+	umov w12, v29.s[3]
 	fmul v23.4s, v23.4s, v17.4s
+	umov w10, v29.s[1]
+	fmul v22.4s, v22.4s, v9.4s
+	umov w14, v27.s[1]
 	ldr w12, [x6, w12, uxtw #2]
 	umov w16, v27.s[3]
 	ldr w9, [x6, w9, uxtw #2]
-	ldr w10, [x6, w10, uxtw #2]
-	umov w15, v27.s[2]
-	fmul v22.4s, v22.4s, v9.4s
-	ldr w11, [x6, w11, uxtw #2]
+	umov w13, v27.s[0]
 	frecps v17.4s, v23.4s, v3.4s
+	ldr w10, [x6, w10, uxtw #2]
 	ldr w14, [x6, w14, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
+	umov w15, v27.s[2]
+	prfm pldl1keep, [x26, #6144]
+	sub x18, x26, #36, lsl #12
 	fsub v3.4s, v3.4s, v5.4s
-	ldr w15, [x6, w15, uxtw #2]
-	fmul v22.4s, v0.4s, v22.4s
-	ldr w16, [x6, w16, uxtw #2]
+	ldr w13, [x6, w13, uxtw #2]
 	fmul v23.4s, v23.4s, v17.4s
+	ldr w16, [x6, w16, uxtw #2]
+	fsub v2.4s, v2.4s, v5.4s
+	ldr w15, [x6, w15, uxtw #2]
+	prfm pstl1keep, [x18, #0]
 	stp w11, w12, [sp, #40]
+	fmul v22.4s, v0.4s, v22.4s
 	stp w13, w14, [sp, #48]
+	fmul v23.4s, v1.4s, v23.4s
 	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	fmul v23.4s, v1.4s, v23.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fadd v0.4s, v0.4s, v4.4s
 	fcvtzs v22.4s, v22.4s, #15
-	ccmp x17, #0, #4, eq
 	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v23.4s, v23.4s, #15
+	fadd v0.4s, v0.4s, v4.4s
+	ccmp x17, #0, #4, eq
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
-	xtn v31.8b, v30.8h
 	xtn v22.4h, v22.4s
+	xtn v31.8b, v30.8h
 	mov v24.8b, v29.8b
 	ldr d29, [sp, #144]
 	xtn2 v22.8h, v23.4s
 	shrn v30.8b, v30.8h, #8
-	mov v26.8b, v31.8b
 	mov v25.8b, v27.8b
+	mov v26.8b, v31.8b
 	orr v27.8b, v30.8b, v29.8b
 	b.eq 131f
 	subs x5, x5, #8
@@ -96744,105 +98422,108 @@ rast_kern_h02010:
 	add x2, x2, #32
 	mov v24.16b, v22.16b
 123:
+	mov x8, #16
+	add v17.2d, v7.2d, v8.2d
 	cmp x5, #16
 	add v16.2d, v6.2d, v8.2d
-	mov x8, #16
-	ldr q26, [sp, #112]
 	add x26, x2, #32
-	add v6.2d, v16.2d, v8.2d
-	shrn v20.2s, v16.2d, #30
-	add v17.2d, v7.2d, v8.2d
+	smull2 v29.4s, v24.8h, v15.h[4]
+	ldr q31, [sp, #96]
 	csel x8, x5, x8, lo
 	frecpe v22.4s, v2.4s
 	smull v30.4s, v24.4h, v15.h[4]
+	ldr q26, [sp, #112]
 	subs x8, x8, #8
-	ldr q31, [sp, #96]
-	shrn v21.2s, v6.2d, #30
-	shrn2 v20.4s, v17.2d, #30
-	smull2 v29.4s, v24.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
-	add v7.2d, v17.2d, v8.2d
-	csel x26, x26, x2, hi
+	add v6.2d, v16.2d, v8.2d
+	shrn v20.2s, v16.2d, #30
 	smull v27.4s, v24.4h, v15.h[5]
+	addhn v30.4h, v30.4s, v31.4s
+	csel x26, x26, x2, hi
+	shrn v21.2s, v6.2d, #30
+	csel x8, x8, xzr, hi
+	add v7.2d, v17.2d, v8.2d
+	shrn2 v20.4s, v17.2d, #30
 	addhn2 v30.8h, v29.4s, v31.4s
+	cmn x17, #1
+	frecps v9.4s, v22.4s, v2.4s
 	ldp q16, q17, [x26]
 	smull2 v29.4s, v24.8h, v15.h[5]
-	frecps v9.4s, v22.4s, v2.4s
 	addhn v27.4h, v27.4s, v26.4s
-	shrn2 v21.4s, v7.2d, #30
-	bic v16.4s, #0xff, lsl #24
 	sshr v30.8h, v30.8h, #3
+	bic v16.4s, #0xff, lsl #24
+	shrn2 v21.4s, v7.2d, #30
 	bic v17.4s, #0xff, lsl #24
 	ldr q25, [x19, #64]
-	cmhi v17.4s, v17.4s, v21.4s
-	csel x8, x8, xzr, hi
 	cmhi v16.4s, v16.4s, v20.4s
-	and v30.16b, v30.16b, v25.16b
-	uzp1 v16.8h, v16.8h, v17.8h
+	orr x0, x0, x17
+	cmhi v17.4s, v17.4s, v21.4s
+	sub x18, x26, #36, lsl #12
 	fmul v22.4s, v22.4s, v9.4s
+	uzp1 v16.8h, v16.8h, v17.8h
 	ldr q17, [x20, x8, lsl #4]
 	addhn2 v27.8h, v29.4s, v26.4s
-	ldr q25, [x19, #80]
+	prfm pstl1keep, [x18, #0]
+	and v30.16b, v30.16b, v25.16b
 	and v16.16b, v16.16b, v17.16b
+	ldr q25, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	and v27.16b, v27.16b, v25.16b
 	xtn v17.8b, v16.8h
+	and v27.16b, v27.16b, v25.16b
 	umull v29.4s, v27.4h, v15.h[6]
 	fmov x8, d17
 	ldr q17, [x19, #32]
 	frecpe v23.4s, v3.4s
 	umull2 v27.4s, v27.8h, v15.h[6]
+	frecps v9.4s, v22.4s, v2.4s
 	uaddw v29.4s, v29.4s, v30.4h
-	orr v20.16b, v20.16b, v17.16b
+	ccmp x8, #0, #4, eq
 	orr v21.16b, v21.16b, v17.16b
+	orr v20.16b, v20.16b, v17.16b
 	uaddw2 v27.4s, v27.4s, v30.8h
-	orr x0, x0, x17
-	cmn x17, #1
-	umov w9, v29.s[0]
-	umov w10, v29.s[1]
+	frecps v17.4s, v23.4s, v3.4s
 	umov w12, v29.s[3]
+	umov w10, v29.s[1]
+	umov w15, v27.s[2]
+	umov w9, v29.s[0]
 	umov w13, v27.s[0]
+	umov w11, v29.s[2]
+	umov w14, v27.s[1]
+	fmul v23.4s, v23.4s, v17.4s
+	ldr w12, [x6, w12, uxtw #2]
+	ldr w10, [x6, w10, uxtw #2]
+	fmul v22.4s, v22.4s, v9.4s
+	ldr w9, [x6, w9, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	umov w16, v27.s[3]
 	frecps v17.4s, v23.4s, v3.4s
-	umov w14, v27.s[1]
-	frecps v9.4s, v22.4s, v2.4s
-	ldr w9, [x6, w9, uxtw #2]
-	umov w11, v29.s[2]
-	ldr w10, [x6, w10, uxtw #2]
-	fmul v23.4s, v23.4s, v17.4s
-	ldr w14, [x6, w14, uxtw #2]
 	ldr w13, [x6, w13, uxtw #2]
-	umov w15, v27.s[2]
-	stp w9, w10, [sp, #32]
-	ldr w11, [x6, w11, uxtw #2]
-	fmul v22.4s, v22.4s, v9.4s
-	ldr w12, [x6, w12, uxtw #2]
-	frecps v17.4s, v23.4s, v3.4s
-	ldr w16, [x6, w16, uxtw #2]
 	fsub v2.4s, v2.4s, v5.4s
 	ldr w15, [x6, w15, uxtw #2]
-	stp w13, w14, [sp, #48]
+	fsub v3.4s, v3.4s, v5.4s
+	ldr w11, [x6, w11, uxtw #2]
 	fmul v22.4s, v0.4s, v22.4s
-	stp w11, w12, [sp, #40]
+	ldr w16, [x6, w16, uxtw #2]
+	stp w13, w14, [sp, #48]
+	fadd v0.4s, v0.4s, v4.4s
+	stp w9, w10, [sp, #32]
 	fmul v23.4s, v23.4s, v17.4s
+	stp w11, w12, [sp, #40]
 	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v23.4s, v1.4s, v23.4s
 	fcvtzs v22.4s, v22.4s, #15
-	fadd v0.4s, v0.4s, v4.4s
-	fsub v3.4s, v3.4s, v5.4s
-	shrn v27.8b, v29.8h, #8
-	xtn v29.8b, v29.8h
 	fadd v1.4s, v1.4s, v4.4s
+	shrn v27.8b, v29.8h, #8
 	fcvtzs v23.4s, v23.4s, #15
-	ccmp x8, #0, #4, eq
-	xtn v22.4h, v22.4s
+	prfm pldl1keep, [x26, #6144]
+	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
+	mov v25.8b, v27.8b
+	xtn v22.4h, v22.4s
 	mov v24.8b, v29.8b
 	ldr d29, [sp, #144]
 	xtn2 v22.8h, v23.4s
 	shrn v30.8b, v30.8h, #8
-	mov v25.8b, v27.8b
 	mov v26.8b, v31.8b
 	orr v27.8b, v30.8b, v29.8b
 	b.eq 141f
@@ -96866,10 +98547,13 @@ rast_kern_h02010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v20.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -97107,9 +98791,12 @@ rast_kern_h02011:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -97299,9 +98986,12 @@ rast_kern_h02011:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -97638,14 +99328,17 @@ rast_kern_h02011:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -97659,9 +99352,12 @@ rast_kern_h02011:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -97855,9 +99551,12 @@ rast_kern_h02100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -98078,9 +99777,12 @@ rast_kern_h02100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -98273,14 +99975,17 @@ rast_kern_h02100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -98294,9 +99999,12 @@ rast_kern_h02100:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -98418,181 +100126,184 @@ rast_kern_h02100:
 	xtn2 v24.8h, v25.4s
 	orr v11.16b, v11.16b, v12.16b
 51:
-	add v16.2d, v6.2d, v8.2d
-	ldr q28, [sp, #112]
-	frecpe v23.4s, v3.4s
-	sqdmulh v18.8h, v24.8h, v15.h[1]
-	frecpe v22.4s, v2.4s
 	smull v30.4s, v24.4h, v15.h[4]
-	mov x17, #16
+	cmp x5, #16
 	ldr q31, [sp, #96]
 	smull v27.4s, v24.4h, v15.h[5]
+	frecpe v23.4s, v3.4s
 	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	ldr q21, [sp, #176]
-	add v17.2d, v7.2d, v8.2d
-	cmp x5, #16
-	frecps v12.4s, v23.4s, v3.4s
-	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q28, [sp, #112]
 	ldr q25, [x19, #64]
+	add x16, x2, #32
+	frecpe v22.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q20, [sp, #160]
 	smull2 v29.4s, v24.8h, v15.h[5]
-	frecps v9.4s, v22.4s, v2.4s
 	addhn v27.4h, v27.4s, v28.4s
-	csel x17, x5, x17, lo
+	mov x17, #16
 	sshr v30.8h, v30.8h, #3
 	ldr q26, [sp, #128]
+	frecps v12.4s, v23.4s, v3.4s
+	csel x17, x5, x17, lo
+	addhn2 v27.8h, v29.4s, v28.4s
+	ldr q21, [sp, #176]
+	add v16.2d, v6.2d, v8.2d
+	and v30.16b, v30.16b, v25.16b
+	subs x17, x17, #8
+	add v17.2d, v7.2d, v8.2d
+	ldr q25, [x19, #80]
+	sshr v27.8h, v27.8h, #3
 	add v6.2d, v16.2d, v8.2d
 	shrn v13.2s, v16.2d, #30
-	and v30.16b, v30.16b, v25.16b
-	add v18.8h, v18.8h, v21.8h
-	ldr q25, [x19, #80]
-	addhn2 v27.8h, v29.4s, v28.4s
-	subs x17, x17, #8
-	fmul v22.4s, v22.4s, v9.4s
-	add x16, x2, #32
-	sshr v27.8h, v27.8h, #3
-	shrn2 v13.4s, v17.2d, #30
-	add v7.2d, v17.2d, v8.2d
-	shrn v14.2s, v6.2d, #30
 	and v27.16b, v27.16b, v25.16b
 	csel x16, x16, x2, hi
+	frecps v9.4s, v22.4s, v2.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	ldp q16, q17, [x16]
-	frecps v9.4s, v22.4s, v2.4s
-	uaddw2 v27.4s, v27.4s, v30.8h
+	sub x18, x16, #36, lsl #12
+	csel x17, x17, xzr, hi
+	add v7.2d, v17.2d, v8.2d
+	shrn2 v13.4s, v17.2d, #30
 	uaddw v29.4s, v29.4s, v30.4h
-	fmul v23.4s, v23.4s, v12.4s
-	ldr q20, [sp, #160]
-	umov w14, v27.s[1]
-	umov w9, v29.s[0]
-	umov w13, v27.s[0]
-	umov w10, v29.s[1]
+	prfm pldl1keep, [x16, #6144]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
+	ldp q16, q17, [x16]
 	umov w11, v29.s[2]
-	umov w12, v29.s[3]
-	umov w15, v27.s[2]
-	sqdmulh v25.8h, v24.8h, v15.h[0]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
+	umov w9, v29.s[0]
+	umov w10, v29.s[1]
 	umov w16, v27.s[3]
-	sqdmulh v19.8h, v24.8h, v15.h[3]
+	umov w15, v27.s[2]
+	umov w14, v27.s[1]
+	umov w12, v29.s[3]
+	fmul v23.4s, v23.4s, v12.4s
 	ldr w9, [x6, w9, uxtw #2]
-	frecps v12.4s, v23.4s, v3.4s
+	sqdmulh v18.8h, v24.8h, v15.h[1]
+	ldr w16, [x6, w16, uxtw #2]
+	umov w13, v27.s[0]
 	ldr w10, [x6, w10, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
+	sqdmulh v25.8h, v24.8h, v15.h[0]
 	ldr w12, [x6, w12, uxtw #2]
+	sqdmulh v19.8h, v24.8h, v15.h[3]
+	ldr w11, [x6, w11, uxtw #2]
+	ldr w14, [x6, w14, uxtw #2]
 	fmul v22.4s, v22.4s, v9.4s
 	ldr w15, [x6, w15, uxtw #2]
-	ldr w16, [x6, w16, uxtw #2]
-	stp w13, w14, [sp, #48]
-	ldr w11, [x6, w11, uxtw #2]
-	stp w9, w10, [sp, #32]
-	add v25.8h, v25.8h, v20.8h
-	bic v17.4s, #0xff, lsl #24
-	stp w15, w16, [sp, #56]
-	stp w11, w12, [sp, #40]
-	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v22.4s, v0.4s, v22.4s
+	frecps v12.4s, v23.4s, v3.4s
+	ldr w13, [x6, w13, uxtw #2]
 	add v19.8h, v19.8h, v26.8h
-	shrn2 v14.4s, v7.2d, #30
+	stp w9, w10, [sp, #32]
+	add v18.8h, v18.8h, v21.8h
+	stp w15, w16, [sp, #56]
+	add v25.8h, v25.8h, v20.8h
+	stp w11, w12, [sp, #40]
+	stp w13, w14, [sp, #48]
+	ld2 {v29.8h, v30.8h}, [x28]
+	fsub v3.4s, v3.4s, v5.4s
 	shrn v25.8b, v25.8h, #3
-	shrn v27.8b, v29.8h, #8
 	shrn v18.8b, v18.8h, #3
+	bic v17.4s, #0xff, lsl #24
+	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
+	shrn v14.2s, v6.2d, #30
 	uaddl v20.8h, v18.8b, v27.8b
 	uaddl v26.8h, v25.8b, v29.8b
-	cmhi v17.4s, v17.4s, v14.4s
+	frecps v9.4s, v22.4s, v2.4s
 	umlal v20.8h, v18.8b, v27.8b
 	umlal v26.8h, v25.8b, v29.8b
 	ldr d25, [x19, #48]
+	shrn2 v14.4s, v7.2d, #30
+	shrn v27.8b, v20.8h, #6
+	shrn v29.8b, v26.8h, #6
 	xtn v31.8b, v30.8h
 	bic v16.4s, #0xff, lsl #24
-	movi v18.8b, #0x1f
 	dup v25.8b, v25.b[0]
+	cmhi v17.4s, v17.4s, v14.4s
 	shrn v30.8b, v30.8h, #8
-	shrn v29.8b, v26.8h, #6
-	shrn v27.8b, v20.8h, #6
-	shrn v19.8b, v19.8h, #3
-	uaddl v26.8h, v25.8b, v30.8b
 	ushll v20.8h, v29.8b, #0
-	umlal v26.8h, v25.8b, v30.8b
-	fmul v23.4s, v23.4s, v12.4s
-	uaddl v21.8h, v19.8b, v31.8b
-	csel x17, x17, xzr, hi
+	uaddl v26.8h, v25.8b, v30.8b
+	shrn v19.8b, v19.8h, #3
 	cmhi v16.4s, v16.4s, v13.4s
+	movi v18.8b, #0x1f
+	umlal v26.8h, v25.8b, v30.8b
+	uzp1 v16.8h, v16.8h, v17.8h
+	fmul v22.4s, v22.4s, v9.4s
+	ldr q17, [x20, x17, lsl #4]
+	uaddl v21.8h, v19.8b, v31.8b
 	shrn v30.8b, v26.8h, #5
 	ld2 {v25.8h, v26.8h}, [x1]
-	uzp1 v16.8h, v16.8h, v17.8h
+	fmul v23.4s, v23.4s, v12.4s
+	fmul v22.4s, v0.4s, v22.4s
 	umlal v21.8h, v19.8b, v31.8b
-	fmul v23.4s, v1.4s, v23.4s
-	ldr q17, [x20, x17, lsl #4]
 	xtn v24.8b, v26.8h
 	shrn v26.8b, v26.8h, #8
-	sub v19.8b, v18.8b, v30.8b
-	shrn v31.8b, v21.8h, #6
-	and v16.16b, v16.16b, v17.16b
 	and v26.8b, v26.8b, v18.8b
+	shrn v31.8b, v21.8h, #6
 	cmeq v28.8b, v26.8b, #0
-	xtn v17.8b, v16.8h
+	sub v19.8b, v18.8b, v30.8b
 	bic v19.8b, v19.8b, v28.8b
 	bif v18.8b, v30.8b, v28.8b
 	ushll v28.8h, v31.8b, #0
-	fcvtzs v22.4s, v22.4s, #15
+	and v16.16b, v16.16b, v17.16b
 	umlal v28.8h, v31.8b, v18.8b
-	fadd v0.4s, v0.4s, v4.4s
-	fsub v3.4s, v3.4s, v5.4s
 	umlal v20.8h, v29.8b, v18.8b
-	umlal v28.8h, v24.8b, v19.8b
-	ushll v24.8h, v27.8b, #0
 	xtn v21.8b, v25.8h
+	umlal v28.8h, v24.8b, v19.8b
+	orr x0, x0, x8
+	ushll v24.8h, v27.8b, #0
+	xtn v17.8b, v16.8h
+	fmul v23.4s, v1.4s, v23.4s
 	umlal v24.8h, v27.8b, v18.8b
-	fmov x17, d17
-	ldr q17, [x19, #32]
 	shrn v31.8b, v28.8h, #5
 	shrn v28.8b, v25.8h, #8
 	umlal v20.8h, v21.8b, v19.8b
-	fcvtzs v23.4s, v23.4s, #15
 	umlal v24.8h, v28.8b, v19.8b
-	fmov d28, x8
-	subs x5, x5, #8
 	shrn v29.8b, v20.8h, #5
+	fmov x17, d17
 	shrn v27.8b, v24.8h, #5
 	umax v24.8b, v30.8b, v26.8b
-	orr v14.16b, v14.16b, v17.16b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v25.16b, v31.16b, v24.16b
-	ldr d31, [x3, x4]
 	ldp q18, q19, [x1]
-	movi v24.8b, #0x1f
-	zip1 v27.8h, v29.8h, v25.8h
-	zip2 v29.8h, v29.8h, v25.8h
+	zip1 v25.16b, v31.16b, v24.16b
+	fcvtzs v22.4s, v22.4s, #15
+	zip1 v29.16b, v29.16b, v27.16b
+	fadd v0.4s, v0.4s, v4.4s
 	fadd v1.4s, v1.4s, v4.4s
+	subs x5, x5, #8
+	ldr d31, [x3, x4]
+	zip1 v27.8h, v29.8h, v25.8h
+	movi v24.8b, #0x1f
+	zip2 v29.8h, v29.8h, v25.8h
 	ldr d25, [x19, #48]
-	ldp q20, q21, [x2]
-	dup v25.8b, v25.b[3]
 	cmeq v24.8b, v30.8b, v24.8b
+	fmov d28, x8
+	fcvtzs v23.4s, v23.4s, #15
+	dup v25.8b, v25.b[3]
 	cmeq v26.8b, v31.8b, v25.8b
+	ldr q17, [x19, #32]
 	bic v26.8b, v26.8b, v24.8b
-	bic v28.8b, v28.8b, v26.8b
 	xtn v22.4h, v22.4s
-	bic v30.8b, v28.8b, v24.8b
 	orr v13.16b, v13.16b, v17.16b
-	bsl v30.8b, v25.8b, v31.8b
-	str d30, [x3, x4]
+	bic v28.8b, v28.8b, v26.8b
+	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
+	bsl v30.8b, v25.8b, v31.8b
+	ldp q20, q21, [x2]
+	fsub v2.4s, v2.4s, v5.4s
+	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
+	xtn2 v22.8h, v23.4s
 	sshll v31.8h, v26.8b, #0
-	sshll2 v26.4s, v30.8h, #0
 	sshll v25.4s, v30.4h, #0
+	sshll2 v26.4s, v30.8h, #0
 	sshll v30.4s, v31.4h, #0
 	sshll2 v31.4s, v31.8h, #0
-	orr x0, x0, x8
-	bit v18.16b, v27.16b, v25.16b
 	bit v19.16b, v29.16b, v26.16b
-	bit v21.16b, v11.16b, v31.16b
+	bit v18.16b, v27.16b, v25.16b
 	bit v20.16b, v10.16b, v30.16b
+	bit v21.16b, v11.16b, v31.16b
+	orr v14.16b, v14.16b, v17.16b
 	stp q18, q19, [x1]
-	xtn2 v22.8h, v23.4s
 	stp q20, q21, [x2]
 	b.ls 59f
 	add x1, x1, #32
@@ -98601,180 +100312,183 @@ rast_kern_h02100:
 	cbz x17, 52f
 53:
 	ldr q31, [sp, #96]
-	smull v30.4s, v22.4h, v15.h[4]
-	smull v27.4s, v22.4h, v15.h[5]
-	sqdmulh v18.8h, v22.8h, v15.h[1]
-	mov x8, #16
-	orr x0, x0, x17
-	frecpe v24.4s, v2.4s
-	cmp x5, #16
-	ldr q28, [sp, #112]
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q21, [sp, #176]
-	smull2 v29.4s, v22.8h, v15.h[4]
-	addhn v27.4h, v27.4s, v28.4s
-	ldr q20, [sp, #160]
-	frecpe v23.4s, v3.4s
-	frecps v9.4s, v24.4s, v2.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	csel x8, x5, x8, lo
 	add v16.2d, v6.2d, v8.2d
-	ldr q25, [x19, #64]
-	smull2 v29.4s, v22.8h, v15.h[5]
+	ldr q28, [sp, #112]
+	smull v30.4s, v22.4h, v15.h[4]
+	sqdmulh v18.8h, v22.8h, v15.h[1]
+	smull v27.4s, v22.4h, v15.h[5]
+	smull2 v29.4s, v22.8h, v15.h[4]
+	frecpe v23.4s, v3.4s
+	addhn v30.4h, v30.4s, v31.4s
+	mov x8, #16
+	addhn v27.4h, v27.4s, v28.4s
+	cmp x5, #16
+	frecpe v24.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
 	add x16, x2, #32
+	smull2 v29.4s, v22.8h, v15.h[5]
+	csel x8, x5, x8, lo
+	ldr q25, [x19, #64]
 	add v17.2d, v7.2d, v8.2d
 	sshr v30.8h, v30.8h, #3
-	add v18.8h, v18.8h, v21.8h
-	ldr q26, [sp, #128]
+	frecps v12.4s, v23.4s, v3.4s
 	addhn2 v27.8h, v29.4s, v28.4s
-	subs x8, x8, #8
-	add v6.2d, v16.2d, v8.2d
+	ldr q21, [sp, #176]
+	shrn v10.2s, v16.2d, #30
 	and v30.16b, v30.16b, v25.16b
-	add v7.2d, v17.2d, v8.2d
+	subs x8, x8, #8
 	ldr q25, [x19, #80]
+	add v7.2d, v17.2d, v8.2d
 	sshr v27.8h, v27.8h, #3
 	csel x16, x16, x2, hi
-	shrn v10.2s, v16.2d, #30
+	ldr q26, [sp, #128]
+	add v6.2d, v16.2d, v8.2d
+	shrn2 v10.4s, v17.2d, #30
 	and v27.16b, v27.16b, v25.16b
+	sub x18, x16, #36, lsl #12
+	ldr q20, [sp, #160]
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	csel x8, x8, xzr, hi
-	shrn2 v10.4s, v17.2d, #30
-	sqdmulh v19.8h, v22.8h, v15.h[3]
-	uaddw2 v27.4s, v27.4s, v30.8h
+	frecps v9.4s, v24.4s, v2.4s
 	uaddw v29.4s, v29.4s, v30.4h
+	prfm pldl1keep, [x16, #6144]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	add v18.8h, v18.8h, v21.8h
+	prfm pstl1keep, [x18, #0]
 	ldp q16, q17, [x16]
-	umov w13, v27.s[0]
 	umov w11, v29.s[2]
-	frecps v12.4s, v23.4s, v3.4s
-	umov w12, v29.s[3]
-	umov w9, v29.s[0]
-	umov w10, v29.s[1]
-	umov w14, v27.s[1]
-	ldr w13, [x6, w13, uxtw #2]
-	umov w15, v27.s[2]
-	ldr w12, [x6, w12, uxtw #2]
 	umov w16, v27.s[3]
-	ldr w11, [x6, w11, uxtw #2]
+	fmul v24.4s, v24.4s, v9.4s
+	umov w9, v29.s[0]
+	umov w12, v29.s[3]
 	fmul v23.4s, v23.4s, v12.4s
+	umov w10, v29.s[1]
+	umov w15, v27.s[2]
+	ldr w16, [x6, w16, uxtw #2]
+	umov w13, v27.s[0]
+	frecps v9.4s, v24.4s, v2.4s
+	ldr w11, [x6, w11, uxtw #2]
+	frecps v12.4s, v23.4s, v3.4s
+	ldr w12, [x6, w12, uxtw #2]
+	umov w14, v27.s[1]
 	ldr w10, [x6, w10, uxtw #2]
 	sqdmulh v25.8h, v22.8h, v15.h[0]
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w15, [x6, w15, uxtw #2]
 	ldr w9, [x6, w9, uxtw #2]
-	stp w11, w12, [sp, #40]
-	frecps v12.4s, v23.4s, v3.4s
-	ldr w16, [x6, w16, uxtw #2]
-	stp w13, w14, [sp, #48]
-	add v19.8h, v19.8h, v26.8h
-	shrn v11.2s, v6.2d, #30
-	bic v16.4s, #0xff, lsl #24
-	stp w9, w10, [sp, #32]
-	stp w15, w16, [sp, #56]
-	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v23.4s, v23.4s, v12.4s
-	add v25.8h, v25.8h, v20.8h
-	shrn2 v11.4s, v7.2d, #30
-	shrn v19.8b, v19.8h, #3
-	shrn v27.8b, v29.8h, #8
-	xtn v31.8b, v30.8h
-	xtn v29.8b, v29.8h
-	shrn v25.8b, v25.8h, #3
-	bic v17.4s, #0xff, lsl #24
-	shrn v18.8b, v18.8h, #3
-	uaddl v26.8h, v25.8b, v29.8b
-	cmhi v17.4s, v17.4s, v11.4s
+	ldr w15, [x6, w15, uxtw #2]
+	sqdmulh v19.8h, v22.8h, v15.h[3]
+	ldr w13, [x6, w13, uxtw #2]
 	fmul v24.4s, v24.4s, v9.4s
+	ldr w14, [x6, w14, uxtw #2]
+	stp w9, w10, [sp, #32]
+	add v25.8h, v25.8h, v20.8h
+	stp w15, w16, [sp, #56]
+	shrn v18.8b, v18.8h, #3
+	stp w11, w12, [sp, #40]
+	bic v17.4s, #0xff, lsl #24
+	stp w13, w14, [sp, #48]
+	bic v16.4s, #0xff, lsl #24
+	ld2 {v29.8h, v30.8h}, [x28]
+	add v19.8h, v19.8h, v26.8h
+	shrn v25.8b, v25.8h, #3
+	csel x8, x8, xzr, hi
+	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
+	shrn v19.8b, v19.8h, #3
+	uaddl v26.8h, v25.8b, v29.8b
+	uaddl v20.8h, v18.8b, v27.8b
+	subs x5, x5, #8
+	shrn v11.2s, v6.2d, #30
 	umlal v26.8h, v25.8b, v29.8b
 	ldr d25, [x19, #48]
-	shrn v30.8b, v30.8h, #8
-	fmul v23.4s, v1.4s, v23.4s
-	uaddl v21.8h, v19.8b, v31.8b
-	dup v25.8b, v25.b[0]
 	cmhi v16.4s, v16.4s, v10.4s
+	xtn v31.8b, v30.8h
+	shrn2 v11.4s, v7.2d, #30
+	fmul v24.4s, v0.4s, v24.4s
+	dup v25.8b, v25.b[0]
+	cmhi v17.4s, v17.4s, v11.4s
+	shrn v30.8b, v30.8h, #8
 	shrn v29.8b, v26.8h, #6
 	uaddl v26.8h, v25.8b, v30.8b
-	frecps v9.4s, v24.4s, v2.4s
-	uaddl v20.8h, v18.8b, v27.8b
+	umlal v20.8h, v18.8b, v27.8b
+	uaddl v21.8h, v19.8b, v31.8b
 	umlal v26.8h, v25.8b, v30.8b
-	umlal v21.8h, v19.8b, v31.8b
-	fmul v24.4s, v24.4s, v9.4s
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x8, lsl #4]
+	fsub v3.4s, v3.4s, v5.4s
 	shrn v30.8b, v26.8h, #5
 	ld2 {v25.8h, v26.8h}, [x1]
-	umlal v20.8h, v18.8b, v27.8b
+	umlal v21.8h, v19.8b, v31.8b
 	movi v18.8b, #0x1f
-	uzp1 v16.8h, v16.8h, v17.8h
-	fadd v1.4s, v1.4s, v4.4s
-	ldr q17, [x20, x8, lsl #4]
+	shrn v27.8b, v20.8h, #6
 	xtn v22.8b, v26.8h
 	shrn v26.8b, v26.8h, #8
 	shrn v31.8b, v21.8h, #6
 	sub v19.8b, v18.8b, v30.8b
 	and v26.8b, v26.8b, v18.8b
+	xtn v21.8b, v25.8h
 	and v16.16b, v16.16b, v17.16b
 	cmeq v28.8b, v26.8b, #0
+	xtn v17.8b, v16.8h
 	bic v19.8b, v19.8b, v28.8b
 	bif v18.8b, v30.8b, v28.8b
 	ushll v28.8h, v31.8b, #0
-	shrn v27.8b, v20.8h, #6
-	ushll v20.8h, v29.8b, #0
+	fmul v23.4s, v23.4s, v12.4s
 	umlal v28.8h, v31.8b, v18.8b
-	fmul v24.4s, v0.4s, v24.4s
-	umlal v20.8h, v29.8b, v18.8b
+	ushll v20.8h, v29.8b, #0
+	fsub v2.4s, v2.4s, v5.4s
 	umlal v28.8h, v22.8b, v19.8b
+	fmov x8, d17
 	ushll v22.8h, v27.8b, #0
-	xtn v21.8b, v25.8h
-	subs x5, x5, #8
+	ldr q17, [x19, #32]
+	umlal v20.8h, v29.8b, v18.8b
 	umlal v22.8h, v27.8b, v18.8b
 	shrn v31.8b, v28.8h, #5
 	shrn v28.8b, v25.8h, #8
-	umlal v20.8h, v21.8b, v19.8b
 	umlal v22.8h, v28.8b, v19.8b
-	shrn v29.8b, v20.8h, #5
-	xtn v17.8b, v16.8h
+	umlal v20.8h, v21.8b, v19.8b
+	fmov d28, x17
 	shrn v27.8b, v22.8h, #5
 	umax v22.8b, v30.8b, v26.8b
-	ldp q20, q21, [x2]
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v25.16b, v31.16b, v22.16b
-	fmov x8, d17
-	fmov d28, x17
-	ldr q17, [x19, #32]
+	shrn v29.8b, v20.8h, #5
 	fcvtzs v24.4s, v24.4s, #15
+	zip1 v25.16b, v31.16b, v22.16b
+	zip1 v29.16b, v29.16b, v27.16b
+	fmul v23.4s, v1.4s, v23.4s
+	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	movi v22.8b, #0x1f
 	zip2 v29.8h, v29.8h, v25.8h
-	ldr d31, [x3, x4]
+	orr x0, x0, x17
 	ldr d25, [x19, #48]
-	ldp q18, q19, [x1]
+	ldp q20, q21, [x2]
+	fcvtzs v23.4s, v23.4s, #15
 	dup v25.8b, v25.b[3]
-	cmeq v26.8b, v31.8b, v25.8b
+	fadd v1.4s, v1.4s, v4.4s
 	cmeq v22.8b, v30.8b, v22.8b
-	orr v11.16b, v11.16b, v17.16b
+	cmeq v26.8b, v31.8b, v25.8b
+	xtn v24.4h, v24.4s
 	bic v26.8b, v26.8b, v22.8b
-	orr v10.16b, v10.16b, v17.16b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v22.8b
+	xtn2 v24.8h, v23.4s
 	and v26.8b, v28.8b, v22.8b
 	bsl v30.8b, v25.8b, v31.8b
-	fsub v2.4s, v2.4s, v5.4s
-	fcvtzs v23.4s, v23.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	xtn v24.4h, v24.4s
+	ldp q18, q19, [x1]
+	fadd v0.4s, v0.4s, v4.4s
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
 	sshll v31.8h, v26.8b, #0
-	sshll v25.4s, v30.4h, #0
 	sshll2 v26.4s, v30.8h, #0
+	sshll v25.4s, v30.4h, #0
 	sshll v30.4s, v31.4h, #0
 	sshll2 v31.4s, v31.8h, #0
-	bit v20.16b, v13.16b, v30.16b
-	bit v18.16b, v27.16b, v25.16b
 	bit v19.16b, v29.16b, v26.16b
 	bit v21.16b, v14.16b, v31.16b
-	fadd v0.4s, v0.4s, v4.4s
+	bit v18.16b, v27.16b, v25.16b
+	bit v20.16b, v13.16b, v30.16b
+	orr v10.16b, v10.16b, v17.16b
 	stp q18, q19, [x1]
-	xtn2 v24.8h, v23.4s
+	orr v11.16b, v11.16b, v17.16b
 	stp q20, q21, [x2]
 	b.ls 59f
 	add x1, x1, #32
@@ -98791,15 +100505,17 @@ rast_kern_h02100:
 	mov x8, #8
 	cmp x5, #8
 	add v27.2d, v6.2d, v8.2d
-	add x1, x1, #32
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
-	add x4, x4, #8
+	add x1, x1, #32
 	add v28.2d, v7.2d, v8.2d
 	shrn v10.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
+	add x4, x4, #8
+	prfm pldl1keep, [x2, #6144]
 	add v6.2d, v27.2d, v8.2d
 	shrn2 v10.4s, v28.2d, #30
 	frecps v30.4s, v24.4s, v2.4s
@@ -98808,6 +100524,7 @@ rast_kern_h02100:
 	fsub v3.4s, v3.4s, v5.4s
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
+	prfm pstl1keep, [x18, #0]
 	add v7.2d, v28.2d, v8.2d
 	shrn v11.2s, v6.2d, #30
 	ldp q27, q28, [x2]
@@ -98925,9 +100642,12 @@ rast_kern_h02101:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -99143,9 +100863,12 @@ rast_kern_h02101:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -99568,14 +101291,17 @@ rast_kern_h02101:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -99589,9 +101315,12 @@ rast_kern_h02101:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -99755,9 +101484,12 @@ rast_kern_h02110:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -99950,9 +101682,12 @@ rast_kern_h02110:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -100135,14 +101870,17 @@ rast_kern_h02110:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -100157,9 +101895,12 @@ rast_kern_h02110:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -100245,117 +101986,120 @@ rast_kern_h02110:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v25.4s
 51:
-	add v16.2d, v6.2d, v8.2d
-	mov x17, #16
-	add v17.2d, v7.2d, v8.2d
-	cmp x5, #16
-	smull2 v29.4s, v24.8h, v15.h[4]
 	smull v30.4s, v24.4h, v15.h[4]
-	smull v27.4s, v24.4h, v15.h[5]
-	csel x17, x5, x17, lo
+	mov x17, #16
 	ldr q31, [sp, #96]
-	add v7.2d, v17.2d, v8.2d
-	shrn v13.2s, v16.2d, #30
-	add v6.2d, v16.2d, v8.2d
-	ldr q28, [sp, #112]
+	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	subs x17, x17, #8
-	ldr q25, [x19, #64]
-	add x16, x2, #32
-	shrn2 v13.4s, v17.2d, #30
-	shrn v14.2s, v6.2d, #30
-	addhn v27.4h, v27.4s, v28.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	csel x16, x16, x2, hi
+	cmp x5, #16
+	add v17.2d, v7.2d, v8.2d
+	ldr q28, [sp, #112]
 	frecpe v22.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	csel x17, x5, x17, lo
+	add v16.2d, v6.2d, v8.2d
 	smull2 v29.4s, v24.8h, v15.h[5]
-	ldp q16, q17, [x16]
+	addhn v27.4h, v27.4s, v28.4s
+	ldr q25, [x19, #64]
+	sshr v30.8h, v30.8h, #3
+	ldr d10, [x19, #48]
 	frecps v9.4s, v22.4s, v2.4s
 	addhn2 v27.8h, v29.4s, v28.4s
-	sshr v30.8h, v30.8h, #3
-	bic v16.4s, #0xff, lsl #24
+	add x16, x2, #32
+	shrn v13.2s, v16.2d, #30
 	and v30.16b, v30.16b, v25.16b
+	subs x17, x17, #8
+	shrn2 v13.4s, v17.2d, #30
+	fmul v22.4s, v22.4s, v9.4s
+	csel x16, x16, x2, hi
 	ldr q25, [x19, #80]
+	add v7.2d, v17.2d, v8.2d
 	sshr v27.8h, v27.8h, #3
-	bic v17.4s, #0xff, lsl #24
-	shrn2 v14.4s, v7.2d, #30
+	add v6.2d, v16.2d, v8.2d
 	and v27.16b, v27.16b, v25.16b
-	ldr d25, [x19, #48]
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v22.4s, v22.4s, v9.4s
-	csel x17, x17, xzr, hi
-	orr x0, x0, x8
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	cmhi v17.4s, v17.4s, v14.4s
-	subs x5, x5, #8
-	ldr d10, [x19, #48]
-	umov w9, v29.s[0]
-	umov w15, v27.s[2]
-	umov w12, v29.s[3]
-	umov w14, v27.s[1]
-	umov w13, v27.s[0]
-	frecps v9.4s, v22.4s, v2.4s
-	umov w10, v29.s[1]
-	umov w11, v29.s[2]
-	ldr w9, [x6, w9, uxtw #2]
 	frecpe v23.4s, v3.4s
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w12, [x6, w12, uxtw #2]
-	umov w16, v27.s[3]
-	fmul v22.4s, v22.4s, v9.4s
-	ldr w10, [x6, w10, uxtw #2]
-	dup v25.8b, v25.b[4]
-	ldr w11, [x6, w11, uxtw #2]
-	frecps v9.4s, v23.4s, v3.4s
-	ldr w14, [x6, w14, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	stp w9, w10, [sp, #32]
-	ldr w16, [x6, w16, uxtw #2]
+	frecps v9.4s, v22.4s, v2.4s
+	uaddw v29.4s, v29.4s, v30.4h
 	ldr d11, [x19, #48]
-	cmhi v16.4s, v16.4s, v13.4s
-	stp w11, w12, [sp, #40]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldr d25, [x19, #48]
+	prfm pldl1keep, [x16, #6144]
+	sub x18, x16, #36, lsl #12
+	umov w9, v29.s[0]
+	umov w11, v29.s[2]
+	umov w14, v27.s[1]
+	umov w12, v29.s[3]
+	fmul v22.4s, v22.4s, v9.4s
+	umov w13, v27.s[0]
+	prfm pstl1keep, [x18, #0]
+	frecps v9.4s, v23.4s, v3.4s
+	ldr w11, [x6, w11, uxtw #2]
+	ldr w9, [x6, w9, uxtw #2]
+	umov w10, v29.s[1]
+	csel x17, x17, xzr, hi
+	ldr w13, [x6, w13, uxtw #2]
+	umov w15, v27.s[2]
+	ldr w12, [x6, w12, uxtw #2]
+	dup v25.8b, v25.b[4]
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w10, [x6, w10, uxtw #2]
+	dup v11.8b, v11.b[6]
+	ldp q16, q17, [x16]
+	fmul v23.4s, v23.4s, v9.4s
+	umov w16, v27.s[3]
+	shrn v14.2s, v6.2d, #30
+	bic v17.4s, #0xff, lsl #24
+	ldr w16, [x6, w16, uxtw #2]
 	fmul v22.4s, v0.4s, v22.4s
+	ldr w15, [x6, w15, uxtw #2]
+	frecps v9.4s, v23.4s, v3.4s
+	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	dup v10.8b, v10.b[5]
+	fadd v0.4s, v0.4s, v4.4s
+	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
-	uzp1 v16.8h, v16.8h, v17.8h
-	dup v10.8b, v10.b[5]
 	fmul v23.4s, v23.4s, v9.4s
-	dup v11.8b, v11.b[6]
+	fcvtzs v22.4s, v22.4s, #15
+	fsub v3.4s, v3.4s, v5.4s
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
-	fadd v0.4s, v0.4s, v4.4s
-	uaddl v26.8h, v25.8b, v29.8b
 	xtn v31.8b, v30.8h
-	shrn v30.8b, v30.8h, #8
-	fcvtzs v22.4s, v22.4s, #15
+	uaddl v26.8h, v25.8b, v29.8b
+	bic v16.4s, #0xff, lsl #24
 	umlal v26.8h, v25.8b, v29.8b
 	ldr d25, [x19, #48]
-	frecps v9.4s, v23.4s, v3.4s
-	dup v25.8b, v25.b[0]
-	uaddl v18.8h, v11.8b, v31.8b
-	ldr q17, [x20, x17, lsl #4]
-	uaddl v12.8h, v10.8b, v27.8b
+	shrn v30.8b, v30.8h, #8
+	shrn2 v14.4s, v7.2d, #30
 	shrn v29.8b, v26.8h, #6
+	dup v25.8b, v25.b[0]
+	uaddl v12.8h, v10.8b, v27.8b
+	uaddl v18.8h, v11.8b, v31.8b
+	cmhi v16.4s, v16.4s, v13.4s
 	uaddl v26.8h, v25.8b, v30.8b
-	fmul v23.4s, v23.4s, v9.4s
-	umlal v12.8h, v10.8b, v27.8b
+	cmhi v17.4s, v17.4s, v14.4s
+	fmul v23.4s, v1.4s, v23.4s
 	umlal v26.8h, v25.8b, v30.8b
-	and v16.16b, v16.16b, v17.16b
+	umlal v18.8h, v11.8b, v31.8b
+	fadd v1.4s, v1.4s, v4.4s
 	shrn v30.8b, v26.8h, #5
 	ld2 {v25.8h, v26.8h}, [x1]
-	fsub v3.4s, v3.4s, v5.4s
-	umlal v18.8h, v11.8b, v31.8b
+	umlal v12.8h, v10.8b, v27.8b
 	movi v10.8b, #0x1f
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x17, lsl #4]
+	fsub v2.4s, v2.4s, v5.4s
 	xtn v24.8b, v26.8h
 	shrn v26.8b, v26.8h, #8
-	xtn v17.8b, v16.8h
-	shrn v31.8b, v18.8h, #6
+	sub v11.8b, v10.8b, v30.8b
+	xtn v22.4h, v22.4s
 	and v26.8b, v26.8b, v10.8b
 	shrn v27.8b, v12.8h, #6
-	sub v11.8b, v10.8b, v30.8b
+	shrn v31.8b, v18.8h, #6
 	cmeq v28.8b, v26.8b, #0
 	bic v11.8b, v11.8b, v28.8b
 	bif v10.8b, v30.8b, v28.8b
@@ -100363,57 +102107,57 @@ rast_kern_h02110:
 	xtn v18.8b, v25.8h
 	ushll v12.8h, v29.8b, #0
 	umlal v28.8h, v31.8b, v10.8b
-	fmul v23.4s, v1.4s, v23.4s
-	fmov x17, d17
 	umlal v12.8h, v29.8b, v10.8b
 	umlal v28.8h, v24.8b, v11.8b
 	ushll v24.8h, v27.8b, #0
-	fadd v1.4s, v1.4s, v4.4s
+	umlal v12.8h, v18.8b, v11.8b
 	umlal v24.8h, v27.8b, v10.8b
-	ldr q17, [x19, #32]
 	shrn v31.8b, v28.8h, #5
 	shrn v28.8b, v25.8h, #8
-	umlal v12.8h, v18.8b, v11.8b
-	umlal v24.8h, v28.8b, v11.8b
-	shrn v27.8b, v24.8h, #5
-	shrn v29.8b, v12.8h, #5
-	orr v14.16b, v14.16b, v17.16b
-	umax v24.8b, v30.8b, v26.8b
-	zip1 v29.16b, v29.16b, v27.16b
-	zip1 v25.16b, v31.16b, v24.16b
-	fsub v2.4s, v2.4s, v5.4s
-	movi v24.8b, #0x1f
-	ldr d31, [x3, x4]
+	and v16.16b, v16.16b, v17.16b
 	fcvtzs v23.4s, v23.4s, #15
+	umlal v24.8h, v28.8b, v11.8b
+	shrn v29.8b, v12.8h, #5
+	xtn v17.8b, v16.8h
+	shrn v27.8b, v24.8h, #5
+	umax v24.8b, v30.8b, v26.8b
+	ldp q12, q18, [x2]
+	zip1 v25.16b, v31.16b, v24.16b
+	movi v24.8b, #0x1f
+	zip1 v29.16b, v29.16b, v27.16b
+	fmov x17, d17
+	fmov d28, x8
+	cmeq v24.8b, v30.8b, v24.8b
+	ldr q17, [x19, #32]
 	zip1 v27.8h, v29.8h, v25.8h
+	ldr d31, [x3, x4]
 	zip2 v29.8h, v29.8h, v25.8h
 	ldr d25, [x19, #48]
+	subs x5, x5, #8
 	ldp q10, q11, [x1]
 	dup v25.8b, v25.b[3]
-	cmeq v24.8b, v30.8b, v24.8b
-	cmeq v26.8b, v31.8b, v25.8b
-	fmov d28, x8
-	xtn v22.4h, v22.4s
 	orr v13.16b, v13.16b, v17.16b
+	cmeq v26.8b, v31.8b, v25.8b
 	bic v26.8b, v26.8b, v24.8b
+	orr v14.16b, v14.16b, v17.16b
 	bic v28.8b, v28.8b, v26.8b
 	bic v30.8b, v28.8b, v24.8b
 	and v26.8b, v28.8b, v24.8b
 	bsl v30.8b, v25.8b, v31.8b
-	ldp q12, q18, [x2]
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
+	xtn2 v22.8h, v23.4s
 	sshll v31.8h, v26.8b, #0
-	sshll v25.4s, v30.4h, #0
 	sshll2 v26.4s, v30.8h, #0
+	orr x0, x0, x8
+	sshll v25.4s, v30.4h, #0
 	sshll v30.4s, v31.4h, #0
 	sshll2 v31.4s, v31.8h, #0
-	bit v11.16b, v29.16b, v26.16b
 	bit v10.16b, v27.16b, v25.16b
+	bit v11.16b, v29.16b, v26.16b
 	bit v18.16b, v20.16b, v31.16b
 	bit v12.16b, v19.16b, v30.16b
 	stp q10, q11, [x1]
-	xtn2 v22.8h, v23.4s
 	stp q12, q18, [x2]
 	b.ls 59f
 	add x1, x1, #32
@@ -100421,176 +102165,179 @@ rast_kern_h02110:
 	add x4, x4, #8
 	cbz x17, 52f
 53:
-	mov x8, #16
-	add v17.2d, v7.2d, v8.2d
-	cmp x5, #16
-	add v16.2d, v6.2d, v8.2d
-	smull2 v29.4s, v22.8h, v15.h[4]
-	smull v30.4s, v22.4h, v15.h[4]
-	add x16, x2, #32
-	csel x8, x5, x8, lo
-	shrn v19.2s, v16.2d, #30
-	ldr q28, [sp, #112]
-	smull v27.4s, v22.4h, v15.h[5]
-	subs x8, x8, #8
 	ldr q31, [sp, #96]
-	add v6.2d, v16.2d, v8.2d
-	shrn2 v19.4s, v17.2d, #30
-	frecpe v24.4s, v2.4s
+	smull v30.4s, v22.4h, v15.h[4]
+	smull v27.4s, v22.4h, v15.h[5]
+	smull2 v29.4s, v22.8h, v15.h[4]
+	ldr q28, [sp, #112]
+	mov x8, #16
 	addhn v30.4h, v30.4s, v31.4s
-	ldr q25, [x19, #64]
-	add v7.2d, v17.2d, v8.2d
+	frecpe v24.4s, v2.4s
 	addhn v27.4h, v27.4s, v28.4s
-	csel x16, x16, x2, hi
+	ldr q25, [x19, #64]
 	addhn2 v30.8h, v29.4s, v31.4s
 	smull2 v29.4s, v22.8h, v15.h[5]
-	ldp q16, q17, [x16]
 	frecps v9.4s, v24.4s, v2.4s
-	addhn2 v27.8h, v29.4s, v28.4s
+	ldr d11, [x19, #48]
+	add v16.2d, v6.2d, v8.2d
 	sshr v30.8h, v30.8h, #3
-	bic v16.4s, #0xff, lsl #24
-	shrn v20.2s, v6.2d, #30
+	addhn2 v27.8h, v29.4s, v28.4s
+	add v17.2d, v7.2d, v8.2d
 	and v30.16b, v30.16b, v25.16b
 	ldr q25, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	bic v17.4s, #0xff, lsl #24
-	shrn2 v20.4s, v7.2d, #30
+	shrn v19.2s, v16.2d, #30
 	and v27.16b, v27.16b, v25.16b
+	cmp x5, #16
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
+	frecpe v23.4s, v3.4s
 	fmul v24.4s, v24.4s, v9.4s
-	uaddw v29.4s, v29.4s, v30.4h
-	ldr d10, [x19, #48]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	cmhi v17.4s, v17.4s, v20.4s
 	ldr d25, [x19, #48]
-	umov w10, v29.s[1]
-	umov w11, v29.s[2]
-	umov w9, v29.s[0]
-	umov w15, v27.s[2]
-	umov w14, v27.s[1]
+	add x16, x2, #32
+	uaddw v29.4s, v29.4s, v30.4h
+	csel x8, x5, x8, lo
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldr d10, [x19, #48]
 	frecps v9.4s, v24.4s, v2.4s
-	umov w12, v29.s[3]
-	umov w16, v27.s[3]
-	ldr w10, [x6, w10, uxtw #2]
-	ldr w9, [x6, w9, uxtw #2]
+	subs x8, x8, #8
+	umov w15, v27.s[2]
+	umov w11, v29.s[2]
+	umov w14, v27.s[1]
 	umov w13, v27.s[0]
-	dup v10.8b, v10.b[5]
+	csel x16, x16, x2, hi
+	add v6.2d, v16.2d, v8.2d
+	umov w9, v29.s[0]
+	ldr w15, [x6, w15, uxtw #2]
+	umov w10, v29.s[1]
+	umov w12, v29.s[3]
 	ldr w11, [x6, w11, uxtw #2]
+	prfm pldl1keep, [x16, #6144]
+	sub x18, x16, #36, lsl #12
+	add v7.2d, v17.2d, v8.2d
+	ldr w13, [x6, w13, uxtw #2]
 	fmul v24.4s, v24.4s, v9.4s
 	ldr w14, [x6, w14, uxtw #2]
-	ldr w12, [x6, w12, uxtw #2]
-	frecpe v23.4s, v3.4s
-	ldr w15, [x6, w15, uxtw #2]
-	stp w9, w10, [sp, #32]
-	ldr w16, [x6, w16, uxtw #2]
-	fmul v24.4s, v0.4s, v24.4s
-	ldr w13, [x6, w13, uxtw #2]
-	stp w11, w12, [sp, #40]
-	cmhi v16.4s, v16.4s, v19.4s
 	frecps v9.4s, v23.4s, v3.4s
-	stp w15, w16, [sp, #56]
-	stp w13, w14, [sp, #48]
-	ld2 {v29.8h, v30.8h}, [x28]
-	ldr d11, [x19, #48]
-	fmul v23.4s, v23.4s, v9.4s
-	dup v25.8b, v25.b[4]
-	shrn v27.8b, v29.8h, #8
-	xtn v29.8b, v29.8h
-	xtn v31.8b, v30.8h
+	ldr w9, [x6, w9, uxtw #2]
+	prfm pstl1keep, [x18, #0]
+	shrn2 v19.4s, v17.2d, #30
+	ldr w12, [x6, w12, uxtw #2]
+	ldr w10, [x6, w10, uxtw #2]
 	dup v11.8b, v11.b[6]
-	uaddl v26.8h, v25.8b, v29.8b
+	ldp q16, q17, [x16]
+	stp w13, w14, [sp, #48]
+	stp w11, w12, [sp, #40]
+	umov w16, v27.s[3]
+	shrn v20.2s, v6.2d, #30
+	dup v10.8b, v10.b[5]
+	fmul v23.4s, v23.4s, v9.4s
+	ldr w16, [x6, w16, uxtw #2]
+	fsub v2.4s, v2.4s, v5.4s
+	dup v25.8b, v25.b[4]
+	stp w9, w10, [sp, #32]
+	fmul v24.4s, v0.4s, v24.4s
+	stp w15, w16, [sp, #56]
+	ld2 {v29.8h, v30.8h}, [x28]
 	fcvtzs v24.4s, v24.4s, #15
 	frecps v9.4s, v23.4s, v3.4s
-	uaddl v12.8h, v10.8b, v27.8b
-	umlal v26.8h, v25.8b, v29.8b
+	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
+	bic v17.4s, #0xff, lsl #24
+	xtn v31.8b, v30.8h
+	uaddl v26.8h, v25.8b, v29.8b
 	csel x8, x8, xzr, hi
-	ldr d25, [x19, #48]
-	shrn v30.8b, v30.8h, #8
-	xtn v24.4h, v24.4s
-	shrn v29.8b, v26.8h, #6
-	dup v25.8b, v25.b[0]
-	fmul v23.4s, v23.4s, v9.4s
-	fsub v3.4s, v3.4s, v5.4s
-	uaddl v26.8h, v25.8b, v30.8b
-	fadd v0.4s, v0.4s, v4.4s
-	uzp1 v16.8h, v16.8h, v17.8h
-	umlal v26.8h, v25.8b, v30.8b
-	umlal v12.8h, v10.8b, v27.8b
-	movi v10.8b, #0x1f
-	ldr q17, [x20, x8, lsl #4]
 	uaddl v18.8h, v11.8b, v31.8b
+	umlal v26.8h, v25.8b, v29.8b
+	ldr d25, [x19, #48]
+	fmul v23.4s, v23.4s, v9.4s
+	uaddl v12.8h, v10.8b, v27.8b
+	dup v25.8b, v25.b[0]
+	shrn2 v20.4s, v7.2d, #30
+	shrn v30.8b, v30.8h, #8
+	bic v16.4s, #0xff, lsl #24
+	shrn v29.8b, v26.8h, #6
+	uaddl v26.8h, v25.8b, v30.8b
+	cmhi v16.4s, v16.4s, v19.4s
+	umlal v18.8h, v11.8b, v31.8b
+	umlal v26.8h, v25.8b, v30.8b
+	fmul v23.4s, v1.4s, v23.4s
+	cmhi v17.4s, v17.4s, v20.4s
+	shrn v31.8b, v18.8h, #6
 	shrn v30.8b, v26.8h, #5
 	ld2 {v25.8h, v26.8h}, [x1]
-	fmul v23.4s, v1.4s, v23.4s
-	umlal v18.8h, v11.8b, v31.8b
-	sub v11.8b, v10.8b, v30.8b
+	umlal v12.8h, v10.8b, v27.8b
+	movi v10.8b, #0x1f
+	uzp1 v16.8h, v16.8h, v17.8h
+	ldr q17, [x20, x8, lsl #4]
 	xtn v22.8b, v26.8h
 	shrn v26.8b, v26.8h, #8
 	and v16.16b, v16.16b, v17.16b
+	sub v11.8b, v10.8b, v30.8b
 	and v26.8b, v26.8b, v10.8b
-	shrn v27.8b, v12.8h, #6
 	cmeq v28.8b, v26.8b, #0
-	shrn v31.8b, v18.8h, #6
+	xtn v18.8b, v25.8h
+	shrn v27.8b, v12.8h, #6
 	xtn v17.8b, v16.8h
 	bic v11.8b, v11.8b, v28.8b
 	bif v10.8b, v30.8b, v28.8b
-	fmov x8, d17
-	subs x5, x5, #8
 	ushll v28.8h, v31.8b, #0
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v28.8h, v31.8b, v10.8b
+	fmov x8, d17
 	ushll v12.8h, v29.8b, #0
-	xtn v18.8b, v25.8h
+	umlal v28.8h, v31.8b, v10.8b
 	umlal v28.8h, v22.8b, v11.8b
 	ushll v22.8h, v27.8b, #0
 	umlal v12.8h, v29.8b, v10.8b
 	umlal v22.8h, v27.8b, v10.8b
-	ldr q17, [x19, #32]
 	shrn v31.8b, v28.8h, #5
 	shrn v28.8b, v25.8h, #8
-	umlal v12.8h, v18.8b, v11.8b
+	fcvtzs v23.4s, v23.4s, #15
 	umlal v22.8h, v28.8b, v11.8b
-	fsub v2.4s, v2.4s, v5.4s
+	umlal v12.8h, v18.8b, v11.8b
+	orr x0, x0, x17
+	ldr q17, [x19, #32]
 	shrn v27.8b, v22.8h, #5
 	umax v22.8b, v30.8b, v26.8b
 	shrn v29.8b, v12.8h, #5
-	fmov d28, x17
 	zip1 v25.16b, v31.16b, v22.16b
 	zip1 v29.16b, v29.16b, v27.16b
-	orr x0, x0, x17
-	orr v19.16b, v19.16b, v17.16b
+	fsub v3.4s, v3.4s, v5.4s
+	fadd v0.4s, v0.4s, v4.4s
 	ldr d31, [x3, x4]
 	zip1 v27.8h, v29.8h, v25.8h
 	zip2 v29.8h, v29.8h, v25.8h
 	ldr d25, [x19, #48]
 	movi v22.8b, #0x1f
 	ldp q12, q18, [x2]
-	fcvtzs v23.4s, v23.4s, #15
 	dup v25.8b, v25.b[3]
-	orr v20.16b, v20.16b, v17.16b
+	fmov d28, x17
 	cmeq v22.8b, v30.8b, v22.8b
 	cmeq v26.8b, v31.8b, v25.8b
+	orr v20.16b, v20.16b, v17.16b
 	bic v26.8b, v26.8b, v22.8b
-	xtn2 v24.8h, v23.4s
 	bic v28.8b, v28.8b, v26.8b
-	bic v30.8b, v28.8b, v22.8b
 	and v26.8b, v28.8b, v22.8b
+	bic v30.8b, v28.8b, v22.8b
 	bsl v30.8b, v25.8b, v31.8b
 	ldp q10, q11, [x1]
+	fadd v1.4s, v1.4s, v4.4s
 	str d30, [x3, x4]
 	sshll v30.8h, v28.8b, #0
+	xtn v24.4h, v24.4s
 	sshll v31.8h, v26.8b, #0
-	sshll v25.4s, v30.4h, #0
+	subs x5, x5, #8
 	sshll2 v26.4s, v30.8h, #0
+	sshll v25.4s, v30.4h, #0
 	sshll v30.4s, v31.4h, #0
 	sshll2 v31.4s, v31.8h, #0
-	bit v10.16b, v27.16b, v25.16b
-	bit v11.16b, v29.16b, v26.16b
-	bit v18.16b, v14.16b, v31.16b
 	bit v12.16b, v13.16b, v30.16b
-	stp q10, q11, [x1]
+	bit v18.16b, v14.16b, v31.16b
+	bit v11.16b, v29.16b, v26.16b
+	bit v10.16b, v27.16b, v25.16b
+	orr v19.16b, v19.16b, v17.16b
 	stp q12, q18, [x2]
+	stp q10, q11, [x1]
+	xtn2 v24.8h, v23.4s
 	b.ls 59f
 	add x1, x1, #32
 	add x2, x2, #32
@@ -100606,15 +102353,17 @@ rast_kern_h02110:
 	mov x8, #8
 	cmp x5, #8
 	add v27.2d, v6.2d, v8.2d
-	add x1, x1, #32
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
-	add x4, x4, #8
+	add x1, x1, #32
 	add v28.2d, v7.2d, v8.2d
 	shrn v19.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
+	add x4, x4, #8
+	prfm pldl1keep, [x2, #6144]
 	add v6.2d, v27.2d, v8.2d
 	shrn2 v19.4s, v28.2d, #30
 	frecps v30.4s, v24.4s, v2.4s
@@ -100623,6 +102372,7 @@ rast_kern_h02110:
 	fsub v3.4s, v3.4s, v5.4s
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
+	prfm pstl1keep, [x18, #0]
 	add v7.2d, v28.2d, v8.2d
 	shrn v20.2s, v6.2d, #30
 	ldp q27, q28, [x2]
@@ -100740,9 +102490,12 @@ rast_kern_h02111:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -100929,9 +102682,12 @@ rast_kern_h02111:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -101346,14 +103102,17 @@ rast_kern_h02111:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -101367,9 +103126,12 @@ rast_kern_h02111:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -101498,9 +103260,12 @@ rast_kern_h03000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -101740,9 +103505,12 @@ rast_kern_h03000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -101919,14 +103687,17 @@ rast_kern_h03000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -101945,9 +103716,12 @@ rast_kern_h03000:
 	b 826b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -102185,9 +103959,12 @@ rast_kern_h03001:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -102406,9 +104183,12 @@ rast_kern_h03001:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -102825,14 +104605,17 @@ rast_kern_h03001:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -102846,9 +104629,12 @@ rast_kern_h03001:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -103071,9 +104857,12 @@ rast_kern_h03010:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -103282,9 +105071,12 @@ rast_kern_h03010:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -103447,14 +105239,17 @@ rast_kern_h03010:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -103472,9 +105267,12 @@ rast_kern_h03010:
 	b 839b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -103685,9 +105483,12 @@ rast_kern_h03011:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -103877,9 +105678,12 @@ rast_kern_h03011:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -104288,14 +106092,17 @@ rast_kern_h03011:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -104309,9 +106116,12 @@ rast_kern_h03011:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -104505,9 +106315,12 @@ rast_kern_h03100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -104743,9 +106556,12 @@ rast_kern_h03100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -104991,14 +106807,17 @@ rast_kern_h03100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -105018,9 +106837,12 @@ rast_kern_h03100:
 	b 852b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -105194,9 +107016,12 @@ rast_kern_h03101:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -105412,9 +107237,12 @@ rast_kern_h03101:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -105909,14 +107737,17 @@ rast_kern_h03101:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -105930,9 +107761,12 @@ rast_kern_h03101:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -106096,9 +107930,12 @@ rast_kern_h03110:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -106307,9 +108144,12 @@ rast_kern_h03110:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -106545,14 +108385,17 @@ rast_kern_h03110:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -106574,9 +108417,12 @@ rast_kern_h03110:
 	b 859b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -106722,9 +108568,12 @@ rast_kern_h03111:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -106911,9 +108760,12 @@ rast_kern_h03111:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -107400,14 +109252,17 @@ rast_kern_h03111:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -107421,9 +109276,12 @@ rast_kern_h03111:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -107552,9 +109410,12 @@ rast_kern_h04000:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -107790,9 +109651,12 @@ rast_kern_h04000:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -107943,14 +109807,17 @@ rast_kern_h04000:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -107963,9 +109830,12 @@ rast_kern_h04000:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -108110,131 +109980,134 @@ rast_kern_h04000:
 	xtn2 v24.8h, v29.4s
 51:
 	ldr q31, [sp, #96]
-	smull v30.4s, v24.4h, v15.h[4]
-	ldr q22, [sp, #112]
-	smull v27.4s, v24.4h, v15.h[5]
 	smull2 v29.4s, v24.8h, v15.h[4]
+	smull v30.4s, v24.4h, v15.h[4]
+	smull v27.4s, v24.4h, v15.h[5]
+	cmp x5, #16
+	mov x17, #16
+	add v23.2d, v6.2d, v8.2d
+	ldr q22, [sp, #112]
 	addhn v30.4h, v30.4s, v31.4s
 	add v10.2d, v7.2d, v8.2d
 	addhn v27.4h, v27.4s, v22.4s
-	ldr q28, [x19, #64]
-	addhn2 v30.8h, v29.4s, v31.4s
-	cmp x5, #16
-	smull2 v29.4s, v24.8h, v15.h[5]
-	mov x17, #16
-	add v23.2d, v6.2d, v8.2d
-	sshr v30.8h, v30.8h, #3
-	sqdmulh v16.8h, v24.8h, v15.h[0]
-	addhn2 v27.8h, v29.4s, v22.4s
-	and v30.16b, v30.16b, v28.16b
 	csel x17, x5, x17, lo
-	shrn v13.2s, v23.2d, #30
-	ldr q28, [x19, #80]
-	add v6.2d, v23.2d, v8.2d
-	sshr v27.8h, v27.8h, #3
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v24.8h, v15.h[5]
+	add x26, x2, #32
+	subs x17, x17, #8
 	add v7.2d, v10.2d, v8.2d
+	shrn v13.2s, v23.2d, #30
+	sshr v30.8h, v30.8h, #3
+	ldr q28, [x19, #64]
+	add v6.2d, v23.2d, v8.2d
+	csel x26, x26, x2, hi
+	addhn2 v27.8h, v29.4s, v22.4s
+	shrn2 v13.4s, v10.2d, #30
+	and v30.16b, v30.16b, v28.16b
+	ldr q28, [x19, #80]
+	ldp q23, q10, [x26]
+	sshr v27.8h, v27.8h, #3
+	shrn v14.2s, v6.2d, #30
+	bic v23.4s, #0xff, lsl #24
 	and v27.16b, v27.16b, v28.16b
+	ldr q28, [sp, #160]
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	subs x17, x17, #8
-	add x26, x2, #32
-	shrn v14.2s, v6.2d, #30
-	shrn2 v13.4s, v10.2d, #30
-	uaddw v29.4s, v29.4s, v30.4h
-	ldr q28, [sp, #160]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	shrn2 v14.4s, v7.2d, #30
-	add v16.8h, v16.8h, v28.8h
-	ldr q31, [sp, #128]
-	umov w11, v29.s[2]
-	umov w15, v27.s[2]
-	umov w14, v27.s[1]
-	umov w13, v27.s[0]
-	umov w12, v29.s[3]
-	umov w10, v29.s[1]
-	umov w9, v29.s[0]
-	umov w16, v27.s[3]
-	ldrb w11, [x6, w11, uxtw]
+	sub x18, x26, #36, lsl #12
 	frecpe v12.4s, v2.4s
-	ldrb w14, [x6, w14, uxtw]
-	csel x26, x26, x2, hi
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	csel x17, x17, xzr, hi
-	ldrb w10, [x6, w10, uxtw]
-	ldr w11, [x21, w11, uxtw #2]
-	sqdmulh v9.8h, v24.8h, v15.h[3]
-	ldr w14, [x21, w14, uxtw #2]
-	ldrb w16, [x6, w16, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	sqdmulh v17.8h, v24.8h, v15.h[1]
-	ldr w12, [x21, w12, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	ldr w16, [x21, w16, uxtw #2]
-	ldr w9, [x21, w9, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
-	stp w13, w14, [sp, #48]
-	ldr w10, [x21, w10, uxtw #2]
-	ldp q23, q10, [x26]
-	stp w15, w16, [sp, #56]
-	stp w11, w12, [sp, #40]
-	add v17.8h, v17.8h, v11.8h
-	stp w9, w10, [sp, #32]
-	bic v23.4s, #0xff, lsl #24
-	cmhi v23.4s, v23.4s, v13.4s
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v14.4s, v7.2d, #30
 	bic v10.4s, #0xff, lsl #24
+	umov w10, v29.s[1]
+	sqdmulh v17.8h, v24.8h, v15.h[1]
+	umov w9, v29.s[0]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	add v17.8h, v17.8h, v11.8h
 	cmhi v10.4s, v10.4s, v14.4s
+	ldrb w10, [x6, w10, uxtw]
+	umov w16, v27.s[3]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	ldrb w11, [x6, w11, uxtw]
+	ldr w10, [x21, w10, uxtw #2]
+	ldr w9, [x21, w9, uxtw #2]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w16, [x6, w16, uxtw]
+	umov w15, v27.s[2]
+	ldrb w14, [x6, w14, uxtw]
+	ldr w11, [x21, w11, uxtw #2]
+	sqdmulh v16.8h, v24.8h, v15.h[0]
+	ldr w13, [x21, w13, uxtw #2]
+	csel x17, x17, xzr, hi
+	ldrb w15, [x6, w15, uxtw]
+	ldr w14, [x21, w14, uxtw #2]
+	ldr w12, [x21, w12, uxtw #2]
+	cmn x8, #1
+	ldr w16, [x21, w16, uxtw #2]
+	sqdmulh v9.8h, v24.8h, v15.h[3]
+	ldr w15, [x21, w15, uxtw #2]
+	stp w9, w10, [sp, #32]
+	stp w11, w12, [sp, #40]
+	ldr q31, [sp, #128]
+	cmhi v23.4s, v23.4s, v13.4s
+	stp w13, w14, [sp, #48]
+	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
 	uzp1 v23.8h, v23.8h, v10.8h
 	ldr q10, [x20, x17, lsl #4]
+	add v9.8h, v9.8h, v31.8h
 	shrn v27.8b, v29.8h, #8
 	and v23.16b, v23.16b, v10.16b
-	shrn v17.8b, v17.8h, #3
-	xtn v10.8b, v23.8h
 	xtn v29.8b, v29.8h
-	shrn v16.8b, v16.8h, #3
-	uaddl v22.8h, v17.8b, v27.8b
+	xtn v10.8b, v23.8h
+	add v16.8h, v16.8h, v28.8h
 	fmov x17, d10
 	frecps v10.4s, v12.4s, v2.4s
-	uaddl v24.8h, v16.8b, v29.8b
-	orr x0, x0, x8
-	add v9.8h, v9.8h, v31.8h
-	xtn v31.8b, v30.8h
-	shrn v9.8b, v9.8h, #3
+	shrn v17.8b, v17.8h, #3
 	fmul v12.4s, v12.4s, v10.4s
-	umlal v24.8h, v16.8b, v29.8b
+	shrn v16.8b, v16.8h, #3
+	xtn v31.8b, v30.8h
 	frecpe v23.4s, v3.4s
-	umlal v22.8h, v17.8b, v27.8b
 	frecps v10.4s, v12.4s, v2.4s
-	uaddl v27.8h, v9.8b, v31.8b
-	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
-	shrn v29.8b, v22.8h, #6
-	cmn x8, #1
+	uaddl v24.8h, v16.8b, v29.8b
+	uaddl v22.8h, v17.8b, v27.8b
+	fsub v2.4s, v2.4s, v5.4s
 	fmul v12.4s, v12.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	shrn v30.8b, v30.8h, #8
+	orr x0, x0, x8
+	umlal v24.8h, v16.8b, v29.8b
+	umlal v22.8h, v17.8b, v27.8b
 	fmul v23.4s, v23.4s, v10.4s
-	fsub v2.4s, v2.4s, v5.4s
+	shrn v30.8b, v30.8h, #8
+	shrn v28.8b, v24.8h, #6
+	shrn v9.8b, v9.8h, #3
+	shrn v29.8b, v22.8h, #6
+	frecps v10.4s, v23.4s, v3.4s
 	fmul v12.4s, v0.4s, v12.4s
 	fadd v0.4s, v0.4s, v4.4s
-	frecps v10.4s, v23.4s, v3.4s
-	ccmp x17, #0, #4, eq
-	umlal v27.8h, v9.8b, v31.8b
-	fmul v23.4s, v23.4s, v10.4s
+	uaddl v27.8h, v9.8b, v31.8b
 	ldr q22, [x19, #32]
-	orr v31.8b, v30.8b, v24.8b
+	fmul v23.4s, v23.4s, v10.4s
+	orr v25.16b, v25.16b, v22.16b
 	fcvtzs v12.4s, v12.4s, #15
 	fmul v23.4s, v1.4s, v23.4s
-	fsub v3.4s, v3.4s, v5.4s
-	shrn v30.8b, v27.8h, #6
-	xtn v12.4h, v12.4s
-	orr v25.16b, v25.16b, v22.16b
-	fcvtzs v23.4s, v23.4s, #15
 	fadd v1.4s, v1.4s, v4.4s
-	orr v26.16b, v26.16b, v22.16b
+	fsub v3.4s, v3.4s, v5.4s
+	ldr d24, [sp, #144]
+	umlal v27.8h, v9.8b, v31.8b
+	fcvtzs v23.4s, v23.4s, #15
+	prfm pldl1keep, [x26, #6144]
+	ccmp x17, #0, #4, eq
+	xtn v12.4h, v12.4s
+	orr v31.8b, v30.8b, v24.8b
 	xtn2 v12.8h, v23.4s
+	shrn v30.8b, v27.8h, #6
+	orr v26.16b, v26.16b, v22.16b
 	b.eq 61f
 	subs x5, x5, #8
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -108244,135 +110117,138 @@ rast_kern_h04000:
 	add x1, x1, #32
 	add x2, x2, #32
 53:
-	mov x8, #16
-	add v23.2d, v6.2d, v8.2d
-	cmp x5, #16
-	add v10.2d, v7.2d, v8.2d
+	ldr q31, [sp, #96]
 	smull v30.4s, v12.4h, v15.h[4]
 	smull v27.4s, v12.4h, v15.h[5]
-	csel x8, x5, x8, lo
-	ldr q22, [sp, #112]
-	shrn v25.2s, v23.2d, #30
-	ldr q31, [sp, #96]
-	add v7.2d, v10.2d, v8.2d
-	shrn2 v25.4s, v10.2d, #30
-	add x26, x2, #32
-	add v6.2d, v23.2d, v8.2d
-	subs x8, x8, #8
 	smull2 v29.4s, v12.8h, v15.h[4]
+	cmp x5, #16
+	ldr q22, [sp, #112]
 	addhn v30.4h, v30.4s, v31.4s
-	shrn v26.2s, v6.2d, #30
-	ldr q28, [x19, #64]
+	mov x8, #16
 	addhn v27.4h, v27.4s, v22.4s
-	csel x26, x26, x2, hi
 	addhn2 v30.8h, v29.4s, v31.4s
+	csel x8, x5, x8, lo
 	smull2 v29.4s, v12.8h, v15.h[5]
-	ldp q23, q10, [x26]
-	sqdmulh v16.8h, v12.8h, v15.h[0]
-	addhn2 v27.8h, v29.4s, v22.4s
-	csel x8, x8, xzr, hi
-	shrn2 v26.4s, v7.2d, #30
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
-	sshr v27.8h, v27.8h, #3
+	add v23.2d, v6.2d, v8.2d
+	subs x8, x8, #8
+	addhn2 v27.8h, v29.4s, v22.4s
+	add x26, x2, #32
+	add v10.2d, v7.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	cmhi v23.4s, v23.4s, v25.4s
-	bic v10.4s, #0xff, lsl #24
+	sshr v27.8h, v27.8h, #3
+	csel x26, x26, x2, hi
 	and v27.16b, v27.16b, v28.16b
-	cmhi v10.4s, v10.4s, v26.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	uzp1 v23.8h, v23.8h, v10.8h
-	ldr q10, [x20, x8, lsl #4]
 	ldr q28, [sp, #160]
+	sub x18, x26, #36, lsl #12
+	add v7.2d, v10.2d, v8.2d
+	shrn v25.2s, v23.2d, #30
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	and v23.16b, v23.16b, v10.16b
-	umov w12, v29.s[3]
-	umov w13, v27.s[0]
-	umov w11, v29.s[2]
-	umov w14, v27.s[1]
-	umov w15, v27.s[2]
-	umov w16, v27.s[3]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldr q31, [sp, #128]
-	add v16.8h, v16.8h, v28.8h
-	xtn v10.8b, v23.8h
+	prfm pstl1keep, [x18, #0]
+	add v6.2d, v23.2d, v8.2d
+	csel x8, x8, xzr, hi
 	umov w9, v29.s[0]
-	ldrb w16, [x6, w16, uxtw]
-	ldrb w11, [x6, w11, uxtw]
-	ldr w12, [x21, w12, uxtw #2]
 	umov w10, v29.s[1]
+	umov w12, v29.s[3]
 	sqdmulh v17.8h, v12.8h, v15.h[1]
-	ldrb w14, [x6, w14, uxtw]
-	cmn x17, #1
-	ldrb w15, [x6, w15, uxtw]
+	umov w16, v27.s[3]
+	umov w13, v27.s[0]
 	ldrb w9, [x6, w9, uxtw]
+	umov w11, v29.s[2]
 	frecpe v24.4s, v2.4s
 	ldrb w10, [x6, w10, uxtw]
-	fmov x8, d10
+	ldrb w12, [x6, w12, uxtw]
+	ldrb w13, [x6, w13, uxtw]
+	umov w15, v27.s[2]
+	sqdmulh v16.8h, v12.8h, v15.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	add v17.8h, v17.8h, v11.8h
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	umov w14, v27.s[1]
+	ldrb w16, [x6, w16, uxtw]
+	ldr w12, [x21, w12, uxtw #2]
 	ldr w13, [x21, w13, uxtw #2]
 	sqdmulh v9.8h, v12.8h, v15.h[3]
-	ldr w14, [x21, w14, uxtw #2]
-	ldr w9, [x21, w9, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
-	frecpe v23.4s, v3.4s
-	ldr w16, [x21, w16, uxtw #2]
-	frecps v10.4s, v24.4s, v2.4s
+	ldrb w14, [x6, w14, uxtw]
 	ldr w10, [x21, w10, uxtw #2]
 	ldr w11, [x21, w11, uxtw #2]
-	stp w13, w14, [sp, #48]
-	add v17.8h, v17.8h, v11.8h
+	ldr q31, [sp, #128]
+	shrn v26.2s, v6.2d, #30
+	shrn2 v25.4s, v10.2d, #30
+	add v16.8h, v16.8h, v28.8h
+	ldr w16, [x21, w16, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
+	ldp q23, q10, [x26]
+	stp w11, w12, [sp, #40]
 	stp w15, w16, [sp, #56]
 	add v9.8h, v9.8h, v31.8h
+	shrn2 v26.4s, v7.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	bic v10.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
-	stp w11, w12, [sp, #40]
+	cmhi v23.4s, v23.4s, v25.4s
+	stp w13, w14, [sp, #48]
+	cmhi v10.4s, v10.4s, v26.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v24.4s, v24.4s, v10.4s
-	shrn v17.8b, v17.8h, #3
-	shrn v16.8b, v16.8h, #3
-	shrn v27.8b, v29.8h, #8
-	shrn v9.8b, v9.8h, #3
-	xtn v31.8b, v30.8h
-	xtn v29.8b, v29.8h
-	uaddl v22.8h, v17.8b, v27.8b
-	frecps v10.4s, v24.4s, v2.4s
-	uaddl v12.8h, v16.8b, v29.8b
+	uzp1 v23.8h, v23.8h, v10.8h
+	ldr q10, [x20, x8, lsl #4]
+	cmn x17, #1
 	orr x0, x0, x17
-	umlal v22.8h, v17.8b, v27.8b
-	uaddl v27.8h, v9.8b, v31.8b
+	and v23.16b, v23.16b, v10.16b
+	shrn v27.8b, v29.8h, #8
+	xtn v10.8b, v23.8h
+	xtn v29.8b, v29.8h
+	shrn v17.8b, v17.8h, #3
+	fmov x8, d10
+	frecps v10.4s, v24.4s, v2.4s
+	uaddl v22.8h, v17.8b, v27.8b
+	xtn v31.8b, v30.8h
+	shrn v9.8b, v9.8h, #3
+	shrn v16.8b, v16.8h, #3
 	fmul v24.4s, v24.4s, v10.4s
-	frecps v10.4s, v23.4s, v3.4s
+	uaddl v12.8h, v16.8b, v29.8b
+	ccmp x8, #0, #4, eq
+	umlal v22.8h, v17.8b, v27.8b
+	frecpe v23.4s, v3.4s
+	frecps v10.4s, v24.4s, v2.4s
 	umlal v12.8h, v16.8b, v29.8b
-	umlal v27.8h, v9.8b, v31.8b
-	fmul v24.4s, v0.4s, v24.4s
-	fmul v23.4s, v23.4s, v10.4s
-	shrn v28.8b, v12.8h, #6
-	shrn v30.8b, v30.8h, #8
-	fadd v0.4s, v0.4s, v4.4s
-	frecps v10.4s, v23.4s, v3.4s
 	shrn v29.8b, v22.8h, #6
 	ldr q22, [x19, #32]
-	ccmp x8, #0, #4, eq
+	fmul v24.4s, v24.4s, v10.4s
+	frecps v10.4s, v23.4s, v3.4s
+	uaddl v27.8h, v9.8b, v31.8b
+	shrn v28.8b, v12.8h, #6
+	orr v13.16b, v13.16b, v22.16b
+	shrn v30.8b, v30.8h, #8
+	fmul v23.4s, v23.4s, v10.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fmul v24.4s, v0.4s, v24.4s
 	ldr d12, [sp, #144]
+	frecps v10.4s, v23.4s, v3.4s
 	fmul v23.4s, v23.4s, v10.4s
 	fcvtzs v24.4s, v24.4s, #15
-	orr v14.16b, v14.16b, v22.16b
-	orr v31.8b, v30.8b, v12.8b
+	umlal v27.8h, v9.8b, v31.8b
+	fadd v0.4s, v0.4s, v4.4s
+	fsub v3.4s, v3.4s, v5.4s
 	fmul v23.4s, v1.4s, v23.4s
 	fadd v1.4s, v1.4s, v4.4s
-	shrn v30.8b, v27.8h, #6
+	prfm pldl1keep, [x26, #6144]
 	xtn v24.4h, v24.4s
-	fsub v3.4s, v3.4s, v5.4s
 	fcvtzs v23.4s, v23.4s, #15
-	fsub v2.4s, v2.4s, v5.4s
-	orr v13.16b, v13.16b, v22.16b
+	orr v31.8b, v30.8b, v12.8b
 	xtn2 v24.8h, v23.4s
+	shrn v30.8b, v27.8h, #6
+	orr v14.16b, v14.16b, v22.16b
 	b.eq 71f
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	stp q13, q14, [x2]
 	str x17, [x3], #8
 	b.ls 59f
@@ -108390,10 +110266,13 @@ rast_kern_h04000:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -108532,125 +110411,128 @@ rast_kern_h04000:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v29.4s
 81:
-	cmp x5, #16
-	mov x17, #16
-	add v23.2d, v6.2d, v8.2d
-	ldr q31, [sp, #96]
-	smull2 v29.4s, v24.8h, v15.h[4]
-	smull v30.4s, v24.4h, v15.h[4]
-	csel x17, x5, x17, lo
-	ldr q22, [sp, #112]
 	add v10.2d, v7.2d, v8.2d
-	shrn v13.2s, v23.2d, #30
+	cmp x5, #16
+	smull v30.4s, v24.4h, v15.h[4]
+	ldr q31, [sp, #96]
+	mov x17, #16
+	sqdmulh v17.8h, v24.8h, v15.h[1]
 	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	subs x17, x17, #8
+	ldr q22, [sp, #112]
+	csel x17, x5, x17, lo
 	add x26, x2, #32
-	add v7.2d, v10.2d, v8.2d
-	shrn2 v13.4s, v10.2d, #30
-	addhn v27.4h, v27.4s, v22.4s
+	add v23.2d, v6.2d, v8.2d
 	ldr q28, [x19, #64]
-	add v6.2d, v23.2d, v8.2d
-	csel x26, x26, x2, hi
+	addhn v27.4h, v27.4s, v22.4s
 	addhn2 v30.8h, v29.4s, v31.4s
 	smull2 v29.4s, v24.8h, v15.h[5]
-	ldp q23, q10, [x26]
-	sqdmulh v16.8h, v24.8h, v15.h[0]
-	addhn2 v27.8h, v29.4s, v22.4s
+	subs x17, x17, #8
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
-	shrn v14.2s, v6.2d, #30
-	bic v10.4s, #0xff, lsl #24
+	shrn v13.2s, v23.2d, #30
+	add v6.2d, v23.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
+	addhn2 v27.8h, v29.4s, v22.4s
+	add v17.8h, v17.8h, v11.8h
 	ldr q28, [x19, #80]
-	shrn2 v14.4s, v7.2d, #30
+	shrn2 v13.4s, v10.2d, #30
 	csel x17, x17, xzr, hi
-	cmhi v23.4s, v23.4s, v13.4s
 	sshr v27.8h, v27.8h, #3
-	cmhi v10.4s, v10.4s, v14.4s
+	csel x26, x26, x2, hi
+	add v7.2d, v10.2d, v8.2d
+	shrn v14.2s, v6.2d, #30
 	and v27.16b, v27.16b, v28.16b
 	ldr q28, [sp, #160]
 	umull v29.4s, v27.4h, v15.h[6]
-	uzp1 v23.8h, v23.8h, v10.8h
-	ldr q10, [x20, x17, lsl #4]
-	frecpe v12.4s, v2.4s
+	ldp q23, q10, [x26]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
-	add v16.8h, v16.8h, v28.8h
-	and v23.16b, v23.16b, v10.16b
-	xtn v10.8b, v23.8h
-	ldr q31, [sp, #128]
+	sub x18, x26, #36, lsl #12
+	shrn2 v14.4s, v7.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	umov w9, v29.s[0]
 	umov w10, v29.s[1]
+	umov w12, v29.s[3]
+	sqdmulh v16.8h, v24.8h, v15.h[0]
 	umov w11, v29.s[2]
 	uaddw2 v27.4s, v27.4s, v30.8h
-	fmov x17, d10
-	orr x0, x0, x8
-	umov w9, v29.s[0]
-	sqdmulh v9.8h, v24.8h, v15.h[3]
-	umov w12, v29.s[3]
-	umov w13, v27.s[0]
+	prfm pstl1keep, [x18, #0]
+	cmhi v23.4s, v23.4s, v13.4s
+	bic v10.4s, #0xff, lsl #24
+	ldr q31, [sp, #128]
+	cmhi v10.4s, v10.4s, v14.4s
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w14, v27.s[1]
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w11, [x6, w11, uxtw]
-	umov w14, v27.s[1]
-	frecps v10.4s, v12.4s, v2.4s
-	umov w15, v27.s[2]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w9, [x6, w9, uxtw]
 	umov w16, v27.s[3]
-	ldrb w13, [x6, w13, uxtw]
-	sqdmulh v17.8h, v24.8h, v15.h[1]
+	sqdmulh v9.8h, v24.8h, v15.h[3]
+	umov w13, v27.s[0]
 	ldrb w14, [x6, w14, uxtw]
+	umov w15, v27.s[2]
+	uzp1 v23.8h, v23.8h, v10.8h
+	ldr q10, [x20, x17, lsl #4]
 	stp w11, w12, [sp, #40]
-	ldrb w15, [x6, w15, uxtw]
-	fmul v12.4s, v12.4s, v10.4s
 	ldrb w16, [x6, w16, uxtw]
+	frecpe v12.4s, v2.4s
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	prfm pldl1keep, [x26, #6144]
 	stp w9, w10, [sp, #32]
 	add v9.8h, v9.8h, v31.8h
-	cmn x8, #1
-	shrn v16.8b, v16.8h, #3
+	shrn v17.8b, v17.8h, #3
+	and v23.16b, v23.16b, v10.16b
 	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
-	frecps v10.4s, v12.4s, v2.4s
-	frecpe v23.4s, v3.4s
-	add v17.8h, v17.8h, v11.8h
-	xtn v29.8b, v29.8h
-	shrn v17.8b, v17.8h, #3
+	cmn x8, #1
+	add v16.8h, v16.8h, v28.8h
+	xtn v10.8b, v23.8h
 	shrn v9.8b, v9.8h, #3
+	xtn v29.8b, v29.8h
+	fmov x17, d10
+	frecps v10.4s, v12.4s, v2.4s
 	tbl v27.8b, {v19.16b}, v29.8b
+	shrn v16.8b, v16.8h, #3
 	tbl v31.8b, {v20.16b}, v29.8b
+	fmul v12.4s, v12.4s, v10.4s
 	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v29.8b, {v18.16b}, v29.8b
+	frecpe v23.4s, v3.4s
+	uaddl v22.8h, v17.8b, v27.8b
+	frecps v10.4s, v12.4s, v2.4s
+	uaddl v24.8h, v16.8b, v29.8b
+	fsub v2.4s, v2.4s, v5.4s
 	fmul v12.4s, v12.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	uaddl v22.8h, v17.8b, v27.8b
-	uaddl v24.8h, v16.8b, v29.8b
+	umlal v22.8h, v17.8b, v27.8b
+	uaddl v27.8h, v9.8b, v31.8b
 	fmul v12.4s, v0.4s, v12.4s
 	fmul v23.4s, v23.4s, v10.4s
-	umlal v22.8h, v17.8b, v27.8b
-	fsub v2.4s, v2.4s, v5.4s
 	umlal v24.8h, v16.8b, v29.8b
-	frecps v10.4s, v23.4s, v3.4s
-	uaddl v27.8h, v9.8b, v31.8b
 	shrn v29.8b, v22.8h, #6
+	frecps v10.4s, v23.4s, v3.4s
+	fsub v3.4s, v3.4s, v5.4s
+	ldr q22, [x19, #32]
 	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
 	fmul v23.4s, v23.4s, v10.4s
 	fcvtzs v12.4s, v12.4s, #15
-	ldr q22, [x19, #32]
 	umlal v27.8h, v9.8b, v31.8b
+	orr x0, x0, x8
+	ldr d24, [sp, #144]
 	fadd v0.4s, v0.4s, v4.4s
 	fmul v23.4s, v1.4s, v23.4s
-	orr v31.8b, v30.8b, v24.8b
-	xtn v12.4h, v12.4s
-	orr v26.16b, v26.16b, v22.16b
-	fcvtzs v23.4s, v23.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fadd v1.4s, v1.4s, v4.4s
 	ccmp x17, #0, #4, eq
-	shrn v30.8b, v27.8h, #6
-	xtn2 v12.8h, v23.4s
+	xtn v12.4h, v12.4s
 	orr v25.16b, v25.16b, v22.16b
+	orr v31.8b, v30.8b, v24.8b
+	fcvtzs v23.4s, v23.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
+	shrn v30.8b, v27.8h, #6
+	orr v26.16b, v26.16b, v22.16b
+	xtn2 v12.8h, v23.4s
 	b.eq 91f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
@@ -108660,123 +110542,126 @@ rast_kern_h04000:
 	add x1, x1, #32
 	add x2, x2, #32
 83:
-	ldr q31, [sp, #96]
-	add v23.2d, v6.2d, v8.2d
 	cmp x5, #16
-	add v10.2d, v7.2d, v8.2d
-	ldr q22, [sp, #112]
-	add v6.2d, v23.2d, v8.2d
+	ldr q31, [sp, #96]
 	mov x8, #16
-	smull2 v29.4s, v12.8h, v15.h[4]
 	smull v30.4s, v12.4h, v15.h[4]
-	ldr q28, [x19, #64]
-	csel x8, x5, x8, lo
-	shrn v26.2s, v6.2d, #30
-	shrn v25.2s, v23.2d, #30
 	smull v27.4s, v12.4h, v15.h[5]
+	smull2 v29.4s, v12.8h, v15.h[4]
+	csel x8, x5, x8, lo
+	orr x0, x0, x17
 	addhn v30.4h, v30.4s, v31.4s
-	subs x8, x8, #8
-	shrn2 v25.4s, v10.2d, #30
 	add x26, x2, #32
-	sqdmulh v9.8h, v12.8h, v15.h[3]
+	add v23.2d, v6.2d, v8.2d
+	ldr q22, [sp, #112]
+	sqdmulh v17.8h, v12.8h, v15.h[1]
 	addhn2 v30.8h, v29.4s, v31.4s
-	add v7.2d, v10.2d, v8.2d
-	csel x26, x26, x2, hi
+	subs x8, x8, #8
 	smull2 v29.4s, v12.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v22.4s
-	ldr q31, [sp, #128]
-	ldp q23, q10, [x26]
-	sqdmulh v16.8h, v12.8h, v15.h[0]
-	addhn2 v27.8h, v29.4s, v22.4s
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	shrn2 v26.4s, v7.2d, #30
 	csel x8, x8, xzr, hi
-	cmhi v23.4s, v23.4s, v25.4s
+	add v10.2d, v7.2d, v8.2d
+	shrn v25.2s, v23.2d, #30
+	addhn2 v27.8h, v29.4s, v22.4s
+	add v6.2d, v23.2d, v8.2d
+	and v30.16b, v30.16b, v28.16b
+	csel x26, x26, x2, hi
+	shrn2 v25.4s, v10.2d, #30
+	ldr q28, [x19, #80]
+	add v17.8h, v17.8h, v11.8h
 	sshr v27.8h, v27.8h, #3
-	bic v10.4s, #0xff, lsl #24
+	add v7.2d, v10.2d, v8.2d
 	and v27.16b, v27.16b, v28.16b
-	cmhi v10.4s, v10.4s, v26.4s
 	umull v29.4s, v27.4h, v15.h[6]
+	ldp q23, q10, [x26]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	uzp1 v23.8h, v23.8h, v10.8h
-	ldr q10, [x20, x8, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
-	cmn x17, #1
-	add v9.8h, v9.8h, v31.8h
-	and v23.16b, v23.16b, v10.16b
+	sub x18, x26, #36, lsl #12
+	shrn v26.2s, v6.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	bic v10.4s, #0xff, lsl #24
+	shrn2 v26.4s, v7.2d, #30
 	ldr q28, [sp, #160]
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
 	umov w12, v29.s[3]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	add v16.8h, v16.8h, v28.8h
-	xtn v10.8b, v23.8h
-	umov w14, v27.s[1]
-	umov w15, v27.s[2]
-	fmov x8, d10
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w11, [x6, w11, uxtw]
-	umov w13, v27.s[0]
 	umov w9, v29.s[0]
+	sqdmulh v9.8h, v12.8h, v15.h[3]
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
+	cmhi v10.4s, v10.4s, v26.4s
+	ldr q31, [sp, #128]
+	umov w10, v29.s[1]
+	ldrb w9, [x6, w9, uxtw]
+	umov w11, v29.s[2]
+	umov w14, v27.s[1]
+	cmhi v23.4s, v23.4s, v25.4s
 	ldrb w12, [x6, w12, uxtw]
 	umov w16, v27.s[3]
-	ldrb w15, [x6, w15, uxtw]
+	ldrb w10, [x6, w10, uxtw]
 	ldrb w14, [x6, w14, uxtw]
-	frecpe v24.4s, v2.4s
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	stp w11, w12, [sp, #40]
-	sqdmulh v17.8h, v12.8h, v15.h[1]
+	umov w15, v27.s[2]
+	umov w13, v27.s[0]
+	ldrb w11, [x6, w11, uxtw]
+	uzp1 v23.8h, v23.8h, v10.8h
+	ldr q10, [x20, x8, lsl #4]
+	sqdmulh v16.8h, v12.8h, v15.h[0]
 	ldrb w16, [x6, w16, uxtw]
-	frecpe v23.4s, v3.4s
-	frecps v10.4s, v24.4s, v2.4s
-	stp w13, w14, [sp, #48]
+	frecpe v24.4s, v2.4s
+	ldrb w15, [x6, w15, uxtw]
+	stp w11, w12, [sp, #40]
+	ldrb w13, [x6, w13, uxtw]
 	stp w9, w10, [sp, #32]
-	stp w15, w16, [sp, #56]
-	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v24.4s, v24.4s, v10.4s
-	add v17.8h, v17.8h, v11.8h
-	shrn v16.8b, v16.8h, #3
-	shrn v9.8b, v9.8h, #3
-	xtn v29.8b, v29.8h
+	add v16.8h, v16.8h, v28.8h
 	shrn v17.8b, v17.8h, #3
+	and v23.16b, v23.16b, v10.16b
+	stp w15, w16, [sp, #56]
+	stp w13, w14, [sp, #48]
+	xtn v10.8b, v23.8h
+	add v9.8h, v9.8h, v31.8h
+	ld2 {v29.8h, v30.8h}, [x28]
+	cmn x17, #1
+	fmov x8, d10
 	frecps v10.4s, v24.4s, v2.4s
-	tbl v31.8b, {v20.16b}, v29.8b
+	shrn v16.8b, v16.8h, #3
+	xtn v29.8b, v29.8h
+	fmul v24.4s, v24.4s, v10.4s
 	tbl v27.8b, {v19.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v29.8b, {v18.16b}, v29.8b
+	frecpe v23.4s, v3.4s
+	uaddl v22.8h, v17.8b, v27.8b
+	frecps v10.4s, v24.4s, v2.4s
+	umlal v22.8h, v17.8b, v27.8b
+	uaddl v12.8h, v16.8b, v29.8b
 	fmul v24.4s, v24.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	uaddl v22.8h, v17.8b, v27.8b
-	ccmp x8, #0, #4, eq
-	uaddl v12.8h, v16.8b, v29.8b
-	orr x0, x0, x17
-	fmul v24.4s, v0.4s, v24.4s
+	umlal v12.8h, v16.8b, v29.8b
+	shrn v9.8b, v9.8h, #3
+	shrn v29.8b, v22.8h, #6
 	fmul v23.4s, v23.4s, v10.4s
 	fsub v2.4s, v2.4s, v5.4s
-	umlal v12.8h, v16.8b, v29.8b
-	umlal v22.8h, v17.8b, v27.8b
+	ldr q22, [x19, #32]
+	fmul v24.4s, v0.4s, v24.4s
 	frecps v10.4s, v23.4s, v3.4s
 	uaddl v27.8h, v9.8b, v31.8b
+	prfm pldl1keep, [x26, #6144]
 	shrn v28.8b, v12.8h, #6
-	shrn v29.8b, v22.8h, #6
-	ldr d12, [sp, #144]
-	fmul v23.4s, v23.4s, v10.4s
+	orr v14.16b, v14.16b, v22.16b
 	fcvtzs v24.4s, v24.4s, #15
+	fmul v23.4s, v23.4s, v10.4s
 	umlal v27.8h, v9.8b, v31.8b
 	fadd v0.4s, v0.4s, v4.4s
 	fsub v3.4s, v3.4s, v5.4s
 	fmul v23.4s, v1.4s, v23.4s
-	ldr q22, [x19, #32]
+	ldr d12, [sp, #144]
+	ccmp x8, #0, #4, eq
 	xtn v24.4h, v24.4s
 	orr v31.8b, v30.8b, v12.8b
-	shrn v30.8b, v27.8h, #6
-	orr v14.16b, v14.16b, v22.16b
 	fcvtzs v23.4s, v23.4s, #15
 	fadd v1.4s, v1.4s, v4.4s
+	shrn v30.8b, v27.8h, #6
 	orr v13.16b, v13.16b, v22.16b
 	xtn2 v24.8h, v23.4s
 	b.eq 101f
@@ -108799,10 +110684,13 @@ rast_kern_h04000:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -109035,9 +110923,12 @@ rast_kern_h04001:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -109256,9 +111147,12 @@ rast_kern_h04001:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -109635,14 +111529,17 @@ rast_kern_h04001:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -109656,9 +111553,12 @@ rast_kern_h04001:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -109881,9 +111781,12 @@ rast_kern_h04010:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -110096,9 +111999,12 @@ rast_kern_h04010:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -110236,14 +112142,17 @@ rast_kern_h04010:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -110256,9 +112165,12 @@ rast_kern_h04010:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -110372,118 +112284,121 @@ rast_kern_h04010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v29.4s
 51:
-	cmp x5, #16
 	mov x17, #16
 	add v17.2d, v6.2d, v8.2d
-	ldr q31, [sp, #96]
+	cmp x5, #16
 	smull2 v29.4s, v24.8h, v15.h[4]
-	smull v30.4s, v24.4h, v15.h[4]
-	csel x17, x5, x17, lo
-	shrn v13.2s, v17.2d, #30
-	add v23.2d, v7.2d, v8.2d
-	subs x17, x17, #8
+	ldr q31, [sp, #96]
 	add x26, x2, #32
-	add v7.2d, v23.2d, v8.2d
-	ldr q28, [x19, #64]
-	addhn v30.4h, v30.4s, v31.4s
-	csel x26, x26, x2, hi
-	ldr q22, [sp, #112]
-	add v6.2d, v17.2d, v8.2d
-	shrn2 v13.4s, v23.2d, #30
-	addhn2 v30.8h, v29.4s, v31.4s
+	add v23.2d, v7.2d, v8.2d
+	csel x17, x5, x17, lo
+	smull v30.4s, v24.4h, v15.h[4]
 	smull v27.4s, v24.4h, v15.h[5]
-	ldp q17, q23, [x26]
+	subs x17, x17, #8
+	add v6.2d, v17.2d, v8.2d
+	shrn v13.2s, v17.2d, #30
+	addhn v30.4h, v30.4s, v31.4s
+	ldr q22, [sp, #112]
+	shrn2 v13.4s, v23.2d, #30
+	csel x26, x26, x2, hi
+	add v7.2d, v23.2d, v8.2d
+	shrn v14.2s, v6.2d, #30
+	addhn2 v30.8h, v29.4s, v31.4s
 	smull2 v29.4s, v24.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v22.4s
-	csel x17, x17, xzr, hi
-	bic v17.4s, #0xff, lsl #24
-	shrn v14.2s, v6.2d, #30
+	ldr q28, [x19, #64]
+	ldp q17, q23, [x26]
+	addhn2 v27.8h, v29.4s, v22.4s
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
-	shrn2 v14.4s, v7.2d, #30
+	bic v17.4s, #0xff, lsl #24
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	addhn2 v27.8h, v29.4s, v22.4s
-	cmhi v23.4s, v23.4s, v14.4s
-	cmhi v17.4s, v17.4s, v13.4s
 	sshr v27.8h, v27.8h, #3
+	cmhi v17.4s, v17.4s, v13.4s
+	shrn2 v14.4s, v7.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	cmhi v23.4s, v23.4s, v14.4s
 	and v27.16b, v27.16b, v28.16b
+	csel x17, x17, xzr, hi
 	umull v29.4s, v27.4h, v15.h[6]
-	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x17, lsl #4]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	and v17.16b, v17.16b, v23.16b
-	cmn x8, #1
+	uzp1 v17.8h, v17.8h, v23.8h
+	sub x18, x26, #36, lsl #12
+	ldr q23, [x20, x17, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn v23.8b, v17.8h
-	umov w10, v29.s[1]
+	orr x0, x0, x8
+	and v17.16b, v17.16b, v23.16b
 	umov w9, v29.s[0]
-	umov w13, v27.s[0]
-	umov w14, v27.s[1]
+	umov w10, v29.s[1]
 	umov w11, v29.s[2]
-	umov w15, v27.s[2]
+	prfm pstl1keep, [x18, #0]
+	umov w13, v27.s[0]
 	ldrb w9, [x6, w9, uxtw]
-	umov w12, v29.s[3]
-	ldrb w14, [x6, w14, uxtw]
+	umov w14, v27.s[1]
 	ldrb w10, [x6, w10, uxtw]
+	umov w12, v29.s[3]
 	umov w16, v27.s[3]
-	ldrb w15, [x6, w15, uxtw]
-	frecpe v16.4s, v2.4s
-	ldrb w12, [x6, w12, uxtw]
-	ldr w14, [x21, w14, uxtw #2]
-	fmov x17, d23
 	ldrb w11, [x6, w11, uxtw]
-	frecpe v17.4s, v3.4s
-	ldrb w16, [x6, w16, uxtw]
-	frecps v23.4s, v16.4s, v2.4s
+	frecpe v16.4s, v2.4s
 	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	umov w15, v27.s[2]
+	ldrb w12, [x6, w12, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
-	orr x0, x0, x8
+	ldrb w16, [x6, w16, uxtw]
+	ldrb w15, [x6, w15, uxtw]
 	ldr w11, [x21, w11, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	fmul v16.4s, v16.4s, v23.4s
 	ldr w12, [x21, w12, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
 	stp w9, w10, [sp, #32]
-	ldr w16, [x21, w16, uxtw #2]
-	stp w13, w14, [sp, #48]
-	ccmp x17, #0, #4, eq
+	cmn x8, #1
+	ldr w13, [x21, w13, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
 	stp w11, w12, [sp, #40]
-	frecps v23.4s, v16.4s, v2.4s
+	ldr w16, [x21, w16, uxtw #2]
+	xtn v23.8b, v17.8h
+	stp w13, w14, [sp, #48]
 	stp w15, w16, [sp, #56]
+	fmov x17, d23
+	frecps v23.4s, v16.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v16.4s, v16.4s, v23.4s
-	frecps v23.4s, v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
-	xtn v31.8b, v30.8h
+	ccmp x17, #0, #4, eq
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
-	shrn v30.8b, v30.8h, #8
-	fmul v17.4s, v17.4s, v23.4s
-	uaddl v22.8h, v12.8b, v31.8b
-	uaddl v24.8h, v10.8b, v29.8b
+	frecps v23.4s, v16.4s, v2.4s
+	frecpe v17.4s, v3.4s
 	uaddl v9.8h, v11.8b, v27.8b
+	uaddl v24.8h, v10.8b, v29.8b
+	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	fmul v16.4s, v0.4s, v16.4s
 	umlal v24.8h, v10.8b, v29.8b
-	fadd v0.4s, v0.4s, v4.4s
+	prfm pldl1keep, [x26, #6144]
+	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
+	xtn v31.8b, v30.8h
 	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
 	umlal v9.8h, v11.8b, v27.8b
-	fcvtzs v16.4s, v16.4s, #15
-	fmul v17.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v22.8h, v12.8b, v31.8b
+	frecps v23.4s, v17.4s, v3.4s
+	uaddl v22.8h, v12.8b, v31.8b
 	ldr q27, [x19, #32]
+	fsub v2.4s, v2.4s, v5.4s
+	fmul v17.4s, v17.4s, v23.4s
+	fadd v0.4s, v0.4s, v4.4s
+	ldr d24, [sp, #144]
+	fcvtzs v16.4s, v16.4s, #15
+	umlal v22.8h, v12.8b, v31.8b
+	fmul v17.4s, v1.4s, v17.4s
+	fsub v3.4s, v3.4s, v5.4s
 	xtn v16.4h, v16.4s
-	orr v31.8b, v30.8b, v24.8b
+	shrn v30.8b, v30.8h, #8
 	shrn v29.8b, v9.8h, #6
 	orr v25.16b, v25.16b, v27.16b
+	orr v31.8b, v30.8b, v24.8b
 	fcvtzs v17.4s, v17.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
+	fadd v1.4s, v1.4s, v4.4s
 	shrn v30.8b, v22.8h, #6
 	orr v26.16b, v26.16b, v27.16b
 	xtn2 v16.8h, v17.4s
@@ -110496,120 +112411,123 @@ rast_kern_h04010:
 	add x1, x1, #32
 	add x2, x2, #32
 53:
-	cmp x5, #16
-	add v17.2d, v6.2d, v8.2d
 	mov x8, #16
-	add v23.2d, v7.2d, v8.2d
-	ldr q28, [x19, #64]
-	add v6.2d, v17.2d, v8.2d
-	ldr q31, [sp, #96]
-	add x26, x2, #32
-	csel x8, x5, x8, lo
-	add v7.2d, v23.2d, v8.2d
-	shrn v25.2s, v17.2d, #30
-	shrn v26.2s, v6.2d, #30
-	subs x8, x8, #8
+	add v17.2d, v6.2d, v8.2d
+	cmp x5, #16
 	smull v30.4s, v16.4h, v15.h[4]
-	smull2 v29.4s, v16.8h, v15.h[4]
-	csel x26, x26, x2, hi
-	csel x8, x8, xzr, hi
-	shrn2 v25.4s, v23.2d, #30
-	shrn2 v26.4s, v7.2d, #30
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q22, [sp, #112]
-	ldp q17, q23, [x26]
 	smull v27.4s, v16.4h, v15.h[5]
+	ldr q28, [x19, #64]
+	csel x8, x5, x8, lo
+	smull2 v29.4s, v16.8h, v15.h[4]
+	ldr q31, [sp, #96]
+	add v6.2d, v17.2d, v8.2d
+	add x26, x2, #32
+	ldr q22, [sp, #112]
+	subs x8, x8, #8
+	add v23.2d, v7.2d, v8.2d
+	shrn v25.2s, v17.2d, #30
+	addhn v30.4h, v30.4s, v31.4s
+	add v7.2d, v23.2d, v8.2d
+	csel x26, x26, x2, hi
+	shrn2 v25.4s, v23.2d, #30
+	csel x8, x8, xzr, hi
 	addhn2 v30.8h, v29.4s, v31.4s
+	addhn v27.4h, v27.4s, v22.4s
 	smull2 v29.4s, v16.8h, v15.h[5]
+	ldp q17, q23, [x26]
+	addhn2 v27.8h, v29.4s, v22.4s
 	sshr v30.8h, v30.8h, #3
 	bic v17.4s, #0xff, lsl #24
-	and v30.16b, v30.16b, v28.16b
-	bic v23.4s, #0xff, lsl #24
-	addhn v27.4h, v27.4s, v22.4s
-	cmhi v23.4s, v23.4s, v26.4s
-	orr x0, x0, x17
-	cmhi v17.4s, v17.4s, v25.4s
-	ldr q28, [x19, #80]
-	addhn2 v27.8h, v29.4s, v22.4s
-	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x8, lsl #4]
+	shrn v26.2s, v6.2d, #30
 	sshr v27.8h, v27.8h, #3
-	cmn x17, #1
+	bic v23.4s, #0xff, lsl #24
+	shrn2 v26.4s, v7.2d, #30
+	and v30.16b, v30.16b, v28.16b
+	ldr q28, [x19, #80]
+	cmhi v17.4s, v17.4s, v25.4s
+	sub x18, x26, #36, lsl #12
+	cmhi v23.4s, v23.4s, v26.4s
 	and v27.16b, v27.16b, v28.16b
-	and v17.16b, v17.16b, v23.16b
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
+	frecpe v24.4s, v2.4s
+	uzp1 v17.8h, v17.8h, v23.8h
+	ldr q23, [x20, x8, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn v23.8b, v17.8h
+	and v17.16b, v17.16b, v23.16b
 	umov w9, v29.s[0]
+	prfm pstl1keep, [x18, #0]
 	umov w10, v29.s[1]
-	umov w16, v27.s[3]
-	umov w11, v29.s[2]
+	umov w14, v27.s[1]
+	umov w15, v27.s[2]
 	umov w13, v27.s[0]
 	umov w12, v29.s[3]
-	fmov x8, d23
+	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
-	frecpe v24.4s, v2.4s
 	ldrb w10, [x6, w10, uxtw]
-	umov w14, v27.s[1]
-	ldrb w16, [x6, w16, uxtw]
-	umov w15, v27.s[2]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w11, [x6, w11, uxtw]
-	frecps v23.4s, v24.4s, v2.4s
 	ldrb w14, [x6, w14, uxtw]
-	ldr w16, [x21, w16, uxtw #2]
-	ldrb w15, [x6, w15, uxtw]
+	umov w11, v29.s[2]
+	cmn x17, #1
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w16, [x6, w16, uxtw]
+	ldrb w12, [x6, w12, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
-	fmul v24.4s, v24.4s, v23.4s
-	ldr w11, [x21, w11, uxtw #2]
-	frecpe v17.4s, v3.4s
+	ldrb w11, [x6, w11, uxtw]
 	ldr w10, [x21, w10, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	frecps v23.4s, v24.4s, v2.4s
+	ldrb w15, [x6, w15, uxtw]
+	ldr w16, [x21, w16, uxtw #2]
 	ldr w12, [x21, w12, uxtw #2]
+	ldr w11, [x21, w11, uxtw #2]
 	ldr w15, [x21, w15, uxtw #2]
-	ccmp x8, #0, #4, eq
+	ldr w13, [x21, w13, uxtw #2]
 	stp w9, w10, [sp, #32]
-	stp w13, w14, [sp, #48]
-	fmul v24.4s, v24.4s, v23.4s
-	stp w11, w12, [sp, #40]
+	ldr w14, [x21, w14, uxtw #2]
+	xtn v23.8b, v17.8h
 	stp w15, w16, [sp, #56]
+	frecpe v17.4s, v3.4s
+	stp w11, w12, [sp, #40]
+	stp w13, w14, [sp, #48]
+	fmov x8, d23
+	frecps v23.4s, v24.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fsub v2.4s, v2.4s, v5.4s
-	frecps v23.4s, v17.4s, v3.4s
-	fmul v24.4s, v0.4s, v24.4s
+	ccmp x8, #0, #4, eq
+	fmul v24.4s, v24.4s, v23.4s
+	prfm pldl1keep, [x26, #6144]
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
-	shrn v30.8b, v30.8h, #8
-	uaddl v9.8h, v11.8b, v27.8b
-	fmul v17.4s, v17.4s, v23.4s
+	orr x0, x0, x17
+	frecps v23.4s, v24.4s, v2.4s
 	uaddl v16.8h, v10.8b, v29.8b
-	fadd v0.4s, v0.4s, v4.4s
-	umlal v9.8h, v11.8b, v27.8b
-	frecps v23.4s, v17.4s, v3.4s
 	uaddl v22.8h, v12.8b, v31.8b
-	ldr q27, [x19, #32]
+	uaddl v9.8h, v11.8b, v27.8b
+	fmul v24.4s, v24.4s, v23.4s
+	frecps v23.4s, v17.4s, v3.4s
 	umlal v16.8h, v10.8b, v29.8b
-	fcvtzs v24.4s, v24.4s, #15
-	fmul v17.4s, v17.4s, v23.4s
-	shrn v28.8b, v16.8h, #6
-	orr v13.16b, v13.16b, v27.16b
-	ldr d16, [sp, #144]
-	fsub v3.4s, v3.4s, v5.4s
 	umlal v22.8h, v12.8b, v31.8b
+	umlal v9.8h, v11.8b, v27.8b
+	fmul v17.4s, v17.4s, v23.4s
+	fmul v24.4s, v0.4s, v24.4s
+	shrn v28.8b, v16.8h, #6
+	shrn v30.8b, v30.8h, #8
+	frecps v23.4s, v17.4s, v3.4s
+	ldr d16, [sp, #144]
+	fadd v0.4s, v0.4s, v4.4s
+	fcvtzs v24.4s, v24.4s, #15
+	fsub v2.4s, v2.4s, v5.4s
+	fmul v17.4s, v17.4s, v23.4s
+	orr v31.8b, v30.8b, v16.8b
+	ldr q27, [x19, #32]
 	fmul v17.4s, v1.4s, v17.4s
+	fsub v3.4s, v3.4s, v5.4s
 	shrn v29.8b, v9.8h, #6
 	xtn v24.4h, v24.4s
-	orr v31.8b, v30.8b, v16.8b
-	shrn v30.8b, v22.8h, #6
-	fadd v1.4s, v1.4s, v4.4s
-	fcvtzs v17.4s, v17.4s, #15
 	orr v14.16b, v14.16b, v27.16b
+	fcvtzs v17.4s, v17.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
+	shrn v30.8b, v22.8h, #6
+	orr v13.16b, v13.16b, v27.16b
 	xtn2 v24.8h, v17.4s
 	b.eq 71f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -110631,10 +112549,13 @@ rast_kern_h04010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -110771,114 +112692,117 @@ rast_kern_h04010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v29.4s
 81:
-	cmp x5, #16
 	add v17.2d, v6.2d, v8.2d
-	add x26, x2, #32
-	ldr q31, [sp, #96]
 	mov x17, #16
+	cmp x5, #16
+	ldr q28, [x19, #64]
+	smull v30.4s, v24.4h, v15.h[4]
+	smull2 v29.4s, v24.8h, v15.h[4]
+	ldr q22, [sp, #112]
+	csel x17, x5, x17, lo
 	add v23.2d, v7.2d, v8.2d
 	shrn v13.2s, v17.2d, #30
-	smull v30.4s, v24.4h, v15.h[4]
-	csel x17, x5, x17, lo
-	ldr q22, [sp, #112]
-	add v6.2d, v17.2d, v8.2d
+	ldr q31, [sp, #96]
+	add x26, x2, #32
 	shrn2 v13.4s, v23.2d, #30
-	smull2 v29.4s, v24.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
 	subs x17, x17, #8
-	shrn v14.2s, v6.2d, #30
 	smull v27.4s, v24.4h, v15.h[5]
-	addhn2 v30.8h, v29.4s, v31.4s
-	csel x26, x26, x2, hi
+	addhn v30.4h, v30.4s, v31.4s
 	add v7.2d, v23.2d, v8.2d
-	frecpe v16.4s, v2.4s
-	ldp q17, q23, [x26]
-	smull2 v29.4s, v24.8h, v15.h[5]
+	add v6.2d, v17.2d, v8.2d
+	csel x26, x26, x2, hi
 	addhn v27.4h, v27.4s, v22.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v24.8h, v15.h[5]
+	ldp q17, q23, [x26]
+	addhn2 v27.8h, v29.4s, v22.4s
 	sshr v30.8h, v30.8h, #3
 	bic v17.4s, #0xff, lsl #24
-	shrn2 v14.4s, v7.2d, #30
-	bic v23.4s, #0xff, lsl #24
-	ldr q28, [x19, #64]
-	cmhi v23.4s, v23.4s, v14.4s
-	csel x17, x17, xzr, hi
-	cmhi v17.4s, v17.4s, v13.4s
+	shrn v14.2s, v6.2d, #30
 	and v30.16b, v30.16b, v28.16b
-	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x17, lsl #4]
-	addhn2 v27.8h, v29.4s, v22.4s
 	ldr q28, [x19, #80]
-	and v17.16b, v17.16b, v23.16b
+	cmhi v17.4s, v17.4s, v13.4s
 	sshr v27.8h, v27.8h, #3
-	xtn v23.8b, v17.8h
+	bic v23.4s, #0xff, lsl #24
+	shrn2 v14.4s, v7.2d, #30
 	and v27.16b, v27.16b, v28.16b
+	csel x17, x17, xzr, hi
+	cmhi v23.4s, v23.4s, v14.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmov x17, d23
-	orr x0, x0, x8
-	frecps v23.4s, v16.4s, v2.4s
+	sub x18, x26, #36, lsl #12
+	uzp1 v17.8h, v17.8h, v23.8h
+	ldr q23, [x20, x17, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
+	orr x0, x0, x8
 	uaddw2 v27.4s, v27.4s, v30.8h
-	umov w11, v29.s[2]
-	umov w9, v29.s[0]
-	umov w13, v27.s[0]
+	and v17.16b, v17.16b, v23.16b
 	umov w12, v29.s[3]
-	umov w14, v27.s[1]
+	umov w9, v29.s[0]
 	umov w10, v29.s[1]
-	fmul v16.4s, v16.4s, v23.4s
-	ldrb w9, [x6, w9, uxtw]
+	umov w11, v29.s[2]
 	umov w15, v27.s[2]
-	frecpe v17.4s, v3.4s
 	ldrb w12, [x6, w12, uxtw]
-	umov w16, v27.s[3]
+	umov w14, v27.s[1]
+	ldrb w9, [x6, w9, uxtw]
+	umov w13, v27.s[0]
 	ldrb w10, [x6, w10, uxtw]
+	umov w16, v27.s[3]
+	frecpe v16.4s, v2.4s
+	ldrb w11, [x6, w11, uxtw]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w13, [x6, w13, uxtw]
-	frecps v23.4s, v16.4s, v2.4s
-	ldrb w11, [x6, w11, uxtw]
-	fsub v2.4s, v2.4s, v5.4s
-	ldrb w16, [x6, w16, uxtw]
 	ldrb w15, [x6, w15, uxtw]
-	stp w9, w10, [sp, #32]
-	stp w13, w14, [sp, #48]
-	cmn x8, #1
-	fmul v16.4s, v16.4s, v23.4s
-	frecps v23.4s, v17.4s, v3.4s
+	ldrb w16, [x6, w16, uxtw]
+	prfm pstl1keep, [x18, #0]
 	stp w11, w12, [sp, #40]
+	stp w9, w10, [sp, #32]
+	xtn v23.8b, v17.8h
+	stp w13, w14, [sp, #48]
+	fmov x17, d23
 	stp w15, w16, [sp, #56]
+	frecps v23.4s, v16.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fmul v17.4s, v17.4s, v23.4s
-	fmul v16.4s, v0.4s, v16.4s
-	fadd v0.4s, v0.4s, v4.4s
+	frecpe v17.4s, v3.4s
+	fmul v16.4s, v16.4s, v23.4s
+	cmn x8, #1
 	xtn v29.8b, v29.8h
-	frecps v23.4s, v17.4s, v3.4s
+	frecps v23.4s, v16.4s, v2.4s
 	tbl v31.8b, {v20.16b}, v29.8b
-	tbl v27.8b, {v19.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
-	fcvtzs v16.4s, v16.4s, #15
+	tbl v27.8b, {v19.16b}, v29.8b
+	fmul v16.4s, v16.4s, v23.4s
 	tbl v29.8b, {v18.16b}, v29.8b
-	fsub v3.4s, v3.4s, v5.4s
+	frecps v23.4s, v17.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
 	uaddl v22.8h, v12.8b, v31.8b
-	fmul v17.4s, v17.4s, v23.4s
 	uaddl v24.8h, v10.8b, v29.8b
 	ccmp x17, #0, #4, eq
+	fmul v17.4s, v17.4s, v23.4s
+	fmul v16.4s, v0.4s, v16.4s
 	uaddl v9.8h, v11.8b, v27.8b
+	prfm pldl1keep, [x26, #6144]
 	umlal v22.8h, v12.8b, v31.8b
-	umlal v24.8h, v10.8b, v29.8b
-	fmul v17.4s, v1.4s, v17.4s
+	frecps v23.4s, v17.4s, v3.4s
 	umlal v9.8h, v11.8b, v27.8b
+	umlal v24.8h, v10.8b, v29.8b
+	fadd v0.4s, v0.4s, v4.4s
 	ldr q27, [x19, #32]
+	fcvtzs v16.4s, v16.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
 	shrn v28.8b, v24.8h, #6
 	ldr d24, [sp, #144]
-	fadd v1.4s, v1.4s, v4.4s
-	fcvtzs v17.4s, v17.4s, #15
-	shrn v29.8b, v9.8h, #6
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v17.4s, v1.4s, v17.4s
 	xtn v16.4h, v16.4s
 	orr v31.8b, v30.8b, v24.8b
+	orr v26.16b, v26.16b, v27.16b
+	fcvtzs v17.4s, v17.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
+	shrn v29.8b, v9.8h, #6
 	shrn v30.8b, v22.8h, #6
 	orr v25.16b, v25.16b, v27.16b
 	xtn2 v16.8h, v17.4s
-	orr v26.16b, v26.16b, v27.16b
 	b.eq 91f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
@@ -110888,114 +112812,117 @@ rast_kern_h04010:
 	add x1, x1, #32
 	add x2, x2, #32
 83:
-	mov x8, #16
-	add v17.2d, v6.2d, v8.2d
-	cmp x5, #16
-	smull v30.4s, v16.4h, v15.h[4]
-	smull v27.4s, v16.4h, v15.h[5]
-	ldr q31, [sp, #96]
-	csel x8, x5, x8, lo
-	add v6.2d, v17.2d, v8.2d
-	shrn v25.2s, v17.2d, #30
-	add v23.2d, v7.2d, v8.2d
-	ldr q28, [x19, #64]
-	subs x8, x8, #8
-	add x26, x2, #32
-	smull2 v29.4s, v16.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
 	ldr q22, [sp, #112]
-	shrn2 v25.4s, v23.2d, #30
-	csel x26, x26, x2, hi
-	add v7.2d, v23.2d, v8.2d
-	shrn v26.2s, v6.2d, #30
-	addhn2 v30.8h, v29.4s, v31.4s
-	ldp q17, q23, [x26]
-	smull2 v29.4s, v16.8h, v15.h[5]
+	ldr q31, [sp, #96]
+	cmp x5, #16
+	add v17.2d, v6.2d, v8.2d
+	mov x8, #16
+	smull v30.4s, v16.4h, v15.h[4]
+	smull2 v29.4s, v16.8h, v15.h[4]
+	smull v27.4s, v16.4h, v15.h[5]
+	add x26, x2, #32
+	csel x8, x5, x8, lo
+	add v23.2d, v7.2d, v8.2d
+	shrn v25.2s, v17.2d, #30
+	add v6.2d, v17.2d, v8.2d
+	ldr q28, [x19, #64]
+	addhn v30.4h, v30.4s, v31.4s
+	subs x8, x8, #8
 	addhn v27.4h, v27.4s, v22.4s
-	csel x8, x8, xzr, hi
-	shrn2 v26.4s, v7.2d, #30
+	shrn2 v25.4s, v23.2d, #30
+	add v7.2d, v23.2d, v8.2d
+	csel x26, x26, x2, hi
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v16.8h, v15.h[5]
+	ldp q17, q23, [x26]
+	addhn2 v27.8h, v29.4s, v22.4s
 	sshr v30.8h, v30.8h, #3
-	bic v23.4s, #0xff, lsl #24
+	bic v17.4s, #0xff, lsl #24
+	shrn v26.2s, v6.2d, #30
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	addhn2 v27.8h, v29.4s, v22.4s
-	cmhi v23.4s, v23.4s, v26.4s
-	cmn x17, #1
-	bic v17.4s, #0xff, lsl #24
-	sshr v27.8h, v27.8h, #3
+	shrn2 v26.4s, v7.2d, #30
 	cmhi v17.4s, v17.4s, v25.4s
+	sshr v27.8h, v27.8h, #3
+	bic v23.4s, #0xff, lsl #24
+	csel x8, x8, xzr, hi
+	cmhi v23.4s, v23.4s, v26.4s
 	and v27.16b, v27.16b, v28.16b
+	sub x18, x26, #36, lsl #12
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x8, lsl #4]
 	frecpe v24.4s, v2.4s
+	ldr q23, [x20, x8, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
 	and v17.16b, v17.16b, v23.16b
-	xtn v23.8b, v17.8h
-	umov w13, v27.s[0]
-	umov w15, v27.s[2]
-	fmov x8, d23
 	umov w11, v29.s[2]
-	umov w14, v27.s[1]
-	umov w9, v29.s[0]
-	frecps v23.4s, v24.4s, v2.4s
-	umov w12, v29.s[3]
-	ldrb w15, [x6, w15, uxtw]
-	umov w10, v29.s[1]
-	umov w16, v27.s[3]
-	ldrb w11, [x6, w11, uxtw]
-	ldrb w9, [x6, w9, uxtw]
 	orr x0, x0, x17
-	ldrb w13, [x6, w13, uxtw]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
+	umov w13, v27.s[0]
+	umov w16, v27.s[3]
+	umov w15, v27.s[2]
+	ldrb w11, [x6, w11, uxtw]
+	umov w9, v29.s[0]
+	umov w12, v29.s[3]
 	ldrb w10, [x6, w10, uxtw]
-	fmul v24.4s, v24.4s, v23.4s
-	ldrb w12, [x6, w12, uxtw]
 	ldrb w14, [x6, w14, uxtw]
-	frecpe v17.4s, v3.4s
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w9, [x6, w9, uxtw]
 	ldrb w16, [x6, w16, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	ldrb w15, [x6, w15, uxtw]
 	stp w9, w10, [sp, #32]
-	frecps v23.4s, v24.4s, v2.4s
-	stp w11, w12, [sp, #40]
 	stp w13, w14, [sp, #48]
+	xtn v23.8b, v17.8h
+	frecpe v17.4s, v3.4s
+	stp w11, w12, [sp, #40]
+	fmov x8, d23
 	stp w15, w16, [sp, #56]
+	frecps v23.4s, v24.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v24.4s, v24.4s, v23.4s
-	frecps v23.4s, v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
 	xtn v29.8b, v29.8h
-	fmul v17.4s, v17.4s, v23.4s
-	tbl v31.8b, {v20.16b}, v29.8b
 	tbl v27.8b, {v19.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
-	fmul v24.4s, v0.4s, v24.4s
 	tbl v29.8b, {v18.16b}, v29.8b
+	frecps v23.4s, v24.4s, v2.4s
+	fsub v2.4s, v2.4s, v5.4s
+	uaddl v9.8h, v11.8b, v27.8b
+	uaddl v16.8h, v10.8b, v29.8b
+	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
+	cmn x17, #1
+	umlal v16.8h, v10.8b, v29.8b
+	fmul v24.4s, v0.4s, v24.4s
+	fmul v17.4s, v17.4s, v23.4s
+	umlal v9.8h, v11.8b, v27.8b
 	uaddl v22.8h, v12.8b, v31.8b
 	ccmp x8, #0, #4, eq
-	fadd v0.4s, v0.4s, v4.4s
-	uaddl v16.8h, v10.8b, v29.8b
-	fmul v17.4s, v17.4s, v23.4s
-	uaddl v9.8h, v11.8b, v27.8b
-	umlal v22.8h, v12.8b, v31.8b
-	umlal v16.8h, v10.8b, v29.8b
-	fmul v17.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v4.4s
-	umlal v9.8h, v11.8b, v27.8b
-	ldr q27, [x19, #32]
 	shrn v28.8b, v16.8h, #6
-	fcvtzs v24.4s, v24.4s, #15
+	ldr q27, [x19, #32]
+	frecps v23.4s, v17.4s, v3.4s
 	ldr d16, [sp, #144]
-	fcvtzs v17.4s, v17.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	xtn v24.4h, v24.4s
+	orr v13.16b, v13.16b, v27.16b
 	shrn v29.8b, v9.8h, #6
+	fmul v17.4s, v17.4s, v23.4s
+	fadd v0.4s, v0.4s, v4.4s
+	fmul v17.4s, v1.4s, v17.4s
+	fcvtzs v24.4s, v24.4s, #15
+	fsub v3.4s, v3.4s, v5.4s
+	umlal v22.8h, v12.8b, v31.8b
+	prfm pldl1keep, [x26, #6144]
+	fadd v1.4s, v1.4s, v4.4s
+	fcvtzs v17.4s, v17.4s, #15
+	xtn v24.4h, v24.4s
 	orr v31.8b, v30.8b, v16.8b
 	shrn v30.8b, v22.8h, #6
 	orr v14.16b, v14.16b, v27.16b
 	xtn2 v24.8h, v17.4s
-	orr v13.16b, v13.16b, v27.16b
 	b.eq 101f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
@@ -111016,10 +112943,13 @@ rast_kern_h04010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -111158,112 +113088,115 @@ rast_kern_h04010:
 121:
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q31, [sp, #96]
-	smull2 v29.4s, v24.8h, v15.h[4]
 	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	ldr q22, [sp, #112]
-	add v17.2d, v6.2d, v8.2d
-	cmp x5, #16
-	add v23.2d, v7.2d, v8.2d
-	addhn2 v30.8h, v29.4s, v31.4s
 	ldr q28, [x19, #64]
+	cmp x5, #16
+	mov x17, #16
+	add v23.2d, v7.2d, v8.2d
+	add x26, x2, #32
+	add v17.2d, v6.2d, v8.2d
+	ldr q22, [sp, #112]
+	addhn2 v30.8h, v29.4s, v31.4s
+	csel x17, x5, x17, lo
 	smull2 v29.4s, v24.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v22.4s
-	mov x17, #16
-	sshr v30.8h, v30.8h, #3
-	add x26, x2, #32
-	add v6.2d, v17.2d, v8.2d
-	ldr d24, [sp, #144]
-	addhn2 v27.8h, v29.4s, v22.4s
-	csel x17, x5, x17, lo
 	shrn v13.2s, v17.2d, #30
+	add v7.2d, v23.2d, v8.2d
+	sshr v30.8h, v30.8h, #3
+	addhn2 v27.8h, v29.4s, v22.4s
+	subs x17, x17, #8
+	add v6.2d, v17.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
 	sshr v27.8h, v27.8h, #3
+	csel x26, x26, x2, hi
 	shrn v14.2s, v6.2d, #30
 	and v27.16b, v27.16b, v28.16b
-	subs x17, x17, #8
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	orr x0, x0, x8
-	csel x26, x26, x2, hi
-	add v7.2d, v23.2d, v8.2d
+	sub x18, x26, #36, lsl #12
 	shrn2 v13.4s, v23.2d, #30
 	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
 	ldp q17, q23, [x26]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
+	umov w13, v27.s[0]
+	umov w16, v27.s[3]
 	umov w9, v29.s[0]
 	umov w12, v29.s[3]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	frecpe v16.4s, v2.4s
-	umov w13, v27.s[0]
-	ldrb w12, [x6, w12, uxtw]
-	umov w16, v27.s[3]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w11, [x6, w11, uxtw]
-	umov w14, v27.s[1]
-	umov w15, v27.s[2]
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w16, [x6, w16, uxtw]
-	ldr w12, [x21, w12, uxtw #2]
-	ldrb w15, [x6, w15, uxtw]
-	csel x17, x17, xzr, hi
-	ldr w11, [x21, w11, uxtw #2]
 	ldrb w14, [x6, w14, uxtw]
-	ldr w16, [x21, w16, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
+	ldrb w16, [x6, w16, uxtw]
+	frecpe v16.4s, v2.4s
+	ldrb w10, [x6, w10, uxtw]
+	umov w15, v27.s[2]
+	ldrb w12, [x6, w12, uxtw]
+	csel x17, x17, xzr, hi
+	ldrb w9, [x6, w9, uxtw]
+	umov w11, v29.s[2]
+	ldrb w13, [x6, w13, uxtw]
+	ldr w10, [x21, w10, uxtw #2]
+	ldrb w15, [x6, w15, uxtw]
 	ldr w9, [x21, w9, uxtw #2]
 	ldr w14, [x21, w14, uxtw #2]
-	ldr w10, [x21, w10, uxtw #2]
+	ldrb w11, [x6, w11, uxtw]
+	ldr w12, [x21, w12, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
+	orr x0, x0, x8
 	ldr w13, [x21, w13, uxtw #2]
-	stp w11, w12, [sp, #40]
-	stp w15, w16, [sp, #56]
+	ldr w11, [x21, w11, uxtw #2]
+	ldr w16, [x21, w16, uxtw #2]
+	stp w9, w10, [sp, #32]
 	shrn2 v14.4s, v7.2d, #30
-	bic v23.4s, #0xff, lsl #24
-	cmhi v23.4s, v23.4s, v14.4s
 	stp w13, w14, [sp, #48]
 	bic v17.4s, #0xff, lsl #24
-	stp w9, w10, [sp, #32]
+	ldr d24, [sp, #144]
 	cmhi v17.4s, v17.4s, v13.4s
+	stp w15, w16, [sp, #56]
+	bic v23.4s, #0xff, lsl #24
+	stp w11, w12, [sp, #40]
+	cmhi v23.4s, v23.4s, v14.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x17, lsl #4]
+	xtn v31.8b, v30.8h
 	shrn v27.8b, v29.8h, #8
 	and v17.16b, v17.16b, v23.16b
-	xtn v29.8b, v29.8h
 	xtn v23.8b, v17.8h
-	xtn v31.8b, v30.8h
 	fmov x17, d23
-	cmn x8, #1
-	frecps v23.4s, v16.4s, v2.4s
-	mov v28.8b, v29.8b
-	mov v29.8b, v27.8b
-	fmul v16.4s, v16.4s, v23.4s
-	shrn v30.8b, v30.8h, #8
-	ccmp x17, #0, #4, eq
 	frecps v23.4s, v16.4s, v2.4s
 	frecpe v17.4s, v3.4s
+	xtn v29.8b, v29.8h
+	cmn x8, #1
+	fmul v16.4s, v16.4s, v23.4s
+	frecps v23.4s, v16.4s, v2.4s
+	ushll v22.8h, v31.8b, #6
+	shrn v30.8b, v30.8h, #8
+	mov v28.8b, v29.8b
 	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	ushll v22.8h, v31.8b, #6
-	fmul v17.4s, v17.4s, v23.4s
+	prfm pldl1keep, [x26, #6144]
 	fmul v16.4s, v0.4s, v16.4s
-	frecps v23.4s, v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
 	fmul v17.4s, v17.4s, v23.4s
-	fsub v3.4s, v3.4s, v5.4s
-	ldr q27, [x19, #32]
-	fcvtzs v16.4s, v16.4s, #15
-	fmul v17.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v4.4s
-	xtn v16.4h, v16.4s
 	orr v31.8b, v30.8b, v24.8b
-	fcvtzs v17.4s, v17.4s, #15
+	mov v29.8b, v27.8b
+	frecps v23.4s, v17.4s, v3.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fcvtzs v16.4s, v16.4s, #15
+	ccmp x17, #0, #4, eq
+	fmul v17.4s, v17.4s, v23.4s
+	xtn v16.4h, v16.4s
+	ldr q27, [x19, #32]
+	fmul v17.4s, v1.4s, v17.4s
 	fadd v0.4s, v0.4s, v4.4s
-	shrn v30.8b, v22.8h, #6
+	fadd v1.4s, v1.4s, v4.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fcvtzs v17.4s, v17.4s, #15
 	orr v25.16b, v25.16b, v27.16b
+	shrn v30.8b, v22.8h, #6
 	xtn2 v16.8h, v17.4s
 	orr v26.16b, v26.16b, v27.16b
 	b.eq 131f
@@ -111275,113 +113208,116 @@ rast_kern_h04010:
 	add x1, x1, #32
 	add x2, x2, #32
 123:
-	smull v30.4s, v16.4h, v15.h[4]
 	ldr q31, [sp, #96]
-	smull2 v29.4s, v16.8h, v15.h[4]
-	smull v27.4s, v16.4h, v15.h[5]
-	addhn v30.4h, v30.4s, v31.4s
-	add x26, x2, #32
-	add v23.2d, v7.2d, v8.2d
+	smull v30.4s, v16.4h, v15.h[4]
 	ldr q22, [sp, #112]
 	mov x8, #16
-	ldr q28, [x19, #64]
-	addhn2 v30.8h, v29.4s, v31.4s
+	smull v27.4s, v16.4h, v15.h[5]
+	smull2 v29.4s, v16.8h, v15.h[4]
+	addhn v30.4h, v30.4s, v31.4s
 	cmp x5, #16
 	add v17.2d, v6.2d, v8.2d
+	frecpe v24.4s, v2.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	csel x8, x5, x8, lo
 	smull2 v29.4s, v16.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v22.4s
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	add v7.2d, v23.2d, v8.2d
-	addhn2 v27.8h, v29.4s, v22.4s
-	csel x8, x5, x8, lo
 	add v6.2d, v17.2d, v8.2d
+	subs x8, x8, #8
+	addhn2 v27.8h, v29.4s, v22.4s
+	add x26, x2, #32
+	add v23.2d, v7.2d, v8.2d
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	subs x8, x8, #8
-	and v27.16b, v27.16b, v28.16b
+	csel x8, x8, xzr, hi
 	shrn v25.2s, v17.2d, #30
+	and v27.16b, v27.16b, v28.16b
+	csel x26, x26, x2, hi
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	csel x8, x8, xzr, hi
-	csel x26, x26, x2, hi
+	add v7.2d, v23.2d, v8.2d
 	shrn2 v25.4s, v23.2d, #30
-	shrn v26.2s, v6.2d, #30
 	uaddw v29.4s, v29.4s, v30.4h
-	ldp q17, q23, [x26]
-	umov w9, v29.s[0]
-	umov w10, v29.s[1]
 	uaddw2 v27.4s, v27.4s, v30.8h
-	umov w11, v29.s[2]
-	umov w12, v29.s[3]
-	ldrb w10, [x6, w10, uxtw]
-	umov w14, v27.s[1]
-	umov w16, v27.s[3]
-	ldrb w9, [x6, w9, uxtw]
-	cmn x17, #1
-	ldrb w11, [x6, w11, uxtw]
-	ldrb w12, [x6, w12, uxtw]
+	ldp q17, q23, [x26]
 	umov w15, v27.s[2]
-	ldrb w14, [x6, w14, uxtw]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
+	umov w9, v29.s[0]
+	umov w11, v29.s[2]
 	umov w13, v27.s[0]
-	ldrb w16, [x6, w16, uxtw]
-	ldr w10, [x21, w10, uxtw #2]
+	umov w16, v27.s[3]
+	umov w12, v29.s[3]
 	ldrb w15, [x6, w15, uxtw]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w10, [x6, w10, uxtw]
+	ldrb w11, [x6, w11, uxtw]
 	ldrb w13, [x6, w13, uxtw]
-	ldr w12, [x21, w12, uxtw #2]
-	ldr w16, [x21, w16, uxtw #2]
-	frecpe v24.4s, v2.4s
-	ldr w11, [x21, w11, uxtw #2]
+	sub x18, x26, #36, lsl #12
+	ldrb w16, [x6, w16, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	cmn x17, #1
+	ldr w10, [x21, w10, uxtw #2]
 	ldr w9, [x21, w9, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
-	stp w9, w10, [sp, #32]
-	shrn2 v26.4s, v7.2d, #30
+	ldr w16, [x21, w16, uxtw #2]
+	ldr w12, [x21, w12, uxtw #2]
+	ldrb w14, [x6, w14, uxtw]
+	prfm pstl1keep, [x18, #0]
+	orr x0, x0, x17
+	shrn v26.2s, v6.2d, #30
 	bic v17.4s, #0xff, lsl #24
-	stp w11, w12, [sp, #40]
-	bic v23.4s, #0xff, lsl #24
-	stp w13, w14, [sp, #48]
-	cmhi v23.4s, v23.4s, v26.4s
+	ldr w15, [x21, w15, uxtw #2]
 	cmhi v17.4s, v17.4s, v25.4s
+	shrn2 v26.4s, v7.2d, #30
+	bic v23.4s, #0xff, lsl #24
+	stp w9, w10, [sp, #32]
+	cmhi v23.4s, v23.4s, v26.4s
+	ldr w11, [x21, w11, uxtw #2]
 	stp w15, w16, [sp, #56]
+	ldr w13, [x21, w13, uxtw #2]
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
+	ldr w14, [x21, w14, uxtw #2]
 	and v17.16b, v17.16b, v23.16b
 	xtn v23.8b, v17.8h
-	ld2 {v29.8h, v30.8h}, [x28]
-	ldr d16, [sp, #144]
+	stp w11, w12, [sp, #40]
 	fmov x8, d23
+	stp w13, w14, [sp, #48]
 	frecps v23.4s, v24.4s, v2.4s
-	shrn v27.8b, v29.8h, #8
+	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v24.4s, v24.4s, v23.4s
-	ccmp x8, #0, #4, eq
-	xtn v29.8b, v29.8h
 	xtn v31.8b, v30.8h
-	frecpe v17.4s, v3.4s
+	shrn v27.8b, v29.8h, #8
 	frecps v23.4s, v24.4s, v2.4s
+	frecpe v17.4s, v3.4s
 	shrn v30.8b, v30.8h, #8
-	ushll v22.8h, v31.8b, #6
-	orr x0, x0, x17
+	xtn v29.8b, v29.8h
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
 	mov v28.8b, v29.8b
-	orr v31.8b, v30.8b, v16.8b
-	fmul v17.4s, v17.4s, v23.4s
 	mov v29.8b, v27.8b
-	frecps v23.4s, v17.4s, v3.4s
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v17.4s, v17.4s, v23.4s
-	fadd v0.4s, v0.4s, v4.4s
-	fcvtzs v24.4s, v24.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmul v17.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v4.4s
-	ldr q27, [x19, #32]
-	shrn v30.8b, v22.8h, #6
+	ldr d16, [sp, #144]
+	fmul v24.4s, v0.4s, v24.4s
+	frecps v23.4s, v17.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
-	fcvtzs v17.4s, v17.4s, #15
+	ldr q27, [x19, #32]
+	ushll v22.8h, v31.8b, #6
+	fcvtzs v24.4s, v24.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
+	fsub v3.4s, v3.4s, v5.4s
+	prfm pldl1keep, [x26, #6144]
+	fadd v0.4s, v0.4s, v4.4s
+	fmul v17.4s, v1.4s, v17.4s
+	ccmp x8, #0, #4, eq
+	orr v31.8b, v30.8b, v16.8b
 	xtn v24.4h, v24.4s
+	shrn v30.8b, v22.8h, #6
+	fcvtzs v17.4s, v17.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	orr v13.16b, v13.16b, v27.16b
 	xtn2 v24.8h, v17.4s
 	orr v14.16b, v14.16b, v27.16b
@@ -111405,10 +113341,13 @@ rast_kern_h04010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -111545,26 +113484,26 @@ rast_kern_h04010:
 	xtn v24.4h, v24.4s
 	xtn2 v24.8h, v29.4s
 151:
-	cmp x5, #16
 	add v17.2d, v6.2d, v8.2d
 	mov x17, #16
-	add v23.2d, v7.2d, v8.2d
-	add x26, x2, #32
-	add v6.2d, v17.2d, v8.2d
-	csel x17, x5, x17, lo
-	shrn v14.2s, v6.2d, #30
-	shrn v13.2s, v17.2d, #30
-	add v7.2d, v23.2d, v8.2d
+	cmp x5, #16
 	ldr q31, [sp, #96]
+	add v23.2d, v7.2d, v8.2d
+	shrn v13.2s, v17.2d, #30
+	add v6.2d, v17.2d, v8.2d
 	shrn2 v13.4s, v23.2d, #30
+	csel x17, x5, x17, lo
+	add x26, x2, #32
+	add v7.2d, v23.2d, v8.2d
+	ldr q28, [x19, #64]
+	shrn v14.2s, v6.2d, #30
 	subs x17, x17, #8
 	smull v30.4s, v24.4h, v15.h[4]
 	smull v27.4s, v24.4h, v15.h[5]
-	ldr q22, [sp, #112]
 	csel x26, x26, x2, hi
+	ldr q22, [sp, #112]
 	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	ldr q28, [x19, #64]
 	ldp q17, q23, [x26]
 	frecpe v16.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
@@ -111574,79 +113513,82 @@ rast_kern_h04010:
 	sshr v30.8h, v30.8h, #3
 	bic v23.4s, #0xff, lsl #24
 	shrn2 v14.4s, v7.2d, #30
-	and v30.16b, v30.16b, v28.16b
 	addhn2 v27.8h, v29.4s, v22.4s
-	ldr q28, [x19, #80]
+	ldr d24, [sp, #144]
 	cmhi v23.4s, v23.4s, v14.4s
-	orr x0, x0, x8
-	bic v17.4s, #0xff, lsl #24
+	and v30.16b, v30.16b, v28.16b
+	ldr q28, [x19, #80]
 	sshr v27.8h, v27.8h, #3
-	cmhi v17.4s, v17.4s, v13.4s
+	bic v17.4s, #0xff, lsl #24
 	and v27.16b, v27.16b, v28.16b
+	sub x18, x26, #36, lsl #12
+	cmhi v17.4s, v17.4s, v13.4s
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uzp1 v17.8h, v17.8h, v23.8h
+	cmn x8, #1
 	ldr q23, [x20, x17, lsl #4]
-	ldr d24, [sp, #144]
 	uaddw v29.4s, v29.4s, v30.4h
+	prfm pstl1keep, [x18, #0]
 	uaddw2 v27.4s, v27.4s, v30.8h
 	and v17.16b, v17.16b, v23.16b
-	umov w9, v29.s[0]
-	cmn x8, #1
+	umov w12, v29.s[3]
+	xtn v23.8b, v17.8h
 	umov w11, v29.s[2]
 	umov w14, v27.s[1]
-	umov w16, v27.s[3]
-	umov w13, v27.s[0]
 	umov w10, v29.s[1]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w11, [x6, w11, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w9, v29.s[0]
+	umov w13, v27.s[0]
 	umov w15, v27.s[2]
-	umov w12, v29.s[3]
-	ldrb w16, [x6, w16, uxtw]
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	umov w16, v27.s[3]
+	fmov x17, d23
 	ldrb w10, [x6, w10, uxtw]
 	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	stp w9, w10, [sp, #32]
+	ldrb w9, [x6, w9, uxtw]
+	stp w11, w12, [sp, #40]
+	orr x0, x0, x8
+	ldrb w16, [x6, w16, uxtw]
 	ldrb w15, [x6, w15, uxtw]
 	stp w13, w14, [sp, #48]
-	xtn v23.8b, v17.8h
+	prfm pldl1keep, [x26, #6144]
 	frecpe v17.4s, v3.4s
-	stp w11, w12, [sp, #40]
-	stp w15, w16, [sp, #56]
-	fmov x17, d23
 	frecps v23.4s, v16.4s, v2.4s
+	stp w9, w10, [sp, #32]
+	stp w15, w16, [sp, #56]
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v16.4s, v16.4s, v23.4s
 	xtn v29.8b, v29.8h
 	frecps v23.4s, v16.4s, v2.4s
-	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v27.8b, {v19.16b}, v29.8b
-	tbl v31.8b, {v20.16b}, v29.8b
 	fsub v2.4s, v2.4s, v5.4s
-	tbl v29.8b, {v18.16b}, v29.8b
+	tbl v30.8b, {v21.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
 	fmul v16.4s, v16.4s, v23.4s
+	tbl v29.8b, {v18.16b}, v29.8b
 	frecps v23.4s, v17.4s, v3.4s
-	ushll v22.8h, v31.8b, #6
 	mov v28.8b, v29.8b
-	fmul v17.4s, v17.4s, v23.4s
 	mov v29.8b, v27.8b
-	orr v31.8b, v30.8b, v24.8b
-	frecps v23.4s, v17.4s, v3.4s
-	fmul v16.4s, v0.4s, v16.4s
-	ldr q27, [x19, #32]
-	fsub v3.4s, v3.4s, v5.4s
 	fmul v17.4s, v17.4s, v23.4s
+	ldr q27, [x19, #32]
 	ccmp x17, #0, #4, eq
-	orr v25.16b, v25.16b, v27.16b
+	fmul v16.4s, v0.4s, v16.4s
+	frecps v23.4s, v17.4s, v3.4s
+	fsub v3.4s, v3.4s, v5.4s
+	ushll v22.8h, v31.8b, #6
 	fcvtzs v16.4s, v16.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
+	orr v25.16b, v25.16b, v27.16b
+	orr v31.8b, v30.8b, v24.8b
 	fmul v17.4s, v1.4s, v17.4s
 	xtn v16.4h, v16.4s
-	fadd v1.4s, v1.4s, v4.4s
+	orr v26.16b, v26.16b, v27.16b
+	shrn v30.8b, v22.8h, #6
 	fcvtzs v17.4s, v17.4s, #15
 	fadd v0.4s, v0.4s, v4.4s
-	shrn v30.8b, v22.8h, #6
-	orr v26.16b, v26.16b, v27.16b
+	fadd v1.4s, v1.4s, v4.4s
 	xtn2 v16.8h, v17.4s
 	b.eq 161f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -111657,108 +113599,111 @@ rast_kern_h04010:
 	add x1, x1, #32
 	add x2, x2, #32
 153:
-	mov x8, #16
-	add v17.2d, v6.2d, v8.2d
-	cmp x5, #16
-	add v23.2d, v7.2d, v8.2d
 	ldr q31, [sp, #96]
-	add v6.2d, v17.2d, v8.2d
-	ldr q28, [x19, #64]
-	add v7.2d, v23.2d, v8.2d
-	csel x8, x5, x8, lo
-	smull v27.4s, v16.4h, v15.h[5]
-	add x26, x2, #32
+	add v17.2d, v6.2d, v8.2d
+	mov x8, #16
+	cmp x5, #16
 	ldr q22, [sp, #112]
+	add v23.2d, v7.2d, v8.2d
 	shrn v25.2s, v17.2d, #30
-	subs x8, x8, #8
 	smull v30.4s, v16.4h, v15.h[4]
+	csel x8, x5, x8, lo
+	add x26, x2, #32
+	add v7.2d, v23.2d, v8.2d
+	smull v27.4s, v16.4h, v15.h[5]
+	ldr q28, [x19, #64]
+	subs x8, x8, #8
+	add v6.2d, v17.2d, v8.2d
 	shrn2 v25.4s, v23.2d, #30
-	csel x26, x26, x2, hi
 	smull2 v29.4s, v16.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
-	csel x8, x8, xzr, hi
-	ldp q17, q23, [x26]
-	addhn2 v30.8h, v29.4s, v31.4s
-	smull2 v29.4s, v16.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v22.4s
+	csel x26, x26, x2, hi
 	shrn v26.2s, v6.2d, #30
-	bic v17.4s, #0xff, lsl #24
+	addhn v27.4h, v27.4s, v22.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	ldp q17, q23, [x26]
+	smull2 v29.4s, v16.8h, v15.h[5]
 	sshr v30.8h, v30.8h, #3
+	shrn2 v26.4s, v7.2d, #30
+	bic v17.4s, #0xff, lsl #24
 	addhn2 v27.8h, v29.4s, v22.4s
+	csel x8, x8, xzr, hi
 	cmhi v17.4s, v17.4s, v25.4s
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	shrn2 v26.4s, v7.2d, #30
-	bic v23.4s, #0xff, lsl #24
 	sshr v27.8h, v27.8h, #3
+	bic v23.4s, #0xff, lsl #24
 	cmhi v23.4s, v23.4s, v26.4s
 	and v27.16b, v27.16b, v28.16b
+	sub x18, x26, #36, lsl #12
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
 	uaddw v29.4s, v29.4s, v30.4h
+	prfm pldl1keep, [x26, #6144]
 	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
 	and v17.16b, v17.16b, v23.16b
-	umov w10, v29.s[1]
-	umov w11, v29.s[2]
 	umov w9, v29.s[0]
-	umov w12, v29.s[3]
 	umov w14, v27.s[1]
-	umov w13, v27.s[0]
-	ldrb w10, [x6, w10, uxtw]
-	umov w15, v27.s[2]
-	ldrb w11, [x6, w11, uxtw]
-	umov w16, v27.s[3]
-	frecpe v24.4s, v2.4s
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	orr x0, x0, x17
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w16, [x6, w16, uxtw]
-	stp w9, w10, [sp, #32]
-	ldr d16, [sp, #144]
-	xtn v23.8b, v17.8h
-	stp w11, w12, [sp, #40]
-	stp w13, w14, [sp, #48]
+	umov w12, v29.s[3]
+	umov w11, v29.s[2]
 	cmn x17, #1
+	umov w10, v29.s[1]
+	umov w15, v27.s[2]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w13, v27.s[0]
+	umov w16, v27.s[3]
+	ldrb w10, [x6, w10, uxtw]
+	frecpe v24.4s, v2.4s
+	ldrb w11, [x6, w11, uxtw]
+	orr x0, x0, x17
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w13, [x6, w13, uxtw]
+	stp w9, w10, [sp, #32]
+	ldrb w16, [x6, w16, uxtw]
+	stp w11, w12, [sp, #40]
+	xtn v23.8b, v17.8h
+	stp w13, w14, [sp, #48]
 	fmov x8, d23
 	stp w15, w16, [sp, #56]
 	frecps v23.4s, v24.4s, v2.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	fmul v24.4s, v24.4s, v23.4s
-	frecpe v17.4s, v3.4s
+	ldr d16, [sp, #144]
 	xtn v29.8b, v29.8h
 	frecps v23.4s, v24.4s, v2.4s
-	tbl v31.8b, {v20.16b}, v29.8b
+	frecpe v17.4s, v3.4s
 	tbl v27.8b, {v19.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
 	fmul v24.4s, v24.4s, v23.4s
 	tbl v29.8b, {v18.16b}, v29.8b
 	frecps v23.4s, v17.4s, v3.4s
 	mov v28.8b, v29.8b
 	mov v29.8b, v27.8b
 	fmul v17.4s, v17.4s, v23.4s
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v0.4s, v24.4s
-	fadd v0.4s, v0.4s, v4.4s
-	frecps v23.4s, v17.4s, v3.4s
-	ldr q27, [x19, #32]
 	ushll v22.8h, v31.8b, #6
+	ldr q27, [x19, #32]
+	fmul v24.4s, v0.4s, v24.4s
+	frecps v23.4s, v17.4s, v3.4s
 	orr v31.8b, v30.8b, v16.8b
 	fmul v17.4s, v17.4s, v23.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fadd v0.4s, v0.4s, v4.4s
+	ccmp x8, #0, #4, eq
 	fcvtzs v24.4s, v24.4s, #15
-	orr v13.16b, v13.16b, v27.16b
 	fmul v17.4s, v1.4s, v17.4s
 	fadd v1.4s, v1.4s, v4.4s
-	shrn v30.8b, v22.8h, #6
 	xtn v24.4h, v24.4s
+	shrn v30.8b, v22.8h, #6
 	orr v14.16b, v14.16b, v27.16b
 	fcvtzs v17.4s, v17.4s, #15
-	ccmp x8, #0, #4, eq
-	fsub v3.4s, v3.4s, v5.4s
+	fsub v2.4s, v2.4s, v5.4s
+	orr v13.16b, v13.16b, v27.16b
 	xtn2 v24.8h, v17.4s
 	b.eq 171f
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -111780,10 +113725,13 @@ rast_kern_h04010:
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	add v27.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x8, x5, x8, lo
+	prfm pstl1keep, [x18, #0]
 	add v28.2d, v7.2d, v8.2d
 	shrn v25.2s, v27.2d, #30
 	fmul v24.4s, v24.4s, v30.4s
@@ -112016,9 +113964,12 @@ rast_kern_h04011:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -112208,9 +114159,12 @@ rast_kern_h04011:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -112579,14 +114533,17 @@ rast_kern_h04011:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -112600,9 +114557,12 @@ rast_kern_h04011:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -112796,9 +114756,12 @@ rast_kern_h04100:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -113022,9 +114985,12 @@ rast_kern_h04100:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -113244,14 +115210,17 @@ rast_kern_h04100:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -113265,9 +115234,12 @@ rast_kern_h04100:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -113441,9 +115413,12 @@ rast_kern_h04101:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -113659,9 +115634,12 @@ rast_kern_h04101:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -114116,14 +116094,17 @@ rast_kern_h04101:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -114137,9 +116118,12 @@ rast_kern_h04101:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -114303,9 +116287,12 @@ rast_kern_h04110:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -114502,9 +116489,12 @@ rast_kern_h04110:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -114714,14 +116704,17 @@ rast_kern_h04110:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -114737,9 +116730,12 @@ rast_kern_h04110:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -114885,9 +116881,12 @@ rast_kern_h04111:
 	shl v8.2d, v25.2d, #2
 20:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -115074,9 +117073,12 @@ rast_kern_h04111:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	sub x18, x2, #36, lsl #12
 	shrn2 v25.4s, v7.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	frecpe v24.4s, v2.4s
 	frecpe v29.4s, v3.4s
 	ldp q27, q28, [x2]
@@ -115523,14 +117525,17 @@ rast_kern_h04111:
 	shrn v26.2s, v26.2d, #30
 	cmp x5, #8
 	shrn2 v25.4s, v7.2d, #30
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	shrn2 v26.4s, v27.2d, #30
+	shrn v24.4h, v4.4s, #16
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pldl1keep, [x2, #6144]
 	cmhi v27.4s, v27.4s, v25.4s
+	prfm pstl1keep, [x18, #0]
 	cmhi v28.4s, v28.4s, v26.4s
 	add v4.4s, v4.4s, v1.4s
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -115544,9 +117549,12 @@ rast_kern_h04111:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	sub x18, x2, #36, lsl #12
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
+	prfm pstl1keep, [x18, #0]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	ldp q27, q28, [x2]
@@ -115719,9 +117727,12 @@ rast_kern_h10000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -115813,14 +117824,17 @@ rast_kern_h10000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 909:
 	tbnz w7, #1, 30f
@@ -115893,9 +117907,12 @@ rast_kern_h10000:
 	b 908b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -116071,9 +118088,12 @@ rast_kern_h10010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -116150,14 +118170,17 @@ rast_kern_h10010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 916:
 	tbnz w7, #1, 30f
@@ -116206,9 +118229,12 @@ rast_kern_h10010:
 	b 915b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -116396,9 +118422,12 @@ rast_kern_h10100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -116554,14 +118583,17 @@ rast_kern_h10100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 921:
 	tbnz w7, #1, 30f
@@ -116619,9 +118651,12 @@ rast_kern_h10100:
 	b 920b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -116756,9 +118791,12 @@ rast_kern_h10110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -116908,14 +118946,17 @@ rast_kern_h10110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 925:
 	tbnz w7, #1, 30f
@@ -116953,9 +118994,12 @@ rast_kern_h10110:
 	b 924b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -117126,9 +119170,12 @@ rast_kern_h11000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -117296,14 +119343,17 @@ rast_kern_h11000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 931:
 	tbnz w7, #1, 30f
@@ -117407,9 +119457,12 @@ rast_kern_h11000:
 	b 930b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -117620,9 +119673,12 @@ rast_kern_h11001:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -118026,14 +120082,17 @@ rast_kern_h11001:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 936:
 	tbnz w7, #1, 30f
@@ -118108,9 +120167,12 @@ rast_kern_h11001:
 	b 935b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -118300,9 +120362,12 @@ rast_kern_h11010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -118458,14 +120523,17 @@ rast_kern_h11010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 943:
 	tbnz w7, #1, 30f
@@ -118539,9 +120607,12 @@ rast_kern_h11010:
 	b 942b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -118723,9 +120794,12 @@ rast_kern_h11011:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -119121,14 +121195,17 @@ rast_kern_h11011:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 948:
 	tbnz w7, #1, 30f
@@ -119174,9 +121251,12 @@ rast_kern_h11011:
 	b 947b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -119396,9 +121476,12 @@ rast_kern_h11100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -119633,14 +121716,17 @@ rast_kern_h11100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 955:
 	tbnz w7, #1, 30f
@@ -119720,9 +121806,12 @@ rast_kern_h11100:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -119896,9 +121985,12 @@ rast_kern_h11101:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -120380,14 +122472,17 @@ rast_kern_h11101:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 957:
 	tbnz w7, #1, 30f
@@ -120447,9 +122542,12 @@ rast_kern_h11101:
 	b 38b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -120600,9 +122698,12 @@ rast_kern_h11110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -120826,14 +122927,17 @@ rast_kern_h11110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 961:
 	tbnz w7, #1, 30f
@@ -120884,9 +122988,12 @@ rast_kern_h11110:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -121031,9 +123138,12 @@ rast_kern_h11111:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -121507,14 +123617,17 @@ rast_kern_h11111:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 963:
 	tbnz w7, #1, 30f
@@ -121545,9 +123658,12 @@ rast_kern_h11111:
 	b 962b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -121722,9 +123838,12 @@ rast_kern_h12000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -121867,14 +123986,17 @@ rast_kern_h12000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 969:
 	tbnz w7, #1, 30f
@@ -121979,11 +124101,12 @@ rast_kern_h12000:
 	str d16, [sp, #144]
 	b 55f
 51:
-	smull v27.4s, v24.4h, v15.h[5]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	frecpe v22.4s, v2.4s
 	frecpe v23.4s, v3.4s
-	ldr q21, [sp, #112]
 	cmp x5, #16
+	ldr q21, [sp, #112]
+	smull v27.4s, v24.4h, v15.h[5]
 	frecps v9.4s, v22.4s, v2.4s
 	frecps v12.4s, v23.4s, v3.4s
 	smull v30.4s, v24.4h, v15.h[4]
@@ -121991,10 +124114,9 @@ rast_kern_h12000:
 	ldr q31, [sp, #96]
 	fmul v22.4s, v22.4s, v9.4s
 	fmul v23.4s, v23.4s, v12.4s
-	addhn v30.4h, v30.4s, v31.4s
+	ldr q28, [x19, #64]
 	mov x17, #16
-	smull2 v29.4s, v24.8h, v15.h[4]
-	sqdmulh v19.8h, v24.8h, v15.h[1]
+	addhn v30.4h, v30.4s, v31.4s
 	frecps v9.4s, v22.4s, v2.4s
 	frecps v12.4s, v23.4s, v3.4s
 	addhn2 v30.8h, v29.4s, v31.4s
@@ -122002,98 +124124,101 @@ rast_kern_h12000:
 	smull2 v29.4s, v24.8h, v15.h[5]
 	fmul v22.4s, v22.4s, v9.4s
 	fmul v23.4s, v23.4s, v12.4s
-	ldr q28, [x19, #64]
-	subs x17, x17, #8
-	addhn2 v27.8h, v29.4s, v21.4s
 	add x26, x2, #32
-	fmul v22.4s, v0.4s, v22.4s
-	fmul v23.4s, v1.4s, v23.4s
-	csel x26, x26, x2, hi
-	orr x0, x0, x8
+	subs x17, x17, #8
 	sshr v30.8h, v30.8h, #3
-	sshr v27.8h, v27.8h, #3
-	sqdmulh v20.8h, v24.8h, v15.h[3]
+	fmul v22.4s, v0.4s, v22.4s
+	addhn2 v27.8h, v29.4s, v21.4s
+	csel x26, x26, x2, hi
+	sqdmulh v18.8h, v24.8h, v15.h[0]
+	fmul v23.4s, v1.4s, v23.4s
 	fcvtzs v22.4s, v22.4s, #15
 	ldp q16, q17, [x26]
-	sqdmulh v18.8h, v24.8h, v15.h[0]
+	fsub v3.4s, v3.4s, v5.4s
 	fcvtzs v23.4s, v23.4s, #15
-	add v19.8h, v19.8h, v11.8h
-	xtn v22.4h, v22.4s
-	and v30.16b, v30.16b, v28.16b
-	xtn2 v22.8h, v23.4s
-	bic v17.4s, #0xff, lsl #24
-	ldr q28, [x19, #80]
 	add v18.8h, v18.8h, v10.8h
-	bic v16.4s, #0xff, lsl #24
-	and v27.16b, v27.16b, v28.16b
-	umull v29.4s, v27.4h, v15.h[6]
-	umull2 v27.4s, v27.8h, v15.h[6]
+	xtn v22.4h, v22.4s
+	sshr v27.8h, v27.8h, #3
+	xtn2 v22.8h, v23.4s
+	and v30.16b, v30.16b, v28.16b
+	ldr q28, [x19, #80]
 	smull v13.4s, v22.4h, v6.h[0]
 	smull2 v14.4s, v22.8h, v6.h[0]
-	uaddw v29.4s, v29.4s, v30.4h
+	prfm pldl1keep, [x26, #6144]
+	and v27.16b, v27.16b, v28.16b
+	sshr v13.4s, v13.4s, #15
+	bic v17.4s, #0xff, lsl #24
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
 	ldr q31, [sp, #128]
+	add v13.4s, v13.4s, v7.4s
+	sshr v14.4s, v14.4s, #15
+	uaddw v29.4s, v29.4s, v30.4h
+	sub x18, x26, #36, lsl #12
 	uaddw2 v27.4s, v27.4s, v30.8h
 	csel x17, x17, xzr, hi
-	sshr v13.4s, v13.4s, #15
-	sshr v14.4s, v14.4s, #15
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	umov w9, v29.s[0]
-	umov w14, v27.s[1]
-	umov w15, v27.s[2]
-	add v13.4s, v13.4s, v7.4s
-	shrn v19.8b, v19.8h, #3
-	ldr w9, [x6, w9, uxtw #2]
-	umov w16, v27.s[3]
-	umov w12, v29.s[3]
-	ldr w15, [x6, w15, uxtw #2]
-	ldr w10, [x6, w10, uxtw #2]
-	fsub v3.4s, v3.4s, v5.4s
-	ldr w11, [x6, w11, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w16, [x6, w16, uxtw #2]
-	ldr w14, [x6, w14, uxtw #2]
-	umov w13, v27.s[0]
-	stp w9, w10, [sp, #32]
-	cmn x8, #1
 	add v14.4s, v14.4s, v7.4s
-	cmhi v16.4s, v16.4s, v13.4s
-	ldr w12, [x6, w12, uxtw #2]
-	fadd v1.4s, v1.4s, v4.4s
+	umov w11, v29.s[2]
+	sqdmulh v20.8h, v24.8h, v15.h[3]
+	umov w13, v27.s[0]
+	prfm pstl1keep, [x18, #0]
+	umov w9, v29.s[0]
+	umov w15, v27.s[2]
+	umov w12, v29.s[3]
+	ldr w11, [x6, w11, uxtw #2]
+	umov w14, v27.s[1]
+	fadd v0.4s, v0.4s, v4.4s
+	umov w16, v27.s[3]
 	ldr w13, [x6, w13, uxtw #2]
-	stp w15, w16, [sp, #56]
-	add v20.8h, v20.8h, v31.8h
-	shrn v18.8b, v18.8h, #3
-	stp w11, w12, [sp, #40]
-	stp w13, w14, [sp, #48]
-	shrn v20.8b, v20.8h, #3
-	cmhi v17.4s, v17.4s, v14.4s
-	ld2 {v29.8h, v30.8h}, [x28]
-	uzp1 v16.8h, v16.8h, v17.8h
+	umov w10, v29.s[1]
+	orr x0, x0, x8
+	ldr w12, [x6, w12, uxtw #2]
+	cmn x8, #1
+	ldr w14, [x6, w14, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
 	fsub v2.4s, v2.4s, v5.4s
+	ldr w10, [x6, w10, uxtw #2]
+	sqdmulh v19.8h, v24.8h, v15.h[1]
+	ldr w9, [x6, w9, uxtw #2]
+	stp w11, w12, [sp, #40]
+	ldr w16, [x6, w16, uxtw #2]
+	add v20.8h, v20.8h, v31.8h
+	stp w13, w14, [sp, #48]
+	bic v16.4s, #0xff, lsl #24
+	shrn v20.8b, v20.8h, #3
+	stp w9, w10, [sp, #32]
+	cmhi v17.4s, v17.4s, v14.4s
+	cmhi v16.4s, v16.4s, v13.4s
+	stp w15, w16, [sp, #56]
+	add v19.8h, v19.8h, v11.8h
+	ld2 {v29.8h, v30.8h}, [x28]
+	fadd v1.4s, v1.4s, v4.4s
+	uzp1 v16.8h, v16.8h, v17.8h
 	ldr q17, [x20, x17, lsl #4]
-	xtn v31.8b, v30.8h
+	shrn v18.8b, v18.8h, #3
+	shrn v19.8b, v19.8h, #3
 	shrn v27.8b, v29.8h, #8
-	and v16.16b, v16.16b, v17.16b
 	xtn v29.8b, v29.8h
-	uaddl v21.8h, v19.8b, v27.8b
+	and v16.16b, v16.16b, v17.16b
+	xtn v31.8b, v30.8h
 	uaddl v24.8h, v18.8b, v29.8b
 	uaddl v28.8h, v20.8b, v31.8b
 	xtn v17.8b, v16.8h
+	uaddl v21.8h, v19.8b, v27.8b
 	umlal v24.8h, v18.8b, v29.8b
 	umlal v28.8h, v20.8b, v31.8b
 	umlal v21.8h, v19.8b, v27.8b
 	fmov x17, d17
 	shrn v18.8b, v24.8h, #6
-	shrn v20.8b, v28.8h, #6
-	ldr d24, [sp, #144]
 	shrn v30.8b, v30.8h, #8
+	shrn v20.8b, v28.8h, #6
 	ldr q28, [x19, #32]
+	ldr d24, [sp, #144]
 	ccmp x17, #0, #4, eq
-	shrn v19.8b, v21.8h, #6
-	orr v25.16b, v25.16b, v28.16b
-	orr v21.8b, v30.8b, v24.8b
 	orr v26.16b, v26.16b, v28.16b
+	shrn v19.8b, v21.8h, #6
+	orr v21.8b, v30.8b, v24.8b
+	orr v25.16b, v25.16b, v28.16b
 	b.eq 61f
 	subs x5, x5, #8
 	st4 {v18.8b, v19.8b, v20.8b, v21.8b}, [x1]
@@ -122105,119 +124230,122 @@ rast_kern_h12000:
 53:
 	ldr q21, [sp, #112]
 	frecpe v24.4s, v2.4s
-	smull v30.4s, v22.4h, v15.h[4]
 	frecpe v23.4s, v3.4s
-	cmp x5, #16
-	ldr q31, [sp, #96]
+	smull v30.4s, v22.4h, v15.h[4]
 	smull v27.4s, v22.4h, v15.h[5]
 	frecps v9.4s, v24.4s, v2.4s
 	frecps v12.4s, v23.4s, v3.4s
 	smull2 v29.4s, v22.8h, v15.h[4]
-	addhn v27.4h, v27.4s, v21.4s
+	ldr q31, [sp, #96]
+	mov x8, #16
 	fmul v24.4s, v24.4s, v9.4s
 	fmul v23.4s, v23.4s, v12.4s
-	add x26, x2, #32
-	mov x8, #16
 	addhn v30.4h, v30.4s, v31.4s
+	cmp x5, #16
+	addhn v27.4h, v27.4s, v21.4s
 	frecps v9.4s, v24.4s, v2.4s
+	sqdmulh v18.8h, v22.8h, v15.h[0]
 	frecps v12.4s, v23.4s, v3.4s
 	addhn2 v30.8h, v29.4s, v31.4s
 	csel x8, x5, x8, lo
-	smull2 v29.4s, v22.8h, v15.h[5]
 	fmul v24.4s, v24.4s, v9.4s
-	ldr q28, [x19, #64]
-	subs x8, x8, #8
-	sshr v30.8h, v30.8h, #3
+	smull2 v29.4s, v22.8h, v15.h[5]
 	fmul v23.4s, v23.4s, v12.4s
+	sqdmulh v19.8h, v22.8h, v15.h[1]
+	fmul v24.4s, v0.4s, v24.4s
+	ldr q28, [x19, #64]
+	fmul v23.4s, v1.4s, v23.4s
 	addhn2 v27.8h, v29.4s, v21.4s
-	csel x26, x26, x2, hi
+	add x26, x2, #32
+	ldr q31, [sp, #128]
+	fcvtzs v24.4s, v24.4s, #15
+	subs x8, x8, #8
+	add v19.8h, v19.8h, v11.8h
+	fcvtzs v23.4s, v23.4s, #15
+	add v18.8h, v18.8h, v10.8h
+	xtn v24.4h, v24.4s
+	sshr v30.8h, v30.8h, #3
+	sshr v27.8h, v27.8h, #3
+	shrn v18.8b, v18.8h, #3
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	fmul v24.4s, v0.4s, v24.4s
-	fmul v23.4s, v1.4s, v23.4s
-	ldp q16, q17, [x26]
-	fcvtzs v24.4s, v24.4s, #15
-	fcvtzs v23.4s, v23.4s, #15
-	sshr v27.8h, v27.8h, #3
-	bic v16.4s, #0xff, lsl #24
-	xtn v24.4h, v24.4s
-	and v27.16b, v27.16b, v28.16b
 	xtn2 v24.8h, v23.4s
-	ldr q31, [sp, #128]
+	csel x26, x26, x2, hi
+	and v27.16b, v27.16b, v28.16b
+	ldp q16, q17, [x26]
 	umull v29.4s, v27.4h, v15.h[6]
+	sub x18, x26, #36, lsl #12
 	umull2 v27.4s, v27.8h, v15.h[6]
-	smull v25.4s, v24.4h, v6.h[0]
-	sqdmulh v19.8h, v22.8h, v15.h[1]
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	sshr v25.4s, v25.4s, #15
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	umov w16, v27.s[3]
-	umov w15, v27.s[2]
-	fsub v2.4s, v2.4s, v5.4s
-	umov w12, v29.s[3]
-	fsub v3.4s, v3.4s, v5.4s
-	umov w9, v29.s[0]
-	ldr w10, [x6, w10, uxtw #2]
-	umov w13, v27.s[0]
-	ldr w15, [x6, w15, uxtw #2]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldr w12, [x6, w12, uxtw #2]
-	sqdmulh v18.8h, v22.8h, v15.h[0]
-	ldr w16, [x6, w16, uxtw #2]
-	sqdmulh v20.8h, v22.8h, v15.h[3]
-	ldr w9, [x6, w9, uxtw #2]
-	ldr w13, [x6, w13, uxtw #2]
-	ldr w11, [x6, w11, uxtw #2]
-	umov w14, v27.s[1]
-	stp w15, w16, [sp, #56]
-	add v20.8h, v20.8h, v31.8h
+	uaddw v29.4s, v29.4s, v30.4h
+	smull v25.4s, v24.4h, v6.h[0]
+	uaddw2 v27.4s, v27.4s, v30.8h
 	sshr v26.4s, v26.4s, #15
-	add v25.4s, v25.4s, v7.4s
-	stp w9, w10, [sp, #32]
-	bic v17.4s, #0xff, lsl #24
-	ldr w14, [x6, w14, uxtw #2]
-	stp w11, w12, [sp, #40]
-	add v19.8h, v19.8h, v11.8h
-	add v18.8h, v18.8h, v10.8h
-	stp w13, w14, [sp, #48]
-	shrn v20.8b, v20.8h, #3
-	cmhi v16.4s, v16.4s, v25.4s
-	ld2 {v29.8h, v30.8h}, [x28]
-	fadd v1.4s, v1.4s, v4.4s
-	add v26.4s, v26.4s, v7.4s
-	shrn v18.8b, v18.8h, #3
-	shrn v19.8b, v19.8h, #3
 	csel x8, x8, xzr, hi
+	umov w12, v29.s[3]
+	umov w10, v29.s[1]
+	umov w13, v27.s[0]
+	umov w14, v27.s[1]
+	prfm pstl1keep, [x18, #0]
+	cmn x17, #1
+	sshr v25.4s, v25.4s, #15
+	shrn v19.8b, v19.8h, #3
+	bic v16.4s, #0xff, lsl #24
+	umov w9, v29.s[0]
+	umov w16, v27.s[3]
+	ldr w14, [x6, w14, uxtw #2]
+	fadd v0.4s, v0.4s, v4.4s
+	umov w15, v27.s[2]
+	ldr w12, [x6, w12, uxtw #2]
+	umov w11, v29.s[2]
+	sqdmulh v20.8h, v22.8h, v15.h[3]
+	ldr w13, [x6, w13, uxtw #2]
+	fadd v1.4s, v1.4s, v4.4s
+	ldr w10, [x6, w10, uxtw #2]
+	ldr w16, [x6, w16, uxtw #2]
+	ldr w15, [x6, w15, uxtw #2]
+	ldr w9, [x6, w9, uxtw #2]
+	stp w13, w14, [sp, #48]
+	add v20.8h, v20.8h, v31.8h
+	add v25.4s, v25.4s, v7.4s
+	ldr w11, [x6, w11, uxtw #2]
+	prfm pldl1keep, [x26, #6144]
+	add v26.4s, v26.4s, v7.4s
+	stp w15, w16, [sp, #56]
+	bic v17.4s, #0xff, lsl #24
+	stp w9, w10, [sp, #32]
+	cmhi v16.4s, v16.4s, v25.4s
+	stp w11, w12, [sp, #40]
 	cmhi v17.4s, v17.4s, v26.4s
-	shrn v27.8b, v29.8h, #8
-	xtn v31.8b, v30.8h
+	ld2 {v29.8h, v30.8h}, [x28]
+	fsub v2.4s, v2.4s, v5.4s
 	uzp1 v16.8h, v16.8h, v17.8h
 	ldr q17, [x20, x8, lsl #4]
-	fadd v0.4s, v0.4s, v4.4s
-	uaddl v28.8h, v20.8b, v31.8b
-	cmn x17, #1
+	fsub v3.4s, v3.4s, v5.4s
+	shrn v27.8b, v29.8h, #8
+	shrn v20.8b, v20.8h, #3
+	xtn v31.8b, v30.8h
 	xtn v29.8b, v29.8h
 	and v16.16b, v16.16b, v17.16b
-	orr x0, x0, x17
-	uaddl v22.8h, v18.8b, v29.8b
-	uaddl v21.8h, v19.8b, v27.8b
+	shrn v30.8b, v30.8h, #8
 	xtn v17.8b, v16.8h
+	uaddl v22.8h, v18.8b, v29.8b
+	uaddl v28.8h, v20.8b, v31.8b
+	uaddl v21.8h, v19.8b, v27.8b
 	umlal v22.8h, v18.8b, v29.8b
-	umlal v21.8h, v19.8b, v27.8b
 	umlal v28.8h, v20.8b, v31.8b
-	shrn v18.8b, v22.8h, #6
+	umlal v21.8h, v19.8b, v27.8b
 	fmov x8, d17
-	shrn v19.8b, v21.8h, #6
+	orr x0, x0, x17
+	shrn v18.8b, v22.8h, #6
 	ldr d22, [sp, #144]
 	shrn v20.8b, v28.8h, #6
 	ldr q28, [x19, #32]
-	shrn v30.8b, v30.8h, #8
+	shrn v19.8b, v21.8h, #6
 	ccmp x8, #0, #4, eq
-	orr v14.16b, v14.16b, v28.16b
-	orr v21.8b, v30.8b, v22.8b
 	orr v13.16b, v13.16b, v28.16b
+	orr v21.8b, v30.8b, v22.8b
+	orr v14.16b, v14.16b, v28.16b
 	b.eq 71f
 	subs x5, x5, #8
 	st4 {v18.8b, v19.8b, v20.8b, v21.8b}, [x1]
@@ -122241,9 +124369,12 @@ rast_kern_h12000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -122349,9 +124480,12 @@ rast_kern_h12000:
 	b 52b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -122562,9 +124696,12 @@ rast_kern_h12001:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -122928,14 +125065,17 @@ rast_kern_h12001:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 974:
 	tbnz w7, #1, 30f
@@ -123010,9 +125150,12 @@ rast_kern_h12001:
 	b 973b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -123202,9 +125345,12 @@ rast_kern_h12010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -123335,14 +125481,17 @@ rast_kern_h12010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 979:
 	tbnz w7, #1, 30f
@@ -123411,9 +125560,12 @@ rast_kern_h12010:
 	b 978b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -123595,9 +125747,12 @@ rast_kern_h12011:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -123953,14 +126108,17 @@ rast_kern_h12011:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 984:
 	tbnz w7, #1, 30f
@@ -124006,9 +126164,12 @@ rast_kern_h12011:
 	b 983b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -124228,9 +126389,12 @@ rast_kern_h12100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -124440,14 +126604,17 @@ rast_kern_h12100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 989:
 	tbnz w7, #1, 30f
@@ -124522,9 +126689,12 @@ rast_kern_h12100:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -124698,9 +126868,12 @@ rast_kern_h12101:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -125142,14 +127315,17 @@ rast_kern_h12101:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 991:
 	tbnz w7, #1, 30f
@@ -125209,9 +127385,12 @@ rast_kern_h12101:
 	b 38b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -125362,9 +127541,12 @@ rast_kern_h12110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -125563,14 +127745,17 @@ rast_kern_h12110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 993:
 	tbnz w7, #1, 30f
@@ -125616,9 +127801,12 @@ rast_kern_h12110:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -125763,9 +127951,12 @@ rast_kern_h12111:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -126199,14 +128390,17 @@ rast_kern_h12111:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 995:
 	tbnz w7, #1, 30f
@@ -126237,9 +128431,12 @@ rast_kern_h12111:
 	b 994b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -126412,9 +128609,12 @@ rast_kern_h13000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -126607,14 +128807,17 @@ rast_kern_h13000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1001:
 	tbnz w7, #1, 30f
@@ -126718,9 +128921,12 @@ rast_kern_h13000:
 	b 1000b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -126931,9 +129137,12 @@ rast_kern_h13001:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -127369,14 +129578,17 @@ rast_kern_h13001:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1006:
 	tbnz w7, #1, 30f
@@ -127451,9 +129663,12 @@ rast_kern_h13001:
 	b 1005b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -127645,9 +129860,12 @@ rast_kern_h13010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -127826,14 +130044,17 @@ rast_kern_h13010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1013:
 	tbnz w7, #1, 30f
@@ -127908,9 +130129,12 @@ rast_kern_h13010:
 	b 1012b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -128092,9 +130316,12 @@ rast_kern_h13011:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -128522,14 +130749,17 @@ rast_kern_h13011:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1018:
 	tbnz w7, #1, 30f
@@ -128575,9 +130805,12 @@ rast_kern_h13011:
 	b 1017b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -128799,9 +131032,12 @@ rast_kern_h13100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -129063,14 +131299,17 @@ rast_kern_h13100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1025:
 	tbnz w7, #1, 30f
@@ -129150,9 +131389,12 @@ rast_kern_h13100:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -129326,9 +131568,12 @@ rast_kern_h13101:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -129842,14 +132087,17 @@ rast_kern_h13101:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1027:
 	tbnz w7, #1, 30f
@@ -129909,9 +132157,12 @@ rast_kern_h13101:
 	b 38b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -130062,9 +132313,12 @@ rast_kern_h13110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -130316,14 +132570,17 @@ rast_kern_h13110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1031:
 	tbnz w7, #1, 30f
@@ -130374,9 +132631,12 @@ rast_kern_h13110:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -130521,9 +132781,12 @@ rast_kern_h13111:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -131029,14 +133292,17 @@ rast_kern_h13111:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1033:
 	tbnz w7, #1, 30f
@@ -131067,9 +133333,12 @@ rast_kern_h13111:
 	b 1032b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -131250,9 +133519,12 @@ rast_kern_h14000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -131419,14 +133691,17 @@ rast_kern_h14000:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1041:
 	tbnz w7, #1, 30f
@@ -131533,254 +133808,260 @@ rast_kern_h14000:
 51:
 	frecpe v12.4s, v2.4s
 	cmp x5, #16
-	mov x17, #16
-	ldr q9, [sp, #112]
-	smull v30.4s, v24.4h, v15.h[4]
-	frecps v10.4s, v12.4s, v2.4s
-	frecpe v23.4s, v3.4s
 	ldr q31, [sp, #96]
-	smull2 v29.4s, v24.8h, v15.h[4]
-	fmul v12.4s, v12.4s, v10.4s
+	smull v30.4s, v24.4h, v15.h[4]
+	mov x17, #16
+	ldr q28, [x19, #64]
+	frecps v10.4s, v12.4s, v2.4s
 	smull v27.4s, v24.4h, v15.h[5]
+	sqdmulh v17.8h, v24.8h, v15.h[1]
 	addhn v30.4h, v30.4s, v31.4s
+	fmul v12.4s, v12.4s, v10.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
+	ldr q9, [sp, #112]
+	frecpe v23.4s, v3.4s
 	frecps v10.4s, v12.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
-	sqdmulh v8.8h, v24.8h, v15.h[3]
 	smull2 v29.4s, v24.8h, v15.h[5]
+	addhn v27.4h, v27.4s, v9.4s
+	csel x17, x5, x17, lo
 	fmul v12.4s, v12.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	addhn v27.4h, v27.4s, v9.4s
-	ldr q28, [x19, #64]
+	addhn2 v27.8h, v29.4s, v9.4s
+	subs x17, x17, #8
+	sshr v30.8h, v30.8h, #3
 	fmul v12.4s, v0.4s, v12.4s
 	fmul v23.4s, v23.4s, v10.4s
-	csel x17, x5, x17, lo
-	addhn2 v27.8h, v29.4s, v9.4s
-	ldr q31, [sp, #128]
-	sshr v30.8h, v30.8h, #3
-	frecps v10.4s, v23.4s, v3.4s
-	fcvtzs v12.4s, v12.4s, #15
-	subs x17, x17, #8
 	add x26, x2, #32
-	and v30.16b, v30.16b, v28.16b
-	fmul v23.4s, v23.4s, v10.4s
-	ldr q28, [x19, #80]
-	fadd v0.4s, v0.4s, v4.4s
-	csel x17, x17, xzr, hi
-	fmul v23.4s, v1.4s, v23.4s
-	csel x26, x26, x2, hi
-	xtn v12.4h, v12.4s
+	add v17.8h, v17.8h, v11.8h
 	sshr v27.8h, v27.8h, #3
-	and v27.16b, v27.16b, v28.16b
-	fcvtzs v23.4s, v23.4s, #15
-	umull v29.4s, v27.4h, v15.h[6]
-	umull2 v27.4s, v27.8h, v15.h[6]
-	ldr q28, [sp, #160]
+	and v30.16b, v30.16b, v28.16b
+	frecps v10.4s, v23.4s, v3.4s
+	ldr q31, [sp, #128]
+	sqdmulh v8.8h, v24.8h, v15.h[3]
+	fcvtzs v12.4s, v12.4s, #15
+	ldr q28, [x19, #80]
+	fmul v23.4s, v23.4s, v10.4s
 	add v8.8h, v8.8h, v31.8h
-	xtn2 v12.8h, v23.4s
+	and v27.16b, v27.16b, v28.16b
+	csel x26, x26, x2, hi
+	fmul v23.4s, v1.4s, v23.4s
+	umull v29.4s, v27.4h, v15.h[6]
+	sub x18, x26, #36, lsl #12
+	shrn v17.8b, v17.8h, #3
+	ldr q28, [sp, #160]
+	xtn v12.4h, v12.4s
+	fcvtzs v23.4s, v23.4s, #15
+	umull2 v27.4s, v27.8h, v15.h[6]
 	uaddw v29.4s, v29.4s, v30.4h
+	prfm pstl1keep, [x18, #0]
+	xtn2 v12.8h, v23.4s
 	uaddw2 v27.4s, v27.4s, v30.8h
 	ldp q23, q10, [x26]
-	umov w14, v27.s[1]
-	umov w9, v29.s[0]
-	fsub v3.4s, v3.4s, v5.4s
-	umov w15, v27.s[2]
+	umov w11, v29.s[2]
+	fadd v0.4s, v0.4s, v4.4s
 	umov w10, v29.s[1]
 	umov w16, v27.s[3]
-	umov w12, v29.s[3]
-	umov w11, v29.s[2]
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w10, [x6, w10, uxtw]
 	umov w13, v27.s[0]
-	fadd v1.4s, v1.4s, v4.4s
-	ldrb w11, [x6, w11, uxtw]
-	smull v13.4s, v12.4h, v6.h[0]
-	ldrb w16, [x6, w16, uxtw]
-	ldr w12, [x21, w12, uxtw #2]
-	sqdmulh v17.8h, v24.8h, v15.h[1]
-	ldrb w13, [x6, w13, uxtw]
-	ldr w9, [x21, w9, uxtw #2]
-	ldr w16, [x21, w16, uxtw #2]
-	sqdmulh v16.8h, v24.8h, v15.h[0]
-	ldr w10, [x21, w10, uxtw #2]
+	umov w14, v27.s[1]
 	fsub v2.4s, v2.4s, v5.4s
-	ldr w15, [x21, w15, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	smull2 v14.4s, v12.8h, v6.h[0]
+	ldrb w11, [x6, w11, uxtw]
+	umov w15, v27.s[2]
+	ldrb w10, [x6, w10, uxtw]
+	umov w12, v29.s[3]
+	ldrb w16, [x6, w16, uxtw]
+	umov w9, v29.s[0]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w13, [x6, w13, uxtw]
 	ldr w11, [x21, w11, uxtw #2]
+	csel x17, x17, xzr, hi
+	ldrb w12, [x6, w12, uxtw]
+	fsub v3.4s, v3.4s, v5.4s
+	ldrb w9, [x6, w9, uxtw]
+	orr x0, x0, x8
+	ldrb w15, [x6, w15, uxtw]
+	smull v13.4s, v12.4h, v6.h[0]
 	ldr w13, [x21, w13, uxtw #2]
-	add v16.8h, v16.8h, v28.8h
+	ldr w16, [x21, w16, uxtw #2]
+	smull2 v14.4s, v12.8h, v6.h[0]
+	ldr w12, [x21, w12, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
+	sqdmulh v16.8h, v24.8h, v15.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	cmn x8, #1
+	ldr w15, [x21, w15, uxtw #2]
+	stp w11, w12, [sp, #40]
+	ldr w10, [x21, w10, uxtw #2]
+	stp w13, w14, [sp, #48]
 	sshr v13.4s, v13.4s, #15
+	sshr v14.4s, v14.4s, #15
+	add v16.8h, v16.8h, v28.8h
+	stp w15, w16, [sp, #56]
 	bic v10.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
-	add v13.4s, v13.4s, v7.4s
-	stp w11, w12, [sp, #40]
-	bic v23.4s, #0xff, lsl #24
-	stp w13, w14, [sp, #48]
-	stp w15, w16, [sp, #56]
-	ld2 {v29.8h, v30.8h}, [x28]
-	shrn v8.8b, v8.8h, #3
-	sshr v14.4s, v14.4s, #15
-	add v17.8h, v17.8h, v11.8h
-	shrn v16.8b, v16.8h, #3
-	shrn v27.8b, v29.8h, #8
-	xtn v29.8b, v29.8h
-	shrn v17.8b, v17.8h, #3
-	cmhi v23.4s, v23.4s, v13.4s
-	xtn v31.8b, v30.8h
-	uaddl v24.8h, v16.8b, v29.8b
-	uaddl v9.8h, v17.8b, v27.8b
 	add v14.4s, v14.4s, v7.4s
-	umlal v24.8h, v16.8b, v29.8b
-	cmn x8, #1
-	umlal v9.8h, v17.8b, v27.8b
-	uaddl v27.8h, v8.8b, v31.8b
+	ld2 {v29.8h, v30.8h}, [x28]
+	fadd v1.4s, v1.4s, v4.4s
+	add v13.4s, v13.4s, v7.4s
+	shrn v16.8b, v16.8h, #3
+	shrn v8.8b, v8.8h, #3
+	shrn v27.8b, v29.8h, #8
+	xtn v31.8b, v30.8h
+	bic v23.4s, #0xff, lsl #24
+	xtn v29.8b, v29.8h
+	uaddl v9.8h, v17.8b, v27.8b
+	uaddl v24.8h, v16.8b, v29.8b
+	cmhi v23.4s, v23.4s, v13.4s
 	cmhi v10.4s, v10.4s, v14.4s
-	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
+	umlal v24.8h, v16.8b, v29.8b
 	uzp1 v23.8h, v23.8h, v10.8h
 	ldr q10, [x20, x17, lsl #4]
-	umlal v27.8h, v8.8b, v31.8b
-	shrn v29.8b, v9.8h, #6
-	shrn v30.8b, v30.8h, #8
+	umlal v9.8h, v17.8b, v27.8b
+	uaddl v27.8h, v8.8b, v31.8b
+	shrn v28.8b, v24.8h, #6
 	and v23.16b, v23.16b, v10.16b
 	xtn v10.8b, v23.8h
-	orr v26.16b, v26.16b, v22.16b
-	orr v31.8b, v30.8b, v24.8b
+	prfm pldl1keep, [x26, #6144]
+	umlal v27.8h, v8.8b, v31.8b
 	fmov x17, d10
-	shrn v30.8b, v27.8h, #6
+	ldr d24, [sp, #144]
+	shrn v30.8b, v30.8h, #8
 	orr v25.16b, v25.16b, v22.16b
-	orr x0, x0, x8
+	shrn v29.8b, v9.8h, #6
+	orr v31.8b, v30.8b, v24.8b
 	ccmp x17, #0, #4, eq
+	shrn v30.8b, v27.8h, #6
+	orr v26.16b, v26.16b, v22.16b
 	b.eq 61f
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	stp q25, q26, [x2]
 	str x8, [x3], #8
 	b.ls 59f
 	add x1, x1, #32
 	add x2, x2, #32
 53:
-	ldr q9, [sp, #112]
 	frecpe v24.4s, v2.4s
 	smull v27.4s, v12.4h, v15.h[5]
-	smull v30.4s, v12.4h, v15.h[4]
-	sqdmulh v16.8h, v12.8h, v15.h[0]
-	frecps v10.4s, v24.4s, v2.4s
-	addhn v27.4h, v27.4s, v9.4s
+	mov x8, #16
 	ldr q31, [sp, #96]
-	add x26, x2, #32
-	frecpe v23.4s, v3.4s
-	fmul v24.4s, v24.4s, v10.4s
-	smull2 v29.4s, v12.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q28, [x19, #64]
+	sqdmulh v17.8h, v12.8h, v15.h[1]
+	frecps v10.4s, v24.4s, v2.4s
+	smull v30.4s, v12.4h, v15.h[4]
 	cmp x5, #16
+	ldr q9, [sp, #112]
+	smull2 v29.4s, v12.8h, v15.h[4]
+	fmul v24.4s, v24.4s, v10.4s
+	addhn v30.4h, v30.4s, v31.4s
+	addhn v27.4h, v27.4s, v9.4s
+	csel x8, x5, x8, lo
+	frecpe v23.4s, v3.4s
 	frecps v10.4s, v24.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q31, [sp, #128]
 	smull2 v29.4s, v12.8h, v15.h[5]
-	sqdmulh v17.8h, v12.8h, v15.h[1]
+	add x26, x2, #32
 	fmul v24.4s, v24.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
+	sqdmulh v8.8h, v12.8h, v15.h[3]
 	addhn2 v27.8h, v29.4s, v9.4s
-	orr v13.16b, v13.16b, v22.16b
-	mov x8, #16
-	fmul v23.4s, v23.4s, v10.4s
-	sshr v30.8h, v30.8h, #3
-	sshr v27.8h, v27.8h, #3
+	subs x8, x8, #8
 	fmul v24.4s, v0.4s, v24.4s
+	fmul v23.4s, v23.4s, v10.4s
+	add v8.8h, v8.8h, v31.8h
+	csel x8, x8, xzr, hi
+	csel x26, x26, x2, hi
+	fcvtzs v24.4s, v24.4s, #15
 	frecps v10.4s, v23.4s, v3.4s
+	sub x18, x26, #36, lsl #12
+	ldr q28, [x19, #64]
 	add v17.8h, v17.8h, v11.8h
+	sshr v30.8h, v30.8h, #3
+	fmul v23.4s, v23.4s, v10.4s
+	sshr v27.8h, v27.8h, #3
+	shrn v8.8b, v8.8h, #3
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	fmul v23.4s, v23.4s, v10.4s
-	and v27.16b, v27.16b, v28.16b
-	fcvtzs v24.4s, v24.4s, #15
 	fmul v23.4s, v1.4s, v23.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v24.4h, v24.4s
+	ldr q28, [sp, #160]
+	fcvtzs v23.4s, v23.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	csel x8, x5, x8, lo
-	ldr q31, [sp, #128]
-	xtn v24.4h, v24.4s
-	fcvtzs v23.4s, v23.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
-	ldr q28, [sp, #160]
-	uaddw2 v27.4s, v27.4s, v30.8h
 	xtn2 v24.8h, v23.4s
-	umov w12, v29.s[3]
+	shrn v17.8b, v17.8h, #3
+	uaddw v29.4s, v29.4s, v30.4h
+	prfm pstl1keep, [x18, #0]
+	ldp q23, q10, [x26]
 	umov w9, v29.s[0]
-	umov w10, v29.s[1]
-	add v16.8h, v16.8h, v28.8h
+	umov w12, v29.s[3]
+	uaddw2 v27.4s, v27.4s, v30.8h
 	umov w11, v29.s[2]
-	umov w14, v27.s[1]
-	ldrb w10, [x6, w10, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	umov w10, v29.s[1]
+	fsub v3.4s, v3.4s, v5.4s
 	umov w13, v27.s[0]
 	ldrb w9, [x6, w9, uxtw]
 	umov w16, v27.s[3]
 	ldrb w12, [x6, w12, uxtw]
+	umov w14, v27.s[1]
+	fsub v2.4s, v2.4s, v5.4s
+	ldrb w10, [x6, w10, uxtw]
+	ldrb w11, [x6, w11, uxtw]
 	umov w15, v27.s[2]
 	fadd v0.4s, v0.4s, v4.4s
-	ldrb w11, [x6, w11, uxtw]
-	subs x8, x8, #8
-	ldrb w13, [x6, w13, uxtw]
-	smull2 v26.4s, v24.8h, v6.h[0]
 	ldrb w16, [x6, w16, uxtw]
+	ldrb w13, [x6, w13, uxtw]
 	ldr w10, [x21, w10, uxtw #2]
-	csel x26, x26, x2, hi
-	ldr w9, [x21, w9, uxtw #2]
-	sqdmulh v8.8h, v12.8h, v15.h[3]
 	ldr w11, [x21, w11, uxtw #2]
-	smull v25.4s, v24.4h, v6.h[0]
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w15, [x6, w15, uxtw]
-	ldr w13, [x21, w13, uxtw #2]
-	stp w9, w10, [sp, #32]
-	fsub v3.4s, v3.4s, v5.4s
+	sqdmulh v16.8h, v12.8h, v15.h[0]
 	ldr w16, [x21, w16, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w15, [x21, w15, uxtw #2]
 	ldr w12, [x21, w12, uxtw #2]
-	ldp q23, q10, [x26]
-	stp w13, w14, [sp, #48]
-	fadd v1.4s, v1.4s, v4.4s
-	stp w15, w16, [sp, #56]
-	sshr v25.4s, v25.4s, #15
+	smull v25.4s, v24.4h, v6.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
+	cmn x17, #1
+	ldr w14, [x21, w14, uxtw #2]
+	ldr w13, [x21, w13, uxtw #2]
+	stp w11, w12, [sp, #40]
+	orr x0, x0, x17
+	add v16.8h, v16.8h, v28.8h
 	sshr v26.4s, v26.4s, #15
 	bic v23.4s, #0xff, lsl #24
-	csel x8, x8, xzr, hi
+	stp w9, w10, [sp, #32]
 	add v26.4s, v26.4s, v7.4s
+	stp w15, w16, [sp, #56]
 	bic v10.4s, #0xff, lsl #24
-	stp w11, w12, [sp, #40]
-	add v25.4s, v25.4s, v7.4s
-	cmhi v10.4s, v10.4s, v26.4s
-	cmhi v23.4s, v23.4s, v25.4s
+	stp w13, w14, [sp, #48]
+	shrn v16.8b, v16.8h, #3
 	ld2 {v29.8h, v30.8h}, [x28]
-	uzp1 v23.8h, v23.8h, v10.8h
-	cmn x17, #1
-	ldr q10, [x20, x8, lsl #4]
-	add v8.8h, v8.8h, v31.8h
-	shrn v17.8b, v17.8h, #3
+	fadd v1.4s, v1.4s, v4.4s
+	cmhi v10.4s, v10.4s, v26.4s
+	sshr v25.4s, v25.4s, #15
 	shrn v27.8b, v29.8h, #8
 	xtn v29.8b, v29.8h
+	add v25.4s, v25.4s, v7.4s
 	xtn v31.8b, v30.8h
-	and v23.16b, v23.16b, v10.16b
-	shrn v16.8b, v16.8h, #3
-	uaddl v9.8h, v17.8b, v27.8b
 	uaddl v12.8h, v16.8b, v29.8b
-	shrn v8.8b, v8.8h, #3
-	shrn v30.8b, v30.8h, #8
+	uaddl v9.8h, v17.8b, v27.8b
+	cmhi v23.4s, v23.4s, v25.4s
 	umlal v12.8h, v16.8b, v29.8b
+	uzp1 v23.8h, v23.8h, v10.8h
+	ldr q10, [x20, x8, lsl #4]
 	umlal v9.8h, v17.8b, v27.8b
 	uaddl v27.8h, v8.8b, v31.8b
-	xtn v10.8b, v23.8h
+	and v23.16b, v23.16b, v10.16b
 	shrn v28.8b, v12.8h, #6
-	orr x0, x0, x17
-	fmov x8, d10
+	xtn v10.8b, v23.8h
 	ldr d12, [sp, #144]
 	umlal v27.8h, v8.8b, v31.8b
+	prfm pldl1keep, [x26, #6144]
+	fmov x8, d10
+	shrn v30.8b, v30.8h, #8
+	orr v13.16b, v13.16b, v22.16b
 	orr v31.8b, v30.8b, v12.8b
 	ccmp x8, #0, #4, eq
 	shrn v30.8b, v27.8h, #6
@@ -131809,9 +134090,12 @@ rast_kern_h14000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -131925,109 +134209,111 @@ rast_kern_h14000:
 	b 85f
 81:
 	frecpe v12.4s, v2.4s
-	smull v30.4s, v24.4h, v15.h[4]
+	sqdmulh v8.8h, v24.8h, v15.h[3]
+	smull2 v29.4s, v24.8h, v15.h[4]
 	ldr q9, [sp, #112]
+	frecps v10.4s, v12.4s, v2.4s
 	cmp x5, #16
 	mov x17, #16
+	smull v30.4s, v24.4h, v15.h[4]
 	ldr q31, [sp, #96]
-	frecps v10.4s, v12.4s, v2.4s
-	smull2 v29.4s, v24.8h, v15.h[4]
-	ldr q28, [x19, #64]
-	sqdmulh v17.8h, v24.8h, v15.h[1]
 	fmul v12.4s, v12.4s, v10.4s
-	smull v27.4s, v24.4h, v15.h[5]
-	addhn v30.4h, v30.4s, v31.4s
-	orr x0, x0, x8
 	frecpe v23.4s, v3.4s
+	addhn v30.4h, v30.4s, v31.4s
+	sqdmulh v16.8h, v24.8h, v15.h[0]
 	frecps v10.4s, v12.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
-	smull2 v29.4s, v24.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v9.4s
+	smull v27.4s, v24.4h, v15.h[5]
 	csel x17, x5, x17, lo
+	ldr q28, [x19, #64]
 	fmul v12.4s, v12.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
+	smull2 v29.4s, v24.8h, v15.h[5]
+	addhn v27.4h, v27.4s, v9.4s
+	fmul v12.4s, v0.4s, v12.4s
+	fmul v23.4s, v23.4s, v10.4s
+	sqdmulh v17.8h, v24.8h, v15.h[1]
 	addhn2 v27.8h, v29.4s, v9.4s
 	sshr v30.8h, v30.8h, #3
-	orr v26.16b, v26.16b, v22.16b
+	add x26, x2, #32
+	frecps v10.4s, v23.4s, v3.4s
+	fcvtzs v12.4s, v12.4s, #15
+	ldr q31, [sp, #128]
+	add v17.8h, v17.8h, v11.8h
+	sshr v27.8h, v27.8h, #3
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	sshr v27.8h, v27.8h, #3
-	add x26, x2, #32
-	add v17.8h, v17.8h, v11.8h
-	and v27.16b, v27.16b, v28.16b
-	ldr q28, [sp, #160]
-	umull v29.4s, v27.4h, v15.h[6]
-	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v23.4s, v23.4s, v10.4s
 	fsub v2.4s, v2.4s, v5.4s
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	frecps v10.4s, v23.4s, v3.4s
-	fmul v12.4s, v0.4s, v12.4s
-	umov w12, v29.s[3]
-	sqdmulh v16.8h, v24.8h, v15.h[0]
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
 	fmul v23.4s, v23.4s, v10.4s
-	umov w10, v29.s[1]
 	subs x17, x17, #8
-	ldrb w12, [x6, w12, uxtw]
+	add v8.8h, v8.8h, v31.8h
+	and v27.16b, v27.16b, v28.16b
+	fmul v23.4s, v1.4s, v23.4s
+	umull v29.4s, v27.4h, v15.h[6]
+	xtn v12.4h, v12.4s
+	csel x26, x26, x2, hi
+	shrn v17.8b, v17.8h, #3
+	fcvtzs v23.4s, v23.4s, #15
+	umull2 v27.4s, v27.8h, v15.h[6]
+	uaddw v29.4s, v29.4s, v30.4h
+	sub x18, x26, #36, lsl #12
+	xtn2 v12.8h, v23.4s
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pstl1keep, [x18, #0]
+	ldp q23, q10, [x26]
 	umov w9, v29.s[0]
 	umov w14, v27.s[1]
-	fcvtzs v12.4s, v12.4s, #15
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w11, [x6, w11, uxtw]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w10, v29.s[1]
 	umov w15, v27.s[2]
-	ldr q31, [sp, #128]
-	umov w16, v27.s[3]
-	fmul v23.4s, v1.4s, v23.4s
-	ldrb w14, [x6, w14, uxtw]
-	sqdmulh v8.8h, v24.8h, v15.h[3]
-	ldrb w10, [x6, w10, uxtw]
-	fadd v0.4s, v0.4s, v4.4s
-	ldrb w9, [x6, w9, uxtw]
 	fadd v1.4s, v1.4s, v4.4s
-	ldrb w16, [x6, w16, uxtw]
-	fcvtzs v23.4s, v23.4s, #15
+	umov w13, v27.s[0]
+	orr x0, x0, x8
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	ldrb w9, [x6, w9, uxtw]
+	umov w16, v27.s[3]
+	ldrb w13, [x6, w13, uxtw]
+	smull2 v14.4s, v12.8h, v6.h[0]
+	ldrb w10, [x6, w10, uxtw]
+	smull v13.4s, v12.4h, v6.h[0]
 	ldrb w15, [x6, w15, uxtw]
-	stp w11, w12, [sp, #40]
-	csel x26, x26, x2, hi
-	add v8.8h, v8.8h, v31.8h
+	ldrb w11, [x6, w11, uxtw]
+	fadd v0.4s, v0.4s, v4.4s
+	ldrb w16, [x6, w16, uxtw]
 	stp w9, w10, [sp, #32]
-	add v16.8h, v16.8h, v28.8h
+	ldr q28, [sp, #160]
+	sshr v13.4s, v13.4s, #15
 	stp w13, w14, [sp, #48]
+	bic v10.4s, #0xff, lsl #24
+	stp w11, w12, [sp, #40]
+	add v16.8h, v16.8h, v28.8h
+	bic v23.4s, #0xff, lsl #24
 	stp w15, w16, [sp, #56]
+	add v13.4s, v13.4s, v7.4s
 	ld2 {v29.8h, v30.8h}, [x28]
 	fsub v3.4s, v3.4s, v5.4s
-	shrn v17.8b, v17.8h, #3
-	xtn v12.4h, v12.4s
+	cmhi v23.4s, v23.4s, v13.4s
+	sshr v14.4s, v14.4s, #15
 	shrn v8.8b, v8.8h, #3
 	csel x17, x17, xzr, hi
-	xtn2 v12.8h, v23.4s
+	add v14.4s, v14.4s, v7.4s
 	xtn v29.8b, v29.8h
-	smull2 v14.4s, v12.8h, v6.h[0]
 	tbl v27.8b, {v19.16b}, v29.8b
-	ldp q23, q10, [x26]
-	smull v13.4s, v12.4h, v6.h[0]
 	tbl v31.8b, {v20.16b}, v29.8b
 	tbl v30.8b, {v21.16b}, v29.8b
-	uaddl v9.8h, v17.8b, v27.8b
 	tbl v29.8b, {v18.16b}, v29.8b
-	sshr v14.4s, v14.4s, #15
-	sshr v13.4s, v13.4s, #15
-	bic v23.4s, #0xff, lsl #24
-	shrn v16.8b, v16.8h, #3
-	add v13.4s, v13.4s, v7.4s
-	uaddl v24.8h, v16.8b, v29.8b
-	add v14.4s, v14.4s, v7.4s
-	bic v10.4s, #0xff, lsl #24
-	cmhi v10.4s, v10.4s, v14.4s
 	cmn x8, #1
-	cmhi v23.4s, v23.4s, v13.4s
-	umlal v24.8h, v16.8b, v29.8b
+	prfm pldl1keep, [x26, #6144]
+	cmhi v10.4s, v10.4s, v14.4s
+	shrn v16.8b, v16.8h, #3
+	uaddl v9.8h, v17.8b, v27.8b
+	uaddl v24.8h, v16.8b, v29.8b
 	uzp1 v23.8h, v23.8h, v10.8h
 	ldr q10, [x20, x17, lsl #4]
 	umlal v9.8h, v17.8b, v27.8b
+	umlal v24.8h, v16.8b, v29.8b
 	uaddl v27.8h, v8.8b, v31.8b
 	and v23.16b, v23.16b, v10.16b
 	shrn v28.8b, v24.8h, #6
@@ -132035,15 +134321,16 @@ rast_kern_h14000:
 	ldr d24, [sp, #144]
 	umlal v27.8h, v8.8b, v31.8b
 	fmov x17, d10
+	orr v25.16b, v25.16b, v22.16b
 	orr v31.8b, v30.8b, v24.8b
 	shrn v29.8b, v9.8h, #6
-	orr v25.16b, v25.16b, v22.16b
 	ccmp x17, #0, #4, eq
 	shrn v30.8b, v27.8h, #6
+	orr v26.16b, v26.16b, v22.16b
 	b.eq 91f
-	stp q25, q26, [x2]
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
+	stp q25, q26, [x2]
 	str x8, [x3], #8
 	b.ls 89f
 	add x1, x1, #32
@@ -132051,124 +134338,127 @@ rast_kern_h14000:
 83:
 	mov x8, #16
 	frecpe v24.4s, v2.4s
-	smull v27.4s, v12.4h, v15.h[5]
-	cmp x5, #16
-	ldr q9, [sp, #112]
-	smull2 v29.4s, v12.8h, v15.h[4]
-	frecps v10.4s, v24.4s, v2.4s
-	smull v30.4s, v12.4h, v15.h[4]
-	csel x8, x5, x8, lo
-	addhn v27.4h, v27.4s, v9.4s
-	ldr q31, [sp, #96]
-	fmul v24.4s, v24.4s, v10.4s
-	sqdmulh v8.8h, v12.8h, v15.h[3]
-	addhn v30.4h, v30.4s, v31.4s
-	ldr q28, [x19, #64]
 	frecpe v23.4s, v3.4s
+	add x26, x2, #32
+	cmp x5, #16
+	ldr q31, [sp, #96]
+	frecps v10.4s, v24.4s, v2.4s
+	smull2 v29.4s, v12.8h, v15.h[4]
+	smull v30.4s, v12.4h, v15.h[4]
+	smull v27.4s, v12.4h, v15.h[5]
+	fmul v24.4s, v24.4s, v10.4s
+	sqdmulh v17.8h, v12.8h, v15.h[1]
+	addhn v30.4h, v30.4s, v31.4s
+	ldr q9, [sp, #112]
+	csel x8, x5, x8, lo
 	frecps v10.4s, v24.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
-	ldr q31, [sp, #128]
 	smull2 v29.4s, v12.8h, v15.h[5]
-	sqdmulh v17.8h, v12.8h, v15.h[1]
+	sqdmulh v8.8h, v12.8h, v15.h[3]
 	fmul v24.4s, v24.4s, v10.4s
 	frecps v10.4s, v23.4s, v3.4s
-	addhn2 v27.8h, v29.4s, v9.4s
+	ldr q31, [sp, #128]
 	sshr v30.8h, v30.8h, #3
-	orr v13.16b, v13.16b, v22.16b
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	sshr v27.8h, v27.8h, #3
-	and v27.16b, v27.16b, v28.16b
-	ldr q28, [sp, #160]
-	fmul v23.4s, v23.4s, v10.4s
-	umull v29.4s, v27.4h, v15.h[6]
-	sqdmulh v16.8h, v12.8h, v15.h[0]
-	umull2 v27.4s, v27.8h, v15.h[6]
-	frecps v10.4s, v23.4s, v3.4s
-	uaddw v29.4s, v29.4s, v30.4h
-	add v8.8h, v8.8h, v31.8h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	add x26, x2, #32
-	fmul v24.4s, v0.4s, v24.4s
 	subs x8, x8, #8
-	umov w10, v29.s[1]
-	umov w13, v27.s[0]
+	fmul v24.4s, v0.4s, v24.4s
+	fmul v23.4s, v23.4s, v10.4s
+	csel x26, x26, x2, hi
+	add v17.8h, v17.8h, v11.8h
+	ldr q28, [x19, #64]
+	add v8.8h, v8.8h, v31.8h
+	csel x8, x8, xzr, hi
+	frecps v10.4s, v23.4s, v3.4s
+	addhn v27.4h, v27.4s, v9.4s
+	sub x18, x26, #36, lsl #12
+	shrn v8.8b, v8.8h, #3
+	and v30.16b, v30.16b, v28.16b
+	fmul v23.4s, v23.4s, v10.4s
+	ldr q28, [x19, #80]
+	addhn2 v27.8h, v29.4s, v9.4s
+	fcvtzs v24.4s, v24.4s, #15
+	fmul v23.4s, v1.4s, v23.4s
+	shrn v17.8b, v17.8h, #3
+	sshr v27.8h, v27.8h, #3
+	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	fcvtzs v23.4s, v23.4s, #15
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
+	ldr q28, [sp, #160]
+	xtn2 v24.8h, v23.4s
+	prfm pstl1keep, [x18, #0]
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldp q23, q10, [x26]
 	umov w9, v29.s[0]
-	umov w15, v27.s[2]
 	umov w11, v29.s[2]
 	umov w16, v27.s[3]
-	umov w14, v27.s[1]
-	ldrb w10, [x6, w10, uxtw]
 	umov w12, v29.s[3]
-	fmul v23.4s, v23.4s, v10.4s
-	ldrb w9, [x6, w9, uxtw]
-	fadd v0.4s, v0.4s, v4.4s
-	ldrb w15, [x6, w15, uxtw]
-	fcvtzs v24.4s, v24.4s, #15
-	ldrb w11, [x6, w11, uxtw]
+	umov w10, v29.s[1]
+	umov w14, v27.s[1]
 	fsub v3.4s, v3.4s, v5.4s
+	umov w15, v27.s[2]
+	fadd v0.4s, v0.4s, v4.4s
+	ldrb w9, [x6, w9, uxtw]
+	smull v25.4s, v24.4h, v6.h[0]
+	ldrb w16, [x6, w16, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w13, v27.s[0]
+	sqdmulh v16.8h, v12.8h, v15.h[0]
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w10, [x6, w10, uxtw]
+	fsub v2.4s, v2.4s, v5.4s
 	ldrb w14, [x6, w14, uxtw]
 	ldrb w13, [x6, w13, uxtw]
-	fmul v23.4s, v1.4s, v23.4s
-	ldrb w12, [x6, w12, uxtw]
-	fadd v1.4s, v1.4s, v4.4s
-	ldrb w16, [x6, w16, uxtw]
-	stp w13, w14, [sp, #48]
-	xtn v24.4h, v24.4s
-	add v16.8h, v16.8h, v28.8h
-	stp w11, w12, [sp, #40]
-	add v17.8h, v17.8h, v11.8h
-	stp w9, w10, [sp, #32]
 	stp w15, w16, [sp, #56]
-	ld2 {v29.8h, v30.8h}, [x28]
-	fsub v2.4s, v2.4s, v5.4s
-	fcvtzs v23.4s, v23.4s, #15
-	shrn v16.8b, v16.8h, #3
-	csel x26, x26, x2, hi
-	shrn v17.8b, v17.8h, #3
-	xtn2 v24.8h, v23.4s
-	xtn v29.8b, v29.8h
-	ldp q23, q10, [x26]
-	smull v25.4s, v24.4h, v6.h[0]
-	tbl v31.8b, {v20.16b}, v29.8b
-	smull2 v26.4s, v24.8h, v6.h[0]
-	tbl v30.8b, {v21.16b}, v29.8b
-	tbl v27.8b, {v19.16b}, v29.8b
-	tbl v29.8b, {v18.16b}, v29.8b
 	sshr v25.4s, v25.4s, #15
+	stp w9, w10, [sp, #32]
+	stp w11, w12, [sp, #40]
+	add v16.8h, v16.8h, v28.8h
+	stp w13, w14, [sp, #48]
+	bic v10.4s, #0xff, lsl #24
+	ld2 {v29.8h, v30.8h}, [x28]
+	fadd v1.4s, v1.4s, v4.4s
+	add v25.4s, v25.4s, v7.4s
 	sshr v26.4s, v26.4s, #15
 	bic v23.4s, #0xff, lsl #24
-	shrn v8.8b, v8.8h, #3
-	add v25.4s, v25.4s, v7.4s
-	bic v10.4s, #0xff, lsl #24
-	csel x8, x8, xzr, hi
-	add v26.4s, v26.4s, v7.4s
 	orr x0, x0, x17
+	shrn v16.8b, v16.8h, #3
+	add v26.4s, v26.4s, v7.4s
+	xtn v29.8b, v29.8h
+	tbl v27.8b, {v19.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
+	tbl v30.8b, {v21.16b}, v29.8b
+	tbl v29.8b, {v18.16b}, v29.8b
+	cmn x17, #1
+	cmhi v10.4s, v10.4s, v26.4s
+	cmhi v23.4s, v23.4s, v25.4s
 	uaddl v12.8h, v16.8b, v29.8b
 	uaddl v9.8h, v17.8b, v27.8b
-	cmhi v23.4s, v23.4s, v25.4s
-	cmhi v10.4s, v10.4s, v26.4s
-	umlal v12.8h, v16.8b, v29.8b
+	prfm pldl1keep, [x26, #6144]
 	uzp1 v23.8h, v23.8h, v10.8h
 	ldr q10, [x20, x8, lsl #4]
+	umlal v12.8h, v16.8b, v29.8b
 	umlal v9.8h, v17.8b, v27.8b
 	uaddl v27.8h, v8.8b, v31.8b
-	shrn v28.8b, v12.8h, #6
 	and v23.16b, v23.16b, v10.16b
+	shrn v28.8b, v12.8h, #6
 	xtn v10.8b, v23.8h
-	orr v14.16b, v14.16b, v22.16b
-	cmn x17, #1
 	umlal v27.8h, v8.8b, v31.8b
-	ldr d12, [sp, #144]
 	fmov x8, d10
-	shrn v29.8b, v9.8h, #6
+	ldr d12, [sp, #144]
+	orr v13.16b, v13.16b, v22.16b
 	orr v31.8b, v30.8b, v12.8b
 	ccmp x8, #0, #4, eq
 	shrn v30.8b, v27.8h, #6
+	shrn v29.8b, v9.8h, #6
+	orr v14.16b, v14.16b, v22.16b
 	b.eq 101f
-	stp q13, q14, [x2]
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
+	stp q13, q14, [x2]
 	str x17, [x3], #8
 	b.ls 89f
 	add x1, x1, #32
@@ -132188,9 +134478,12 @@ rast_kern_h14000:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -132296,9 +134589,12 @@ rast_kern_h14000:
 	b 82b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -132509,9 +134805,12 @@ rast_kern_h14001:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -132907,14 +135206,17 @@ rast_kern_h14001:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1046:
 	tbnz w7, #1, 30f
@@ -132989,9 +135291,12 @@ rast_kern_h14001:
 	b 1045b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -133197,9 +135502,12 @@ rast_kern_h14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -133353,14 +135661,17 @@ rast_kern_h14010:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1059:
 	tbnz w7, #1, 30f
@@ -133436,117 +135747,120 @@ rast_kern_h14010:
 	b 55f
 51:
 	frecpe v16.4s, v2.4s
-	frecpe v17.4s, v3.4s
 	smull v30.4s, v24.4h, v15.h[4]
+	ldr q28, [x19, #64]
 	ldr q31, [sp, #96]
-	add x26, x2, #32
 	frecps v23.4s, v16.4s, v2.4s
-	smull2 v29.4s, v24.8h, v15.h[4]
+	frecpe v17.4s, v3.4s
+	fmul v16.4s, v16.4s, v23.4s
 	smull v27.4s, v24.4h, v15.h[5]
 	addhn v30.4h, v30.4s, v31.4s
 	ldr q9, [sp, #112]
-	fmul v16.4s, v16.4s, v23.4s
-	cmp x5, #16
-	addhn2 v30.8h, v29.4s, v31.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
 	frecps v23.4s, v16.4s, v2.4s
-	addhn v27.4h, v27.4s, v9.4s
-	mov x17, #16
-	ldr q28, [x19, #64]
-	sshr v30.8h, v30.8h, #3
+	orr v25.16b, v25.16b, v22.16b
 	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	smull2 v29.4s, v24.8h, v15.h[5]
-	csel x17, x5, x17, lo
+	addhn2 v30.8h, v29.4s, v31.4s
+	add x26, x2, #32
+	addhn v27.4h, v27.4s, v9.4s
 	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
-	addhn2 v27.8h, v29.4s, v9.4s
+	cmp x5, #16
+	mov x17, #16
+	sshr v30.8h, v30.8h, #3
+	smull2 v29.4s, v24.8h, v15.h[5]
 	frecps v23.4s, v17.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	csel x17, x5, x17, lo
+	addhn2 v27.8h, v29.4s, v9.4s
 	fcvtzs v16.4s, v16.4s, #15
-	orr v25.16b, v25.16b, v22.16b
-	subs x17, x17, #8
 	fmul v17.4s, v17.4s, v23.4s
+	orr x0, x0, x8
+	subs x17, x17, #8
+	and v30.16b, v30.16b, v28.16b
+	fmul v17.4s, v1.4s, v17.4s
+	ldr q28, [x19, #80]
+	csel x26, x26, x2, hi
 	xtn v16.4h, v16.4s
 	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	fmul v17.4s, v1.4s, v17.4s
 	and v27.16b, v27.16b, v28.16b
-	umull v29.4s, v27.4h, v15.h[6]
 	fcvtzs v17.4s, v17.4s, #15
+	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	uaddw v29.4s, v29.4s, v30.4h
+	prfm pldl1keep, [x26, #6144]
 	xtn2 v16.8h, v17.4s
+	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
+	ldp q17, q23, [x26]
+	umov w12, v29.s[3]
+	umov w16, v27.s[3]
+	umov w15, v27.s[2]
+	umov w14, v27.s[1]
 	umov w9, v29.s[0]
 	umov w10, v29.s[1]
-	umov w12, v29.s[3]
-	umov w15, v27.s[2]
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
-	umov w14, v27.s[1]
-	ldrb w9, [x6, w9, uxtw]
 	csel x17, x17, xzr, hi
-	ldrb w10, [x6, w10, uxtw]
-	umov w16, v27.s[3]
-	ldrb w11, [x6, w11, uxtw]
-	csel x26, x26, x2, hi
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	fsub v3.4s, v3.4s, v5.4s
-	ldr w10, [x21, w10, uxtw #2]
-	ldrb w14, [x6, w14, uxtw]
-	smull v13.4s, v16.4h, v6.h[0]
-	ldrb w15, [x6, w15, uxtw]
-	ldr w11, [x21, w11, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w13, [x21, w13, uxtw #2]
+	umov w11, v29.s[2]
 	ldrb w16, [x6, w16, uxtw]
-	smull2 v14.4s, v16.8h, v6.h[0]
-	ldr w12, [x21, w12, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	ldr w15, [x21, w15, uxtw #2]
-	ldr w16, [x21, w16, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w9, [x21, w9, uxtw #2]
-	ldp q17, q23, [x26]
-	stp w15, w16, [sp, #56]
-	stp w11, w12, [sp, #40]
-	stp w9, w10, [sp, #32]
-	sshr v14.4s, v14.4s, #15
-	bic v17.4s, #0xff, lsl #24
-	sshr v13.4s, v13.4s, #15
-	add v14.4s, v14.4s, v7.4s
-	stp w13, w14, [sp, #48]
-	bic v23.4s, #0xff, lsl #24
-	add v13.4s, v13.4s, v7.4s
-	ld2 {v29.8h, v30.8h}, [x28]
 	fadd v1.4s, v1.4s, v4.4s
+	ldrb w15, [x6, w15, uxtw]
+	smull v13.4s, v16.4h, v6.h[0]
+	ldrb w12, [x6, w12, uxtw]
+	sub x18, x26, #36, lsl #12
+	ldrb w9, [x6, w9, uxtw]
+	umov w13, v27.s[0]
+	ldrb w14, [x6, w14, uxtw]
+	fsub v3.4s, v3.4s, v5.4s
+	ldrb w10, [x6, w10, uxtw]
+	ldrb w11, [x6, w11, uxtw]
+	fadd v0.4s, v0.4s, v4.4s
+	ldr w12, [x21, w12, uxtw #2]
+	ldrb w13, [x6, w13, uxtw]
+	ldr w15, [x21, w15, uxtw #2]
+	smull2 v14.4s, v16.8h, v6.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	ldr w16, [x21, w16, uxtw #2]
+	ldr w11, [x21, w11, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
+	ldr w13, [x21, w13, uxtw #2]
+	ldr w10, [x21, w10, uxtw #2]
+	prfm pstl1keep, [x18, #0]
+	sshr v13.4s, v13.4s, #15
+	sshr v14.4s, v14.4s, #15
+	orr v26.16b, v26.16b, v22.16b
+	stp w11, w12, [sp, #40]
+	add v13.4s, v13.4s, v7.4s
+	stp w9, w10, [sp, #32]
+	bic v23.4s, #0xff, lsl #24
+	stp w15, w16, [sp, #56]
+	bic v17.4s, #0xff, lsl #24
+	stp w13, w14, [sp, #48]
+	ld2 {v29.8h, v30.8h}, [x28]
 	cmhi v17.4s, v17.4s, v13.4s
-	cmhi v23.4s, v23.4s, v14.4s
 	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
+	add v14.4s, v14.4s, v7.4s
+	xtn v31.8b, v30.8h
+	uaddl v24.8h, v10.8b, v29.8b
+	cmhi v23.4s, v23.4s, v14.4s
+	uaddl v9.8h, v12.8b, v31.8b
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x17, lsl #4]
-	uaddl v8.8h, v11.8b, v27.8b
-	xtn v29.8b, v29.8h
-	xtn v31.8b, v30.8h
-	and v17.16b, v17.16b, v23.16b
-	uaddl v24.8h, v10.8b, v29.8b
-	xtn v23.8b, v17.8h
-	orr x0, x0, x8
-	shrn v30.8b, v30.8h, #8
-	cmn x8, #1
-	uaddl v9.8h, v12.8b, v31.8b
-	fmov x17, d23
 	umlal v24.8h, v10.8b, v29.8b
-	umlal v8.8h, v11.8b, v27.8b
 	umlal v9.8h, v12.8b, v31.8b
+	uaddl v8.8h, v11.8b, v27.8b
+	cmn x8, #1
+	and v17.16b, v17.16b, v23.16b
 	shrn v28.8b, v24.8h, #6
+	xtn v23.8b, v17.8h
+	umlal v8.8h, v11.8b, v27.8b
 	ldr d24, [sp, #144]
-	shrn v29.8b, v8.8h, #6
-	ccmp x17, #0, #4, eq
+	fmov x17, d23
+	shrn v30.8b, v30.8h, #8
 	orr v31.8b, v30.8b, v24.8b
+	ccmp x17, #0, #4, eq
 	shrn v30.8b, v9.8h, #6
-	orr v26.16b, v26.16b, v22.16b
+	shrn v29.8b, v8.8h, #6
 	b.eq 61f
 	subs x5, x5, #8
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -133558,115 +135872,118 @@ rast_kern_h14010:
 53:
 	cmp x5, #16
 	frecpe v24.4s, v2.4s
-	smull2 v29.4s, v16.8h, v15.h[4]
-	smull v30.4s, v16.4h, v15.h[4]
+	frecpe v17.4s, v3.4s
 	ldr q31, [sp, #96]
 	mov x8, #16
+	smull v30.4s, v16.4h, v15.h[4]
 	frecps v23.4s, v24.4s, v2.4s
-	frecpe v17.4s, v3.4s
 	smull v27.4s, v16.4h, v15.h[5]
+	csel x8, x5, x8, lo
+	smull2 v29.4s, v16.8h, v15.h[4]
 	fmul v24.4s, v24.4s, v23.4s
-	addhn v30.4h, v30.4s, v31.4s
-	orr x0, x0, x17
 	ldr q9, [sp, #112]
+	addhn v30.4h, v30.4s, v31.4s
 	frecps v23.4s, v24.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
 	smull2 v29.4s, v16.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v9.4s
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	sshr v30.8h, v30.8h, #3
-	ldr q28, [x19, #64]
-	fmul v24.4s, v0.4s, v24.4s
-	fmul v17.4s, v17.4s, v23.4s
-	addhn2 v27.8h, v29.4s, v9.4s
 	add x26, x2, #32
-	orr v14.16b, v14.16b, v22.16b
-	fcvtzs v24.4s, v24.4s, #15
-	frecps v23.4s, v17.4s, v3.4s
-	csel x8, x5, x8, lo
-	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
+	sshr v30.8h, v30.8h, #3
+	subs x8, x8, #8
 	fmul v17.4s, v17.4s, v23.4s
-	and v27.16b, v27.16b, v28.16b
-	umull v29.4s, v27.4h, v15.h[6]
-	fmul v17.4s, v1.4s, v17.4s
-	umull2 v27.4s, v27.8h, v15.h[6]
-	uaddw v29.4s, v29.4s, v30.4h
-	fcvtzs v17.4s, v17.4s, #15
+	fmul v24.4s, v0.4s, v24.4s
+	addhn v27.4h, v27.4s, v9.4s
+	frecps v23.4s, v17.4s, v3.4s
+	fcvtzs v24.4s, v24.4s, #15
+	addhn2 v27.8h, v29.4s, v9.4s
+	ldr q28, [x19, #64]
+	fmul v17.4s, v17.4s, v23.4s
+	csel x26, x26, x2, hi
 	xtn v24.4h, v24.4s
+	and v30.16b, v30.16b, v28.16b
+	sshr v27.8h, v27.8h, #3
+	fmul v17.4s, v1.4s, v17.4s
+	sub x18, x26, #36, lsl #12
+	ldr q28, [x19, #80]
+	and v27.16b, v27.16b, v28.16b
+	fcvtzs v17.4s, v17.4s, #15
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
+	xtn2 v24.8h, v17.4s
+	prfm pstl1keep, [x18, #0]
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	csel x8, x8, xzr, hi
+	ldp q17, q23, [x26]
+	umov w16, v27.s[3]
+	umov w9, v29.s[0]
+	umov w13, v27.s[0]
 	umov w11, v29.s[2]
 	umov w10, v29.s[1]
-	umov w9, v29.s[0]
-	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn2 v24.8h, v17.4s
 	umov w12, v29.s[3]
-	ldrb w11, [x6, w11, uxtw]
-	umov w14, v27.s[1]
-	umov w13, v27.s[0]
+	fadd v0.4s, v0.4s, v4.4s
 	ldrb w9, [x6, w9, uxtw]
-	ldrb w10, [x6, w10, uxtw]
-	ldr w11, [x21, w11, uxtw #2]
-	umov w15, v27.s[2]
-	smull v25.4s, v24.4h, v6.h[0]
-	ldrb w12, [x6, w12, uxtw]
-	umov w16, v27.s[3]
+	umov w14, v27.s[1]
+	fadd v1.4s, v1.4s, v4.4s
 	ldrb w13, [x6, w13, uxtw]
+	umov w15, v27.s[2]
+	ldrb w11, [x6, w11, uxtw]
+	cmn x17, #1
+	ldrb w10, [x6, w10, uxtw]
 	fsub v3.4s, v3.4s, v5.4s
-	ldr w10, [x21, w10, uxtw #2]
 	ldr w9, [x21, w9, uxtw #2]
-	ldrb w15, [x6, w15, uxtw]
-	fsub v2.4s, v2.4s, v5.4s
-	ldrb w14, [x6, w14, uxtw]
-	subs x8, x8, #8
-	ldr w12, [x21, w12, uxtw #2]
-	stp w9, w10, [sp, #32]
+	ldrb w12, [x6, w12, uxtw]
+	smull v25.4s, v24.4h, v6.h[0]
 	ldrb w16, [x6, w16, uxtw]
 	smull2 v26.4s, v24.8h, v6.h[0]
+	ldr w10, [x21, w10, uxtw #2]
 	ldr w13, [x21, w13, uxtw #2]
-	csel x26, x26, x2, hi
-	ldr w15, [x21, w15, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldr w14, [x21, w14, uxtw #2]
-	csel x8, x8, xzr, hi
+	fsub v2.4s, v2.4s, v5.4s
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldr w11, [x21, w11, uxtw #2]
+	ldr w12, [x21, w12, uxtw #2]
 	ldr w16, [x21, w16, uxtw #2]
-	ldp q17, q23, [x26]
-	stp w15, w16, [sp, #56]
-	stp w13, w14, [sp, #48]
+	stp w9, w10, [sp, #32]
+	orr x0, x0, x17
+	ldr w14, [x21, w14, uxtw #2]
+	ldr w15, [x21, w15, uxtw #2]
+	stp w11, w12, [sp, #40]
+	sshr v26.4s, v26.4s, #15
+	bic v23.4s, #0xff, lsl #24
 	sshr v25.4s, v25.4s, #15
 	bic v17.4s, #0xff, lsl #24
-	sshr v26.4s, v26.4s, #15
+	stp w15, w16, [sp, #56]
 	add v25.4s, v25.4s, v7.4s
-	stp w11, w12, [sp, #40]
+	stp w13, w14, [sp, #48]
 	add v26.4s, v26.4s, v7.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fadd v1.4s, v1.4s, v4.4s
 	cmhi v17.4s, v17.4s, v25.4s
-	bic v23.4s, #0xff, lsl #24
-	cmhi v23.4s, v23.4s, v26.4s
 	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
+	cmhi v23.4s, v23.4s, v26.4s
+	xtn v31.8b, v30.8h
+	uaddl v16.8h, v10.8b, v29.8b
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
-	uaddl v8.8h, v11.8b, v27.8b
-	xtn v31.8b, v30.8h
-	xtn v29.8b, v29.8h
-	and v17.16b, v17.16b, v23.16b
-	uaddl v16.8h, v10.8b, v29.8b
 	uaddl v9.8h, v12.8b, v31.8b
-	cmn x17, #1
-	xtn v23.8b, v17.8h
 	umlal v16.8h, v10.8b, v29.8b
-	umlal v9.8h, v12.8b, v31.8b
-	umlal v8.8h, v11.8b, v27.8b
-	fmov x8, d23
-	shrn v28.8b, v16.8h, #6
-	ldr d16, [sp, #144]
+	uaddl v8.8h, v11.8b, v27.8b
 	shrn v30.8b, v30.8h, #8
+	and v17.16b, v17.16b, v23.16b
+	xtn v23.8b, v17.8h
+	orr v14.16b, v14.16b, v22.16b
+	shrn v28.8b, v16.8h, #6
+	umlal v8.8h, v11.8b, v27.8b
+	ldr d16, [sp, #144]
+	fmov x8, d23
+	umlal v9.8h, v12.8b, v31.8b
+	prfm pldl1keep, [x26, #6144]
 	orr v31.8b, v30.8b, v16.8b
 	ccmp x8, #0, #4, eq
-	shrn v30.8b, v9.8h, #6
 	shrn v29.8b, v8.8h, #6
+	shrn v30.8b, v9.8h, #6
 	orr v13.16b, v13.16b, v22.16b
 	b.eq 71f
 	subs x5, x5, #8
@@ -133691,9 +136008,12 @@ rast_kern_h14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -133805,113 +136125,116 @@ rast_kern_h14010:
 	b 85f
 81:
 	frecpe v16.4s, v2.4s
-	smull v30.4s, v24.4h, v15.h[4]
-	frecps v23.4s, v16.4s, v2.4s
-	ldr q31, [sp, #96]
-	cmp x5, #16
-	ldr q9, [sp, #112]
-	frecpe v17.4s, v3.4s
-	fmul v16.4s, v16.4s, v23.4s
-	smull2 v29.4s, v24.8h, v15.h[4]
-	addhn v30.4h, v30.4s, v31.4s
-	mov x17, #16
 	smull v27.4s, v24.4h, v15.h[5]
+	ldr q9, [sp, #112]
+	mov x17, #16
+	ldr q28, [x19, #64]
+	cmp x5, #16
 	frecps v23.4s, v16.4s, v2.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	add x26, x2, #32
-	smull2 v29.4s, v24.8h, v15.h[5]
-	addhn v27.4h, v27.4s, v9.4s
 	csel x17, x5, x17, lo
+	smull v30.4s, v24.4h, v15.h[4]
+	fmul v16.4s, v16.4s, v23.4s
+	ldr q31, [sp, #96]
+	frecpe v17.4s, v3.4s
+	frecps v23.4s, v16.4s, v2.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
+	addhn v27.4h, v27.4s, v9.4s
+	addhn v30.4h, v30.4s, v31.4s
 	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	addhn2 v27.8h, v29.4s, v9.4s
-	sshr v30.8h, v30.8h, #3
-	ldr q28, [x19, #64]
+	fsub v2.4s, v2.4s, v5.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	subs x17, x17, #8
 	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
-	sshr v27.8h, v27.8h, #3
+	smull2 v29.4s, v24.8h, v15.h[5]
+	add x26, x2, #32
+	csel x17, x17, xzr, hi
+	sshr v30.8h, v30.8h, #3
+	frecps v23.4s, v17.4s, v3.4s
+	addhn2 v27.8h, v29.4s, v9.4s
+	csel x26, x26, x2, hi
+	orr v26.16b, v26.16b, v22.16b
+	fcvtzs v16.4s, v16.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
+	sub x18, x26, #36, lsl #12
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
-	frecps v23.4s, v17.4s, v3.4s
-	subs x17, x17, #8
+	fmul v17.4s, v1.4s, v17.4s
+	sshr v27.8h, v27.8h, #3
+	xtn v16.4h, v16.4s
 	and v27.16b, v27.16b, v28.16b
-	fmul v17.4s, v17.4s, v23.4s
+	fcvtzs v17.4s, v17.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v17.4s, v1.4s, v17.4s
-	fcvtzs v16.4s, v16.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn v16.4h, v16.4s
-	umov w10, v29.s[1]
-	umov w13, v27.s[0]
-	umov w9, v29.s[0]
-	umov w14, v27.s[1]
-	umov w16, v27.s[3]
-	fadd v0.4s, v0.4s, v4.4s
-	umov w15, v27.s[2]
-	umov w11, v29.s[2]
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	fcvtzs v17.4s, v17.4s, #15
-	fadd v1.4s, v1.4s, v4.4s
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w16, [x6, w16, uxtw]
-	umov w12, v29.s[3]
-	fsub v2.4s, v2.4s, v5.4s
-	ldrb w11, [x6, w11, uxtw]
-	csel x26, x26, x2, hi
 	xtn2 v16.8h, v17.4s
-	ldrb w14, [x6, w14, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	stp w9, w10, [sp, #32]
-	smull v13.4s, v16.4h, v6.h[0]
-	ldrb w15, [x6, w15, uxtw]
+	uaddw v29.4s, v29.4s, v30.4h
+	prfm pstl1keep, [x18, #0]
+	uaddw2 v27.4s, v27.4s, v30.8h
 	ldp q17, q23, [x26]
-	csel x17, x17, xzr, hi
-	stp w13, w14, [sp, #48]
-	stp w11, w12, [sp, #40]
-	smull2 v14.4s, v16.8h, v6.h[0]
-	stp w15, w16, [sp, #56]
-	fsub v3.4s, v3.4s, v5.4s
-	ld2 {v29.8h, v30.8h}, [x28]
-	bic v17.4s, #0xff, lsl #24
-	sshr v14.4s, v14.4s, #15
-	xtn v29.8b, v29.8h
+	umov w12, v29.s[3]
+	umov w10, v29.s[1]
+	umov w9, v29.s[0]
+	umov w11, v29.s[2]
+	smull v13.4s, v16.4h, v6.h[0]
+	umov w14, v27.s[1]
+	fadd v1.4s, v1.4s, v4.4s
+	umov w15, v27.s[2]
+	ldrb w12, [x6, w12, uxtw]
+	umov w13, v27.s[0]
+	ldrb w11, [x6, w11, uxtw]
 	orr x0, x0, x8
+	ldrb w10, [x6, w10, uxtw]
+	umov w16, v27.s[3]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w15, [x6, w15, uxtw]
+	smull2 v14.4s, v16.8h, v6.h[0]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	ldrb w16, [x6, w16, uxtw]
+	stp w9, w10, [sp, #32]
+	stp w11, w12, [sp, #40]
 	sshr v13.4s, v13.4s, #15
-	tbl v30.8b, {v21.16b}, v29.8b
+	sshr v14.4s, v14.4s, #15
+	bic v17.4s, #0xff, lsl #24
+	stp w13, w14, [sp, #48]
+	bic v23.4s, #0xff, lsl #24
+	stp w15, w16, [sp, #56]
+	add v14.4s, v14.4s, v7.4s
+	ld2 {v29.8h, v30.8h}, [x28]
+	fsub v3.4s, v3.4s, v5.4s
+	cmhi v23.4s, v23.4s, v14.4s
+	add v13.4s, v13.4s, v7.4s
+	xtn v29.8b, v29.8h
 	tbl v27.8b, {v19.16b}, v29.8b
 	tbl v31.8b, {v20.16b}, v29.8b
+	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v29.8b, {v18.16b}, v29.8b
-	add v13.4s, v13.4s, v7.4s
-	bic v23.4s, #0xff, lsl #24
-	uaddl v9.8h, v12.8b, v31.8b
-	uaddl v24.8h, v10.8b, v29.8b
-	add v14.4s, v14.4s, v7.4s
-	umlal v9.8h, v12.8b, v31.8b
-	umlal v24.8h, v10.8b, v29.8b
-	uaddl v8.8h, v11.8b, v27.8b
-	cmhi v23.4s, v23.4s, v14.4s
 	cmhi v17.4s, v17.4s, v13.4s
-	shrn v28.8b, v24.8h, #6
-	ldr d24, [sp, #144]
+	prfm pldl1keep, [x26, #6144]
+	fadd v0.4s, v0.4s, v4.4s
+	uaddl v24.8h, v10.8b, v29.8b
+	uaddl v9.8h, v12.8b, v31.8b
+	cmn x8, #1
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x17, lsl #4]
-	umlal v8.8h, v11.8b, v27.8b
+	umlal v24.8h, v10.8b, v29.8b
+	umlal v9.8h, v12.8b, v31.8b
+	uaddl v8.8h, v11.8b, v27.8b
 	and v17.16b, v17.16b, v23.16b
-	cmn x8, #1
+	shrn v28.8b, v24.8h, #6
 	xtn v23.8b, v17.8h
-	orr v31.8b, v30.8b, v24.8b
-	shrn v29.8b, v8.8h, #6
+	ldr d24, [sp, #144]
+	umlal v8.8h, v11.8b, v27.8b
 	fmov x17, d23
 	orr v25.16b, v25.16b, v22.16b
-	shrn v30.8b, v9.8h, #6
-	orr v26.16b, v26.16b, v22.16b
+	orr v31.8b, v30.8b, v24.8b
+	shrn v29.8b, v8.8h, #6
 	ccmp x17, #0, #4, eq
+	shrn v30.8b, v9.8h, #6
 	b.eq 91f
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	stp q25, q26, [x2]
 	str x8, [x3], #8
 	b.ls 89f
@@ -133919,113 +136242,116 @@ rast_kern_h14010:
 	add x2, x2, #32
 83:
 	frecpe v24.4s, v2.4s
-	smull v27.4s, v16.4h, v15.h[5]
-	ldr q9, [sp, #112]
-	smull2 v29.4s, v16.8h, v15.h[4]
-	frecps v23.4s, v24.4s, v2.4s
 	ldr q31, [sp, #96]
-	mov x8, #16
 	smull v30.4s, v16.4h, v15.h[4]
-	frecpe v17.4s, v3.4s
-	fmul v24.4s, v24.4s, v23.4s
-	addhn v30.4h, v30.4s, v31.4s
-	frecps v23.4s, v24.4s, v2.4s
-	addhn v27.4h, v27.4s, v9.4s
-	addhn2 v30.8h, v29.4s, v31.4s
 	cmp x5, #16
-	smull2 v29.4s, v16.8h, v15.h[5]
+	mov x8, #16
+	frecps v23.4s, v24.4s, v2.4s
+	addhn v30.4h, v30.4s, v31.4s
+	csel x8, x5, x8, lo
+	fmul v24.4s, v24.4s, v23.4s
+	smull2 v29.4s, v16.8h, v15.h[4]
+	subs x8, x8, #8
+	add x26, x2, #32
+	ldr q9, [sp, #112]
+	orr x0, x0, x17
+	frecps v23.4s, v24.4s, v2.4s
+	frecpe v17.4s, v3.4s
+	addhn2 v30.8h, v29.4s, v31.4s
+	smull v27.4s, v16.4h, v15.h[5]
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	ldr q28, [x19, #64]
-	addhn2 v27.8h, v29.4s, v9.4s
+	smull2 v29.4s, v16.8h, v15.h[5]
+	addhn v27.4h, v27.4s, v9.4s
 	fmul v24.4s, v0.4s, v24.4s
 	fmul v17.4s, v17.4s, v23.4s
-	csel x8, x5, x8, lo
-	add x26, x2, #32
+	addhn2 v27.8h, v29.4s, v9.4s
+	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	orr v14.16b, v14.16b, v22.16b
-	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
 	frecps v23.4s, v17.4s, v3.4s
+	csel x26, x26, x2, hi
+	and v30.16b, v30.16b, v28.16b
+	fmul v17.4s, v17.4s, v23.4s
+	csel x8, x8, xzr, hi
+	fcvtzs v24.4s, v24.4s, #15
+	sshr v27.8h, v27.8h, #3
+	sub x18, x26, #36, lsl #12
+	fmul v17.4s, v1.4s, v17.4s
+	ldr q28, [x19, #80]
+	xtn v24.4h, v24.4s
 	and v27.16b, v27.16b, v28.16b
-	subs x8, x8, #8
+	fcvtzs v17.4s, v17.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	fmul v17.4s, v17.4s, v23.4s
-	fcvtzs v24.4s, v24.4s, #15
+	prfm pldl1keep, [x26, #6144]
+	xtn2 v24.8h, v17.4s
+	prfm pstl1keep, [x18, #0]
 	uaddw v29.4s, v29.4s, v30.4h
 	uaddw2 v27.4s, v27.4s, v30.8h
-	fmul v17.4s, v1.4s, v17.4s
-	umov w10, v29.s[1]
-	umov w16, v27.s[3]
-	umov w11, v29.s[2]
-	umov w13, v27.s[0]
-	umov w12, v29.s[3]
-	umov w15, v27.s[2]
-	umov w14, v27.s[1]
+	ldp q17, q23, [x26]
 	umov w9, v29.s[0]
-	ldrb w10, [x6, w10, uxtw]
+	umov w16, v27.s[3]
+	umov w13, v27.s[0]
+	umov w10, v29.s[1]
 	fadd v1.4s, v1.4s, v4.4s
+	umov w11, v29.s[2]
+	smull v25.4s, v24.4h, v6.h[0]
+	umov w14, v27.s[1]
+	ldrb w9, [x6, w9, uxtw]
+	fsub v2.4s, v2.4s, v5.4s
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w10, [x6, w10, uxtw]
+	umov w15, v27.s[2]
+	umov w12, v29.s[3]
 	ldrb w11, [x6, w11, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	ldrb w14, [x6, w14, uxtw]
 	fsub v3.4s, v3.4s, v5.4s
 	ldrb w16, [x6, w16, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	xtn v24.4h, v24.4s
-	ldrb w12, [x6, w12, uxtw]
-	fcvtzs v17.4s, v17.4s, #15
-	ldrb w9, [x6, w9, uxtw]
 	ldrb w15, [x6, w15, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	csel x26, x26, x2, hi
-	stp w11, w12, [sp, #40]
 	stp w9, w10, [sp, #32]
-	xtn2 v24.8h, v17.4s
-	fadd v0.4s, v0.4s, v4.4s
-	stp w15, w16, [sp, #56]
+	ldrb w12, [x6, w12, uxtw]
 	stp w13, w14, [sp, #48]
-	ld2 {v29.8h, v30.8h}, [x28]
-	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q17, q23, [x26]
-	smull v25.4s, v24.4h, v6.h[0]
-	xtn v29.8b, v29.8h
-	bic v17.4s, #0xff, lsl #24
-	sshr v26.4s, v26.4s, #15
+	cmn x17, #1
 	sshr v25.4s, v25.4s, #15
 	bic v23.4s, #0xff, lsl #24
-	tbl v31.8b, {v20.16b}, v29.8b
-	tbl v27.8b, {v19.16b}, v29.8b
-	add v26.4s, v26.4s, v7.4s
-	tbl v30.8b, {v21.16b}, v29.8b
-	tbl v29.8b, {v18.16b}, v29.8b
-	uaddl v9.8h, v12.8b, v31.8b
-	uaddl v8.8h, v11.8b, v27.8b
+	stp w15, w16, [sp, #56]
+	stp w11, w12, [sp, #40]
+	ld2 {v29.8h, v30.8h}, [x28]
+	fadd v0.4s, v0.4s, v4.4s
 	add v25.4s, v25.4s, v7.4s
-	uaddl v16.8h, v10.8b, v29.8b
-	csel x8, x8, xzr, hi
-	umlal v8.8h, v11.8b, v27.8b
-	umlal v9.8h, v12.8b, v31.8b
-	umlal v16.8h, v10.8b, v29.8b
-	cmhi v23.4s, v23.4s, v26.4s
+	sshr v26.4s, v26.4s, #15
+	add v26.4s, v26.4s, v7.4s
+	xtn v29.8b, v29.8h
+	bic v17.4s, #0xff, lsl #24
+	tbl v30.8b, {v21.16b}, v29.8b
+	tbl v27.8b, {v19.16b}, v29.8b
+	tbl v31.8b, {v20.16b}, v29.8b
+	tbl v29.8b, {v18.16b}, v29.8b
 	cmhi v17.4s, v17.4s, v25.4s
-	orr v13.16b, v13.16b, v22.16b
+	cmhi v23.4s, v23.4s, v26.4s
+	uaddl v16.8h, v10.8b, v29.8b
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
-	shrn v28.8b, v16.8h, #6
-	ldr d16, [sp, #144]
+	uaddl v9.8h, v12.8b, v31.8b
+	uaddl v8.8h, v11.8b, v27.8b
+	umlal v16.8h, v10.8b, v29.8b
+	umlal v9.8h, v12.8b, v31.8b
+	umlal v8.8h, v11.8b, v27.8b
 	and v17.16b, v17.16b, v23.16b
-	shrn v29.8b, v8.8h, #6
+	shrn v28.8b, v16.8h, #6
 	xtn v23.8b, v17.8h
-	orr v31.8b, v30.8b, v16.8b
-	cmn x17, #1
+	ldr d16, [sp, #144]
+	orr v14.16b, v14.16b, v22.16b
 	fmov x8, d23
+	orr v31.8b, v30.8b, v16.8b
+	shrn v29.8b, v8.8h, #6
 	shrn v30.8b, v9.8h, #6
-	fsub v2.4s, v2.4s, v5.4s
 	ccmp x8, #0, #4, eq
-	orr x0, x0, x17
+	orr v13.16b, v13.16b, v22.16b
 	b.eq 101f
-	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	subs x5, x5, #8
+	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
 	stp q13, q14, [x2]
 	str x17, [x3], #8
 	b.ls 89f
@@ -134046,9 +136372,12 @@ rast_kern_h14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -134160,109 +136489,112 @@ rast_kern_h14010:
 	b 125f
 121:
 	frecpe v16.4s, v2.4s
-	frecpe v17.4s, v3.4s
 	smull v30.4s, v24.4h, v15.h[4]
+	add x26, x2, #32
+	ldr q28, [x19, #64]
 	ldr q31, [sp, #96]
 	frecps v23.4s, v16.4s, v2.4s
-	cmp x5, #16
+	smull v27.4s, v24.4h, v15.h[5]
 	smull2 v29.4s, v24.8h, v15.h[4]
 	addhn v30.4h, v30.4s, v31.4s
+	cmp x5, #16
 	fmul v16.4s, v16.4s, v23.4s
+	frecpe v17.4s, v3.4s
+	ldr q9, [sp, #112]
 	mov x17, #16
 	addhn2 v30.8h, v29.4s, v31.4s
-	smull v27.4s, v24.4h, v15.h[5]
 	frecps v23.4s, v16.4s, v2.4s
-	ldr q9, [sp, #112]
-	orr x0, x0, x8
+	csel x17, x5, x17, lo
 	smull2 v29.4s, v24.8h, v15.h[5]
 	fmul v16.4s, v16.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
 	addhn v27.4h, v27.4s, v9.4s
 	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
-	csel x17, x5, x17, lo
-	sshr v30.8h, v30.8h, #3
-	ldr q28, [x19, #64]
-	addhn2 v27.8h, v29.4s, v9.4s
-	fcvtzs v16.4s, v16.4s, #15
-	frecps v23.4s, v17.4s, v3.4s
-	add x26, x2, #32
+	ldr d24, [sp, #144]
 	subs x17, x17, #8
+	sshr v30.8h, v30.8h, #3
+	frecps v23.4s, v17.4s, v3.4s
+	addhn2 v27.8h, v29.4s, v9.4s
+	csel x26, x26, x2, hi
+	orr v25.16b, v25.16b, v22.16b
+	fmul v17.4s, v17.4s, v23.4s
 	sshr v27.8h, v27.8h, #3
 	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	fmul v17.4s, v17.4s, v23.4s
-	and v27.16b, v27.16b, v28.16b
-	csel x26, x26, x2, hi
+	fcvtzs v16.4s, v16.4s, #15
 	fmul v17.4s, v1.4s, v17.4s
-	umull v29.4s, v27.4h, v15.h[6]
-	fadd v1.4s, v1.4s, v4.4s
-	umull2 v27.4s, v27.8h, v15.h[6]
-	fcvtzs v17.4s, v17.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
+	ldr q28, [x19, #80]
 	xtn v16.4h, v16.4s
-	uaddw2 v27.4s, v27.4s, v30.8h
-	ldr d24, [sp, #144]
+	and v27.16b, v27.16b, v28.16b
+	fcvtzs v17.4s, v17.4s, #15
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
+	orr x0, x0, x8
 	xtn2 v16.8h, v17.4s
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	prfm pldl1keep, [x26, #6144]
 	ldp q17, q23, [x26]
-	umov w13, v27.s[0]
 	umov w11, v29.s[2]
+	umov w15, v27.s[2]
 	umov w16, v27.s[3]
-	umov w10, v29.s[1]
+	umov w12, v29.s[3]
+	umov w9, v29.s[0]
+	umov w13, v27.s[0]
+	sub x18, x26, #36, lsl #12
 	umov w14, v27.s[1]
 	smull2 v14.4s, v16.8h, v6.h[0]
-	umov w9, v29.s[0]
-	smull v13.4s, v16.4h, v6.h[0]
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	fsub v3.4s, v3.4s, v5.4s
 	ldrb w11, [x6, w11, uxtw]
-	umov w15, v27.s[2]
-	ldrb w13, [x6, w13, uxtw]
-	ldrb w14, [x6, w14, uxtw]
+	fadd v0.4s, v0.4s, v4.4s
 	ldrb w16, [x6, w16, uxtw]
-	umov w12, v29.s[3]
+	ldrb w9, [x6, w9, uxtw]
+	ldrb w13, [x6, w13, uxtw]
+	umov w10, v29.s[1]
+	ldrb w14, [x6, w14, uxtw]
+	ldr w12, [x21, w12, uxtw #2]
+	smull v13.4s, v16.4h, v6.h[0]
+	ldr w9, [x21, w9, uxtw #2]
+	ldr w11, [x21, w11, uxtw #2]
+	ldrb w10, [x6, w10, uxtw]
+	prfm pstl1keep, [x18, #0]
 	sshr v14.4s, v14.4s, #15
 	sshr v13.4s, v13.4s, #15
-	bic v23.4s, #0xff, lsl #24
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w12, [x6, w12, uxtw]
-	ldr w11, [x21, w11, uxtw #2]
-	ldr w14, [x21, w14, uxtw #2]
-	ldr w13, [x21, w13, uxtw #2]
-	fsub v3.4s, v3.4s, v5.4s
+	bic v17.4s, #0xff, lsl #24
+	ldr w15, [x21, w15, uxtw #2]
 	ldr w10, [x21, w10, uxtw #2]
-	ldr w12, [x21, w12, uxtw #2]
-	fadd v0.4s, v0.4s, v4.4s
-	ldrb w15, [x6, w15, uxtw]
+	ldr w13, [x21, w13, uxtw #2]
+	ldr w14, [x21, w14, uxtw #2]
+	add v13.4s, v13.4s, v7.4s
 	ldr w16, [x21, w16, uxtw #2]
-	fsub v2.4s, v2.4s, v5.4s
-	ldr w9, [x21, w9, uxtw #2]
+	stp w11, w12, [sp, #40]
 	csel x17, x17, xzr, hi
 	add v14.4s, v14.4s, v7.4s
-	ldr w15, [x21, w15, uxtw #2]
 	stp w13, w14, [sp, #48]
-	cmhi v23.4s, v23.4s, v14.4s
+	bic v23.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
-	add v13.4s, v13.4s, v7.4s
-	stp w11, w12, [sp, #40]
-	bic v17.4s, #0xff, lsl #24
+	cmhi v23.4s, v23.4s, v14.4s
 	stp w15, w16, [sp, #56]
 	cmhi v17.4s, v17.4s, v13.4s
 	ld2 {v29.8h, v30.8h}, [x28]
+	fsub v2.4s, v2.4s, v5.4s
 	uzp1 v17.8h, v17.8h, v23.8h
-	cmn x8, #1
 	ldr q23, [x20, x17, lsl #4]
-	xtn v31.8b, v30.8h
+	fadd v1.4s, v1.4s, v4.4s
 	shrn v27.8b, v29.8h, #8
+	xtn v31.8b, v30.8h
 	and v17.16b, v17.16b, v23.16b
-	xtn v29.8b, v29.8h
-	xtn v23.8b, v17.8h
-	mov v28.8b, v29.8b
 	shrn v30.8b, v30.8h, #8
+	xtn v23.8b, v17.8h
 	ushll v9.8h, v31.8b, #6
+	xtn v29.8b, v29.8h
+	cmn x8, #1
 	fmov x17, d23
-	orr v25.16b, v25.16b, v22.16b
-	orr v31.8b, v30.8b, v24.8b
+	mov v28.8b, v29.8b
 	mov v29.8b, v27.8b
+	orr v31.8b, v30.8b, v24.8b
 	ccmp x17, #0, #4, eq
 	shrn v30.8b, v9.8h, #6
 	orr v26.16b, v26.16b, v22.16b
@@ -134276,109 +136608,112 @@ rast_kern_h14010:
 	add x2, x2, #32
 123:
 	frecpe v24.4s, v2.4s
-	cmp x5, #16
-	frecpe v17.4s, v3.4s
-	ldr q9, [sp, #112]
+	smull v27.4s, v16.4h, v15.h[5]
+	smull v30.4s, v16.4h, v15.h[4]
+	ldr q31, [sp, #96]
 	mov x8, #16
 	frecps v23.4s, v24.4s, v2.4s
-	ldr q31, [sp, #96]
-	smull v30.4s, v16.4h, v15.h[4]
-	smull v27.4s, v16.4h, v15.h[5]
-	fmul v24.4s, v24.4s, v23.4s
 	smull2 v29.4s, v16.8h, v15.h[4]
+	cmp x5, #16
+	ldr q28, [x19, #64]
 	addhn v30.4h, v30.4s, v31.4s
-	frecps v23.4s, v24.4s, v2.4s
-	addhn v27.4h, v27.4s, v9.4s
-	add x26, x2, #32
+	ldr q9, [sp, #112]
+	fmul v24.4s, v24.4s, v23.4s
+	frecpe v17.4s, v3.4s
+	csel x8, x5, x8, lo
 	addhn2 v30.8h, v29.4s, v31.4s
-	smull2 v29.4s, v16.8h, v15.h[5]
+	add x26, x2, #32
+	frecps v23.4s, v24.4s, v2.4s
+	orr v13.16b, v13.16b, v22.16b
+	subs x8, x8, #8
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
+	addhn v27.4h, v27.4s, v9.4s
+	csel x8, x8, xzr, hi
+	smull2 v29.4s, v16.8h, v15.h[5]
 	fmul v24.4s, v0.4s, v24.4s
 	fmul v17.4s, v17.4s, v23.4s
-	ldr q28, [x19, #64]
 	sshr v30.8h, v30.8h, #3
-	addhn2 v27.8h, v29.4s, v9.4s
-	fcvtzs v24.4s, v24.4s, #15
 	frecps v23.4s, v17.4s, v3.4s
-	ldr d16, [sp, #144]
-	csel x8, x5, x8, lo
-	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	fmul v17.4s, v17.4s, v23.4s
+	fcvtzs v24.4s, v24.4s, #15
+	addhn2 v27.8h, v29.4s, v9.4s
 	orr x0, x0, x17
+	and v30.16b, v30.16b, v28.16b
+	ldr d16, [sp, #144]
+	fmul v17.4s, v17.4s, v23.4s
+	fsub v3.4s, v3.4s, v5.4s
+	csel x26, x26, x2, hi
+	ldr q28, [x19, #80]
+	sshr v27.8h, v27.8h, #3
+	fmul v17.4s, v1.4s, v17.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v24.4h, v24.4s
-	fmul v17.4s, v1.4s, v17.4s
+	fcvtzs v17.4s, v17.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	subs x8, x8, #8
-	fadd v1.4s, v1.4s, v4.4s
-	fcvtzs v17.4s, v17.4s, #15
-	uaddw2 v27.4s, v27.4s, v30.8h
-	csel x26, x26, x2, hi
-	uaddw v29.4s, v29.4s, v30.4h
+	sub x18, x26, #36, lsl #12
 	xtn2 v24.8h, v17.4s
-	ldp q17, q23, [x26]
-	umov w16, v27.s[3]
-	umov w11, v29.s[2]
-	umov w10, v29.s[1]
-	umov w9, v29.s[0]
-	umov w13, v27.s[0]
-	umov w15, v27.s[2]
-	ldrb w11, [x6, w11, uxtw]
-	umov w14, v27.s[1]
-	smull2 v26.4s, v24.8h, v6.h[0]
-	ldrb w10, [x6, w10, uxtw]
-	umov w12, v29.s[3]
-	ldrb w9, [x6, w9, uxtw]
-	ldrb w15, [x6, w15, uxtw]
-	ldrb w14, [x6, w14, uxtw]
-	fadd v0.4s, v0.4s, v4.4s
-	ldrb w16, [x6, w16, uxtw]
-	ldr w10, [x21, w10, uxtw #2]
-	smull v25.4s, v24.4h, v6.h[0]
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w13, [x6, w13, uxtw]
-	csel x8, x8, xzr, hi
-	ldr w16, [x21, w16, uxtw #2]
 	cmn x17, #1
-	ldr w15, [x21, w15, uxtw #2]
-	ldr w12, [x21, w12, uxtw #2]
-	ldr w9, [x21, w9, uxtw #2]
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldp q17, q23, [x26]
+	umov w11, v29.s[2]
+	umov w13, v27.s[0]
+	umov w9, v29.s[0]
+	umov w12, v29.s[3]
+	smull v25.4s, v24.4h, v6.h[0]
+	umov w10, v29.s[1]
+	umov w15, v27.s[2]
+	ldrb w13, [x6, w13, uxtw]
+	ldrb w9, [x6, w9, uxtw]
+	umov w14, v27.s[1]
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	umov w16, v27.s[3]
+	ldrb w10, [x6, w10, uxtw]
 	ldr w13, [x21, w13, uxtw #2]
-	stp w15, w16, [sp, #56]
+	fsub v2.4s, v2.4s, v5.4s
+	ldrb w15, [x6, w15, uxtw]
+	ldrb w16, [x6, w16, uxtw]
+	ldrb w14, [x6, w14, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
 	ldr w11, [x21, w11, uxtw #2]
+	ldr w10, [x21, w10, uxtw #2]
+	ldr w16, [x21, w16, uxtw #2]
 	ldr w14, [x21, w14, uxtw #2]
-	sshr v25.4s, v25.4s, #15
+	ldr w9, [x21, w9, uxtw #2]
+	fadd v1.4s, v1.4s, v4.4s
+	ldr w15, [x21, w15, uxtw #2]
+	fadd v0.4s, v0.4s, v4.4s
+	ldr w12, [x21, w12, uxtw #2]
+	prfm pstl1keep, [x18, #0]
 	sshr v26.4s, v26.4s, #15
+	sshr v25.4s, v25.4s, #15
 	bic v23.4s, #0xff, lsl #24
-	stp w9, w10, [sp, #32]
-	add v26.4s, v26.4s, v7.4s
 	stp w13, w14, [sp, #48]
 	add v25.4s, v25.4s, v7.4s
+	stp w9, w10, [sp, #32]
+	add v26.4s, v26.4s, v7.4s
 	stp w11, w12, [sp, #40]
 	bic v17.4s, #0xff, lsl #24
+	stp w15, w16, [sp, #56]
 	cmhi v17.4s, v17.4s, v25.4s
 	cmhi v23.4s, v23.4s, v26.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	fsub v3.4s, v3.4s, v5.4s
 	uzp1 v17.8h, v17.8h, v23.8h
 	ldr q23, [x20, x8, lsl #4]
-	shrn v27.8b, v29.8h, #8
+	prfm pldl1keep, [x26, #6144]
 	xtn v31.8b, v30.8h
 	and v17.16b, v17.16b, v23.16b
-	xtn v29.8b, v29.8h
 	xtn v23.8b, v17.8h
-	mov v28.8b, v29.8b
-	shrn v30.8b, v30.8h, #8
-	orr v13.16b, v13.16b, v22.16b
-	fmov x8, d23
+	shrn v27.8b, v29.8h, #8
+	xtn v29.8b, v29.8h
 	ushll v9.8h, v31.8b, #6
-	orr v31.8b, v30.8b, v16.8b
+	fmov x8, d23
+	shrn v30.8b, v30.8h, #8
+	mov v28.8b, v29.8b
 	mov v29.8b, v27.8b
+	orr v31.8b, v30.8b, v16.8b
 	ccmp x8, #0, #4, eq
 	shrn v30.8b, v9.8h, #6
 	orr v14.16b, v14.16b, v22.16b
@@ -134405,9 +136740,12 @@ rast_kern_h14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -134519,105 +136857,108 @@ rast_kern_h14010:
 	b 155f
 151:
 	frecpe v16.4s, v2.4s
-	ldr q31, [sp, #96]
-	smull v27.4s, v24.4h, v15.h[5]
+	cmp x5, #16
 	mov x17, #16
+	smull v30.4s, v24.4h, v15.h[4]
+	ldr q31, [sp, #96]
 	frecps v23.4s, v16.4s, v2.4s
 	ldr q9, [sp, #112]
-	ldr q28, [x19, #64]
-	cmp x5, #16
-	fmul v16.4s, v16.4s, v23.4s
-	smull v30.4s, v24.4h, v15.h[4]
-	addhn v27.4h, v27.4s, v9.4s
-	csel x17, x5, x17, lo
-	smull2 v29.4s, v24.8h, v15.h[4]
-	frecps v23.4s, v16.4s, v2.4s
-	frecpe v17.4s, v3.4s
-	fsub v2.4s, v2.4s, v5.4s
+	orr x0, x0, x8
 	addhn v30.4h, v30.4s, v31.4s
 	fmul v16.4s, v16.4s, v23.4s
-	frecps v23.4s, v17.4s, v3.4s
+	smull2 v29.4s, v24.8h, v15.h[4]
+	smull v27.4s, v24.4h, v15.h[5]
+	frecpe v17.4s, v3.4s
+	frecps v23.4s, v16.4s, v2.4s
 	addhn2 v30.8h, v29.4s, v31.4s
+	addhn v27.4h, v27.4s, v9.4s
 	add x26, x2, #32
 	smull2 v29.4s, v24.8h, v15.h[5]
+	fmul v16.4s, v16.4s, v23.4s
+	frecps v23.4s, v17.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	addhn2 v27.8h, v29.4s, v9.4s
+	ldr q28, [x19, #64]
 	fmul v16.4s, v0.4s, v16.4s
 	fmul v17.4s, v17.4s, v23.4s
-	sshr v30.8h, v30.8h, #3
-	subs x17, x17, #8
-	addhn2 v27.8h, v29.4s, v9.4s
-	frecps v23.4s, v17.4s, v3.4s
-	csel x17, x17, xzr, hi
+	csel x17, x5, x17, lo
 	sshr v27.8h, v27.8h, #3
+	sshr v30.8h, v30.8h, #3
+	frecps v23.4s, v17.4s, v3.4s
+	fcvtzs v16.4s, v16.4s, #15
 	and v30.16b, v30.16b, v28.16b
 	ldr q28, [x19, #80]
 	fmul v17.4s, v17.4s, v23.4s
-	and v27.16b, v27.16b, v28.16b
-	fcvtzs v16.4s, v16.4s, #15
-	fmul v17.4s, v1.4s, v17.4s
-	umull v29.4s, v27.4h, v15.h[6]
-	fadd v1.4s, v1.4s, v4.4s
-	umull2 v27.4s, v27.8h, v15.h[6]
-	csel x26, x26, x2, hi
-	fcvtzs v17.4s, v17.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
-	xtn v16.4h, v16.4s
-	uaddw2 v27.4s, v27.4s, v30.8h
-	xtn2 v16.8h, v17.4s
 	ldr d24, [sp, #144]
-	ldp q17, q23, [x26]
+	subs x17, x17, #8
+	xtn v16.4h, v16.4s
+	and v27.16b, v27.16b, v28.16b
+	umull v29.4s, v27.4h, v15.h[6]
+	umull2 v27.4s, v27.8h, v15.h[6]
+	fmul v17.4s, v1.4s, v17.4s
+	csel x26, x26, x2, hi
+	uaddw v29.4s, v29.4s, v30.4h
+	uaddw2 v27.4s, v27.4s, v30.8h
+	sub x18, x26, #36, lsl #12
+	fcvtzs v17.4s, v17.4s, #15
+	umov w10, v29.s[1]
+	umov w12, v29.s[3]
+	umov w16, v27.s[3]
+	umov w11, v29.s[2]
 	umov w13, v27.s[0]
 	umov w9, v29.s[0]
-	smull v13.4s, v16.4h, v6.h[0]
-	umov w10, v29.s[1]
+	prfm pstl1keep, [x18, #0]
+	xtn2 v16.8h, v17.4s
+	ldrb w10, [x6, w10, uxtw]
+	ldrb w16, [x6, w16, uxtw]
 	umov w14, v27.s[1]
-	orr x0, x0, x8
-	umov w16, v27.s[3]
 	ldrb w9, [x6, w9, uxtw]
 	umov w15, v27.s[2]
 	smull2 v14.4s, v16.8h, v6.h[0]
-	ldrb w10, [x6, w10, uxtw]
-	fadd v0.4s, v0.4s, v4.4s
 	ldrb w13, [x6, w13, uxtw]
-	ldrb w16, [x6, w16, uxtw]
-	umov w12, v29.s[3]
-	umov w11, v29.s[2]
+	ldrb w12, [x6, w12, uxtw]
+	smull v13.4s, v16.4h, v6.h[0]
 	ldrb w14, [x6, w14, uxtw]
+	ldrb w11, [x6, w11, uxtw]
 	fsub v3.4s, v3.4s, v5.4s
 	ldrb w15, [x6, w15, uxtw]
-	sshr v13.4s, v13.4s, #15
-	sshr v14.4s, v14.4s, #15
-	orr v25.16b, v25.16b, v22.16b
-	ldrb w12, [x6, w12, uxtw]
-	ldrb w11, [x6, w11, uxtw]
+	ldp q17, q23, [x26]
 	stp w13, w14, [sp, #48]
-	add v13.4s, v13.4s, v7.4s
+	fadd v1.4s, v1.4s, v4.4s
+	stp w11, w12, [sp, #40]
 	stp w15, w16, [sp, #56]
+	csel x17, x17, xzr, hi
+	sshr v14.4s, v14.4s, #15
+	sshr v13.4s, v13.4s, #15
+	bic v17.4s, #0xff, lsl #24
 	bic v23.4s, #0xff, lsl #24
 	stp w9, w10, [sp, #32]
-	add v14.4s, v14.4s, v7.4s
-	stp w11, w12, [sp, #40]
-	bic v17.4s, #0xff, lsl #24
+	add v13.4s, v13.4s, v7.4s
 	ld2 {v29.8h, v30.8h}, [x28]
-	cmhi v17.4s, v17.4s, v13.4s
+	fadd v0.4s, v0.4s, v4.4s
+	add v14.4s, v14.4s, v7.4s
 	cmhi v23.4s, v23.4s, v14.4s
 	xtn v29.8b, v29.8h
-	uzp1 v17.8h, v17.8h, v23.8h
-	ldr q23, [x20, x17, lsl #4]
-	tbl v31.8b, {v20.16b}, v29.8b
-	tbl v30.8b, {v21.16b}, v29.8b
+	cmhi v17.4s, v17.4s, v13.4s
 	tbl v27.8b, {v19.16b}, v29.8b
+	uzp1 v17.8h, v17.8h, v23.8h
+	tbl v31.8b, {v20.16b}, v29.8b
+	ldr q23, [x20, x17, lsl #4]
+	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v29.8b, {v18.16b}, v29.8b
+	prfm pldl1keep, [x26, #6144]
 	cmn x8, #1
+	ushll v9.8h, v31.8b, #6
 	and v17.16b, v17.16b, v23.16b
 	xtn v23.8b, v17.8h
-	mov v28.8b, v29.8b
-	fmov x17, d23
-	ushll v9.8h, v31.8b, #6
 	orr v31.8b, v30.8b, v24.8b
+	orr v26.16b, v26.16b, v22.16b
+	fmov x17, d23
+	mov v28.8b, v29.8b
 	mov v29.8b, v27.8b
+	orr v25.16b, v25.16b, v22.16b
 	ccmp x17, #0, #4, eq
 	shrn v30.8b, v9.8h, #6
-	orr v26.16b, v26.16b, v22.16b
 	b.eq 161f
 	subs x5, x5, #8
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -134628,105 +136969,108 @@ rast_kern_h14010:
 	add x2, x2, #32
 153:
 	frecpe v24.4s, v2.4s
-	ldr q31, [sp, #96]
-	smull v30.4s, v16.4h, v15.h[4]
-	ldr q9, [sp, #112]
-	cmp x5, #16
-	frecps v23.4s, v24.4s, v2.4s
-	smull2 v29.4s, v16.8h, v15.h[4]
-	fmul v24.4s, v24.4s, v23.4s
-	addhn v30.4h, v30.4s, v31.4s
 	mov x8, #16
-	orr v13.16b, v13.16b, v22.16b
+	cmp x5, #16
+	smull v30.4s, v16.4h, v15.h[4]
 	frecps v23.4s, v24.4s, v2.4s
 	frecpe v17.4s, v3.4s
-	addhn2 v30.8h, v29.4s, v31.4s
-	ldr q28, [x19, #64]
+	ldr q9, [sp, #112]
+	fmul v24.4s, v24.4s, v23.4s
+	ldr q31, [sp, #96]
+	csel x8, x5, x8, lo
 	smull v27.4s, v16.4h, v15.h[5]
+	frecps v23.4s, v24.4s, v2.4s
+	add x26, x2, #32
+	subs x8, x8, #8
+	addhn v30.4h, v30.4s, v31.4s
+	smull2 v29.4s, v16.8h, v15.h[4]
 	fmul v24.4s, v24.4s, v23.4s
 	frecps v23.4s, v17.4s, v3.4s
-	smull2 v29.4s, v16.8h, v15.h[5]
 	addhn v27.4h, v27.4s, v9.4s
-	csel x8, x5, x8, lo
-	sshr v30.8h, v30.8h, #3
+	csel x26, x26, x2, hi
+	addhn2 v30.8h, v29.4s, v31.4s
+	ldr q28, [x19, #64]
+	smull2 v29.4s, v16.8h, v15.h[5]
 	fmul v17.4s, v17.4s, v23.4s
-	addhn2 v27.8h, v29.4s, v9.4s
-	subs x8, x8, #8
+	fsub v2.4s, v2.4s, v5.4s
 	fmul v24.4s, v0.4s, v24.4s
-	fadd v0.4s, v0.4s, v4.4s
+	sub x18, x26, #36, lsl #12
 	frecps v23.4s, v17.4s, v3.4s
-	sshr v27.8h, v27.8h, #3
-	and v30.16b, v30.16b, v28.16b
-	ldr q28, [x19, #80]
-	fmul v17.4s, v17.4s, v23.4s
-	add x26, x2, #32
-	and v27.16b, v27.16b, v28.16b
+	addhn2 v27.8h, v29.4s, v9.4s
+	sshr v30.8h, v30.8h, #3
 	fcvtzs v24.4s, v24.4s, #15
+	fmul v17.4s, v17.4s, v23.4s
+	prfm pstl1keep, [x18, #0]
+	and v30.16b, v30.16b, v28.16b
 	fmul v17.4s, v1.4s, v17.4s
+	ldr q28, [x19, #80]
+	xtn v24.4h, v24.4s
+	sshr v27.8h, v27.8h, #3
+	and v27.16b, v27.16b, v28.16b
+	fcvtzs v17.4s, v17.4s, #15
 	umull v29.4s, v27.4h, v15.h[6]
 	umull2 v27.4s, v27.8h, v15.h[6]
-	xtn v24.4h, v24.4s
-	fcvtzs v17.4s, v17.4s, #15
-	uaddw v29.4s, v29.4s, v30.4h
-	uaddw2 v27.4s, v27.4s, v30.8h
-	csel x26, x26, x2, hi
 	xtn2 v24.8h, v17.4s
-	umov w11, v29.s[2]
-	umov w9, v29.s[0]
-	umov w16, v27.s[3]
+	uaddw v29.4s, v29.4s, v30.4h
+	orr x0, x0, x17
+	uaddw2 v27.4s, v27.4s, v30.8h
+	ldp q17, q23, [x26]
 	umov w10, v29.s[1]
 	umov w13, v27.s[0]
-	fsub v2.4s, v2.4s, v5.4s
-	umov w12, v29.s[3]
-	umov w15, v27.s[2]
-	ldrb w11, [x6, w11, uxtw]
-	ldrb w9, [x6, w9, uxtw]
 	umov w14, v27.s[1]
-	csel x8, x8, xzr, hi
-	ldrb w10, [x6, w10, uxtw]
-	ldrb w12, [x6, w12, uxtw]
+	umov w11, v29.s[2]
+	umov w12, v29.s[3]
+	umov w16, v27.s[3]
 	smull v25.4s, v24.4h, v6.h[0]
-	ldrb w16, [x6, w16, uxtw]
-	smull2 v26.4s, v24.8h, v6.h[0]
 	ldrb w13, [x6, w13, uxtw]
-	fadd v1.4s, v1.4s, v4.4s
-	ldrb w15, [x6, w15, uxtw]
-	orr x0, x0, x17
 	ldrb w14, [x6, w14, uxtw]
-	ldp q17, q23, [x26]
-	stp w11, w12, [sp, #40]
+	umov w9, v29.s[0]
+	umov w15, v27.s[2]
+	ldrb w16, [x6, w16, uxtw]
+	fadd v0.4s, v0.4s, v4.4s
+	ldrb w11, [x6, w11, uxtw]
+	ldrb w12, [x6, w12, uxtw]
+	smull2 v26.4s, v24.8h, v6.h[0]
+	ldrb w9, [x6, w9, uxtw]
 	fsub v3.4s, v3.4s, v5.4s
-	stp w9, w10, [sp, #32]
-	sshr v25.4s, v25.4s, #15
+	ldrb w15, [x6, w15, uxtw]
+	fadd v1.4s, v1.4s, v4.4s
+	ldrb w10, [x6, w10, uxtw]
 	stp w13, w14, [sp, #48]
-	bic v17.4s, #0xff, lsl #24
+	stp w11, w12, [sp, #40]
 	sshr v26.4s, v26.4s, #15
-	add v25.4s, v25.4s, v7.4s
 	bic v23.4s, #0xff, lsl #24
-	stp w15, w16, [sp, #56]
+	sshr v25.4s, v25.4s, #15
 	add v26.4s, v26.4s, v7.4s
+	stp w9, w10, [sp, #32]
+	add v25.4s, v25.4s, v7.4s
+	stp w15, w16, [sp, #56]
+	bic v17.4s, #0xff, lsl #24
 	ld2 {v29.8h, v30.8h}, [x28]
-	cmhi v23.4s, v23.4s, v26.4s
+	csel x8, x8, xzr, hi
 	cmhi v17.4s, v17.4s, v25.4s
+	cmhi v23.4s, v23.4s, v26.4s
+	prfm pldl1keep, [x26, #6144]
 	xtn v29.8b, v29.8h
 	uzp1 v17.8h, v17.8h, v23.8h
+	tbl v31.8b, {v20.16b}, v29.8b
 	ldr q23, [x20, x8, lsl #4]
 	ldr d16, [sp, #144]
 	tbl v30.8b, {v21.16b}, v29.8b
 	tbl v27.8b, {v19.16b}, v29.8b
-	tbl v31.8b, {v20.16b}, v29.8b
-	cmn x17, #1
-	and v17.16b, v17.16b, v23.16b
-	xtn v23.8b, v17.8h
-	ushll v9.8h, v31.8b, #6
 	tbl v29.8b, {v18.16b}, v29.8b
-	fmov x8, d23
-	orr v14.16b, v14.16b, v22.16b
+	ushll v9.8h, v31.8b, #6
+	and v17.16b, v17.16b, v23.16b
+	cmn x17, #1
+	xtn v23.8b, v17.8h
 	orr v31.8b, v30.8b, v16.8b
 	mov v28.8b, v29.8b
-	ccmp x8, #0, #4, eq
-	shrn v30.8b, v9.8h, #6
+	fmov x8, d23
+	orr v13.16b, v13.16b, v22.16b
 	mov v29.8b, v27.8b
+	shrn v30.8b, v9.8h, #6
+	ccmp x8, #0, #4, eq
+	orr v14.16b, v14.16b, v22.16b
 	b.eq 171f
 	subs x5, x5, #8
 	st4 {v28.8b, v29.8b, v30.8b, v31.8b}, [x1]
@@ -134750,9 +137094,12 @@ rast_kern_h14010:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x8, x5, x8, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -134858,9 +137205,12 @@ rast_kern_h14010:
 	b 152b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -135042,9 +137392,12 @@ rast_kern_h14011:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -135432,14 +137785,17 @@ rast_kern_h14011:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1064:
 	tbnz w7, #1, 30f
@@ -135485,9 +137841,12 @@ rast_kern_h14011:
 	b 1063b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -135709,9 +138068,12 @@ rast_kern_h14100:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -135947,14 +138309,17 @@ rast_kern_h14100:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1069:
 	tbnz w7, #1, 30f
@@ -136028,9 +138393,12 @@ rast_kern_h14100:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -136204,9 +138572,12 @@ rast_kern_h14101:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -136680,14 +139051,17 @@ rast_kern_h14101:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1071:
 	tbnz w7, #1, 30f
@@ -136747,9 +139121,12 @@ rast_kern_h14101:
 	b 38b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -136900,9 +139277,12 @@ rast_kern_h14110:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -137128,14 +139508,17 @@ rast_kern_h14110:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1073:
 	tbnz w7, #1, 30f
@@ -137180,9 +139563,12 @@ rast_kern_h14110:
 	b 47b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -137327,9 +139713,12 @@ rast_kern_h14111:
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	cmp x5, #8
+	sub x18, x2, #36, lsl #12
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -137795,14 +140184,17 @@ rast_kern_h14111:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1075:
 	tbnz w7, #1, 30f
@@ -137833,9 +140225,12 @@ rast_kern_h14111:
 	b 1074b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -137912,9 +140307,12 @@ rast_kern_h20000:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -138075,39 +140473,42 @@ rast_kern_h20000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	tbz w7, #14, 37f
@@ -138142,26 +140543,32 @@ rast_kern_h20000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -138357,9 +140764,12 @@ rast_kern_h20010:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 0:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 24f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -138523,9 +140933,12 @@ rast_kern_h20100:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -138683,39 +141096,42 @@ rast_kern_h20100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	tbz w7, #14, 37f
@@ -138814,26 +141230,32 @@ rast_kern_h20100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -138971,9 +141393,12 @@ rast_kern_h20110:
 	add x3, x3, x10
 	add x3, x3, x8
 0:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 24f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -139152,9 +141577,12 @@ rast_kern_h21000:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -139351,39 +141779,42 @@ rast_kern_h21000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -139495,20 +141926,23 @@ rast_kern_h21000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -139517,9 +141951,12 @@ rast_kern_h21000:
 	sshr v30.8h, v30.8h, #3
 	b 1091b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -139736,9 +142173,12 @@ rast_kern_h21001:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -139925,39 +142365,42 @@ rast_kern_h21001:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -140303,26 +142746,32 @@ rast_kern_h21001:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -140526,9 +142975,12 @@ rast_kern_h21010:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -140696,39 +143148,42 @@ rast_kern_h21010:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -140827,20 +143282,23 @@ rast_kern_h21010:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -140849,9 +143307,12 @@ rast_kern_h21010:
 	sshr v30.8h, v30.8h, #3
 	b 1104b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -141037,9 +143498,12 @@ rast_kern_h21011:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -141197,39 +143661,42 @@ rast_kern_h21011:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -141567,26 +144034,32 @@ rast_kern_h21011:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -141762,9 +144235,12 @@ rast_kern_h21100:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -141958,39 +144434,42 @@ rast_kern_h21100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -142167,20 +144646,23 @@ rast_kern_h21100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -142189,9 +144671,12 @@ rast_kern_h21100:
 	sshr v30.8h, v30.8h, #3
 	b 1116b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -142343,9 +144828,12 @@ rast_kern_h21101:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -142529,39 +145017,42 @@ rast_kern_h21101:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -142985,26 +145476,32 @@ rast_kern_h21101:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -143152,9 +145649,12 @@ rast_kern_h21110:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -143319,39 +145819,42 @@ rast_kern_h21110:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -143517,20 +146020,23 @@ rast_kern_h21110:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -143539,9 +146045,12 @@ rast_kern_h21110:
 	sshr v30.8h, v30.8h, #3
 	b 1123b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -143664,9 +146173,12 @@ rast_kern_h21111:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -143821,39 +146333,42 @@ rast_kern_h21111:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -144269,26 +146784,32 @@ rast_kern_h21111:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -144396,9 +146917,12 @@ rast_kern_h22000:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -144585,39 +147109,42 @@ rast_kern_h22000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -144704,26 +147231,32 @@ rast_kern_h22000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -144940,9 +147473,12 @@ rast_kern_h22001:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -145129,39 +147665,42 @@ rast_kern_h22001:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -145467,26 +148006,32 @@ rast_kern_h22001:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -145690,9 +148235,12 @@ rast_kern_h22010:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -145850,39 +148398,42 @@ rast_kern_h22010:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -145956,26 +148507,32 @@ rast_kern_h22010:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -146161,9 +148718,12 @@ rast_kern_h22011:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -146321,39 +148881,42 @@ rast_kern_h22011:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -146651,26 +149214,32 @@ rast_kern_h22011:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -146846,9 +149415,12 @@ rast_kern_h22100:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -147032,39 +149604,42 @@ rast_kern_h22100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -147216,26 +149791,32 @@ rast_kern_h22100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -147387,9 +149968,12 @@ rast_kern_h22101:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -147573,39 +150157,42 @@ rast_kern_h22101:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -147989,26 +150576,32 @@ rast_kern_h22101:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -148156,9 +150749,12 @@ rast_kern_h22110:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -148313,39 +150909,42 @@ rast_kern_h22110:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -148486,26 +151085,32 @@ rast_kern_h22110:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -148628,9 +151233,12 @@ rast_kern_h22111:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -148785,39 +151393,42 @@ rast_kern_h22111:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -149193,26 +151804,32 @@ rast_kern_h22111:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -149322,9 +151939,12 @@ rast_kern_h23000:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -149523,39 +152143,42 @@ rast_kern_h23000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -149696,20 +152319,23 @@ rast_kern_h23000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -149719,9 +152345,12 @@ rast_kern_h23000:
 	sshr v30.8h, v30.8h, #3
 	b 1159b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -149929,9 +152558,12 @@ rast_kern_h23001:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -150118,39 +152750,42 @@ rast_kern_h23001:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -150528,26 +153163,32 @@ rast_kern_h23001:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -150752,9 +153393,12 @@ rast_kern_h23010:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -150922,39 +153566,42 @@ rast_kern_h23010:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -151076,20 +153723,23 @@ rast_kern_h23010:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -151098,9 +153748,12 @@ rast_kern_h23010:
 	sshr v30.8h, v30.8h, #3
 	b 1172b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -151288,9 +153941,12 @@ rast_kern_h23011:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -151448,39 +154104,42 @@ rast_kern_h23011:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -151850,26 +154509,32 @@ rast_kern_h23011:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -152045,9 +154710,12 @@ rast_kern_h23100:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -152243,39 +154911,42 @@ rast_kern_h23100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -152478,20 +155149,23 @@ rast_kern_h23100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -152501,9 +155175,12 @@ rast_kern_h23100:
 	sshr v30.8h, v30.8h, #3
 	b 1184b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -152656,9 +155333,12 @@ rast_kern_h23101:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -152842,39 +155522,42 @@ rast_kern_h23101:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -153330,26 +156013,32 @@ rast_kern_h23101:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -153497,9 +156186,12 @@ rast_kern_h23110:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -153666,39 +156358,42 @@ rast_kern_h23110:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -153890,20 +156585,23 @@ rast_kern_h23110:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	smull v30.4s, v24.4h, v15.h[4]
 	ldr q25, [x19, #64]
@@ -153913,9 +156611,12 @@ rast_kern_h23110:
 	sshr v30.8h, v30.8h, #3
 	b 1191b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -154039,9 +156740,12 @@ rast_kern_h23111:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -154196,39 +156900,42 @@ rast_kern_h23111:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v30.4s, v24.4h, v15.h[4]
@@ -154676,26 +157383,32 @@ rast_kern_h23111:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -154805,9 +157518,12 @@ rast_kern_h24000:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -154994,39 +157710,42 @@ rast_kern_h24000:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	ldr q25, [x19, #64]
@@ -155141,26 +157860,32 @@ rast_kern_h24000:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -155368,9 +158093,12 @@ rast_kern_h24001:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -155557,39 +158285,42 @@ rast_kern_h24001:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -155927,26 +158658,32 @@ rast_kern_h24001:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -156151,9 +158888,12 @@ rast_kern_h24010:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -156311,39 +159051,42 @@ rast_kern_h24010:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -156440,26 +159183,32 @@ rast_kern_h24010:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -156647,9 +159396,12 @@ rast_kern_h24011:
 	add x1, x1, x8, lsl #2
 	add x2, x1, x10
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -156807,39 +159559,42 @@ rast_kern_h24011:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -157169,26 +159924,32 @@ rast_kern_h24011:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -157364,9 +160125,12 @@ rast_kern_h24100:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -157550,39 +160314,42 @@ rast_kern_h24100:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	ldr q25, [x19, #64]
@@ -157759,26 +160526,32 @@ rast_kern_h24100:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -157931,9 +160704,12 @@ rast_kern_h24101:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -158117,39 +160893,42 @@ rast_kern_h24101:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -158565,26 +161344,32 @@ rast_kern_h24101:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -158732,9 +161517,12 @@ rast_kern_h24110:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -158889,39 +161677,42 @@ rast_kern_h24110:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	ldr q25, [x19, #64]
@@ -159087,26 +161878,32 @@ rast_kern_h24110:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -159230,9 +162027,12 @@ rast_kern_h24111:
 	add x3, x3, x10
 	add x3, x3, x8
 20:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -159387,39 +162187,42 @@ rast_kern_h24111:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	sub x18, x2, #36, lsl #12
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	prfm pstl1keep, [x18, #0]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	stp q10, q11, [sp, #112]
@@ -159827,26 +162630,32 @@ rast_kern_h24111:
 	ldp q27, q28, [x2]
 	mov x9, #8
 	cmp x5, #8
-	shrn v24.4h, v4.4s, #16
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	add v4.4s, v4.4s, v1.4s
-	add v5.4s, v5.4s, v1.4s
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	fmov x8, d28
+	add v4.4s, v4.4s, v1.4s
+	add v5.4s, v5.4s, v1.4s
 	cbz x8, 8b
 	b 5b
 24:
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	tbnz w7, #1, 30f
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
@@ -159981,10 +162790,11 @@ rast_kern_hv00:
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	and v27.16b, v29.16b, v13.16b
-	and v28.16b, v30.16b, v13.16b
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	cmhi v27.4s, v27.4s, v25.4s
 	subs x5, x5, #8
+	cmhi v27.4s, v27.4s, v25.4s
+	and v28.16b, v30.16b, v13.16b
 	cmhi v28.4s, v28.4s, v26.4s
 	ldr q31, [x20, x9, lsl #4]
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -160019,10 +162829,10 @@ rast_kern_hv00:
 	shrn2 v26.4s, v27.2d, #30
 	and v27.16b, v29.16b, v13.16b
 	and v28.16b, v30.16b, v13.16b
-	mov x9, #8
 	sub v27.4s, v25.4s, v27.4s
-	cmp x5, #8
 	sub v28.4s, v26.4s, v28.4s
+	mov x9, #8
+	cmp x5, #8
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
 	csel x9, x5, x9, lo
@@ -160034,22 +162844,23 @@ rast_kern_hv00:
 	and v27.16b, v27.16b, v31.16b
 	xtn v28.8b, v27.8h
 	sshll v31.4s, v27.4h, #0
-	fmov x8, d28
-	bit v24.16b, v10.16b, v27.16b
-	sshll2 v27.4s, v27.8h, #0
 	orr v25.16b, v25.16b, v22.16b
 	orr v26.16b, v26.16b, v22.16b
+	fmov x8, d28
+	prfm pldl1keep, [x2, #6144]
+	bit v24.16b, v10.16b, v27.16b
+	sshll2 v27.4s, v27.8h, #0
+	orr x0, x0, x8
 	bit v29.16b, v25.16b, v31.16b
 	bit v30.16b, v26.16b, v27.16b
-	orr x0, x0, x8
-	subs x5, x5, #8
-	add v6.2d, v6.2d, v9.2d
 	str q24, [x1]
+	str d28, [x3], #8
+	add v6.2d, v6.2d, v9.2d
 	add x1, x1, #16
 	add v7.2d, v7.2d, v9.2d
+	subs x5, x5, #8
 	stp q29, q30, [x2]
 	add x2, x2, #32
-	str d28, [x3], #8
 	b.hi 24b
 9:
 	sub x2, x2, #32
@@ -160163,6 +162974,7 @@ rast_kern_hv01:
 	add x2, x1, x10
 	ldr w10, [x19, #256]
 	mul x10, x24, x10
+	prfm pldl1keep, [x2, #6144]
 	add x1, x11, x10
 	ldr x11, [x19, #0]
 	ldrsw x10, [x22, #768]
@@ -160216,6 +163028,7 @@ rast_kern_hv01:
 	add x1, x1, #16
 	add v26.2d, v6.2d, v8.2d
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
 	shrn2 v25.4s, v7.2d, #30
@@ -160347,6 +163160,7 @@ rast_kern_hv01:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
@@ -160484,6 +163298,7 @@ rast_kern_hv01:
 	shrn2 v25.4s, v7.2d, #30
 	shrn v24.4h, v4.4s, #16
 	shrn2 v26.4s, v27.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
@@ -160509,6 +163324,7 @@ rast_kern_hv01:
 	b 1230b
 24:
 	add v26.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	shrn v25.2s, v6.2d, #30
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
@@ -160685,6 +163501,7 @@ rast_kern_hv02:
 	add x2, x1, x10
 	ldr w10, [x19, #256]
 	mul x10, x24, x10
+	prfm pldl1keep, [x2, #6144]
 	add x1, x11, x10
 	ldr x11, [x19, #0]
 	ldrsw x10, [x22, #768]
@@ -160738,6 +163555,7 @@ rast_kern_hv02:
 	add x1, x1, #16
 	add v26.2d, v6.2d, v8.2d
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
 	shrn2 v25.4s, v7.2d, #30
@@ -160859,6 +163677,7 @@ rast_kern_hv02:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
@@ -160971,6 +163790,7 @@ rast_kern_hv02:
 	shrn2 v25.4s, v7.2d, #30
 	shrn v24.4h, v4.4s, #16
 	shrn2 v26.4s, v27.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
@@ -160991,6 +163811,7 @@ rast_kern_hv02:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	shrn v25.2s, v6.2d, #30
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
@@ -161169,6 +163990,7 @@ rast_kern_hv03:
 	add x2, x1, x10
 	ldr w10, [x19, #256]
 	mul x10, x24, x10
+	prfm pldl1keep, [x2, #6144]
 	add x1, x11, x10
 	ldr x11, [x19, #0]
 	ldrsw x10, [x22, #768]
@@ -161222,6 +164044,7 @@ rast_kern_hv03:
 	add x1, x1, #16
 	add v26.2d, v6.2d, v8.2d
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
 	shrn2 v25.4s, v7.2d, #30
@@ -161353,6 +164176,7 @@ rast_kern_hv03:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
@@ -161514,6 +164338,7 @@ rast_kern_hv03:
 	shrn2 v25.4s, v7.2d, #30
 	shrn v24.4h, v4.4s, #16
 	shrn2 v26.4s, v27.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
@@ -161539,6 +164364,7 @@ rast_kern_hv03:
 	b 1244b
 24:
 	add v26.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	shrn v25.2s, v6.2d, #30
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
@@ -161717,6 +164543,7 @@ rast_kern_hv04:
 	add x2, x1, x10
 	ldr w10, [x19, #256]
 	mul x10, x24, x10
+	prfm pldl1keep, [x2, #6144]
 	add x1, x11, x10
 	ldr x11, [x19, #0]
 	ldrsw x10, [x22, #768]
@@ -161770,6 +164597,7 @@ rast_kern_hv04:
 	add x1, x1, #16
 	add v26.2d, v6.2d, v8.2d
 	shrn v25.2s, v6.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
 	shrn2 v25.4s, v7.2d, #30
@@ -161891,6 +164719,7 @@ rast_kern_hv04:
 	add v27.2d, v7.2d, v8.2d
 	cmp x5, #8
 	shrn v26.2s, v26.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	shrn2 v25.4s, v7.2d, #30
 	shrn2 v26.4s, v27.2d, #30
 	csel x9, x5, x9, lo
@@ -162027,6 +164856,7 @@ rast_kern_hv04:
 	shrn2 v25.4s, v7.2d, #30
 	shrn v24.4h, v4.4s, #16
 	shrn2 v26.4s, v27.2d, #30
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	csel x9, x5, x9, lo
 	shrn2 v24.8h, v5.4s, #16
@@ -162047,6 +164877,7 @@ rast_kern_hv04:
 	b 5b
 24:
 	add v26.2d, v6.2d, v8.2d
+	prfm pldl1keep, [x2, #6144]
 	shrn v25.2s, v6.2d, #30
 	add v27.2d, v7.2d, v8.2d
 	shrn v26.2s, v26.2d, #30
@@ -162275,6 +165106,7 @@ rast_kern_hv10:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -162351,14 +165183,17 @@ rast_kern_hv10:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1260:
 	tbnz w7, #1, 30f
@@ -162406,9 +165241,12 @@ rast_kern_hv10:
 	b 1259b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -162601,6 +165439,7 @@ rast_kern_hv11:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -162752,14 +165591,17 @@ rast_kern_hv11:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1267:
 	tbnz w7, #1, 30f
@@ -162810,9 +165652,12 @@ rast_kern_hv11:
 	b 1266b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -163005,6 +165850,7 @@ rast_kern_hv12:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -163131,14 +165977,17 @@ rast_kern_hv12:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1272:
 	tbnz w7, #1, 30f
@@ -163184,9 +166033,12 @@ rast_kern_hv12:
 	b 1271b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -163383,6 +166235,7 @@ rast_kern_hv13:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -163556,14 +166409,17 @@ rast_kern_hv13:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1279:
 	tbnz w7, #1, 30f
@@ -163614,9 +166470,12 @@ rast_kern_hv13:
 	b 1278b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -163813,6 +166672,7 @@ rast_kern_hv14:
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	fsub v2.4s, v2.4s, v5.4s
@@ -163961,14 +166821,17 @@ rast_kern_hv14:
 	add v5.4s, v5.4s, v1.4s
 41:
 	tbz w7, #13, 23f
+	sub x18, x2, #36, lsl #12
+	ldp q27, q28, [x2]
 	smull v25.4s, v24.4h, v6.h[0]
 	smull2 v26.4s, v24.8h, v6.h[0]
-	ldp q27, q28, [x2]
 	sshr v25.4s, v25.4s, #15
+	prfm pldl1keep, [x2, #6144]
 	sshr v26.4s, v26.4s, #15
-	bic v27.4s, #0xff, lsl #24
+	prfm pstl1keep, [x18, #0]
 	add v25.4s, v25.4s, v7.4s
 	add v26.4s, v26.4s, v7.4s
+	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
 1284:
 	tbnz w7, #1, 30f
@@ -164014,9 +166877,12 @@ rast_kern_hv14:
 	b 1283b
 23:
 	sshll v26.4s, v24.4h, #0
+	sub x18, x2, #36, lsl #12
 	sshll2 v27.4s, v24.8h, #0
+	prfm pldl1keep, [x2, #6144]
 	smull v25.2d, v26.2s, v6.2s
 	smull2 v26.2d, v26.4s, v6.4s
+	prfm pstl1keep, [x18, #0]
 	shrn v25.2s, v25.2d, #15
 	shrn2 v25.4s, v26.2d, #15
 	smull v26.2d, v27.2s, v6.2s
@@ -164144,31 +167010,32 @@ rast_kern_hv20:
 0:
 	ldr q29, [x2]
 	ldr q30, [x2, #16]
-	cmp x5, #8
-	ldr q24, [x1]
 	mov x9, #8
+	cmp x5, #8
 	and v27.16b, v29.16b, v13.16b
 	and v28.16b, v30.16b, v13.16b
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
-	subs x5, x5, #8
 	cmhi v28.4s, v28.4s, v6.4s
 	ldr q31, [x20, x9, lsl #4]
 	uzp1 v27.8h, v27.8h, v28.8h
+	ldr q24, [x1]
 	and v27.16b, v27.16b, v31.16b
 	xtn v28.8b, v27.8h
 	sshll v31.4s, v27.4h, #0
-	bit v24.16b, v10.16b, v27.16b
 	fmov x8, d28
+	bit v24.16b, v10.16b, v27.16b
 	sshll2 v27.4s, v27.8h, #0
 	bit v29.16b, v11.16b, v31.16b
 	bit v30.16b, v11.16b, v27.16b
-	str q24, [x1]
+	prfm pldl1keep, [x2, #6144]
 	orr x0, x0, x8
+	subs x5, x5, #8
+	str q24, [x1]
 	add x1, x1, #16
-	str d28, [x3], #8
 	stp q29, q30, [x2]
 	add x2, x2, #32
+	str d28, [x3], #8
 	b.hi 0b
 	b 9f
 24:
@@ -164196,13 +167063,14 @@ rast_kern_hv20:
 	sshll2 v27.4s, v27.8h, #0
 	bit v29.16b, v11.16b, v31.16b
 	bit v30.16b, v11.16b, v27.16b
+	prfm pldl1keep, [x2, #6144]
 	orr x0, x0, x8
 	subs x5, x5, #8
 	str q24, [x1]
 	add x1, x1, #16
-	str d28, [x3], #8
 	stp q29, q30, [x2]
 	add x2, x2, #32
+	str d28, [x3], #8
 	b.hi 24b
 9:
 	sub x2, x2, #32
@@ -164308,8 +167176,8 @@ rast_kern_hv21:
 	orr v11.16b, v6.16b, v22.16b
 10:
 	ldr w10, [x19, #240]
-	add x3, sp, #256
 	ldrh w8, [x22, #2048]
+	add x3, sp, #256
 	ldr x11, [x19, #208]
 	mul x10, x24, x10
 	ldrh w5, [x22, #2304]
@@ -164322,8 +167190,9 @@ rast_kern_hv21:
 	ldp q27, q28, [x2]
 	add x1, x11, x10
 	bic v27.4s, #0xff, lsl #24
-	bic v28.4s, #0xff, lsl #24
 	add x1, x1, x8, lsl #1
+	prfm pldl1keep, [x2, #6144]
+	bic v28.4s, #0xff, lsl #24
 1289:
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
@@ -164344,6 +167213,7 @@ rast_kern_hv21:
 	b.ls 15f
 	add x2, x2, #32
 	add x1, x1, #16
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -164465,39 +167335,40 @@ rast_kern_hv21:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -164597,6 +167468,7 @@ rast_kern_hv21:
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
+	prfm pldl1keep, [x2, #6144]
 	cmhi v28.4s, v28.4s, v6.4s
 	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -164614,6 +167486,7 @@ rast_kern_hv21:
 	sshr v30.8h, v30.8h, #3
 	b 1291b
 24:
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -164775,8 +167648,8 @@ rast_kern_hv22:
 	orr v11.16b, v6.16b, v22.16b
 10:
 	ldr w10, [x19, #240]
-	add x3, sp, #256
 	ldrh w8, [x22, #2048]
+	add x3, sp, #256
 	ldr x11, [x19, #208]
 	mul x10, x24, x10
 	ldrh w5, [x22, #2304]
@@ -164789,8 +167662,9 @@ rast_kern_hv22:
 	ldp q27, q28, [x2]
 	add x1, x11, x10
 	bic v27.4s, #0xff, lsl #24
-	bic v28.4s, #0xff, lsl #24
 	add x1, x1, x8, lsl #1
+	prfm pldl1keep, [x2, #6144]
+	bic v28.4s, #0xff, lsl #24
 1297:
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
@@ -164811,6 +167685,7 @@ rast_kern_hv22:
 	b.ls 15f
 	add x2, x2, #32
 	add x1, x1, #16
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -164922,39 +167797,40 @@ rast_kern_hv22:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -165029,6 +167905,7 @@ rast_kern_hv22:
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
+	prfm pldl1keep, [x2, #6144]
 	cmhi v28.4s, v28.4s, v6.4s
 	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -165041,6 +167918,7 @@ rast_kern_hv22:
 	cbz x8, 8b
 	b 5b
 24:
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -165206,8 +168084,8 @@ rast_kern_hv23:
 	orr v11.16b, v6.16b, v22.16b
 10:
 	ldr w10, [x19, #240]
-	add x3, sp, #256
 	ldrh w8, [x22, #2048]
+	add x3, sp, #256
 	ldr x11, [x19, #208]
 	mul x10, x24, x10
 	ldrh w5, [x22, #2304]
@@ -165220,8 +168098,9 @@ rast_kern_hv23:
 	ldp q27, q28, [x2]
 	add x1, x11, x10
 	bic v27.4s, #0xff, lsl #24
-	bic v28.4s, #0xff, lsl #24
 	add x1, x1, x8, lsl #1
+	prfm pldl1keep, [x2, #6144]
+	bic v28.4s, #0xff, lsl #24
 1303:
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
@@ -165242,6 +168121,7 @@ rast_kern_hv23:
 	b.ls 15f
 	add x2, x2, #32
 	add x1, x1, #16
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -165363,39 +168243,40 @@ rast_kern_hv23:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 	smull v30.4s, v24.4h, v15.h[4]
 	smull2 v29.4s, v24.8h, v15.h[4]
@@ -165517,6 +168398,7 @@ rast_kern_hv23:
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
+	prfm pldl1keep, [x2, #6144]
 	cmhi v28.4s, v28.4s, v6.4s
 	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -165534,6 +168416,7 @@ rast_kern_hv23:
 	sshr v30.8h, v30.8h, #3
 	b 1305b
 24:
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -165699,8 +168582,8 @@ rast_kern_hv24:
 	orr v11.16b, v6.16b, v22.16b
 10:
 	ldr w10, [x19, #240]
-	add x3, sp, #256
 	ldrh w8, [x22, #2048]
+	add x3, sp, #256
 	ldr x11, [x19, #208]
 	mul x10, x24, x10
 	ldrh w5, [x22, #2304]
@@ -165713,8 +168596,9 @@ rast_kern_hv24:
 	ldp q27, q28, [x2]
 	add x1, x11, x10
 	bic v27.4s, #0xff, lsl #24
-	bic v28.4s, #0xff, lsl #24
 	add x1, x1, x8, lsl #1
+	prfm pldl1keep, [x2, #6144]
+	bic v28.4s, #0xff, lsl #24
 1311:
 	tbnz w7, #1, 34f
 	cmhi v27.4s, v27.4s, v6.4s
@@ -165735,6 +168619,7 @@ rast_kern_hv24:
 	b.ls 15f
 	add x2, x2, #32
 	add x1, x1, #16
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -165846,39 +168731,40 @@ rast_kern_hv24:
 0:
 	tbnz w7, #1, 24f
 	tbnz w7, #0, 6f
-	frecpe v24.4s, v2.4s
-	ldp q27, q28, [x2]
-	frecpe v29.4s, v3.4s
 	mov x9, #8
-	cmp x5, #8
+	frecpe v24.4s, v2.4s
+	frecpe v29.4s, v3.4s
+	ldp q27, q28, [x2]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
+	cmp x5, #8
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
+	frecps v30.4s, v24.4s, v2.4s
+	frecps v31.4s, v29.4s, v3.4s
+	fsub v2.4s, v2.4s, v5.4s
+	fsub v3.4s, v3.4s, v5.4s
+	fmul v24.4s, v24.4s, v30.4s
+	fmul v29.4s, v29.4s, v31.4s
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
 	cmhi v27.4s, v27.4s, v6.4s
 	cmhi v28.4s, v28.4s, v6.4s
-	frecps v30.4s, v24.4s, v2.4s
-	frecps v31.4s, v29.4s, v3.4s
+	fmul v24.4s, v0.4s, v24.4s
 	uzp1 v27.8h, v27.8h, v28.8h
 	ldr q28, [x20, x9, lsl #4]
-	fsub v2.4s, v2.4s, v5.4s
-	fmul v24.4s, v24.4s, v30.4s
-	fmul v29.4s, v29.4s, v31.4s
-	and v27.16b, v27.16b, v28.16b
-	xtn v28.8b, v27.8h
-	fmul v24.4s, v0.4s, v24.4s
 	fmul v29.4s, v1.4s, v29.4s
 	fadd v0.4s, v0.4s, v4.4s
-	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v24.4s, v24.4s, #15
+	fadd v1.4s, v1.4s, v4.4s
 	fcvtzs v29.4s, v29.4s, #15
-	fsub v3.4s, v3.4s, v5.4s
-	fmov x8, d28
 	xtn v24.4h, v24.4s
+	and v27.16b, v27.16b, v28.16b
+	xtn v28.8b, v27.8h
 	xtn2 v24.8h, v29.4s
+	fmov x8, d28
 	cbz x8, 8f
 5:
 	smull v27.4s, v24.4h, v15.h[5]
@@ -165975,6 +168861,7 @@ rast_kern_hv24:
 	bic v28.4s, #0xff, lsl #24
 	csel x9, x5, x9, lo
 	cmhi v27.4s, v27.4s, v6.4s
+	prfm pldl1keep, [x2, #6144]
 	cmhi v28.4s, v28.4s, v6.4s
 	shrn2 v24.8h, v5.4s, #16
 	uzp1 v27.8h, v27.8h, v28.8h
@@ -165987,6 +168874,7 @@ rast_kern_hv24:
 	cbz x8, 8b
 	b 5b
 24:
+	prfm pldl1keep, [x2, #6144]
 	ldp q27, q28, [x2]
 	bic v27.4s, #0xff, lsl #24
 	bic v28.4s, #0xff, lsl #24
@@ -166271,9 +169159,12 @@ rast_kern_hs000:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v14.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -166325,13 +169216,16 @@ rast_kern_hs000:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v14.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -166688,9 +169582,12 @@ rast_kern_hs100:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v6.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -166824,13 +169721,16 @@ rast_kern_hs100:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v6.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -167090,10 +169990,13 @@ rast_kern_hs101:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -167447,16 +170350,19 @@ rast_kern_hs101:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -167693,9 +170599,12 @@ rast_kern_hs110:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v20.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -167818,13 +170727,16 @@ rast_kern_hs110:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v20.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -168026,10 +170938,13 @@ rast_kern_hs111:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -168375,16 +171290,19 @@ rast_kern_hs111:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -168608,9 +171526,12 @@ rast_kern_hs200:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v6.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -168719,13 +171640,16 @@ rast_kern_hs200:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v6.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -168980,10 +171904,13 @@ rast_kern_hs201:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -169297,16 +172224,19 @@ rast_kern_hs201:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -169533,9 +172463,12 @@ rast_kern_hs210:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v20.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -169633,13 +172566,16 @@ rast_kern_hs210:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v20.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -169836,10 +172772,13 @@ rast_kern_hs211:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -170145,16 +173084,19 @@ rast_kern_hs211:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -170391,9 +173333,12 @@ rast_kern_hs300:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v6.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -170553,13 +173498,16 @@ rast_kern_hs300:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v6.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -170820,10 +173768,13 @@ rast_kern_hs301:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -171209,16 +174160,19 @@ rast_kern_hs301:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -171458,9 +174412,12 @@ rast_kern_hs310:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v8.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -171606,13 +174563,16 @@ rast_kern_hs310:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v8.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -171814,10 +174774,13 @@ rast_kern_hs311:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -172195,16 +175158,19 @@ rast_kern_hs311:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -172429,9 +175395,12 @@ rast_kern_hs400:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v6.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -172565,13 +175534,16 @@ rast_kern_hs400:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v6.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -172826,10 +175798,13 @@ rast_kern_hs401:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -173175,16 +176150,19 @@ rast_kern_hs401:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -173414,9 +176392,12 @@ rast_kern_hs410:
 	frecpe v29.4s, v3.4s
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
+	prfm pldl1keep, [x2, #6144]
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v8.8h
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
@@ -173537,13 +176518,16 @@ rast_kern_hs410:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
+	sub x18, x2, #36, lsl #12
 	shrn v24.4h, v4.4s, #16
-	add v4.4s, v4.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	cmeq v27.8h, v27.8h, v8.8h
-	add v5.4s, v5.4s, v1.4s
+	prfm pstl1keep, [x18, #0]
+	shrn2 v24.8h, v5.4s, #16
 	ldr q28, [x20, x9, lsl #4]
+	add v5.4s, v5.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
 	fmov x8, d28
@@ -173740,10 +176724,13 @@ rast_kern_hs411:
 	cmp x5, #8
 	ldr q27, [x2]
 	ldr q25, [x19, #224]
+	sub x18, x2, #36, lsl #12
 	frecps v30.4s, v24.4s, v2.4s
 	frecps v31.4s, v29.4s, v3.4s
 	csel x9, x5, x9, lo
+	prfm pldl1keep, [x2, #6144]
 	cmeq v27.8h, v27.8h, v25.8h
+	prfm pstl1keep, [x18, #0]
 	fmul v24.4s, v24.4s, v30.4s
 	fmul v29.4s, v29.4s, v31.4s
 	ldr q28, [x20, x9, lsl #4]
@@ -174081,16 +177068,19 @@ rast_kern_hs411:
 	mov x9, #8
 	cmp x5, #8
 	ldr q27, [x2]
-	shrn v24.4h, v4.4s, #16
+	sub x18, x2, #36, lsl #12
 	ldr q25, [x19, #224]
-	add v4.4s, v4.4s, v1.4s
 	csel x9, x5, x9, lo
-	shrn2 v24.8h, v5.4s, #16
-	add v5.4s, v5.4s, v1.4s
+	prfm pldl1keep, [x2, #6144]
+	shrn v24.4h, v4.4s, #16
+	prfm pstl1keep, [x18, #0]
 	cmeq v27.8h, v27.8h, v25.8h
 	ldr q28, [x20, x9, lsl #4]
+	shrn2 v24.8h, v5.4s, #16
+	add v4.4s, v4.4s, v1.4s
 	and v27.16b, v27.16b, v28.16b
 	xtn v28.8b, v27.8h
+	add v5.4s, v5.4s, v1.4s
 	fmov x8, d28
 	cbz x8, 8b
 	b 5b
@@ -174136,4 +177126,7 @@ rast_kern_tail:
 .float 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0
 .word 0, 1, 2, 3, 4, 5, 6, 7
 .float 8.0, 8.0, 8.0, 8.0
+.globl rast_kern_h_layout
+rast_kern_h_layout:
+.word 3072, 153600
 .section .note.GNU-stack,"",%progbits

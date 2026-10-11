@@ -48,7 +48,8 @@ import re
 
 BRANCH = {"b", "bl", "br", "blr", "ret", "cbz", "cbnz", "tbz", "tbnz"}
 STORE = {"str", "stp", "strb", "strh", "stur", "st1", "st2", "st3", "st4"}
-LOAD = {"ldr", "ldp", "ldrb", "ldrh", "ldrsw", "ldrsh", "ldrsb", "ldur", "ld1", "ld1r", "ld2", "ld3", "ld4"}
+# prfm: a load without a destination (the kernels' prefetches, kerngen.py prefetch())
+LOAD = {"prfm", "ldr", "ldp", "ldrb", "ldrh", "ldrsw", "ldrsh", "ldrsb", "ldur", "ld1", "ld1r", "ld2", "ld3", "ld4"}
 FLAGS_ONLY = {"cmp", "cmn", "tst", "ccmp", "ccmn", "fcmp"}
 SET_FLAGS = {"adds", "subs", "ands", "bics", "negs"}
 READ_FLAGS = {"csel", "csinc", "csinv", "csneg", "cset", "csetm", "cinc", "cinv", "cneg", "adc", "sbc", "ccmp", "ccmn",

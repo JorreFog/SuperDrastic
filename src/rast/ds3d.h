@@ -78,6 +78,7 @@
 #define SYS_PUBLISHED   0x34eb60    /* u64: the frame the compositor reads with threaded_3d */
 #define SYS_LAST        0x34eb68    /* u64: the frame last rendered (the source of the copy) */
 #define DS_SET_3D_VISIBILITY  0x3c2c0   /* render_scanline_set_3d_visibility(u8 bits[32], const u32 px[256]) */
+#define DS_GOT_MEMCPY         0x15f528  /* DraStic's GOT slot of memcpy (R_AARCH64_JUMP_SLOT) */
 #define DS_UPDATE_FRAME_3D_4X 0x58f10   /* update_frame_3d_4x(sys, u32 skip) */
 #define DS_UPDATE_FRAME_3D_1X 0x52870   /* update_frame_3d_1x(sys, u32 skip) */
 #define DS_RESET_VIDEO_3D     0x59a60   /* reset_video_3d(sys + SYS_FRAMEBUF) */

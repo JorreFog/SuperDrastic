@@ -605,11 +605,13 @@ static __attribute__((noinline)) void edge_lines(uint32_t *col0, uint32_t *col1,
 /* resolves the bin in place and returns its 48 lines (768 pixels each, contiguous): the context's colour lines 1..48,
  * fogged and edge-marked. The resolve's other work, clearing bits 29-31 of each pixel, is left out: the downsample
  * ignores them (it reads the alpha as & 0x1f and replaces byte 3). The edge marking reads only the attribute lines and
- * each pixel's own colour, so marking the colour lines in place gives the same pixels as a separate output buffer. */
-static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
+ * each pixel's own colour, so marking the colour lines in place gives the same pixels as a separate output buffer.
+ * no_edge: DraStic's disable_edge_marking (render context byte CTX_NO_EDGE), as rast.c's resolve_bin honours it at 2x
+ * (c2cc3a7, ROCKNIXDS issue 47: the 3x resolve marked edges whatever the setting). */
+static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin, int no_edge) {
     comp_hr_frame();                    /* (the bin boundary rows are this resolve's: DraStic's gap passes are skipped) */
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
-    int edges = (d3 >> 5) & 1, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
+    int edges = (d3 >> 5) & 1 && !no_edge, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
     uint32_t params = 0, fogc = U32(geom, 0x9a9c), clear = U32(sys, SYS_CLEAR_ATTR);
     if (fog) { uint32_t sh = (d3 >> 8) & 0xf; params = sh | ((U16(geom, 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16; }
@@ -768,6 +770,10 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
         const uint32_t *r0 = in + 3 * by * HR_W, *r1 = r0 + HR_W, *r2 = r1 + HR_W;
         uint8_t *o0 = out + (2 * by) * 0x800, *oe = o0 + 0x400;
         for (; o0 != oe; o0 += 16, r0 += 12, r1 += 12, r2 += 12) {
+            /* the next triple's lines: the bin's 3x context is 345 KiB a render thread against the cores' shared 512 KiB
+             * cache, and the stride prefetcher does not follow these three-stream structure loads (3c5260f, measured on the
+             * RG DS Plus: the downsample spent nearly all its time waiting on its loads) */
+            __builtin_prefetch(r0 + 3 * HR_W, 0, 3); __builtin_prefetch(r1 + 3 * HR_W, 0, 3); __builtin_prefetch(r2 + 3 * HR_W, 0, 3);
             if (skip) { skip--; ds_step(r0, r1, r2, o0, clr, two, 0); }
             else if (ds_step(r0, r1, r2, o0, clr, two, 1)) skip = DS_SKIP;
         }
@@ -782,7 +788,11 @@ static unsigned long dc_bins, dc_bad;
 __attribute__((constructor)) static void hr_dcheck_init(void) { hr_dcheck = getenv("RAST_DCHECK") != 0; }
 
 /* ---- the bin loop (in place of rast.c's render_bins when the scale is 3) ---- */
+extern const uint32_t rast_kern_h_layout[2];    /* the layout the hi-res kernels' prefetches were generated for */
 void hr_render_bins(uint8_t *ctx, int dyn) {
+    if (rast_kern_h_layout[0] != HR_LSTRIDE || rast_kern_h_layout[1] != HR_ATTR) {
+        fprintf(stderr, "[hr] kerngen.py's HR_LSTRIDE/HR_ATTR differ from hr.c's\n"); abort();
+    }
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
     unsigned buf = U8(geom, GEOM_SWAP_BUF) ^ 1;
     uint8_t *verts = geom + GEOM_VERTS + buf * GEOM_VERTS_BUF;
@@ -824,7 +834,7 @@ void hr_render_bins(uint8_t *ctx, int dyn) {
             memset(H->ctx + HR_ID, 0xff, HR_CL * HR_W);
             hr_render_list(H, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);
         }
-        const uint32_t *res = hr_resolve_bin(H, sys, geom, bin);
+        const uint32_t *res = hr_resolve_bin(H, sys, geom, bin, U8(ctx, CTX_NO_EDGE));
         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, res, HR_BL * HR_W * 4);
         hr_downsample(res, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
         comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */
