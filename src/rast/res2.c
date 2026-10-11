@@ -130,7 +130,7 @@ static inline __attribute__((always_inline)) uint8x16_t fog_ch16(uint8x16_t c, u
     return vaddq_u8(c, vreinterpretq_u8_s8(vshrn_high_n_s16(vshrn_n_s16(lo, 7), hi, 7)));
 }
 static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
-                                                             uint32_t fogc, int zb, int full) {
+                                                             uint32_t fogc, int zb, uint8_t *tp, const int planes, int full) {
     static const uint8_t idx[32] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
                                      16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
     const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16));
@@ -184,6 +184,11 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
                 : "r"(c8), "m"(*(const uint8_t (*)[128])c8));
         const uint8x16x4_t wx = { { vreinterpretq_u8_u32(a0), vreinterpretq_u8_u32(a1), vreinterpretq_u8_u32(a2), vreinterpretq_u8_u32(a3) } };
         const uint8x16x4_t wy = { { vreinterpretq_u8_u32(a4), vreinterpretq_u8_u32(a5), vreinterpretq_u8_u32(a6), vreinterpretq_u8_u32(a7) } };
+        if (planes) {                   /* the words' top bytes for the edge marking's id screen (two tbl and two str) */
+            const uint8x16_t ti = PIDX(16);
+            vst1q_u8(tp, vqtbl4q_u8(wx, ti)); vst1q_u8(tp + 16, vqtbl4q_u8(wy, ti));
+            tp += 32;
+        }
         if (__builtin_expect((int)vmaxvq_u8(vmaxq_u8(vqtbl4q_u8(wx, didx), vqtbl4q_u8(wy, didx))) <= zb, 1)) {
             FOG_ZERO_WORDS();
             continue;
@@ -222,8 +227,15 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
  * zb from fog_zero_b2() */
 static __attribute__((noinline)) void fog_line2x(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
                                                  uint32_t fogc, int zb, int full) {
-    if (full) fog_line16(c, attr, table, params, fogc, zb, 1);
-    else fog_line16(c, attr, table, params, fogc, zb, 0);
+    if (full) fog_line16(c, attr, table, params, fogc, zb, 0, 0, 1);
+    else fog_line16(c, attr, table, params, fogc, zb, 0, 0, 0);
+}
+/* the same, writing the attribute line's top-byte plane tp as it goes (a function of its own: in one function clang
+ * merges the two calls and tests tp in the loop) */
+static __attribute__((noinline)) void fog_line2xp(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
+                                                  uint32_t fogc, int zb, uint8_t *tp, int full) {
+    if (full) fog_line16(c, attr, table, params, fogc, zb, tp, 1, 1);
+    else fog_line16(c, attr, table, params, fogc, zb, tp, 1, 0);
 }
 static inline __attribute__((always_inline)) uint8x16_t edge_sel(uint8x16_t m, uint8x16_t t, uint8x16_t f) {
     __asm__("bif %0.16b, %1.16b, %2.16b" : "+w"(t) : "w"(f), "w"(m));      /* m ? t : f (hr.c's note on bif) */
@@ -425,14 +437,16 @@ int res2_resolve_fx(uint8_t *ctx, uint8_t *out, unsigned bin, unsigned m, uint8_
         uint32x4_t c4 = vdupq_n_u32(clear);
         for (int x = 0; x < W2; x += 4) vst1q_u32(&cl[0][x], c4), vst1q_u32(&cl[1][x], c4);
     }
-    if (fog) {
-        for (int y = y0; y < 31; y++) fog_line2x(COL(y), ATT(y), table, params, fogc, zb, fog == 1);
-        if (bin == 11) fog_line2x(COL(31), ATT(30), table, params, fogc, zb, fog == 1);
-    }
-    /* the id screen's planes: the 32 attribute lines' top bytes, and the clear attribute's for bins 0 and 11 */
+    /* the id screen's planes: the 32 attribute lines' top bytes (the fog pass writes those of the lines it fogs, it
+     * has the words; edge_tplanes2x the rest), and the clear attribute's for bins 0 and 11 */
     uint8_t *tp = tplanes2x();
 #define TP(y) (tp + (y) * W2)
-    edge_tplanes2x(tp, ATT(0), 32);
+    if (fog) {
+        for (int y = y0; y < 31; y++) fog_line2xp(COL(y), ATT(y), table, params, fogc, zb, TP(y), fog == 1);
+        if (bin == 11) fog_line2x(COL(31), ATT(30), table, params, fogc, zb, fog == 1);       /* (line 30's attributes) */
+        if (y0) edge_tplanes2x(TP(0), ATT(0), 1);
+        edge_tplanes2x(TP(31), ATT(31), 1);
+    } else edge_tplanes2x(tp, ATT(0), 32);
     if (bin == 0 || bin == 11) memset(TP(32), (int)(clear >> 24), W2);
     int l = 1;
     if (bin == 0) {

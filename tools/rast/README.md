@@ -325,6 +325,17 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   pointer, which the scene cycle with the compositor's checks passed: its scenes never take the fog-only resolve),
   `t_comp_hook.c`, the scene cycle with the compositor's checks (its bins as DraStic's renderer's to 69600 bins, 5809
   tables against the C port, 0 differ).
+  Then, with fog and edge marking both on, the fog pass writes the edge screen's top-byte planes of the lines it fogs
+  (it has their attribute words in registers: two tbl and two str a step of 32 pixels, +4 modeled cycles; its own
+  function, fog_line_zbp / fog_line2xp, as clang merged the two calls of one function and tested the pointer in the
+  loop), and edge_tplanes makes only the others (at 3x the context's first and last line, at 2x the lines the fog does
+  not take: line 0 of bins 1-11, line 31). Modeled A55 cycles a frame, the fog and edge-marking scene S4: at 3x
+  edge_tplanes 0.19 -> 0.01 M, the fog 1.16 -> 1.24 M (-0.12 M); at 2x edge_tplanes2x 0.095 -> 0.005 M, the fog 0.52 ->
+  0.53 M (-0.07 M). `ut/hr_ab` against 4f63ae7 (its resolve cases fog with edge marking on random and polygon-like
+  contexts; it failed a first build that fogged a pair's lines just before marking them, so the marking read the plane
+  of the line below before the fog wrote it: the fog now runs a pair ahead), `t_resolve.c` (the drivers with fog and
+  edge marking, every bin), S4's frame diff with the compositor's checks, the scene cycle's bins as DraStic's renderer's
+  (to 48000 bins, 4147 tables and 3.08 M composited quarters checked, 0 differ).
   Fifth round, overdraw (`defer.c`, the deferred kernels). Measured first, per bin (a C NEON build's RAST_STATS): the
   stress ROM writes 1.5 opaque pixels per covered one (1.25-1.75 in every bin), the field scene S7 1.0 everywhere, the
   fog and edge-marking scene S4 1.15 (1.0 in 75% of its bins, up to 2.25 in its heaviest); polygons whose depth test

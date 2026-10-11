@@ -319,7 +319,7 @@ static inline __attribute__((always_inline)) uint8x16_t fog_ch16(uint8x16_t c, u
     return vaddq_u8(c, vreinterpretq_u8_s8(vshrn_high_n_s16(vshrn_n_s16(lo, 7), hi, 7)));
 }
 static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params,
-                                                             uint32_t fogc, int zb, int full) {
+                                                             uint32_t fogc, int zb, uint8_t *tp, const int planes, int full) {
     static const uint8_t idx[32] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
                                      16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
     const uint16x8_t off = vdupq_n_u16((uint16_t)(params >> 16));
@@ -380,6 +380,11 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
                 : "r"(c8), "m"(*(const uint8_t (*)[128])c8));
         const uint8x16x4_t wx = { { vreinterpretq_u8_u32(a0), vreinterpretq_u8_u32(a1), vreinterpretq_u8_u32(a2), vreinterpretq_u8_u32(a3) } };
         const uint8x16x4_t wy = { { vreinterpretq_u8_u32(a4), vreinterpretq_u8_u32(a5), vreinterpretq_u8_u32(a6), vreinterpretq_u8_u32(a7) } };
+        if (planes) {                   /* the words' top bytes for the edge marking's id screen (two tbl and two str) */
+            const uint8x16_t ti = PIDX(16);
+            vst1q_u8(tp, vqtbl4q_u8(wx, ti)); vst1q_u8(tp + 16, vqtbl4q_u8(wy, ti));
+            tp += 32;
+        }
         if (__builtin_expect((int)vmaxvq_u8(vmaxq_u8(vqtbl4q_u8(wx, didx), vqtbl4q_u8(wy, didx))) <= zb, 1)) {
             /* the fog flags (bit 31 of the words) cleared (and with the mask into other registers: the immediate bic
              * is destructive and the words are still wanted on the other path, so clang copied them first) */
@@ -420,10 +425,17 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
  * zb from fog_zero_b2() */
 static __attribute__((noinline)) void fog_line_zb(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc,
                                                   int zb, int full) {
-    if (full) fog_line16(c, attr, table, params, fogc, zb, 1);
-    else fog_line16(c, attr, table, params, fogc, zb, 0);
+    if (full) fog_line16(c, attr, table, params, fogc, zb, 0, 0, 1);
+    else fog_line16(c, attr, table, params, fogc, zb, 0, 0, 0);
 }
-/* the same with the bound derived here (ut/hr_ab's fog test; the resolve derives it once per bin) */
+/* the same, writing the attribute line's top-byte plane tp as it goes (the edge marking's id screen; a function of
+ * its own: in one function clang merges the two calls and tests tp in the loop) */
+static __attribute__((noinline)) void fog_line_zbp(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc,
+                                                   int zb, uint8_t *tp, int full) {
+    if (full) fog_line16(c, attr, table, params, fogc, zb, tp, 1, 1);
+    else fog_line16(c, attr, table, params, fogc, zb, tp, 1, 0);
+}
+/* the same with the bound derived here and no planes (ut/hr_ab's fog test; the resolve derives it once per bin) */
 static void fog_line(uint32_t *c, const uint32_t *attr, const uint8_t *table, uint32_t params, uint32_t fogc, int full) {
     fog_line_zb(c, attr, table, params, fogc, fog_zero_b2(table, params), full);
 }
@@ -605,7 +617,22 @@ static __attribute__((noinline)) const uint32_t *hr_resolve_bin(hr_t *H, uint8_t
 #define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
 #define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
     _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
-    if (edges) edge_tplanes(H->tp, ATT(0), HR_CL);     /* (the resolve writes colours only: the attributes stay) */
+    /* the edge marking's id screen reads the attribute lines' top bytes as planes (H->tp): with fog the fog pass writes
+     * them for the lines it fogs (it has the words), edge_tplanes the rest (the resolve writes colours only: the
+     * attributes stay). A pair's marking reads the planes of the lines above and below it, so the fog runs a pair
+     * ahead of the marking: line k's colours are fogged before they are marked (the marking reads only the attribute
+     * lines and each pixel's own colour, the fog only its own line), as before */
+    if (edges && fog) {
+        edge_tplanes(H->tp, ATT(0), 1); edge_tplanes(H->tp + (HR_CL - 1) * HR_W, ATT(HR_CL - 1), 1);
+        for (int k = 1; k <= 2; k++) fog_line_zbp(COL(k), ATT(k), geom + 0x9974, params, fogc, zb, H->tp + k * HR_W, fog == 1);
+        for (int l = 1; l <= HR_BL; l += 2) {
+            if (l + 2 <= HR_BL)
+                for (int k = l + 2; k <= l + 3; k++) fog_line_zbp(COL(k), ATT(k), geom + 0x9974, params, fogc, zb, H->tp + k * HR_W, fog == 1);
+            edge_lines(COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), H->tp + (l - 1) * HR_W, clear, geom + 0x99b4);
+        }
+        return COL(1);
+    }
+    if (edges) edge_tplanes(H->tp, ATT(0), HR_CL);
     for (int l = 1; l <= HR_BL; l += 2) {               /* two lines a step: the edge marking shares their compares */
         if (fog) for (int k = l; k <= l + 1; k++) fog_line_zb(COL(k), ATT(k), geom + 0x9974, params, fogc, zb, fog == 1);
         if (edges) edge_lines(COL(l), COL(l + 1), ATT(l - 1), ATT(l), ATT(l + 1), ATT(l + 2), H->tp + (l - 1) * HR_W, clear, geom + 0x99b4);
