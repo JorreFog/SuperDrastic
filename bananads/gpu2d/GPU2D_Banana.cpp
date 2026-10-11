@@ -1957,6 +1957,19 @@ void BananaRenderer2D::ResolveSpritesNeon(int x0, int x1)
     uint32x4_t present = zero;
     for (int i = x0; i < x1; i += 4)
     {
+        if (!(i & 15) && i + 16 <= x1)
+        {
+            // 16 pixels with no opaque sprite pixel (most of a line's sprite extent): one test, two stores
+            uint32x4x4_t q = vld1q_u32_x4(&OBJLine[i]);
+            uint32x4_t any = vorrq_u32(vorrq_u32(q.val[0], q.val[1]), vorrq_u32(q.val[2], q.val[3]));
+            if (vmaxvq_u32(vandq_u32(any, vopaque)) == 0)
+            {
+                vst1q_u32(&OBJColor[i], zero); vst1q_u32(&OBJColor[i + 4], zero);
+                vst1q_u32(&OBJColor[i + 8], zero); vst1q_u32(&OBJColor[i + 12], zero);
+                i += 12;
+                continue;
+            }
+        }
         uint32x4_t p = vld1q_u32(&OBJLine[i]);
         uint32x4_t op = vtstq_u32(p, vopaque);
         if (windows)
