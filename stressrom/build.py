@@ -2,13 +2,16 @@
 """Build dsstress .nds ROMs: a tunable 3D stress load for DraStic (see main9.c).
 
     build.py                      -> out/dsstress-ramp.nds, out/dsstress-L1..L10.nds, out/dsswap.nds
+    STRESS_THUMB=1 build.py       -> the same in out-thumb/, with main9.c compiled as Thumb (BananaJIT's tests)
 Needs clang + ld.lld (targets armv5te for the ARM9; the ARM7 is a 4-byte halt stub).
 Header layout mirrors the minimal ROM DraStic is known to boot: ARM9 at 0x8000, no logo.
 """
 import math, os, struct, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "out")
+THUMB = os.environ.get("STRESS_THUMB") == "1"
+OD = "out-thumb" if THUMB else "out"
+OUT = os.path.join(HERE, OD)
 os.makedirs(OUT, exist_ok=True)
 
 def fx(v): return int(round(v * 4096))
@@ -43,10 +46,10 @@ with open(os.path.join(OUT, "ld9.ld"), "w") as f: f.write(LD)
 
 T = ["--target=armv5te-none-eabi", "-marm", "-mfloat-abi=soft"]
 def run(cmd): subprocess.run(cmd, check=True, cwd=HERE)
-run(["clang", *T, "-O2", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables", "-ffreestanding", "-fno-builtin", "-nostdlib", "-Wall", "-c", "main9.c", "-o", "out/main9.o"])
-run(["clang", *T, "-c", "crt9.s", "-o", "out/crt9.o"])
-run(["ld.lld", "-T", "out/ld9.ld", "out/crt9.o", "out/main9.o", "-o", "out/arm9.elf"])
-run(["llvm-objcopy", "-O", "binary", "out/arm9.elf", "out/arm9.bin"])
+run(["clang", *T[:1], "-mthumb" if THUMB else "-marm", *T[2:], "-O2", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables", "-ffreestanding", "-fno-builtin", "-nostdlib", "-Wall", "-c", "main9.c", "-o", OD + "/main9.o"])
+run(["clang", *T, "-c", "crt9.s", "-o", OD + "/crt9.o"])
+run(["ld.lld", "-T", OD + "/ld9.ld", OD + "/crt9.o", OD + "/main9.o", "-o", OD + "/arm9.elf"])
+run(["llvm-objcopy", "-O", "binary", OD + "/arm9.elf", OD + "/arm9.bin"])
 arm9 = bytearray(open(os.path.join(OUT, "arm9.bin"), "rb").read())
 assert arm9[4:8] == b"STRS", "config block not at offset 4"
 # ARM7 stub: HALTCNT <- 0x80 in a loop (ldr/strb/b with the address in a literal)

@@ -43,6 +43,8 @@ public:
 
     // Native coverage (for docs and tests): true if this ARM instruction compiles without the interpreter.
     static bool NativeARM(u32 instr, u16 kind);
+    static int NativeKindARM(u32 instr, u16 kind);  // 0 interpreter, 1 data processing, 2 load/store
+    static int ThumbToARM(u32 thumb, u16 kind, u32 r15, u32& arm, u16& armKind, u32& pc, bool& noRotate);
 
 private:
     using Reg = bananajit::Reg;
@@ -54,6 +56,10 @@ private:
     void ExitBlock();
     void Fallback(bool thumb);
     void CompileALU();
+    void CompileMem();
+    Reg Shifter(u32 instr, bool wantC, bool& carry_changes, Reg dst);
+    void StoreHigh();             // store dirty r8-r14 (they live in caller-saved registers)
+    void CallOut(const void* fn);  // fn(cpu, w1, w2) with the interpreter's state in memory
     void AddCycles(s32 n) { ConstantCycles += n; }
     void FlushCycles();
     s32 CyclesC() const;       // what the interpreter's AddCycles_C charges for CurInstr
@@ -70,6 +76,8 @@ private:
     u32 R15 = 0;
     s32 ConstantCycles = 0;
     u16 Loaded = 0, Dirt = 0;
+    u32 PCValue = 0;     // what reading the PC gives in this instruction
+    bool NoRotate = false;
 };
 
 }  // namespace melonDS

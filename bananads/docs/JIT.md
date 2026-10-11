@@ -22,27 +22,44 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
   `msr nzcv` plus one `b.cond`. An S instruction takes its flags straight from the host's arithmetic (`mrs
   nzcv`), and only for the flags a later instruction reads (the framework's SetFlags analysis).
 - **Cycles:** each instruction costs what melonDS's interpreter charges for it, taken or skipped.
-- **What is native (phase 1):** ARM data processing (all 16 operations, immediate and immediate-shift operands,
-  RRX and the #32 shift forms, with the shifter's carry), when Rd isn't the PC.
+- **What is native:**
+  - ARM data processing: all 16 operations, immediate and immediate-shift operands, RRX and the #32 shift forms,
+    with the shifter's carry, when Rd isn't the PC.
+  - ARM loads and stores: LDR/STR/LDRB/STRB (immediate and shifted-register offsets, pre/post-indexed,
+    write-back) and LDRH/STRH/LDRSB/LDRSH. The address is computed natively. The access goes through the same
+    functions the interpreter calls (`DataRead*`/`DataWrite*` and `AddCycles_CD/CDI`), so its timing and
+    side effects are the interpreter's.
+  - Thumb: every Thumb instruction that means exactly what an ARM instruction means is compiled as that ARM
+    instruction (`ThumbToARM`). That covers shifts by an immediate, add/subtract, MOV/CMP/ADD/SUB with
+    immediates, the register ALU ops, the high-register ADD/CMP/MOV, PC/SP-relative ADD, ADD SP, and every
+    load/store form except PUSH/POP/LDMIA/STMIA. One exception to "exactly": Thumb's PC- and SP-relative LDR
+    doesn't rotate an unaligned word, so it uses its own helper.
 - **Everything else** runs through melonDS's interpreter, one instruction at a time, using the framework's
-  protocol (R15, CurInstr and CodeCycles set first, and the PC stored before the condition check). So every
-  instruction works from the start.
+  protocol (R15, CurInstr and CodeCycles set first, and the PC stored before the condition check). Today that
+  is branches, LDM/STM/PUSH/POP, multiplies, shifts by a register, MSR/MRS, coprocessor and DSP instructions.
 - **Fastmem:** off with BananaJIT for now.
 
-**Checked (aarch64 under qemu):** the stress ROMs `dsstress-L1`, `L5`, `L10`, `dsswap` and `dsstress-ramp`
-give pictures identical to the interpreter's at frames 150, 300, 450 and 600 (CI checks L5). In `dsstress-L5`,
-869 of the 1,598 compiled instructions are native. RAM drifts from frame 9 on through block-granularity timing,
-as with melonDS's JIT (frame 6), with the same pictures. **Not checked:** a device, real games, speed. qemu's
-numbers don't say anything about the A55.
+**Checked (aarch64 under qemu):** the stress ROMs (`dsstress-L1`, `L5`, `L10`, `dsswap`, `dsstress-ramp`)
+give pictures identical to the interpreter's at frames 150, 300, 450 and 600. They were checked both as ARM code
+and compiled as Thumb (`STRESS_THUMB=1 stressrom/build.py`); CI checks L5 both ways. Native share of compiled
+instructions in `dsstress-L5`:
+- **ARM:** 1,533 of 1,598 (96%).
+- **Thumb:** 3,782 of 4,266 (89%). Most of the rest is conditional branches, MUL, B and PUSH/POP.
+
+RAM drifts from frame 9 on through block-granularity timing, as with melonDS's JIT (frame 6), with the same
+pictures.
+
+**Not checked:** a device, real games, speed. qemu's numbers say nothing about the A55, and under qemu the
+stress ROMs are bound by 3D, not by the CPUs.
 
 `BANANAJIT_TRACE=1` logs every compiled block: each instruction's address, kind, and whether it is native.
 
-**Next, in order of what the trace shows the interpreter still doing:**
-1. Loads and stores (LDR/STR immediate, LDRH/STRH, LDM/STM): through melonDS's memory functions, then
-   fastmem.
-2. Branches (B, BL, BX) natively, and linking blocks with static targets directly.
-3. Thumb: the same operations, decoded from Thumb.
-4. Shifts by a register, multiplies, and the DSP instructions.
+**Next, in order of what the traces show the interpreter still doing:**
+1. Branches: B/BL/B.cond/BX natively, with the interpreter's `JumpTo` costs (its instruction-fetch and cache
+   timing has to be matched first), then linking blocks with static targets directly.
+2. LDM/STM and PUSH/POP.
+3. MUL/MLA (the interpreter charges by operand size), shifts by a register.
+4. Fastmem for loads and stores in main RAM, with the framework's fault patching.
 5. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
 
 ## The DraStic JIT study (2026-10-11)

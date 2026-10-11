@@ -60,6 +60,17 @@ jobs:
           done
           cmp bj-on/frame150.ppm bj-off/frame150.ppm
           cmp bj-on/frame300.ppm bj-off/frame300.ppm
+      - name: BananaJIT on Thumb code (the stress ROM compiled as Thumb)
+        run: |
+          STRESS_THUMB=1 python3 stressrom/build.py
+          for j in on off; do
+            mkdir -p bjt-$j
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads --frontend headless --set jit=$j \
+              --set headless.frames=300 --set headless.dump_dir=bjt-$j --set headless.dump_every=150 \
+              --set save.dir=smoke --set wifi.dns=off --set resume.on_start=off stressrom/out-thumb/dsstress-L5.nds
+          done
+          cmp bjt-on/frame150.ppm bjt-off/frame150.ppm
+          cmp bjt-on/frame300.ppm bjt-off/frame300.ppm
       - uses: actions/upload-artifact@v4
         with:
           name: bananads-aarch64
