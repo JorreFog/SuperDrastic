@@ -54,6 +54,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `headless.frames` | `600` | how many frames `headless` runs |
 | `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
 | `headless.reload_at` | none | after this frame, save the state to slot 3 and load it straight back (a test of the savestate path) |
+| `headless.audio_dump` | none | write the raw audio the SPU hands the frontend (`SPU::ReadOutput`: stereo s16 at the output rate, 48000 Hz) to this file, so two builds' audio compares byte for byte with `cmp` |
 | `headless.measure_from` | `0` | also report the fps from this frame on (a game's scene, after loading) |
 | `headless.input` | none | scripted presses: `<frame>:<keys>[:<frames held>]`, comma-separated, keys joined by `+` (`a b select start right left up down r l x y`), held 6 frames by default: `600:start,900:a:10` |
 | `log.file` | none | a copy of the log (stderr always gets it) |
