@@ -1,16 +1,16 @@
-From 5556ac6555504edd6f97f43d63a9c6c325160f3e Mon Sep 17 00:00:00 2001
+From 7736a3569510465f5501633a17a37db6a6ab641f Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
-Date: Sun, 11 Oct 2026 20:21:58 +0000
+Date: Sun, 11 Oct 2026 20:31:07 +0000
 Subject: [PATCH] ARMJIT_A64: fewer host instructions per block and per exit
 
 Each change is on by default and exact (same cycles, memory and pictures). MELONDS_JIT_OLDCODEGEN=1
 turns all of them off (the code is then what patches 0001-0006 generate); MELONDS_JIT_NO<name>=1
 turns off one. All are read once, when the compiler is created.
 
-- FASTENTRY: the fast memory base (x26) is set by a prologue at each block's entry (MOVZ and a
-  MOVK per other non-zero halfword: the same size for all of a CPU's blocks), which the runtime
-  dispatches to; link slots and DynExit enter past it (x26 is callee-saved
-  and only blocks of the same CPU set it), so a linked block doesn't reload it.
+- FASTENTRY: the fast memory base (x26) is set by a prologue at each block's entry (MOVZ and a MOVK
+  per other non-zero halfword: the same size for all of a CPU's blocks), which the runtime
+  dispatches to; link slots and DynExit enter past it (x26 is callee-saved and only blocks of the
+  same CPU set it), so a linked block doesn't reload it.
 - CONDEXIT: a conditional branch with a constant target ending a block gets a known exit each way
   (ExitCheck and a link slot), instead of DynExit's lookup; the condition is checked again on the
   host's flags or RCPSR.
@@ -26,36 +26,38 @@ turns off one. All are read once, when the compiler is created.
   literal, and come in a variant without the CPSR store for blocks that left RCPSR as it is in
   memory; DynExit computes the lookup address in fewer instructions and loads the code base from a
   literal.
-- EXITPC: a constant exit's R15 is stored by the stub (ExitCheckPC, from a literal word after the
-  link slot) instead of a mov/movk/str in the block; so is the not-taken exit's of a conditional
-  immediate branch ending a block (no R15 store before it).
-- SELFLOOP: an exit back to the block's own start, when nothing in the block stores R15 (so memory
-  still has the block's), does ExitCheck's work inline and goes round through a link slot linked
-  from the start (UnlinkBlock unlinks it as any other); back to the loop stores R15.
-- LOOPREGS: such a loop block (only compiled instructions, no block transfers, MSR/MRS, register
-  jumps or R15 operands, no branch followed when taken) loads every guest register it uses once at
-  its entry and keeps them in host registers round the loop (no unloading; slow memory calls save
-  and reload caller-saved ones); every way out stores them all.
-  A Thumb PUSH/POP/LDMIA/STMIA of one register (not PC) qualifies: with the register loaded it is
+- EXITPC (needs EXITSTUB): a constant exit's R15 is stored by the stub (ExitCheckPC, from a literal
+  word after the link slot) instead of a mov/movk/str in the block; so is the not-taken exit's of a
+  conditional immediate branch ending a block (no R15 store before it).
+- SELFLOOP (needs EXITPC): an exit back to the block's own start, when nothing in the block stores
+  R15 (so memory still has the block's), does ExitCheck's work inline and goes round through a link
+  slot linked from the start (UnlinkBlock unlinks it as any other); back to the loop stores R15.
+- LOOPREGS (needs SELFLOOP and CONDEXIT): such a loop block (only compiled instructions, no block
+  transfers, MSR/MRS, register jumps or R15 operands, no branch followed when taken) loads every
+  guest register it uses once at its entry and keeps them in host registers round the loop (no
+  unloading; slow memory calls save and reload caller-saved ones); every way out stores them all. A
+  Thumb PUSH/POP/LDMIA/STMIA of one register (not PC) qualifies: with the register loaded it is
   Comp_MemAccessBlock's single access.
-- KEEPFLAGS: the functions a faulted fast memory access is patched to call keep the host's NZCV,
-  so a fast access no longer ends the host flags' validity (conditions after loads branch on them).
-- FOLDEXIT: a conditional immediate branch ending a block has its taken way's exit inside the
-  branch (stores, one cycle add of its jump cycles plus the block's constant ones, known by then:
-  the not-taken way's are the last) and its other way's at the end, instead of a join and a second
-  condition check.
-- LAZYFLAGS: an unconditional instruction's four flags stay in the host's NZCV (PendingFlags) until something would change or read NZCV/RCPSR (the emitter calls FlagsTouched
+- KEEPFLAGS: the functions a faulted fast memory access is patched to call keep the host's NZCV, so
+  a fast access no longer ends the host flags' validity (conditions after loads branch on them).
+- FOLDEXIT (needs CONDEXIT): a conditional immediate branch ending a block has its taken way's exit
+  inside the branch (stores, one cycle add of its jump cycles plus the block's constant ones, known
+  by then: the not-taken way's are the last) and its other way's at the end, instead of a join and a
+  second condition check.
+- LAZYFLAGS (needs KEEPFLAGS): an unconditional instruction's four flags stay in the host's NZCV
+  (PendingFlags) until something would change or read NZCV/RCPSR (the emitter calls FlagsTouched
   first: Write32 for an NZCV writer or an instruction naming w27, BL before taking its offset), an
   instruction not known safe starts, or an exit, which puts them in RCPSR on its way only. An
   unconditional ADD/SUB/RSB/CMP/CMN/NEG that reads no flags and sets two or more drops pending ones
   (it overwrites all four the same way before anything can read them). In a LOOPREGS block, when the
-  loop puts all four flags in RCPSR before reading any, the way round
-  leaves them and the CPSR store out; the loop's check then compares Timestamp and Target by the sign
-  of their difference (no NZCV write), so its ways out still find the flags in NZCV. A callee-saved
-  host register the loop's guest registers leave free holds the Timestamp's address.
+  loop puts all four flags in RCPSR before reading any, the way round leaves them and the CPSR store
+  out; the loop's check then compares Timestamp and Target by the sign of their difference (no NZCV
+  write), so its ways out still find the flags in NZCV. A callee-saved host register the loop's
+  guest registers leave free holds the Timestamp's address.
 
 MELONDS_JIT_PERFMAP also names the shared stubs in the map (stub_e9xx/e7xx JumpTo, ec0n ExitCheck,
-ed0n DynExit, eb00 the rest), and MELONDS_JIT_PERFDIR puts the map and code dump elsewhere than /tmp.
+ed0n DynExit, eb00 the rest), and MELONDS_JIT_PERFDIR puts the map and code dump elsewhere than
+/tmp.
 ---
  src/ARMJIT_A64/ARMJIT_ALU.cpp       |  15 +-
  src/ARMJIT_A64/ARMJIT_Branch.cpp    |  60 ++-
@@ -219,7 +221,7 @@ index c4af33b..ca47bf0 100644
      SetJumpTarget(skipExecute);
      Comp_AddCycles_C(true);
 diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-index ee12807..920a336 100644
+index ee12807..810e4ec 100644
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 @@ -265,6 +265,34 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
@@ -236,11 +238,11 @@ index ee12807..920a336 100644
 +        OptCodeStores = !old && !getenv("MELONDS_JIT_NOCODESTORES");
 +        OptDead = !old && !getenv("MELONDS_JIT_NODEAD");
 +        OptExitStub = !old && !getenv("MELONDS_JIT_NOEXITSTUB");
-+        OptExitPC = !old && !getenv("MELONDS_JIT_NOEXITPC") && !getenv("MELONDS_JIT_NOLINK");
++        OptExitPC = OptExitStub && !getenv("MELONDS_JIT_NOEXITPC") && !getenv("MELONDS_JIT_NOLINK");   // (ExitCheckPC)
 +        OptSelfLoop = OptExitPC && !getenv("MELONDS_JIT_NOSELFLOOP");
 +        OptKeepFlags = !old && !getenv("MELONDS_JIT_NOKEEPFLAGS");
 +        OptLoopRegs = OptSelfLoop && OptCondExit && !getenv("MELONDS_JIT_NOLOOPREGS");
-+        OptLazyFlags = OptLoopRegs && OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
++        OptLazyFlags = OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
 +        FlagsWatch = OptLazyFlags;
 +        OptFoldExit = OptCondExit && !getenv("MELONDS_JIT_NOFOLDEXIT") && !getenv("MELONDS_JIT_NOLINK");
 +        // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
