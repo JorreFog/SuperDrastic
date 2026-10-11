@@ -1,11 +1,11 @@
-From 50b4d44f5ec7a5b5a3ec5522a0635337c23c2aee Mon Sep 17 00:00:00 2001
+From 4e4157a3be89c445f94672c2f8a3bec0d2d51d4f Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 20:28:14 +0000
 Subject: [PATCH] NDS: fewer layers for the JIT's slow memory accesses (VRAM,
  OAM, palette, IO registers)
 
 What the JIT's slow loads and stores do is unchanged: the same values, side effects and order as the
-NDS::ARM9Read*/ARM9Write* chain. MELONDS_MEMFAST (a mask, default 3: both on) picks the parts:
+NDS::ARM9Read*/ARM9Write* chain. MELONDS_MEMFAST (a mask, default 7: all on) picks the parts:
 
 - 1 (VRAM, OAM, palette): GPU::VRAMDirect, a table per 16 KB page of 0x06000000-0x06FFFFFF, says for each page
   with one bank alone mapped where the page is in its bank, the bank's dirty word and bit, and its display
@@ -18,6 +18,10 @@ NDS::ARM9Read*/ARM9Write* chain. MELONDS_MEMFAST (a mask, default 3: both on) pi
   IPCSYNC/IPCFIFOCNT, the IPC FIFOs, IME/IE/IF, line for line as ARM9IO*/ARM7IO* do them; other IO registers
   straight to NDS::ARM9IO*/ARM7IO* without the virtual ARM9Read*/ARM7Read* dispatch. The JIT's static-address
   IO calls (GetFuncForAddr) get one function per such register.
+- 4 (VRAM tracking): VRAMTrackingSet::DeriveState, which the 2D renderers call per line, returns at once when
+  nothing was remapped since its last call (GPU::VRAMMapGen, bumped with every VRAMMap_* change: MapVRAM_*,
+  Reset, a state load) and the banks mapped there then have no dirty bit: the walk would return nothing and
+  clear nothing.
 
 SlowRead9/SlowWrite9 start with the common cases inline, with no call and no stack frame, after checks that
 have no side effects (the TCMs, the region, the VRAM page's entry, the code bitmap for main RAM, so a store
@@ -29,20 +33,21 @@ needs no CheckAndInvalidate. SlowBlockTransfer9 stores inside one 1 KB of OAM, p
 FIFO do the region's checks once. ARMJIT_Memory::LocaliseAddress is inline for the regions CheckAndInvalidate
 names as constants (the same result).
 
-MELONDS_MEMFAST=0 gives patch 0005's paths; BananaDS sets it from jit.vramfast and jit.iodirect.
+MELONDS_MEMFAST=0 gives patch 0005's paths; BananaDS sets it from jit.vramfast, jit.iodirect and
+render.vramtrack_skip.
 ---
  src/ARMJIT.cpp        | 464 ++++++++++++++++++++++++++++++++++++------
  src/ARMJIT_Memory.cpp | 163 ++++++++++++++-
  src/ARMJIT_Memory.h   |  18 +-
- src/GPU.cpp           |  55 +++++
- src/GPU.h             | 131 ++++++++++++
+ src/GPU.cpp           |  73 +++++++
+ src/GPU.h             | 144 +++++++++++++
  src/NDS.h             | 171 ++++++++++++++++
  src/NDS_IOFast.cpp    |  11 +
- src/NDS_IOFast.h      |  25 +++
- 8 files changed, 968 insertions(+), 70 deletions(-)
+ src/NDS_IOFast.h      |  27 +++
+ 8 files changed, 1001 insertions(+), 70 deletions(-)
 
 diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
-index 5356968..b0f3dcd 100644
+index 5356968..10934cb 100644
 --- a/src/ARMJIT.cpp
 +++ b/src/ARMJIT.cpp
 @@ -102,48 +102,85 @@ template <typename T>
@@ -270,7 +275,7 @@ index 5356968..b0f3dcd 100644
      else if ((addr & cpu->DTCMMask) == cpu->DTCMBase)
          val = *(T*)&cpu->DTCM[addr & 0x3FFF];
 -    else if (ConsoleType == 0 && IOFastOn && IOFastRead9<T>(cpu->NDS, addr, val))
-+    else if (ConsoleType == 0 && (IOFastRoutes | MemFastParts) && IOFastRead9<T>(cpu->NDS, addr, val))
++    else if (ConsoleType == 0 && (IOFastRoutes | (MemFastParts & 3)) && IOFastRead9<T>(cpu->NDS, addr, val))
          ;
      else if (std::is_same<T, u32>::value)
          val = NDS::Current->ARM9Read32(addr);
@@ -392,7 +397,7 @@ index 5356968..b0f3dcd 100644
          *(T*)&cpu->DTCM[addr & 0x3FFF] = val;
      }
 -    else if (ConsoleType == 0 && IOFastOn && IOFastWrite9<T>(cpu->NDS, addr, val))
-+    else if (ConsoleType == 0 && (IOFastRoutes | MemFastParts) && IOFastWrite9<T>(cpu->NDS, addr, val))
++    else if (ConsoleType == 0 && (IOFastRoutes | (MemFastParts & 3)) && IOFastWrite9<T>(cpu->NDS, addr, val))
      {
      }
      else if (std::is_same<T, u32>::value)
@@ -591,7 +596,7 @@ index 5356968..b0f3dcd 100644
 +            }
 +        }
 +    }
-+    if (ConsoleType == 0 && (IOFastRoutes | MemFastParts))
++    if (ConsoleType == 0 && (IOFastRoutes | (MemFastParts & 3)))
      {
          // the same per word as SlowWrite9/SlowRead9 (the TCMs first), with the direct routes
          melonDS::NDS& nds = cpu->NDS;
@@ -855,7 +860,7 @@ index 4bf660e..a1116ce 100644
      void* FastMem7Start;
      u8* MemoryBase = nullptr;
 diff --git a/src/GPU.cpp b/src/GPU.cpp
-index b695ee9..3455a05 100644
+index b695ee9..991bfad 100644
 --- a/src/GPU.cpp
 +++ b/src/GPU.cpp
 @@ -48,6 +48,7 @@ enum
@@ -870,7 +875,7 @@ index b695ee9..3455a05 100644
  
      VRAMMap_ARM7[0] = 0;
      VRAMMap_ARM7[1] = 0;
-+    MarkVRAMDirectStale();
++    VRAMMappingChanged();
  
      memset(VRAMPtr_ABG, 0, sizeof(VRAMPtr_ABG));
      memset(VRAMPtr_AOBJ, 0, sizeof(VRAMPtr_AOBJ));
@@ -878,7 +883,7 @@ index b695ee9..3455a05 100644
  
      if (!file->Saving)
      {
-+        MarkVRAMDirectStale();
++        VRAMMappingChanged();
          for (int i = 0; i < 0x20; i++)
          {
              VRAMPtr_ABG[i] = GetUniqueBankPtr(VRAMMap_ABG[i], i << 14);
@@ -886,7 +891,7 @@ index b695ee9..3455a05 100644
  
  void GPU::MapVRAM_AB(u32 bank, u8 cnt) noexcept
  {
-+    MarkVRAMDirectStale();
++    VRAMMappingChanged();
      cnt &= 0x9B;
  
      u8 oldcnt = VRAMCNT[bank];
@@ -894,7 +899,7 @@ index b695ee9..3455a05 100644
  
  void GPU::MapVRAM_CD(u32 bank, u8 cnt) noexcept
  {
-+    MarkVRAMDirectStale();
++    VRAMMappingChanged();
      cnt &= 0x9F;
  
      u8 oldcnt = VRAMCNT[bank];
@@ -902,7 +907,7 @@ index b695ee9..3455a05 100644
  
  void GPU::MapVRAM_E(u32 bank, u8 cnt) noexcept
  {
-+    MarkVRAMDirectStale();
++    VRAMMappingChanged();
      cnt &= 0x87;
  
      u8 oldcnt = VRAMCNT[bank];
@@ -910,7 +915,7 @@ index b695ee9..3455a05 100644
  
  void GPU::MapVRAM_FG(u32 bank, u8 cnt) noexcept
  {
-+    MarkVRAMDirectStale();
++    VRAMMappingChanged();
      cnt &= 0x9F;
  
      u8 oldcnt = VRAMCNT[bank];
@@ -918,7 +923,7 @@ index b695ee9..3455a05 100644
  
  void GPU::MapVRAM_H(u32 bank, u8 cnt) noexcept
  {
-+    MarkVRAMDirectStale();
++    VRAMMappingChanged();
      cnt &= 0x83;
  
      u8 oldcnt = VRAMCNT[bank];
@@ -926,11 +931,43 @@ index b695ee9..3455a05 100644
  
  void GPU::MapVRAM_I(u32 bank, u8 cnt) noexcept
  {
-+    MarkVRAMDirectStale();
++    VRAMMappingChanged();
      cnt &= 0x83;
  
      u8 oldcnt = VRAMCNT[bank];
-@@ -1612,6 +1621,52 @@ void GPU::CheckCaptureEnd()
+@@ -1393,6 +1402,21 @@ void GPU::SetVCount(u16 val, u16 mask) noexcept
+ template <u32 Size, u32 MappingGranularity>
+ NonStupidBitField<Size/VRAMDirtyGranularity> VRAMTrackingSet<Size, MappingGranularity>::DeriveState(const u32* currentMappings, GPU& gpu)
+ {
++    // nothing remapped since the last call and no dirty bit in the banks mapped here: the walk below would
++    // return nothing and clear nothing
++    if ((MemFastParts & memfast_VRAMTrack) && LastMapGen == gpu.VRAMMapGen)
++    {
++        bool clean = true;
++        for (u32 banks = LastBanks; banks != 0 && clean; banks &= banks - 1)
++        {
++            const NonStupidBitField<128*1024/VRAMDirtyGranularity>& dirty = gpu.VRAMDirty[__builtin_ctz(banks)];
++            for (u32 w = 0; w < sizeof(dirty.Data) / sizeof(dirty.Data[0]); w++)
++                clean &= dirty.Data[w] == 0;
++        }
++        if (clean)
++            return NonStupidBitField<Size/VRAMDirtyGranularity>();
++    }
++
+     NonStupidBitField<Size/VRAMDirtyGranularity> result;
+     u16 banksToBeZeroed = 0;
+     for (u32 i = 0; i < Size / MappingGranularity; i++)
+@@ -1444,6 +1468,9 @@ NonStupidBitField<Size/VRAMDirtyGranularity> VRAMTrackingSet<Size, MappingGranul
+         }
+     }
+ 
++    LastMapGen = gpu.VRAMMapGen;
++    LastBanks = banksToBeZeroed;
++
+     while (banksToBeZeroed != 0)
+     {
+         u32 num = __builtin_ctz(banksToBeZeroed);
+@@ -1612,6 +1639,52 @@ void GPU::CheckCaptureEnd()
      VRAMCBFlagsOr(dstbank, dstoff, CBFlag_Complete);
  }
  
@@ -984,10 +1021,30 @@ index b695ee9..3455a05 100644
  {
      u16 flags = VRAMCaptureBlockFlags[block];
 diff --git a/src/GPU.h b/src/GPU.h
-index b0e1faf..20d9c9f 100644
+index b0e1faf..97e711b 100644
 --- a/src/GPU.h
 +++ b/src/GPU.h
-@@ -145,6 +145,135 @@ public:
+@@ -40,6 +40,11 @@ struct VRAMTrackingSet
+ 
+     const u32 VRAMBitsPerMapping = MappingGranularity / VRAMDirtyGranularity;
+ 
++    // (BananaDS, MELONDS_MEMFAST's memfast_VRAMTrack) GPU::VRAMMapGen at the last DeriveState, and the banks
++    // mapped here then: while the generation holds and those banks have no dirty bit, DeriveState has nothing to do
++    u64 LastMapGen = ~0ULL;
++    u16 LastBanks = 0;
++
+     void Reset()
+     {
+         for (u32 i = 0; i < Size / MappingGranularity; i++)
+@@ -48,6 +53,7 @@ struct VRAMTrackingSet
+             // so it will always be a mismatch => the bank will be completely invalidated
+             Mapping[i] = 0x8000;
+         }
++        LastMapGen = ~0ULL;
+     }
+     NonStupidBitField<Size/VRAMDirtyGranularity> DeriveState(const u32* currentMappings, GPU& gpu);
+ };
+@@ -145,6 +151,141 @@ public:
          if (mask & (1<<3)) SyncVRAMCaptureBlock((3<<2) | addr, write);
      }
  
@@ -1082,6 +1139,12 @@ index b0e1faf..20d9c9f 100644
 +        val = *(const T*)&mem[addr & 0x3FFF];
 +        return true;
 +    }
++    // every change to the VRAMMap_* tables: VRAMTrackingSet::DeriveState's generation, and VRAMDirect stale
++    void VRAMMappingChanged() noexcept
++    {
++        VRAMMapGen++;
++        MarkVRAMDirectStale();
++    }
 +    void MarkVRAMDirectStale() noexcept
 +    {
 +        if (VRAMDirectStale)
@@ -1123,12 +1186,13 @@ index b0e1faf..20d9c9f 100644
      int GetCaptureBlock_LCDC(u32 offset);
  
      void GetCaptureInfo_ABG(int* info);
-@@ -674,6 +803,8 @@ public:
+@@ -674,6 +815,9 @@ public:
      melonDS::GPU3D GPU3D;
  
      NonStupidBitField<128*1024/VRAMDirtyGranularity> VRAMDirty[9] {};
 +    bool VRAMDirectStale = true;            // (BananaDS: VRAMDirect needs rebuilding)
 +    VRAMDirectPage VRAMDirect[1024] {};
++    u64 VRAMMapGen = 0;                     // (BananaDS: bumped by VRAMMappingChanged)
      VRAMTrackingSet<512*1024, 16*1024> VRAMDirty_ABG {};
      VRAMTrackingSet<256*1024, 16*1024> VRAMDirty_AOBJ {};
      VRAMTrackingSet<128*1024, 16*1024> VRAMDirty_BBG {};
@@ -1315,7 +1379,7 @@ index 5acd202..7eb4cff 100644
      [[nodiscard]] bool IsJITEnabled() const noexcept { return EnableJIT; }
      void SetJITArgs(std::optional<JITArgs> args) noexcept;
 diff --git a/src/NDS_IOFast.cpp b/src/NDS_IOFast.cpp
-index 2787c88..93acf91 100644
+index 2787c88..cc74418 100644
 --- a/src/NDS_IOFast.cpp
 +++ b/src/NDS_IOFast.cpp
 @@ -50,10 +50,21 @@ static u32 ReadIOFastEnv()
@@ -1325,26 +1389,26 @@ index 2787c88..93acf91 100644
 +static u32 ReadMemFastEnv()
 +{
 +    const char* e = getenv("MELONDS_MEMFAST");
-+    return e ? (u32)strtoul(e, nullptr, 0) & 0x3 : 0x3;
++    return e ? (u32)strtoul(e, nullptr, 0) & 0x7 : 0x7;
 +}
 +
 +u32 MemFastParts = ReadMemFastEnv();
-+u32 SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !MemFastParts) ? (u32)slow_FullPath : 0);
++u32 SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !(MemFastParts & 3)) ? (u32)slow_FullPath : 0);
 +
  void IOFastInit() noexcept
  {
      IOFastRoutes = ReadIOFastEnv();
      IOFastOn = IOFastRoutes != 0;
 +    MemFastParts = ReadMemFastEnv();
-+    SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !MemFastParts) ? (u32)slow_FullPath : 0);
++    SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !(MemFastParts & 3)) ? (u32)slow_FullPath : 0);
  }
  
  namespace
 diff --git a/src/NDS_IOFast.h b/src/NDS_IOFast.h
-index 3de27cb..6422a47 100644
+index 3de27cb..03d9da0 100644
 --- a/src/NDS_IOFast.h
 +++ b/src/NDS_IOFast.h
-@@ -61,9 +61,34 @@ enum
+@@ -61,9 +61,36 @@ enum
      iofast_IORead = 8,      // DISPSTAT/VCOUNT, KEYINPUT, IME/IE/IF reads
  };
  
@@ -1359,6 +1423,8 @@ index 3de27cb..6422a47 100644
 +                            // (NDS::ARM9IOReadDirect/ARM9IOWriteDirect), other IO registers straight to
 +                            // NDS::ARM9IO*/ARM7IO* (no ARM9Read*/ARM7Read* dispatch), also for the JIT's
 +                            // static-address IO calls
++    memfast_VRAMTrack = 4,  // VRAMTrackingSet::DeriveState returns at once when nothing was remapped since its
++                            // last call (GPU::VRAMMapGen) and its banks have no dirty bit
 +};
 +
  extern bool IOStatsOn;
