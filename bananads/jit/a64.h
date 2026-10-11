@@ -135,6 +135,7 @@ struct A64 {
     void msr_nzcv(Reg t) { flagEpoch++; put(0xD51B4200 | t); }
     void cset(Reg d, Cond c) { put(0x1A9F07E0 | (c ^ 1) << 12 | d); }  // CSINC d, wzr, wzr, !c
     void csel(Reg d, Reg n, Reg m, Cond c) { put(0x1A800000 | m << 16 | c << 12 | n << 5 | d); }
+    void csinc(Reg d, Reg n, Reg m, Cond c) { put(0x1A800400 | m << 16 | c << 12 | n << 5 | d); }  // c ? n : m + 1
 
     // Loads and stores, unsigned scaled offset from a 64-bit base
     void ldr(Reg t, Reg n, uint32_t off) { put(0xB9400000 | (off / 4) << 10 | n << 5 | t); }
@@ -153,6 +154,7 @@ struct A64 {
     void strb_reg(Reg t, Reg n, Reg m) { put(0x38206800 | m << 16 | n << 5 | t); }
     void mulx(Reg d, Reg n, Reg m) { put(0x9B007C00 | m << 16 | n << 5 | d); }  // MADD d, n, m, xzr
     void ldrx_reg_lsl3(Reg t, Reg n, Reg m) { put(0xF8607800 | m << 16 | n << 5 | t); }  // [Xn, Xm, LSL #3]
+    void ldr_reg_lsl2(Reg t, Reg n, Reg m) { put(0xB8607800 | m << 16 | n << 5 | t); }   // W, [Xn, Xm, LSL #2]
 
     // Load/store register pair, 32-bit (W), signed scaled offset (imm7 * 4, -256..252): block transfers gather
     // and scatter the register list through a scratch buffer two words at a time with these.
@@ -223,14 +225,16 @@ struct A64 {
     void brk() { put(0xD4200000); }
 
     // A forward branch: emit it now, point it at here() later.
-    struct Fixup { uint32_t* at; uint32_t kind; };  // kind: 0 B, 1 B.cond, 2 CBZ/CBNZ
+    struct Fixup { uint32_t* at; uint32_t kind; };  // kind: 0 B, 1 B.cond, 2 CBZ/CBNZ, 3 TBZ/TBNZ
     Fixup b_fwd() { Fixup f{code, 0}; put(b_(0)); return f; }
     Fixup bcond_fwd(Cond c) { Fixup f{code, 1}; put(bcond_(c, 0)); return f; }
     Fixup cbz_fwd(Reg t) { Fixup f{code, 2}; put(cbz_(t, 0)); return f; }
     Fixup cbnz_fwd(Reg t) { Fixup f{code, 2}; put(cbnz_(t, 0)); return f; }
+    Fixup tbnz_fwd(Reg t, uint32_t bit) { Fixup f{code, 3}; put(0x37000000 | (bit & 31) << 19 | t); return f; }  // W, bit < 32
     void land(Fixup f) {
         int32_t words = (int32_t)(code - f.at);
         if (f.kind == 0) *f.at |= words & 0x3FFFFFF;
+        else if (f.kind == 3) *f.at |= (words & 0x3FFF) << 5;
         else *f.at |= (words & 0x7FFFF) << 5;
     }
     // A direct branch or call to an absolute address, when it's within +-128 MB; else through x16.

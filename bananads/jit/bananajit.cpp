@@ -45,6 +45,7 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
                  offsetof(ARM, FastBlockLookup) < 32768 && offsetof(ARM, StopExecution) % 4 == 0;
     DoMul = !getenv("BANANAJIT_NO_MUL");
     DoLDM = !getenv("BANANAJIT_NO_LDM");
+    DoJumps = !getenv("BANANAJIT_NO_JUMPS");
     Exact = getenv("BANANAJIT_EXACT") != nullptr;
     Platform::Log(Platform::LogLevel::Info, "[bananajit] timing %s\n",
                   Exact ? "exact (the interpreter's, cycle for cycle)" : "per block, with fast memory");
@@ -319,7 +320,7 @@ s32 Compiler::CyclesC() const {
 // stored on the way back only, and instrAddr is a constant.
 static constexpr u32 PrologueBytes = 8;
 
-void Compiler::ExitBlock(bool known, u32 knownPC, int thumbAfter) {
+void Compiler::ExitBlock(bool known, u32 knownPC, int thumbAfter, bool addrInW0) {
     const bool thumbExit = thumbAfter < 0 ? Thumb : thumbAfter != 0;
     FlushCycles();
     FlushRegs(false);
@@ -331,6 +332,7 @@ void Compiler::ExitBlock(bool known, u32 knownPC, int thumbAfter) {
     };
     if (!LinkBlocks) { back(); return; }
     const Reg X0r = W0, X16 = (Reg)16, X17 = (Reg)17;
+    if (addrInW0) A.mov(W2, W0);  // (the Timestamp/Target pair is loaded into x17/x0 below)
     u64* ts = CurCPU->Num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp;  // its Target is the next u64
 
     A.ldr(X16, RCPU, offsetof(ARM, StopExecution));
@@ -346,6 +348,8 @@ void Compiler::ExitBlock(bool known, u32 knownPC, int thumbAfter) {
 
     if (known) {
         A.movi(X0r, knownPC - (thumbExit ? 2 : 4));  // instrAddr
+    } else if (addrInW0) {
+        A.mov(X0r, W2);  // EmitJumpTo's instrAddr (R15 and the Thumb bit are in place)
     } else {
         A.ldr(X0r, RCPU, off_R(15));
         A.ubfx(X17, RCPSR, 5, 1);     // Thumb: 2, ARM: 4
@@ -1345,7 +1349,7 @@ void Compiler::SlowBlockTransfer(bool load, const int* regs, int n) {
     A.msr_nzcv((Reg)16);
     for (int r = 8; r < 16; r += 2) A.ldpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
     if (load)
-        for (int i = 0; i < n; i++) A.ldr(host(regs[i]), SP, 80 + i * 8);
+        for (int i = 0; i < n; i++) A.ldr(regs[i] == 15 ? W0 : host(regs[i]), SP, 80 + i * 8);
     A.addxi(SP, SP, 80 + extra);
 }
 
@@ -1355,7 +1359,8 @@ void Compiler::SlowBlockTransfer(bool load, const int* regs, int n) {
 bool Compiler::FastBlockTransfer(bool load, int rn, const int* regs, int n) {
     if (load)
         for (int i = 0; i < n; i++) if (regs[i] == rn) return false;
-    for (int i = 0; i < n; i++) load ? Dirty(regs[i]) : Need(regs[i]);
+    for (int i = 0; i < n; i++) if (regs[i] != 15) load ? Dirty(regs[i]) : Need(regs[i]);
+    auto xr = [&](int g) { return g == 15 ? W0 : host(g); };  // a loaded PC goes to W0 (CompileJump)
     if (StaticSlow()) {
         SlowBlockTransfer(load, regs, n);
     } else {
@@ -1368,11 +1373,11 @@ bool Compiler::FastBlockTransfer(bool load, int rn, const int* regs, int n) {
         while (i < n) {
             faulting.push_back(A.here());
             if (i + 1 < n) {
-                load ? A.ldp(host(regs[i]), host(regs[i + 1]), (Reg)16, i * 4)
-                     : A.stp(host(regs[i]), host(regs[i + 1]), (Reg)16, i * 4);
+                load ? A.ldp(xr(regs[i]), xr(regs[i + 1]), (Reg)16, i * 4)
+                     : A.stp(xr(regs[i]), xr(regs[i + 1]), (Reg)16, i * 4);
                 i += 2;
             } else {
-                load ? A.ldr(host(regs[i]), (Reg)16, i * 4) : A.str(host(regs[i]), (Reg)16, i * 4);
+                load ? A.ldr(xr(regs[i]), (Reg)16, i * 4) : A.str(xr(regs[i]), (Reg)16, i * 4);
                 i++;
             }
         }
@@ -1646,6 +1651,139 @@ bool Compiler::CompileBranch() {
     return true;
 }
 
+
+// --- block timing: jumps to a register (BX, BLX, LDM/POP with the PC) ---
+
+// What ARMv5/ARMv4::JumpTo does, at melonDS's JIT's level (its JumpTo stubs): W0 holds the address, bit 0 the state
+// it goes to. Sets the Thumb bit, R15, the code region's cycles and charges the fetches; leaves the instruction's
+// address in W0 (for ExitBlock).
+void Compiler::EmitJumpTo() {
+    const Reg X16 = (Reg)16, X17 = (Reg)17;
+    if (CurCPU->Num == 0) {
+        // the fetch cost w: MemTimings[addr >> 12][0] (RegionCodeCycles; 0xFF: the instruction cache, 3), 1 in ITCM
+        A.movix(X16, (uint64_t)(uintptr_t)((u8*)CurCPU + offsetof(ARMv5, MemTimings)));
+        A.lsri(X17, W0, 12);
+        A.addx(X16, X16, X17, LSL, 2);
+        A.ldrb(X17, X16, 0);
+        StoreCPU(X17, offsetof(ARMv5, RegionCodeCycles));
+        A.cmpi(X17, 0xFF);
+        A.movz(X16, 3);
+        A.csel(X17, X16, X17, EQ);
+        A.ldr(X16, RCPU, offsetof(ARMv5, ITCMSize));
+        A.subs(ZR, W0, X16);
+        A.csinc(X17, X17, ZR, CS);  // addr < ITCMSize: 1
+        auto thumb = A.tbnz_fwd(W0, 0);
+        A.andi(RCPSR, RCPSR, ~0x20u);  // ARM: two fetches
+        A.andi(W0, W0, ~3u);
+        A.addi(X16, W0, 4);
+        A.str(X16, RCPU, off_R(15));
+        A.add(RCycles, RCycles, X17, LSL, 1);
+        auto done = A.b_fwd();
+        A.land(thumb);
+        A.orri(RCPSR, RCPSR, 0x20);    // Thumb: two fetches from a halfword-aligned address, else one
+        A.andi(W0, W0, ~1u);
+        A.addi(X16, W0, 2);
+        A.str(X16, RCPU, off_R(15));
+        A.add(RCycles, RCycles, X17);
+        auto one = A.tbnz_fwd(W0, 1);
+        auto skip = A.b_fwd();
+        A.land(one);
+        A.add(RCycles, RCycles, X17);
+        A.land(skip);
+        A.land(done);
+    } else {
+        // CodeRegion, CodeCycles (addr >> 15) and ARM7MemTimings[CodeCycles]: Thumb [0] + [1], ARM [2] + [3]
+        A.lsri(X16, W0, 24);
+        StoreCPU(X16, offsetof(ARM, CodeRegion));
+        A.lsri(X17, W0, 15);
+        StoreCPU(X17, offsetof(ARM, CodeCycles));
+        A.movix(X16, (uint64_t)(uintptr_t)&NDS.ARM7MemTimings[0][0]);
+        A.ldr_reg_lsl2(X16, X16, X17);
+        auto thumb = A.tbnz_fwd(W0, 0);
+        A.andi(RCPSR, RCPSR, ~0x20u);
+        A.ubfx(X17, X16, 16, 8);
+        A.lsri(X16, X16, 24);
+        A.add(RCycles, RCycles, X17);
+        A.add(RCycles, RCycles, X16);
+        A.andi(W0, W0, ~3u);
+        A.addi(X16, W0, 4);
+        A.str(X16, RCPU, off_R(15));
+        auto done = A.b_fwd();
+        A.land(thumb);
+        A.orri(RCPSR, RCPSR, 0x20);
+        A.ubfx(X17, X16, 0, 8);
+        A.ubfx(X16, X16, 8, 8);
+        A.add(RCycles, RCycles, X17);
+        A.add(RCycles, RCycles, X16);
+        A.andi(W0, W0, ~1u);
+        A.addi(X16, W0, 2);
+        A.str(X16, RCPU, off_R(15));
+        A.land(done);
+    }
+}
+
+int Compiler::DynJump(bool thumb, u32 in, u16 kind, int num) {
+    using namespace ARMInstrInfo;
+    if (thumb) {
+        if (kind == tk_BX) return ((in >> 3) & 0xF) != 15 ? 1 : 0;
+        if (kind == tk_BLX_REG) return num == 0 && ((in >> 3) & 0xF) != 15 ? 1 : 0;
+        if (kind == tk_POP) return (in & (1 << 8)) ? 2 : 0;
+        return 0;
+    }
+    if (kind == ak_BX || kind == ak_BLX_REG) return (in & 0xF) != 15 ? 1 : 0;
+    if (kind == ak_LDM) {
+        const u32 rn = (in >> 16) & 0xF;
+        if (!(in & (1 << 15)) || (in & (1 << 22)) || rn == 15 || (in & (1u << rn))) return 0;
+        return 2;
+    }
+    return 0;
+}
+
+// The jump itself: BX/BLX to a register, or the PC loaded by LDM/POP (with the other registers and the write-back),
+// then the block's exit with the target in W0. Returns true (the taken path has left the block).
+bool Compiler::CompileJump(int form) {
+    using namespace ARMInstrInfo;
+    const u32 in = CurInstr.Instr;
+    const u16 kind = CurInstr.Info.Kind;
+    if (form == 1) {
+        const u32 rm = Thumb ? (in >> 3) & 0xF : in & 0xF;
+        Need(rm);
+        A.mov(W0, host(rm));   // (before BLX writes LR: BLX LR jumps to the old LR)
+        if (kind == ak_BLX_REG || kind == tk_BLX_REG) {
+            A.movi(host(14), Thumb ? R15 - 1 : R15 - 4);
+            Dirty(14);
+        }
+    } else {
+        u32 rlist, rn;
+        bool pre, up, wb;
+        if (Thumb) { rlist = (in & 0xFF) | 1u << 15; rn = 13; pre = false; up = true; wb = true; }
+        else { rlist = in & 0xFFFF; rn = (in >> 16) & 0xF; pre = in & (1 << 24); up = in & (1 << 23); wb = in & (1 << 21); }
+        const int n = __builtin_popcount(rlist);
+        int regs[16], ns = 0;
+        for (int r = 0; r < 16; r++) if (rlist & (1u << r)) regs[ns++] = r;
+        const s32 startOff = up ? (pre ? 4 : 0) : (-4 * n + (pre ? 0 : 4));
+        const s32 wbDelta = up ? 4 * n : -4 * n;
+        Need(rn);
+        if (startOff > 0) A.addi(W1, host(rn), startOff);
+        else if (startOff < 0) A.subi(W1, host(rn), -startOff);
+        else A.mov(W1, host(rn));
+        FastBlockTransfer(true, (int)rn, regs, ns);  // the PC into W0 (DynJump excluded a base in the list)
+        if (wb) {
+            wbDelta >= 0 ? A.addi(host(rn), host(rn), (u32)wbDelta) : A.subi(host(rn), host(rn), (u32)-wbDelta);
+            Dirty(rn);
+        }
+        // ARMv4: LDM stays in ARM state (bit 0 cleared), POP in Thumb state (set); ARMv5 interworks on bit 0
+        if (CurCPU->Num == 1) Thumb ? A.orri(W0, W0, 1) : A.andi(W0, W0, ~1u);
+    }
+    EmitJumpTo();
+    const s32 keep = ConstantCycles;
+    const u16 keepDirt = Dirt;
+    ExitBlock(false, 0, -1, true);
+    ConstantCycles = keep;
+    Dirt = keepDirt;
+    return true;
+}
+
 // --- a block ---
 
 static const char* TraceName(bool thumb, const FetchedInstr& f) {
@@ -1699,6 +1837,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
         if (!DoMul && (nk == 3 || nk == 4)) nk = 0;  // jit.mul=off: multiply and register-shift through the interpreter
         if (!DoLDM && nk == 5) nk = 0;               // jit.ldm=off: block transfers through the interpreter
         if (!nk && !Exact && FastMem && StaticBranch(thumb, kind, cpu->Num)) nk = 6;  // block timing: native
+        int jumpForm = 0;
+        if (!nk && !Exact && FastMem && DoJumps && (jumpForm = DynJump(thumb, CurInstr.Instr, kind, cpu->Num))) nk = 7;
         const bool native = nk != 0;
         bool branchExited = false;
         const bool selfCycles = nk != 1;  // the interpreter or a memory helper charges this one's cycles
@@ -1743,7 +1883,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             skip = A.bcond_fwd((Cond)(cond ^ 1));
         }
 
-        if (thumb && nk && nk != 5 && nk != 6) {  // compiled as the ARM instruction it means; flags, registers and cycles stay Thumb's
+        if (thumb && nk && nk != 5 && nk != 6 && nk != 7) {  // compiled as the ARM instruction it means; flags, registers and cycles stay Thumb's
             CurInstr.Instr = armInstr;
             if (nk == 2) CurInstr.Info.Kind = armKind;
         }
@@ -1760,6 +1900,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             CompileBlockTransfer();  // charges its own AddCycles_CDI/CD (loads/stores) through the helper
         } else if (nk == 6) {
             branchExited = CompileBranch();
+        } else if (nk == 7) {
+            branchExited = CompileJump(jumpForm);
         } else {
             Fallback(thumb);
         }

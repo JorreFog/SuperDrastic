@@ -58,7 +58,12 @@ private:
     void LoadFlags();          // host NZCV <- CPSR, unless the host's NZCV still holds them
     u32 FlagsEpoch = ~0u;      // host NZCV == CPSR's NZCV while this equals A.flagEpoch
     // knownPC: the R15 it leaves, when constant; thumbAfter: the Thumb state then (-1: the block's)
-    void ExitBlock(bool known = false, u32 knownPC = 0, int thumbAfter = -1);
+    // addrInW0: the target's instruction address is in W0 (EmitJumpTo), R15 and the Thumb bit already set
+    void ExitBlock(bool known = false, u32 knownPC = 0, int thumbAfter = -1, bool addrInW0 = false);
+    void EmitJumpTo();
+    static int DynJump(bool thumb, u32 instr, u16 kind, int num);  // 0 no, 1 BX/BLX reg, 2 LDM/POP with the PC
+    bool CompileJump(int form);
+    bool DoJumps = true;  // jit.jumps=off: jumps to a register through the interpreter
     // block timing: B, BL, BLX imm and Thumb B, B<cond>, BL (merged) with their target known when compiled, as
     // melonDS's JIT does them (fetch cycles counted at compile time); the taken path leaves the block itself unless
     // the framework follows the branch. Returns whether it did (the rest of the taken path is then dead).

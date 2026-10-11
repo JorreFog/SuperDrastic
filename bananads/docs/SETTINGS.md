@@ -36,6 +36,8 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `sdl.scale` | `2` | the window's size |
 | `headless.frames` | `600` | how many frames `headless` runs |
 | `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
+| `headless.measure_from` | `0` | also report the fps from this frame on (a game's scene, after loading) |
+| `headless.input` | none | scripted presses: `<frame>:<keys>[:<frames held>]`, comma-separated, keys joined by `+` (`a b select start right left up down r l x y`), held 6 frames by default: `600:start,900:a:10` |
 | `log.file` | none | a copy of the log (stderr always gets it) |
 | `log.level` | `1` | 0 debug, 1 info, 2 warnings, 3 errors |
 

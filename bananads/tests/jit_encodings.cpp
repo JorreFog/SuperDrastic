@@ -39,6 +39,9 @@ int main() {
     E("sub sp, sp, #80", a.subxi(SP, SP, 80));
     E("add x16, x29, #0x123, lsl #12", a.addxi12((Reg)16, (Reg)29, 0x123));
     E("add x16, x17, w16, uxtw", a.add_uxtw((Reg)16, (Reg)17, (Reg)16));
+    E("csinc w17, w17, wzr, hs", a.csinc((Reg)17, (Reg)17, ZR, CS));
+    E("ldr w16, [x16, x17, lsl #2]", a.ldr_reg_lsl2((Reg)16, (Reg)16, (Reg)17));
+    E("tbnz w0, #0, #8\nnop", { auto f = a.tbnz_fwd((Reg)0, 0); a.nop(); a.land(f); });
     E("add w1, w2, w3", a.add((Reg)1, (Reg)2, (Reg)3));
     E("add w1, w2, w3, lsl #5", a.add((Reg)1, (Reg)2, (Reg)3, LSL, 5));
     E("adds w19, w20, w21, lsr #31", a.adds((Reg)19, (Reg)20, (Reg)21, LSR, 31));
