@@ -821,3 +821,318 @@ ORIG4 ds2d_vis4_orig, 6, "mov x4, x17", "mov w3, #8", "sub w3, w3, w2; neg w2, w
 ORIG4 ds2d_vis8_orig, 7, "mov x2, x17", "ld1 {v24.16b}, [x2]", "ld1 {v0.16b, v1.16b, v2.16b, v3.16b}, [x1], #64; ld1 {v4.16b, v5.16b, v6.16b, v7.16b}, [x1], #64"
 /* render_scanline_set_visibility_12bpp_asm (0x9f468): adr x2, bits; ld1 {v24.16b}, [x2]; mov w3, 2; nop */
 ORIG4 ds2d_vis12_orig, 8, "mov x2, x17", "ld1 {v24.16b}, [x2]", "mov w3, #2"
+
+/* The affine BG tile renderers: render_scanline_affine_render_tiles_normal_normal_asm (0x9f9bc),
+ * _extended_normal_asm (0x9fbf8), _extended_extended_asm (0x9fd30). A line of an affine BG comes as runs of pixels
+ * within one tile (count runs: widths[k] pixels from the 8x8 8bpp tile of entry k, each pixel's byte offset in the
+ * tile from offs[]); a run's 16 offsets are loaded, looked up in the tile's 64 bytes by tbl and 16 bytes stored, the
+ * pointers then advanced by the run's width (the next run's store overwrites the excess; widths of 16 or more loop
+ * in 16s). normal_normal: entries are bytes (tile * 64 & 0x3fc0), the output 8bpp indexes; extended_normal: u16
+ * entries (tile * 64 & 0xffc0), each run's offsets XORed with a flip byte (flips[k]); extended_extended: the same
+ * with the entries' palette numbers (bits 12-15) as the high byte of u16 output pixels (st2). The originals load a
+ * tile by ld1 of four registers (the load pipe held 8 modeled cycles), two tiles a step: 51 modeled cycles per two
+ * runs (normal_normal). These are the originals instruction for instruction except: the tiles by four ldr q, the
+ * narrow path's offsets by ldr q at [x1] and [x1, w0] and its stores by str q at [x0] and [x0, w0] with the pointer
+ * adds after them, ld2r of the flip bytes as two ld1r: the same loads and stores in the same order (every load of a
+ * step before its stores), so the same bytes for any arguments; 31 cycles per two runs. Callers: the affine BG
+ * renderers render_scanline_affine_normal_ext / _extended_ext (C). The first four instructions include a cbz, so the
+ * check mode reaches the originals through ds2d_aff_*_orig (below). Clobbers the originals' registers and x16, x17. */
+.macro LDTILE t0, t1, t2, t3, base
+    ldr   \t0, [\base]
+    ldr   \t1, [\base, #16]
+    ldr   \t2, [\base, #32]
+    ldr   \t3, [\base, #48]
+.endm
+
+    .p2align 4
+    .globl ds2d_aff_nn
+    .hidden ds2d_aff_nn
+    .type ds2d_aff_nn, %function
+ds2d_aff_nn:                            /* (dst, offs, widths, entries, count, tiles) */
+    ldrb  w7, [x2]
+    mov   w12, #0x3fc0
+    cbz   w7, 8f                        /* widths[0] == 0: 256 pixels from entries[0]'s tile */
+    subs  w4, w4, #1
+    b.eq  6f
+1:  ldrh  w9, [x3], #2
+    ldrh  w6, [x2], #2
+    and   w10, w12, w9, lsl #6
+    and   w11, w12, w9, lsr #2
+    and   x7, x6, #0xff
+    lsr   x8, x6, #8
+    add   x10, x5, w10, uxtw
+    add   x11, x5, w11, uxtw
+    tst   w6, #0xf0f0f0f0
+    LDTILE q0, q1, q2, q3, x10
+    LDTILE q4, q5, q6, q7, x11
+    b.ne  3f
+    ldr   q16, [x1]
+    ldr   q17, [x1, x7]
+    add   x1, x1, x7
+    add   x1, x1, x8
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    tbl   v19.16b, {v4.16b, v5.16b, v6.16b, v7.16b}, v17.16b
+    subs  w4, w4, #2
+    str   q18, [x0]
+    str   q19, [x0, x7]
+    add   x0, x0, x7
+    add   x0, x0, x8
+    b.gt  1b
+    b.eq  6f
+    ret
+3:  ld1   {v16.16b}, [x1], #16          /* a run of 16 or more: the original's loops */
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    subs  x7, x7, #16
+    st1   {v18.16b}, [x0], #16
+    b.gt  3b
+    add   x1, x1, w7, sxtw
+    add   x0, x0, w7, sxtw
+4:  ld1   {v17.16b}, [x1], #16
+    tbl   v19.16b, {v4.16b, v5.16b, v6.16b, v7.16b}, v17.16b
+    subs  x8, x8, #16
+    st1   {v19.16b}, [x0], #16
+    b.gt  4b
+    subs  w4, w4, #2
+    add   x1, x1, w8, sxtw
+    add   x0, x0, w8, sxtw
+    b.gt  1b
+    b.ne  7f
+6:  ldrb  w10, [x3]                     /* the last (odd) run */
+    ldrb  w7, [x2]
+    and   w10, w12, w10, lsl #6
+    add   x10, x5, w10, uxtw
+    LDTILE q0, q1, q2, q3, x10
+5:  ld1   {v16.16b}, [x1], #16
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    subs  w7, w7, #16
+    st1   {v18.16b}, [x0], #16
+    b.gt  5b
+7:  ret
+8:  ldrb  w10, [x3]
+    mov   x7, #0x100
+    and   w10, w12, w10, lsl #6
+    add   x10, x5, w10, uxtw
+    LDTILE q0, q1, q2, q3, x10
+9:  ld1   {v16.16b, v17.16b}, [x1], #32
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    tbl   v19.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v17.16b
+    subs  x7, x7, #0x20
+    st1   {v18.16b, v19.16b}, [x0], #32
+    b.ne  9b
+    ret
+    .size ds2d_aff_nn, . - ds2d_aff_nn
+
+    .p2align 4
+    .globl ds2d_aff_en
+    .hidden ds2d_aff_en
+    .type ds2d_aff_en, %function
+ds2d_aff_en:                            /* (dst, offs, widths, entries, flips, count, tiles) */
+    ldrb  w8, [x2]
+    mov   w13, #0xffc0
+    cbz   w8, 8f
+    subs  w5, w5, #1
+    b.eq  6f
+1:  ldr   w10, [x3], #4
+    ldrh  w7, [x2], #2
+    and   w11, w13, w10, lsl #6
+    and   w12, w13, w10, lsr #10
+    and   x8, x7, #0xff
+    lsr   x9, x7, #8
+    add   x11, x6, w11, uxtw
+    add   x12, x6, w12, uxtw
+    tst   w7, #0xf0f0f0f0
+    add   x16, x4, #1
+    ld1r  {v20.16b}, [x4]
+    ld1r  {v21.16b}, [x16]
+    add   x4, x4, #2
+    LDTILE q0, q1, q2, q3, x11
+    LDTILE q4, q5, q6, q7, x12
+    b.ne  3f
+    ldr   q16, [x1]
+    ldr   q17, [x1, x8]
+    add   x1, x1, x8
+    add   x1, x1, x9
+    eor   v16.16b, v16.16b, v20.16b
+    eor   v17.16b, v17.16b, v21.16b
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    tbl   v19.16b, {v4.16b, v5.16b, v6.16b, v7.16b}, v17.16b
+    subs  w5, w5, #2
+    str   q18, [x0]
+    str   q19, [x0, x8]
+    add   x0, x0, x8
+    add   x0, x0, x9
+    b.gt  1b
+    b.eq  6f
+    ret
+3:  ld1   {v16.16b}, [x1], #16
+    eor   v16.16b, v16.16b, v20.16b
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    subs  x8, x8, #16
+    st1   {v18.16b}, [x0], #16
+    b.gt  3b
+    add   x1, x1, w8, sxtw
+    add   x0, x0, w8, sxtw
+4:  ld1   {v17.16b}, [x1], #16
+    eor   v17.16b, v17.16b, v21.16b
+    tbl   v19.16b, {v4.16b, v5.16b, v6.16b, v7.16b}, v17.16b
+    subs  x9, x9, #16
+    st1   {v19.16b}, [x0], #16
+    b.gt  4b
+    subs  w5, w5, #2
+    add   x1, x1, w9, sxtw
+    add   x0, x0, w9, sxtw
+    b.gt  1b
+    b.ne  7f
+6:  ldrh  w11, [x3]
+    ldrb  w8, [x2]
+    and   w11, w13, w11, lsl #6
+    add   x11, x6, w11, uxtw
+    ld1r  {v20.16b}, [x4]
+    LDTILE q0, q1, q2, q3, x11
+5:  ld1   {v16.16b}, [x1], #16
+    eor   v16.16b, v16.16b, v20.16b
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    subs  w8, w8, #16
+    st1   {v18.16b}, [x0], #16
+    b.gt  5b
+7:  ret
+8:  ldrh  w11, [x3]
+    mov   x8, #0x100
+    and   w11, w13, w11, lsl #6
+    ld1r  {v20.16b}, [x4]
+    add   x11, x6, w11, uxtw
+    LDTILE q0, q1, q2, q3, x11
+9:  ld1   {v16.16b, v17.16b}, [x1], #32
+    eor   v16.16b, v16.16b, v20.16b
+    eor   v17.16b, v17.16b, v20.16b
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    tbl   v19.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v17.16b
+    subs  x8, x8, #0x20
+    st1   {v18.16b, v19.16b}, [x0], #32
+    b.ne  9b
+    ret
+    .size ds2d_aff_en, . - ds2d_aff_en
+
+    .p2align 4
+    .globl ds2d_aff_ee
+    .hidden ds2d_aff_ee
+    .type ds2d_aff_ee, %function
+ds2d_aff_ee:                            /* (u16 dst, offs, widths, entries, flips, count, tiles) */
+    ldrb  w8, [x2]
+    mov   w15, #0xffc0
+    cbz   w8, 8f
+    subs  w5, w5, #1
+    b.eq  6f
+1:  ldr   w10, [x3], #4
+    ldrh  w7, [x2], #2
+    and   w11, w15, w10, lsl #6
+    and   w12, w15, w10, lsr #10
+    and   x8, x7, #0xff
+    lsr   x9, x7, #8
+    add   x11, x6, w11, uxtw
+    add   x12, x6, w12, uxtw
+    ubfx  w13, w10, #12, #4
+    lsr   w14, w10, #28
+    tst   w7, #0xf0f0f0f0
+    add   x16, x4, #1
+    ld1r  {v22.16b}, [x4]
+    ld1r  {v23.16b}, [x16]
+    add   x4, x4, #2
+    dup   v19.16b, w13
+    dup   v21.16b, w14
+    LDTILE q0, q1, q2, q3, x11
+    LDTILE q4, q5, q6, q7, x12
+    b.ne  3f
+    ldr   q16, [x1]
+    ldr   q17, [x1, x8]
+    add   x1, x1, x8
+    add   x1, x1, x9
+    add   x8, x8, x8
+    add   x9, x9, x9
+    eor   v16.16b, v16.16b, v22.16b
+    eor   v17.16b, v17.16b, v23.16b
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    tbl   v20.16b, {v4.16b, v5.16b, v6.16b, v7.16b}, v17.16b
+    subs  w5, w5, #2
+    st2   {v18.16b, v19.16b}, [x0], x8
+    st2   {v20.16b, v21.16b}, [x0], x9
+    b.gt  1b
+    b.eq  6f
+    ret
+3:  ld1   {v16.16b}, [x1], #16
+    eor   v16.16b, v16.16b, v22.16b
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    subs  x8, x8, #16
+    st2   {v18.16b, v19.16b}, [x0], #32
+    b.gt  3b
+    add   x1, x1, w8, sxtw
+    add   x0, x0, w8, sxtw #1
+4:  ld1   {v17.16b}, [x1], #16
+    eor   v17.16b, v17.16b, v23.16b
+    tbl   v20.16b, {v4.16b, v5.16b, v6.16b, v7.16b}, v17.16b
+    subs  x9, x9, #16
+    st2   {v20.16b, v21.16b}, [x0], #32
+    b.gt  4b
+    subs  w5, w5, #2
+    add   x1, x1, w9, sxtw
+    add   x0, x0, w9, sxtw #1
+    b.gt  1b
+    b.ne  7f
+6:  ldrh  w11, [x3]
+    ldrb  w8, [x2]
+    ubfx  w13, w11, #12, #4
+    and   w11, w15, w11, lsl #6
+    add   x11, x6, w11, uxtw
+    dup   v19.16b, w13
+    ld1r  {v22.16b}, [x4]
+    LDTILE q0, q1, q2, q3, x11
+5:  ld1   {v16.16b}, [x1], #16
+    eor   v16.16b, v16.16b, v22.16b
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    subs  w8, w8, #16
+    st2   {v18.16b, v19.16b}, [x0], #32
+    b.gt  5b
+7:  ret
+8:  ldrh  w11, [x3]
+    mov   x8, #0x100
+    ubfx  w13, w11, #12, #4
+    and   w11, w15, w11, lsl #6
+    ld1r  {v22.16b}, [x4]
+    dup   v19.16b, w13
+    dup   v21.16b, w13
+    add   x11, x6, w11, uxtw
+    LDTILE q0, q1, q2, q3, x11
+9:  ld1   {v16.16b, v17.16b}, [x1], #32
+    eor   v16.16b, v16.16b, v22.16b
+    eor   v17.16b, v17.16b, v22.16b
+    tbl   v18.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v16.16b
+    tbl   v20.16b, {v0.16b, v1.16b, v2.16b, v3.16b}, v17.16b
+    subs  x8, x8, #0x20
+    st2   {v18.16b, v19.16b}, [x0], #32
+    st2   {v20.16b, v21.16b}, [x0], #32
+    b.ne  9b
+    ret
+    .size ds2d_aff_ee, . - ds2d_aff_ee
+
+/* the check mode's entries to the three originals: their first four instructions (the third a cbz on widths[0]),
+ * then a jump to the fifth (ds2d_orig_vars[i] = { the cbz's target, the fifth instruction }) */
+.macro AFFORIG name, idx, i1, i2, w, i4
+    .p2align 4
+    .globl \name
+    .hidden \name
+    .type \name, %function
+\name:
+    adrp  x16, ds2d_orig_vars
+    add   x16, x16, :lo12:ds2d_orig_vars
+    ldp   x17, x16, [x16, #(\idx) * 16]
+    \i1
+    \i2
+    cbz   \w, 1f
+    \i4
+    br    x16
+1:  br    x17
+    .size \name, . - \name
+.endm
+AFFORIG ds2d_aff_nn_orig, 9, "ldrb w7, [x2]", "mov w12, #0x3fc0", w7, "subs w4, w4, #1"
+AFFORIG ds2d_aff_en_orig, 10, "ldrb w8, [x2]", "mov w13, #0xffc0", w8, "subs w5, w5, #1"
+AFFORIG ds2d_aff_ee_orig, 11, "ldrb w8, [x2]", "mov w15, #0xffc0", w8, "subs w5, w5, #1"

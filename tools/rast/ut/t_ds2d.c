@@ -840,6 +840,165 @@ static void test_vis(void) {
     fprintf(stderr, "set_visibility: %u 4bpp (any shift) / %u 8bpp / %u 12bpp random lines, 200 each through the stubs and the check wrappers equal\n", n[0], n[1], n[2]);
 }
 
+/* ---- the blended captures ---- */
+typedef void (*capb_fn_t)(uint8_t *, uint16_t *, const uint16_t *, const void *);
+#define NCB 16
+static struct { uint8_t cap[0x80]; uint8_t a[0x800]; uint16_t b[512]; int hasb, w; uint8_t ref[1024 + 2 * G]; } cb_case[2][NCB];
+
+static void capb_inputs(uint8_t *cap, uint8_t *a, uint16_t *b, int is3d, int *w) {
+    rndfill(cap, 0x80);
+    switch (rnd(4)) {                                  /* EVA / EVB: DraStic's (0..16), any byte, or the direct case */
+    case 0: cap[0x54] = rnd(17); cap[0x55] = rnd(17); break;
+    case 1: break;
+    case 2: cap[0x54] = 16; cap[0x55] = 0; break;
+    default: cap[0x54] = rnd(2) ? 0 : 16; cap[0x55] = rnd(2) ? 16 : rnd(17); break;
+    }
+    int ww = rnd(3) ? 128 * (1 + rnd(2)) : rnd(4) ? rnd(300) : 0;
+    if (cap[0x54] == 16 && cap[0x55] == 0) ww = 32 * (1 + rnd(8));            /* the direct asm's steps of 32 */
+    *w = ww;
+    uint16_t w16 = (uint16_t)ww; memcpy(cap + 0x4c, &w16, 2);
+    rndfill(a, 0x800);
+    if (rnd(2)) for (int i = 0; i < 0x800; i++) a[i] &= is3d ? ((i & 3) == 3 ? 0xff : 0x3f) : 0x3f;   /* 6-bit channels */
+    rndfill(b, 1024);
+}
+static void test_capb(void) {
+    capb_fn_t ds[2] = { DS(capb_fn_t, DS_CAPB), DS(capb_fn_t, DS_CAPB3D) };
+    static uint8_t cap[0x80], a[0x800], o1[1024 + 2 * G], o2[1024 + 2 * G];
+    static uint16_t b[512];
+    unsigned n[2] = { 0 }, ninplace = 0;
+    for (int it = 0; it < 8000; it++) {
+        int is3d = it & 1, w;
+        capb_inputs(cap, a, b, is3d, &w);
+        int hasb = rnd(4) != 0;
+        uint64_t hb = hasb ? 1 : 0; memcpy(cap + 0x40, &hb, 8);              /* the 2D one's source B flag */
+        const uint16_t *pb = hasb || !is3d ? b : 0;
+        rndfill(o1, sizeof o1); memcpy(o2, o1, sizeof o1);
+        int inplace = hasb && rnd(5) == 0;
+        if (inplace) {                                   /* out == srcb: VRAM captured onto itself */
+            memcpy(o1 + G, b, 1024); memcpy(o2 + G, b, 1024);
+            ds[is3d](cap, (uint16_t *)(o1 + G), (const uint16_t *)(o1 + G), a);
+            (is3d ? (capb_fn_t)ds2d_capb3d : (capb_fn_t)ds2d_capb)(cap, (uint16_t *)(o2 + G), (const uint16_t *)(o2 + G), a);
+            ninplace++;
+        } else {
+            ds[is3d](cap, (uint16_t *)(o1 + G), pb, a);
+            (is3d ? (capb_fn_t)ds2d_capb3d : (capb_fn_t)ds2d_capb)(cap, (uint16_t *)(o2 + G), pb, a);
+        }
+        if (ut_cmp(is3d ? "capture_blended_3d" : "capture_blended", o1, o2, sizeof o1)) {
+            fprintf(stderr, "  eva %u evb %u w %d srcb %d in place %d\n", cap[0x54], cap[0x55], w, hasb, inplace);
+            return;
+        }
+        if (!inplace && it / 2 < NCB) {
+            int k = it / 2;
+            memcpy(cb_case[is3d][k].cap, cap, sizeof cap); memcpy(cb_case[is3d][k].a, a, sizeof a); memcpy(cb_case[is3d][k].b, b, sizeof b);
+            cb_case[is3d][k].hasb = hasb; cb_case[is3d][k].w = w; memcpy(cb_case[is3d][k].ref, o1, sizeof o1);
+        }
+        n[is3d]++;
+    }
+    /* out over a source: the original's order (the replacement hands these to it) */
+    orig_capb = ds[0]; orig_capb3d = ds[1];
+    for (int it = 0; it < 400; it++) {
+        int is3d = it & 1, w;
+        static uint8_t buf1[0x1000], buf2[0x1000];
+        capb_inputs(cap, a, b, is3d, &w);
+        if (cap[0x54] == 16 && cap[0x55] == 0) cap[0x55] = 1;
+        uint64_t hb = 1; memcpy(cap + 0x40, &hb, 8);
+        rndfill(buf1, sizeof buf1); memcpy(buf2, buf1, sizeof buf1);
+        int ao = rnd(0x400), bo = 0x400 + rnd(0x200), oo = rnd(2) ? ao + 2 * rnd(64) : bo + 2 * (rnd(32) + 1);
+        if (oo + 2 * w > 0x1000 || ao + (is3d ? 4 : 1) * w + (is3d ? 0 : 0x200) > 0x1000 || bo + 2 * w > 0x1000) continue;
+        ds[is3d](cap, (uint16_t *)(buf1 + oo), (const uint16_t *)(buf1 + bo), buf1 + ao);
+        (is3d ? (capb_fn_t)ds2d_capb3d : (capb_fn_t)ds2d_capb)(cap, (uint16_t *)(buf2 + oo), (const uint16_t *)(buf2 + bo), buf2 + ao);
+        if (ut_cmp("capture_blended overlapping", buf1, buf2, sizeof buf1)) return;
+    }
+    unsigned long bad0 = chk_bad[H_CAPB] + chk_bad[H_CAPB3D];
+    for (int it = 0; it < 400; it++) {
+        int is3d = it & 1, w;
+        capb_inputs(cap, a, b, is3d, &w);
+        uint64_t hb = rnd(2); memcpy(cap + 0x40, &hb, 8);
+        const uint16_t *pb = hb || !is3d ? b : 0;
+        rndfill(o1, sizeof o1); memcpy(o2, o1, sizeof o1);
+        ds[is3d](cap, (uint16_t *)(o1 + G), pb, a);
+        if (is3d) chk_capb3d(cap, (uint16_t *)(o2 + G), pb, (const uint32_t *)a); else chk_capb(cap, (uint16_t *)(o2 + G), pb, a);
+        if (ut_cmp("capture_blended check wrappers", o1, o2, sizeof o1)) return;
+    }
+    if (chk_bad[H_CAPB] + chk_bad[H_CAPB3D] != bad0) { fprintf(stderr, "FAIL capture_blended check wrappers counted differences\n"); ut_fail++; }
+    fprintf(stderr, "capture_blended: %u 2D + %u 3D random lines (any EVA / EVB, widths 0..299, %u in place, the direct case), "
+            "400 overlapping, 200 each through the check wrappers equal\n", n[0], n[1], ninplace);
+}
+
+/* ---- the affine BG tile renderers ---- */
+typedef void (*affnn_fn_t)(uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, int, const uint8_t *);
+typedef void (*affe_fn_t)(void *, const uint8_t *, const uint8_t *, const uint16_t *, const uint8_t *, int, const uint8_t *);
+#define NAF 12
+static struct { uint8_t offs[1200], widths[80], flips[80]; uint16_t entries[80]; int n, used; uint8_t ref[1600 + 2 * G]; } af_case[3][NAF];
+
+/* runs as DraStic's setup makes them (1-8 pixels, summing to <= 256) or any (0..40, wide ones); n runs */
+static int aff_inputs(uint8_t *offs, uint8_t *widths, uint16_t *entries, uint8_t *flips) {
+    rndfill(offs, 1200); rndfill(entries, 160); rndfill(flips, 80);
+    if (rnd(2)) for (int i = 0; i < 1200; i++) offs[i] &= 0x3f;
+    if (rnd(2)) for (int i = 0; i < 80; i++) flips[i] = rnd(4) == 0 ? 0 : rnd(2) ? 0x07 : rnd(2) ? 0x38 : 0x3f;
+    int n, sum = 0;
+    switch (rnd(4)) {
+    case 0: n = 0; for (; n < 70 && sum < 256; n++) { widths[n] = 1 + rnd(8); sum += widths[n]; } break;
+    case 1: n = 1 + rnd(40); for (int k = 0; k < n; k++) widths[k] = rnd(41); break;
+    case 2: n = rnd(4); for (int k = 0; k < 4; k++) widths[k] = rnd(3) ? 1 + rnd(30) : 0; break;  /* n 0..3, zero widths */
+    default: n = 1 + rnd(30); for (int k = 0; k < n; k++) widths[k] = rnd(4) ? 1 + rnd(15) : 16 + rnd(25); break;
+    }
+    for (int k = n; k < 80; k++) widths[k] = rnd(20);
+    if (rnd(8) == 0) widths[0] = 0;                                      /* the whole line from one tile */
+    else if (widths[0] == 0) widths[0] = 1;
+    return n;
+}
+static void test_aff(void) {
+    affnn_fn_t dnn = DS(affnn_fn_t, DS_AFF_NN);
+    affe_fn_t den = DS(affe_fn_t, DS_AFF_EN), dee = DS(affe_fn_t, DS_AFF_EE);
+    static uint8_t offs[1200], widths[80], flips[80], d1[1600 + 2 * G], d2[1600 + 2 * G];
+    static uint16_t entries[80];
+    unsigned nf[3] = { 0 };
+    for (int it = 0; it < 9000; it++) {
+        int f = it % 3;
+        if (it % 300 == 0) rndfill(sp_tiles, 65536 + 8);
+        const uint8_t *tiles = it < 3 * NAF ? sp_tiles0 : sp_tiles;
+        int n = aff_inputs(offs, widths, entries, flips);
+        if (aff_extent(widths, n) * (f == 2 ? 2 : 1) > 1600) continue;
+        rndfill(d1, sizeof d1); memcpy(d2, d1, sizeof d1);
+        if (f == 0) { dnn(d1 + G, offs, widths, (const uint8_t *)entries, n, tiles); ds2d_aff_nn(d2 + G, offs, widths, (const uint8_t *)entries, n, tiles); }
+        else if (f == 1) { den(d1 + G, offs, widths, entries, flips, n, tiles); ds2d_aff_en(d2 + G, offs, widths, entries, flips, n, tiles); }
+        else { dee(d1 + G, offs, widths, entries, flips, n, tiles); ds2d_aff_ee((uint16_t *)(d2 + G), offs, widths, entries, flips, n, tiles); }
+        if (ut_cmp(f == 0 ? "affine_render_tiles_normal_normal" : f == 1 ? "affine_render_tiles_extended_normal" : "affine_render_tiles_extended_extended",
+                   d1, d2, sizeof d1)) { fprintf(stderr, "  n %d widths %u %u %u\n", n, widths[0], widths[1], widths[2]); return; }
+        if (it / 3 < NAF) {
+            int k = it / 3;
+            memcpy(af_case[f][k].offs, offs, sizeof offs); memcpy(af_case[f][k].widths, widths, sizeof widths);
+            memcpy(af_case[f][k].flips, flips, sizeof flips); memcpy(af_case[f][k].entries, entries, sizeof entries);
+            af_case[f][k].n = n; af_case[f][k].used = 1; memcpy(af_case[f][k].ref, d1, sizeof d1);
+        }
+        nf[f]++;
+    }
+    ds2d_orig_vars[9][0] = ut_base + DS_AFF_NN + 0xdc; ds2d_orig_vars[9][1] = ut_base + DS_AFF_NN + 16;
+    ds2d_orig_vars[10][0] = ut_base + DS_AFF_EN + 0xfc; ds2d_orig_vars[10][1] = ut_base + DS_AFF_EN + 16;
+    ds2d_orig_vars[11][0] = ut_base + DS_AFF_EE + 0x11c; ds2d_orig_vars[11][1] = ut_base + DS_AFF_EE + 16;
+    unsigned long bad0 = chk_bad[H_AFF_NN] + chk_bad[H_AFF_EN] + chk_bad[H_AFF_EE];
+    for (int it = 0; it < 600; it++) {
+        int f = it % 3;
+        int n = aff_inputs(offs, widths, entries, flips);
+        if (aff_extent(widths, n) * (f == 2 ? 2 : 1) > 1600) continue;
+        rndfill(d1, sizeof d1); memcpy(d2, d1, sizeof d1);
+        if (f == 0) { dnn(d1 + G, offs, widths, (const uint8_t *)entries, n, sp_tiles); ds2d_aff_nn_orig(d2 + G, offs, widths, (const uint8_t *)entries, n, sp_tiles); }
+        else if (f == 1) { den(d1 + G, offs, widths, entries, flips, n, sp_tiles); ds2d_aff_en_orig(d2 + G, offs, widths, entries, flips, n, sp_tiles); }
+        else { dee(d1 + G, offs, widths, entries, flips, n, sp_tiles); ds2d_aff_ee_orig((uint16_t *)(d2 + G), offs, widths, entries, flips, n, sp_tiles); }
+        if (ut_cmp("affine_render_tiles originals through the stubs", d1, d2, sizeof d1)) return;
+        memcpy(d2, d1, sizeof d1); rndfill(d2 + G, 1600);
+        memcpy(d2 + G + (f == 2 ? 2 : 1) * aff_extent(widths, n), d1 + G + (f == 2 ? 2 : 1) * aff_extent(widths, n), 1600 - (f == 2 ? 2 : 1) * aff_extent(widths, n));
+        if (f == 0) chk_aff_nn(d2 + G, offs, widths, (const uint8_t *)entries, n, sp_tiles);
+        else if (f == 1) chk_aff_en(d2 + G, offs, widths, entries, flips, n, sp_tiles);
+        else chk_aff_ee((uint16_t *)(d2 + G), offs, widths, entries, flips, n, sp_tiles);
+        if (ut_cmp("affine_render_tiles check wrappers", d1, d2, sizeof d1)) return;
+    }
+    if (chk_bad[H_AFF_NN] + chk_bad[H_AFF_EN] + chk_bad[H_AFF_EE] != bad0) { fprintf(stderr, "FAIL affine_render_tiles check wrappers counted differences\n"); ut_fail++; }
+    fprintf(stderr, "affine_render_tiles: %u / %u / %u random lines (runs as DraStic's and any widths, n 0..70, the one-tile line), "
+            "200 each through the stubs and the check wrappers equal\n", nf[0], nf[1], nf[2]);
+}
+
 static void test_patched(void) {
     setenv("RAST_2D", "-1", 1);
     unsetenv("RAST_2DCHECK");
@@ -1027,7 +1186,34 @@ static void test_patched(void) {
             }
         }
     }
-    fprintf(stderr, "patched entries: %d calls each equal (second batch: %d / %d / %d; third: %d)\n", NCONV, NPAL, NPR, NFX, NTM);
+    {
+        capb_fn_t e[2] = { DS(capb_fn_t, DS_CAPB), DS(capb_fn_t, DS_CAPB3D) };
+        for (int is3d = 0; is3d < 2; is3d++) for (int k = 0; k < NCB; k++) {
+            static uint8_t o[1024 + 2 * G];
+            const uint16_t *pb = cb_case[is3d][k].hasb || !is3d ? cb_case[is3d][k].b : 0;
+            for (int pass = 0; pass < 2; pass++) {
+                memcpy(o, cb_case[is3d][k].ref, sizeof o);
+                memset(o + G, pass ? 0xa5 : 0x5a, 2 * cb_case[is3d][k].w);
+                (pass ? (is3d ? orig_capb3d : orig_capb) : e[is3d])(cb_case[is3d][k].cap, (uint16_t *)(o + G), pb, cb_case[is3d][k].a);
+                if (ut_cmp(pass ? "capture_blended trampoline" : "capture_blended patched entry", cb_case[is3d][k].ref, o, sizeof o)) return;
+            }
+        }
+    }
+    {
+        affnn_fn_t enn = DS(affnn_fn_t, DS_AFF_NN);
+        affe_fn_t een = DS(affe_fn_t, DS_AFF_EN), eee = DS(affe_fn_t, DS_AFF_EE);
+        for (int f = 0; f < 3; f++) for (int k = 0; k < NAF; k++) {
+            static uint8_t d[1600 + 2 * G];
+            if (!af_case[f][k].used) continue;              /* a case skipped for its extent */
+            memcpy(d, af_case[f][k].ref, sizeof d);
+            size_t ext = (f == 2 ? 2 : 1) * aff_extent(af_case[f][k].widths, af_case[f][k].n);
+            memset(d + G, 0x5a, ext);
+            if (f == 0) enn(d + G, af_case[f][k].offs, af_case[f][k].widths, (const uint8_t *)af_case[f][k].entries, af_case[f][k].n, sp_tiles0);
+            else (f == 1 ? een : eee)(d + G, af_case[f][k].offs, af_case[f][k].widths, af_case[f][k].entries, af_case[f][k].flips, af_case[f][k].n, sp_tiles0);
+            if (ut_cmp("affine_render_tiles patched entry", af_case[f][k].ref, d, sizeof d)) return;
+        }
+    }
+    fprintf(stderr, "patched entries: %d calls each equal (second batch: %d / %d / %d; third: %d; captures %d)\n", NCONV, NPAL, NPR, NFX, NTM, NCB);
 }
 
 void ut_main(void) {
@@ -1047,5 +1233,7 @@ void ut_main(void) {
     test_tme();
     test_dbl();
     test_vis();
+    test_capb();
+    test_aff();
     test_patched();
 }

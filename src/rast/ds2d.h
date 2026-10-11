@@ -33,6 +33,13 @@
 #define DS_VIS8 0x9f390             /* render_scanline_set_visibility_8bpp_asm(u8 out[32], bytes[256]) */
 #define DS_VIS12 0x9f468            /* render_scanline_set_visibility_12bpp_asm(u8 out[32], u16[256]) */
 #define DS_VIS_CONSTS 0x9f380       /* their const_bit_mask */
+#define DS_AFF_NN 0x9f9bc           /* render_scanline_affine_render_tiles_normal_normal_asm(dst, offs, widths, entries, n, tiles) */
+#define DS_AFF_EN 0x9fbf8           /* render_scanline_affine_render_tiles_extended_normal_asm(dst, offs, widths, entries, flips, n, tiles) */
+#define DS_AFF_EE 0x9fd30           /* render_scanline_affine_render_tiles_extended_extended_asm(u16 dst, the same) */
+#define DS_CAPB 0x3bc60             /* render_scanline_capture_blended(cap, u16 out, u16 srcb, planes) */
+#define DS_CAPB3D 0x3bdb0           /* render_scanline_capture_blended_3d(cap, u16 out, u16 srcb, u32 px3d) */
+#define DS_CAP_DIRECT 0xa0910       /* render_scanline_capture_direct_asm(cap, out, planes) */
+#define DS_CAP_DIRECT3D 0xa09b0     /* render_scanline_capture_direct_3d_asm(cap, out, px3d) */
 
 void ds2d_init(void);           /* rast_init, renderer hooked: installs per RAST_2D */
 
@@ -54,6 +61,8 @@ void ds2d_disable_blank(const uint8_t *masks, uint8_t *word);
 void ds2d_vis4(uint8_t *out, const uint8_t *src, uint32_t shift);
 void ds2d_vis8(uint8_t *out, const uint8_t *src);
 void ds2d_vis12(uint8_t *out, const uint16_t *src);
+void ds2d_capb(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const uint8_t *planes);
+void ds2d_capb3d(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const uint32_t *px);
 void ds2d_blend_enable(uint8_t *out, const uint8_t *masks, uint64_t a, uint64_t b);
 
 /* ds2d_asm.S */
@@ -75,6 +84,16 @@ void ds2d_span8n_orig(uint8_t *dst, const uint8_t *tiles, const uint16_t *entrie
 void ds2d_span8e_orig(uint16_t *dst, const uint8_t *tiles, const uint16_t *entries, const uint8_t *flags);
 void ds2d_tme4_orig(uint16_t *entries, uint8_t *flags, const uint16_t *row, const uint16_t *row2, uint32_t k, uint32_t roff);
 void ds2d_tme8_orig(uint16_t *entries, uint8_t *flags, const uint16_t *row, const uint16_t *row2, uint32_t k, uint32_t roff);
+void ds2d_aff_nn(uint8_t *dst, const uint8_t *offs, const uint8_t *widths, const uint8_t *entries, int n, const uint8_t *tiles);
+void ds2d_aff_en(uint8_t *dst, const uint8_t *offs, const uint8_t *widths, const uint16_t *entries, const uint8_t *flips, int n,
+                 const uint8_t *tiles);
+void ds2d_aff_ee(uint16_t *dst, const uint8_t *offs, const uint8_t *widths, const uint16_t *entries, const uint8_t *flips, int n,
+                 const uint8_t *tiles);
+void ds2d_aff_nn_orig(uint8_t *dst, const uint8_t *offs, const uint8_t *widths, const uint8_t *entries, int n, const uint8_t *tiles);
+void ds2d_aff_en_orig(uint8_t *dst, const uint8_t *offs, const uint8_t *widths, const uint16_t *entries, const uint8_t *flips,
+                      int n, const uint8_t *tiles);
+void ds2d_aff_ee_orig(uint16_t *dst, const uint8_t *offs, const uint8_t *widths, const uint16_t *entries, const uint8_t *flips,
+                      int n, const uint8_t *tiles);
 void ds2d_vis4_orig(uint8_t *out, const uint8_t *src, uint32_t shift);
 void ds2d_vis8_orig(uint8_t *out, const uint8_t *src);
 void ds2d_vis12_orig(uint8_t *out, const uint16_t *src);
