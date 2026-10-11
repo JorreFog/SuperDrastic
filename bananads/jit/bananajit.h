@@ -58,6 +58,7 @@ private:
     void CompileALU();
     void CompileMul();         // MUL/MLA/UMULL/UMLAL/SMULL/SMLAL, and Thumb MUL
     void CompileMem();
+    void CompileBlockTransfer();  // LDM/STM and Thumb PUSH/POP/LDMIA/STMIA
     Reg Shifter(u32 instr, bool wantC, bool& carry_changes, Reg dst);
     Reg RegShifter(u32 instr, bool wantC);  // operand 2 shifted by a register; writes C itself when wantC
     void StoreHigh();             // store dirty r8-r14 (they live in caller-saved registers)
@@ -70,6 +71,7 @@ private:
     void FastStore9(int size, const void* slowfn);  // ARM9 DTCM/main-RAM stores inline
     bool LinkBlocks = false;
     bool DoMul = true;  // jit.mul=off sends multiply and register-shift to the interpreter (difftest gate)
+    bool DoLDM = true;  // jit.ldm=off sends block transfers (LDM/STM/PUSH/POP) to the interpreter (difftest gate)
     void AddCycles(s32 n) { ConstantCycles += n; }
     void AddCyclesCI(s32 internal);  // emit AddCycles_CI(internal) to RCycles now (taken-path cycles)
     void FlushCycles();

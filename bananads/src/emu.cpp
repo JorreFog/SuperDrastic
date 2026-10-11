@@ -169,6 +169,9 @@ bool Emu::load_rom(const std::string& path) {
     // jit.mul=off: multiply and register-shift through the interpreter (for bananads-difftest: both must agree)
     if (cfg_.flag("jit.mul", true)) unsetenv("BANANAJIT_NO_MUL");
     else setenv("BANANAJIT_NO_MUL", "1", 1);
+    // jit.ldm=off: block transfers (LDM/STM/PUSH/POP) through the interpreter (for bananads-difftest)
+    if (cfg_.flag("jit.ldm", true)) unsetenv("BANANAJIT_NO_LDM");
+    else setenv("BANANAJIT_NO_LDM", "1", 1);
 #endif
 
     auto& hdr = args.Firmware.GetHeader();
