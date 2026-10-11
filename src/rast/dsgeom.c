@@ -652,10 +652,66 @@ static inline __attribute__((always_inline)) int tvx_fast(uint8_t *g) {
 int geom_tvx_ours(uint8_t *g) { return tvx_fast(g); }
 void geom_transform_vertexes(uint8_t *g) { if (__builtin_expect(!tvx_fast(g), 0)) geom_tvx_orig(g); }
 
+/* ---- geometry_clipped_vertex_interpolate_edge ---- */
+#define DS_CLIP_EDGE 0x59c00
+
+/* geometry_clipped_vertex_interpolate_edge(out, a, b, plane) (0x59c00, static; geometry_flush_polygons' clipping, four
+ * bl sites 0x5bd34 0x5bd58 0x5c2e0 0x5c304): the vertex where the edge a -> b (24-byte clip-space vertices: x, y, z, w
+ * s32, s and t s16 at +0x10, a 5:5:5 colour at +0x14, the clip code at +0x16) crosses the plane axis = plane >> 1
+ * (0 x, 1 y, 2 z) = (plane & 1 ? -w : w). From the disassembly (0x59c00..0x59f40): with wa, wb = a.w, b.w (both
+ * negated, 32-bit, for an odd plane), den = (wb - wa) - (b[axis] - a[axis]) in 64 bits from the sign-extended words;
+ * t = den ? (s32)((((s64)(s32)(a[axis] - wa) << 18) + den - 1) / den) (sdiv: towards 0) : 0x40000. Each attribute
+ * (x y z w, s t, the three colour channels) from a's value p and b's q: d = q - p (32-bit) >= 0 ? p + (u32)(((s64)d *
+ * t) >> 18 logical) : p - (u32)(((s64)(p - q) * t) >> 18 logical); the channels are packed unmasked (r | g << 5 |
+ * b << 10, 16 bits), s and t as (s & 0xffff) | t << 16. Then out[axis] = the plane's sign * the new w, and the clip
+ * code from the stored x, y, z against w and -w (signed: bit 0 x > w, 1 x < -w, 2 y > w, 3 y < -w, 4 z > w, 5 z <
+ * -w). Every load comes before the first store (out may be a or b). Its nine attributes are nine branches each way in
+ * the original; here each is a select, one multiply and a select. The callers keep no caller-saved register across
+ * the call (liveafter.py over flush_polygons: nothing caller-saved is read after any of the four calls before it is
+ * written, even assuming later calls preserve everything), so an AAPCS replacement is safe although the function is
+ * static. */
+geom_clip_fn *geom_clip_orig;
+
+static inline __attribute__((always_inline)) int32_t clip_lerp(int32_t p, int32_t q, int32_t t) {
+    /* the original's two branches as one: p - q is -(q - p) mod 2^32, and p - m is p + -m */
+    uint32_t d = (uint32_t)q - (uint32_t)p;
+    int neg = (int32_t)d < 0;
+    uint32_t ad = neg ? 0u - d : d;
+    uint32_t m = (uint32_t)((uint64_t)((int64_t)(int32_t)ad * t) >> 18);       /* smull, lsr */
+    return (int32_t)((uint32_t)p + (neg ? 0u - m : m));
+}
+
+void geom_clip_edge(uint8_t *out, const uint8_t *a, const uint8_t *b, uint32_t plane) {
+    uint32_t axis = plane >> 1, neg = plane & 1;
+    int32_t ax = ld32(a, 0), ay = ld32(a, 4), az = ld32(a, 8), aw = ld32(a, 12);
+    int32_t bx = ld32(b, 0), by = ld32(b, 4), bz = ld32(b, 8), bw = ld32(b, 12);
+    int32_t ap = ld32(a, 4 * (uintptr_t)axis), bp = ld32(b, 4 * (uintptr_t)axis);
+    uint32_t atex = (uint32_t)ld32(a, 0x10), btex = (uint32_t)ld32(b, 0x10);
+    uint32_t acol = ld16(a, 0x14), bcol = ld16(b, 0x14);
+    int32_t wa = neg ? (int32_t)(0u - (uint32_t)aw) : aw, wb = neg ? (int32_t)(0u - (uint32_t)bw) : bw;
+    int64_t den = ((int64_t)wb - wa) - ((int64_t)bp - ap);
+    int32_t t = 0x40000;
+    if (den) {
+        int64_t num = (int64_t)((uint64_t)(int64_t)(int32_t)((uint32_t)ap - (uint32_t)wa) << 18) + (den - 1);
+        t = (int32_t)(num / den);
+    }
+    int32_t x = clip_lerp(ax, bx, t), y = clip_lerp(ay, by, t), z = clip_lerp(az, bz, t), w = clip_lerp(aw, bw, t);
+    int32_t s = clip_lerp((int16_t)atex, (int16_t)btex, t), tt = clip_lerp((int32_t)atex >> 16, (int32_t)btex >> 16, t);
+    int32_t r = clip_lerp(acol & 0x1f, bcol & 0x1f, t), g = clip_lerp(acol >> 5 & 0x1f, bcol >> 5 & 0x1f, t);
+    int32_t bl = clip_lerp(acol >> 10 & 0x1f, bcol >> 10 & 0x1f, t);
+    st32(out, 0x10, ((uint32_t)s & 0xffff) | (uint32_t)tt << 16);
+    st16(out, 0x14, (uint16_t)((uint32_t)r | (uint32_t)g << 5 | (uint32_t)bl << 10));
+    /* the original stores all four, then the plane's word (any axis: plane 6 and 7 give w, larger ones go past) */
+    st32(out, 0, (uint32_t)x); st32(out, 4, (uint32_t)y); st32(out, 8, (uint32_t)z); st32(out, 12, (uint32_t)w);
+    st32(out, 4 * (uintptr_t)axis, neg ? 0u - (uint32_t)w : (uint32_t)w);
+    int32_t nw = (int32_t)(0u - (uint32_t)w), cx = ld32(out, 0), cy = ld32(out, 4), cz = ld32(out, 8);
+    out[0x16] = (uint8_t)((cx > w) | (cx < nw) << 1 | (cy > w) << 2 | (cy < nw) << 3 | (cz > w) << 4 | (cz < nw) << 5);
+}
+
 /* ---- check mode ---- */
 #define QC_AROUND 32
 static unsigned long qc_n[2], qc_bad, pc_n[2], pc_bad;      /* [0] handled by ours (checked), [1] to the original */
-static unsigned long vc_n[2], vc_bad, yc_n, yc_bad, tc_n, tc_bad, xc_n[2], xc_bad;
+static unsigned long vc_n[2], vc_bad, yc_n, yc_bad, tc_n, tc_bad, xc_n[2], xc_bad, ec_n, ec_bad;
 static struct timespec qc_last;
 
 static void qc_report(void) {
@@ -665,8 +721,9 @@ static void qc_report(void) {
     qc_last = now;
     fprintf(stderr, "[geom] queue: %lu checked, %lu differ, %lu to DraStic's; add_vertex: %lu checked, %lu differ, %lu to "
             "DraStic's; y-sort: %lu checked, %lu differ; vertex block: %lu checked, %lu differ; transform: %lu checked, %lu "
-            "differ, %lu to DraStic's; packed: %lu checked, %lu differ, %lu to DraStic's\n", qc_n[0], qc_bad, qc_n[1], vc_n[0],
-            vc_bad, vc_n[1], yc_n, yc_bad, tc_n, tc_bad, xc_n[0], xc_bad, xc_n[1], pc_n[0], pc_bad, pc_n[1]);
+            "differ, %lu to DraStic's; packed: %lu checked, %lu differ, %lu to DraStic's; clip edge: %lu checked, %lu differ\n",
+            qc_n[0], qc_bad, qc_n[1], vc_n[0], vc_bad, vc_n[1], yc_n, yc_bad, tc_n, tc_bad, xc_n[0], xc_bad, xc_n[1], pc_n[0],
+            pc_bad, pc_n[1], ec_n, ec_bad);
 }
 
 /* the bytes a call may write: the state's queue fields and 32 bytes either side of the three cursors' targets (the
@@ -867,12 +924,33 @@ void geom_tvx_check(uint8_t *g) {
     qc_report();
 }
 
+
+/* the clipped vertex: its 24 bytes (the plane's word is one of them for the planes 0..7; any other plane goes
+ * straight to the original) */
+void geom_clip_edge_check(uint8_t *out, const uint8_t *a, const uint8_t *b, uint32_t plane) {
+    if ((plane >> 1) > 3) { geom_clip_orig(out, a, b, plane); return; }
+    uint8_t in[24], ours[24];
+    memcpy(in, out, 24);
+    geom_clip_edge(out, a, b, plane);
+    memcpy(ours, out, 24);
+    memcpy(out, in, 24);
+    geom_clip_orig(out, a, b, plane);
+    ec_n++;
+    if (memcmp(ours, out, 24) && ec_bad++ < 30) {
+        fprintf(stderr, "[geomcheck] geometry_clipped_vertex_interpolate_edge(plane %u) differs from DraStic's:", plane);
+        for (int i = 0; i < 24; i++) if (ours[i] != out[i]) fprintf(stderr, " [+%#x] %02x/%02x", i, out[i], ours[i]);
+        fprintf(stderr, " (DraStic/ours)\n");
+    }
+    qc_report();
+}
+
 static const uint32_t expect_queue[4] = { 0xa9bd7bfd, 0x910003fd, 0xf90013f5, 0x91402415 };
 static const uint32_t expect_vertex[4] = { 0xa9bb7bfd, 0x910003fd, 0xa90363f7, 0x91402417 };
 static const uint32_t expect_packed[4] = { 0xa9be7bfd, 0xaa0003e2, 0x910003fd, 0xa90153f3 };
 static const uint32_t expect_tvb[4] = { 0x91402401, 0xb9433003, 0x911f9021, 0xb9430002 };
 static const uint32_t expect_ysort[4] = { 0xa9af7bfd, 0x910003fd, 0xa90153f3, 0xaa0103f4 };
 static const uint32_t expect_tvx[4] = { 0xa9aa7bfd, 0x910003fd, 0xa90153f3, 0xaa0003f3 };
+static const uint32_t expect_clip[4] = { 0xa9bc7bfd, 0x53017c6f, 0x910003fd, 0x79402825 };
 static const uint32_t expect_flush[4] = { 0xd287720c, 0xcb2c63ff, 0xd28f3f01, 0x8b01000a };
 
 void geom_init(void) {
@@ -896,8 +974,9 @@ void geom_init(void) {
     if (check) geom_flush_orig = (geom_flush_fn *)rast_hook(DS_FLUSH_POLYGONS, expect_flush, (void *)geom_flush_check);
     if (geom_tvb_orig && geom_flush_orig)
         geom_tvx_orig = (geom_tvx_fn *)rast_hook(DS_TRANSFORM_VERTEXES, expect_tvx, check ? (void *)geom_tvx_check : (void *)geom_transform_vertexes);
-    fprintf(stderr, "[geom] queue_geometry_command%s%s%s%s%s replaced%s\n", geom_packed_orig ? ", queue_geometry_command_packed" : "",
+    geom_clip_orig = (geom_clip_fn *)rast_hook(DS_CLIP_EDGE, expect_clip, check ? (void *)geom_clip_edge_check : (void *)geom_clip_edge);
+    fprintf(stderr, "[geom] queue_geometry_command%s%s%s%s%s%s replaced%s\n", geom_packed_orig ? ", queue_geometry_command_packed" : "",
             geom_vertex_orig ? ", geometry_add_vertex" : "", geom_ysort_orig ? ", video_3d_bin_polygons_y_sort_4x" : "",
             geom_tvb_orig ? ", geometry_transform_vertex_block_asm" : "", geom_tvx_orig ? ", geometry_transform_vertexes" : "",
-            check ? ", checking every call against DraStic's" : "");
+            geom_clip_orig ? ", geometry_clipped_vertex_interpolate_edge" : "", check ? ", checking every call against DraStic's" : "");
 }

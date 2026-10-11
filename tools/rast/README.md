@@ -27,10 +27,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   written in one NEON pass instead of DraStic's five-stage chain (`render_scanline_2d_composite` hooked,
   `RAST_COMPFUSE=0` off): on the stress ROM the chain's 0.81 M a frame become 0.39 M, on the field
   scene 0.47 M become 0.07 M, checked byte for byte against the original in the running emulator.
-- **DraStic's geometry stage, cheaper.** Six of its functions on the emulation thread are replaced by exact ones
+- **DraStic's geometry stage, cheaper.** Seven of its functions on the emulation thread are replaced by exact ones
   (the command queue's fast paths for the ports and for GXFIFO, the vertex batch, the vertex transform with its
   lighting in NEON lanes, the polygon binning; `RAST_GEOM=0` off, `RAST_GEOMCHECK=1` checks every call against
-  DraStic's): 0.30 M modeled cycles a frame less on the stress ROM, 0.14 M on
+  DraStic's): 0.32 M modeled cycles a frame less on the stress ROM, 0.14 M on
   the fog and edge scene, 0.07 M on the field scene (below).
 - **Scheduled for the handhelds' in-order core.** The RG DS and RG DS Plus run Cortex-A55 cores, which issue in
   program order, at most two instructions a cycle, and stall on every operand that is not ready: instruction counts
@@ -738,6 +738,14 @@ and lighting, clipping, and the binning of the finished polygons for the render 
   before it and with the count, the bit-7 count summed), and the usual stream, an event at vertex k for every k (a
   normal or colour before every vertex), all lit or all explicit, is filled by one copy of the colours instead of a
   run per vertex.
+- `geometry_clipped_vertex_interpolate_edge` (static; geometry_flush_polygons' four clipping call sites): the vertex
+  where an edge crosses a clip plane, its nine attributes' two-way branches (on the sign of the difference) as one
+  multiply with sign selects, the 64-bit division and the clip code as DraStic's. Static, so its callers could rely on
+  GCC's knowledge of its clobber set: a walk of flush_polygons' disassembly from the four return points finds no
+  caller-saved register read before it is written (the same walk finds the y-sort's x11 across render_sprite_check,
+  the one place DraStic does rely on that), so an AAPCS function is a valid replacement. 182 -> 141 modeled cycles a
+  call on L4 (368 calls a frame: 0.067 -> 0.052 M), S4 177 -> 136 (0.013 -> 0.010 M), the clipping scene S9 179 ->
+  133.
 
 The callers assume the AAPCS and nothing more (from the disassembly: the JIT's 32-bit store helper saves w12-w18, x30
 and NZCV around its call; the C callers keep only callee-saved registers across the calls; each original calls code
@@ -770,7 +778,12 @@ and packed words), seeds 1, 3, 5; nine mutants fail it. `RAST_GEOMCHECK=1` with 
 scenes (S10 below), the scene cycle, L4 and L10: 1357910 transforms (none passed on by the event-stream rule) and
 1806067 GXFIFO words checked, with 43.2 M queue, 10.7 M add_vertex, 54502 y-sort and 387349 vertex block calls, 0
 differ; at 3x the same ROMs, 1232663 transforms and 1074240 words, 0 differ; at 1x the stress ROM, 44436
-transforms, 0 differ. The scene cycle's frame diff: DraStic's renderer's counts at every checkpoint (to 108000).
+transforms, 0 differ. The scene cycle's frame diff: DraStic's renderer's counts at every checkpoint (to 108000). The
+clipped-edge interpolation: test_clip (300000 edges a seed, a third of them with the output on an input; seeds 1, 3,
+5; four of five mutants fail it, the fifth, an arithmetic instead of a logical shift, is equivalent: the shifted
+product's low 32 bits are bits 18..49 either way); with the check mode at 2x over S0-S10, the cycle and L4, 1387850
+calls checked, at 3x on S9, S4 and L4 435056, 0 differ; the scene cycle's frame diff DraStic's renderer's counts at
+every checkpoint (to 148800).
 
 The scene ROMs' source (ROCKNIXDS `stressrom/scenes9.c`) gains scene 10 (`dsscenes-S10.nds`, fixed-scene ROMs only:
 the cycle ROM is unchanged; built with the other scenes' build.py and options under a new file name): a
@@ -835,9 +848,8 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
 - DraStic's geometry stage, next (`dsgeom.c`): the remaining cost on the stress ROM is spread thin:
   geometry_flush_polygons (L4 0.23 M modeled cycles a frame over dozens of small blocks, its largest 0.035 M) and
   process_geometry_commands (0.13 M, one computed-goto switch over the command handlers) have no hot path short of
-  the whole function; geometry_clipped_vertex_interpolate_edge (0.07 M, a leaf with a 64-bit division) could be
-  rewritten but its callers in flush_polygons may rely on GCC's knowledge of its clobber set (check the four call
-  sites first). The DMA form of the packed queue (`queue_geometry_command_packed_multi`) costs ~15 modeled cycles a
+  the whole function. The DMA form of the packed queue (`queue_geometry_command_packed_multi`) costs ~15 modeled
+  cycles a
   word on `dsscenes-S10.nds`: little to gain. The y-sort's per-polygon work is still DraStic's in C (L4 0.148
   M): a row's loads first into a local array, to overlap the entries' load chains, modeled worse (0.162 M; clang
   keeps that loop one entry a block).
