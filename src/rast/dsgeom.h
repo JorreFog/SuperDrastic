@@ -37,5 +37,9 @@ typedef void geom_matmul_fn(void *dst, const void *a, const void *b);   /* geome
 int geom_tvx_ours(uint8_t *geom);           /* as geom_queue_ours */
 void geom_transform_vertexes(uint8_t *geom);
 void geom_tvx_check(uint8_t *geom);
-void geom_flush_check(uint8_t *geom);       /* on geometry_flush_polygons' entry in check mode: holds a flush while a transform is compared */
+void geom_flush_check(uint8_t *geom);
+typedef void geom_clip_fn(uint8_t *out, const uint8_t *a, const uint8_t *b, uint32_t plane);
+extern geom_clip_fn *geom_clip_orig;        /* DraStic's geometry_clipped_vertex_interpolate_edge */
+void geom_clip_edge(uint8_t *out, const uint8_t *a, const uint8_t *b, uint32_t plane);
+void geom_clip_edge_check(uint8_t *out, const uint8_t *a, const uint8_t *b, uint32_t plane);       /* on geometry_flush_polygons' entry in check mode: holds a flush while a transform is compared */
 #endif

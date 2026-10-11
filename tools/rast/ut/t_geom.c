@@ -515,6 +515,51 @@ static void test_tvx(int n) {
     (void)lit;
 }
 
+
+/* geometry_clipped_vertex_interpolate_edge: vertex pairs with coordinates in clip-space ranges (and any 32-bit value
+ * sometimes), w of either sign, the pair straddling the plane or not, equal axis distances (den 0), s t colours
+ * random; planes 0..7; out separate or the same as a or b. The 24 bytes of all three compared; then the check mode */
+static int32_t ct_val(void) { unsigned k = rnd(8); return k < 5 ? rndr(-0x40000, 0x40000) : k < 7 ? (int32_t)(int16_t)rnd64() : (int32_t)rnd64(); }
+static void test_clip(int n) {
+    geom_clip_fn *orig = DS(geom_clip_fn *, DS_CLIP_EDGE);
+    uint8_t buf[2][3][24];
+    unsigned long den0 = 0, alias = 0;
+    for (int it = 0; it < n && !ut_fail; it++) {
+        uint8_t *v = buf[0][0];
+        rndfill(v, sizeof buf[0]);
+        for (int k = 0; k < 2; k++) for (int c = 0; c < 4; c++) st32(buf[0][k], 4 * c, (uint32_t)ct_val());
+        uint32_t plane = rnd(8) ? rnd(6) : 6 + rnd(2), axis = plane >> 1;
+        if (rnd(8) == 0) {                         /* den 0: the same distance to the plane at both ends */
+            int32_t d = ct_val();
+            st32(buf[0][1], 12, (uint32_t)ld32(buf[0][0], 12) + (uint32_t)d);
+            st32(buf[0][1], 4 * axis, (uint32_t)ld32(buf[0][0], 4 * axis) + (uint32_t)((plane & 1) ? -d : d));
+            if (axis == 3) st32(buf[0][1], 12, (uint32_t)ld32(buf[0][0], 12) + (uint32_t)d);
+        }
+        unsigned o = rnd(8) == 0 ? rnd(2) : 2;     /* out: a, b or the third slot */
+        memcpy(buf[1], buf[0], sizeof buf[0]);
+        geom_clip_edge(buf[0][o], buf[0][0], buf[0][1], plane);
+        orig(buf[1][o], buf[1][0], buf[1][1], plane);
+        if (ut_cmp("clip edge: ours vs DraStic's", buf[1], buf[0], sizeof buf[0]))
+            fprintf(stderr, "   iteration %d plane %u out %u\n", it, plane, o);
+        int32_t wa = ld32(buf[1][0], 12), wb = ld32(buf[1][1], 12);
+        den0 += (plane & 1 ? -(int64_t)wb + wa : (int64_t)wb - wa) == 0;
+        alias += o < 2;
+    }
+    for (int it = 0; it < n / 10 && !ut_fail; it++) {
+        rndfill(buf[0], sizeof buf[0]);
+        uint32_t plane = rnd(6);
+        memcpy(buf[1], buf[0], sizeof buf[0]);
+        orig(buf[1][2], buf[1][0], buf[1][1], plane);
+        geom_clip_orig = orig;
+        unsigned long bad = ec_bad;
+        geom_clip_edge_check(buf[0][2], buf[0][0], buf[0][1], plane);
+        if (ec_bad != bad) { fprintf(stderr, "FAIL clip edge: the check mode reported a difference\n"); ut_fail++; }
+        ut_cmp("clip edge: check mode's result", buf[1], buf[0], sizeof buf[0]);
+    }
+    fprintf(stderr, "geometry_clipped_vertex_interpolate_edge: %d edges equal to DraStic's (%lu with out = a or b)\n", n, alias);
+    (void)den0;
+}
+
 /* DraStic's entry patched to the replacement, as geom_init() does: called through the entry, against the original
  * through the trampoline, on the calls ours handles */
 static void test_patched(int n) {
@@ -582,5 +627,6 @@ void ut_main(void) {
     test_ysort(1500);
     test_tvb(20000);
     test_tvx(20000);
+    test_clip(300000);
     test_patched(20000);
 }
