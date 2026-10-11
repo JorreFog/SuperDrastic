@@ -374,6 +374,7 @@ __attribute__((constructor)) static void rast_init(void) {
         else if (dump_dir) hr_frame = calloc(768 * 576, 4);
     }
     comp_init();                         /* the compositor's 3D visibility step (comp.c) */
+    { extern void geom_init(void); geom_init(); }   /* DraStic's geometry stage (dsgeom.c) */
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
     fprintf(stderr, "[rast] Gengis Engine: hooked video_3d_render_bins_4x, mode %s, scale %d\n", e, rast_scale);
 }
