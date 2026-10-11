@@ -115,6 +115,50 @@ static void WriteLineNeon(u32* dst, const u32* src, u32 factor)
         vst4q_u8((u8*)(dst + i), o);
     }
 }
+
+// 16 direct-colour pixels (display modes 2 and 3) to the three 6-bit channel planes
+static inline void Planes15(const u16* p, uint8x16_t& r, uint8x16_t& g, uint8x16_t& b)
+{
+    uint16x8_t c0 = vld1q_u16(p), c1 = vld1q_u16(p + 8);
+    uint16x8_t m = vdupq_n_u16(0x3E);
+    r = vcombine_u8(vmovn_u16(vandq_u16(vshlq_n_u16(c0, 1), m)), vmovn_u16(vandq_u16(vshlq_n_u16(c1, 1), m)));
+    g = vcombine_u8(vmovn_u16(vandq_u16(vshrq_n_u16(c0, 4), m)), vmovn_u16(vandq_u16(vshrq_n_u16(c1, 4), m)));
+    b = vcombine_u8(vmovn_u16(vandq_u16(vshrq_n_u16(c0, 9), m)), vmovn_u16(vandq_u16(vshrq_n_u16(c1, 9), m)));
+}
+
+template<int mode>
+static void OutputDisplayNeonT(u32* dst, const u16* display, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint8x16_t r, g, b;
+        Planes15(display + i, r, g, b);
+        if (mode)
+        {
+            r = Bright6<mode>(r, f);
+            g = Bright6<mode>(g, f);
+            b = Bright6<mode>(b, f);
+        }
+        uint8x16x4_t o;
+        o.val[0] = Expand6(b);
+        o.val[1] = Expand6(g);
+        o.val[2] = Expand6(r);
+        o.val[3] = vdupq_n_u8(0xFF);
+        vst4q_u8((u8*)(dst + i), o);
+    }
+}
+
+// display modes 2 and 3: the conversion to the 18-bit format fused with WriteLine
+static void OutputDisplayNeon(u32* dst, const u16* display, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      OutputDisplayNeonT<1>(dst, display, factor);
+    else if (mode == 2 && factor) OutputDisplayNeonT<2>(dst, display, factor);
+    else                          OutputDisplayNeonT<0>(dst, display, 0);
+}
 #endif
 
 // master brightness and colour expansion in one pass
@@ -167,6 +211,13 @@ void BananaRenderer::OutputLineA(u32* dst, u32 dispcnt, u16 brightness, const u1
     case 2: // VRAM display
     case 3: // FIFO display
         {
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+            if (Banana2DFast && display)
+            {
+                OutputDisplayNeon(dst, display, brightness);
+                return;
+            }
+#endif
             alignas(16) u32 tmp[256];
             if (display)
             {

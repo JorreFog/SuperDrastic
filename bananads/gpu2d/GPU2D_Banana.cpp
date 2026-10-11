@@ -862,9 +862,52 @@ void BananaRenderer2D::DrawBG_Affine(u32 line, u32 bgnum)
 }
 
 // direct-colour pixels, contiguous in VRAM and in the output
+#ifdef BANANA_NEON
+// AND / OR of the 32-bit pixels whose low and high halves are the lanes of lo and hi
+static inline u32 HorAnd16(uint16x8_t lo, uint16x8_t hi)
+{
+    uint64x2_t l = vreinterpretq_u64_u16(lo), h = vreinterpretq_u64_u16(hi);
+    u64 a = vgetq_lane_u64(l, 0) & vgetq_lane_u64(l, 1), b = vgetq_lane_u64(h, 0) & vgetq_lane_u64(h, 1);
+    a &= a >> 32; a &= a >> 16; b &= b >> 32; b &= b >> 16;
+    return (u32)(a & 0xFFFF) | ((u32)(b & 0xFFFF) << 16);
+}
+static inline u32 HorOr16(uint16x8_t lo, uint16x8_t hi)
+{
+    uint64x2_t l = vreinterpretq_u64_u16(lo), h = vreinterpretq_u64_u16(hi);
+    u64 a = vgetq_lane_u64(l, 0) | vgetq_lane_u64(l, 1), b = vgetq_lane_u64(h, 0) | vgetq_lane_u64(h, 1);
+    a |= a >> 32; a |= a >> 16; b |= b >> 32; b |= b >> 16;
+    return (u32)(a & 0xFFFF) | ((u32)(b & 0xFFFF) << 16);
+}
+#endif
+
 static inline void ConvertRun16(u32* out, const u16* src, int n, u32 flag, u32& acc, u32& all)
 {
     int j = 0;
+#ifdef BANANA_NEON
+    if (Banana2DFast && n >= 8)
+    {
+        // 8 pixels in 16-bit lanes: low halves R | G << 8, high halves B | the flag, zeroed where bit 15 is clear,
+        // stored interleaved (st2)
+        const uint16x8_t m3e = vdupq_n_u16(0x3E), vflag = vdupq_n_u16((u16)(flag >> 16));
+        uint16x8_t accLo = vdupq_n_u16(0), accHi = accLo, allLo = vdupq_n_u16(0xFFFF), allHi = allLo;
+        for (; j + 8 <= n; j += 8)
+        {
+            uint16x8_t c = vld1q_u16(src + j);
+            uint16x8_t a = vreinterpretq_u16_s16(vshrq_n_s16(vreinterpretq_s16_u16(c), 15));
+            uint16x8_t r = vandq_u16(vshlq_n_u16(c, 1), m3e);
+            uint16x8_t g = vandq_u16(vshrq_n_u16(c, 4), m3e);
+            uint16x8_t b = vandq_u16(vshrq_n_u16(c, 9), m3e);
+            uint16x8x2_t o;
+            o.val[0] = vandq_u16(vsliq_n_u16(r, g, 8), a);
+            o.val[1] = vandq_u16(vorrq_u16(b, vflag), a);
+            vst2q_u16((u16*)(out + j), o);
+            accLo = vorrq_u16(accLo, o.val[0]); accHi = vorrq_u16(accHi, o.val[1]);
+            allLo = vandq_u16(allLo, o.val[0]); allHi = vandq_u16(allHi, o.val[1]);
+        }
+        acc |= HorOr16(accLo, accHi);
+        all &= HorAnd16(allLo, allHi);
+    }
+#endif
     if (n >= 4)
     {
         V4 vacc = VZero(), vall = VDup(~0u);
@@ -1862,16 +1905,26 @@ struct CompStep
 template<int N, bool needSecond>
 static void CompositeN(const CompStep* steps, const u32* startLine, u32* outTop, u32* outSecond)
 {
+    // (the step pointers and priority values in registers for the whole line)
+    const u32* line[N > 0 ? N : 1];
+    const u32* prio[N > 0 ? N : 1];
+    V4 prioval[N > 0 ? N : 1];
+    for (int k = 0; k < N; k++)
+    {
+        line[k] = steps[k].line;
+        prio[k] = steps[k].prio;
+        prioval[k] = VDup(steps[k].prioval);
+    }
     for (int i = 0; i < 256; i += 4)
     {
         V4 top = VLoad(startLine + i);
         V4 sec = VZero();
         for (int k = 0; k < N; k++)
         {
-            V4 c = VLoad(steps[k].line + i);
+            V4 c = VLoad(line[k] + i);
             V4 m = VNonZero(c);
-            if (steps[k].prio)
-                m = VAnd(m, VEq(VLoad(steps[k].prio + i), VDup(steps[k].prioval)));
+            if (prio[k])
+                m = VAnd(m, VEq(VLoad(prio[k] + i), prioval[k]));
             if (needSecond)
                 sec = VSel(m, top, sec);
             top = VSel(m, c, top);
@@ -1889,6 +1942,8 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
     CompStep steps[8];
     u8 full[8];
     int n = 0;
+    // sprites of a single priority: every opaque OBJColor pixel has it, no priority test
+    const u32* objprio = (Banana2DFast && !(OBJPrioPresent & (OBJPrioPresent - 1))) ? nullptr : OBJPrio;
     for (int p = 3; p >= 0; p--)
     {
         for (int bg = 3; bg >= 0; bg--)
@@ -1902,7 +1957,7 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
         }
         if (OBJPrioPresent & (1<<p))
         {
-            steps[n] = { OBJColor, OBJPrio, (u32)p };
+            steps[n] = { OBJColor, objprio, (u32)p };
             full[n] = 0;
             n++;
         }
