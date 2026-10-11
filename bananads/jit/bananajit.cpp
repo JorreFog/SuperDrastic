@@ -33,8 +33,11 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
     assert(offsetof(ARM, CurInstr) < 16380 && offsetof(ARM, CodeCycles) < 16380);
     Reset();
     FastLoads = FastLoads9Ok() && !getenv("BANANAJIT_NO_FASTLOADS");
+    LinkBlocks = !getenv("BANANAJIT_NO_LINK") && offsetof(ARM, FastBlockLookup) % 8 == 0 &&
+                 offsetof(ARM, FastBlockLookup) < 32768 && offsetof(ARM, StopExecution) % 4 == 0;
     Platform::Log(Platform::LogLevel::Info, "[bananajit] BananaDS's own JIT, %zu MB of code memory, ARM9 loads %s\n",
                   CodeSize >> 20, FastLoads ? "inline" : "through calls");
+    Platform::Log(Platform::LogLevel::Info, "[bananajit] blocks %s\n", LinkBlocks ? "linked" : "return to the loop");
 }
 
 Compiler::~Compiler() { ARMJIT_Global::FreeCodeMem(CodeMemBase); }
@@ -218,11 +221,68 @@ s32 Compiler::CyclesC() const {
     return (R15 & 2) ? 0 : CurInstr.CodeCycles;
 }
 
+// Leaving a block. With block linking on (the default; jit.link=off turns it off), the block does what
+// ARMv5/ARMv4::Execute's JIT loop does between two blocks, in the same order, and jumps straight into the
+// next one instead of returning to it:
+//   if (StopExecution) -> back to the loop (it handles IRQs, halts, idle loops);
+//   Timestamp += Cycles; Cycles = 0; if (Timestamp >= Target) -> back (the loop ends);
+//   instrAddr = R[15] - (Thumb ? 2 : 4); outside FastBlockLookupStart/Size -> back (it sets the region up);
+//   entry = FastBlockLookup[(instrAddr - Start) / 2]; not (instrAddr | Num) -> back (it compiles the block);
+//   else jump to the entry: what ARM_Dispatch would have done.
+// The lookup reads the framework's table every time, so invalidated blocks are never jumped to.
 void Compiler::ExitBlock() {
     FlushCycles();
     FlushRegs(false);
-    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
     A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
+    if (!LinkBlocks) {
+        A.str(RCycles, RCPU, offsetof(ARM, Cycles));
+        A.jump((const void*)&ARM_Ret, false);
+        return;
+    }
+    const Reg X0r = W0, X16 = (Reg)16, X17 = (Reg)17;
+    u64* ts = CurCPU->Num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp;  // its Target is the next u64
+
+    A.ldr(X16, RCPU, offsetof(ARM, StopExecution));
+    auto stop = A.cbnz_fwd(X16);
+
+    A.movix(X16, (uint64_t)(uintptr_t)ts);
+    A.ldrx(X17, X16, 0);
+    A.addx_sxtw(X17, X17, RCycles);
+    A.strx(X17, X16, 0);
+    A.movz(RCycles, 0);
+    A.ldrx(X0r, X16, 8);
+    A.cmpx(X17, X0r);
+    auto late = A.bcond_fwd(CS);  // Timestamp >= Target (unsigned)
+
+    A.ldr(X0r, RCPU, off_R(15));
+    A.ubfx(X17, RCPSR, 5, 1);     // Thumb: 2, ARM: 4
+    A.lsli(X17, X17, 1);
+    A.movz(X16, 4);
+    A.sub(X17, X16, X17);
+    A.sub(X0r, X0r, X17);         // instrAddr
+    A.ldr(X16, RCPU, offsetof(ARM, FastBlockLookupStart));
+    A.sub(X17, X0r, X16);         // offset (huge when below Start)
+    A.ldr(X16, RCPU, offsetof(ARM, FastBlockLookupSize));
+    A.subs(ZR, X17, X16);
+    auto outside = A.bcond_fwd(CS);
+    A.ldrx(X16, RCPU, offsetof(ARM, FastBlockLookup));
+    A.lsri(X17, X17, 1);
+    A.ldrx_reg_lsl3(X16, X16, X17);
+    if (CurCPU->Num) A.addi(X0r, X0r, 1);  // instrAddr | 1 (it is even)
+    A.lsrxi(X17, X16, 32);
+    A.subs(ZR, X17, X0r);
+    auto miss = A.bcond_fwd(NE);
+    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
+    A.mov(X16, X16);              // the low 32 bits: the entry's offset in code memory
+    A.movix(X17, (uint64_t)(uintptr_t)CodeBase);
+    A.addx(X16, X17, X16);
+    A.br(X16);
+
+    A.land(stop);
+    A.land(late);
+    A.land(outside);
+    A.land(miss);
+    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
     A.jump((const void*)&ARM_Ret, false);
 }
 

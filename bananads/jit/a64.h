@@ -41,6 +41,8 @@ struct A64 {
     void addi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(false, 0, d, n, imm, false)); }
     void subi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(false, 2, d, n, imm, false)); }
     void cmpi(Reg n, uint32_t imm) { put(addsub_imm(false, 3, ZR, n, imm, false)); }
+    void cmpx(Reg n, Reg m) { put(addsub_reg(true, 3, ZR, n, m, LSL, 0)); }
+    void addx_sxtw(Reg d, Reg n, Reg m) { put(0x8B20C000 | m << 16 | n << 5 | d); }  // d = n + (s64)(s32)m
     void addxi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 0, d, n, imm, false)); }
 
     // Logical (shifted register): op 0 AND, 1 BIC, 2 ORR, 3 ORN, 4 EOR, 5 EON, 6 ANDS, 7 BICS
@@ -87,6 +89,7 @@ struct A64 {
     void asri(Reg d, Reg n, uint32_t s) { put(bfm(0x13000000, d, n, s, 31)); }                  // 1-31
     void sxtb(Reg d, Reg n) { put(bfm(0x13000000, d, n, 0, 7)); }
     void sxth(Reg d, Reg n) { put(bfm(0x13000000, d, n, 0, 15)); }
+    void lsrxi(Reg d, Reg n, uint32_t s) { put(0xD3400000 | (s & 63) << 16 | 63 << 10 | n << 5 | d); }
     void rori(Reg d, Reg n, uint32_t s) { put(0x13800000 | n << 16 | (s & 31) << 10 | n << 5 | d); }  // EXTR
 
     // Wide moves
@@ -126,6 +129,7 @@ struct A64 {
     void ldr_reg(Reg t, Reg n, Reg m) { put(0xB8606800 | m << 16 | n << 5 | t); }
     void ldrh_reg(Reg t, Reg n, Reg m) { put(0x78606800 | m << 16 | n << 5 | t); }
     void ldrb_reg(Reg t, Reg n, Reg m) { put(0x38606800 | m << 16 | n << 5 | t); }
+    void ldrx_reg_lsl3(Reg t, Reg n, Reg m) { put(0xF8607800 | m << 16 | n << 5 | t); }  // [Xn, Xm, LSL #3]
 
     // Branches. Offsets are in words from the branch itself; patch() fills one in later.
     static uint32_t b_(int32_t words) { return 0x14000000 | (words & 0x3FFFFFF); }

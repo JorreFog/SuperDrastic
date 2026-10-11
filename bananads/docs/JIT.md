@@ -12,7 +12,7 @@ does block decoding, the block cache, invalidation and idle-loop detection; Bana
 `ARMJIT_A64` compiler, through one guarded line that CMake adds to melonDS's `src/ARMJIT_Compiler.h`. It was
 written from the Arm Architecture Reference Manual, with no DraStic code.
 
-- **The encoder** (`jit/a64.h`): one function per instruction form. `tests/jit_encodings.sh` checks all 78 forms
+- **The encoder** (`jit/a64.h`): one function per instruction form. `tests/jit_encodings.sh` checks all 82 forms
   against LLVM's assembler (`ctest`, any host).
 - **Registers:**
   - x29 holds the CPU, w28 the cycles, w27 the CPSR.
@@ -35,6 +35,11 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
     melonDS models no ARM9 data cache, so this is exact. Any other address, or no permission, takes the
     call. `jit.fastloads=off` turns it off; with it on or off, `bananads-difftest --every` finds main RAM
     byte-identical after every frame (CI, ARM and Thumb), so it changes no cycle.
+  - Block linking: a block's exit does what melonDS's `Execute` loop does between two blocks, in the same
+    order: the StopExecution check, `Timestamp += Cycles`, the Target check, the region check and the
+    FastBlockLookup lookup. Then it jumps straight into the next block instead of returning. The table is
+    read every time, so an invalidated block is never entered. `jit.link=off` turns it off; with it on or
+    off, main RAM is identical after every frame (CI, ARM and Thumb).
   - Thumb: every Thumb instruction that means exactly what an ARM instruction means is compiled as that ARM
     instruction (`ThumbToARM`). That covers shifts by an immediate, add/subtract, MOV/CMP/ADD/SUB with
     immediates, the register ALU ops, the high-register ADD/CMP/MOV, PC/SP-relative ADD, ADD SP, and every
@@ -61,8 +66,9 @@ stress ROMs are bound by 3D, not by the CPUs.
 `BANANAJIT_TRACE=1` logs every compiled block: each instruction's address, kind, and whether it is native.
 
 **Next, in order of what the traces show the interpreter still doing:**
-1. Branches: B/BL/B.cond/BX natively, with the interpreter's `JumpTo` costs (its instruction-fetch and cache
-   timing has to be matched first), then linking blocks with static targets directly.
+1. Branches natively. Linking is done, but a branch still calls `JumpTo`. Its fetch costs go through the ARM9
+   instruction-cache model; melonDS's JIT precomputes them, which is an approximation. A native branch has
+   to keep the run-time cost to stay exact.
 2. LDM/STM and PUSH/POP.
 3. MUL/MLA (the interpreter charges by operand size), shifts by a register.
 4. Stores inline, like the loads. A store to main RAM or ITCM can hit compiled code: it needs the framework's

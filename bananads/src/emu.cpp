@@ -160,6 +160,8 @@ bool Emu::load_rom(const std::string& path) {
     // jit.fastloads=off: ARM9 loads through calls instead of inline (for bananads-difftest: both must agree)
     if (cfg_.flag("jit.fastloads", true)) unsetenv("BANANAJIT_NO_FASTLOADS");
     else setenv("BANANAJIT_NO_FASTLOADS", "1", 1);
+    if (cfg_.flag("jit.link", true)) unsetenv("BANANAJIT_NO_LINK");  // jit.link=off: back to the loop each block
+    else setenv("BANANAJIT_NO_LINK", "1", 1);
 #endif
 
     auto& hdr = args.Firmware.GetHeader();

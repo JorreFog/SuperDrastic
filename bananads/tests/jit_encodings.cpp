@@ -97,5 +97,9 @@ int main() {
     E("ldrh w0, [x2, x17]", a.ldrh_reg((Reg)0, (Reg)2, (Reg)17));
     E("ldrb w17, [x16, x17]", a.ldrb_reg((Reg)17, (Reg)16, (Reg)17));
     E("cbnz w3, #8", a.put(A64::cbnz_((Reg)3, 2)));
+    E("cmp x17, x0", a.cmpx((Reg)17, (Reg)0));
+    E("add x17, x17, w28, sxtw", a.addx_sxtw((Reg)17, (Reg)17, (Reg)28));
+    E("ldr x16, [x16, x17, lsl #3]", a.ldrx_reg_lsl3((Reg)16, (Reg)16, (Reg)17));
+    E("lsr x17, x16, #32", a.lsrxi((Reg)17, (Reg)16, 32));
     return 0;
 }

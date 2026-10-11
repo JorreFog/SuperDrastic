@@ -62,6 +62,7 @@ private:
     void CallOut(const void* fn);  // fn(cpu, w1, w2) with the interpreter's state in memory
     void FastLoad9(int size, bool sign, bool rotate, const void* slowfn);  // ARM9 TCM/main-RAM loads inline
     bool FastLoads = false;
+    bool LinkBlocks = false;
     void AddCycles(s32 n) { ConstantCycles += n; }
     void FlushCycles();
     s32 CyclesC() const;       // what the interpreter's AddCycles_C charges for CurInstr
