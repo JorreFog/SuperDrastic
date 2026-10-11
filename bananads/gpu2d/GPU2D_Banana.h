@@ -198,6 +198,7 @@ private:
     u32 NumSprites;
     int ObjXMin, ObjXMax;   // screen extent touched by non-window sprites on this line
     bool WindowsOn;
+    bool Raw3D;         // BG0 is the 3D layer, composited straight from Line3D (no BGLine(0) this scanline)
     u8 LayerDrawn;      // bit per BG: a layer line exists for this scanline
     u8 LayerFull;       // bit per BG: every pixel of the layer line is opaque
     u8 OBJPrioPresent;  // bit per priority: opaque sprite pixels with that priority exist

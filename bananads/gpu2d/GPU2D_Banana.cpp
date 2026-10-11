@@ -362,6 +362,7 @@ void BananaRenderer2D::Reset()
     NumSprites = 0;
     ObjXMin = 256; ObjXMax = 0;
     WindowsOn = false;
+    Raw3D = false;
     LayerDrawn = 0;
     LayerFull = 0;
     OBJPrioPresent = 0;
@@ -1897,24 +1898,30 @@ struct CompStep
     const u32* line;
     const u32* prio;   // null for a BG; the OBJ priority line for a sprite step
     u32 prioval;
+    bool raw3d;        // line is the 3D layer's own line, converted here (DrawBG_3D's conversion)
 };
 
 // painter's algorithm over N layer lines, four pixels at a time with the top (and second) pixel kept
 // in registers; startLine is the layer everything is painted onto (the backdrop, or a layer that
-// covers the whole line)
-template<int N, bool needSecond>
+// covers the whole line). has3d: a step is the 3D layer's own line, made into DrawBG_3D's pixels here
+// (opaque where the alpha byte is nonzero, with the 3D flag added); every other step's pixels are
+// opaque exactly where their flag byte is nonzero, so the same test serves all steps
+template<int N, bool needSecond, bool has3d>
 static void CompositeN(const CompStep* steps, const u32* startLine, u32* outTop, u32* outSecond)
 {
     // (the step pointers and priority values in registers for the whole line)
     const u32* line[N > 0 ? N : 1];
     const u32* prio[N > 0 ? N : 1];
     V4 prioval[N > 0 ? N : 1];
+    V4 orv[N > 0 ? N : 1];
     for (int k = 0; k < N; k++)
     {
         line[k] = steps[k].line;
         prio[k] = steps[k].prio;
         prioval[k] = VDup(steps[k].prioval);
+        orv[k] = VDup(steps[k].raw3d ? 0x40000000 : 0);
     }
+    const V4 flagbyte = VDup(0xFF000000);
     for (int i = 0; i < 256; i += 4)
     {
         V4 top = VLoad(startLine + i);
@@ -1922,7 +1929,14 @@ static void CompositeN(const CompStep* steps, const u32* startLine, u32* outTop,
         for (int k = 0; k < N; k++)
         {
             V4 c = VLoad(line[k] + i);
-            V4 m = VNonZero(c);
+            V4 m;
+            if (has3d)
+            {
+                m = VNonZero(VAnd(c, flagbyte));
+                c = VOr(c, orv[k]);
+            }
+            else
+                m = VNonZero(c);
             if (prio[k])
                 m = VAnd(m, VEq(VLoad(prio[k] + i), prioval[k]));
             if (needSecond)
@@ -1950,14 +1964,15 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
         {
             if ((LayerDrawn & (1<<bg)) && ((R.BGCnt[bg] & 0x3) == p))
             {
-                steps[n] = { BGLine(bg), nullptr, 0 };
+                bool raw = (bg == 0) && Raw3D;
+                steps[n] = { raw ? Line3D : BGLine(bg), nullptr, 0, raw };
                 full[n] = (LayerFull >> bg) & 1;
                 n++;
             }
         }
         if (OBJPrioPresent & (1<<p))
         {
-            steps[n] = { OBJColor, objprio, (u32)p };
+            steps[n] = { OBJColor, objprio, (u32)p, false };
             full[n] = 0;
             n++;
         }
@@ -1984,9 +1999,14 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
     }
 
     const CompStep* s = steps + start;
+    bool has3d = false;
+    for (int k = start; k < n; k++) has3d |= steps[k].raw3d;
     switch (n - start)
     {
-#define BANANA_COMP(N) case N: if (needSecond) CompositeN<N, true>(s, startLine, outTop, outSecond); else CompositeN<N, false>(s, startLine, outTop, outSecond); break;
+#define BANANA_COMP(N) case N: \
+        if (has3d) { if (needSecond) CompositeN<N, true, true>(s, startLine, outTop, outSecond); else CompositeN<N, false, true>(s, startLine, outTop, outSecond); } \
+        else       { if (needSecond) CompositeN<N, true, false>(s, startLine, outTop, outSecond); else CompositeN<N, false, false>(s, startLine, outTop, outSecond); } \
+        break;
     BANANA_COMP(0) BANANA_COMP(1) BANANA_COMP(2) BANANA_COMP(3)
     BANANA_COMP(4) BANANA_COMP(5) BANANA_COMP(6) BANANA_COMP(7) BANANA_COMP(8)   // at most 4 BGs + 4 OBJ steps
     default: break;
@@ -2206,6 +2226,7 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
 
     LayerDrawn = 0;
     LayerFull = 0;
+    Raw3D = false;
 
     // BG types per mode: 0 none, 1 text, 2 affine, 3 extended, 4 large, 5 3D
     enum { T_None, T_Text, T_Affine, T_Ext, T_Large, T_3D };
@@ -2237,7 +2258,9 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
         switch (type[bg])
         {
         case T_3D:
-            DrawBG_3D();
+            // with no window to apply, the compositor converts the 3D line itself (one pass less)
+            if (Banana2DFast && !WindowsOn) Raw3D = true;
+            else                            DrawBG_3D();
             LayerDrawn |= (1<<bg);
             break;
         case T_Text:
