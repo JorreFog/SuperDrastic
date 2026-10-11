@@ -1452,14 +1452,20 @@ void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
     if (GPU2D.Num == 0)
     {
         auto objDirty = GPU.VRAMDirty_AOBJ.DeriveState(GPU.VRAMMap_AOBJ, GPU);
-        GPU.MakeVRAMFlat_AOBJCoherent(objDirty);
-        if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_AOBJ);
+        if (!Banana2DFast || AnyBits(objDirty))   // (most lines: nothing to make coherent or copy)
+        {
+            GPU.MakeVRAMFlat_AOBJCoherent(objDirty);
+            if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_AOBJ);
+        }
     }
     else
     {
         auto objDirty = GPU.VRAMDirty_BOBJ.DeriveState(GPU.VRAMMap_BOBJ, GPU);
-        GPU.MakeVRAMFlat_BOBJCoherent(objDirty);
-        if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_BOBJ);
+        if (!Banana2DFast || AnyBits(objDirty))   // (most lines: nothing to make coherent or copy)
+        {
+            GPU.MakeVRAMFlat_BOBJCoherent(objDirty);
+            if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_BOBJ);
+        }
     }
 
     u32 oambit = 1u << GPU2D.Num;
@@ -1633,6 +1639,40 @@ void BananaRenderer2D::DrawSprite_Rotscale(u32 num, u32 boundwidth, u32 boundhei
 
     width <<= 8;
     height <<= 8;
+
+    if (Banana2DFast && xoff < boundwidth)
+    {
+        // only the pixels whose source lands inside the sprite can draw anything: clip [xoff, boundwidth) to them
+        // (widened by one pixel each side; the loops still test every pixel, so this only skips pixels they'd skip)
+        s64 lo = 0, hi = (s64)boundwidth - xoff;     // pixel k of the span samples rotX + k*rotA, rotY + k*rotC
+        auto clip = [&](s64 a, s64 d, s64 lim)
+        {
+            // 0 <= a + k*d <= lim - 1
+            auto fdiv = [](s64 x, s64 y) { s64 q = x / y; return (x % y != 0 && ((x < 0) != (y < 0))) ? q - 1 : q; };
+            if (d == 0)
+            {
+                if (a < 0 || a >= lim) hi = lo;
+                return;
+            }
+            s64 k0, k1;   // the real k range, as floor bounds widened by one
+            if (d > 0) { k0 = fdiv(-a, d); k1 = fdiv(lim - 1 - a, d) + 1; }
+            else       { k0 = fdiv(lim - 1 - a, d); k1 = fdiv(-a, d) + 1; }
+            k0 -= 1; k1 += 1;
+            if (k0 > lo) lo = k0;
+            if (k1 < hi) hi = k1;
+        };
+        clip(rotX, rotA, width);
+        clip(rotY, rotC, height);
+        if (hi <= lo)
+            return;
+        if (lo > 0)
+        {
+            xoff += lo; xpos += lo;
+            rotX += (s32)lo * rotA;
+            rotY += (s32)lo * rotC;
+        }
+        boundwidth = xoff + (u32)(hi - lo);
+    }
 
     if (spritemode == 3)
     {
@@ -1980,9 +2020,44 @@ void BananaRenderer2D::ApplySpriteMosaicX()
     u8 mosw = R.OBJMosaicSize[0];
     if (mosw == 0) return;
 
+    int i0 = 0, i1 = 256;
     u8 mosx = 0;
     u32 latchcolor = 0;
-    for (int i = 0; i < 256; i++)
+#ifdef BANANA_NEON
+    if (Banana2DFast)
+    {
+        // every pixel's own value first (a transparent pixel's from its attribute byte), 4 at a time; a pixel without
+        // the mosaic bit always latches itself, so the sequential pass is needed only from the mosaic block holding
+        // the first pixel with the bit to the last such pixel
+        const uint32x4_t vop = vdupq_n_u32(OBJ_IsOpaque), vm = vdupq_n_u32(OBJ_IsSprite | OBJ_Mosaic | OBJ_BGPrioMask);
+        const uint32x4_t vmos = vdupq_n_u32(OBJ_Mosaic);
+        int first = 256, last = -1;
+        for (int i = 0; i < 256; i += 4)
+        {
+            uint32x4_t p = vld1q_u32(&OBJLine[i]);
+            uint32x4_t t = vandq_u32(vshlq_n_u32(VFromBytes4(*(const u32*)&OBJTransAttr[i]), 16), vm);
+            uint32x4_t c = vbslq_u32(vtstq_u32(p, vop), p, t);
+            vst1q_u32(&OBJLine[i], c);
+            if (vmaxvq_u32(vandq_u32(c, vmos)))
+            {
+                for (int k = 0; k < 4; k++)
+                    if (OBJLine[i + k] & OBJ_Mosaic)
+                    {
+                        if (first == 256) first = i + k;
+                        last = i + k;
+                    }
+            }
+        }
+        if (last < 0)
+            i1 = 0;
+        else
+        {
+            i0 = first - (first % (mosw + 1));
+            i1 = last + 1;
+        }
+    }
+#endif
+    for (int i = i0; i < i1; i++)
     {
         u32 curcolor = OBJLine[i];
         if (!(curcolor & OBJ_IsOpaque))
@@ -2526,14 +2601,22 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
         auto bgDirty = GPU.VRAMDirty_ABG.DeriveState(GPU.VRAMMap_ABG, GPU);
         auto bgExtPalDirty = GPU.VRAMDirty_ABGExtPal.DeriveState(GPU.VRAMMap_ABGExtPal, GPU);
         auto objExtPalDirty = GPU.VRAMDirty_AOBJExtPal.DeriveState(&GPU.VRAMMap_AOBJExtPal, GPU);
-        GPU.MakeVRAMFlat_ABGCoherent(bgDirty);
-        regs.BGExtChanged |= GPU.MakeVRAMFlat_ABGExtPalCoherent(bgExtPalDirty);
-        regs.OBJExtChanged |= GPU.MakeVRAMFlat_AOBJExtPalCoherent(objExtPalDirty);
-        if (CopyTo)
+        // (render.2d_fast: an empty dirty set, most lines, has nothing to make coherent or copy)
+        const bool all = !Banana2DFast;
+        if (all || AnyBits(bgDirty))
         {
-            CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_ABG);
-            CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_ABGExtPal);
-            CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_AOBJExtPal);
+            GPU.MakeVRAMFlat_ABGCoherent(bgDirty);
+            if (CopyTo) CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_ABG);
+        }
+        if (all || AnyBits(bgExtPalDirty))
+        {
+            regs.BGExtChanged |= GPU.MakeVRAMFlat_ABGExtPalCoherent(bgExtPalDirty);
+            if (CopyTo) CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_ABGExtPal);
+        }
+        if (all || AnyBits(objExtPalDirty))
+        {
+            regs.OBJExtChanged |= GPU.MakeVRAMFlat_AOBJExtPalCoherent(objExtPalDirty);
+            if (CopyTo) CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_AOBJExtPal);
         }
     }
     else
@@ -2541,14 +2624,22 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
         auto bgDirty = GPU.VRAMDirty_BBG.DeriveState(GPU.VRAMMap_BBG, GPU);
         auto bgExtPalDirty = GPU.VRAMDirty_BBGExtPal.DeriveState(GPU.VRAMMap_BBGExtPal, GPU);
         auto objExtPalDirty = GPU.VRAMDirty_BOBJExtPal.DeriveState(&GPU.VRAMMap_BOBJExtPal, GPU);
-        GPU.MakeVRAMFlat_BBGCoherent(bgDirty);
-        regs.BGExtChanged |= GPU.MakeVRAMFlat_BBGExtPalCoherent(bgExtPalDirty);
-        regs.OBJExtChanged |= GPU.MakeVRAMFlat_BOBJExtPalCoherent(objExtPalDirty);
-        if (CopyTo)
+        // (render.2d_fast: an empty dirty set, most lines, has nothing to make coherent or copy)
+        const bool all = !Banana2DFast;
+        if (all || AnyBits(bgDirty))
         {
-            CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_BBG);
-            CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_BBGExtPal);
-            CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_BOBJExtPal);
+            GPU.MakeVRAMFlat_BBGCoherent(bgDirty);
+            if (CopyTo) CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_BBG);
+        }
+        if (all || AnyBits(bgExtPalDirty))
+        {
+            regs.BGExtChanged |= GPU.MakeVRAMFlat_BBGExtPalCoherent(bgExtPalDirty);
+            if (CopyTo) CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_BBGExtPal);
+        }
+        if (all || AnyBits(objExtPalDirty))
+        {
+            regs.OBJExtChanged |= GPU.MakeVRAMFlat_BOBJExtPalCoherent(objExtPalDirty);
+            if (CopyTo) CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_BOBJExtPal);
         }
     }
 
