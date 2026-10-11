@@ -811,3 +811,13 @@ ORIG4 ds2d_alpha_orig, 1, "mov x4, x17", "movi v29.16b, #0x1f", "ld1 {v28.16b}, 
 ORIG4 ds2d_span8n_orig, 2, "mov x5, x17", "mov w4, #0x20", "ld1 {v0.4s}, [x5]; shl v1.4s, v0.4s, #16"
 /* render_scanline_tiled_span_8bpp_ext_palette_asm (0x9f188): adr x5, c; movi v18, 1; ld1 {v0.4s}, [x5]; mov v18.d[0], xzr */
 ORIG4 ds2d_span8e_orig, 3, "mov x5, x17", "movi v18.16b, #1", "ld1 {v0.4s}, [x5]; mov v18.d[0], xzr"
+/* render_scanline_tiled_setup_tile_map_entries_4bpp_asm (0x9ee70): adr x7, table; mov x8, x30; mov w6, 28; movi v5.8h, 0x800 */
+ORIG4 ds2d_tme4_orig, 4, "mov x7, x17", "mov x8, x30", "mov w6, #0x1c; movi v5.8h, #0x8, lsl #8"
+/* render_scanline_tiled_setup_tile_map_entries_8bpp_asm (0x9ef08): the same with w6 = 56 */
+ORIG4 ds2d_tme8_orig, 5, "mov x7, x17", "mov x8, x30", "mov w6, #0x38; movi v5.8h, #0x8, lsl #8"
+/* render_scanline_set_visibility_4bpp_asm (0x9f278): adr x4, masks; mov w3, 8; sub w3, w3, w2; neg w2, w2 */
+ORIG4 ds2d_vis4_orig, 6, "mov x4, x17", "mov w3, #8", "sub w3, w3, w2; neg w2, w2"
+/* render_scanline_set_visibility_8bpp_asm (0x9f390): adr x2, bits; ld1 {v24.16b}, [x2]; ld1 x4 [x1], #64; ld1 x4 [x1], #64 */
+ORIG4 ds2d_vis8_orig, 7, "mov x2, x17", "ld1 {v24.16b}, [x2]", "ld1 {v0.16b, v1.16b, v2.16b, v3.16b}, [x1], #64; ld1 {v4.16b, v5.16b, v6.16b, v7.16b}, [x1], #64"
+/* render_scanline_set_visibility_12bpp_asm (0x9f468): adr x2, bits; ld1 {v24.16b}, [x2]; mov w3, 2; nop */
+ORIG4 ds2d_vis12_orig, 8, "mov x2, x17", "ld1 {v24.16b}, [x2]", "mov w3, #2"

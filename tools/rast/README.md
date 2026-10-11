@@ -610,7 +610,16 @@ calls a frame): palette_lookup_8bpp 770 -> 540 (132), _12bpp 838 -> 636 (52), sp
 418 -> 356 (48), shade 699 -> 401 (32), double encoder ~330 -> 230 (48); S4: setup_alpha_base 194 -> 85, the double
 encoder 70 -> 54 (129 each).
 
-`RAST_2D=0` (or `DSFLIP_RAST_2D=0`) leaves them alone (otherwise a bit mask of the hooks, default all);
+A third batch: `render_scanline_set_visibility_8bpp_asm` / `_12bpp_asm` (a layer line's visibility bitmap: the
+originals' instructions from ldr q instead of ld1 of four registers with writeback; 98 -> ~80 and 175 -> ~135 modeled
+cycles a call), and the blend weights' setups take blocks whose mask bytes are all set without the select. Measured
+and left off by default (`DS2D_DEFAULT`; RAST_2D=-1 turns them on, the check mode and `t_ds2d.c` cover them): the
+tile-map-entry setups (DraStic's table of map-row loaders is cheap: 44 modeled cycles a call against ours 74),
+disable_blank_layers (45 against ~60 with the jump into ours), set_visibility_4bpp (95 against ~98) and
+setup_blend_base (176 against ~200: both are bound by the same 16 128-bit operations per 64 pixels). A leaf of
+fewer than ~100 cycles a call gains little from a hook: the patched entry's jump costs a few cycles of its own.
+
+`RAST_2D=0` (or `DSFLIP_RAST_2D=0`) leaves them alone (otherwise a bit mask of the hooks, default `DS2D_DEFAULT`);
 `RAST_2DCHECK=1` runs every call twice, ours and then DraStic's (through the trampoline) on the same input bytes, and
 compares the outputs with 64 bytes either side (`[ds2d] check:` counts every 2 s, `[ds2dcheck]` lines for a
 difference). Exactness: `tools/rast/ut/t_ds2d.c` (each routine against the original on random inputs of any byte

@@ -68,11 +68,22 @@
  *           (0x9f188): an 8bpp text BG line's 33 tile rows (index bytes; with the palette number as the high byte
  *           for the extended palettes) -> ds2d_span8n() / ds2d_span8e(): the rows loaded straight into vector
  *           lanes instead of through general registers, the interleave by zip + str q. Caller: tiled_ext (C).
+ *   H_TME4, H_TME8  render_scanline_tiled_setup_tile_map_entries_4bpp_asm (0x9ee70) / _8bpp_asm (0x9ef08): a text
+ *           BG line's 40 map entries from tile column k, through DraStic's table of 32 map-row loaders, as tile-row
+ *           byte offsets plus flag bytes -> ds2d_tme4() / ds2d_tme8(): the same rotation by ext, without the indirect
+ *           call and the stores with writeback. Caller: tiled_ext (C).
+ *   H_DBL    render_scanline_disable_blank_layers_asm (0xa089c: clears the enable bits of BGs whose visibility bitmap
+ *           is empty) -> ds2d_disable_blank(). Caller: render_scanline_2d (C), twice a line.
+ *   H_VIS4, H_VIS8, H_VIS12  render_scanline_set_visibility_4bpp_asm (0x9f278), _8bpp_asm (0x9f390), _12bpp_asm
+ *           (0x9f468): a layer line's 256-bit visibility bitmap from its nibbles / bytes / u16 indexes ->
+ *           ds2d_vis4() etc.: the originals' instructions from ldr q loads. Callers: tiled_ext, the affine renderers (C).
  *
- * RAST_2D (or DSFLIP_RAST_2D): 0 leaves DraStic's functions alone; otherwise a mask of the hooks (default all):
+ * RAST_2D (or DSFLIP_RAST_2D): 0 leaves DraStic's functions alone; otherwise a mask of the hooks (default all but
+ * the five that do not pay, DS2D_DEFAULT below; -1 all):
  * 1 H_CONV, 2 H_SELECT, 4 H_EFFECTS, 8 H_BLEND, 16 H_PRIO, 32 H_CONV1X, 64 H_SPAN4, 128 H_PAL8, 256 H_PAL12,
  * 512 H_PRIO2, 1024 H_ALPHA_BASE, 2048 H_ALPHA, 4096 H_BLEND_BASE, 8192 H_BLEND_SET, 16384 H_SHADE, 32768 H_SPAN8N,
- * 65536 H_SPAN8E. RAST_2DCHECK=1: every call of a hooked function runs ours, then DraStic's original (through the
+ * 65536 H_SPAN8E, 0x20000 H_TME4, 0x40000 H_TME8, 0x80000 H_DBL, 0x100000 H_VIS4, 0x200000 H_VIS8, 0x400000 H_VIS12.
+ * RAST_2DCHECK=1: every call of a hooked function runs ours, then DraStic's original (through the
  * trampoline rast_hook() returns; through an ORIG4 stub of ds2d_asm.S for the entries that start with an adr, as
  * ds2d_span4_orig; through a private copy of the whole routine for the two palette lookups, whose loops re-enter the
  * patched entry: copy_orig(), check mode only, both routines position independent in every instruction) on the same
@@ -93,7 +104,7 @@
 #include "ds2d.h"
 
 enum { H_CONV, H_SELECT, H_EFFECTS, H_BLEND, H_PRIO, H_CONV1X, H_SPAN4, H_PAL8, H_PAL12, H_PRIO2, H_ALPHA_BASE, H_ALPHA,
-       H_BLEND_BASE, H_BLEND_SET, H_SHADE, H_SPAN8N, H_SPAN8E, H_N };
+       H_BLEND_BASE, H_BLEND_SET, H_SHADE, H_SPAN8N, H_SPAN8E, H_TME4, H_TME8, H_DBL, H_VIS4, H_VIS8, H_VIS12, H_N };
 
 /* the originals (trampolines) */
 typedef void (*conv_fn)(const uint8_t *a, const uint8_t *b, uint32_t *out);
@@ -114,7 +125,9 @@ typedef void (*span4_fn)(uint16_t *dst, uint8_t *rows, const uint16_t *pal, cons
 /* DraStic's span_4bpp: its constant and its fifth instruction, for ds2d_span4_orig (ds2d_asm.S) */
 __attribute__((visibility("hidden"))) uintptr_t ds2d_span4_consts, ds2d_span4_cont;
 /* the same for the ORIG4 stubs of ds2d_asm.S: { the adr's target, the fifth instruction } per stub */
-__attribute__((visibility("hidden"))) uintptr_t ds2d_orig_vars[4][2];
+__attribute__((visibility("hidden"))) uintptr_t ds2d_orig_vars[9][2];
+typedef void (*dbl_fn)(const uint8_t *masks, uint8_t *word);
+static dbl_fn orig_dbl;
 typedef void (*pal8_fn)(uint16_t *dst, const uint8_t *src, const uint16_t *pal, int n);
 typedef void (*pal12_fn)(uint16_t *dst, const uint16_t *src, const uint16_t *pal, int n);
 static pal8_fn orig_pal8;                  /* private copies of the originals (see copy_orig) */
@@ -138,7 +151,9 @@ static struct timespec chk_last;
 static const char *hname[H_N] = { "color_convert_direct_32_2x", "select_pixels", "color_effects_apply", "select_blend_enable", "priority_encode_single",
                                     "color_convert_direct_32_1x", "tiled_span_4bpp", "palette_lookup_8bpp", "palette_lookup_12bpp",
                                     "priority_encode_double", "effects_setup_alpha_base", "effects_setup_alpha", "effects_setup_blend_base",
-                                    "effects_setup_blend", "shade", "tiled_span_8bpp_normal", "tiled_span_8bpp_ext" };
+                                    "effects_setup_blend", "shade", "tiled_span_8bpp_normal", "tiled_span_8bpp_ext",
+                                    "tile_map_entries_4bpp", "tile_map_entries_8bpp", "disable_blank_layers", "set_visibility_4bpp",
+                                    "set_visibility_8bpp", "set_visibility_12bpp" };
 static int ds2d_check, ds2d_mask;
 
 /* a region with up to CHK_PAD bytes either side, as far as the pages of its first and last byte go (always mapped) */
@@ -631,9 +646,12 @@ void ds2d_setup_alpha_base(uint8_t *wa, uint8_t *wb, const uint8_t *alpha, const
             continue;
         }
         const uint8_t *ap = alpha + 64 * b;
-        uint8x16_t t = LD1R(mask + 8 * b, "2d");
-        uint8x16_t a0 = sel8(EN16(t, 0), LDQ(ap, 0), c1f), a1 = sel8(EN16(t, 1), LDQ(ap, 16), c1f);
-        uint8x16_t a2 = sel8(EN16(t, 2), LDQ(ap, 32), c1f), a3 = sel8(EN16(t, 3), LDQ(ap, 48), c1f);
+        uint8x16_t a0 = LDQ(ap, 0), a1 = LDQ(ap, 16), a2 = LDQ(ap, 32), a3 = LDQ(ap, 48);
+        if (~(m0 & m1)) {                                 /* not all set: the select */
+            uint8x16_t t = LD1R(mask + 8 * b, "2d");
+            a0 = sel8(EN16(t, 0), a0, c1f); a1 = sel8(EN16(t, 1), a1, c1f);
+            a2 = sel8(EN16(t, 2), a2, c1f); a3 = sel8(EN16(t, 3), a3, c1f);
+        }
         vst1q_u8(pa, vaddq_u8(a0, c1)); vst1q_u8(pa + 16, vaddq_u8(a1, c1));
         vst1q_u8(pa + 32, vaddq_u8(a2, c1)); vst1q_u8(pa + 48, vaddq_u8(a3, c1));
         vst1q_u8(pb, vsubq_u8(c1f, a0)); vst1q_u8(pb + 16, vsubq_u8(c1f, a1));
@@ -651,9 +669,16 @@ void ds2d_setup_alpha(uint8_t *wa, uint8_t *wb, const uint8_t *alpha, const uint
         if (!(m0 | m1)) continue;
         uint8_t *pa = wa + 64 * b, *pb = wb + 64 * b;
         const uint8_t *ap = alpha + 64 * b;
+        uint8x16_t a0 = LDQ(ap, 0), a1 = LDQ(ap, 16), a2 = LDQ(ap, 32), a3 = LDQ(ap, 48);
+        if (!~(m0 & m1)) {                                /* all set: the new weights only */
+            vst1q_u8(pa, vaddq_u8(a0, c1)); vst1q_u8(pa + 16, vaddq_u8(a1, c1));
+            vst1q_u8(pa + 32, vaddq_u8(a2, c1)); vst1q_u8(pa + 48, vaddq_u8(a3, c1));
+            vst1q_u8(pb, vsubq_u8(c1f, a0)); vst1q_u8(pb + 16, vsubq_u8(c1f, a1));
+            vst1q_u8(pb + 32, vsubq_u8(c1f, a2)); vst1q_u8(pb + 48, vsubq_u8(c1f, a3));
+            continue;
+        }
         uint8x16_t t = LD1R(mask + 8 * b, "2d");
         uint8x16_t e0 = EN16(t, 0), e1 = EN16(t, 1), e2 = EN16(t, 2), e3 = EN16(t, 3);
-        uint8x16_t a0 = LDQ(ap, 0), a1 = LDQ(ap, 16), a2 = LDQ(ap, 32), a3 = LDQ(ap, 48);
         uint8x16_t w0 = LDQ(pa, 0), w1 = LDQ(pa, 16), w2 = LDQ(pa, 32), w3 = LDQ(pa, 48);
         uint8x16_t x0 = LDQ(pb, 0), x1 = LDQ(pb, 16), x2 = LDQ(pb, 32), x3 = LDQ(pb, 48);
         vst1q_u8(pa, sel8(e0, vaddq_u8(a0, c1), w0)); vst1q_u8(pa + 16, sel8(e1, vaddq_u8(a1, c1), w1));
@@ -679,6 +704,14 @@ void ds2d_setup_blend_base(uint32_t bldalpha, uint8_t *wa, uint8_t *wb, const ui
     const uint8x16_t c20 = vdupq_n_u8(0x20);
     for (int b = 0; b < 4; b++) {
         uint8_t *pa = wa + 64 * b, *pb = wb + 64 * b;
+        uint64_t m;
+        memcpy(&m, mask + 8 * b, 8);
+        if (!m || !~m) {                                  /* none or all set: two constants */
+            uint8x16_t x = m ? evb : vdupq_n_u8(0), y = m ? eva : c20;
+            vst1q_u8(pb, x); vst1q_u8(pb + 16, x); vst1q_u8(pb + 32, x); vst1q_u8(pb + 48, x);
+            vst1q_u8(pa, y); vst1q_u8(pa + 16, y); vst1q_u8(pa + 32, y); vst1q_u8(pa + 48, y);
+            continue;
+        }
         uint8x16_t t = LD1R(mask + 8 * b, "2d");
         uint8x16_t e0 = EN16(t, 0), e1 = EN16(t, 1), e2 = EN16(t, 2), e3 = EN16(t, 3);
         vst1q_u8(pb, vandq_u8(e0, evb)); vst1q_u8(pb + 16, vandq_u8(e1, evb));
@@ -698,6 +731,11 @@ void ds2d_setup_blend(uint32_t bldalpha, uint8_t *wa, uint8_t *wb, const uint8_t
         memcpy(&m0, mask + 8 * b, 4); memcpy(&m1, mask + 8 * b + 4, 4);
         if (!(m0 | m1)) continue;
         uint8_t *pa = wa + 64 * b, *pb = wb + 64 * b;
+        if (!~(m0 & m1)) {                                /* all set: the constants */
+            vst1q_u8(pa, eva); vst1q_u8(pa + 16, eva); vst1q_u8(pa + 32, eva); vst1q_u8(pa + 48, eva);
+            vst1q_u8(pb, evb); vst1q_u8(pb + 16, evb); vst1q_u8(pb + 32, evb); vst1q_u8(pb + 48, evb);
+            continue;
+        }
         uint8x16_t t = LD1R(mask + 8 * b, "2d");
         uint8x16_t e0 = EN16(t, 0), e1 = EN16(t, 1), e2 = EN16(t, 2), e3 = EN16(t, 3);
         uint8x16_t w0 = LDQ(pa, 0), w1 = LDQ(pa, 16), w2 = LDQ(pa, 32), w3 = LDQ(pa, 48);
@@ -887,6 +925,198 @@ static void chk_span8e(uint16_t *dst, const uint8_t *tiles, const uint16_t *entr
     pthread_mutex_unlock(&chk_lock);
 }
 
+
+/* a region with the pad on its left only (the bytes after it are another output of the same call) */
+static rgn padded_l(void *p, size_t n) {
+    rgn r = padded(p, n);
+    return (rgn){ r.p, (size_t)((uint8_t *)p - r.p) + n };
+}
+
+/* ---- H_TME4, H_TME8: render_scanline_tiled_setup_tile_map_entries_{4,8}bpp_asm(entries, flags, row, row2, k, roff) ----
+ * The 40 map entries a text BG line needs from tile column k (0..31, the caller's 5-bit field) of a 32-tile map row
+ * (row: the 64-byte row of the first screen block, row2: of the next one), through DraStic's table of 32 loaders:
+ * with b = k & ~7, r = k & 7 and S = row[b..31] ++ row2[0..b+7], the entries are e[0..31] = S[r..r+31] and e[32..39]
+ * = row2[b + ((r + i) & 7)] (the loader's last register is rotated, not shifted: entry 39 wraps to row2[b]). Per
+ * entry: entries[i] = (e & 0x3ff) << 5 (8bpp: << 6) | (e & 0x800 ? 28 - roff : roff) (8bpp: 56 - roff): the tile
+ * row's byte offset in the character data, roff = (vofs & 7) * 4 (8bpp: * 8); flags[i] = e >> 8 (bit 2 h-flip, 3
+ * v-flip, 4-7 the palette). The original stores 48 flag bytes, the last 8 from a register half it never wrote (whatever
+ * the caller's code left in v23's upper half); their only readers, the span routine tiled_ext calls next, read at
+ * most flags[0..35] (span_4bpp and span_8bpp_ext: 32 a word at a time, then the 33rd tile's 4-byte load of
+ * flags[32..35], of which bytes 32 and 33 are used; span_8bpp_normal: flags[0..32]) and entries[0..35], so flag
+ * bytes 40..47 are not an output: this writes flags[0..39]. Reads row[b..31],
+ * row2[0..b+7] (64 bytes at most each), as the loaders do. Caller: render_scanline_tiled_ext (C), the buffers on its
+ * stack. The original models at ~47 cycles (an indirect call into the table, st1 of four registers); this at ~30. */
+static inline __attribute__((always_inline)) void tme(uint16_t *entries, uint8_t *flags, const uint16_t *row,
+                                                      const uint16_t *row2, uint32_t k, uint32_t roff, const int BPP8) {
+    k &= 31;
+    unsigned b = k & ~7u, r = k & 7;
+    uint8x16_t v0, v1, v2, v3, v4;                   /* S[0..39] as the loaders have them */
+    const uint8_t *p = (const uint8_t *)(row + b), *q = (const uint8_t *)row2;
+    switch (b) {
+    case 0: v0 = LDQ(p, 0); v1 = LDQ(p, 16); v2 = LDQ(p, 32); v3 = LDQ(p, 48); v4 = LDQ(q, 0); break;
+    case 8: v0 = LDQ(p, 0); v1 = LDQ(p, 16); v2 = LDQ(p, 32); v3 = LDQ(q, 0); v4 = LDQ(q, 16); break;
+    case 16: v0 = LDQ(p, 0); v1 = LDQ(p, 16); v2 = LDQ(q, 0); v3 = LDQ(q, 16); v4 = LDQ(q, 32); break;
+    default: v0 = LDQ(p, 0); v1 = LDQ(q, 0); v2 = LDQ(q, 16); v3 = LDQ(q, 32); v4 = LDQ(q, 48); break;
+    }
+#define ROT(n) v0 = vextq_u8(v0, v1, n); v1 = vextq_u8(v1, v2, n); v2 = vextq_u8(v2, v3, n); v3 = vextq_u8(v3, v4, n); \
+               v4 = vextq_u8(v4, v4, n); break;
+    switch (r) {
+    case 1: ROT(2) case 2: ROT(4) case 3: ROT(6) case 4: ROT(8) case 5: ROT(10) case 6: ROT(12) case 7: ROT(14)
+    default: break;
+    }
+#undef ROT
+    const uint16x8_t vflip = vdupq_n_u16(0x800), ro = vdupq_n_u16((uint16_t)roff), rf = vdupq_n_u16((uint16_t)((BPP8 ? 56 : 28) - roff));
+#define ONE(v, o) do {                                                                                              \
+        uint16x8_t e_ = vreinterpretq_u16_u8(v);                                                                   \
+        uint16x8_t s_ = sel16(tst16(e_, vflip), rf, ro);                                                           \
+        s_ = BPP8 ? vsliq_n_u16(s_, e_, 6) : vbicq_u16(vsliq_n_u16(s_, e_, 5), vdupq_n_u16(0x8000));               \
+        vst1q_u16(entries + (o), s_);                                                                              \
+    } while (0)
+    ONE(v0, 0); ONE(v1, 8); ONE(v2, 16); ONE(v3, 24); ONE(v4, 32);
+#undef ONE
+    vst1q_u8(flags, vcombine_u8(vshrn_n_u16(vreinterpretq_u16_u8(v0), 8), vshrn_n_u16(vreinterpretq_u16_u8(v1), 8)));
+    vst1q_u8(flags + 16, vcombine_u8(vshrn_n_u16(vreinterpretq_u16_u8(v2), 8), vshrn_n_u16(vreinterpretq_u16_u8(v3), 8)));
+    vst1_u8(flags + 32, vshrn_n_u16(vreinterpretq_u16_u8(v4), 8));
+}
+void ds2d_tme4(uint16_t *entries, uint8_t *flags, const uint16_t *row, const uint16_t *row2, uint32_t k, uint32_t roff) {
+    tme(entries, flags, row, row2, k, roff, 0);
+}
+void ds2d_tme8(uint16_t *entries, uint8_t *flags, const uint16_t *row, const uint16_t *row2, uint32_t k, uint32_t roff) {
+    tme(entries, flags, row, row2, k, roff, 1);
+}
+typedef void (*tme_fn)(uint16_t *, uint8_t *, const uint16_t *, const uint16_t *, uint32_t, uint32_t);
+static void chk_tme(int h, tme_fn ours, tme_fn orig, uint16_t *entries, uint8_t *flags, const uint16_t *row, const uint16_t *row2,
+                    uint32_t k, uint32_t roff) {
+    /* the 8 undefined flag bytes after the 40 are left out; the pads stay on the left: tiled_ext's flags follow
+     * its entries directly (the entries' right pad is the flags' region), and after the flags come the original's
+     * 8 undefined bytes */
+    rgn r[4] = { padded_l(entries, 80), padded_l(flags, 40), { (uint8_t *)row, 64 }, { (uint8_t *)row2, 64 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 4, chk_in);
+    ours(entries, flags, row, row2, k, roff);
+    rg_save(r, 4, chk_ours);
+    rg_load(r, 4, chk_in);
+    orig(entries, flags, row, row2, k, roff);
+    chk_finish(h, r, 4, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_tme4(uint16_t *e, uint8_t *f, const uint16_t *row, const uint16_t *row2, uint32_t k, uint32_t roff) {
+    chk_tme(H_TME4, ds2d_tme4, ds2d_tme4_orig, e, f, row, row2, k, roff);
+}
+static void chk_tme8(uint16_t *e, uint8_t *f, const uint16_t *row, const uint16_t *row2, uint32_t k, uint32_t roff) {
+    chk_tme(H_TME8, ds2d_tme8, ds2d_tme8_orig, e, f, row, row2, k, roff);
+}
+
+/* ---- H_DBL: render_scanline_disable_blank_layers_asm(masks, word) ----
+ * masks: the four BGs' 256-bit visibility bitmaps (32 bytes each); word: a 32-bit layer-enable word. With f_k = 1
+ * when any byte of mask k is set: word &= (f_0 ? 0xfffffff1 : 0) | (f_1 ? 0xfffffff2 : 0) | (f_2 ? 0xfffffff4 : 0) |
+ * (f_3 ? 0xfffffff8 : 0) | 0xfff0 (the original's cmtst / umaxv / bic / orr: a BG with no visible pixel loses its
+ * enable bit, and with none visible bits 16-31 go too). Caller: render_scanline_2d (C), twice a line. */
+void ds2d_disable_blank(const uint8_t *m, uint8_t *word) {
+    uint32_t w, keep = 0xfff0;
+    memcpy(&w, word, 4);
+    for (int k = 0; k < 4; k++) {
+        uint8x16_t v = vorrq_u8(LDQ(m + 32 * k, 0), LDQ(m + 32 * k, 16));
+        uint64x2_t d = vreinterpretq_u64_u8(v);
+        if (vgetq_lane_u64(d, 0) | vgetq_lane_u64(d, 1)) keep |= 0xfffffff0 | 1u << k;
+    }
+    w &= keep;
+    memcpy(word, &w, 4);
+}
+static void chk_dbl(const uint8_t *m, uint8_t *word) {
+    rgn r[2] = { padded(word, 4), { (uint8_t *)m, 128 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 2, chk_in);
+    ds2d_disable_blank(m, word);
+    rg_save(r, 2, chk_ours);
+    rg_load(r, 2, chk_in);
+    orig_dbl(m, word);
+    chk_finish(H_DBL, r, 2, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+
+/* ---- H_VIS4, H_VIS8, H_VIS12: a layer line's 256-bit visibility bitmap ----
+ * set_visibility_4bpp_asm(out, src, shift): src holds 272 nibbles (136 bytes: 34 tile rows, the low nibble first);
+ * bit i of out = nibble i + shift is not zero, shift = hofs & 7 (the caller's; any value gives the original's ushl
+ * results: the bytes are shifted right by shift and the next byte left by 8 - shift, both as the original's
+ * per-lane ushl of the low byte of -shift / 8 - shift). The original's instructions in order: two cmtst per 16 bytes
+ * (the nibbles), bit + and with its insert masks (two bits per byte), three addp levels (eight pixels a byte), ext,
+ * ushl, orr. Loads by ldr q instead of ld1 with writeback. Caller: render_scanline_tiled_ext (C). */
+void ds2d_vis4(uint8_t *out, const uint8_t *src, uint32_t shift) {
+    const uint8x16_t lo = vdupq_n_u8(0x0f), hi = vdupq_n_u8(0xf0);
+    const uint8x16_t ins = vreinterpretq_u8_u32(vdupq_n_u32(0x80200802)), keep = vreinterpretq_u8_u32(vdupq_n_u32(0xc0300c03));
+    const int8x16_t sr = vdupq_n_s8((int8_t)(0u - shift)), sl = vdupq_n_s8((int8_t)(8u - shift));
+#define NIB(v) vandq_u8(sel8(ins, tst8(v, hi), tst8(v, lo)), keep)
+    uint8x16_t a0 = NIB(LDQ(src, 0)), a1 = NIB(LDQ(src, 16)), a2 = NIB(LDQ(src, 32)), a3 = NIB(LDQ(src, 48));
+    uint8x16_t a4 = NIB(LDQ(src, 64)), a5 = NIB(LDQ(src, 80)), a6 = NIB(LDQ(src, 96)), a7 = NIB(LDQ(src, 112));
+    uint8x16_t a8 = NIB(vcombine_u8(vld1_u8(src + 128), vdup_n_u8(0)));
+#undef NIB
+    a0 = vpaddq_u8(a0, a1); a1 = vpaddq_u8(a2, a3); a2 = vpaddq_u8(a4, a5); a3 = vpaddq_u8(a6, a7); a4 = vpaddq_u8(a8, a8);
+    a0 = vpaddq_u8(a0, a1); a1 = vpaddq_u8(a2, a3); a2 = vpaddq_u8(a4, a4);
+    uint8x16_t n0 = vextq_u8(a0, a1, 1), n1 = vextq_u8(a1, a2, 1);
+    vst1q_u8(out, vorrq_u8(vshlq_u8(a0, sr), vshlq_u8(n0, sl)));
+    vst1q_u8(out + 16, vorrq_u8(vshlq_u8(a1, sr), vshlq_u8(n1, sl)));
+}
+/* set_visibility_8bpp_asm(out, src): bit i = src[i] != 0 over 256 bytes (cmeq #0, bic of the bit masks, three addp
+ * levels). Callers: render_scanline_tiled_ext, the affine renderers (C). */
+void ds2d_vis8(uint8_t *out, const uint8_t *src) {
+    static const uint8_t b8[16] = { 1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128 };
+    const uint8x16_t bits = vld1q_u8(b8);
+#define NZ(o) vbicq_u8(bits, vceqzq_u8(LDQ(src, o)))
+    uint8x16_t a0 = vpaddq_u8(NZ(0), NZ(16)), a1 = vpaddq_u8(NZ(32), NZ(48)), a2 = vpaddq_u8(NZ(64), NZ(80)), a3 = vpaddq_u8(NZ(96), NZ(112));
+    uint8x16_t a4 = vpaddq_u8(NZ(128), NZ(144)), a5 = vpaddq_u8(NZ(160), NZ(176)), a6 = vpaddq_u8(NZ(192), NZ(208)), a7 = vpaddq_u8(NZ(224), NZ(240));
+#undef NZ
+    a0 = vpaddq_u8(a0, a1); a1 = vpaddq_u8(a2, a3); a2 = vpaddq_u8(a4, a5); a3 = vpaddq_u8(a6, a7);
+    vst1q_u8(out, vpaddq_u8(a0, a1));
+    vst1q_u8(out + 16, vpaddq_u8(a2, a3));
+}
+/* set_visibility_12bpp_asm(out, src): the same over the low bytes of 256 u16 (the original's ld2 takes the even
+ * bytes: an extended-palette index's low byte; a non-zero palette number alone does not count), 128 pixels a half. */
+void ds2d_vis12(uint8_t *out, const uint16_t *src) {
+    static const uint8_t b8[16] = { 1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128 };
+    const uint8x16_t bits = vld1q_u8(b8);
+    const uint8_t *s = (const uint8_t *)src;
+    for (int h = 0; h < 2; h++, s += 256) {
+#define NZ(o) vbicq_u8(bits, vceqzq_u8(vuzp1q_u8(LDQ(s, o), LDQ(s, (o) + 16))))
+        uint8x16_t a0 = vpaddq_u8(NZ(0), NZ(32)), a1 = vpaddq_u8(NZ(64), NZ(96)), a2 = vpaddq_u8(NZ(128), NZ(160)), a3 = vpaddq_u8(NZ(192), NZ(224));
+#undef NZ
+        vst1q_u8(out + 16 * h, vpaddq_u8(vpaddq_u8(a0, a1), vpaddq_u8(a2, a3)));
+    }
+}
+static void chk_vis4(uint8_t *out, const uint8_t *src, uint32_t shift) {
+    rgn r[2] = { padded(out, 32), { (uint8_t *)src, 136 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 2, chk_in);
+    ds2d_vis4(out, src, shift);
+    rg_save(r, 2, chk_ours);
+    rg_load(r, 2, chk_in);
+    ds2d_vis4_orig(out, src, shift);
+    chk_finish(H_VIS4, r, 2, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_vis8(uint8_t *out, const uint8_t *src) {
+    rgn r[2] = { padded(out, 32), { (uint8_t *)src, 256 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 2, chk_in);
+    ds2d_vis8(out, src);
+    rg_save(r, 2, chk_ours);
+    rg_load(r, 2, chk_in);
+    ds2d_vis8_orig(out, src);
+    chk_finish(H_VIS8, r, 2, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+static void chk_vis12(uint8_t *out, const uint16_t *src) {
+    rgn r[2] = { padded(out, 32), { (uint8_t *)src, 512 } };
+    pthread_mutex_lock(&chk_lock);
+    size_t total = rg_save(r, 2, chk_in);
+    ds2d_vis12(out, src);
+    rg_save(r, 2, chk_ours);
+    rg_load(r, 2, chk_in);
+    ds2d_vis12_orig(out, src);
+    chk_finish(H_VIS12, r, 2, total);
+    pthread_mutex_unlock(&chk_lock);
+}
+
 /* ---- install ---- */
 static const uint32_t expect_conv[4] = { 0x91040004, 0x91040025, 0x91080006, 0x91080027 };
 static const uint32_t expect_select[4] = { 0xd10a03ff, 0xa9007bfd, 0x910003fd, 0xa9025bf5 };
@@ -904,6 +1134,12 @@ static const uint32_t expect_blendw[4] = { 0x0b000000, 0x4f01e411, 0x53001404, 0
 static const uint32_t expect_shade[4] = { 0xfc1f0fe8, 0x79414404, 0x52800408, 0x79414005 };
 static const uint32_t expect_span8n[4] = { 0x10ffff85, 0x52800404, 0x4c4078a0, 0x4f305401 };
 static const uint32_t expect_span8e[4] = { 0x10fffac5, 0x4f00e432, 0x4c4078a0, 0x4e081ff2 };
+static const uint32_t expect_tme4[4] = { 0x10ffdb87, 0xaa1e03e8, 0x52800386, 0x4f00a505 };
+static const uint32_t expect_tme8[4] = { 0x10ffd6c7, 0xaa1e03e8, 0x52800706, 0x4f00a505 };
+static const uint32_t expect_dbl[4] = { 0x4cdf2000, 0x4c402004, 0xbd400030, 0x4f07e7f1 };
+static const uint32_t expect_vis4[4] = { 0x10ffffc4, 0x52800103, 0x4b020063, 0x4b0203e2 };
+static const uint32_t expect_vis8[4] = { 0x10ffff82, 0x4c407058, 0x4cdf2020, 0x4cdf2024 };
+static const uint32_t expect_vis12[4] = { 0x10fff8c2, 0x4c407058, 0x52800043, 0xd503201f };
 
 /* one hook: the message names the routine; `orig` receives the trampoline (or stays as set) */
 static void *hook1(int h, uintptr_t off, const uint32_t expect[4], void *ours, void *chk) {
@@ -914,10 +1150,16 @@ static void *hook1(int h, uintptr_t off, const uint32_t expect[4], void *ours, v
     return t;
 }
 
+/* the default: every hook but those measured no faster than DraStic's (cycles.py on the 2D scene cycle, modeled A55
+ * cycles a call, the patched entry's jump included): the tile map entries (DraStic's table loaders: 44 against 74),
+ * disable_blank_layers (45 against ~60), set_visibility_4bpp (95 against ~98) and setup_blend_base (176 against ~200:
+ * both are bound by the same 16 128-bit operations per 64 pixels). RAST_2D=-1 (or their bits) enables them. */
+#define DS2D_DEFAULT (~(1 << H_TME4 | 1 << H_TME8 | 1 << H_DBL | 1 << H_VIS4 | 1 << H_BLEND_BASE))
+
 void ds2d_init(void) {
     const char *e = getenv("DSFLIP_RAST_2D");
     if (!e) e = getenv("RAST_2D");
-    ds2d_mask = e ? (int)strtol(e, 0, 0) : -1;
+    ds2d_mask = e ? (int)strtol(e, 0, 0) : DS2D_DEFAULT;
     ds2d_check = getenv("RAST_2DCHECK") && atoi(getenv("RAST_2DCHECK"));
     if (!ds2d_mask) return;
     clock_gettime(CLOCK_MONOTONIC, &chk_last);
@@ -986,4 +1228,18 @@ void ds2d_init(void) {
     orig_shade = (shade_fn)hook1(H_SHADE, DS_SHADE, expect_shade, (void *)ds2d_shade, (void *)chk_shade);
     hook1(H_SPAN8N, DS_SPAN8N, expect_span8n, (void *)ds2d_span8n, (void *)chk_span8n);
     hook1(H_SPAN8E, DS_SPAN8E, expect_span8e, (void *)ds2d_span8e, (void *)chk_span8e);
+    ds2d_orig_vars[4][0] = ds2d_orig_vars[5][0] = ds_base + DS_TME_TABLE;
+    ds2d_orig_vars[4][1] = ds_base + DS_TME4 + 16;
+    ds2d_orig_vars[5][1] = ds_base + DS_TME8 + 16;
+    ds2d_orig_vars[6][0] = ds_base + DS_VIS4_CONSTS;
+    ds2d_orig_vars[6][1] = ds_base + DS_VIS4 + 16;
+    ds2d_orig_vars[7][0] = ds2d_orig_vars[8][0] = ds_base + DS_VIS_CONSTS;
+    ds2d_orig_vars[7][1] = ds_base + DS_VIS8 + 16;
+    ds2d_orig_vars[8][1] = ds_base + DS_VIS12 + 16;
+    hook1(H_TME4, DS_TME4, expect_tme4, (void *)ds2d_tme4, (void *)chk_tme4);
+    hook1(H_TME8, DS_TME8, expect_tme8, (void *)ds2d_tme8, (void *)chk_tme8);
+    orig_dbl = (dbl_fn)hook1(H_DBL, DS_DISABLE_BLANK, expect_dbl, (void *)ds2d_disable_blank, (void *)chk_dbl);
+    hook1(H_VIS4, DS_VIS4, expect_vis4, (void *)ds2d_vis4, (void *)chk_vis4);
+    hook1(H_VIS8, DS_VIS8, expect_vis8, (void *)ds2d_vis8, (void *)chk_vis8);
+    hook1(H_VIS12, DS_VIS12, expect_vis12, (void *)ds2d_vis12, (void *)chk_vis12);
 }
