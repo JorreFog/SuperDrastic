@@ -27,6 +27,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "res2.h"
+#include "fogzero.h"
 
 /* 32 pixels of a colour line: masked to the even (e) and odd (o) half-rows (the path without a table) */
 static inline __attribute__((always_inline)) void px32(const uint32_t *s, uint32_t *e, uint32_t *o, uint32x4_t m) {
@@ -128,49 +129,84 @@ static inline __attribute__((always_inline)) void fog_line16(uint32_t *c, const 
     const uint8x16x2_t dlt = { { vld1q_u8(table + 32), vld1q_u8(table + 48) } };
     const uint8x16x2_t ntab = { { vsubq_u8(vmulq_u8(dlt.val[0], vld1q_u8(idx)), vld1q_u8(table)),
                                   vsubq_u8(vmulq_u8(dlt.val[1], vld1q_u8(idx + 16)), vld1q_u8(table + 16)) } };
-    const uint8x16_t fr = vdupq_n_u8((uint8_t)fogc), fg = vdupq_n_u8((uint8_t)(fogc >> 8)), fb = vdupq_n_u8((uint8_t)(fogc >> 16));
-    const uint8x16_t fa = vdupq_n_u8((uint8_t)(fogc >> 24)), x81 = vdupq_n_u8(0x81), x7f = vdupq_n_u8(0x7f);
+    const uint8x16_t fog4 = vreinterpretq_u8_u32(vdupq_n_u32(fogc)), x81 = vdupq_n_u8(0x81);
+    const uint32x4_t m7f = vdupq_n_u32(0x7fffffff);                         /* the words without their fog flag */
     uint8_t *c8 = (uint8_t *)c, *end = c8 + 4 * W2;
     const ptrdiff_t ad = (const uint8_t *)attr - c8;
-#define FOG_K(nf, a) ({ \
-        uint16x8_t d0 = vshrq_n_u16(vreinterpretq_u16_u8(vzip1q_u8(a.val[1], a.val[2])), 1); \
-        uint16x8_t d1 = vshrq_n_u16(vreinterpretq_u16_u8(vzip2q_u8(a.val[1], a.val[2])), 1); \
-        uint16x8_t v0 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d0, off)), sh)); \
-        uint16x8_t v1 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(vqsubq_u16(d1, off)), sh)); \
-        uint8x16_t i = vsriq_n_u8(nf, vuzp2q_u8(vreinterpretq_u8_u16(v0), vreinterpretq_u8_u16(v1)), 2); \
+    /* the step is hr.c's fog_line16 (which documents it) over 512 pixels, with its check of the factors after FOG_K:
+     * the words of 32 pixels' attributes and colours by ldr q, the depth bytes by tbl and the screen on them, a
+     * zero step's flags cleared by word; otherwise the alpha planes by tbl, the flag test, the factors, and a step
+     * whose factors are all 0 after all (depths within 128 of the bound, or every flagged pixel below it and
+     * unflagged ones above) also cleared by word; the fogged planes stored by st4 */
+#define FOGB(k) ({ uint8x16_t f_; __asm__ volatile("dup %0.16b, %1.b[" #k "]" : "=w"(f_) : "w"(fog4)); f_; })
+#define FOG_D(w0, w1) vqsubq_u16(vshrq_n_u16(vshrn_high_n_u32(vshrn_n_u32(w0, 8), w1, 8), 1), off)
+#define FOG_K(t, u0, u1) ({ \
+        uint16x8_t v0 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(u0), sh)); \
+        uint16x8_t v1 = vreinterpretq_u16_s16(vqshlq_s16(vreinterpretq_s16_u16(u1), sh)); \
+        uint8x16_t i = vsriq_n_u8(vcgezq_s8(vreinterpretq_s8_u8(t)), vuzp2q_u8(vreinterpretq_u8_u16(v0), vreinterpretq_u8_u16(v1)), 2); \
         int8x16_t dl = vreinterpretq_s8_u8(vqtbl2q_u8(dlt, i)); \
         int16x8_t p0 = vqdmulhq_s16(vshll_n_s8(vget_low_s8(dl), 5), vreinterpretq_s16_u16(v0)); \
         int16x8_t p1 = vqdmulhq_s16(vshll_high_n_s8(dl, 5), vreinterpretq_s16_u16(v1)); \
         uint8x16_t k = vsubq_u8(vqtbl2q_u8(ntab, i), vuzp1q_u8(vreinterpretq_u8_s16(p0), vreinterpretq_u8_s16(p1))); \
         vreinterpretq_s8_u8(vaddq_u8(k, vceqq_u8(k, x81))); \
     })
+#define FOG_ZERO_WORDS() do { \
+        uint32x4_t w0 = vandq_u32(c0, m7f), w1 = vandq_u32(c1, m7f), w2 = vandq_u32(c2, m7f), w3 = vandq_u32(c3, m7f); \
+        uint32x4_t w4 = vandq_u32(c4, m7f), w5 = vandq_u32(c5, m7f), w6 = vandq_u32(c6, m7f), w7 = vandq_u32(c7, m7f); \
+        __asm__("str %q1, [%9]\n\tstr %q2, [%9, #16]\n\tstr %q3, [%9, #32]\n\tstr %q4, [%9, #48]\n\t" \
+                "str %q5, [%9, #64]\n\tstr %q6, [%9, #80]\n\tstr %q7, [%9, #96]\n\tstr %q8, [%9, #112]" \
+                : "=m"(*(uint8_t (*)[128])c8) \
+                : "w"(w0), "w"(w1), "w"(w2), "w"(w3), "w"(w4), "w"(w5), "w"(w6), "w"(w7), "r"(c8)); \
+    } while (0)
+    static const uint8_t plane_idx[32] = { 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62,
+                                           3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63 };
+    const uint8x16_t didx = vld1q_u8(plane_idx);
+#define PIDX(k) ({ uint8x16_t i_; __asm__ volatile("ldr %q0, [%1, #%2]" : "=w"(i_) : "r"(plane_idx), "i"(k)); i_; })
     for (; c8 != end; c8 += 128) {
-        /* the attributes loaded before the flag test (nearly every step has a flagged pixel): the in-order core
-         * overlaps the four ld4 */
-        uint8x16x4_t px = vld4q_u8(c8), py = vld4q_u8(c8 + 64), ax = vld4q_u8(c8 + ad), ay = vld4q_u8(c8 + 64 + ad);
-        __asm__ volatile("" : "+w"(ax.val[2]), "+w"(ay.val[2]));  /* (clang would sink the second past the branch) */
-        if (__builtin_expect(vmaxvq_u8(vorrq_u8(px.val[3], py.val[3])) < 0x80, 0)) continue;     /* no fog flag in the step */
-        const uint8x16_t nx = vcgezq_s8(vreinterpretq_s8_u8(px.val[3])), ny = vcgezq_s8(vreinterpretq_s8_u8(py.val[3]));
-        int8x16_t kx, ky;
-        /* a step whose factors are all 0 (weight 0, or no fog flag) is the colours with the flags cleared: the
-         * modulate of every channel adds 0. The depth screen finds most of them before the factors: every fog-flagged
-         * pixel's depth byte (attribute bits 16-23) at most zb (fog_zero_b2) */
-        if ((int)vmaxvq_u8(vmaxq_u8(vbicq_u8(ax.val[2], nx), vbicq_u8(ay.val[2], ny))) <= zb) goto zero;
-        kx = FOG_K(nx, ax), ky = FOG_K(ny, ay);
-        if (!vmaxvq_u8(vreinterpretq_u8_s8(vorrq_s8(kx, ky)))) {
-        zero:
-            px.val[3] = vandq_u8(px.val[3], x7f); py.val[3] = vandq_u8(py.val[3], x7f);
-            vst4q_u8(c8, px); vst4q_u8(c8 + 64, py);
+        const uint8_t *at = c8 + ad;
+        uint32x4_t a0, a1, a2, a3, a4, a5, a6, a7, c0, c1, c2, c3, c4, c5, c6, c7;
+        __asm__("ldr %q0, [%8]\n\tldr %q1, [%8, #16]\n\tldr %q2, [%8, #32]\n\tldr %q3, [%8, #48]\n\t"
+                "ldr %q4, [%8, #64]\n\tldr %q5, [%8, #80]\n\tldr %q6, [%8, #96]\n\tldr %q7, [%8, #112]"
+                : "=&w"(a0), "=&w"(a1), "=&w"(a2), "=&w"(a3), "=&w"(a4), "=&w"(a5), "=&w"(a6), "=&w"(a7)
+                : "r"(at), "m"(*(const uint8_t (*)[128])at));
+        __asm__("ldr %q0, [%8]\n\tldr %q1, [%8, #16]\n\tldr %q2, [%8, #32]\n\tldr %q3, [%8, #48]\n\t"
+                "ldr %q4, [%8, #64]\n\tldr %q5, [%8, #80]\n\tldr %q6, [%8, #96]\n\tldr %q7, [%8, #112]"
+                : "=&w"(c0), "=&w"(c1), "=&w"(c2), "=&w"(c3), "=&w"(c4), "=&w"(c5), "=&w"(c6), "=&w"(c7)
+                : "r"(c8), "m"(*(const uint8_t (*)[128])c8));
+        const uint8x16x4_t wx = { { vreinterpretq_u8_u32(a0), vreinterpretq_u8_u32(a1), vreinterpretq_u8_u32(a2), vreinterpretq_u8_u32(a3) } };
+        const uint8x16x4_t wy = { { vreinterpretq_u8_u32(a4), vreinterpretq_u8_u32(a5), vreinterpretq_u8_u32(a6), vreinterpretq_u8_u32(a7) } };
+        if (__builtin_expect((int)vmaxvq_u8(vmaxq_u8(vqtbl4q_u8(wx, didx), vqtbl4q_u8(wy, didx))) <= zb, 1)) {
+            FOG_ZERO_WORDS();
             continue;
         }
-        px.val[3] = fog_ch16(vandq_u8(px.val[3], x7f), fa, kx);
-        py.val[3] = fog_ch16(vandq_u8(py.val[3], x7f), fa, ky);
+        const uint8x16x4_t cx = { { vreinterpretq_u8_u32(c0), vreinterpretq_u8_u32(c1), vreinterpretq_u8_u32(c2), vreinterpretq_u8_u32(c3) } };
+        const uint8x16x4_t cy = { { vreinterpretq_u8_u32(c4), vreinterpretq_u8_u32(c5), vreinterpretq_u8_u32(c6), vreinterpretq_u8_u32(c7) } };
+        const uint8x16_t aidx = PIDX(16);
+        uint8x16_t tx = vqtbl4q_u8(cx, aidx), ty = vqtbl4q_u8(cy, aidx);              /* the alpha planes */
+        if (__builtin_expect(vmaxvq_u8(vorrq_u8(tx, ty)) < 0x80, 0)) continue;     /* no fog flag in the step */
+        uint16x8_t ux0 = FOG_D(a0, a1), ux1 = FOG_D(a2, a3), uy0 = FOG_D(a4, a5), uy1 = FOG_D(a6, a7);
+        int8x16_t kx = FOG_K(tx, ux0, ux1), ky = FOG_K(ty, uy0, uy1);
+        if (!vmaxvq_u8(vreinterpretq_u8_s8(vorrq_s8(kx, ky)))) {
+            FOG_ZERO_WORDS();
+            continue;
+        }
+        uint8x16x4_t px, py;
+        px.val[3] = fog_ch16(vshrq_n_u8(vshlq_n_u8(tx, 1), 1), FOGB(3), kx);       /* (the flag cleared: no mask held) */
+        py.val[3] = fog_ch16(vshrq_n_u8(vshlq_n_u8(ty, 1), 1), FOGB(3), ky);
+        const uint8x16_t ridx = vsubq_u8(didx, vdupq_n_u8(2)), gidx = vsubq_u8(didx, vdupq_n_u8(1));
+        px.val[0] = vqtbl4q_u8(cx, ridx); px.val[1] = vqtbl4q_u8(cx, gidx); px.val[2] = vqtbl4q_u8(cx, didx);
+        py.val[0] = vqtbl4q_u8(cy, ridx); py.val[1] = vqtbl4q_u8(cy, gidx); py.val[2] = vqtbl4q_u8(cy, didx);
         if (full) {
+            const uint8x16_t fr = FOGB(0), fg = FOGB(1), fb = FOGB(2);
             px.val[0] = fog_ch16(px.val[0], fr, kx), px.val[1] = fog_ch16(px.val[1], fg, kx), px.val[2] = fog_ch16(px.val[2], fb, kx);
             py.val[0] = fog_ch16(py.val[0], fr, ky), py.val[1] = fog_ch16(py.val[1], fg, ky), py.val[2] = fog_ch16(py.val[2], fb, ky);
         }
         vst4q_u8(c8, px); vst4q_u8(c8 + 64, py);
     }
+#undef PIDX
+#undef FOG_ZERO_WORDS
+#undef FOGB
+#undef FOG_D
 #undef FOG_K
 }
 /* fog of a colour line in place with the weights of the attribute line attr (full: r, g, b and alpha; else alpha);
@@ -179,34 +215,6 @@ static __attribute__((noinline)) void fog_line2x(uint32_t *c, const uint32_t *at
                                                  uint32_t fogc, int zb, int full) {
     if (full) fog_line16(c, attr, table, params, fogc, zb, 1);
     else fog_line16(c, attr, table, params, fogc, zb, 0);
-}
-/* The depth screen's bound, once per bin: the largest depth byte b2 (attribute bits 16-23) such that every fog-flagged
- * pixel whose b2 is at most it has the factor k = 0, or -1 (no screen). In FOG_K, a pixel's 15-bit depth
- * d = attribute bits 9-23 gives v = min((d -sat off) << sh, 0x7fff), i = v >> 10, r = v & 1023 and (sqdmulh of
- * delta[i] << 5 by v: delta[i] * v / 1024, at most 2^27, no saturation; ntab[i] = delta[i] * i - table[i])
- *     k = -(table[i] + floor(delta[i] * r / 1024)) mod 256,
- * before the 0x81 -> 0x80 adjust, which neither makes nor unmakes a 0 (delta signed, table and k bytes). From v = 0
- * up, segment i (v = 1024 i + r) is 0 throughout if table[i] = delta[i] = 0; else, with table[i] = 0, it is 0 up to
- * r = 1023 / delta[i] for delta[i] > 0 (then 1 <= floor(..) <= 126) and only at r = 0 for delta[i] < 0 (then -1);
- * table[i] != 0 ends the run before the segment. So k = 0 for every v <= z, which holds exactly when
- * d <= off + (z >> sh) = dmax (sh <= 15 here), i.e. (b2 << 8 | b1) <= 2 * dmax + 1, which every b2 <= (2 * dmax +
- * 1 - 255) >> 8 satisfies whatever b1 (the screen gives up the steps whose largest depth is within 128 of dmax).
- * The fog scene S4 (table 4 i, offset 0x6000) has z = 255: the steps before the fog offset. */
-static int fog_zero_b2(const uint8_t *table, uint32_t params) {
-    int z = 0x7fff;
-    for (int i = 0; i < 32; i++) {
-        int t = table[i], dl = (int8_t)table[32 + i];
-        if (t) { z = 1024 * i - 1; break; }
-        if (dl > 0) { z = 1024 * i + 1023 / dl; break; }
-        if (dl < 0) { z = 1024 * i; break; }
-    }
-    uint32_t sh = params & 0xff;
-    if (z < 0 || sh > 15) return -1;
-    if (z >= 0x7fff) return 255;
-    uint32_t lim = 2 * ((params >> 16) + ((uint32_t)z >> sh)) + 1;
-    if (lim < 255) return -1;
-    lim = (lim - 255) >> 8;
-    return lim > 255 ? 255 : (int)lim;
 }
 static inline __attribute__((always_inline)) uint8x16_t edge_sel(uint8x16_t m, uint8x16_t t, uint8x16_t f) {
     __asm__("bif %0.16b, %1.16b, %2.16b" : "+w"(t) : "w"(f), "w"(m));      /* m ? t : f (hr.c's note on bif) */
