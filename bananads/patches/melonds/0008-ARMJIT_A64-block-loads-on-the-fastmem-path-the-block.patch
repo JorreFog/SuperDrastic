@@ -1,0 +1,151 @@
+From 37361f62da3a7a4d07c455979680a9a3aedc368d Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 19:43:30 +0000
+Subject: [PATCH] ARMJIT_A64: block loads on the fastmem path; the block lookup
+ and the halt check inline
+
+Block transfers took the fastmem path only for stores (since the A64 port of 2020; the x64 compiler has loads
+too), so every LDM and POP called SlowBlockTransfer9. Loads now take it as well: a fault anywhere in the
+sequence patches all of it into the slow call and runs it again from the address, which no load in it changes,
+and the cycles are charged at compile time either way, so nothing observable changes. The address's low two
+bits are cleared for loads at an offset, as the slow path does. MELONDS_JIT_NOFASTLDM=1 keeps loads on the
+slow path.
+
+ARMJIT::LookUpBlock and NDS::HaltInterrupted are inline: Execute's loop calls the first for every block it
+dispatches, and a halted CPU's Execute asks the second every scheduler slice.
+---
+ src/ARMJIT.cpp                      |  8 --------
+ src/ARMJIT.h                        |  9 ++++++++-
+ src/ARMJIT_A64/ARMJIT_LoadStore.cpp |  9 ++++++++-
+ src/NDS.cpp                         | 17 -----------------
+ src/NDS.h                           | 18 +++++++++++++++++-
+ 5 files changed, 33 insertions(+), 28 deletions(-)
+
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 9d967796..53569686 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -1240,14 +1240,6 @@ void ARMJIT::CheckAndInvalidateWVRAM(int bank) noexcept
+     }
+ }
+ 
+-JitBlockEntry ARMJIT::LookUpBlock(u32 num, u64* entries, u32 offset, u32 addr) noexcept
+-{
+-    u64* entry = &entries[offset / 2];
+-    if (*entry >> 32 == (addr | num))
+-        return JITCompiler.AddEntryOffset((u32)*entry);
+-    return NULL;
+-}
+-
+ void ARMJIT::blockSanityCheck(u32 num, u32 blockAddr, JitBlockEntry entry) noexcept
+ {
+     u32 localAddr = LocaliseCodeAddress(num, blockAddr);
+diff --git a/src/ARMJIT.h b/src/ARMJIT.h
+index 41e111fe..75fe5401 100644
+--- a/src/ARMJIT.h
++++ b/src/ARMJIT.h
+@@ -62,7 +62,14 @@ public:
+         if (CodeMemRegions[region][(localAddr & 0x7FFFFFF) / 512].Code & (1 << ((localAddr & 0x1FF) / 16)))
+             InvalidateByAddr(localAddr);
+     }
+-    JitBlockEntry LookUpBlock(u32 num, u64* entries, u32 offset, u32 addr) noexcept;
++    // (inline: Execute's loop calls it for every block it dispatches)
++    JitBlockEntry LookUpBlock(u32 num, u64* entries, u32 offset, u32 addr) noexcept
++    {
++        u64* entry = &entries[offset / 2];
++        if (*entry >> 32 == (addr | num))
++            return JITCompiler.AddEntryOffset((u32)*entry);
++        return NULL;
++    }
+     bool SetupExecutableRegion(u32 num, u32 blockAddr, u64*& entry, u32& start, u32& size) noexcept;
+     u32 LocaliseCodeAddress(u32 num, u32 addr) const noexcept;
+ 
+diff --git a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+index f9ea08b0..e415590d 100644
+--- a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
++++ b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+@@ -499,8 +499,11 @@ s32 Compiler::Comp_MemAccessBlock(int rn, BitSet16 regs, bool store, bool preinc
+         ? NDS.JIT.Memory.ClassifyAddress9(CurInstr.DataRegion)
+         : NDS.JIT.Memory.ClassifyAddress7(CurInstr.DataRegion);
+ 
++    // (loads too, as melonDS's x64 compiler does: a fault anywhere in the sequence patches all of it into the slow
++    // call and runs it again from the address, which no load in it changes; MELONDS_JIT_NOFASTLDM=1 for stores only)
++    static const bool fastLoads = !getenv("MELONDS_JIT_NOFASTLDM");
+     bool compileFastPath = NDS.JIT.FastMemoryEnabled()
+-        && store && !usermode && (CurInstr.Cond() < 0xE || NDS.JIT.Memory.IsFastmemCompatible(expectedTarget));
++        && (store || fastLoads) && !usermode && (CurInstr.Cond() < 0xE || NDS.JIT.Memory.IsFastmemCompatible(expectedTarget));
+ 
+     {
+         s32 offset = decrement
+@@ -508,7 +511,11 @@ s32 Compiler::Comp_MemAccessBlock(int rn, BitSet16 regs, bool store, bool preinc
+             : (preinc ? 4 : 0);
+ 
+         if (offset)
++        {
+             ADDI2R(W0, MapReg(rn), offset);
++            if (compileFastPath && !store)
++                ANDI2R(W0, W0, ~3);     // (a block transfer ignores the address's low bits)
++        }
+         else if (compileFastPath)
+             ANDI2R(W0, MapReg(rn), ~3);
+         else
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 82af3eb4..b6065897 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -1500,23 +1500,6 @@ void NDS::ClearIRQ2(u32 irq)
+     UpdateIRQ(1);
+ }
+ 
+-bool NDS::HaltInterrupted(u32 cpu) const
+-{
+-    if (cpu == 0)
+-    {
+-        if (!(IME[0] & 0x1))
+-            return false;
+-    }
+-
+-    if (IF[cpu] & IE[cpu])
+-        return true;
+-
+-    if ((ConsoleType == 1) && cpu && (IF2 & IE2))
+-        return true;
+-
+-    return false;
+-}
+-
+ void NDS::StopCPU(u32 cpu, u32 mask)
+ {
+     if (cpu)
+diff --git a/src/NDS.h b/src/NDS.h
+index 9f3b613d..5acd2023 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -459,7 +459,23 @@ public: // TODO: Encapsulate the rest of these members
+     void ClearIRQ(u32 cpu, u32 irq);
+     void SetIRQ2(u32 irq);
+     void ClearIRQ2(u32 irq);
+-    bool HaltInterrupted(u32 cpu) const;
++    // (inline: a halted CPU's Execute asks it every scheduler slice)
++    bool HaltInterrupted(u32 cpu) const
++    {
++        if (cpu == 0)
++        {
++            if (!(IME[0] & 0x1))
++                return false;
++        }
++
++        if (IF[cpu] & IE[cpu])
++            return true;
++
++        if ((ConsoleType == 1) && cpu && (IF2 & IE2))
++            return true;
++
++        return false;
++    }
+     void StopCPU(u32 cpu, u32 mask);
+     void ResumeCPU(u32 cpu, u32 mask);
+     void GXFIFOStall();
+-- 
+2.43.0
+
