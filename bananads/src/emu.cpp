@@ -268,6 +268,8 @@ bool Emu::load_rom(const std::string& path) {
     // render.2d: banana (the default: the Banana 2D engine, gpu2d/) or melonds (melonDS's 2D renderer)
 #ifdef BANANADS_2D
     const bool banana2d = cfg_.str("render.2d", "banana") == "banana";
+    // render.2d_fast: the Banana 2D engine's NEON paths (on, the default) or the portable code (off); same pixels
+    melonDS::Banana2DFast = cfg_.flag("render.2d_fast", true);
 #else
     const bool banana2d = false;
 #endif

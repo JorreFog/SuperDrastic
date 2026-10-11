@@ -31,6 +31,10 @@
 namespace melonDS
 {
 
+// render.2d_fast (default on): the NEON paths of the Banana 2D engine (output stage, 16-colour text BGs, direct-colour
+// bitmaps) and the sprite line's partial clears. Off: the portable code they replace. The same pixels either way.
+extern bool Banana2DFast;
+
 // The 2D unit's registers one scanline reads, as GPU2D holds them when the line is drawn (same names as GPU2D's).
 // A line is drawn from this copy, so it can be drawn later, on another thread (render.2d_thread).
 struct Banana2DRegs
@@ -164,6 +168,7 @@ private:
     // standard palettes converted to the 18-bit format (flag byte 0xFF = opaque marker, 0 = transparent)
     alignas(16) u32 PalBG256[256];  // 256-colour: entry 0 transparent
     alignas(16) u32 PalBG16[256];   // 16-colour: every 16th entry transparent
+    alignas(16) u8 PalBG16Planes[16][48];  // PalBG16 by 16-colour palette, as R, G, B planes of 16 bytes
     u32 Backdrop;
     bool PalBGStale, PalOBJStale;
 

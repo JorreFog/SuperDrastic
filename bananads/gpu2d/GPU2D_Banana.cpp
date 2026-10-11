@@ -26,6 +26,9 @@
 #if !defined(BANANA_NO_SIMD) && (defined(__ARM_NEON) || defined(__aarch64__))
 #include <arm_neon.h>
 #define BANANA_SIMD 1
+#ifdef __aarch64__
+#define BANANA_NEON 1
+#endif
 namespace melonDS
 {
 typedef uint32x4_t V4;
@@ -121,6 +124,8 @@ static inline u32 VHorAnd(V4 a) { return a.v[0] & a.v[1] & a.v[2] & a.v[3]; }
 
 namespace melonDS
 {
+
+bool Banana2DFast = true;
 
 // 15-bit palette colour to the 18-bit internal format; bit 15 is the low green bit
 // (melonDS: applies to BG/OBJ palette colours, not to direct colour)
@@ -344,6 +349,7 @@ void BananaRenderer2D::Reset()
     memset(SecondLine, 0, sizeof(SecondLine));
     memset(PalBG256, 0, sizeof(PalBG256));
     memset(PalBG16, 0, sizeof(PalBG16));
+    memset(PalBG16Planes, 0, sizeof(PalBG16Planes));
     memset(ObjTable.get(), 0, 0x2000 * sizeof(u32));
     Backdrop = 0x20000000;
     for (int i = 0; i < 256; i++) BackdropLine[i] = Backdrop;
@@ -374,6 +380,11 @@ void BananaRenderer2D::UpdatePalettes(bool bg, bool obj, bool bgStale)
             u32 c = Conv15(pal[i]) | 0xFF000000;
             PalBG256[i] = i ? c : 0;
             PalBG16[i] = (i & 0xF) ? c : 0;
+            // planar copy for the NEON 16-colour text BGs: R, G, B bytes of each 16-colour palette, colour 0 black
+            u32 p16 = PalBG16[i];
+            PalBG16Planes[i >> 4][(i & 0xF)]      = (u8)p16;
+            PalBG16Planes[i >> 4][16 + (i & 0xF)] = (u8)(p16 >> 8);
+            PalBG16Planes[i >> 4][32 + (i & 0xF)] = (u8)(p16 >> 16);
         }
         u32 bd = Conv15(pal[0]) | 0x20000000;
         if (bd != Backdrop || bgStale)
@@ -619,6 +630,49 @@ void BananaRenderer2D::DrawBG_Text(u32 line, u32 bgnum)
     u32* out = BGLine(bgnum) - (xoff & 0x7);
     bool full = true;
     bool drawn = false;
+
+#ifdef BANANA_NEON
+    if (!bpp8 && Banana2DFast)
+    {
+        // 16-colour tiles, 8 pixels per tile row: the 8 nibbles spread to 8 index bytes (reversed for an X flip), looked up
+        // in the tile palette's R, G and B planes and in a flag plane (0 for colour 0, else this BG's flag), and stored
+        // interleaved as 8 pixels (st4). The scalar loop below does the same with 8 loads and 8 stores per tile.
+        const uint8x8_t m0f = vdup_n_u8(0x0F);
+        const uint8x8_t perm[2] = { vcreate_u8(0x0706050403020100ULL), vcreate_u8(0x0001020304050607ULL) };
+        const uint8x16_t flagplane = vsetq_lane_u8(0, vdupq_n_u8((u8)(1u << bgnum)), 0);
+        const uint8x16_t zero = vdupq_n_u8(0);
+        uint8x8_t minidx = vdup_n_u8(0xFF);
+        for (int t = 0; t < 33; t++, xt += 8, out += 8)
+        {
+            u16 tile = *(u16*)&vram[(tilemapaddr + ((xt & 0xF8) >> 2) + ((xt & widexmask) << 3)) & vrammask];
+            u32 r = (tile & (1<<11)) ? (7 - row) : row;
+            u32 pix = *(u32*)&vram[(tilesetaddr + ((tile & 0x03FF) << 5) + (r << 2)) & vrammask];
+            if (pix == 0)
+            {
+                vst1q_u8((u8*)out, zero);
+                vst1q_u8((u8*)(out + 4), zero);
+                full = false;
+                continue;
+            }
+            drawn = true;
+            uint8x8_t b = vreinterpret_u8_u32(vdup_n_u32(pix));
+            uint8x8_t idx = vzip1_u8(vand_u8(b, m0f), vshr_n_u8(b, 4));
+            idx = vtbl1_u8(idx, perm[(tile >> 10) & 1]);
+            minidx = vmin_u8(minidx, idx);
+            const u8* pl = PalBG16Planes[tile >> 12];
+            uint8x8x4_t o;
+            o.val[0] = vqtbl1_u8(vld1q_u8(pl), idx);
+            o.val[1] = vqtbl1_u8(vld1q_u8(pl + 16), idx);
+            o.val[2] = vqtbl1_u8(vld1q_u8(pl + 32), idx);
+            o.val[3] = vqtbl1_u8(flagplane, idx);
+            vst4_u8((u8*)out, o);
+        }
+        if (vminv_u8(minidx) == 0) full = false;
+        if (drawn) LayerDrawn |= (1 << bgnum);
+        if (full) LayerFull |= (1 << bgnum);
+        return;
+    }
+#endif
 
     for (int t = 0; t < 33; t++, xt += 8, out += 8)
     {
