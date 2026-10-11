@@ -315,27 +315,27 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   two uzp2 .8h and a uzp2 .16b (a cycle whatever the table's size in llvm-mca's A55), which needs the four in
   consecutive registers: the allocator reserves a quad when a group's first value is produced (the resolve's loads as
   two quads, its even pixels made in place of one after the odd ones, the bitmap pass's loads as a quad; one set in
-  flight, two left no quad free), and a third line for the fog-only resolve (res2_line_raw_asm: the words split unmasked
-  as DraStic's modulate_*_resolve write them, the entries from the raw alpha bytes as compvis.h takes them) replaces
-  split_line and the table pass after it. llvm-mca, whole functions: res2_line_asm 708 -> 664 cycles, comp_vis_line_asm
-  469 -> 411, the raw line 595 against ~320 + 411. Modeled A55 cycles a frame (against dd36c2d's profiles): the field
-  scene S7 at 2x res2_line_asm 0.271 -> 0.255 M, at 3x comp_vis_line_asm 0.179 -> 0.157 M. `t_resolve.c` (res2_resolve's
-  block and entries against DraStic's resolve and the port; the fx test's fog-only modes now return entries, which it
-  checks against the port on DraStic's block: it failed a first build whose raw line read its weights through the wrong
-  pointer, which the scene cycle with the compositor's checks passed: its scenes never take the fog-only resolve),
-  `t_comp_hook.c`, the scene cycle with the compositor's checks (its bins as DraStic's renderer's to 69600 bins, 5809
-  tables against the C port, 0 differ).
+  flight, two left no quad free), and a third line for the fog-only resolve (res2_line_raw_asm: the words split
+  unmasked as DraStic's modulate_*_resolve write them, the entries from the raw alpha bytes as compvis.h takes them)
+  replaces split_line and the table pass after it. llvm-mca, whole functions: res2_line_asm 708 -> 664 cycles,
+  comp_vis_line_asm 469 -> 411, the raw line 595 against ~320 + 411. Modeled A55 cycles a frame (against dd36c2d's
+  profiles): the field scene S7 at 2x res2_line_asm 0.271 -> 0.255 M, at 3x comp_vis_line_asm 0.179 -> 0.157 M.
+  `t_resolve.c` (res2_resolve's block and entries against DraStic's resolve and the port; the fx test's fog-only modes
+  now return entries, which it checks against the port on DraStic's block: it failed a first build whose raw line read
+  its weights through the wrong pointer, which the scene cycle with the compositor's checks passed: its scenes never
+  take the fog-only resolve), `t_comp_hook.c`, the scene cycle with the compositor's checks (its bins as DraStic's
+  renderer's to 69600 bins, 5809 tables against the C port, 0 differ).
   Then, with fog and edge marking both on, the fog pass writes the edge screen's top-byte planes of the lines it fogs
   (it has their attribute words in registers: two tbl and two str a step of 32 pixels, +4 modeled cycles; its own
   function, fog_line_zbp / fog_line2xp, as clang merged the two calls of one function and tested the pointer in the
   loop), and edge_tplanes makes only the others (at 3x the context's first and last line, at 2x the lines the fog does
   not take: line 0 of bins 1-11, line 31). Modeled A55 cycles a frame, the fog and edge-marking scene S4: at 3x
-  edge_tplanes 0.19 -> 0.01 M, the fog 1.16 -> 1.24 M (-0.12 M); at 2x edge_tplanes2x 0.095 -> 0.005 M, the fog 0.52 ->
-  0.53 M (-0.07 M). `ut/hr_ab` against 4f63ae7 (its resolve cases fog with edge marking on random and polygon-like
+  edge_tplanes 0.19 -> 0.01 M, the fog 1.16 -> 1.24 M (-0.12 M); at 2x edge_tplanes2x 0.095 -> 0.005 M, the fog 0.52
+  -> 0.53 M (-0.07 M). `ut/hr_ab` against 4f63ae7 (its resolve cases fog with edge marking on random and polygon-like
   contexts; it failed a first build that fogged a pair's lines just before marking them, so the marking read the plane
   of the line below before the fog wrote it: the fog now runs a pair ahead), `t_resolve.c` (the drivers with fog and
-  edge marking, every bin), S4's frame diff with the compositor's checks, the scene cycle's bins as DraStic's renderer's
-  (to 48000 bins, 4147 tables and 3.08 M composited quarters checked, 0 differ).
+  edge marking, every bin), S4's frame diff with the compositor's checks, the scene cycle's bins as DraStic's
+  renderer's (to 48000 bins, 4147 tables and 3.08 M composited quarters checked, 0 differ).
   Fifth round, overdraw (`defer.c`, the deferred kernels). Measured first, per bin (a C NEON build's RAST_STATS): the
   stress ROM writes 1.5 opaque pixels per covered one (1.25-1.75 in every bin), the field scene S7 1.0 everywhere, the
   fog and edge-marking scene S4 1.15 (1.0 in 75% of its bins, up to 2.25 in its heaviest); polygons whose depth test
@@ -420,6 +420,32 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   4f63ae7: 0 of 323000 batches differ (four seeds); the scene cycle's differing bins as DraStic's renderer's at
   every checkpoint to 74400 bins with the compositor's checks 0 differ, with deferred shading to 67200, S4 0 bins in
   12000, the stress ROM's 6 bins in 4800, the four 3x runs without signals.
+  Then three more by the profiles: the flat textured kernels' white lines (flag bit 2: the texel is the colour),
+  which pipe()'s loops excluded and which are nearly all of L4's 02010 and S7's 14010 (the white path's copy block
+  ran on every group), get white loops of their own (pipe_loops(): 120:, 150: for the 16-colour palette; colour()
+  takes the texture and white_copies() into the st4 quad instead of the modulates): kpath, the white path, 02010 113
+  -> 82.5, 14010 135 -> 96 (16 colours 132 -> 93), 04010 126 -> 106 (123 -> 96). The translucent 02100 and 02110,
+  L4's second and fourth kernels, get a pipelined loop (pipe_trans()) for lines with blending, no fog, no depth
+  update, no alpha test and A < 31 (L4's: the blend and the alpha modulate ran on every group, fog and depth update
+  on none): a step is the next group's head and the current group's colour, alpha modulate, blend, id test and
+  stores in one block, falling through while the next group passes (the translucent store merges any mask); the
+  current group's words in v10 v11 for 02100 (its r0 g0 splats to the stack) and in the dep role's v19 v20 for 02110
+  (its flat colour then loaded from the kernel arguments), the next group's attribute address in x16 (x26 is id0
+  there): kpath, blending with the alpha modulate, 02100 202 -> 156, 02110 198 -> 152. The lazy kernels' loop before
+  a line's first passing group tests two groups a step while both fail (pair_screen(): one block, one branch; on a
+  pass the single test takes the group again): llvm-mca, a failing group 29 -> 24.5 cycles (02100 tests ~26000
+  groups a frame on L4, ~19000 of them failing there). The climb runs its model over two passes of a loop (three
+  found the same orders), so 17 distinct loops generate in about 2.5 minutes. Modeled A55 cycles a frame (90 s
+  profiles; this build's against 4f63ae7's (same session, m9) and commit 2's: stress ROM L4 at 2x, 02100 2.76 ->
+  2.39 M (IPC 0.85 -> 1.05), 02110 1.39 -> 1.21, 02010 2.23 -> 2.07 (IPC 0.88 -> 1.13), the four L4 kernels 10.91 ->
+  9.92 M (-9.1%; commit 2's profile 10.38); at 3x h02100 6.14 -> 5.22, h02110 3.05 -> 2.58, h02010 4.78 -> 4.18, the
+  four 23.66 -> 20.70 M (-12.5%); the field scene S7's 14010 1.28 -> 1.05 M (-18%; instructions +12%: the pipelined
+  loop's and a longer span of the scene). The spans differ (1071 to 1439 frames of L4): judge by the IPC and the
+  instructions as well; the frames' totals now include the main branch's other changes (merged before this commit)).
+  `ut/kern_ab` against 4f63ae7 (its forced pipelined batches now half white, and with pipe_trans()'s flags on an
+  eighth of the translucent kernels'): 0 of 340000 batches differ; the scene cycle's differing bins as DraStic's
+  renderer's at every checkpoint to 62400 bins with the compositor's checks 0 differ, with deferred shading to
+  112800, S4 0 bins in 16800, the stress ROM's 6 bins in 4800, the four 3x runs without signals.
   Fifth round, 2D: `ds2d.c` (the section "DraStic's 2D scanline routines" below) replaces seven of DraStic's 2D
   routines in a first commit and ten more in a second, each exact (`t_ds2d.c`, RAST_2DCHECK=1 over the 2D and 3D
   scenes); modeled A55 cycles a frame: every 2x / 3x game's conversion 0.62 -> 0.29 M, the field scene S7 frame 4.49
@@ -595,7 +621,16 @@ calls a frame): palette_lookup_8bpp 770 -> 540 (132), _12bpp 838 -> 636 (52), sp
 418 -> 356 (48), shade 699 -> 401 (32), double encoder ~330 -> 230 (48); S4: setup_alpha_base 194 -> 85, the double
 encoder 70 -> 54 (129 each).
 
-`RAST_2D=0` (or `DSFLIP_RAST_2D=0`) leaves them alone (otherwise a bit mask of the hooks, default all);
+A third batch: `render_scanline_set_visibility_8bpp_asm` / `_12bpp_asm` (a layer line's visibility bitmap: the
+originals' instructions from ldr q instead of ld1 of four registers with writeback; 98 -> ~80 and 175 -> ~135 modeled
+cycles a call), and the blend weights' setups take blocks whose mask bytes are all set without the select. Measured
+and left off by default (`DS2D_DEFAULT`; RAST_2D=-1 turns them on, the check mode and `t_ds2d.c` cover them): the
+tile-map-entry setups (DraStic's table of map-row loaders is cheap: 44 modeled cycles a call against ours 74),
+disable_blank_layers (45 against ~60 with the jump into ours), set_visibility_4bpp (95 against ~98) and
+setup_blend_base (176 against ~200: both are bound by the same 16 128-bit operations per 64 pixels). A leaf of
+fewer than ~100 cycles a call gains little from a hook: the patched entry's jump costs a few cycles of its own.
+
+`RAST_2D=0` (or `DSFLIP_RAST_2D=0`) leaves them alone (otherwise a bit mask of the hooks, default `DS2D_DEFAULT`);
 `RAST_2DCHECK=1` runs every call twice, ours and then DraStic's (through the trampoline) on the same input bytes, and
 compares the outputs with 64 bytes either side (`[ds2d] check:` counts every 2 s, `[ds2dcheck]` lines for a
 difference). Exactness: `tools/rast/ut/t_ds2d.c` (each routine against the original on random inputs of any byte
