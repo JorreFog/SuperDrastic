@@ -95,11 +95,7 @@ private:
     void Execute(Job& job);
     void WorkerLoop();
     void StopWorker();
-    static void DrainHook(void* self)
-    {
-        auto* r = (BananaRenderer*)self;
-        if (r->Drain2D()) r->StatDrains++;
-    }
+    static bool DrainHook(void* self) { return ((BananaRenderer*)self)->Drain2D(); }
     void DrawScanlineInPlace(u32 line);
 
     bool Thread2D = false;
@@ -111,7 +107,7 @@ private:
     std::condition_variable Wake;
     bool KickPending = false, Quit = false;
     std::thread Worker;
-    u64 StatJobs = 0, StatInPlace = 0, StatDrains = 0;
+    u64 StatJobs = 0, StatInPlace = 0;
 };
 
 }

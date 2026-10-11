@@ -1152,18 +1152,20 @@ void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
     if (GPU2D.Num == 0)
     {
         auto objDirty = GPU.VRAMDirty_AOBJ.DeriveState(GPU.VRAMMap_AOBJ, GPU);
-        if (AnyBits(objDirty) || oam)
+        bool vram = AnyBits(objDirty);
+        if (vram || oam)
         {
-            Drain();
+            Drain(vram ? Wait_OBJVRAM : Wait_OAM);
             GPU.MakeVRAMFlat_AOBJCoherent(objDirty);
         }
     }
     else
     {
         auto objDirty = GPU.VRAMDirty_BOBJ.DeriveState(GPU.VRAMMap_BOBJ, GPU);
-        if (AnyBits(objDirty) || oam)
+        bool vram = AnyBits(objDirty);
+        if (vram || oam)
         {
-            Drain();
+            Drain(vram ? Wait_OBJVRAM : Wait_OAM);
             GPU.MakeVRAMFlat_BOBJCoherent(objDirty);
         }
     }
@@ -1927,9 +1929,10 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
         auto bgDirty = GPU.VRAMDirty_ABG.DeriveState(GPU.VRAMMap_ABG, GPU);
         auto bgExtPalDirty = GPU.VRAMDirty_ABGExtPal.DeriveState(GPU.VRAMMap_ABGExtPal, GPU);
         auto objExtPalDirty = GPU.VRAMDirty_AOBJExtPal.DeriveState(&GPU.VRAMMap_AOBJExtPal, GPU);
-        if (!(AnyBits(bgDirty) || AnyBits(bgExtPalDirty) || AnyBits(objExtPalDirty) || pal))
+        bool vram = AnyBits(bgDirty) || AnyBits(bgExtPalDirty) || AnyBits(objExtPalDirty);
+        if (!(vram || pal))
             return;
-        Drain();
+        Drain(vram ? Wait_BGVRAM : Wait_Palette);
         GPU.MakeVRAMFlat_ABGCoherent(bgDirty);
         bgExtChanged = GPU.MakeVRAMFlat_ABGExtPalCoherent(bgExtPalDirty);
         objExtChanged = GPU.MakeVRAMFlat_AOBJExtPalCoherent(objExtPalDirty);
@@ -1939,9 +1942,10 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
         auto bgDirty = GPU.VRAMDirty_BBG.DeriveState(GPU.VRAMMap_BBG, GPU);
         auto bgExtPalDirty = GPU.VRAMDirty_BBGExtPal.DeriveState(GPU.VRAMMap_BBGExtPal, GPU);
         auto objExtPalDirty = GPU.VRAMDirty_BOBJExtPal.DeriveState(&GPU.VRAMMap_BOBJExtPal, GPU);
-        if (!(AnyBits(bgDirty) || AnyBits(bgExtPalDirty) || AnyBits(objExtPalDirty) || pal))
+        bool vram = AnyBits(bgDirty) || AnyBits(bgExtPalDirty) || AnyBits(objExtPalDirty);
+        if (!(vram || pal))
             return;
-        Drain();
+        Drain(vram ? Wait_BGVRAM : Wait_Palette);
         GPU.MakeVRAMFlat_BBGCoherent(bgDirty);
         bgExtChanged = GPU.MakeVRAMFlat_BBGExtPalCoherent(bgExtPalDirty);
         objExtChanged = GPU.MakeVRAMFlat_BOBJExtPalCoherent(objExtPalDirty);

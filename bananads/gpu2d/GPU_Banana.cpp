@@ -335,9 +335,16 @@ void BananaRenderer::StopWorker()
     Thread2D = false;
     static_cast<BananaRenderer2D&>(*Rend2D_A).SetDrainHook(nullptr, nullptr);
     static_cast<BananaRenderer2D&>(*Rend2D_B).SetDrainHook(nullptr, nullptr);
+    auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
+    auto& b = static_cast<BananaRenderer2D&>(*Rend2D_B);
+    u64 w[BananaRenderer2D::Wait_Count];
+    for (int i = 0; i < BananaRenderer2D::Wait_Count; i++)
+        w[i] = a.Waits[i] + b.Waits[i];
     Platform::Log(Platform::LogLevel::Info,
-                  "[2d] 2D thread: %llu jobs, %llu lines drawn in place (display capture), %llu waits for changed memory\n",
-                  (unsigned long long)StatJobs, (unsigned long long)StatInPlace, (unsigned long long)StatDrains);
+                  "[2d] 2D thread: %llu jobs, %llu lines drawn in place (display capture); waits for the thread before "
+                  "changes: %llu BG VRAM, %llu palette, %llu OBJ VRAM, %llu OAM\n",
+                  (unsigned long long)StatJobs, (unsigned long long)StatInPlace,
+                  (unsigned long long)w[0], (unsigned long long)w[1], (unsigned long long)w[2], (unsigned long long)w[3]);
 }
 
 void BananaRenderer::WorkerLoop()

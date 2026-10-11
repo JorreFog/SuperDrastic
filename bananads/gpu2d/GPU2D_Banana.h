@@ -88,7 +88,10 @@ public:
     //    thread, so a line is always drawn from memory as it was at its own time.
     //  * Draw*From draw the line from `regs` and that memory alone; on either thread, one at a time, in order.
     // DrawScanline/DrawSprites are the two back to back.
-    void SetDrainHook(void (*fn)(void*), void* ctx) { DrainFn = fn; DrainCtx = ctx; }
+    void SetDrainHook(bool (*fn)(void*), void* ctx) { DrainFn = fn; DrainCtx = ctx; }
+    // how often the drain hook had to wait, by what changed: BG VRAM (or ext palettes), palettes, OBJ VRAM, OAM
+    enum { Wait_BGVRAM, Wait_Palette, Wait_OBJVRAM, Wait_OAM, Wait_Count };
+    u64 Waits[Wait_Count] = {};
     void PrepareScanline(Banana2DRegs& regs);
     void PrepareSprites(Banana2DRegs& regs);
     void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d);
@@ -100,9 +103,9 @@ private:
     Banana2DRegs R;             // the registers of the line being drawn
     const u32* Line3D = nullptr; // the 3D layer's line for it
     alignas(8) u16 OAMCopy[512]; // this unit's OAM, copied when the sprite table is rebuilt
-    void (*DrainFn)(void*) = nullptr;
+    bool (*DrainFn)(void*) = nullptr;
     void* DrainCtx = nullptr;
-    void Drain() { if (DrainFn) DrainFn(DrainCtx); }
+    void Drain(int why) { if (DrainFn && DrainFn(DrainCtx)) Waits[why]++; }
 
     // OBJ line pixel format, the same as melonDS's SoftRenderer2D
     enum : u32
