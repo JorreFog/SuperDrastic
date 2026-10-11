@@ -22,4 +22,6 @@ typedef struct {
     void (*modulate[2])(uint32_t *dst, const uint32_t *src, const uint8_t *w, uint32_t fog_colour);   /* full, alpha */
 } res2_gap_leaves;
 void res2_gaps(uint8_t *vb, int fog, const res2_gap_leaves *L);
+/* the same bytes with res2.c's NEON stages (the output rows and the gap buffers' fogged colours) */
+void res2_gaps_neon(uint8_t *vb, int fog);
 #endif

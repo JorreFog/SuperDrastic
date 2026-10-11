@@ -224,10 +224,13 @@ static void test_gaps(int n) {
     L.modulate[1] = DS(void (*)(uint32_t *, const uint32_t *, const uint8_t *, uint32_t), 0x9d18c);
     for (int it = 0; it < n && ut_fail < 10; it++)
         for (unsigned d = 0; d < sizeof drv / sizeof drv[0]; d++) {
-            setup();
-            DS(gaps_fn, drv[d].off)(sys[0] + VB_OFS);
-            res2_gaps(sys[1] + VB_OFS, drv[d].fog, &L);
-            if (check(drv[d].name)) fprintf(stderr, "  (iteration %d)\n", it);
+            for (int v = 0; v < 2; v++) {                     /* DraStic's leaves, then res2.c's NEON stages */
+                setup();
+                DS(gaps_fn, drv[d].off)(sys[0] + VB_OFS);
+                if (v) res2_gaps_neon(sys[1] + VB_OFS, drv[d].fog);
+                else res2_gaps(sys[1] + VB_OFS, drv[d].fog, &L);
+                if (check(drv[d].name)) fprintf(stderr, "  (iteration %d, %s)\n", it, v ? "res2_gaps_neon" : "res2_gaps");
+            }
         }
 }
 
@@ -403,5 +406,5 @@ void ut_main(void) {
     *(uint64_t *)(sys[1] + 0x2c1748) = *(uint64_t *)(sys[0] + 0x2c1748);
     ut_cmp("sys (whole)", sys[0], sys[1], SYS_SZ);
     ut_cmp("geom (whole)", geom[0], geom[1], GEOM_SZ);
-    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers, %d gap passes x 3, %d res2, %d fx (x 6 modes) and %d vis iterations\n", n * 4, n, n, n, n, n);
+    fprintf(stderr, "t_resolve: %d leaf iterations, %d driver iterations x 9 drivers, %d gap passes x 3 x 2, %d res2, %d fx (x 6 modes) and %d vis iterations\n", n * 4, n, n, n, n, n);
 }

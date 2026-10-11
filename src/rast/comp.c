@@ -53,8 +53,8 @@
  *    the planes with 0x40 bytes either side, the 3D pixels and the engine's first 0x400 bytes; counts per path every
  *    2 s ("[comp] composite:" lines, "[compcheck]" for a difference).
  *
- * 4. DraStic's edge-marking gap passes (the bin boundary rows after the bins): replaced by the same driver on DraStic's
- *    own leaf routines (res2.c res2_gaps), skipped at 3x, where they marked those rows from stale data (at hook_gaps).
+ * 4. DraStic's edge-marking gap passes (the bin boundary rows after the bins): replaced by the same bytes from res2.c's
+ *    NEON stages (res2_gaps_neon), skipped at 3x, where they marked those rows from stale data (at hook_gaps).
  *
  * RAST_COMP (or DSFLIP_RAST_COMP): 0 off (DraStic's function), 1 the NEON replacement only, 2 (default) with the
  * table. RAST_COMPFUSE (DSFLIP_RAST_COMPFUSE) 0 leaves render_scanline_2d_composite alone. */
@@ -247,8 +247,10 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
  * and nothing fills the gap buffers: the pass marked the rows from stale data (zeros in a game started at 3x, so all
  * 22 rows transparent every frame: measured on the fog and edge-marking scene S4, 11264 pixels a frame with alpha 0
  * there and none in the rows beside them). The three are replaced (the plain one's 4th instruction is an adrp: no
- * trampoline) by res2_gaps(), DraStic's driver with its own leaf routines, which is skipped once the 3x pipeline has
- * resolved a bin (comp_hr_frame(); the scale is fixed at start-up). RAST_GAPHOOK=0 leaves them alone. */
+ * trampoline) by res2_gaps_neon(), the same bytes from res2.c's NEON stages (output rows and gap buffers; t_resolve
+ * compares it with the three), skipped once the 3x pipeline has resolved a bin (comp_hr_frame(); the scale is fixed
+ * at start-up). RAST_GAPHOOK=0 leaves DraStic's passes alone, 2 runs res2_gaps() instead (DraStic's driver with its
+ * own leaf routines). */
 #define DS_GAPS           0x56630      /* video_3d_resolve_bin_edge_mark_gaps_4x(vb) */
 #define DS_GAPS_FOG_FULL  0x580c0      /* video_3d_resolve_bin_edge_mark_fog_full_gaps_4x(vb) */
 #define DS_GAPS_FOG_ALPHA 0x586d0      /* video_3d_resolve_bin_edge_mark_fog_alpha_gaps_4x(vb) */
@@ -261,9 +263,11 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
 static int hr_frames;                   /* atomic: the 3x pipeline renders the frames */
 void comp_hr_frame(void) { __atomic_store_n(&hr_frames, 1, __ATOMIC_RELAXED); }
 static res2_gap_leaves gap_leaves;
+static int gap_mode;                    /* RAST_GAPHOOK: 1 res2_gaps_neon, 2 res2_gaps */
 static void hook_gaps(uint8_t *vb, int fog) {
     if (__atomic_load_n(&hr_frames, __ATOMIC_RELAXED)) return;
-    res2_gaps(vb, fog, &gap_leaves);
+    if (gap_mode == 2) res2_gaps(vb, fog, &gap_leaves);
+    else res2_gaps_neon(vb, fog);
 }
 static void hook_gaps_plain(uint8_t *vb) { hook_gaps(vb, 0); }
 static void hook_gaps_fog_full(uint8_t *vb) { hook_gaps(vb, 1); }
@@ -272,7 +276,8 @@ static const uint32_t expect_gaps[4] = { 0xd109c3ff, 0x91492001, 0x9146e003, 0xb
 static const uint32_t expect_gaps_fog[4] = { 0xd10a43ff, 0x9146e001, 0x91492002, 0xa9007bfd };  /* both fog modes */
 static void gaps_init(void) {
     const char *e = getenv("RAST_GAPHOOK");
-    if (e && !atoi(e)) return;
+    gap_mode = e ? atoi(e) : 1;
+    if (gap_mode <= 0) return;
     gap_leaves.identify = DSG(void (*)(uint8_t *, const uint32_t *, const uint32_t *, const uint32_t *, uint32_t), DS_EDGE_IDENTIFY);
     gap_leaves.mark = DSG(void (*)(uint8_t *, const uint32_t *, const uint8_t *, const uint8_t *), DS_EDGE_MARK);
     gap_leaves.weights = DSG(void (*)(const uint32_t *, uint8_t *, const uint8_t *, uint32_t), DS_FOG_WEIGHTS);
@@ -287,7 +292,7 @@ static void gaps_init(void) {
     rast_hook(DS_GAPS, expect_gaps, (void *)hook_gaps_plain);
     rast_hook(DS_GAPS_FOG_FULL, expect_gaps_fog, (void *)hook_gaps_fog_full);
     rast_hook(DS_GAPS_FOG_ALPHA, expect_gaps_fog, (void *)hook_gaps_fog_alpha);
-    fprintf(stderr, "[comp] edge-marking gap passes replaced (skipped at 3x)\n");
+    fprintf(stderr, "[comp] edge-marking gap passes replaced (%s; skipped at 3x)\n", gap_mode == 2 ? "DraStic's driver" : "NEON");
 }
 #undef DSG
 
