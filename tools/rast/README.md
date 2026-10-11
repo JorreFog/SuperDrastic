@@ -30,7 +30,7 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
 - **DraStic's geometry stage, cheaper.** Six of its functions on the emulation thread are replaced by exact ones
   (the command queue's fast paths for the ports and for GXFIFO, the vertex batch, the vertex transform with its
   lighting in NEON lanes, the polygon binning; `RAST_GEOM=0` off, `RAST_GEOMCHECK=1` checks every call against
-  DraStic's): 0.33 M modeled cycles a frame less on the stress ROM, 0.15 M on
+  DraStic's): 0.30 M modeled cycles a frame less on the stress ROM, 0.14 M on
   the fog and edge scene, 0.07 M on the field scene (below).
 - **Scheduled for the handhelds' in-order core.** The RG DS and RG DS Plus run Cortex-A55 cores, which issue in
   program order, at most two instructions a cycle, and stall on every operand that is not ready: instruction counts
@@ -221,10 +221,14 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   ROM L4: the queue 0.314 -> 0.204 M (46.6 -> 30.3 cycles a call, 6740 calls a frame), add_vertex 0.077 -> 0.050 M,
   the vertex block 0.058 -> 0.031 M, the y-sort 0.151 -> 0.148 M; together 0.167 M a frame less on L4, 0.088 M on
   S4, 0.063 M on S7. Then geometry_transform_vertexes as a whole, its lighting four normals at a time in NEON lanes
-  (lane for lane DraStic's fixed point), and the GXFIFO form of the queue: the transform with its vertex block 6954 -> 2512 modeled cycles a call on
-  L4 (43 calls a frame: 0.299 -> 0.108 M), S4 0.114 -> 0.042 M, S7 0.027 -> 0.014 M; the GXFIFO queue 33.7 -> 25.8
-  cycles a call on the new GXFIFO scene S10 (1090 calls a frame). The replaced functions together: 0.33, 0.15 and
-  0.07 M a frame less on L4, S4 and S7 (of the geometry stage's ~1.35, ~0.45 and ~0.25 M).
+  (lane for lane DraStic's fixed point), and the GXFIFO form of the queue: the transform with its lighting and
+  vertex block 6954 -> 3907 modeled cycles a call on L4 (43 calls a frame: 0.299 -> 0.168 M), S4 0.114 -> 0.064 M,
+  S7 0.027 -> 0.015 M; the GXFIFO queue 33.7 -> 25.8 cycles a call on the new GXFIFO scene S10 (1090 calls a
+  frame). The transform's event stream is then checked 16 bytes a step and the usual stream (an event before every
+  vertex, all lit or all explicit) filled by one copy: the transform with its lighting and vertex block 3907 ->
+  3209 modeled cycles a call on L4 (0.168 -> 0.138 M a frame), S4 1455 -> 1227 (0.064 -> 0.054 M), S10 645 -> 591.
+  The replaced functions together: 0.30, 0.14 and 0.07 M a frame less on L4, S4 and S7 (of the geometry stage's
+  ~1.35, ~0.45 and ~0.25 M).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -374,7 +378,10 @@ and lighting, clipping, and the binning of the finished polygons for the render 
   clamp of the shininess index with the table read per lane). The colour fill follows the event stream the way all
   three of the original's fill variants read a consistent one (one byte per normal or colour, strictly rising vertex
   indices, as process_geometry_commands builds it); any other state goes to the original untouched (the check mode
-  counts those: none on the ROMs).
+  counts those: none on the ROMs). The stream is checked 16 bytes a step (NEON compares of each index with the one
+  before it and with the count, the bit-7 count summed), and the usual stream, an event at vertex k for every k (a
+  normal or colour before every vertex), all lit or all explicit, is filled by one copy of the colours instead of a
+  run per vertex.
 
 The callers assume the AAPCS and nothing more (from the disassembly: the JIT's 32-bit store helper saves w12-w18, x30
 and NZCV around its call; the C callers keep only callee-saved registers across the calls; each original calls code

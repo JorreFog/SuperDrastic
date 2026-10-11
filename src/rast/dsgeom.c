@@ -576,6 +576,27 @@ static inline void fill16(uint8_t *p, uint16_t c, uint32_t cnt) {
     for (; cnt; cnt--, p += 2) st16(p, 0, c);
 }
 
+/* the event stream checked 16 bytes a step (the bytes either side of it are the state's): every index above the one
+ * before it (the first: any), none above the count, as many events with bit 7 as explicit colours. *dense: event k
+ * at vertex k for every k (a normal or colour before every vertex: the usual stream) */
+static inline int tvx_events(const uint8_t *ev, uint32_t ne, uint32_t n, uint32_t na, int *dense) {
+    static const uint8_t iota_b[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+    uint8x16_t iota = vld1q_u8(iota_b), at = iota, lim = vdupq_n_u8((uint8_t)(n > 127 ? 127 : n)), m7f = vdupq_n_u8(0x7f);
+    uint8x16_t bad = vdupq_n_u8(0), notd = vdupq_n_u8(0), c7 = vdupq_n_u8(0);
+    for (uint32_t k = 0; k < ne; k += 16) {
+        uint8x16_t v = vld1q_u8(ev + k), idx = vandq_u8(v, m7f), pidx = vandq_u8(vld1q_u8(ev + k - 1), m7f);
+        uint8x16_t live = vcltq_u8(iota, vdupq_n_u8((uint8_t)(ne - k > 16 ? 16 : ne - k)));
+        uint8x16_t b = vorrq_u8(vcleq_u8(idx, pidx), vcgtq_u8(idx, lim));
+        if (!k) b = vsetq_lane_u8(vgetq_lane_u8(vcgtq_u8(idx, lim), 0), b, 0);      /* the first has no predecessor */
+        bad = vorrq_u8(bad, vandq_u8(b, live));
+        notd = vorrq_u8(notd, vandq_u8(vmvnq_u8(vceqq_u8(idx, at)), live));
+        c7 = vaddq_u8(c7, vandq_u8(vshrq_n_u8(v, 7), live));
+        at = vaddq_u8(at, vdupq_n_u8(16));
+    }
+    *dense = ne && !vmaxvq_u8(notd);
+    return !vmaxvq_u8(bad) && vaddlvq_u8(c7) == na;
+}
+
 /* the original's effect; 0 (nothing written) for a state the original's three fill variants would not read alike
  * (DraStic never builds one: the event stream is one byte per normal or colour, the vertex indices strictly rising) */
 static inline __attribute__((always_inline)) int tvx_fast(uint8_t *g) {
@@ -585,13 +606,8 @@ static inline __attribute__((always_inline)) int tvx_fast(uint8_t *g) {
     uintptr_t nb = (uintptr_t)(ncur - (g + G_NORMALS)) >> 2, na = (uintptr_t)(ccur - (g + G_COLOURS)) >> 1, ne = ecur - (g + G_EVENTS);
     if (ne != na + nb || nb > TVX_MAX_NORMALS || na > 72) return 0;
     const uint8_t *ev = g + G_EVENTS;
-    for (uintptr_t k = 0, prev = 0, nc = 0; k < ne; k++) {
-        uint32_t e = ev[k], idx = e & 0x7f;
-        if ((k && idx <= prev) || idx > n) return 0;
-        nc += e >> 7;
-        prev = idx;
-        if (k + 1 == ne && nc != na) return 0;
-    }
+    int dense;
+    if (!tvx_events(ev, (uint32_t)ne, n, (uint32_t)na, &dense)) return 0;
     uint32_t i0 = (uint32_t)ld32(g, G_OUT_BASE);
     if (g[G_MTX_DIRTY]) { geom_matmul(g + G_CLIP_MTX, g + G_PROJ_MTX, ldp_(g, G_POS_MTX_PTR)); g[G_MTX_DIRTY] = 0; }
     geom_tvb(g);
@@ -604,14 +620,24 @@ static inline __attribute__((always_inline)) int tvx_fast(uint8_t *g) {
     const uint8_t *ex = g + G_COLOURS;
     const uint16_t *li = lit;
     uint32_t cur = (uint32_t)ld32(g, G_CUR_COLOUR), prev = 0;
-    for (uintptr_t k = 0; k < ne; k++) {
-        uint32_t e = ev[k], idx = e & 0x7f, cnt = idx - prev;
-        fill16(out, (uint16_t)cur, cnt);
-        out += 2 * cnt;
-        if (e & 0x80) { cur = ld16(ex, 0); ex += 2; } else cur = *li++;
-        prev = idx;
+    if (dense && (!na || !nb)) {
+        /* event k at vertex k, all lit or all explicit: vertex k takes colour k (the first ne), those after the last
+         * event its colour, which becomes the current one (an event at the count sets only that) */
+        const uint8_t *col = na ? ex : (const uint8_t *)lit;
+        uint32_t m = (uint32_t)ne < n ? (uint32_t)ne : n;
+        memcpy(out, col, 2 * (size_t)m);
+        cur = ld16(col, 2 * (ne - 1));
+        fill16(out + 2 * (size_t)m, (uint16_t)cur, n - m);
+    } else {
+        for (uintptr_t k = 0; k < ne; k++) {
+            uint32_t e = ev[k], idx = e & 0x7f, cnt = idx - prev;
+            fill16(out, (uint16_t)cur, cnt);
+            out += 2 * cnt;
+            if (e & 0x80) { cur = ld16(ex, 0); ex += 2; } else cur = *li++;
+            prev = idx;
+        }
+        fill16(out, (uint16_t)cur, n - prev);
     }
-    fill16(out, (uint16_t)cur, n - prev);
     st32(g, G_LAST_EVENT, 0xff);
     stp_(g, G_NORMAL_CUR, g + G_NORMALS);
     stp_(g, G_COLOUR_CUR, g + G_COLOURS);

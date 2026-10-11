@@ -405,10 +405,13 @@ static void xt_state(uint8_t *g, int *consistent) {
     if (rnd(2)) st32(g, G_CUR_COLOUR, rnd(0x10000));
     /* the events: ne distinct rising indices in 0..n; kind by a mode */
     unsigned mode = rnd(8), ne = mode == 0 ? 0 : rnd(2) ? rnd(n + 2) : rnd(6);
+    int dense = rnd(3) == 0;                         /* an event before every vertex (and maybe one at the count) */
+    if (dense && mode) ne = rnd(4) ? n + rnd(2) : 1 + rnd(n);    /* events at the first ne vertices (the rest after the last) */
     if (ne > n + 1) ne = n + 1;
     if (ne > 65) ne = 65;
     uint8_t idx[66];
-    { /* ne distinct values of 0..n, rising */
+    if (dense) for (unsigned k = 0; k < ne; k++) idx[k] = (uint8_t)k;
+    else { /* ne distinct values of 0..n, rising */
         unsigned left = ne;
         for (unsigned v = 0, k = 0; v <= n && left; v++) if (rnd(n + 1 - v) < left) { idx[k++] = (uint8_t)v; left--; }
     }
@@ -420,11 +423,13 @@ static void xt_state(uint8_t *g, int *consistent) {
         else { st32(g, G_NORMALS + 4 * nb, (uint32_t)rnd64()); nb++; }
     }
     *consistent = 1;
-    if (rnd(32) == 0) {                 /* an inconsistent stream: a count off, a falling index, or a kind count off */
-        unsigned w = rnd(3);
+    if (rnd(32) == 0) {        /* an inconsistent stream: a count off, a falling index, a kind count off, an index past n */
+        unsigned w = rnd(5);
         if (w == 0) ne += 1;
-        else if (w == 1 && ne >= 2) { uint8_t t = g[G_EVENTS]; g[G_EVENTS] = g[G_EVENTS + 1]; g[G_EVENTS + 1] = t; }
-        else if (ne) g[G_EVENTS] ^= 0x80;
+        else if (w == 1 && ne >= 2) { unsigned j = rnd(ne - 1); uint8_t t = g[G_EVENTS + j]; g[G_EVENTS + j] = g[G_EVENTS + j + 1]; g[G_EVENTS + j + 1] = t; }
+        else if (w == 2 && ne >= 2) { unsigned j = 1 + rnd(ne - 1); g[G_EVENTS + j] = (g[G_EVENTS + j] & 0x80) | (g[G_EVENTS + j - 1] & 0x7f); }
+        else if (w == 3 && ne) g[G_EVENTS + rnd(ne)] ^= 0x80;
+        else if (ne) { unsigned j = ne - 1; g[G_EVENTS + j] = (g[G_EVENTS + j] & 0x80) | (uint8_t)(n + 1 + rnd(126 - n)); }
         else ne = 1;
         *consistent = 0;
     }
