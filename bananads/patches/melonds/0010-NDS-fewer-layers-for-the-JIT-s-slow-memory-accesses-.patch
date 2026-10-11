@@ -1,5 +1,5 @@
-From c35217af5333d2420704f7c6579c8f8c37000e07 Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
+From 50b4d44f5ec7a5b5a3ec5522a0635337c23c2aee Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 20:28:14 +0000
 Subject: [PATCH] NDS: fewer layers for the JIT's slow memory accesses (VRAM,
  OAM, palette, IO registers)
@@ -20,25 +20,29 @@ NDS::ARM9Read*/ARM9Write* chain. MELONDS_MEMFAST (a mask, default 3: both on) pi
   IO calls (GetFuncForAddr) get one function per such register.
 
 SlowRead9/SlowWrite9 start with the common cases inline, with no call and no stack frame, after checks that
-have no side effects (the TCMs, the region, the VRAM page's entry, the code bitmap: no compiled code in the 16
-bytes, so CheckAndInvalidate would do nothing); anything else takes the full path (IO statistics, TCMs,
-MELONDS_IOFAST routes, the NDS chain). ARMJIT_Memory::LocaliseAddress is inline for the regions CheckAndInvalidate names
-as constants (the same result).
+have no side effects (the TCMs, the region, the VRAM page's entry, the code bitmap for main RAM, so a store
+into a page holding code but not into code skips CheckAndInvalidate's call); anything else takes the full path
+(IO statistics, TCMs, MELONDS_IOFAST routes, the NDS chain), as does everything while MELONDS_IOSTATS counts.
+MELONDS_IOFAST's register reads and GX route are taken from the inline start too. The VRAM table has no entries
+while any compiled code is in VRAM (ARMJIT_Memory::SetCodeProtection marks it stale), so the inline VRAM store
+needs no CheckAndInvalidate. SlowBlockTransfer9 stores inside one 1 KB of OAM, palette, a VRAM page or the GX
+FIFO do the region's checks once. ARMJIT_Memory::LocaliseAddress is inline for the regions CheckAndInvalidate
+names as constants (the same result).
 
 MELONDS_MEMFAST=0 gives patch 0005's paths; BananaDS sets it from jit.vramfast and jit.iodirect.
 ---
- src/ARMJIT.cpp        | 371 ++++++++++++++++++++++++++++++++++--------
- src/ARMJIT_Memory.cpp | 160 +++++++++++++++++-
+ src/ARMJIT.cpp        | 464 ++++++++++++++++++++++++++++++++++++------
+ src/ARMJIT_Memory.cpp | 163 ++++++++++++++-
  src/ARMJIT_Memory.h   |  18 +-
- src/GPU.cpp           |  41 +++++
- src/GPU.h             | 113 +++++++++++++
- src/NDS.h             | 171 +++++++++++++++++++
- src/NDS_IOFast.cpp    |  11 ++
- src/NDS_IOFast.h      |  24 +++
- 8 files changed, 839 insertions(+), 70 deletions(-)
+ src/GPU.cpp           |  55 +++++
+ src/GPU.h             | 131 ++++++++++++
+ src/NDS.h             | 171 ++++++++++++++++
+ src/NDS_IOFast.cpp    |  11 +
+ src/NDS_IOFast.h      |  25 +++
+ 8 files changed, 968 insertions(+), 70 deletions(-)
 
 diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
-index 5356968..c28e547 100644
+index 5356968..b0f3dcd 100644
 --- a/src/ARMJIT.cpp
 +++ b/src/ARMJIT.cpp
 @@ -102,48 +102,85 @@ template <typename T>
@@ -59,7 +63,9 @@ index 5356968..c28e547 100644
 -    {
 -        melonDS::GPU& gpu = nds.GPU;
 -        switch (addr & 0x00E00000)
--        {
++    case 0x04:
++        if (routes & iofast_IORead)
+         {
 -        case 0x00000000: gpu.SyncVRAM_ABG(addr, false); val = gpu.ReadVRAM_ABG<T>(addr); return true;
 -        case 0x00200000: gpu.SyncVRAM_BBG(addr, false); val = gpu.ReadVRAM_BBG<T>(addr); return true;
 -        case 0x00400000: gpu.SyncVRAM_AOBJ(addr, false); val = gpu.ReadVRAM_AOBJ<T>(addr); return true;
@@ -72,9 +78,7 @@ index 5356968..c28e547 100644
 -    if (sizeof(T) == 4)
 -    {
 -        switch (addr)
-+    case 0x04:
-+        if (routes & iofast_IORead)
-         {
+-        {
 -        case 0x04000004: val = nds.GPU.DispStat[0] | (nds.GPU.VCount << 16); return true;
 -        case 0x04000208: val = nds.IME[0]; return true;
 -        case 0x04000210: val = nds.IE[0]; return true;
@@ -182,12 +186,7 @@ index 5356968..c28e547 100644
 -        nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_VRAM>(addr);
 -        melonDS::GPU& gpu = nds.GPU;
 -        switch (addr & 0x00E00000)
-+    case 0x04:
-+        // the geometry engine's FIFO (0x04000400-43F) and command ports (0x04000440-5FF): ARM9IOWrite32 hands
-+        // these to GPU3D::Write32, which drops them while the geometry engine is off and gives the FIFO port to
-+        // WriteToGXFIFO
-+        if (sizeof(T) == 4 && (routes & iofast_GX) && addr - 0x04000400 < 0x200)
-         {
+-        {
 -        case 0x00000000: gpu.SyncVRAM_ABG(addr, true); gpu.WriteVRAM_ABG<T>(addr, val); return true;
 -        case 0x00200000: gpu.SyncVRAM_BBG(addr, true); gpu.WriteVRAM_BBG<T>(addr, val); return true;
 -        case 0x00400000: gpu.SyncVRAM_AOBJ(addr, true); gpu.WriteVRAM_AOBJ<T>(addr, val); return true;
@@ -202,7 +201,12 @@ index 5356968..c28e547 100644
 -    {
 -        GPU3D& gpu3d = nds.GPU.GPU3D;
 -        if (addr < 0x04000440)
--        {
++    case 0x04:
++        // the geometry engine's FIFO (0x04000400-43F) and command ports (0x04000440-5FF): ARM9IOWrite32 hands
++        // these to GPU3D::Write32, which drops them while the geometry engine is off and gives the FIFO port to
++        // WriteToGXFIFO
++        if (sizeof(T) == 4 && (routes & iofast_GX) && addr - 0x04000400 < 0x200)
+         {
 -            if (gpu3d.GeometryEnabled)
 -                gpu3d.WriteToGXFIFO(val);
 +            GPU3D& gpu3d = nds.GPU.GPU3D;
@@ -234,13 +238,13 @@ index 5356968..c28e547 100644
 +            return false;
 +        if (nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))
 +            nds.GPU.WritePalette<T>(addr, val);
-+        return true;
+         return true;
 +    case 0x07:
 +        if (sizeof(T) < 2 || !(parts & memfast_VRAM))
 +            return false;
 +        if (nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))
 +            nds.GPU.WriteOAM<T>(addr, val);
-         return true;
++        return true;
 +    case 0x06:
 +        if (sizeof(T) < 2 || !((routes & iofast_VRAM) || (parts & memfast_VRAM)))
 +            return false;
@@ -270,7 +274,7 @@ index 5356968..c28e547 100644
          ;
      else if (std::is_same<T, u32>::value)
          val = NDS::Current->ARM9Read32(addr);
-@@ -216,12 +287,69 @@ static inline T SlowRead9Impl(u32 addr, ARMv5* cpu)
+@@ -216,12 +287,89 @@ static inline T SlowRead9Impl(u32 addr, ARMv5* cpu)
  }
  
  template <typename T, int ConsoleType>
@@ -294,7 +298,7 @@ index 5356968..c28e547 100644
 +    {
 +        const u32 flags = SlowPathFlags;
 +        const u32 a = addr & ~(u32)(sizeof(T) - 1);
-+        if (!(flags & slow_Stats) && a >= cpu->ITCMSize && (a & cpu->DTCMMask) != cpu->DTCMBase)
++        if (!(flags & slow_FullPath) && a >= cpu->ITCMSize && (a & cpu->DTCMMask) != cpu->DTCMBase)
 +        {
 +            melonDS::NDS& nds = cpu->NDS;
 +            T val;
@@ -309,7 +313,27 @@ index 5356968..c28e547 100644
 +                }
 +                break;
 +            case 0x04:
-+                if (sizeof(T) >= 2 && (flags & slow_MemIO))
++                // (MELONDS_IOFAST's register reads, all below IPCSYNC; NDS::ARM9IOReadDirect's are from it on)
++                if (a < 0x04000180)
++                {
++                    if (!(flags & slow_IORead))
++                        break;
++                    if (sizeof(T) == 2)
++                    {
++                        switch (a)
++                        {
++                        case 0x04000004: val = nds.GPU.DispStat[0]; done = true; break;
++                        case 0x04000006: val = nds.GPU.VCount; done = true; break;
++                        case 0x04000130: nds.LagFrameFlag = false; val = nds.KeyInput & 0xFFFF; done = true; break;
++                        }
++                    }
++                    else if (sizeof(T) == 4 && a == 0x04000004)
++                    {
++                        val = nds.GPU.DispStat[0] | (nds.GPU.VCount << 16);
++                        done = true;
++                    }
++                }
++                else if (sizeof(T) >= 2 && (flags & slow_MemIO))
 +                    done = nds.ARM9IOReadDirect<T>(a, val);
 +                break;
 +            case 0x05:
@@ -341,7 +365,7 @@ index 5356968..c28e547 100644
  template <typename T, int ConsoleType>
  static inline T SlowRead7Impl(u32 addr)
  {
-@@ -229,7 +357,20 @@ static inline T SlowRead7Impl(u32 addr)
+@@ -229,7 +377,20 @@ static inline T SlowRead7Impl(u32 addr)
      addr &= ~(sizeof(T) - 1);
  
      T val;
@@ -363,7 +387,7 @@ index 5356968..c28e547 100644
          val = NDS::Current->ARM7Read32(addr);
      else if (std::is_same<T, u16>::value)
          val = NDS::Current->ARM7Read16(addr);
-@@ -263,7 +404,7 @@ static inline void SlowWrite9Impl(u32 addr, ARMv5* cpu, u32 val)
+@@ -263,7 +424,7 @@ static inline void SlowWrite9Impl(u32 addr, ARMv5* cpu, u32 val)
      {
          *(T*)&cpu->DTCM[addr & 0x3FFF] = val;
      }
@@ -372,7 +396,7 @@ index 5356968..c28e547 100644
      {
      }
      else if (std::is_same<T, u32>::value)
-@@ -281,18 +422,114 @@ static inline void SlowWrite9Impl(u32 addr, ARMv5* cpu, u32 val)
+@@ -281,18 +442,135 @@ static inline void SlowWrite9Impl(u32 addr, ARMv5* cpu, u32 val)
  }
  
  template <typename T, int ConsoleType>
@@ -383,6 +407,19 @@ index 5356968..c28e547 100644
      SlowWrite9Impl<T, ConsoleType>(addr, cpu, val);
  }
  
++// MELONDS_IOFAST's GX FIFO and command port route (IOFastWrite9's)
++[[gnu::noinline]] static void GXWrite9Route(melonDS::NDS& nds, u32 addr, u32 val)
++{
++    GPU3D& gpu3d = nds.GPU.GPU3D;
++    if (addr < 0x04000440)
++    {
++        if (gpu3d.GeometryEnabled)
++            gpu3d.WriteToGXFIFO(val);
++    }
++    else
++        gpu3d.Write32(addr, val);
++}
++
 +template <typename T>
 +[[gnu::noinline]] static void IOWrite9Route(melonDS::NDS& nds, u32 addr, u32 val)
 +{
@@ -404,13 +441,10 @@ index 5356968..c28e547 100644
 +    switch (a >> 24)
 +    {
 +    case 0x06:
-+        // (CheckAndInvalidate<0, memregion_VRAM> has nothing to do when the 16 bytes hold no code)
++        // (CheckAndInvalidate<0, memregion_VRAM> has nothing to do: GPU::VRAMDirect has entries only while VRAM
++        // holds no compiled code)
 +        if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
-+        {
-+            const AddressRange* code = &nds.JIT.CodeIndexVRAM[(a & 0xFFFFF) / 512];
-+            __asm__("" : "+r"(code));
-+            return !((code->Code >> ((a & 0x1FF) / 16)) & 1) && nds.GPU.WriteVRAMQuick<T>(a, val);
-+        }
++            return nds.GPU.WriteVRAMQuick<T>(a, val);
 +        return false;
 +    case 0x02:
 +        // (CheckAndInvalidate<0, memregion_MainRAM> likewise)
@@ -430,7 +464,11 @@ index 5356968..c28e547 100644
 +        if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
 +        {
 +            if (nds.PowerControl9 & ((a & 0x400) ? (1<<9) : (1<<1)))
-+                nds.GPU.WritePalette<T>(a, val);
++            {
++                melonDS::GPU* gpu = &nds.GPU;
++                __asm__("" : "+r"(gpu));    // (one base for the GPU's members)
++                gpu->WritePalette<T>(a, val);
++            }
 +            return true;
 +        }
 +        return false;
@@ -438,7 +476,11 @@ index 5356968..c28e547 100644
 +        if (sizeof(T) >= 2 && (flags & slow_MemVRAM))
 +        {
 +            if (nds.PowerControl9 & ((a & 0x400) ? (1<<9) : (1<<1)))
-+                nds.GPU.WriteOAM<T>(a, val);
++            {
++                melonDS::GPU* gpu = &nds.GPU;
++                __asm__("" : "+r"(gpu));
++                gpu->WriteOAM<T>(a, val);
++            }
 +            return true;
 +        }
 +        return false;
@@ -453,14 +495,17 @@ index 5356968..c28e547 100644
 +    {
 +        const u32 flags = SlowPathFlags;
 +        const u32 a = addr & ~(u32)(sizeof(T) - 1);
-+        if (!(flags & slow_Stats) && a >= cpu->ITCMSize && (a & cpu->DTCMMask) != cpu->DTCMBase)
++        if (!(flags & slow_FullPath) && a >= cpu->ITCMSize && (a & cpu->DTCMMask) != cpu->DTCMBase)
 +        {
 +            melonDS::NDS& nds = cpu->NDS;
 +            if (QuickWrite9<T>(nds, a, val, flags))
 +                return;
-+            if ((a >> 24) == 0x04 && (flags & slow_MemIO) && !(sizeof(T) == 4 && (flags & iofast_GX) && a - 0x04000400 < 0x200))
++            if ((a >> 24) == 0x04 && (flags & slow_MemIO))
 +            {
-+                IOWrite9Route<T>(nds, a, val);
++                if (sizeof(T) == 4 && (flags & iofast_GX) && a - 0x04000400 < 0x200)
++                    GXWrite9Route(nds, a, val);
++                else
++                    IOWrite9Route<T>(nds, a, val);
 +                return;
 +            }
 +        }
@@ -489,20 +534,82 @@ index 5356968..c28e547 100644
          NDS::Current->ARM7Write32(addr, val);
      else if (std::is_same<T, u16>::value)
          NDS::Current->ARM7Write16(addr, val);
-@@ -312,7 +549,7 @@ void SlowBlockTransfer9(u32 addr, u64* data, u32 num, ARMv5* cpu)
+@@ -312,7 +590,59 @@ void SlowBlockTransfer9(u32 addr, u64* data, u32 num, ARMv5* cpu)
  {
      addr &= ~0x3;
      MELONDS_IOSTAT(Write ? iostat_Block9Write : iostat_Block9Read, addr, 4, num);
 -    if (ConsoleType == 0 && IOFastOn)
++    const u32 flags = SlowPathFlags;
++    if (ConsoleType == 0 && Write && (flags & (slow_MemVRAM | slow_MemIO)) && num)
++    {
++        // a store inside one 1 KB (one OAM or palette half, one VRAM page, the GX FIFO) and clear of the TCMs:
++        // what the words' own paths do, with the region's checks once (they can't change within the block)
++        const u32 last = addr + (num - 1) * 4;
++        if (((addr ^ last) >> 10) == 0 && addr >= cpu->ITCMSize && (~cpu->DTCMMask) >= 0x3FF
++            && (addr & cpu->DTCMMask) != cpu->DTCMBase)
++        {
++            melonDS::NDS& nds = cpu->NDS;
++            switch ((flags & slow_MemVRAM) ? addr >> 24 : 0)
++            {
++            case 0x04:
++                break;
++            case 0x05:
++                if (nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))
++                {
++                    melonDS::GPU* gpu = &nds.GPU;
++                    __asm__("" : "+r"(gpu));
++                    for (u32 i = 0; i < num; i++)
++                        gpu->WritePalette<u32>(addr + i * 4, (u32)data[i]);
++                }
++                return;
++            case 0x07:
++                if (nds.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))
++                {
++                    // (GPU::WriteOAM for each word: the words, then the 1 KB's dirty bit they all set)
++                    melonDS::GPU* gpu = &nds.GPU;
++                    __asm__("" : "+r"(gpu));
++                    u8* oam = gpu->OAM;
++                    for (u32 i = 0; i < num; i++)
++                        *(u32*)&oam[(addr + i * 4) & 0x7FF] = (u32)data[i];
++                    gpu->OAMDirty |= 1 << ((addr & 0x7FF) / 1024);
++                }
++                return;
++            case 0x06:
++                // (an entry means no compiled code in VRAM: CheckAndInvalidate would do nothing)
++                if (nds.GPU.WriteVRAMQuickBlock(addr, data, num))
++                    return;
++                break;
++            }
++            // the GX FIFO (MELONDS_IOFAST's route, word by word: GPU3D::GeometryEnabled can't change in between)
++            if ((flags & slow_MemIO) && (flags & iofast_GX) && addr >= 0x04000400 && last < 0x04000440)
++            {
++                GPU3D& gpu3d = nds.GPU.GPU3D;
++                if (gpu3d.GeometryEnabled)
++                    for (u32 i = 0; i < num; i++)
++                        gpu3d.WriteToGXFIFO((u32)data[i]);
++                return;
++            }
++        }
++    }
 +    if (ConsoleType == 0 && (IOFastRoutes | MemFastParts))
      {
          // the same per word as SlowWrite9/SlowRead9 (the TCMs first), with the direct routes
          melonDS::NDS& nds = cpu->NDS;
 diff --git a/src/ARMJIT_Memory.cpp b/src/ARMJIT_Memory.cpp
-index 5a0d110..700bc3c 100644
+index 5a0d110..325288e 100644
 --- a/src/ARMJIT_Memory.cpp
 +++ b/src/ARMJIT_Memory.cpp
-@@ -841,7 +841,7 @@ bool ARMJIT_Memory::FaultHandler(FaultDescription& faultDesc, melonDS::NDS& nds)
+@@ -498,6 +498,9 @@ void ARMJIT_Memory::Mapping::Unmap(int region, melonDS::NDS& nds) noexcept
+ 
+ void ARMJIT_Memory::SetCodeProtection(int region, u32 offset, bool protect) noexcept
+ {
++    // (a VRAM page gaining or losing code: GPU::VRAMDirect has no entries while VRAM holds code)
++    if (region == memregion_VRAM)
++        NDS.GPU.MarkVRAMDirectStale();
+     offset &= ~(PageSize - 1);
+     //printf("set code protection %d %x %d\n", region, offset, protect);
+ 
+@@ -841,7 +844,7 @@ bool ARMJIT_Memory::FaultHandler(FaultDescription& faultDesc, melonDS::NDS& nds)
      return false;
  }
  
@@ -511,7 +618,7 @@ index 5a0d110..700bc3c 100644
  {
      ARMJIT_Global::Init();
  #if defined(__SWITCH__)
-@@ -1173,7 +1173,7 @@ bool ARMJIT_Memory::GetMirrorLocation(int region, u32 num, u32 addr, u32& memory
+@@ -1173,7 +1176,7 @@ bool ARMJIT_Memory::GetMirrorLocation(int region, u32 num, u32 addr, u32& memory
      }
  }
  
@@ -520,7 +627,7 @@ index 5a0d110..700bc3c 100644
  {
      switch (region)
      {
-@@ -1369,6 +1369,8 @@ u32 WifiRead32(u32 addr)
+@@ -1369,6 +1372,8 @@ u32 WifiRead32(u32 addr)
  template <typename T>
  void VRAMWrite(u32 addr, T val)
  {
@@ -529,7 +636,7 @@ index 5a0d110..700bc3c 100644
      switch (addr & 0x00E00000)
      {
      case 0x00000000: NDS::Current->GPU.SyncVRAM_ABG(addr, true); NDS::Current->GPU.WriteVRAM_ABG<T>(addr, val); return;
-@@ -1381,6 +1383,9 @@ void VRAMWrite(u32 addr, T val)
+@@ -1381,6 +1386,9 @@ void VRAMWrite(u32 addr, T val)
  template <typename T>
  T VRAMRead(u32 addr)
  {
@@ -539,7 +646,7 @@ index 5a0d110..700bc3c 100644
      switch (addr & 0x00E00000)
      {
      case 0x00000000: NDS::Current->GPU.SyncVRAM_ABG(addr, false); return NDS::Current->GPU.ReadVRAM_ABG<T>(addr);
-@@ -1494,6 +1499,131 @@ static u32 NDS_ARM7IORead32(u32 addr)
+@@ -1494,6 +1502,131 @@ static u32 NDS_ARM7IORead32(u32 addr)
      return NDS::Current->ARM7IORead32(addr);
  }
  
@@ -671,7 +778,7 @@ index 5a0d110..700bc3c 100644
  static void NDS_ARM7IOWrite8(u32 addr, u8 val)
  {
      NDS::Current->ARM7IOWrite8(addr, val);
-@@ -1538,6 +1668,20 @@ void* ARMJIT_Memory::GetFuncForAddr(ARM* cpu, u32 addr, bool store, int size) co
+@@ -1538,6 +1671,20 @@ void* ARMJIT_Memory::GetFuncForAddr(ARM* cpu, u32 addr, bool store, int size) co
                  }
              }
  
@@ -692,7 +799,7 @@ index 5a0d110..700bc3c 100644
              switch (size | store)
              {
              case 8: return (void*)NDS_ARM9IORead8;
-@@ -1581,6 +1725,18 @@ void* ARMJIT_Memory::GetFuncForAddr(ARM* cpu, u32 addr, bool store, int size) co
+@@ -1581,6 +1728,18 @@ void* ARMJIT_Memory::GetFuncForAddr(ARM* cpu, u32 addr, bool store, int size) co
                  }
              }*/
  
@@ -748,7 +855,7 @@ index 4bf660e..a1116ce 100644
      void* FastMem7Start;
      u8* MemoryBase = nullptr;
 diff --git a/src/GPU.cpp b/src/GPU.cpp
-index b695ee9..67c3a0d 100644
+index b695ee9..3455a05 100644
 --- a/src/GPU.cpp
 +++ b/src/GPU.cpp
 @@ -48,6 +48,7 @@ enum
@@ -823,7 +930,7 @@ index b695ee9..67c3a0d 100644
      cnt &= 0x83;
  
      u8 oldcnt = VRAMCNT[bank];
-@@ -1612,6 +1621,38 @@ void GPU::CheckCaptureEnd()
+@@ -1612,6 +1621,52 @@ void GPU::CheckCaptureEnd()
      VRAMCBFlagsOr(dstbank, dstoff, CBFlag_Complete);
  }
  
@@ -833,6 +940,20 @@ index b695ee9..67c3a0d 100644
 +    // area, the bits above its size within bits 14-20 mirror)
 +    static const u16 noCapture = 0;
 +    static constexpr u32 pageMask[8] = {0x1F, 0x7, 0xF, 0x7, 0x3F, 0x3F, 0x3F, 0x3F};
++#ifdef JIT_ENABLED
++    // the JIT's slow paths skip ARMJIT::CheckAndInvalidate for the pages here: no entry while any compiled code
++    // is in VRAM (the first code in a page marks the table stale: ARMJIT_Memory::SetCodeProtection)
++    for (const AddressRange& range : NDS.JIT.CodeIndexVRAM)
++    {
++        if (range.Code)
++        {
++            for (VRAMDirectPage& p : VRAMDirect)
++                p = VRAMDirectPage{nullptr, nullptr, &noCapture, 0, 0};
++            VRAMDirectStale = false;
++            return;
++        }
++    }
++#endif
 +    for (u32 i = 0; i < 1024; i++)
 +    {
 +        const u32 area = i >> 7;
@@ -863,10 +984,10 @@ index b695ee9..67c3a0d 100644
  {
      u16 flags = VRAMCaptureBlockFlags[block];
 diff --git a/src/GPU.h b/src/GPU.h
-index b0e1faf..4ab64d2 100644
+index b0e1faf..20d9c9f 100644
 --- a/src/GPU.h
 +++ b/src/GPU.h
-@@ -145,6 +145,117 @@ public:
+@@ -145,6 +145,135 @@ public:
          if (mask & (1<<3)) SyncVRAMCaptureBlock((3<<2) | addr, write);
      }
  
@@ -906,7 +1027,8 @@ index b0e1faf..4ab64d2 100644
 +
 +    // per 16 KB page of 0x06000000-0x06FFFFFF (address bits 14-23), when one bank alone is mapped there: the page
 +    // in its bank, the bank's dirty word and first bit for it, its capture block's flags (banks A-D); rebuilt from
-+    // SingleVRAMBank on the first access after a mapping change (VRAMDirectStale: MapVRAM_*, Reset, a state load)
++    // SingleVRAMBank on the first access after a mapping change (VRAMDirectStale: MapVRAM_*, Reset, a state load,
++    // a VRAM page gaining or losing compiled code), and empty while VRAM holds compiled code (UpdateVRAMDirect)
 +    struct VRAMDirectPage
 +    {
 +        u8* Mem;                    // VRAM[bank] + (page & VRAMMask[bank]), or null: no bank or several
@@ -930,6 +1052,23 @@ index b0e1faf..4ab64d2 100644
 +            return false;
 +        *p->DirtyWord |= 1ULL << (p->DirtyBit + ((addr >> 9) & 31));
 +        *(T*)&mem[addr & 0x3FFF] = val;
++        return true;
++    }
++    // num words from addr, all in one page (its entry checked once): what WriteVRAMQuick<u32> does for each
++    bool WriteVRAMQuickBlock(u32 addr, const u64* data, u32 num) noexcept
++    {
++        const VRAMDirectPage* p = &VRAMDirect[(addr >> 14) & 0x3FF];
++        __asm__("" : "+r"(p));
++        u8* mem = p->Mem;
++        if (!mem || (*p->CaptureFlags & CaptureBlockIsCapture))
++            return false;
++        u64* dirty = p->DirtyWord;
++        const u32 bit = p->DirtyBit;
++        for (u32 i = 0; i < num; i++, addr += 4)
++        {
++            *dirty |= 1ULL << (bit + ((addr >> 9) & 31));
++            *(u32*)&mem[addr & 0x3FFF] = (u32)data[i];
++        }
 +        return true;
 +    }
 +    template<typename T>
@@ -984,7 +1123,7 @@ index b0e1faf..4ab64d2 100644
      int GetCaptureBlock_LCDC(u32 offset);
  
      void GetCaptureInfo_ABG(int* info);
-@@ -674,6 +785,8 @@ public:
+@@ -674,6 +803,8 @@ public:
      melonDS::GPU3D GPU3D;
  
      NonStupidBitField<128*1024/VRAMDirtyGranularity> VRAMDirty[9] {};
@@ -1176,7 +1315,7 @@ index 5acd202..7eb4cff 100644
      [[nodiscard]] bool IsJITEnabled() const noexcept { return EnableJIT; }
      void SetJITArgs(std::optional<JITArgs> args) noexcept;
 diff --git a/src/NDS_IOFast.cpp b/src/NDS_IOFast.cpp
-index 2787c88..f390aa1 100644
+index 2787c88..93acf91 100644
 --- a/src/NDS_IOFast.cpp
 +++ b/src/NDS_IOFast.cpp
 @@ -50,10 +50,21 @@ static u32 ReadIOFastEnv()
@@ -1190,22 +1329,22 @@ index 2787c88..f390aa1 100644
 +}
 +
 +u32 MemFastParts = ReadMemFastEnv();
-+u32 SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | (IOStatsOn ? (u32)slow_Stats : 0);
++u32 SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !MemFastParts) ? (u32)slow_FullPath : 0);
 +
  void IOFastInit() noexcept
  {
      IOFastRoutes = ReadIOFastEnv();
      IOFastOn = IOFastRoutes != 0;
 +    MemFastParts = ReadMemFastEnv();
-+    SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | (IOStatsOn ? (u32)slow_Stats : 0);
++    SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !MemFastParts) ? (u32)slow_FullPath : 0);
  }
  
  namespace
 diff --git a/src/NDS_IOFast.h b/src/NDS_IOFast.h
-index 3de27cb..35c3647 100644
+index 3de27cb..6422a47 100644
 --- a/src/NDS_IOFast.h
 +++ b/src/NDS_IOFast.h
-@@ -61,9 +61,33 @@ enum
+@@ -61,9 +61,34 @@ enum
      iofast_IORead = 8,      // DISPSTAT/VCOUNT, KEYINPUT, IME/IE/IF reads
  };
  
@@ -1226,14 +1365,15 @@ index 3de27cb..35c3647 100644
  extern bool IOFastOn;       // MELONDS_IOFAST isn't 0 and the mask isn't empty
  extern u32 IOFastRoutes;
 +extern u32 MemFastParts;    // MELONDS_MEMFAST, memfast_* (read at ARMJIT::Reset, with IOFastInit)
-+// all of it in one word for the slow paths' entry: IOFastRoutes, MemFastParts << 4, IOStatsOn in bit 31
++// all of it in one word for the slow paths' entry: IOFastRoutes, MemFastParts << 4, and bit 31 when the slow
++// paths take their full path only (the IO statistics on, or no MELONDS_MEMFAST part)
 +enum
 +{
 +    slow_MainRAM = iofast_MainRAM,
 +    slow_IORead = iofast_IORead,
 +    slow_MemVRAM = memfast_VRAM << 4,
 +    slow_MemIO = memfast_IO << 4,
-+    slow_Stats = 1u << 31,
++    slow_FullPath = 1u << 31,
 +};
 +extern __attribute__((visibility("hidden"))) u32 SlowPathFlags;
  
