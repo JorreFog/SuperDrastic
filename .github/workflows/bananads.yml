@@ -97,6 +97,14 @@ jobs:
             qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 300 \
               --a jit=on --a jit.mul=off --b jit=on --b jit.mul=on $rom
           done
+      - name: BananaJIT's native block transfers (LDM/STM, PUSH/POP) cost exactly what the interpreter does (main RAM equal every frame)
+        run: |
+          for rom in stressrom/out/dsstress-L5.nds stressrom/out/dsstress-ramp.nds \
+                     stressrom/out-thumb/dsstress-L5.nds stressrom/out-thumb/dsstress-ramp.nds \
+                     stressrom/out-arm7/dsstress-L5.nds stressrom/out-arm7-thumb/dsstress-L5.nds; do
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 300 \
+              --a jit=on --a jit.ldm=off --b jit=on --b jit.ldm=on $rom
+          done
       - name: The DraStic JIT study's differential ROMs (PR #10): BananaJIT = interpreter = ARMv5TE
         run: |
           if ! git fetch --depth 1 origin drastic-jit-re; then echo "branch drastic-jit-re not found: skipped"; exit 0; fi
