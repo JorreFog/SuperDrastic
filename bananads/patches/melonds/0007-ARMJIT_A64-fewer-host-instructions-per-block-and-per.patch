@@ -1,6 +1,6 @@
-From 3c25177c3b35c07663321628c206c9d831b27f12 Mon Sep 17 00:00:00 2001
+From 5f16f14a3b55e0a0310860e76b8628fe7b418138 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
-Date: Sun, 11 Oct 2026 20:47:21 +0000
+Date: Sun, 11 Oct 2026 21:05:52 +0000
 Subject: [PATCH] ARMJIT_A64: fewer host instructions per block and per exit
 
 Each change is on by default and exact (same cycles, memory and pictures). MELONDS_JIT_OLDCODEGEN=1
@@ -57,6 +57,10 @@ turns off one. All are read once, when the compiler is created.
 - DYNADDR (needs EXITSTUB): the JumpTo functions also leave the next block's address in w4, and an
   unconditional register jump's exit looks the block up from it (DynExitA) instead of from R15 and
   the T bit.
+- DYNCACHE (needs DYNADDR): such an exit keeps the key (address | T) of the block it last learnt in
+  a word after a link slot: the same key goes through ExitCheck and the slot, linked to that block
+  (UnlinkBlock unlinks it as any other); another key goes to DynExitA; the first time, ExitCheck and
+  back to the loop asking ARM_Dispatch to link the slot, and Link learns the dispatched block's key.
 
 MELONDS_JIT_PERFMAP also names the shared stubs in the map (stub_e9xx/e7xx JumpTo, ec0n ExitCheck,
 ed0n DynExit, eb00 the rest), and MELONDS_JIT_PERFDIR puts the map and code dump elsewhere than
@@ -64,12 +68,12 @@ ed0n DynExit, eb00 the rest), and MELONDS_JIT_PERFDIR puts the map and code dump
 ---
  src/ARMJIT_A64/ARMJIT_ALU.cpp       |  15 +-
  src/ARMJIT_A64/ARMJIT_Branch.cpp    |  69 ++-
- src/ARMJIT_A64/ARMJIT_Compiler.cpp  | 637 +++++++++++++++++++++++++---
- src/ARMJIT_A64/ARMJIT_Compiler.h    |  75 +++-
+ src/ARMJIT_A64/ARMJIT_Compiler.cpp  | 701 +++++++++++++++++++++++++---
+ src/ARMJIT_A64/ARMJIT_Compiler.h    |  80 +++-
  src/ARMJIT_A64/ARMJIT_LoadStore.cpp |  41 +-
  src/dolphin/Arm64Emitter.cpp        |  10 +
  src/dolphin/Arm64Emitter.h          |   4 +
- 7 files changed, 767 insertions(+), 84 deletions(-)
+ 7 files changed, 833 insertions(+), 87 deletions(-)
 
 diff --git a/src/ARMJIT_A64/ARMJIT_ALU.cpp b/src/ARMJIT_A64/ARMJIT_ALU.cpp
 index 1368c7b..4b1ca1f 100644
@@ -112,7 +116,7 @@ index 1368c7b..4b1ca1f 100644
          else
              CLZ(W0, rs);
 diff --git a/src/ARMJIT_A64/ARMJIT_Branch.cpp b/src/ARMJIT_A64/ARMJIT_Branch.cpp
-index c4af33b..4015204 100644
+index c4af33b..37a549d 100644
 --- a/src/ARMJIT_A64/ARMJIT_Branch.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Branch.cpp
 @@ -68,8 +68,11 @@ void Compiler::Comp_JumpTo(u32 addr, bool forceNonConstantCycles)
@@ -201,7 +205,7 @@ index c4af33b..4015204 100644
  
          ANDI2R(W0, W0, ~3);
 +        if (OptDynAddr)
-+            MOV(W4, W0);   // (the next block's address, for DynExitA)
++            MOV(W4, W0);   // (the next block's address, for DynExitA; | 1 for Thumb below)
          ADD(W0, W0, 4);
          STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARMv5, R[15]));
  
@@ -210,7 +214,7 @@ index c4af33b..4015204 100644
  
          ANDI2R(W0, W0, ~1);
 +        if (OptDynAddr)
-+            MOV(W4, W0);
++            ORRI2R(W4, W0, 1);   // (| 1: Thumb, for DynExitA and DYNCACHE's key)
          ADD(W0, W0, 2);
          STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARMv5, R[15]));
  
@@ -228,7 +232,7 @@ index c4af33b..4015204 100644
          ANDI2R(W0, W0, ~1);
  
 +        if (OptDynAddr)
-+            MOV(W4, W0);
++            ORRI2R(W4, W0, 1);
          ADD(W3, W0, 2);
          STR(INDEX_UNSIGNED, W3, RCPU, offsetof(ARM, R[15]));
  
@@ -268,10 +272,10 @@ index c4af33b..4015204 100644
      SetJumpTarget(skipExecute);
      Comp_AddCycles_C(true);
 diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-index ee12807..cebafe0 100644
+index ee12807..4ff7bdc 100644
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-@@ -265,6 +265,35 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -265,6 +265,36 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
  #endif
      SetCodePtr(0);
  
@@ -286,6 +290,7 @@ index ee12807..cebafe0 100644
 +        OptDead = !old && !getenv("MELONDS_JIT_NODEAD");
 +        OptExitStub = !old && !getenv("MELONDS_JIT_NOEXITSTUB");
 +        OptDynAddr = OptExitStub && !getenv("MELONDS_JIT_NODYNADDR");
++        OptDynCache = OptDynAddr && !getenv("MELONDS_JIT_NODYNCACHE") && !getenv("MELONDS_JIT_NOLINK");
 +        OptExitPC = OptExitStub && !getenv("MELONDS_JIT_NOEXITPC") && !getenv("MELONDS_JIT_NOLINK");   // (ExitCheckPC)
 +        OptSelfLoop = OptExitPC && !getenv("MELONDS_JIT_NOSELFLOOP");
 +        OptKeepFlags = !old && !getenv("MELONDS_JIT_NOKEEPFLAGS");
@@ -307,7 +312,7 @@ index ee12807..cebafe0 100644
      for (int i = 0; i < 3; i++)
      {
          JumpToFuncs9[i] = Gen_JumpTo9(i);
-@@ -358,6 +387,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -358,6 +388,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
          RET();
      }
  
@@ -316,7 +321,7 @@ index ee12807..cebafe0 100644
      for (int consoleType = 0; consoleType < 2; consoleType++)
      {
          for (int num = 0; num < 2; num++)
-@@ -379,7 +410,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -379,7 +411,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
                      {
                          MOV(W1, rdMapped);
                      }
@@ -327,7 +332,7 @@ index ee12807..cebafe0 100644
                      if (consoleType == 0)
                      {
                          switch ((8 << size) |  num)
-@@ -405,7 +438,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -405,7 +439,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
                          }
                      }
                      
@@ -338,7 +343,7 @@ index ee12807..cebafe0 100644
                      RET();
  
                      for (int signextend = 0; signextend < 2; signextend++)
-@@ -413,7 +448,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -413,7 +449,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
                          PatchedLoadFuncs[consoleType][num][size][signextend][reg] = GetRXPtr();
                          if (num == 0)
                              MOV(X1, RCPU);
@@ -349,7 +354,7 @@ index ee12807..cebafe0 100644
                          if (consoleType == 0)
                          {
                              switch ((8 << size) |  num)
-@@ -438,7 +475,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -438,7 +476,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
                              case 9: QuickCallFunction(X3, SlowRead7<u8, 1>); break;
                              }
                          }
@@ -360,7 +365,7 @@ index ee12807..cebafe0 100644
                          if (size == 32)
                              MOV(rdMapped, W0);
                          else if (signextend)
-@@ -462,10 +501,19 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -462,10 +502,19 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
      SetCodeBase((u8*)GetRWPtr(), (u8*)GetRXPtr());
  
      // DynExit's code base, now that it is known
@@ -382,7 +387,7 @@ index ee12807..cebafe0 100644
          p[0] = 0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 17;                       // movz x17, #.., lsl #0
          for (int hw = 1; hw < 4; hw++)
              p[hw] = 0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 17;  // movk x17, #.., lsl #16*hw
-@@ -475,11 +523,21 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -475,11 +524,21 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
      LinkBlocks = !getenv("MELONDS_JIT_NOLINK");
      if (getenv("MELONDS_JIT_PERFMAP"))
      {
@@ -407,7 +412,7 @@ index ee12807..cebafe0 100644
      }
  }
  
-@@ -723,21 +781,99 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+@@ -723,21 +782,99 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
          if (ConstantCycles)
              ADD(RCycles, RCycles, ConstantCycles);
          if (taken)
@@ -512,12 +517,59 @@ index ee12807..cebafe0 100644
  {
      if (!LinkBlocks)
      {
-@@ -745,24 +881,97 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter)
+@@ -745,24 +882,144 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter)
          return;
      }
  
 +    // RCPSR as in memory (nothing in this block changed it: CPSR is in memory at every block's entry) needs no store
 +    const int c = (OptExitStub && !CPSRDirty) ? 0 : 1;
++
++    if (!known && LastJumpViaFunc && OptDynCache)
++    {
++        // DYNCACHE: the target's key (address | T, in W4) against the one this exit learnt; the same: ExitCheck and
++        // the slot, linked to that block; else DynExitA, or the first time, ExitCheck and back to the loop asking
++        // ARM_Dispatch to link the slot (Link learns the key then)
++        u32* litRW = nullptr;
++        u8* litRX = nullptr;
++        FixupBranch learnt;
++        {
++            // ldr w1, <key>: the key word comes after the slot, below
++            litRW = (u32*)GetWriteableRWPtr();
++            litRX = (u8*)GetRXPtr();
++            Write32(0x18000000 | 1);
++        }
++        CMP(W4, W1);
++        FixupBranch miss = B(CC_NEQ);
++        BL(ExitCheck[Num][c]);
++        u8* slot = GetWriteableRWPtr();
++        u8* slotRX = (u8*)GetRXPtr();
++        SwapCodeRegion();
++        u8* learnPath = (u8*)GetRXPtr();
++        SwapCodeRegion();
++        B(learnPath);
++        u8* keyRX = (u8*)GetRXPtr();
++        Write32(2);   // (no key has bit 1 set without bit 0: a Thumb key has bit 0, an ARM one neither)
++        *litRW |= (u32)((keyRX - litRX) / 4) << 5;
++        SetJumpTarget(miss);
++        CMP(W1, 2);
++        FixupBranch learn = B(CC_EQ);
++        B(DynExitA[Num][c]);
++        SetJumpTarget(learn);
++        BL(ExitCheck[Num][c]);
++        B(learnPath);
++        LinkSlots[(u32)(slotRX - GetRXBase())] = {*(u32*)slot, 0, Num, (u32)(keyRX - GetRXBase())};
++
++        // the learn path (the slot's until linked, and the first miss's): link the slot to the block the loop
++        // dispatches next
++        SwapCodeRegion();
++        MOVP2R(X16, slotRX);
++        MOVP2R(X17, &melonds_jit_link[0]);
++        STP(INDEX_SIGNED, X16, RCPU, X17, 0);
++        QuickTailCall(X16, ARM_Ret);
++        FlushIcacheSection(learnPath, (u8*)GetRXPtr());
++        SwapCodeRegion();
++        return;
++    }
 +
      if (!known)
      {
@@ -613,7 +665,7 @@ index ee12807..cebafe0 100644
      MOVP2R(X16, slotRX);
      MOVP2R(X17, &melonds_jit_link[0]);
      STP(INDEX_SIGNED, X16, RCPU, X17, 0);
-@@ -778,18 +987,45 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -778,18 +1035,45 @@ void Compiler::Gen_ExitStubs(int num)
      // Cycles = 0, and on (a return to the exit's slot) while Timestamp < Target. Back to the loop is a return
      // to ARM_Ret, which keeps the return stack in step.
      u64* ts = num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp;   // its Target is the next u64
@@ -664,7 +716,7 @@ index ee12807..cebafe0 100644
          STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));   // (the next block reads it from memory)
          RET();
          SetJumpTarget(stop);
-@@ -797,36 +1033,74 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -797,36 +1081,74 @@ void Compiler::Gen_ExitStubs(int num)
          MOVP2R(X30, (void*)ARM_Ret);
          RET();
      }
@@ -736,7 +788,7 @@ index ee12807..cebafe0 100644
 +        {
 +            static_assert(offsetof(ARM, FastBlockLookupSize) == offsetof(ARM, FastBlockLookupStart) + 4, "lookup");
 +            if (a)
-+                MOV(W0, W4);   // (R15 - (Thumb ? 2 : 4), as the JumpTo function left it)
++                ANDI2R(W0, W4, ~1);   // (R15 - (Thumb ? 2 : 4), as the JumpTo function left it, | 1 for Thumb)
 +            else
 +            {
 +                SUB(W0, W0, 4);
@@ -761,7 +813,7 @@ index ee12807..cebafe0 100644
          LDR(INDEX_UNSIGNED, X16, RCPU, offsetof(ARM, FastBlockLookup));
          LSR(W17, W17, 1);
          LDR(X16, X16, ArithOption(X17, true));
-@@ -834,11 +1108,21 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -834,11 +1156,21 @@ void Compiler::Gen_ExitStubs(int num)
              ORRI2R(W0, W0, 1);
          CMP(X0, X16, ArithOption(X16, ST_LSR, 32));
          FixupBranch miss = B(CC_NEQ);
@@ -788,7 +840,7 @@ index ee12807..cebafe0 100644
          ADD(X16, X17, W16, ArithOption(W16));   // + the entry's offset (uxtw)
          BR(X16);
          SetJumpTarget(stop);
-@@ -846,11 +1130,112 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -846,15 +1178,128 @@ void Compiler::Gen_ExitStubs(int num)
          SetJumpTarget(outside);
          SetJumpTarget(miss);
          QuickTailCall(X16, ARM_Ret);
@@ -900,8 +952,26 @@ index ee12807..cebafe0 100644
 +    entry += EntrySkip[cpu->Num];   // (past the entry prologue)
      const u32 off = (u32)(slotRX - GetRXBase());
      auto it = LinkSlots.find(off);
-     if (it == LinkSlots.end() || it->second.r15 != cpu->R[15]
-@@ -864,7 +1249,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+-    if (it == LinkSlots.end() || it->second.r15 != cpu->R[15]
+-        || it->second.num != (cpu->Num | ((cpu->CPSR & 0x20) ? 2u : 0u)))
++    if (it == LinkSlots.end())
++        return;
++    if (it->second.lit)
++    {
++        // a DYNCACHE slot: it learns the key of the block it goes to, the one the loop dispatches now
++        if (it->second.num != cpu->Num)
++            return;
++        const bool thumb = cpu->CPSR & 0x20;
++        const u32 key = (cpu->R[15] - (thumb ? 2 : 4)) | (thumb ? 1 : 0);
++        NDS.JIT.JitEnableWrite();
++        *(u32*)(RWBase() + it->second.lit) = key;
++        NDS.JIT.JitEnableExecute();
++    }
++    else if (it->second.r15 != cpu->R[15] || it->second.num != (cpu->Num | ((cpu->CPSR & 0x20) ? 2u : 0u)))
+         return;
+     const s64 d = ((s64)(entry - GetRXBase()) - (s64)off) / 4;
+     if (d < -(1 << 25) || d >= (1 << 25))
+@@ -864,7 +1309,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
      *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
      NDS.JIT.JitEnableExecute();
      FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
@@ -910,7 +980,7 @@ index ee12807..cebafe0 100644
  }
  
  void Compiler::UnlinkBlock(JitBlockEntry entry)
-@@ -909,6 +1294,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -909,6 +1354,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
  
      JitBlockEntry res = (JitBlockEntry)GetRXPtr();
      const ptrdiff_t farStart = OtherCodeRegion;
@@ -923,7 +993,7 @@ index ee12807..cebafe0 100644
  
      Thumb = thumb;
      Num = cpu->Num;
-@@ -918,15 +1309,48 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -918,15 +1369,48 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
      CPSRDirty = false;
      InvalidateHostFlags();
  
@@ -973,7 +1043,7 @@ index ee12807..cebafe0 100644
  
          CompileFunc comp = Thumb
              ? T_Comp[CurInstr.Info.Kind]
-@@ -934,19 +1358,49 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -934,19 +1418,49 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
  
          Exit = i == (instrsCount - 1) || (CurInstr.BranchFlags & branch_FollowCondNotTaken);
  
@@ -1027,7 +1097,7 @@ index ee12807..cebafe0 100644
              {
                  MOVI2R(W0, (s32)CurInstr.CodeCycles);
                  STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CodeCycles));
-@@ -958,6 +1412,25 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -958,6 +1472,25 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
              SaveCycles();
              SaveCPSR();
              RegCache.Flush();
@@ -1053,7 +1123,7 @@ index ee12807..cebafe0 100644
          }
          else
              RegCache.Prepare(Thumb, i);
-@@ -1012,7 +1485,17 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1012,7 +1545,17 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
  
                  Comp_BranchSpecialBehaviour(true);
  
@@ -1072,7 +1142,7 @@ index ee12807..cebafe0 100644
                  {
                      if (IrregularCycles || (CurInstr.BranchFlags & branch_FollowCondTaken))
                      {
-@@ -1049,7 +1532,24 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1049,7 +1592,24 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
          }
      }
  
@@ -1098,7 +1168,7 @@ index ee12807..cebafe0 100644
  
      if (ConstantCycles)
          ADD(RCycles, RCycles, ConstantCycles);
-@@ -1060,11 +1560,32 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1060,11 +1620,32 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
          if (!last.Info.Branches())
              Comp_Exit(true, R15, Thumb);
          else if (LastJumpKnown && !cond)
@@ -1133,7 +1203,7 @@ index ee12807..cebafe0 100644
  
      if (PerfMap)
 diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
-index 3cf6f69..3c62be2 100644
+index 3cf6f69..78e22f6 100644
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.h
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
 @@ -93,6 +93,7 @@ struct LoadStorePatch
@@ -1144,7 +1214,7 @@ index 3cf6f69..3c62be2 100644
  };
  
  class Compiler : public Arm64Gen::ARM64XEmitter
-@@ -239,12 +240,26 @@ public:
+@@ -239,21 +240,88 @@ public:
      // target is known when compiling has a slot: a B that ARM_Dispatch patches to the target block once the loop
      // has dispatched it after this exit (melonds_jit_link, Link), and that UnlinkBlock puts back when the framework
      // retires or invalidates the target. Other exits look the next block up in FastBlockLookup.
@@ -1168,6 +1238,8 @@ index 3cf6f69..3c62be2 100644
 +    bool OptDynAddr = true;       // NODYNADDR: the JumpTo functions leave the address in W4 and an exit after one
 +                                  // looks the block up from it (DynExitA)
 +    bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
++    bool OptDynCache = true;      // NODYNCACHE: such an exit keeps the last target it went to (its key: address | T)
++                                  // in a word after a link slot it links to that block, like a known exit's
 +    const void* StubsStart[4] = {};   // ExitCheck9, DynExit9, ExitCheck7, DynExit7 (for the perf map)
 +    bool DynExitLiteral = false;  // DynExitBase is a u64 literal (OptExitStub), not four MOVZ/MOVK to fill in
 +    bool JumpR15Deferred = false; // this instruction's constant jump left storing R15 to its exit (OptExitPC)
@@ -1176,7 +1248,11 @@ index 3cf6f69..3c62be2 100644
      void Link(u8* slotRX, ARM* cpu, u8* entry);
      void UnlinkBlock(JitBlockEntry entry);
      bool LastJumpKnown = false;   // the instruction being compiled jumped to a constant address (Comp_JumpTo(u32))
-@@ -254,6 +269,56 @@ public:
+     u32 LastJumpR15 = 0;
+     bool LastJumpThumb = false;
+-    struct LinkSlot { u32 orig; u32 r15; u32 num; };          // num: the CPU's, | 2 when the target is Thumb code
++    struct LinkSlot { u32 orig; u32 r15; u32 num; u32 lit = 0; };   // num: the CPU's, | 2 when the target is Thumb
++                                                              // code; lit: a DYNCACHE slot's key word, 0 otherwise
      std::unordered_map<u32, LinkSlot> LinkSlots;              // a slot's offset in code memory -> its link path's B
      std::unordered_map<u32, std::vector<u32>> LinkedTo;       // a block's entry offset -> the slots that jump to it
      bool LinkBlocks = true;       // MELONDS_JIT_NOLINK=1: every exit goes back to the loop, as melonDS's does
