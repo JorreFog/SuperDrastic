@@ -476,6 +476,19 @@ void BananaRenderer2D::CalcWindowMask()
     if (dispcnt & (1<<15))
     {
         u8 c = R.WinCnt[3];
+#ifdef BANANA_NEON
+        if (Banana2DFast)
+        {
+            // 16 pixels per step, a select instead of a branch per pixel
+            uint8x16_t vc = vdupq_n_u8(c);
+            for (int i = 0; i < 256; i += 16)
+            {
+                uint8x16_t ow = vld1q_u8(&OBJWindow[i]);
+                vst1q_u8(&WindowMask[i], vbslq_u8(vtstq_u8(ow, ow), vc, vld1q_u8(&WindowMask[i])));
+            }
+        }
+        else
+#endif
         for (int i = 0; i < 256; i++)
             if (OBJWindow[i]) WindowMask[i] = c;
     }
