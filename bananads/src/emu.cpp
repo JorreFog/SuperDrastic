@@ -205,6 +205,15 @@ bool Emu::load_rom(const std::string& path) {
     if (lang >= 0 && lang <= 5) user.Settings = (u16)((user.Settings & ~7) | lang);
     args.Firmware.UpdateChecksums();
 
+    // jit.iofast=on|off sets MELONDS_IOFAST (melonDS patch 0005: the JIT slow paths' direct routes for main RAM,
+    // the GX FIFO and IE/IF/IME/DISPSTAT/VCOUNT/KEYINPUT), which the NDS reads as it's created; unset, the
+    // environment decides (default on). For A/B runs, bananads-difftest --a jit.iofast=on --b jit.iofast=off.
+    {
+        const std::string iofast = cfg_.str("jit.iofast", "");
+        if (iofast == "on") setenv("MELONDS_IOFAST", "1", 1);
+        else if (iofast == "off") setenv("MELONDS_IOFAST", "0", 1);
+    }
+
     setup_wifi();
     setup_local();
 

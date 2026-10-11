@@ -1,0 +1,741 @@
+From 0e205d9e16f3d0a97e96ef54e19b2ee804e1efd3 Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 18:04:45 +0000
+Subject: [PATCH] NDS: MELONDS_IOSTATS counts the slow memory accesses;
+ MELONDS_IOFAST direct routes for the hot ones
+
+The JIT sends every access fast memory can't take (IO, VRAM, LDM/STM, pages holding compiled code) to
+SlowRead9/SlowWrite9/SlowBlockTransfer9 (and the ARM7 ones), which go through NDS::ARM9Read*/ARM9Write*
+(virtual), a switch on the region, NDS::ARM9IORead*/ARM9IOWrite* (virtual), a switch on the register,
+and for the 3D engine GPU3D::Write32, per word.
+
+MELONDS_IOSTATS=n (from frame n on; 1 = all) counts, and prints the top entries to stderr at exit:
+- the JIT's slow reads and writes per CPU, by address for IO and by region otherwise (ITCM/DTCM apart),
+- its block transfers per CPU, by the first word's address, in calls and words,
+- every IO register access by address, whoever makes it (JIT, interpreter, DMA), and the JIT's calls to
+  GPU3D for a known address.
+Off, each counting site is one branch on a global that is never taken. NDS_IOFast.cpp holds it.
+
+MELONDS_IOFAST=0 turns off the direct routes the slow paths now take on the DS (not the DSi, which
+overrides those functions), each doing exactly what the chain does for that address, minus the
+dispatch:
+- main RAM: reads, and writes with the JIT's CheckAndInvalidate first (pages holding code fault into
+  the slow path; every LDM is a slow block transfer),
+- VRAM: 16- and 32-bit reads and writes, with the same SyncVRAM_*/ReadVRAM_*/WriteVRAM_* calls,
+- the GX FIFO (0x04000400-43F): GeometryEnabled, then WriteToGXFIFO; the command ports
+  (0x04000440-5FF): GPU3D::Write32, as ARM9IOWrite32 does,
+- 32-bit reads of DISPSTAT+VCOUNT, IME, IE, IF; 16-bit reads of DISPSTAT, VCOUNT, KEYINPUT
+  (clearing LagFrameFlag as ARM9IORead16 does), IME, IE and IF halves: plain reads of state.
+SlowBlockTransfer9 does the TCM checks and the routes per word, without a call per word. The JIT
+charges a slow access's cycles in the compiled code, from the decoder's DataCycles, so the routes
+change no timing. The default is on; ARMJIT::Reset re-reads the variable, so a front-end can set it
+per console.
+---
+ src/ARMJIT.cpp        | 183 ++++++++++++++++++++++++++++++++++++++++--
+ src/ARMJIT_Memory.cpp |   6 ++
+ src/CMakeLists.txt    |   1 +
+ src/NDS.cpp           |  24 ++++++
+ src/NDS.h             |   1 +
+ src/NDS_IOFast.cpp    | 166 ++++++++++++++++++++++++++++++++++++++
+ src/NDS_IOFast.h      |  68 ++++++++++++++++
+ 7 files changed, 441 insertions(+), 8 deletions(-)
+ create mode 100644 src/NDS_IOFast.cpp
+ create mode 100644 src/NDS_IOFast.h
+
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 421b75a..d0e3a27 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -18,6 +18,7 @@
+ 
+ #include "ARMJIT.h"
+ #include "ARMJIT_Memory.h"
++#include "NDS_IOFast.h"
+ #include <string.h>
+ #include <assert.h>
+ #include <unordered_map>
+@@ -92,8 +93,100 @@ u32 ARMJIT::LocaliseCodeAddress(u32 num, u32 addr) const noexcept
+     return 0;
+ }
+ 
++// The direct routes (MELONDS_IOFAST, NDS_IOFast.h): for the addresses below (main RAM, VRAM, the GX FIFO and
++// command ports, and the IRQ, DISPSTAT/VCOUNT and KEYINPUT registers), what NDS::ARM9Read*/ARM9Write* and
++// ARM9IORead*/ARM9IOWrite* would do, line for line, without the virtual calls and the switches. Only for the DS
++// (ConsoleType 0): the DSi overrides those functions. The callers have already ruled out the TCMs, as the chain
++// does.
++template <typename T>
++static inline bool IOFastRead9(melonDS::NDS& nds, u32 addr, T& val)
++{
++    if ((addr >> 24) == 0x02)
++    {
++        val = *(T*)&nds.MainRAM[addr & nds.MainRAMMask];
++        return true;
++    }
++    if (sizeof(T) >= 2 && (addr >> 24) == 0x06)
++    {
++        melonDS::GPU& gpu = nds.GPU;
++        switch (addr & 0x00E00000)
++        {
++        case 0x00000000: gpu.SyncVRAM_ABG(addr, false); val = gpu.ReadVRAM_ABG<T>(addr); return true;
++        case 0x00200000: gpu.SyncVRAM_BBG(addr, false); val = gpu.ReadVRAM_BBG<T>(addr); return true;
++        case 0x00400000: gpu.SyncVRAM_AOBJ(addr, false); val = gpu.ReadVRAM_AOBJ<T>(addr); return true;
++        case 0x00600000: gpu.SyncVRAM_BOBJ(addr, false); val = gpu.ReadVRAM_BOBJ<T>(addr); return true;
++        default:         gpu.SyncVRAM_LCDC(addr, false); val = gpu.ReadVRAM_LCDC<T>(addr); return true;
++        }
++    }
++    if (sizeof(T) == 4)
++    {
++        switch (addr)
++        {
++        case 0x04000004: val = nds.GPU.DispStat[0] | (nds.GPU.VCount << 16); return true;
++        case 0x04000208: val = nds.IME[0]; return true;
++        case 0x04000210: val = nds.IE[0]; return true;
++        case 0x04000214: val = nds.IF[0]; return true;
++        }
++    }
++    else if (sizeof(T) == 2)
++    {
++        switch (addr)
++        {
++        case 0x04000004: val = nds.GPU.DispStat[0]; return true;
++        case 0x04000006: val = nds.GPU.VCount; return true;
++        case 0x04000130: nds.LagFrameFlag = false; val = nds.KeyInput & 0xFFFF; return true;
++        case 0x04000208: val = nds.IME[0]; return true;
++        case 0x04000210: val = nds.IE[0] & 0xFFFF; return true;
++        case 0x04000212: val = nds.IE[0] >> 16; return true;
++        case 0x04000214: val = nds.IF[0] & 0xFFFF; return true;
++        case 0x04000216: val = nds.IF[0] >> 16; return true;
++        }
++    }
++    return false;
++}
++
++template <typename T>
++static inline bool IOFastWrite9(melonDS::NDS& nds, u32 addr, u32 val)
++{
++    if ((addr >> 24) == 0x02)
++    {
++        nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(addr);
++        *(T*)&nds.MainRAM[addr & nds.MainRAMMask] = val;
++        return true;
++    }
++    if (sizeof(T) >= 2 && (addr >> 24) == 0x06)
++    {
++        nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_VRAM>(addr);
++        melonDS::GPU& gpu = nds.GPU;
++        switch (addr & 0x00E00000)
++        {
++        case 0x00000000: gpu.SyncVRAM_ABG(addr, true); gpu.WriteVRAM_ABG<T>(addr, val); return true;
++        case 0x00200000: gpu.SyncVRAM_BBG(addr, true); gpu.WriteVRAM_BBG<T>(addr, val); return true;
++        case 0x00400000: gpu.SyncVRAM_AOBJ(addr, true); gpu.WriteVRAM_AOBJ<T>(addr, val); return true;
++        case 0x00600000: gpu.SyncVRAM_BOBJ(addr, true); gpu.WriteVRAM_BOBJ<T>(addr, val); return true;
++        default:         gpu.SyncVRAM_LCDC(addr, true); gpu.WriteVRAM_LCDC<T>(addr, val); return true;
++        }
++    }
++    // the geometry engine's FIFO (0x04000400-43F) and command ports (0x04000440-5FF): ARM9IOWrite32 hands
++    // these to GPU3D::Write32, which drops them while the geometry engine is off and gives the FIFO port to
++    // WriteToGXFIFO
++    if (sizeof(T) == 4 && addr - 0x04000400 < 0x200)
++    {
++        GPU3D& gpu3d = nds.GPU.GPU3D;
++        if (addr < 0x04000440)
++        {
++            if (gpu3d.GeometryEnabled)
++                gpu3d.WriteToGXFIFO(val);
++        }
++        else
++            gpu3d.Write32(addr, val);
++        return true;
++    }
++    return false;
++}
++
+ template <typename T, int ConsoleType>
+-T SlowRead9(u32 addr, ARMv5* cpu)
++static inline T SlowRead9Impl(u32 addr, ARMv5* cpu)
+ {
+     u32 offset = addr & 0x3;
+     addr &= ~(sizeof(T) - 1);
+@@ -103,6 +196,8 @@ T SlowRead9(u32 addr, ARMv5* cpu)
+         val = *(T*)&cpu->ITCM[addr & 0x7FFF];
+     else if ((addr & cpu->DTCMMask) == cpu->DTCMBase)
+         val = *(T*)&cpu->DTCM[addr & 0x3FFF];
++    else if (ConsoleType == 0 && IOFastOn && IOFastRead9<T>(cpu->NDS, addr, val))
++        ;
+     else if (std::is_same<T, u32>::value)
+         val = NDS::Current->ARM9Read32(addr);
+     else if (std::is_same<T, u16>::value)
+@@ -117,7 +212,14 @@ T SlowRead9(u32 addr, ARMv5* cpu)
+ }
+ 
+ template <typename T, int ConsoleType>
+-T SlowRead7(u32 addr)
++T SlowRead9(u32 addr, ARMv5* cpu)
++{
++    MELONDS_IOSTAT(iostat_Read9, addr & ~(u32)(sizeof(T) - 1), sizeof(T), 1);
++    return SlowRead9Impl<T, ConsoleType>(addr, cpu);
++}
++
++template <typename T, int ConsoleType>
++static inline T SlowRead7Impl(u32 addr)
+ {
+     u32 offset = addr & 0x3;
+     addr &= ~(sizeof(T) - 1);
+@@ -137,7 +239,14 @@ T SlowRead7(u32 addr)
+ }
+ 
+ template <typename T, int ConsoleType>
+-void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
++T SlowRead7(u32 addr)
++{
++    MELONDS_IOSTAT(iostat_Read7, addr & ~(u32)(sizeof(T) - 1), sizeof(T), 1);
++    return SlowRead7Impl<T, ConsoleType>(addr);
++}
++
++template <typename T, int ConsoleType>
++static inline void SlowWrite9Impl(u32 addr, ARMv5* cpu, u32 val)
+ {
+     addr &= ~(sizeof(T) - 1);
+ 
+@@ -150,6 +259,9 @@ void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
+     {
+         *(T*)&cpu->DTCM[addr & 0x3FFF] = val;
+     }
++    else if (ConsoleType == 0 && IOFastOn && IOFastWrite9<T>(cpu->NDS, addr, val))
++    {
++    }
+     else if (std::is_same<T, u32>::value)
+     {
+         NDS::Current->ARM9Write32(addr, val);
+@@ -165,7 +277,14 @@ void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
+ }
+ 
+ template <typename T, int ConsoleType>
+-void SlowWrite7(u32 addr, u32 val)
++void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
++{
++    MELONDS_IOSTAT(iostat_Write9, addr & ~(u32)(sizeof(T) - 1), sizeof(T), 1);
++    SlowWrite9Impl<T, ConsoleType>(addr, cpu, val);
++}
++
++template <typename T, int ConsoleType>
++static inline void SlowWrite7Impl(u32 addr, u32 val)
+ {
+     addr &= ~(sizeof(T) - 1);
+ 
+@@ -177,16 +296,62 @@ void SlowWrite7(u32 addr, u32 val)
+         NDS::Current->ARM7Write8(addr, val);
+ }
+ 
++template <typename T, int ConsoleType>
++void SlowWrite7(u32 addr, u32 val)
++{
++    MELONDS_IOSTAT(iostat_Write7, addr & ~(u32)(sizeof(T) - 1), sizeof(T), 1);
++    SlowWrite7Impl<T, ConsoleType>(addr, val);
++}
++
+ template <bool Write, int ConsoleType>
+ void SlowBlockTransfer9(u32 addr, u64* data, u32 num, ARMv5* cpu)
+ {
+     addr &= ~0x3;
++    MELONDS_IOSTAT(Write ? iostat_Block9Write : iostat_Block9Read, addr, 4, num);
++    if (ConsoleType == 0 && IOFastOn)
++    {
++        // the same per word as SlowWrite9/SlowRead9 (the TCMs first), with the direct routes
++        melonDS::NDS& nds = cpu->NDS;
++        for (u32 i = 0; i < num; i++, addr += 4)
++        {
++            if (addr < cpu->ITCMSize)
++            {
++                if (Write)
++                {
++                    nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_ITCM>(addr);
++                    *(u32*)&cpu->ITCM[addr & 0x7FFF] = data[i];
++                }
++                else
++                    data[i] = *(u32*)&cpu->ITCM[addr & 0x7FFF];
++            }
++            else if ((addr & cpu->DTCMMask) == cpu->DTCMBase)
++            {
++                if (Write)
++                    *(u32*)&cpu->DTCM[addr & 0x3FFF] = data[i];
++                else
++                    data[i] = *(u32*)&cpu->DTCM[addr & 0x3FFF];
++            }
++            else if (Write)
++            {
++                if (!IOFastWrite9<u32>(nds, addr, (u32)data[i]))
++                    nds.ARM9Write32(addr, data[i]);
++            }
++            else
++            {
++                u32 val;
++                if (!IOFastRead9<u32>(nds, addr, val))
++                    val = nds.ARM9Read32(addr);
++                data[i] = val;
++            }
++        }
++        return;
++    }
+     for (u32 i = 0; i < num; i++)
+     {
+         if (Write)
+-            SlowWrite9<u32, ConsoleType>(addr, cpu, data[i]);
++            SlowWrite9Impl<u32, ConsoleType>(addr, cpu, data[i]);
+         else
+-            data[i] = SlowRead9<u32, ConsoleType>(addr, cpu);
++            data[i] = SlowRead9Impl<u32, ConsoleType>(addr, cpu);
+         addr += 4;
+     }
+ }
+@@ -195,12 +360,13 @@ template <bool Write, int ConsoleType>
+ void SlowBlockTransfer7(u32 addr, u64* data, u32 num)
+ {
+     addr &= ~0x3;
++    MELONDS_IOSTAT(Write ? iostat_Block7Write : iostat_Block7Read, addr, 4, num);
+     for (u32 i = 0; i < num; i++)
+     {
+         if (Write)
+-            SlowWrite7<u32, ConsoleType>(addr, data[i]);
++            SlowWrite7Impl<u32, ConsoleType>(addr, data[i]);
+         else
+-            data[i] = SlowRead7<u32, ConsoleType>(addr);
++            data[i] = SlowRead7Impl<u32, ConsoleType>(addr);
+         addr += 4;
+     }
+ }
+@@ -238,6 +404,7 @@ ARMJIT::~ARMJIT() noexcept
+ 
+ void ARMJIT::Reset() noexcept
+ {
++    IOFastInit();
+     JitEnableWrite();
+     ResetBlockCache();
+ 
+diff --git a/src/ARMJIT_Memory.cpp b/src/ARMJIT_Memory.cpp
+index c64bad1..5a0d110 100644
+--- a/src/ARMJIT_Memory.cpp
++++ b/src/ARMJIT_Memory.cpp
+@@ -1393,31 +1393,37 @@ T VRAMRead(u32 addr)
+ 
+ static u8 GPU3D_Read8(u32 addr) noexcept
+ {
++    MELONDS_IOSTAT(iostat_IORead9, addr, 1, 1);  // (the JIT calls these for a known address, past NDS::ARM9IO*)
+     return NDS::Current->GPU.GPU3D.Read8(addr);
+ }
+ 
+ static u16 GPU3D_Read16(u32 addr) noexcept
+ {
++    MELONDS_IOSTAT(iostat_IORead9, addr, 2, 1);  // (the JIT calls these for a known address, past NDS::ARM9IO*)
+     return NDS::Current->GPU.GPU3D.Read16(addr);
+ }
+ 
+ static u32 GPU3D_Read32(u32 addr) noexcept
+ {
++    MELONDS_IOSTAT(iostat_IORead9, addr, 4, 1);  // (the JIT calls these for a known address, past NDS::ARM9IO*)
+     return NDS::Current->GPU.GPU3D.Read32(addr);
+ }
+ 
+ static void GPU3D_Write8(u32 addr, u8 val) noexcept
+ {
++    MELONDS_IOSTAT(iostat_IOWrite9, addr, 1, 1);  // (the JIT calls these for a known address, past NDS::ARM9IO*)
+     NDS::Current->GPU.GPU3D.Write8(addr, val);
+ }
+ 
+ static void GPU3D_Write16(u32 addr, u16 val) noexcept
+ {
++    MELONDS_IOSTAT(iostat_IOWrite9, addr, 2, 1);  // (the JIT calls these for a known address, past NDS::ARM9IO*)
+     NDS::Current->GPU.GPU3D.Write16(addr, val);
+ }
+ 
+ static void GPU3D_Write32(u32 addr, u32 val) noexcept
+ {
++    MELONDS_IOSTAT(iostat_IOWrite9, addr, 4, 1);  // (the JIT calls these for a known address, past NDS::ARM9IO*)
+     NDS::Current->GPU.GPU3D.Write32(addr, val);
+ }
+ 
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index d322e2b..c1e1357 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -43,6 +43,7 @@ add_library(core STATIC
+     GPU3D_Texcache.h
+     Mic.cpp
+     NDS.cpp
++    NDS_IOFast.cpp
+     NDSCart.cpp
+     Platform.h
+     ROMList.h
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index eac3a1d..3f203dc 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -2819,6 +2819,8 @@ bool NDS::ARM7GetMemRegion(u32 addr, bool write, MemRegion* region)
+ 
+ u8 NDS::ARM9IORead8(u32 addr)
+ {
++    MELONDS_IOSTAT(iostat_IORead9, addr, 1, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: return GPU.DispStat[0] & 0xFF;
+@@ -2910,6 +2912,8 @@ u8 NDS::ARM9IORead8(u32 addr)
+ 
+ u16 NDS::ARM9IORead16(u32 addr)
+ {
++    MELONDS_IOSTAT(iostat_IORead9, addr, 2, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: return GPU.DispStat[0];
+@@ -3036,6 +3040,8 @@ u16 NDS::ARM9IORead16(u32 addr)
+ 
+ u32 NDS::ARM9IORead32(u32 addr)
+ {
++    MELONDS_IOSTAT(iostat_IORead9, addr, 4, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: return GPU.DispStat[0] | (GPU.VCount << 16);
+@@ -3160,6 +3166,8 @@ u32 NDS::ARM9IORead32(u32 addr)
+ 
+ void NDS::ARM9IOWrite8(u32 addr, u8 val)
+ {
++    MELONDS_IOSTAT(iostat_IOWrite9, addr, 1, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: GPU.SetDispStat(0, val, 0x00FF); return;
+@@ -3279,6 +3287,8 @@ void NDS::ARM9IOWrite8(u32 addr, u8 val)
+ 
+ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+ {
++    MELONDS_IOSTAT(iostat_IOWrite9, addr, 2, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: GPU.SetDispStat(0, val, 0xFFFF); return;
+@@ -3456,6 +3466,8 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+ 
+ void NDS::ARM9IOWrite32(u32 addr, u32 val)
+ {
++    MELONDS_IOSTAT(iostat_IOWrite9, addr, 4, 1);
++
+     switch (addr)
+     {
+     case 0x04000004:
+@@ -3646,6 +3658,8 @@ void NDS::ARM9IOWrite32(u32 addr, u32 val)
+ 
+ u8 NDS::ARM7IORead8(u32 addr)
+ {
++    MELONDS_IOSTAT(iostat_IORead7, addr, 1, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: return GPU.DispStat[1] & 0xFF;
+@@ -3698,6 +3712,8 @@ u8 NDS::ARM7IORead8(u32 addr)
+ 
+ u16 NDS::ARM7IORead16(u32 addr)
+ {
++    MELONDS_IOSTAT(iostat_IORead7, addr, 2, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: return GPU.DispStat[1];
+@@ -3773,6 +3789,8 @@ u16 NDS::ARM7IORead16(u32 addr)
+ 
+ u32 NDS::ARM7IORead32(u32 addr)
+ {
++    MELONDS_IOSTAT(iostat_IORead7, addr, 4, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: return GPU.DispStat[1] | (GPU.VCount << 16);
+@@ -3852,6 +3870,8 @@ u32 NDS::ARM7IORead32(u32 addr)
+ 
+ void NDS::ARM7IOWrite8(u32 addr, u8 val)
+ {
++    MELONDS_IOSTAT(iostat_IOWrite7, addr, 1, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: GPU.SetDispStat(1, val, 0x00FF); return;
+@@ -3953,6 +3973,8 @@ void NDS::ARM7IOWrite8(u32 addr, u8 val)
+ 
+ void NDS::ARM7IOWrite16(u32 addr, u16 val)
+ {
++    MELONDS_IOSTAT(iostat_IOWrite7, addr, 2, 1);
++
+     switch (addr)
+     {
+     case 0x04000004: GPU.SetDispStat(1, val, 0xFFFF); return;
+@@ -4101,6 +4123,8 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
+ 
+ void NDS::ARM7IOWrite32(u32 addr, u32 val)
+ {
++    MELONDS_IOSTAT(iostat_IOWrite7, addr, 4, 1);
++
+     switch (addr)
+     {
+     case 0x04000004:
+diff --git a/src/NDS.h b/src/NDS.h
+index 729706b..9441cec 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -39,6 +39,7 @@
+ #include "ARMJIT.h"
+ #include "MemRegion.h"
+ #include "ARMJIT_Memory.h"
++#include "NDS_IOFast.h"
+ #include "ARM.h"
+ #include "CRC32.h"
+ #include "DMA.h"
+diff --git a/src/NDS_IOFast.cpp b/src/NDS_IOFast.cpp
+new file mode 100644
+index 0000000..ac73d45
+--- /dev/null
++++ b/src/NDS_IOFast.cpp
+@@ -0,0 +1,166 @@
++/*
++    Copyright 2016-2026 melonDS team
++
++    This file is part of melonDS.
++
++    melonDS is free software: you can redistribute it and/or modify it under
++    the terms of the GNU General Public License as published by the Free
++    Software Foundation, either version 3 of the License, or (at your option)
++    any later version.
++
++    melonDS is distributed in the hope that it will be useful, but WITHOUT ANY
++    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
++
++    You should have received a copy of the GNU General Public License along
++    with melonDS. If not, see http://www.gnu.org/licenses/.
++*/
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <algorithm>
++#include <unordered_map>
++#include <vector>
++
++#include "NDS_IOFast.h"
++#include "NDS.h"
++
++namespace melonDS
++{
++
++static u32 IOStatsFrom = 0;
++
++static u32 ReadIOStatsEnv()
++{
++    const char* e = getenv("MELONDS_IOSTATS");
++    const long v = e ? strtol(e, nullptr, 0) : 0;
++    return v > 0 ? (u32)v : 0;
++}
++
++bool IOStatsOn = (IOStatsFrom = ReadIOStatsEnv()) != 0;
++static bool ReadIOFastEnv()
++{
++    const char* e = getenv("MELONDS_IOFAST");
++    return !(e && e[0] == '0');
++}
++
++bool IOFastOn = ReadIOFastEnv();
++
++void IOFastInit() noexcept
++{
++    IOFastOn = ReadIOFastEnv();
++}
++
++namespace
++{
++
++struct Counts
++{
++    u64 Calls = 0;
++    u64 Words = 0;
++};
++
++struct Stats
++{
++    std::unordered_map<u64, Counts> Table;
++    u32 FirstFrame = ~0u, LastFrame = 0;
++
++    ~Stats() { Print(); }
++
++    void Print()
++    {
++        if (!IOStatsOn || Table.empty())
++            return;
++
++        static const char* const names[iostat_Count] = {
++            "ARM9 JIT slow read",  "ARM9 JIT slow write",  "ARM7 JIT slow read", "ARM7 JIT slow write",
++            "ARM9 JIT block read (LDM)", "ARM9 JIT block write (STM)",
++            "ARM7 JIT block read (LDM)", "ARM7 JIT block write (STM)",
++            "ARM9 IO register read (all callers)", "ARM9 IO register write (all callers)",
++            "ARM7 IO register read (all callers)", "ARM7 IO register write (all callers)",
++        };
++        const u32 frames = LastFrame >= FirstFrame ? LastFrame - FirstFrame + 1 : 1;
++        fprintf(stderr, "melonDS IO stats: frames %u-%u (%u); per kind: total, then the top entries"
++            " (calls; words for blocks; per frame)\n", FirstFrame, LastFrame, frames);
++
++        for (int kind = 0; kind < iostat_Count; kind++)
++        {
++            std::vector<std::pair<u64, Counts>> rows;
++            u64 calls = 0, words = 0;
++            for (auto& it : Table)
++            {
++                if ((int)(it.first >> 40) != kind)
++                    continue;
++                rows.push_back(it);
++                calls += it.second.Calls;
++                words += it.second.Words;
++            }
++            if (rows.empty())
++                continue;
++            std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b)
++                { return a.second.Calls != b.second.Calls ? a.second.Calls > b.second.Calls : a.first < b.first; });
++
++            const bool block = kind >= iostat_Block9Read && kind <= iostat_Block7Write;
++            fprintf(stderr, "  %s: %llu calls (%.1f/frame)", names[kind], (unsigned long long)calls,
++                (double)calls / frames);
++            if (block)
++                fprintf(stderr, ", %llu words (%.1f/frame)", (unsigned long long)words, (double)words / frames);
++            fprintf(stderr, "\n");
++
++            for (size_t i = 0; i < rows.size() && i < 16; i++)
++            {
++                const u32 where = (u32)rows[i].first;
++                const u32 size = (rows[i].first >> 32) & 0xFF;
++                char label[32];
++                if (where == 1)
++                    snprintf(label, sizeof(label), "ITCM");
++                else if (where == 2)
++                    snprintf(label, sizeof(label), "DTCM");
++                else if ((where >> 24) == 0x04)
++                    snprintf(label, sizeof(label), "%08X", where);
++                else
++                    snprintf(label, sizeof(label), "%08X region", where);
++                fprintf(stderr, "    %-16s %2u-bit %12llu (%9.1f/frame)", label, size * 8,
++                    (unsigned long long)rows[i].second.Calls, (double)rows[i].second.Calls / frames);
++                if (block)
++                    fprintf(stderr, " words %12llu", (unsigned long long)rows[i].second.Words);
++                fprintf(stderr, "\n");
++            }
++        }
++    }
++};
++
++Stats IOStatsTable;
++
++}
++
++void IOStatsCount(int kind, u32 addr, u32 size, u32 words) noexcept
++{
++    NDS* nds = NDS::Current;
++    if (!nds)
++        return;
++    const u32 frame = nds->NumFrames;
++    if (frame < IOStatsFrom)
++        return;
++    IOStatsTable.FirstFrame = std::min(IOStatsTable.FirstFrame, frame);
++    IOStatsTable.LastFrame = std::max(IOStatsTable.LastFrame, frame);
++
++    u32 where = addr;
++    if (kind < iostat_IORead9)
++    {
++        const bool arm9 = kind == iostat_Read9 || kind == iostat_Write9
++            || kind == iostat_Block9Read || kind == iostat_Block9Write;
++        if (arm9 && addr < nds->ARM9.ITCMSize)
++            where = 1;
++        else if (arm9 && (addr & nds->ARM9.DTCMMask) == nds->ARM9.DTCMBase)
++            where = 2;
++        else if ((addr >> 24) != 0x04)
++            where = addr & (arm9 ? 0xFF000000 : 0xFF800000);
++    }
++
++    Counts& c = IOStatsTable.Table[((u64)kind << 40) | ((u64)size << 32) | where];
++    c.Calls++;
++    c.Words += words;
++}
++
++}
+diff --git a/src/NDS_IOFast.h b/src/NDS_IOFast.h
+new file mode 100644
+index 0000000..7155c33
+--- /dev/null
++++ b/src/NDS_IOFast.h
+@@ -0,0 +1,68 @@
++/*
++    Copyright 2016-2026 melonDS team
++
++    This file is part of melonDS.
++
++    melonDS is free software: you can redistribute it and/or modify it under
++    the terms of the GNU General Public License as published by the Free
++    Software Foundation, either version 3 of the License, or (at your option)
++    any later version.
++
++    melonDS is distributed in the hope that it will be useful, but WITHOUT ANY
++    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
++
++    You should have received a copy of the GNU General Public License along
++    with melonDS. If not, see http://www.gnu.org/licenses/.
++*/
++
++// IO statistics and the JIT slow paths' direct routes.
++//
++// MELONDS_IOSTATS=n counts, from frame n on, the memory accesses that leave the JIT's fast paths (SlowRead/
++// SlowWrite and SlowBlockTransfer, per CPU, by address: IO registers exactly, other memory by region) and every
++// IO register access (NDS::ARM9IO* / ARM7IO*, whoever makes it: JIT, interpreter or DMA), and prints the top
++// entries to stderr at exit. Off, each counting site costs one predicted-not-taken branch.
++//
++// MELONDS_IOFAST=0 turns off the direct routes the JIT's slow paths take for the hottest addresses (ARMJIT.cpp,
++// ARMJIT_Memory.cpp). Each route does what the NDS::ARM9Read/Write chain does for that address, minus the
++// dispatch; the JIT charges a slow access's cycles in the compiled code, so no timing changes either way.
++
++#ifndef NDS_IOFAST_H
++#define NDS_IOFAST_H
++
++#include "types.h"
++
++namespace melonDS
++{
++
++enum
++{
++    iostat_Read9,       // ARM9 SlowRead* (by address size)
++    iostat_Write9,      // ARM9 SlowWrite*
++    iostat_Read7,
++    iostat_Write7,
++    iostat_Block9Read,  // ARM9 SlowBlockTransfer, LDM (by the first word's address)
++    iostat_Block9Write, // ARM9 SlowBlockTransfer, STM
++    iostat_Block7Read,
++    iostat_Block7Write,
++    iostat_IORead9,     // ARM9 IO register read, any caller
++    iostat_IOWrite9,
++    iostat_IORead7,
++    iostat_IOWrite7,
++    iostat_Count
++};
++
++extern bool IOStatsOn;
++extern bool IOFastOn;
++
++// counts one access of `size` bytes (or a block of `words` words) at addr; only called when IOStatsOn
++void IOStatsCount(int kind, u32 addr, u32 size, u32 words) noexcept;
++// (re)reads MELONDS_IOFAST; ARMJIT::Reset calls it, so a front-end can set it per console
++void IOFastInit() noexcept;
++
++#define MELONDS_IOSTAT(kind, addr, size, words) \
++    do { if (__builtin_expect(IOStatsOn, 0)) IOStatsCount(kind, addr, size, words); } while (0)
++
++}
++
++#endif
+-- 
+2.43.0
+
