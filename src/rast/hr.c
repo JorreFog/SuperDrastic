@@ -514,23 +514,30 @@ static inline __attribute__((always_inline)) void edge_block(uint32_t *col0, uin
     edge_mark(col0, p0.val[3], e0, er, eg, eb);
     edge_mark(col1, p1.val[3], e1, er, eg, eb);
 }
-/* the top bytes of n attribute lines (the polygon ids and flags) as byte planes, 16 pixels from 4 ldr q and two levels of
- * uzp2: the edge marking's id screen reads each line's once instead of twice (a line is c0 or c1 of one pair and a or
- * b of another) and its right neighbours with one unaligned load. 32 pixels a step, the loads at immediate offsets
- * from one pointer in asm: the compiler makes ldp (which holds the A55's load pipe longer in the model) or
- * post-incremented loads (which hold it and write the base back in order) of them otherwise; 21 cycles a step of 16
- * -> ~22 a step of 32. */
+/* the top bytes of n attribute lines (the polygon ids and flags) as byte planes: the edge marking's id screen reads
+ * each line's once instead of twice (a line is c0 or c1 of one pair and a or b of another) and its right neighbours
+ * with one unaligned load. 64 pixels a step: 16 ldr q at immediate offsets from one pointer (asm: the compiler makes
+ * ldp, which holds the A55's load pipe longer in the model, or post-incremented loads, which hold it and write the
+ * base back in order, of them otherwise) and a tbl of each four words' byte 3 (a cycle, latency 4, whatever the
+ * table's size in llvm-mca's A55; two levels of uzp2 were 6 four-cycle operations): 13 modeled cycles a step of 32
+ * pixels against 22. */
 static __attribute__((noinline)) void edge_tplanes(uint8_t *tp, const uint32_t *att, unsigned n) {
+    static const uint8_t top_idx[16] = { 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63 };
+    const uint8x16_t tidx = vld1q_u8(top_idx);
     const uint8_t *p = (const uint8_t *)att, *end = p + (size_t)n * HR_LSTRIDE;
-    _Static_assert(HR_W % 32 == 0, "edge_tplanes: 32 pixels a step");
-    for (; p != end; p += 128, tp += 32) {
-        uint8x16_t q0, q1, q2, q3, q4, q5, q6, q7;
-        __asm__("ldr %q0, [%8]\n\tldr %q1, [%8, #16]\n\tldr %q2, [%8, #32]\n\tldr %q3, [%8, #48]\n\t"
-                "ldr %q4, [%8, #64]\n\tldr %q5, [%8, #80]\n\tldr %q6, [%8, #96]\n\tldr %q7, [%8, #112]"
-                : "=w"(q0), "=w"(q1), "=w"(q2), "=w"(q3), "=w"(q4), "=w"(q5), "=w"(q6), "=w"(q7)
-                : "r"(p), "m"(*(const uint8_t (*)[128])p));
-        vst1q_u8(tp, vuzp2q_u8(vuzp2q_u8(q0, q1), vuzp2q_u8(q2, q3)));
-        vst1q_u8(tp + 16, vuzp2q_u8(vuzp2q_u8(q4, q5), vuzp2q_u8(q6, q7)));
+    _Static_assert(HR_W % 64 == 0, "edge_tplanes: 64 pixels a step");
+    for (; p != end; p += 256, tp += 64) {
+        uint8x16_t q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15;
+        __asm__("ldr %q0, [%16]\n\tldr %q1, [%16, #16]\n\tldr %q2, [%16, #32]\n\tldr %q3, [%16, #48]\n\t"
+                "ldr %q4, [%16, #64]\n\tldr %q5, [%16, #80]\n\tldr %q6, [%16, #96]\n\tldr %q7, [%16, #112]\n\t"
+                "ldr %q8, [%16, #128]\n\tldr %q9, [%16, #144]\n\tldr %q10, [%16, #160]\n\tldr %q11, [%16, #176]\n\t"
+                "ldr %q12, [%16, #192]\n\tldr %q13, [%16, #208]\n\tldr %q14, [%16, #224]\n\tldr %q15, [%16, #240]"
+                : "=&w"(q0), "=&w"(q1), "=&w"(q2), "=&w"(q3), "=&w"(q4), "=&w"(q5), "=&w"(q6), "=&w"(q7),
+                  "=&w"(q8), "=&w"(q9), "=&w"(q10), "=&w"(q11), "=&w"(q12), "=&w"(q13), "=&w"(q14), "=&w"(q15)
+                : "r"(p), "m"(*(const uint8_t (*)[256])p));
+        const uint8x16x4_t w0 = { { q0, q1, q2, q3 } }, w1 = { { q4, q5, q6, q7 } }, w2 = { { q8, q9, q10, q11 } }, w3 = { { q12, q13, q14, q15 } };
+        vst1q_u8(tp, vqtbl4q_u8(w0, tidx)); vst1q_u8(tp + 16, vqtbl4q_u8(w1, tidx));
+        vst1q_u8(tp + 32, vqtbl4q_u8(w2, tidx)); vst1q_u8(tp + 48, vqtbl4q_u8(w3, tidx));
     }
 }
 /* two lines of the bin, marked in place: col0/c0 and col1/c1 (the line below), a = the line above the first, b = the
@@ -555,29 +562,33 @@ static __attribute__((noinline)) void edge_lines(uint32_t *col0, uint32_t *col1,
      * bin; the right neighbours an unaligned load one byte on): 6 loads and 11 operations a block (~25 modeled cycles)
      * instead of edge_block's ~160, and in the stress ROM's edge-marking scene 96% of the blocks pass. While no block
      * is forced two blocks are screened at once (one max and branch: a step of 32 pixels ~55 modeled cycles instead of
-     * ~68), and a pair that does not pass is taken a block at a time. The last block, whose right neighbour is the
-     * clear attribute, is always full. */
+     * ~68), and a pair that does not pass is taken a block at a time. The last block's right neighbours are the clear
+     * attribute, its top byte in the screen's place. */
     const uint8_t *ta = tp, *t0p = tp + HR_W, *t1p = tp + 2 * HR_W, *tbp = tp + 3 * HR_W;
     int force = ((vgetq_lane_u8(lp0, 15) | vgetq_lane_u8(lp1, 15)) & 0x3f) != 0;
     int x = 0;
-#define SCREEN(x) ({ \
+#define SCREEN(x, r0, r1) ({ \
         uint8x16_t t0 = vld1q_u8(t0p + (x)), t1 = vld1q_u8(t1p + (x)); \
         vorrq_u8(vorrq_u8(veorq_u8(vld1q_u8(ta + (x)), t0), veorq_u8(t0, t1)), \
-                 vorrq_u8(veorq_u8(t1, vld1q_u8(tbp + (x))), \
-                          vorrq_u8(veorq_u8(t0, vld1q_u8(t0p + (x) + 1)), veorq_u8(t1, vld1q_u8(t1p + (x) + 1))))); \
+                 vorrq_u8(veorq_u8(t1, vld1q_u8(tbp + (x))), vorrq_u8(veorq_u8(t0, r0), veorq_u8(t1, r1)))); \
     })
     while (x < HR_W - 16) {
-        if (__builtin_expect(!force, 1) && x < HR_W - 32 && !vmaxvq_u8(vandq_u8(vorrq_u8(SCREEN(x), SCREEN(x + 16)), m3f))) {
+        if (__builtin_expect(!force, 1) && x < HR_W - 32 &&
+            !vmaxvq_u8(vandq_u8(vorrq_u8(SCREEN(x, vld1q_u8(t0p + x + 1), vld1q_u8(t1p + x + 1)),
+                                         SCREEN(x + 16, vld1q_u8(t0p + x + 17), vld1q_u8(t1p + x + 17))), m3f))) {
             lp0 = lp1 = vdupq_n_u8(0); x += 32; continue;            /* two blocks without an id edge */
         }
-        uint8x16_t d = SCREEN(x);
+        uint8x16_t d = SCREEN(x, vld1q_u8(t0p + x + 1), vld1q_u8(t1p + x + 1));
         if (__builtin_expect(!force, 1) && !vmaxvq_u8(vandq_u8(d, m3f))) { lp0 = lp1 = vdupq_n_u8(0); x += 16; continue; }
         edge_block(col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 0, k, &lp0, &lp1, er, eg, eb);
         force = ((vgetq_lane_u8(lp0, 15) | vgetq_lane_u8(lp1, 15)) & 0x3f) != 0;
         x += 16;
     }
-#undef SCREEN
+    /* the last block: its right neighbours are the clear attribute */
+    uint8x16_t d = SCREEN(x, vextq_u8(vld1q_u8(t0p + x), k.val[3], 1), vextq_u8(vld1q_u8(t1p + x), k.val[3], 1));
+    if (__builtin_expect(!force, 1) && !vmaxvq_u8(vandq_u8(d, m3f))) return;
     edge_block(col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
+#undef SCREEN
 }
 /* resolves the bin in place and returns its 48 lines (768 pixels each, contiguous): the context's colour lines 1..48,
  * fogged and edge-marked. The resolve's other work, clearing bits 29-31 of each pixel, is left out: the downsample

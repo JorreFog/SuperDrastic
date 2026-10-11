@@ -31,6 +31,8 @@ issue runs it (llvm-mca -mcpu=cortex-a55; it reproduces llvm-mca's cycles on the
     pipe. A 128-bit NEON operation, and a widening one (umull, uaddl, ushll, addhn...), holds one FP pipe for two
     cycles and must open its issue group (be the first of its cycle); shifts, narrows, dup, tbl, conversions, fmov
     and the by-element fmul hold one for a cycle at any width. ldp q holds the load pipe 6 cycles, ld2 4, ldp d/x 2;
+    st2 and st4 hold the store pipe a cycle a register (2, 4), and umov's result (a lane to a general register)
+    takes 4 cycles, fmov's 3 (both as llvm-mca's timeline shows them);
   - results are written back in program order (stores excepted): an instruction whose result would be written
     before an earlier one's waits, so a load or a multiply delays the short operations behind it, and a branch
     (an issue slot) waits for the block's last results to be written.
@@ -224,7 +226,8 @@ def latency(b, rest, q, I):
              "sqrdmulh", "sqdmull", "zip1", "zip2", "uzp1", "uzp2", "trn1", "trn2", "tbl", "tbx", "bit", "bif", "bsl",
              "movi"): return 4
     if b == "dup": return 2 if q else 4
-    if b in ("fmov", "umov", "smov"): return 3
+    if b in ("umov", "smov"): return 4                                           # (a lane to a general register)
+    if b == "fmov": return 3
     if b in ("mov", "ins") and re.search(r"\]\s*,\s*[wx]", rest): return 4        # insert from a general register
     if b in ("and", "orr", "eor", "bic", "orn", "mov", "mvn", "mvni", "not"): return 1
     if b in ("uaddl", "uaddl2", "saddl", "uaddw", "uaddw2", "saddw", "addhn", "addhn2", "raddhn", "subhn", "abs",
@@ -253,6 +256,7 @@ def machine(I, b, rest, q, ops):
         if I.mem[0] == "st":
             I.unit, I.wb = "st", False
             if wbase: I.uops = 2
+            if b in ("st1", "st2", "st3", "st4"): I.occ = len(re.findall(r"v\d+", ops[0]))  # (a cycle a register)
         else:
             I.unit = "ld"
             if b == "ldp":
@@ -279,7 +283,7 @@ UNITS = {"alu": (0, 1), "imac": (2,), "fp": (3, 4), "mac": (5, 6), "ld": (7,), "
 
 class Machine:
     """the in-order issue state: the current cycle and its issued micro-ops, when each unit and register is free, the
-    last writeback"""
+    last writeback (when() and issue() are the climb's inner loop: plain loops and locals, no generators)"""
     __slots__ = ("cycle", "used", "free", "ready", "lastwb")
     def __init__(self):
         self.cycle, self.used, self.lastwb = 0, 0, 0
@@ -297,10 +301,16 @@ class Machine:
         for r in I.uses:
             x = ready.get(r, 0)
             if x > t: t = x
-        if I.wb and self.lastwb - I.wlat > t: t = self.lastwb - I.wlat
+        if I.wb:
+            x = self.lastwb - I.wlat
+            if x > t: t = x
         f = self.free
-        u = min(f[k] for k in I.unit)
-        if u > t: t = u
+        u = I.unit
+        x = f[u[0]]
+        if len(u) > 1:
+            y = f[u[1]]
+            if y < x: x = y
+        if x > t: t = x
         if t == self.cycle and (self.used + I.uops > 2 or (I.bg and self.used)): t += 1
         return t
     def issue(self, I, t=None):
@@ -308,8 +318,12 @@ class Machine:
         if t > self.cycle: self.cycle, self.used = t, 0
         self.used += I.uops
         f = self.free
-        k = min(I.unit, key=f.__getitem__); f[k] = t + I.occ
-        for d, l in I.dlat: self.ready[d] = t + l
+        u = I.unit
+        k = u[0]
+        if len(u) > 1 and f[u[1]] < f[k]: k = u[1]
+        f[k] = t + I.occ
+        ready = self.ready
+        for d, l in I.dlat: ready[d] = t + l
         if I.wb: self.lastwb = t + I.lat
         return t
     def key(self, regs):
@@ -532,8 +546,9 @@ def climb_loop(lines, start, end, evals, seed=1):
     """A loop's steady path, lines[start:end] (from its head label to its jump back; its conditional branches not
     taken, kerngen.py's pipelined loops), reordered as a whole: the blocks were scheduled one at a time, each for its
     own branch, but in the loop the next group's head (whose results the next step reads first) competes with the
-    current group's colour stage in one block. A hill climb on the machine model running the path three times over:
-    each step moves one instruction of a block to another place its dependences (dag()) allow, after its last
+    current group's colour stage in one block. A hill climb on the machine model running the path twice over (the
+    second pass carries the first's state, as the loop does; three passes found the same orders): each step moves one
+    instruction of a block to another place its dependences (dag()) allow, after its last
     predecessor and before its first successor (labels and branches stay), and keeps the order when the loop runs no
     slower; `evals` such moves, fewer when a quarter of them pass without a gain. Deterministic (its own xorshift
     generator, seeded); identical paths are climbed once."""
@@ -563,7 +578,7 @@ def climb_loop(lines, start, end, evals, seed=1):
             items.append(ins); orders.append(list(range(len(ins)))); preds.append([[j for j, _ in pi] for pi in p]); succ.append(sc)
         def run(orders):
             m = Machine()
-            for _ in range(3):
+            for _ in range(2):
                 for it, o in zip(items, orders):
                     if o is None:
                         if it is BR: m.issue(BR)
