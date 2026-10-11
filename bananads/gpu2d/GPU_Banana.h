@@ -44,10 +44,10 @@ namespace melonDS
 // (BananaRenderer2D::Prepare*), the 3D layer's line and the VRAM or FIFO display line when shown, and, through a
 // copy log, every VRAM block, palette half and OAM that changed since the last line. The 2D thread applies a job's
 // log to the engines' own copies of that memory, then draws the job into the back framebuffer, in order. So every
-// line is drawn from memory as it was at its own time, and the emulator never waits for the drawing, except:
-// before SwapBuffers (the frontend reads the framebuffer after the frame), Reset, Stop and savestates; when the job
-// ring or the log is full; and while display capture is on, when the emulator's thread waits for the 2D thread
-// and draws the lines itself (capture reads them back into VRAM at their time).
+// line is drawn from memory as it was at its own time, and the emulator never waits for the drawing, except
+// before SwapBuffers (the frontend reads the framebuffer after the frame), Reset, Stop and savestates, and when the
+// job ring or the log is full. While display capture is on, unit A is drawn on the emulator's thread (capture reads
+// its lines back into VRAM at their time) and only unit B goes to the 2D thread.
 class BananaRenderer : public SoftRenderer
 {
 public:
@@ -81,6 +81,7 @@ private:
         enum : u8 { Scanline, Sprites } Kind;
         bool ScreensEnabled;
         bool HasDisplay;            // Display holds unit A's VRAM or FIFO display line
+        bool OnlyB;                 // unit A is drawn on the emulator's thread (display capture)
         u32 Line;                   // VCOUNT for a scanline, the sprite line for sprites
         u32* DstA;
         u32* DstB;
@@ -100,7 +101,7 @@ private:
     void WorkerLoop();
     void StopWorker();
     // the copy log: a ring of {destination, length, data} records, 16-byte aligned. LogWrite (the emulator's
-    // thread) and LogRead (whichever thread draws, as it applies records) count bytes since the start.
+    // thread) and LogRead (the 2D thread, as it applies records) count bytes since the start.
     static constexpr u32 LogSize = 4 << 20;
     static constexpr u32 LogChunk = 64 << 10;
     struct LogRecord { u8* Dst; u64 Len; };   // Dst null: skip to the ring's end
@@ -112,6 +113,9 @@ private:
     void LogReserve(u64 bytes);
     void ApplyLog(u64 end);
     void DrawScanlineInPlace(u32 line);
+    void SetAInPlace(bool on);
+    static void DirectCopy(void*, void* dst, const void* src, u32 len) { memcpy(dst, src, len); }
+    bool AInPlace = false;      // unit A drawn on the emulator's thread, its copies written directly
     void PrepareScanlineJob(Job& job, u32 line, u32*& line3d);
     void PrepareSpritesJob(Job& job, u32 line);
 

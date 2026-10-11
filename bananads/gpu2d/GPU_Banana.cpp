@@ -155,27 +155,48 @@ void BananaRenderer::DrawScanline(u32 line)
         return;
     }
 
-    if (GPU.CaptureEnable)
-    {
-        // display capture writes the lines back into VRAM at their time: drawn here and now
-        if (Drain2D()) StatWaits++;
-        Job& job = NewJob();
-        u32* line3d;
-        PrepareScanlineJob(job, line, line3d);
-        Execute(job);
-        StatInPlace++;
-        if (job.Line < 192)
-        {
-            Output3D = line3d;
-            DoCapture(job.Line);
-        }
-        return;
-    }
+    // display capture writes unit A's lines back into VRAM at their time: unit A is drawn here and now
+    SetAInPlace(GPU.CaptureEnable);
 
     Job& job = NewJob();
     u32* line3d;
     PrepareScanlineJob(job, line, line3d);
+    job.OnlyB = AInPlace;
     Submit();
+
+    if (AInPlace)
+    {
+        // (the 2D thread reads this job too, for unit B; neither writes it)
+        StatInPlace++;
+        if (job.Line < 192)
+        {
+            static_cast<BananaRenderer2D&>(*Rend2D_A).DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D);
+            if (job.ScreensEnabled)
+                OutputLineA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
+            else
+                FillLine(job.DstA, 0xFF000000);
+            Output3D = line3d;
+            DoCapture(job.Line);
+        }
+        else
+            FillLine(job.DstA, job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000);
+    }
+}
+
+// unit A on the emulator's thread or not: switched with the 2D thread done with unit A's jobs
+void BananaRenderer::SetAInPlace(bool on)
+{
+    if (on == AInPlace)
+        return;
+    auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
+    if (on)
+    {
+        if (Drain2D()) StatWaits++;
+        a.SetCopyFn(DirectCopy, nullptr);
+    }
+    else
+        a.SetCopyFn(CopyHook, this);  // (the 2D thread sees what was drawn here through the next job's release)
+    AInPlace = on;
 }
 
 void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
@@ -273,21 +294,18 @@ void BananaRenderer::DrawSprites(u32 line)
         return;
     }
 
-    if (GPU.CaptureEnable)
-    {
-        if (Drain2D()) StatWaits++;
-        Job& job = NewJob();
-        PrepareSpritesJob(job, line);
-        Execute(job);
-        return;
-    }
+    SetAInPlace(GPU.CaptureEnable);
 
     Job& job = NewJob();
     PrepareSpritesJob(job, line);
+    job.OnlyB = AInPlace;
     Submit();
+
+    if (AInPlace)
+        static_cast<BananaRenderer2D&>(*Rend2D_A).DrawSpritesFrom(job.Line, job.Regs[0]);
 }
 
-// on the 2D thread (or the emulator's thread, while the 2D thread is idle)
+// on the 2D thread
 void BananaRenderer::Execute(Job& job)
 {
     auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
@@ -295,33 +313,35 @@ void BananaRenderer::Execute(Job& job)
 
     ApplyLog(job.LogEnd);
 
+    bool doA = !job.OnlyB;
+
     if (job.Kind == Job::Sprites)
     {
-        a.DrawSpritesFrom(job.Line, job.Regs[0]);
+        if (doA) a.DrawSpritesFrom(job.Line, job.Regs[0]);
         b.DrawSpritesFrom(job.Line, job.Regs[1]);
         return;
     }
 
     if (job.Line < 192)
     {
-        a.DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D);
+        if (doA) a.DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D);
         b.DrawScanlineFrom(job.Line, job.Regs[1], job.Line3D);
 
         if (job.ScreensEnabled)
         {
-            OutputLineA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
+            if (doA) OutputLineA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
             OutputLineB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB);
         }
         else
         {
-            FillLine(job.DstA, 0xFF000000);
+            if (doA) FillLine(job.DstA, 0xFF000000);
             FillLine(job.DstB, 0xFF000000);
         }
     }
     else
     {
         u32 c = job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000;
-        FillLine(job.DstA, c);
+        if (doA) FillLine(job.DstA, c);
         FillLine(job.DstB, c);
     }
 }
@@ -334,7 +354,8 @@ void BananaRenderer::Execute(Job& job)
 // (acquire) and publishes each with Tail's release. The copy log works the same way with LogWrite and LogRead: a
 // job's records are written before the job is published, and the space of applied records is reused only after
 // LogRead's release. The 2D thread owns the engines' drawing state and copies; the emulator's thread touches them
-// only with Tail == Head (Drain2D: capture, Reset, savestates, switching the thread off).
+// only with Tail == Head (Drain2D: Reset, savestates, switching the thread off), except unit A's while display
+// capture is on (SetAInPlace waits for the 2D thread first; its jobs then leave unit A alone).
 // The 2D thread sleeps on Wake when it has caught up; Kick wakes it every KickBatch jobs, at VBlank, and whenever
 // the emulator's thread is about to wait for it.
 
@@ -358,6 +379,7 @@ void BananaRenderer::SetThreaded2D(bool on)
     Kicked = 0;
     KickPending = false;
     Quit = false;
+    AInPlace = false;
     static_cast<BananaRenderer2D&>(*Rend2D_A).UseCopies(CopyHook, this);
     static_cast<BananaRenderer2D&>(*Rend2D_B).UseCopies(CopyHook, this);
     Thread2D = true;
@@ -378,8 +400,9 @@ void BananaRenderer::StopWorker()
     Thread2D = false;
     static_cast<BananaRenderer2D&>(*Rend2D_A).UseCopies(nullptr, nullptr);
     static_cast<BananaRenderer2D&>(*Rend2D_B).UseCopies(nullptr, nullptr);
+    AInPlace = false;
     Platform::Log(Platform::LogLevel::Info,
-                  "[2d] 2D thread: %llu jobs, %llu lines drawn in place (display capture), %.1f MB through the copy "
+                  "[2d] 2D thread: %llu jobs, %llu lines with unit A drawn in place (display capture), %.1f MB through the copy "
                   "log, %llu waits for the thread (capture, full ring or log)\n",
                   (unsigned long long)StatJobs, (unsigned long long)StatInPlace, StatLogBytes / 1048576.0,
                   (unsigned long long)StatWaits);
@@ -424,7 +447,7 @@ void BananaRenderer::LogReserve(u64 bytes)
         std::this_thread::yield();
 }
 
-// whichever thread draws the job (the 2D thread, or the emulator's while the 2D thread is idle)
+// the 2D thread, before it draws a job
 void BananaRenderer::ApplyLog(u64 end)
 {
     u64 rd = LogRead.load(std::memory_order_relaxed);

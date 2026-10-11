@@ -105,6 +105,7 @@ public:
 
     typedef void (*CopyFn)(void* ctx, void* dst, const void* src, u32 len);
     void UseCopies(CopyFn copy, void* ctx);   // copy null: back to GPU's memory
+    void SetCopyFn(CopyFn copy, void* ctx) { CopyTo = copy; CopyCtx = ctx; }  // (after UseCopies)
     void Resync() { NeedResync = true; }      // copy all of GPU's VRAM flats at the next Prepare*
 
 private:
