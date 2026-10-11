@@ -315,16 +315,16 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   two uzp2 .8h and a uzp2 .16b (a cycle whatever the table's size in llvm-mca's A55), which needs the four in
   consecutive registers: the allocator reserves a quad when a group's first value is produced (the resolve's loads as
   two quads, its even pixels made in place of one after the odd ones, the bitmap pass's loads as a quad; one set in
-  flight, two left no quad free), and a third line for the fog-only resolve (res2_line_raw_asm: the words split unmasked
-  as DraStic's modulate_*_resolve write them, the entries from the raw alpha bytes as compvis.h takes them) replaces
-  split_line and the table pass after it. llvm-mca, whole functions: res2_line_asm 708 -> 664 cycles, comp_vis_line_asm
-  469 -> 411, the raw line 595 against ~320 + 411. Modeled A55 cycles a frame (against dd36c2d's profiles): the field
-  scene S7 at 2x res2_line_asm 0.271 -> 0.255 M, at 3x comp_vis_line_asm 0.179 -> 0.157 M. `t_resolve.c` (res2_resolve's
-  block and entries against DraStic's resolve and the port; the fx test's fog-only modes now return entries, which it
-  checks against the port on DraStic's block: it failed a first build whose raw line read its weights through the wrong
-  pointer, which the scene cycle with the compositor's checks passed: its scenes never take the fog-only resolve),
-  `t_comp_hook.c`, the scene cycle with the compositor's checks (its bins as DraStic's renderer's to 69600 bins, 5809
-  tables against the C port, 0 differ).
+  flight, two left no quad free), and a third line for the fog-only resolve (res2_line_raw_asm: the words split
+  unmasked as DraStic's modulate_*_resolve write them, the entries from the raw alpha bytes as compvis.h takes them)
+  replaces split_line and the table pass after it. llvm-mca, whole functions: res2_line_asm 708 -> 664 cycles,
+  comp_vis_line_asm 469 -> 411, the raw line 595 against ~320 + 411. Modeled A55 cycles a frame (against dd36c2d's
+  profiles): the field scene S7 at 2x res2_line_asm 0.271 -> 0.255 M, at 3x comp_vis_line_asm 0.179 -> 0.157 M.
+  `t_resolve.c` (res2_resolve's block and entries against DraStic's resolve and the port; the fx test's fog-only modes
+  now return entries, which it checks against the port on DraStic's block: it failed a first build whose raw line read
+  its weights through the wrong pointer, which the scene cycle with the compositor's checks passed: its scenes never
+  take the fog-only resolve), `t_comp_hook.c`, the scene cycle with the compositor's checks (its bins as DraStic's
+  renderer's to 69600 bins, 5809 tables against the C port, 0 differ).
   Fifth round, overdraw (`defer.c`, the deferred kernels). Measured first, per bin (a C NEON build's RAST_STATS): the
   stress ROM writes 1.5 opaque pixels per covered one (1.25-1.75 in every bin), the field scene S7 1.0 everywhere, the
   fog and edge-marking scene S4 1.15 (1.0 in 75% of its bins, up to 2.25 in its heaviest); polygons whose depth test
