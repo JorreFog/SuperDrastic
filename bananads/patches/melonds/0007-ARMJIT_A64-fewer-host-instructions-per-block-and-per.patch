@@ -1,14 +1,15 @@
-From 6ac8de7beb78d53e9ba1ab53e12f50705677a0e5 Mon Sep 17 00:00:00 2001
+From e3b96e8cef2a8e3046ca04300e1f4684676aebe6 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
-Date: Sun, 11 Oct 2026 20:15:59 +0000
+Date: Sun, 11 Oct 2026 20:18:18 +0000
 Subject: [PATCH] ARMJIT_A64: fewer host instructions per block and per exit
 
 Each change is on by default and exact (same cycles, memory and pictures). MELONDS_JIT_OLDCODEGEN=1
 turns all of them off (the code is then what patches 0001-0006 generate); MELONDS_JIT_NO<name>=1
 turns off one. All are read once, when the compiler is created.
 
-- FASTENTRY: the fast memory base (x26) is set by a four-instruction prologue at each block's
-  entry, which the runtime dispatches to; link slots and DynExit enter past it (x26 is callee-saved
+- FASTENTRY: the fast memory base (x26) is set by a prologue at each block's entry (MOVZ and a
+  MOVK per other non-zero halfword: the same size for all of a CPU's blocks), which the runtime
+  dispatches to; link slots and DynExit enter past it (x26 is callee-saved
   and only blocks of the same CPU set it), so a linked block doesn't reload it.
 - CONDEXIT: a conditional branch with a constant target ending a block gets a known exit each way
   (ExitCheck and a link slot), instead of DynExit's lookup; the condition is checked again on the
@@ -58,12 +59,12 @@ ed0n DynExit, eb00 the rest), and MELONDS_JIT_PERFDIR puts the map and code dump
 ---
  src/ARMJIT_A64/ARMJIT_ALU.cpp       |  15 +-
  src/ARMJIT_A64/ARMJIT_Branch.cpp    |  60 ++-
- src/ARMJIT_A64/ARMJIT_Compiler.cpp  | 589 +++++++++++++++++++++++++---
+ src/ARMJIT_A64/ARMJIT_Compiler.cpp  | 598 +++++++++++++++++++++++++---
  src/ARMJIT_A64/ARMJIT_Compiler.h    |  69 +++-
  src/ARMJIT_A64/ARMJIT_LoadStore.cpp |  41 +-
  src/dolphin/Arm64Emitter.cpp        |  10 +
  src/dolphin/Arm64Emitter.h          |   4 +
- 7 files changed, 706 insertions(+), 82 deletions(-)
+ 7 files changed, 715 insertions(+), 82 deletions(-)
 
 diff --git a/src/ARMJIT_A64/ARMJIT_ALU.cpp b/src/ARMJIT_A64/ARMJIT_ALU.cpp
 index 1368c7b..01b8df2 100644
@@ -218,10 +219,10 @@ index c4af33b..ca47bf0 100644
      SetJumpTarget(skipExecute);
      Comp_AddCycles_C(true);
 diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-index ee12807..cb021c6 100644
+index ee12807..be5addb 100644
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-@@ -265,6 +265,26 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -265,6 +265,34 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
  #endif
      SetCodePtr(0);
  
@@ -242,13 +243,21 @@ index ee12807..cb021c6 100644
 +        OptLazyFlags = OptLoopRegs && OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
 +        FlagsWatch = OptLazyFlags;
 +        OptFoldExit = OptCondExit && !getenv("MELONDS_JIT_NOFOLDEXIT") && !getenv("MELONDS_JIT_NOLINK");
-+        EntrySkip[0] = EntrySkip[1] = OptFastEntry ? 16 : 0;
++        // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
++        for (int num = 0; num < 2; num++)
++        {
++            const u64 base = (u64)(uintptr_t)(num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
++            u32 n = 1;
++            for (int hw = 1; hw < 4; hw++)
++                n += ((base >> (16 * hw)) & 0xFFFF) != 0;
++            EntrySkip[num] = OptFastEntry ? 4 * n : 0;
++        }
 +    }
 +
      for (int i = 0; i < 3; i++)
      {
          JumpToFuncs9[i] = Gen_JumpTo9(i);
-@@ -358,6 +378,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -358,6 +386,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
          RET();
      }
  
@@ -257,7 +266,7 @@ index ee12807..cb021c6 100644
      for (int consoleType = 0; consoleType < 2; consoleType++)
      {
          for (int num = 0; num < 2; num++)
-@@ -379,7 +401,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -379,7 +409,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
                      {
                          MOV(W1, rdMapped);
                      }
@@ -268,7 +277,7 @@ index ee12807..cb021c6 100644
                      if (consoleType == 0)
                      {
                          switch ((8 << size) |  num)
-@@ -405,7 +429,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -405,7 +437,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
                          }
                      }
                      
@@ -279,7 +288,7 @@ index ee12807..cb021c6 100644
                      RET();
  
                      for (int signextend = 0; signextend < 2; signextend++)
-@@ -413,7 +439,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -413,7 +447,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
                          PatchedLoadFuncs[consoleType][num][size][signextend][reg] = GetRXPtr();
                          if (num == 0)
                              MOV(X1, RCPU);
@@ -290,7 +299,7 @@ index ee12807..cb021c6 100644
                          if (consoleType == 0)
                          {
                              switch ((8 << size) |  num)
-@@ -438,7 +466,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -438,7 +474,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
                              case 9: QuickCallFunction(X3, SlowRead7<u8, 1>); break;
                              }
                          }
@@ -301,7 +310,7 @@ index ee12807..cb021c6 100644
                          if (size == 32)
                              MOV(rdMapped, W0);
                          else if (signextend)
-@@ -462,10 +492,17 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -462,10 +500,17 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
      SetCodeBase((u8*)GetRWPtr(), (u8*)GetRXPtr());
  
      // DynExit's code base, now that it is known
@@ -321,7 +330,7 @@ index ee12807..cb021c6 100644
          p[0] = 0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 17;                       // movz x17, #.., lsl #0
          for (int hw = 1; hw < 4; hw++)
              p[hw] = 0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 17;  // movk x17, #.., lsl #16*hw
-@@ -475,11 +512,21 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -475,11 +520,21 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
      LinkBlocks = !getenv("MELONDS_JIT_NOLINK");
      if (getenv("MELONDS_JIT_PERFMAP"))
      {
@@ -346,7 +355,7 @@ index ee12807..cb021c6 100644
      }
  }
  
-@@ -723,21 +770,78 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+@@ -723,21 +778,78 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
          if (ConstantCycles)
              ADD(RCycles, RCycles, ConstantCycles);
          if (taken)
@@ -430,7 +439,7 @@ index ee12807..cb021c6 100644
  {
      if (!LinkBlocks)
      {
-@@ -745,24 +849,97 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter)
+@@ -745,24 +857,97 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter)
          return;
      }
  
@@ -531,7 +540,7 @@ index ee12807..cb021c6 100644
      MOVP2R(X16, slotRX);
      MOVP2R(X17, &melonds_jit_link[0]);
      STP(INDEX_SIGNED, X16, RCPU, X17, 0);
-@@ -778,18 +955,45 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -778,18 +963,45 @@ void Compiler::Gen_ExitStubs(int num)
      // Cycles = 0, and on (a return to the exit's slot) while Timestamp < Target. Back to the loop is a return
      // to ARM_Ret, which keeps the return stack in step.
      u64* ts = num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp;   // its Target is the next u64
@@ -582,7 +591,7 @@ index ee12807..cb021c6 100644
          STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));   // (the next block reads it from memory)
          RET();
          SetJumpTarget(stop);
-@@ -797,36 +1001,65 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -797,36 +1009,65 @@ void Compiler::Gen_ExitStubs(int num)
          MOVP2R(X30, (void*)ARM_Ret);
          RET();
      }
@@ -668,7 +677,7 @@ index ee12807..cb021c6 100644
          LDR(INDEX_UNSIGNED, X16, RCPU, offsetof(ARM, FastBlockLookup));
          LSR(W17, W17, 1);
          LDR(X16, X16, ArithOption(X17, true));
-@@ -834,11 +1067,21 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -834,11 +1075,21 @@ void Compiler::Gen_ExitStubs(int num)
              ORRI2R(W0, W0, 1);
          CMP(X0, X16, ArithOption(X16, ST_LSR, 32));
          FixupBranch miss = B(CC_NEQ);
@@ -695,7 +704,7 @@ index ee12807..cb021c6 100644
          ADD(X16, X17, W16, ArithOption(W16));   // + the entry's offset (uxtw)
          BR(X16);
          SetJumpTarget(stop);
-@@ -846,11 +1089,110 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -846,11 +1097,111 @@ void Compiler::Gen_ExitStubs(int num)
          SetJumpTarget(outside);
          SetJumpTarget(miss);
          QuickTailCall(X16, ARM_Ret);
@@ -713,9 +722,9 @@ index ee12807..cb021c6 100644
 +    {
 +        DynExit[num][0] = DynExit[num][1];
 +        DynExitBase[num][0] = DynExitBase[num][1];
-     }
- }
- 
++    }
++}
++
 +void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
 +{
 +    // A conditional immediate branch ending the block (FoldCondExit), its taken way: what the block's end does
@@ -785,28 +794,29 @@ index ee12807..cb021c6 100644
 +            : (k == ARMInstrInfo::ak_LDM || k == ARMInstrInfo::ak_STM || k == ARMInstrInfo::ak_MSR_IMM
 +                || k == ARMInstrInfo::ak_MSR_REG || k == ARMInstrInfo::ak_MRS || k == ARMInstrInfo::ak_BLX_IMM))
 +            return false;
-+    }
+     }
 +    return true;
 +}
 +
 +void Compiler::Comp_EntryPrologue()
 +{
-+    // The entry the runtime dispatches to: x26 = the CPU's fast memory base, always four instructions
-+    // (EntrySkip). Exits that go straight on into a block (link slots, DynExit) enter past it: x26 is callee-saved
-+    // and only blocks of the same CPU set it, so it still holds the base there.
++    // The entry the runtime dispatches to: x26 = the CPU's fast memory base, in EntrySkip[Num] bytes (the same for
++    // all its blocks). Exits that go straight on into a block (link slots, DynExit) enter past it: x26 is
++    // callee-saved and only blocks of the same CPU set it, so it still holds the base there.
 +    const u64 base = (u64)(uintptr_t)(Num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
 +    Write32(0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 26);                          // movz x26, #.., lsl #0
 +    for (int hw = 1; hw < 4; hw++)
-+        Write32(0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 26);   // movk x26, #.., lsl #16*hw
-+}
-+
++        if ((base >> (16 * hw)) & 0xFFFF)
++            Write32(0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 26);   // movk x26, #.., lsl #16*hw
+ }
+ 
  void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
  {
 +    entry += EntrySkip[cpu->Num];   // (past the entry prologue)
      const u32 off = (u32)(slotRX - GetRXBase());
      auto it = LinkSlots.find(off);
      if (it == LinkSlots.end() || it->second.r15 != cpu->R[15]
-@@ -864,7 +1206,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+@@ -864,7 +1215,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
      *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
      NDS.JIT.JitEnableExecute();
      FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
@@ -815,7 +825,7 @@ index ee12807..cb021c6 100644
  }
  
  void Compiler::UnlinkBlock(JitBlockEntry entry)
-@@ -909,6 +1251,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -909,6 +1260,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
  
      JitBlockEntry res = (JitBlockEntry)GetRXPtr();
      const ptrdiff_t farStart = OtherCodeRegion;
@@ -828,7 +838,7 @@ index ee12807..cb021c6 100644
  
      Thumb = thumb;
      Num = cpu->Num;
-@@ -918,15 +1266,47 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -918,15 +1275,47 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
      CPSRDirty = false;
      InvalidateHostFlags();
  
@@ -877,7 +887,7 @@ index ee12807..cb021c6 100644
  
          CompileFunc comp = Thumb
              ? T_Comp[CurInstr.Info.Kind]
-@@ -934,19 +1314,53 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -934,19 +1323,53 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
  
          Exit = i == (instrsCount - 1) || (CurInstr.BranchFlags & branch_FollowCondNotTaken);
  
@@ -935,7 +945,7 @@ index ee12807..cb021c6 100644
              {
                  MOVI2R(W0, (s32)CurInstr.CodeCycles);
                  STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CodeCycles));
-@@ -958,6 +1372,25 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -958,6 +1381,25 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
              SaveCycles();
              SaveCPSR();
              RegCache.Flush();
@@ -961,7 +971,7 @@ index ee12807..cb021c6 100644
          }
          else
              RegCache.Prepare(Thumb, i);
-@@ -1012,7 +1445,17 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1012,7 +1454,17 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
  
                  Comp_BranchSpecialBehaviour(true);
  
@@ -980,7 +990,7 @@ index ee12807..cb021c6 100644
                  {
                      if (IrregularCycles || (CurInstr.BranchFlags & branch_FollowCondTaken))
                      {
-@@ -1049,7 +1492,24 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1049,7 +1501,24 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
          }
      }
  
@@ -1006,7 +1016,7 @@ index ee12807..cb021c6 100644
  
      if (ConstantCycles)
          ADD(RCycles, RCycles, ConstantCycles);
-@@ -1060,11 +1520,28 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1060,11 +1529,28 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
          if (!last.Info.Branches())
              Comp_Exit(true, R15, Thumb);
          else if (LastJumpKnown && !cond)
