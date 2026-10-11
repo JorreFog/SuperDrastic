@@ -321,7 +321,9 @@ static void *worker_main(void *arg) {
 }
 
 /* a DraStic thread that found no bin left: until the bins the workers still render are finished (a short spin,
- * then a futex wait on qdone, woken by each finished bin while someone waits; 1 ms timeouts as a safety net) */
+ * then a futex wait on qdone, woken by each finished bin while someone waits; 1 ms timeouts as a safety net against a
+ * missed wake-up, not a bound: a worker that died mid-bin would hang the frame here, as a dead DraStic helper hangs
+ * update_frame_3d_4x) */
 static unsigned qwaiters;               /* atomic: threads in wait_done's futex wait */
 static void wait_done(void) {
     unsigned d;
@@ -342,7 +344,14 @@ static int threaded_3d(const uint8_t *ctx) {
     return *(const uint32_t *)(cfg + CFG_THREADED_3D) != 0;
 }
 
-/* the first DraStic thread of a frame that claims: the workers' contexts get its header, and they wake */
+/* the first DraStic thread of a frame that claims: the workers' contexts get its header, and they wake. The copy is
+ * the header, CTX_SYS..CTX_SIZE (0x24000..0x24100): what our bin loop, the resolve and comp_bin read of a context
+ * besides its lines are CTX_SYS, CTX_GEOM (the pointers, the same in every render context), CTX_LINEMASK and
+ * CTX_FOGUSED (written per bin by the loop and the kernels, read by the resolve), CTX_NO_EDGE, CTX_FIRST_BIN and
+ * CTX_BIN_STRIDE (DraStic's thread assignment, read by sched_start; the worker's first bin is set below). None of the
+ * header is a per-thread pointer, and DraStic's threads signal with flags of their own outside the contexts (the done
+ * flags update_frame_3d_4x waits for), so nothing a DraStic thread writes during the frame is copied mid-frame; the
+ * workers' line buffers are their own. */
 static void wake_workers(const uint8_t *ctx, unsigned gen) {
     pthread_mutex_lock(&wk_lock);
     if (wk_gen != gen) {
@@ -394,7 +403,7 @@ int sched_next(sched_it *it) {
     if (it->dyn == 1) {
         /* the first bin of the frame's order whose bit this thread sets (the bins before it.k are taken) */
         while (b < 0 && it->k < NBINS) {
-            unsigned c = order[it->k++];
+            unsigned c = __atomic_load_n(&order[it->k++], __ATOMIC_RELAXED);
             if (!(__atomic_fetch_or(&claimed, 1ull << c, __ATOMIC_RELAXED) & 1ull << c)) b = (int)c;
         }
         /* with workers (woken for this frame by its first thread, before any thread got here): return when every bin
@@ -403,8 +412,10 @@ int sched_next(sched_it *it) {
     } else if (it->dyn) {
         /* a worker: the same by compare-and-swap, while the frame is the one it was woken for */
         uint64_t w = __atomic_load_n(&claimed, __ATOMIC_ACQUIRE);
+        /* (order[] is read atomically: the next frame's sched_frame_begin may rewrite it while a worker that has
+         * finished its last bin still looks for one; the generation check makes a stale entry harmless) */
         while (b < 0 && it->k < NBINS && (unsigned)(w >> 32) == it->gen) {
-            unsigned c = order[it->k];
+            unsigned c = __atomic_load_n(&order[it->k], __ATOMIC_RELAXED);
             if (w & 1ull << c) { it->k++; continue; }
             if (__atomic_compare_exchange_n(&claimed, &w, w | 1ull << c, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
                 b = (int)c; it->k++;
