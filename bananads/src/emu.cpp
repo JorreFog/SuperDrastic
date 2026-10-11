@@ -213,6 +213,10 @@ bool Emu::load_rom(const std::string& path) {
     nds_->Reset();
     nds_->SetupDirectBoot(game_ + ".nds");
     setup_slice();
+    // core.fast_gxdma / core.fast_spu: exact shortcuts in melonDS's DMA and SPU (patches/melonds/0004), off by
+    // default until measured on the handheld
+    nds_->FastGXDMA = cfg_.flag("core.fast_gxdma", false);
+    nds_->FastSPU = cfg_.flag("core.fast_spu", false);
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;
