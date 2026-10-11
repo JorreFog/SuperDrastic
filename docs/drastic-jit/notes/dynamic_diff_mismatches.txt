@@ -1,0 +1,205 @@
+movs r0,r1,asr r2  r1=00000001 r2=1 Cin=0 NZCVQ                             exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=00000001 r2=1 Cin=1 NZCVQ                             exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=00000001 r2=101 Cin=0 NZCVQ                           exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=00000001 r2=101 Cin=1 NZCVQ                           exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=00000002 r2=1 Cin=0 NZCVQ                             exp=00000002 int=00000002 jit=00000006  JIT!=exp
+movs r0,r1,asr r2  r1=00000002 r2=1 Cin=1 NZCVQ                             exp=00000002 int=00000002 jit=00000006  JIT!=exp
+movs r0,r1,asr r2  r1=00000002 r2=2 Cin=0 NZCVQ                             exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=00000002 r2=2 Cin=1 NZCVQ                             exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=00000002 r2=101 Cin=0 NZCVQ                           exp=00000002 int=00000002 jit=00000006  JIT!=exp
+movs r0,r1,asr r2  r1=00000002 r2=101 Cin=1 NZCVQ                           exp=00000002 int=00000002 jit=00000006  JIT!=exp
+movs r0,r1,asr r2  r1=00000003 r2=2 Cin=0 NZCVQ                             exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=00000003 r2=2 Cin=1 NZCVQ                             exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=000000f0 r2=4 Cin=0 NZCVQ                             exp=00000002 int=00000002 jit=00000006  JIT!=exp
+movs r0,r1,asr r2  r1=000000f0 r2=4 Cin=1 NZCVQ                             exp=00000002 int=00000002 jit=00000006  JIT!=exp
+movs r0,r1,asr r2  r1=80000000 r2=1f Cin=0 NZCVQ                            exp=00000012 int=00000012 jit=00000016  JIT!=exp
+movs r0,r1,asr r2  r1=80000000 r2=1f Cin=1 NZCVQ                            exp=00000012 int=00000012 jit=00000016  JIT!=exp
+movs r0,r1,asr r2  r1=80000001 r2=1 Cin=0 NZCVQ                             exp=00000016 int=00000016 jit=00000012  JIT!=exp
+movs r0,r1,asr r2  r1=80000001 r2=1 Cin=1 NZCVQ                             exp=00000016 int=00000016 jit=00000012  JIT!=exp
+movs r0,r1,asr r2  r1=80000001 r2=1f Cin=0 NZCVQ                            exp=00000012 int=00000012 jit=00000016  JIT!=exp
+movs r0,r1,asr r2  r1=80000001 r2=1f Cin=1 NZCVQ                            exp=00000012 int=00000012 jit=00000016  JIT!=exp
+movs r0,r1,asr r2  r1=80000001 r2=101 Cin=0 NZCVQ                           exp=00000016 int=00000016 jit=00000012  JIT!=exp
+movs r0,r1,asr r2  r1=80000001 r2=101 Cin=1 NZCVQ                           exp=00000016 int=00000016 jit=00000012  JIT!=exp
+movs r0,r1,asr r2  r1=40000000 r2=1f Cin=0 NZCVQ                            exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+movs r0,r1,asr r2  r1=40000000 r2=1f Cin=1 NZCVQ                            exp=0000000e int=0000000e jit=0000000a  JIT!=exp
+probe3 msr cpsr_f,#0 after Q set NZCVQ                                      exp=00000000 int=00000000 jit=00000001  JIT!=exp
+probe4 msr cpsr_f,r0(=0) NZCVQ                                              exp=00000000 int=00000000 jit=00000001  JIT!=exp
+probe6 msr cpsr_f,#0 again NZCVQ                                            exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qadd r0,r1,r2  r1=00000005 r2=ffffffff result                               exp=00000004 int=00000004 jit=7fffffff  JIT!=exp
+qadd r0,r1,r2  r1=00000005 r2=ffffffff NZCVQ                                exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qadd r0,r1,r2  r1=80000000 r2=ffffffff result                               exp=80000000 int=80000000 jit=7fffffff  JIT!=exp
+qadd r0,r1,r2  r1=80000000 r2=ffffffff NZCVQ                                exp=00000001 int=00000001 jit=00000000  JIT!=exp
+qadd r0,r1,r2  r1=00000010 r2=fffffff0 result                               exp=00000000 int=00000000 jit=7fffffff  JIT!=exp
+qadd r0,r1,r2  r1=00000010 r2=fffffff0 NZCVQ                                exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qadd r0,r1,r2  r1=ffffffff r2=ffffffff result                               exp=fffffffe int=fffffffe jit=7fffffff  JIT!=exp
+qadd r0,r1,r2  r1=ffffffff r2=ffffffff NZCVQ                                exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qadd r0,r1,r2  r1=00000003 r2=c0000000 result                               exp=c0000003 int=c0000003 jit=7fffffff  JIT!=exp
+qadd r0,r1,r2  r1=00000003 r2=c0000000 NZCVQ                                exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qdadd r0,r1,r2  r1=00000005 r2=ffffffff result                              exp=00000003 int=00000003 jit=7fffffff  JIT!=exp
+qdadd r0,r1,r2  r1=00000005 r2=ffffffff NZCVQ                               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qdadd r0,r1,r2  r1=00000001 r2=00000010 result                              exp=00000021 int=00000000 jit=00000011  INT/JIT!=exp
+qdadd r0,r1,r2  r1=00000001 r2=00000010 NZCVQ                               exp=00000000 int=00000001 jit=00000000  INT!=exp
+qdadd r0,r1,r2  r1=fffffffb r2=00000003 result                              exp=00000001 int=fffffffa jit=fffffffe  INT/JIT!=exp
+qdadd r0,r1,r2  r1=fffffffb r2=00000003 NZCVQ                               exp=00000000 int=00000001 jit=00000000  INT!=exp
+qdadd r0,r1,r2  r1=7fffffff r2=00000001 result                              exp=7fffffff int=7ffffffe jit=7fffffff  INT!=exp
+qdadd r0,r1,r2  r1=80000000 r2=ffffffff result                              exp=80000000 int=80000000 jit=7fffffff  JIT!=exp
+qdadd r0,r1,r2  r1=80000000 r2=ffffffff NZCVQ                               exp=00000001 int=00000001 jit=00000000  JIT!=exp
+qdadd r0,r1,r2  r1=80000000 r2=00000001 result                              exp=80000002 int=80000000 jit=80000001  INT/JIT!=exp
+qdadd r0,r1,r2  r1=80000000 r2=00000001 NZCVQ                               exp=00000000 int=00000001 jit=00000000  INT!=exp
+qdadd r0,r1,r2  r1=00000000 r2=40000000 result                              exp=7fffffff int=ffffffff jit=40000000  INT/JIT!=exp
+qdadd r0,r1,r2  r1=00000000 r2=40000000 NZCVQ                               exp=00000001 int=00000001 jit=00000000  JIT!=exp
+qdadd r0,r1,r2  r1=00000010 r2=fffffff0 result                              exp=fffffff0 int=fffffff0 jit=7fffffff  JIT!=exp
+qdadd r0,r1,r2  r1=00000010 r2=fffffff0 NZCVQ                               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qdadd r0,r1,r2  r1=ffffffff r2=ffffffff result                              exp=fffffffd int=fffffffd jit=7fffffff  JIT!=exp
+qdadd r0,r1,r2  r1=ffffffff r2=ffffffff NZCVQ                               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qdadd r0,r1,r2  r1=12345678 r2=01000000 result                              exp=14345678 int=12345677 jit=13345678  INT/JIT!=exp
+qdadd r0,r1,r2  r1=12345678 r2=01000000 NZCVQ                               exp=00000000 int=00000001 jit=00000000  INT!=exp
+qdadd r0,r1,r2  r1=00000003 r2=c0000000 result                              exp=80000003 int=80000003 jit=7fffffff  JIT!=exp
+qdadd r0,r1,r2  r1=00000003 r2=c0000000 NZCVQ                               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+qdsub r0,r1,r2  r1=00000005 r2=ffffffff result                              exp=00000007 int=00000007 jit=00000006  JIT!=exp
+qdsub r0,r1,r2  r1=00000001 r2=00000010 result                              exp=ffffffe1 int=00000002 jit=fffffff1  INT/JIT!=exp
+qdsub r0,r1,r2  r1=00000001 r2=00000010 NZCVQ                               exp=00000000 int=00000001 jit=00000000  INT!=exp
+qdsub r0,r1,r2  r1=fffffffb r2=00000003 result                              exp=fffffff5 int=fffffffc jit=fffffff8  INT/JIT!=exp
+qdsub r0,r1,r2  r1=fffffffb r2=00000003 NZCVQ                               exp=00000000 int=00000001 jit=00000000  INT!=exp
+qdsub r0,r1,r2  r1=7fffffff r2=00000001 result                              exp=7ffffffd int=7fffffff jit=7ffffffe  INT/JIT!=exp
+qdsub r0,r1,r2  r1=7fffffff r2=00000001 NZCVQ                               exp=00000000 int=00000001 jit=00000000  INT!=exp
+qdsub r0,r1,r2  r1=80000000 r2=ffffffff result                              exp=80000002 int=80000002 jit=80000001  JIT!=exp
+qdsub r0,r1,r2  r1=80000000 r2=00000001 result                              exp=80000000 int=80000001 jit=80000000  INT!=exp
+qdsub r0,r1,r2  r1=00000000 r2=40000000 result                              exp=80000001 int=00000001 jit=c0000000  INT/JIT!=exp
+qdsub r0,r1,r2  r1=00000000 r2=40000000 NZCVQ                               exp=00000001 int=00000001 jit=00000000  JIT!=exp
+qdsub r0,r1,r2  r1=00000010 r2=fffffff0 result                              exp=00000030 int=00000030 jit=00000020  JIT!=exp
+qdsub r0,r1,r2  r1=ffffffff r2=ffffffff result                              exp=00000001 int=00000001 jit=00000000  JIT!=exp
+qdsub r0,r1,r2  r1=12345678 r2=01000000 result                              exp=10345678 int=12345679 jit=11345678  INT/JIT!=exp
+qdsub r0,r1,r2  r1=12345678 r2=01000000 NZCVQ                               exp=00000000 int=00000001 jit=00000000  INT!=exp
+qdsub r0,r1,r2  r1=00000003 r2=c0000000 result                              exp=7fffffff int=7fffffff jit=40000003  JIT!=exp
+qdsub r0,r1,r2  r1=00000003 r2=c0000000 NZCVQ                               exp=00000001 int=00000001 jit=00000000  JIT!=exp
+smlabb r0,r1,r2,r3  r1=0003fffe r2=7fff0005 r3=80000000 NZCVQ               exp=00000001 int=00000001 jit=00000000  JIT!=exp
+smlalbb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=fffffff0 hi=00000000 lo     exp=ffffffe6 int=0003ffee jit=0003ffee  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=fffffff0 hi=00000000 hi     exp=00000000 int=00000001 jit=00000001  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=00000005 hi=ffffffff lo     exp=fffffffb int=00040003 jit=00040003  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=00000005 hi=ffffffff hi     exp=fffffffe int=ffffffff jit=ffffffff  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=7fffffff hi=7fffffff lo     exp=7ffffff5 int=8003fffd jit=8003fffd  INT/JIT!=exp
+smlabt r0,r1,r2,r3  r1=0003fffe r2=7fff0005 r3=80000000 NZCVQ               exp=00000001 int=00000001 jit=00000000  JIT!=exp
+smlalbt r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=fffffff0 hi=00000000 lo     exp=fffefff2 int=7ffdbff1 jit=7ffdbff1  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=fffffff0 hi=00000000 hi     exp=00000000 int=00000001 jit=00000001  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=00000005 hi=ffffffff lo     exp=ffff0007 int=7ffdc006 jit=7ffdc006  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=00000005 hi=ffffffff hi     exp=fffffffe int=ffffffff jit=ffffffff  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=7fffffff hi=7fffffff lo     exp=7fff0001 int=fffdc000 jit=fffdc000  INT/JIT!=exp
+smlatb r0,r1,r2,r3  r1=0003fffe r2=7fff0005 r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlaltb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=fffffff0 hi=00000000 lo     exp=ffffffff int=0003ffee jit=0003ffee  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=fffffff0 hi=00000000 hi     exp=00000000 int=00000001 jit=00000001  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=00000005 hi=ffffffff lo     exp=00000014 int=00040003 jit=00040003  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=7fffffff hi=7fffffff lo     exp=8000000e int=8003fffd jit=8003fffd  INT/JIT!=exp
+smlatt r0,r1,r2,r3  r1=0003fffe r2=7fff0005 r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlaltt r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=fffffff0 hi=00000000 lo     exp=00017fed int=7ffdbff1 jit=7ffdbff1  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=00000005 hi=ffffffff lo     exp=00018002 int=7ffdc006 jit=7ffdc006  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=0003fffe r2=7fff0005 lo=7fffffff hi=7fffffff lo     exp=80017ffc int=fffdc000 jit=fffdc000  INT/JIT!=exp
+smlabb r0,r1,r2,r3  r1=80008000 r2=80008000 r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlalbb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=fffffff0 hi=00000000 lo     exp=3ffffff0 int=effffff0 jit=effffff0  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=fffffff0 hi=00000000 hi     exp=00000001 int=00000000 jit=00001000  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=00000005 hi=ffffffff lo     exp=40000005 int=f0000005 jit=f0000005  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=00000ffe  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=7fffffff hi=7fffffff lo     exp=bfffffff int=6fffffff jit=6fffffff  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=7fffffff hi=7fffffff hi     exp=7fffffff int=7fffffff jit=80000fff  JIT!=exp
+smlabt r0,r1,r2,r3  r1=80008000 r2=80008000 r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlalbt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=fffffff0 hi=00000000 lo     exp=3ffffff0 int=effffff0 jit=effffff0  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=fffffff0 hi=00000000 hi     exp=00000001 int=00000000 jit=00001000  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=00000005 hi=ffffffff lo     exp=40000005 int=f0000005 jit=f0000005  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=00000ffe  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=7fffffff hi=7fffffff lo     exp=bfffffff int=6fffffff jit=6fffffff  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=7fffffff hi=7fffffff hi     exp=7fffffff int=7fffffff jit=80000fff  JIT!=exp
+smlatb r0,r1,r2,r3  r1=80008000 r2=80008000 r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlaltb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=fffffff0 hi=00000000 lo     exp=3ffffff0 int=effffff0 jit=effffff0  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=fffffff0 hi=00000000 hi     exp=00000001 int=00000000 jit=00001000  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=00000005 hi=ffffffff lo     exp=40000005 int=f0000005 jit=f0000005  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=00000ffe  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=7fffffff hi=7fffffff lo     exp=bfffffff int=6fffffff jit=6fffffff  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=80008000 r2=80008000 lo=7fffffff hi=7fffffff hi     exp=7fffffff int=7fffffff jit=80000fff  JIT!=exp
+smlatt r0,r1,r2,r3  r1=80008000 r2=80008000 r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlaltt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=fffffff0 hi=00000000 lo     exp=3ffffff0 int=effffff0 jit=effffff0  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=fffffff0 hi=00000000 hi     exp=00000001 int=00000000 jit=00001000  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=00000005 hi=ffffffff lo     exp=40000005 int=f0000005 jit=f0000005  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=00000ffe  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=7fffffff hi=7fffffff lo     exp=bfffffff int=6fffffff jit=6fffffff  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=80008000 r2=80008000 lo=7fffffff hi=7fffffff hi     exp=7fffffff int=7fffffff jit=80000fff  JIT!=exp
+smlabb r0,r1,r2,r3  r1=7fff7fff r2=7fff7fff r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlalbb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=fffffff0 hi=00000000 lo     exp=3ffefff1 int=affffff1 jit=affffff1  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=fffffff0 hi=00000000 hi     exp=00000001 int=00000000 jit=00001000  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=00000005 hi=ffffffff lo     exp=3fff0006 int=b0000006 jit=b0000006  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=00000ffe  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=7fffffff hi=7fffffff lo     exp=bfff0000 int=30000000 jit=30000000  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=7fffffff hi=7fffffff hi     exp=7fffffff int=7fffffff jit=80000fff  JIT!=exp
+smlabt r0,r1,r2,r3  r1=7fff7fff r2=7fff7fff r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlalbt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=fffffff0 hi=00000000 lo     exp=3ffefff1 int=affffff1 jit=affffff1  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=fffffff0 hi=00000000 hi     exp=00000001 int=00000000 jit=00001000  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=00000005 hi=ffffffff lo     exp=3fff0006 int=b0000006 jit=b0000006  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=00000ffe  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=7fffffff hi=7fffffff lo     exp=bfff0000 int=30000000 jit=30000000  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=7fffffff hi=7fffffff hi     exp=7fffffff int=7fffffff jit=80000fff  JIT!=exp
+smlatb r0,r1,r2,r3  r1=7fff7fff r2=7fff7fff r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlaltb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=fffffff0 hi=00000000 lo     exp=3ffefff1 int=affffff1 jit=affffff1  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=fffffff0 hi=00000000 hi     exp=00000001 int=00000000 jit=00001000  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=00000005 hi=ffffffff lo     exp=3fff0006 int=b0000006 jit=b0000006  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=00000ffe  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=7fffffff hi=7fffffff lo     exp=bfff0000 int=30000000 jit=30000000  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=7fffffff hi=7fffffff hi     exp=7fffffff int=7fffffff jit=80000fff  JIT!=exp
+smlatt r0,r1,r2,r3  r1=7fff7fff r2=7fff7fff r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlaltt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=fffffff0 hi=00000000 lo     exp=3ffefff1 int=affffff1 jit=affffff1  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=fffffff0 hi=00000000 hi     exp=00000001 int=00000000 jit=00001000  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=00000005 hi=ffffffff lo     exp=3fff0006 int=b0000006 jit=b0000006  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=00000ffe  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=7fffffff hi=7fffffff lo     exp=bfff0000 int=30000000 jit=30000000  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=7fff7fff r2=7fff7fff lo=7fffffff hi=7fffffff hi     exp=7fffffff int=7fffffff jit=80000fff  JIT!=exp
+smlabb r0,r1,r2,r3  r1=ffff0001 r2=0002ffff r3=80000000 NZCVQ               exp=00000001 int=00000001 jit=00000000  JIT!=exp
+smlalbb r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=fffffff0 hi=00000000 lo     exp=ffffffef int=fffffff0 jit=00007ff0  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=fffffff0 hi=00000000 hi     exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlalbb r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=00000005 hi=ffffffff lo     exp=00000004 int=00000005 jit=00008005  INT/JIT!=exp
+smlalbb r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=7fffffff hi=7fffffff lo     exp=7ffffffe int=7fffffff jit=80007fff  INT/JIT!=exp
+smlabt r0,r1,r2,r3  r1=ffff0001 r2=0002ffff r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlalbt r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=fffffff0 hi=00000000 lo     exp=fffffff2 int=ffff7ff1 jit=ffff7ff0  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=00000005 hi=ffffffff lo     exp=00000007 int=ffff8006 jit=ffff8005  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=fffffffe  INT/JIT!=exp
+smlalbt r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=7fffffff hi=7fffffff lo     exp=80000001 int=7fff8000 jit=7fff7fff  INT/JIT!=exp
+smlatb r0,r1,r2,r3  r1=ffff0001 r2=0002ffff r3=80000000 NZCVQ               exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlaltb r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=fffffff0 hi=00000000 lo     exp=fffffff1 int=fffffff0 jit=00007ff0  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=fffffff0 hi=00000000 hi     exp=00000000 int=00000000 jit=00000001  JIT!=exp
+smlaltb r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=00000005 hi=ffffffff lo     exp=00000006 int=00000005 jit=00008005  INT/JIT!=exp
+smlaltb r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=7fffffff hi=7fffffff lo     exp=80000000 int=7fffffff jit=80007fff  INT/JIT!=exp
+smlatt r0,r1,r2,r3  r1=ffff0001 r2=0002ffff r3=80000000 NZCVQ               exp=00000001 int=00000001 jit=00000000  JIT!=exp
+smlaltt r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=fffffff0 hi=00000000 lo     exp=ffffffee int=ffff7ff1 jit=ffff7ff0  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=00000005 hi=ffffffff lo     exp=00000003 int=ffff8006 jit=ffff8005  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=00000005 hi=ffffffff hi     exp=ffffffff int=fffffffe jit=fffffffe  INT/JIT!=exp
+smlaltt r3,r4,r1,r2  r1=ffff0001 r2=0002ffff lo=7fffffff hi=7fffffff lo     exp=7ffffffd int=7fff8000 jit=7fff7fff  INT/JIT!=exp
+
+class                 words  int!=exp  jit!=exp  int!=jit
+movs asr                224         0        24        24
+movs lsl                224         0         0         0
+movs lsr                224         0         0         0
+movs ror                224         0         0         0
+probe1                    1         0         0         0
+probe2                    1         0         0         0
+probe3                    1         0         1         1
+probe4                    1         0         1         1
+probe5                    1         0         0         0
+probe6                    1         0         1         1
+probe7                    1         0         0         0
+qadd                     22         0        10        10
+qdadd                    22        10        16        21
+qdsub                    22        10        12        17
+qsub                     22         0         0         0
+smlabb                   24         0         4         4
+smlabt                   24         0         4         4
+smlalbb                  36        18        21        10
+smlalbt                  36        19        21         9
+smlaltb                  36        17        20        10
+smlaltt                  36        17        19         9
+smlatb                   24         0         4         4
+smlatt                   24         0         4         4
+smlawb                   16         0         0         0
+smlawt                   16         0         0         0
+smulbb                    8         0         0         0
+smulbt                    8         0         0         0
+smultb                    8         0         0         0
+smultt                    8         0         0         0
+smulwb                    8         0         0         0
+smulwt                    8         0         0         0
