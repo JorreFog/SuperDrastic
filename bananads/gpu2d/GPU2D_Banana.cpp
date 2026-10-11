@@ -1640,6 +1640,40 @@ void BananaRenderer2D::DrawSprite_Rotscale(u32 num, u32 boundwidth, u32 boundhei
     width <<= 8;
     height <<= 8;
 
+    if (Banana2DFast && xoff < boundwidth)
+    {
+        // only the pixels whose source lands inside the sprite can draw anything: clip [xoff, boundwidth) to them
+        // (widened by one pixel each side; the loops still test every pixel, so this only skips pixels they'd skip)
+        s64 lo = 0, hi = (s64)boundwidth - xoff;     // pixel k of the span samples rotX + k*rotA, rotY + k*rotC
+        auto clip = [&](s64 a, s64 d, s64 lim)
+        {
+            // 0 <= a + k*d <= lim - 1
+            auto fdiv = [](s64 x, s64 y) { s64 q = x / y; return (x % y != 0 && ((x < 0) != (y < 0))) ? q - 1 : q; };
+            if (d == 0)
+            {
+                if (a < 0 || a >= lim) hi = lo;
+                return;
+            }
+            s64 k0, k1;   // the real k range, as floor bounds widened by one
+            if (d > 0) { k0 = fdiv(-a, d); k1 = fdiv(lim - 1 - a, d) + 1; }
+            else       { k0 = fdiv(lim - 1 - a, d); k1 = fdiv(-a, d) + 1; }
+            k0 -= 1; k1 += 1;
+            if (k0 > lo) lo = k0;
+            if (k1 < hi) hi = k1;
+        };
+        clip(rotX, rotA, width);
+        clip(rotY, rotC, height);
+        if (hi <= lo)
+            return;
+        if (lo > 0)
+        {
+            xoff += lo; xpos += lo;
+            rotX += (s32)lo * rotA;
+            rotY += (s32)lo * rotC;
+        }
+        boundwidth = xoff + (u32)(hi - lo);
+    }
+
     if (spritemode == 3)
     {
         u32 alpha = attrib[2] >> 12;
