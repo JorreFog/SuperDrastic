@@ -61,6 +61,7 @@ private:
     void setup_wifi();
     void setup_local();
     void flush_save(bool now);
+    void setup_slice();
 
     Config cfg_;
     std::unique_ptr<melonDS::NDS> nds_;
@@ -72,6 +73,8 @@ private:
     std::unique_ptr<uint8_t[]> save_copy_;
     uint32_t save_len_ = 0;
     uint64_t save_dirty_us_ = 0;  // when the game last wrote its save; 0 = written out
+    long slice_stats_ = 0;        // core.slice_stats: log the slice's statistics every this many frames
+    long slice_frames_ = 0;
 };
 
 }  // namespace bananads
