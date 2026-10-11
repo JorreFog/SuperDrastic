@@ -27,6 +27,10 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   written in one NEON pass instead of DraStic's five-stage chain (`render_scanline_2d_composite` hooked,
   `RAST_COMPFUSE=0` off): on the stress ROM the chain's 0.81 M a frame become 0.39 M, on the field
   scene 0.47 M become 0.07 M, checked byte for byte against the original in the running emulator.
+- **DraStic's geometry stage, cheaper.** Four of its functions on the emulation thread are replaced by exact
+  ones (the command queue's fast paths, the vertex batch, the A55-scheduled vertex transform, the polygon binning;
+  `RAST_GEOM=0` off, `RAST_GEOMCHECK=1` checks every call against DraStic's): 0.063 M modeled cycles a frame less
+  on the field scene, 0.166 M on the stress ROM (below).
 - **Scheduled for the handhelds' in-order core.** The RG DS and RG DS Plus run Cortex-A55 cores, which issue in
   program order, at most two instructions a cycle, and stall on every operand that is not ready: instruction counts
   miss that. `tools/rast/dev/cycles.py` models it (every executed block of a simulator profile through llvm-mca's
@@ -41,16 +45,18 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   st4 stores, the 2x fog and edge-marking resolves, the 3x edge marking's id screen and walker stores, the 2x span
   setup and batch splitting) and the third (the opaque kernels' attribute words kept in registers and st4 for the
   paletted ones, the 2x and 3x fog's depth screens, the edge screens' loads, the 3x downsample's uniform steps, the 2x
-  walker's edge steps):
+  walker's edge steps), and the fourth and fifth (DraStic's 2D scanline routines replaced, the render threads'
+  bin queue, the fog's zero step at both scales, the 3x walker on the 2x walker's fused routines, the deferred
+  kernels' visibility group in one block, the five hottest kernels' software-pipelined group loops):
 
-  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of the first round | second round | third round, net |
-  |---|---|---|---|---|---|---|
-  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) | 18.1 M (-3.3%) | 17.7 M (-0.9%) |
-  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) | 4.08 M (0.0%) | 3.92 M (-2.2%) |
-  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) | 9.75 M (-11.7%) | 9.12 M (-5.2%) |
-  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) | 34.2 M (-3.3%) | 33.8 M (-0.3%) |
-  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) | 7.41 M (-2.3%) | 7.13 M (-2.9%) |
-  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) | 18.9 M (-7.5%) | 17.7 M (-6.0%) |
+  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of the first round | second round | third round, net | fourth and fifth, net |
+  |---|---|---|---|---|---|---|---|
+  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) | 18.1 M (-3.3%) | 17.7 M (-0.9%) | 16.7 M (-5.3%) |
+  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) | 4.08 M (0.0%) | 3.92 M (-2.2%) | 3.59 M (-8.4%) |
+  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) | 9.75 M (-11.7%) | 9.12 M (-5.2%) | 7.85 M (-13.9%) |
+  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) | 34.2 M (-3.3%) | 33.8 M (-0.3%) | 30.2 M (-10.6%) |
+  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) | 7.41 M (-2.3%) | 7.13 M (-2.9%) | 6.68 M (-6.3%) |
+  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) | 18.9 M (-7.5%) | 17.7 M (-6.0%) | 14.8 M (-16.6%) |
 
   The totals include 0.07-0.83 M a frame of blocks outside DraStic and librast (cycles.py's `[other]`) that vary
   from run to run: the second round's changes are against the first round's profiles with those taken out (L4 2x
@@ -59,6 +65,9 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   them. The third round's column is net of them, against the second round's net figures (its profiles, run beside
   a scene-cycle diff, reached fewer frames and so a different part of each ROM's scene mix: the per-function
   figures in its paragraphs below are the firmer measure; the stress ROM's kernels and walker -0.22 M a frame).
+  The fourth and fifth rounds' column is net of them too, against the third's (90 s profiles of each ROM beside
+  other simulator jobs: L4 2x 699 frames, S7 4382, S4 2560, L4 3x 415, S7 3x 1525, S4 3x 752). S7 spends ~45% of
+  its 3D time in the kernel 14010, whose lines do not take the pipelined loop yet (1.31 M a frame at 2x, as before).
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins. Since then each group starts with one basic block (`kerngen.py`'s head()): the
@@ -288,6 +297,20 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   `t_resolve.c`, S4's frame diff 0 bins in 4800 with the compositor's checks 0 differ, the scene cycle's differing
   bins as DraStic's renderer's at every checkpoint reached (to 19200 bins in 330 s on a loaded host), the compositor's
   checks 0 differ.
+  Then the edge marking's id screen at 2x (`res2.c` edge_lines2x) on per-bin planes, as hr.c's at 3x: the bin's 32
+  attribute lines' top bytes once as byte planes (edge_tplanes2x, a buffer per render thread, with a line of the
+  clear attribute's byte for bins 0 and 11's neighbour), and the screen on them, two blocks of 16 pixels a step while
+  no block is forced (56 modeled cycles a step of 32 pixels against 61 a block from the words: 16 ldr q and 12 uzp2).
+  The plane pass gathers each four words' byte 3 by one tbl (a cycle in llvm-mca's A55) from 16 ldr q a step of 64
+  pixels, 13 modeled cycles a step of 32 against the two levels of uzp2's 22, which the 3x edge_tplanes takes too; and
+  the last block of a pair, whose right neighbours are the clear attribute, is screened like the others at both scales
+  (its top byte in the plane's place; it was always taken in full). Modeled A55 cycles a frame: S4 at 2x edge_lines2x
+  0.50 -> 0.27 M plus the planes' 0.10 M (-0.13 M); S4 at 3x edge_tplanes 0.30 -> 0.19 M (edge_lines 0.53 -> 0.55
+  M: the base profile's 76 frames are another part of the scene; the screened last block is ~1% of its steps).
+  `ut/hr_ab` against 4f63ae7 (two seeds; the polygon-like contexts' rectangles end at and beside block boundaries and
+  at the right edge), `t_resolve.c` (its edge drivers on rectangles of ids against DraStic's), S4's frame diff 0 bins
+  with the compositor's checks 0 differ, the scene cycle's differing bins as DraStic's renderer's at every checkpoint
+  to 81600 bins (6845 tables checked, 0 differ).
   Fifth round, overdraw (`defer.c`, the deferred kernels). Measured first, per bin (a C NEON build's RAST_STATS): the
   stress ROM writes 1.5 opaque pixels per covered one (1.25-1.75 in every bin), the field scene S7 1.0 everywhere, the
   fog and edge-marking scene S4 1.15 (1.0 in 75% of its bins, up to 2.25 in its heaviest); polygons whose depth test
@@ -398,6 +421,17 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   eighth of the translucent kernels'): 0 of 340000 batches differ; the scene cycle's differing bins as DraStic's
   renderer's at every checkpoint to 62400 bins with the compositor's checks 0 differ, with deferred shading to
   112800, S4 0 bins in 16800, the stress ROM's 6 bins in 4800, the four 3x runs without signals.
+  Fifth round, 2D: `ds2d.c` (the section "DraStic's 2D scanline routines" below) replaces seven of DraStic's 2D
+  routines in a first commit and ten more in a second, each exact (`t_ds2d.c`, RAST_2DCHECK=1 over the 2D and 3D
+  scenes); modeled A55 cycles a frame: every 2x / 3x game's conversion 0.62 -> 0.29 M, the field scene S7 frame 4.49
+  -> 4.21 M, the 2D scene cycle 3.44 -> 2.82 M (DraStic's 2D routines and ours together).
+  Fifth round, the geometry stage: four of DraStic's geometry functions on the emulation thread are replaced through
+  the same hook mechanism (`dsgeom.c`, the section below): the command queue's fast paths, the vertex batch's append,
+  the vertex block's transform rescheduled for the A55 and the polygon binning visiting only occupied rows; checked
+  call by call against the originals in the running emulator (`RAST_GEOMCHECK=1`) and in `ut/t_geom.c`. Modeled A55
+  cycles a frame, base -> ours, on the stress ROM L4: the queue 0.314 -> 0.204 M (46.6 -> 30.3 cycles a call, 6740
+  calls a frame), add_vertex 0.077 -> 0.050 M, the vertex block 0.058 -> 0.031 M, the y-sort 0.151 -> 0.148 M;
+  together 0.167 M a frame less on L4, 0.088 M on S4, 0.063 M on S7.
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -544,6 +578,22 @@ all a replacement keeps; `ds2d.c`'s header lists the callers):
   per 4 tiles against 94. Its first instruction is an `adr`, so the check mode reaches the original through
   `ds2d_span4_orig` (its first four instructions' effects, then a jump to its fifth) instead of the trampoline.
 
+A second batch (the fifth round's second commit) takes ten more leaves the same way, all called from C:
+`render_scanline_palette_lookup_8bpp_asm` / `_12bpp_asm` (8bpp and extended-palette indexes to colours: the
+original's iteration is one dependence chain, 26 / 28 modeled cycles per 8 pixels; ours is software pipelined over
+two register sets, an iteration's word loaded and its indexes computed while the previous gathers land, 16 / 19;
+arguments where that reordering could show, dst just below or over the source or over the palette, take a verbatim
+copy of the original's loop), the 8bpp text BG spans (`_span_8bpp_normal_palette_asm`, `_ext_palette_asm`: rows
+loaded straight into vector lanes instead of through general registers, zip + str q instead of st2), the double
+priority encoder, the blend weights' four setups and the brightness shade (per block as the originals, the mask
+bytes by ld1r + tbl, empty mask blocks shortcut). In the check mode the entries that start with an adr reach the
+original through an ORIG4 stub of `ds2d_asm.S` (as `ds2d_span4_orig`), and the two palette lookups, whose loops
+re-enter the patched entry, through a private executable copy of the whole routine (both position independent in
+every instruction; check mode only, nothing is written into DraStic). Per call, modeled cycles (2D scene cycle,
+calls a frame): palette_lookup_8bpp 770 -> 540 (132), _12bpp 838 -> 636 (52), span_8bpp 329 -> 276 (105) and
+418 -> 356 (48), shade 699 -> 401 (32), double encoder ~330 -> 230 (48); S4: setup_alpha_base 194 -> 85, the double
+encoder 70 -> 54 (129 each).
+
 `RAST_2D=0` (or `DSFLIP_RAST_2D=0`) leaves them alone (otherwise a bit mask of the hooks, default all);
 `RAST_2DCHECK=1` runs every call twice, ours and then DraStic's (through the trampoline) on the same input bytes, and
 compares the outputs with 64 bytes either side (`[ds2d] check:` counts every 2 s, `[ds2dcheck]` lines for a
@@ -559,6 +609,51 @@ Cost per frame, modeled A55 cycles (`cycles.py`, the replaced routines against D
 scene S4 1.09 -> 0.57 M (conversion, merge chain 0.23 -> 0.18, colour effects 0.18 -> 0.07, blend masks 0.035 ->
 0.008, encoder 0.030 -> 0.023); the stress ROM L4 1.17 -> 0.67 M (merge chain 0.48 -> 0.33); the 2D scene cycle 1.32
 -> 0.79 M (4bpp spans 0.27 -> 0.19, merge chain 0.32 -> 0.25; frame 3.42 -> 2.95 M).
+
+## DraStic's geometry stage (`src/rast/dsgeom.c`, `geom_tvb.S`, exact)
+
+The emulation thread also runs DraStic's DS geometry engine: the command queue, the vertex batches, their transform
+and lighting, clipping, and the binning of the finished polygons for the render threads. With the renderer hooked,
+`geom_init()` replaces four of its functions (`DSFLIP_RAST_GEOM` / `RAST_GEOM=0` leaves them alone):
+
+- `queue_geometry_command` (one call per word written to the command ports): the paths that neither run
+  process_geometry nor touch the SWAP_BUFFERS flag do the original's stores in its order, without its stack frame;
+  every other call goes to the original through the trampoline before anything is written.
+- `geometry_add_vertex`: the same for a vertex appended to a batch that is not full, with no matrix update pending
+  (texture coordinate mode 3's two dot products included).
+- `geometry_transform_vertex_block_asm` (`geom_tvb.S`): the batch through the clip matrix, four vertices a step as
+  the original (the group past a multiple of 4 included), its 24 multiply-accumulates in eight independent chains
+  instead of eight chains of three, the translation added after the narrowing (the same bits): 130 -> 66 modeled
+  cycles a step (llvm-mca, Cortex-A55).
+- `video_3d_bin_polygons_y_sort_4x` (the opaque and the y-sorted translucent lists, a frame each): DraStic's three
+  passes (per polygon: y range, shading flags, texture lookup, top row; rows down: by bottom y; rows up: into the
+  bins) on its own sort arrays, step by step, but visiting only the rows that hold polygons (a byte a row and a bit
+  per 8 rows) where the original walks all 385 rows twice.
+
+The callers assume the AAPCS and nothing more (from the disassembly: the JIT's 32-bit store helper saves w12-w18, x30
+and NZCV around its call; the C callers keep only callee-saved registers across the calls; each original calls code
+compiled outside its unit, so GCC's IPA-RA cannot have narrowed its clobber set), so plain C is a valid replacement.
+Modeled A55 cycles (`dev/cycles.py`, 90 s profiles of
+4f63ae7's build and this one from the same session; the patched entries' jumps included), the stress ROM L4: the
+queue 46.6 -> 30.3 cycles a call (6740 calls a frame: 0.314 -> 0.204 M a frame), add_vertex 47.1 -> 30.6 (1633:
+0.077 -> 0.050 M), the vertex block 2071 -> 1107 (28: 0.058 -> 0.031 M), the y-sort 0.151 -> 0.148 M (L4's rows
+are nearly all occupied: there the per-polygon work, which is DraStic's, dominates); the fog and edge scene S4:
+0.132 -> 0.086, 0.032 -> 0.021, 0.025 -> 0.013, 0.043 -> 0.024 M; the field scene S7: 0.073 -> 0.047, 0.021 ->
+0.014, 0.017 -> 0.009, 0.046 -> 0.024 M. Together 0.167, 0.088 and 0.063 M a frame less on the emulation thread
+(L4, S4, S7). Exactness: `tools/rast/ut/t_geom.c` runs each replacement against DraStic's original in its process on
+random states (queue states at the 0x400-byte limit, every parameter count and the swap flag; full batches and
+pending matrices; any matrix and coordinates, the 64-bit sums wrapping; polygons of 0..15 vertices with y beyond
+0x180, repeated texture keys, quads' sprite path and stale sort rows, with DraStic's texture_cache_lookup and
+render_sprite_check patched to logging stubs so the calls are compared too), then DraStic's entry patched as
+`geom_init()` patches it (seeds 1, 3, 5; seven mutants, one per path, fail it). `RAST_GEOMCHECK=1` runs every call
+ours handles twice in the emulator, ours and then the original through the trampoline on the same input bytes, and
+compares everything either may write (`[geom]` counts every 2 s, `[geomcheck]` for a difference): at 2x over the ten
+scenes (60 s each), the scene cycle (330 s) and the stress ROMs L4 and L10 (90 s), 18.6 M calls of the queue, 4.09
+M of add_vertex, 24647 of the y-sort and 173276 of the vertex block checked, 0 differ; at 3x (hr.c's vertex hook
+active too) the same ROMs, 15.8 M, 3.52 M, 24093 and 156416, 0 differ; at 1x (hi-res off: DraStic's 1x binning, the
+same queue and batch) the stress ROM, 8.48 M, 2.02 M and 35296, 0 differ (the 2D cycle's test ROM never writes the
+geometry ports). The scene cycle's frame diff gives exactly DraStic's renderer's counts at every checkpoint reached
+(to 132000 bins).
 
 ## How it works
 
@@ -612,6 +707,15 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
 
 ## Next
 
+- DraStic's geometry stage, next (`dsgeom.c`): geometry_transform_vertexes' lighting (L4 0.24 M, S4 0.09 M modeled
+  cycles a frame: per vertex and light a chain of dependent multiplies; the whole function would have to be
+  replaced, its batch bookkeeping too), process_geometry_commands' dispatch (L4 0.13 M) and geometry_flush_polygons
+  (L4 0.23 M; 12 KiB of code), geometry_clipped_vertex_interpolate_edge (L4 0.07 M; a static function: check its
+  callers' register assumptions first). The y-sort's per-polygon work is still DraStic's in C (L4 0.148 M): a
+  row's loads first into a local array, to overlap the entries' load chains, modeled worse (0.162 M; clang keeps
+  that loop one entry a block). Games feed the geometry engine by DMA into GXFIFO (`queue_geometry_command_packed`
+  and `_packed_multi`, not replaced; the test ROMs write the command ports), so the queue's share there is
+  unmeasured.
 - Device A/B: the same game with the option off and on, from the performance logs (`threads_avg` in the summary).
 - The render threads' bins (`binsched.c`): the queue's order is the previous frame's bin times; S7's largest bin is
   ~65% of a thread's share, so no order of whole bins gets S7 below ~1.06 of the mean thread. Splitting the heaviest
@@ -634,9 +738,8 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
   0 (Status); res2.c's fog_zero_b2() bound (any table, the offset and the shift) now screens hr.c's fog_line too
   (Status, fifth round), and hr.c's edge marking could take res2.c's skip of the key compares (S4 2x: edge marking
   1.02 -> 0.57 -> 0.50 M with the top-byte screen, fog 0.89 -> 0.78 -> 0.60 M with the depth screen). The 2x edge
-  screen's skipped step (61 modeled cycles: 16 ldr q, 12 uzp2, two ext, the xors) is near the issue limit; the next
-  saving there is fewer loads: a bin's top-byte planes made once, as hr.c's edge_tplanes does at 3x (each line is read
-  by three steps).
+  screen now reads a bin's top-byte planes made once, as hr.c's at 3x (fifth round); its skipped pair of blocks (56
+  modeled cycles: 12 loads, the xors and ors, one max) is near the issue limit.
 - Deferred shading (fifth round, Status): a better per-bin predictor than the depth complexity, which cannot tell
   polygons drawn back to front (overdraw) from front to back (cheap one-pass failures): the overdraw itself (written
   and owned pixels: the visibility and shade kernels would return counts instead of their any-pass flags). The shade
@@ -649,9 +752,16 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
   S7). ds2d.c now owns the conversion hook, so it could take the rows by plane pointer; first prove that nothing
   reads the planes between the composite and the conversion (render_scanline memsets and reuses them in some
   display modes; display capture reads them).
-- DraStic's 2D path after `ds2d.c` (the section above): render_scanline_2d itself (C, 0.10-0.34 M; its costliest
-  blocks are inlined NEON over the layer lines, not a function a hook can take); in 2D games render_scanline_obj_c
-  (C, 0.23 M on the 2D scene cycle), palette_lookup_8bpp (0.10 M), the 8bpp spans and render_scanline_bg.
+- DraStic's 2D path after `ds2d.c` (the section above): what is left is C. render_scanline_obj_c (6.8 KB, 0.26 M
+  on the 2D scene cycle and the largest 2D item of any sprite-heavy game: its per-pixel loops store the colour, the
+  index and the attribute byte per sprite pixel) can only be taken whole: DraStic's OBJ renderer re-implemented
+  exactly (1D / 2D mapping, bitmap and affine sprites, mosaic, the OBJ window) against the decompiler's C, with
+  RAST_2DCHECK over sprite scenes; next render_scanline_bitmap_8bpp / _16bpp (3.5 KB each, 0.06 / 0.05 M, mode 3-5
+  games), render_scanline_capture_blended_3d (324 B, 0.04 M when a game captures every frame), the affine tile
+  renderers (render_scanline_affine_render_tiles_*_asm, 0.036 M: variable-length runs with overlapping 16-byte
+  stores) and render_scanline_bg (0.10 M on the 2D cycle, nearly all of it its horizontal mosaic loops).
+  render_scanline_2d (0.10-0.34 M) and render_scanline (0.06 M) are per-line drivers whose cost is prologue and
+  inlined NEON (L4: the OBJ lines' bit-15 visibility bitmaps): not hookable without replacing them whole.
 - The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate; IPC
   ~0.8-0.98 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
   finds 0.1% more). Across blocks the translucent tail, the alpha stages and the st4 stores are done (Status); the
