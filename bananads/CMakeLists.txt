@@ -104,6 +104,28 @@ if(BANANADS_GENGIS)
     set_target_properties(gengis PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 endif()
 
+# The Banana 2D engine (gpu2d/, from ROCKNIXDS's bananads/ at 99cac23, its PR #66): melonDS's 2D renderer
+# replaced, pixel for pixel (render.2d). It needs two friend declarations in melonDS's GPU_Soft.h, its
+# melonds-core.patch.
+option(BANANADS_2D "Banana 2D engine in place of melonDS's 2D renderer" ON)
+if(BANANADS_2D)
+    set(SOFTH ${MELONDS_SRC}/src/GPU_Soft.h)
+    file(READ ${SOFTH} SOFTTXT)
+    if(NOT SOFTTXT MATCHES "friend class BananaRenderer2D")
+        string(REPLACE "    friend class SoftRenderer3D;\n"
+            "    friend class SoftRenderer3D;\n    friend class BananaRenderer2D;\n    friend class BananaRenderer;\n"
+            SOFTTXT2 "${SOFTTXT}")
+        if(SOFTTXT2 STREQUAL SOFTTXT)
+            message(FATAL_ERROR "melonDS's GPU_Soft.h changed; the Banana 2D engine's friend declarations need updating")
+        endif()
+        file(WRITE ${SOFTH} "${SOFTTXT2}")
+    endif()
+    add_library(banana2d STATIC gpu2d/GPU2D_Banana.cpp gpu2d/GPU_Banana.cpp)
+    target_include_directories(banana2d PUBLIC gpu2d)
+    target_link_libraries(banana2d PUBLIC core)
+    target_compile_definitions(banana2d PUBLIC BANANADS_2D=1)
+endif()
+
 # melonDS's network helpers, without its Qt frontend. LAN and netplay need ENet; slirp (Nintendo WFC) doesn't.
 find_package(PkgConfig REQUIRED)
 set(NET ${MELONDS_SRC}/src/net)
@@ -128,6 +150,9 @@ add_executable(bananads
     src/video_headless.cpp)
 target_include_directories(bananads PRIVATE src)
 target_link_libraries(bananads PRIVATE core bananads-net pthread)
+if(BANANADS_2D)
+    target_link_libraries(bananads PRIVATE banana2d)
+endif()
 if(BANANADS_GENGIS)
     target_sources(bananads PRIVATE src/gengis_renderer.cpp)
     target_link_libraries(bananads PRIVATE gengis)
@@ -164,6 +189,9 @@ add_test(NAME jit-encodings COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/jit_enc
 add_executable(bananads-difftest tools/difftest.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
 target_include_directories(bananads-difftest PRIVATE src)
 target_link_libraries(bananads-difftest PRIVATE core bananads-net pthread)
+if(BANANADS_2D)
+    target_link_libraries(bananads-difftest PRIVATE banana2d)
+endif()
 if(BANANADS_GENGIS)
     target_sources(bananads-difftest PRIVATE src/gengis_renderer.cpp)
     target_link_libraries(bananads-difftest PRIVATE gengis)

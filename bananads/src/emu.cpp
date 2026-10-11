@@ -14,6 +14,9 @@
 
 #include "Args.h"
 #include "GPU_Soft.h"
+#ifdef BANANADS_2D
+#include "GPU_Banana.h"
+#endif
 #include "NDS.h"
 #include "NDSCart.h"
 #include "Net.h"
@@ -213,23 +216,46 @@ bool Emu::load_rom(const std::string& path) {
     RendererSettings rs{};
     rs.ScaleFactor = 1;
     rs.Threaded = cfg_.flag("render.threaded", true);
+    // render.2d: banana (the default: the Banana 2D engine, gpu2d/) or melonds (melonDS's 2D renderer)
+#ifdef BANANADS_2D
+    const bool banana2d = cfg_.str("render.2d", "banana") == "banana";
+#else
+    const bool banana2d = false;
+#endif
 #ifdef BANANADS_GENGIS
     // render.renderer: gengis (the default: Gengis Engine, SuperDrastic's rasterizer, on render.gengis_threads
     // threads) or soft (melonDS's software renderer, render.threaded)
     if (cfg_.str("render.renderer", "gengis") == "gengis") {
-        nds_->SetRenderer(std::make_unique<GengisSoftRenderer>(*nds_, (int)cfg_.num("render.gengis_threads", 3),
-                                                               cfg_.flag("render.gengis_defer", false)));
+        const int threads = (int)cfg_.num("render.gengis_threads", 3);
+        const bool defer = cfg_.flag("render.gengis_defer", false);
+#ifdef BANANADS_2D
+        if (banana2d)
+            nds_->SetRenderer(std::make_unique<GengisBananaRenderer>(*nds_, threads, defer));
+        else
+#endif
+            nds_->SetRenderer(std::make_unique<GengisSoftRenderer>(*nds_, threads, defer));
     } else
 #endif
     {
-        nds_->SetRenderer(std::make_unique<SoftRenderer>(*nds_));
+#ifdef BANANADS_2D
+        if (banana2d)
+            nds_->SetRenderer(std::make_unique<BananaRenderer>(*nds_));
+        else
+#endif
+            nds_->SetRenderer(std::make_unique<SoftRenderer>(*nds_));
         nds_->GetRenderer().SetRenderSettings(rs);
     }
 
     time_t t = time(nullptr);
     tm lt;
     localtime_r(&t, &lt);
-    nds_->RTC.SetDateTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec);
+    // rtc.fixed ("YYYY-MM-DD HH:MM:SS"): the DS clock starts there instead of now, so that two runs of a game that
+    // reads the clock (to seed its random numbers, say) go the same way; for tests
+    int fy, fmo, fd, fh, fmi, fs;
+    if (sscanf(cfg_.str("rtc.fixed", "").c_str(), "%d-%d-%d%*c%d:%d:%d", &fy, &fmo, &fd, &fh, &fmi, &fs) == 6)
+        nds_->RTC.SetDateTime(fy, fmo, fd, fh, fmi, fs);
+    else
+        nds_->RTC.SetDateTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec);
 
     nds_->Start();
     Log(LogLevel::Info, "[emu] %s started (JIT %s, MAC %02x:%02x:%02x:%02x:%02x:%02x)\n", game_.c_str(),

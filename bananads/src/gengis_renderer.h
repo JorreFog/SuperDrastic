@@ -13,6 +13,9 @@
 
 #include "GPU3D.h"
 #include "GPU_Soft.h"
+#ifdef BANANADS_2D
+#include "GPU_Banana.h"
+#endif
 
 extern "C" {
 #include "gx.h"
@@ -62,13 +65,20 @@ private:
     std::vector<std::thread> Threads;
 };
 
-// melonDS's software renderer (its 2D compositor) with Gengis as the 3D renderer
-class GengisSoftRenderer : public melonDS::SoftRenderer {
+// a software renderer (melonDS's, or BananaRenderer with the Banana 2D engine) with Gengis as the 3D renderer
+template <class Base>
+class GengisRendererOn : public Base {
 public:
-    GengisSoftRenderer(melonDS::NDS& nds, int threads, bool defer);
-    void PreSavestate() override;
+    GengisRendererOn(melonDS::NDS& nds, int threads, bool defer) : Base(nds) {
+        this->Rend3D = std::make_unique<GengisRenderer3D>(this->GPU.GPU3D, threads, defer);
+    }
+    void PreSavestate() override { this->Rend3D->FinishRendering(); }
     void PostSavestate() override {}
     void SetRenderSettings(melonDS::RendererSettings&) override {}
 };
+using GengisSoftRenderer = GengisRendererOn<melonDS::SoftRenderer>;
+#ifdef BANANADS_2D
+using GengisBananaRenderer = GengisRendererOn<melonDS::BananaRenderer>;
+#endif
 
 }  // namespace bananads

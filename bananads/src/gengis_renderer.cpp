@@ -332,10 +332,4 @@ u32* GengisRenderer3D::GetLine(int line) {
     return Scrolled;
 }
 
-GengisSoftRenderer::GengisSoftRenderer(melonDS::NDS& nds, int threads, bool defer) : SoftRenderer(nds) {
-    Rend3D = std::make_unique<GengisRenderer3D>(GPU.GPU3D, threads, defer);
-}
-
-void GengisSoftRenderer::PreSavestate() { Rend3D->FinishRendering(); }
-
 }  // namespace bananads

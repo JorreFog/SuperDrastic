@@ -10,6 +10,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `frontend` | `sdl` (or `headless` in a build without SDL) | `sdl`, `headless`; `kms` comes with milestone D |
 | `jit` | `on` | melonDS's JIT; `off` for the interpreter (slow, for debugging) |
 | `jit.timing` | `block` | BananaJIT's timing: `block` (melonDS's JIT's level: fast memory, cycles counted per block) or `exact` (the interpreter's, cycle for cycle; slower) |
+| `render.2d` | `banana` | the 2D renderer: `banana` (the Banana 2D engine, gpu2d/: melonDS's picture, pixel for pixel, in about a third of the time) or `melonds` (melonDS's own) |
 | `render.renderer` | `gengis` | the 3D renderer: `gengis` (Gengis Engine, SuperDrastic's rasterizer, on several threads; aarch64 builds) or `soft` (melonDS's software renderer) |
 | `render.gengis_threads` | `3` | Gengis Engine's render threads (the emulator's thread also renders a bin when it has to wait for one) |
 | `render.gengis_defer` | `off` | Gengis Engine's deferred shading of opaque polygons |
@@ -21,6 +22,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `resume.on_start` | `on` | load it when the game starts |
 | `firmware.nickname` | `BananaDS` | the DS's user name (10 characters at most; games and WFC show it) |
 | `firmware.language` | the firmware's | 0 Japanese, 1 English, 2 French, 3 German, 4 Italian, 5 Spanish |
+| `rtc.fixed` | none | the DS clock's start, `YYYY-MM-DD HH:MM:SS` (or `T` or `_` for the space), instead of the current time: two runs of a game that seeds its random numbers from the clock then go the same way (for tests) |
 | `wifi.dns` | `kaeru` | `kaeru`, `altwfc`, `wiilink`, an IPv4 address, `system` (the handheld's own DNS) or `off` (no Wi-Fi at all) |
 | `wifi.local` | `off` | `host`, or `join:<the host's address>`: local wireless with another handheld (builds with `BANANADS_LAN`) |
 | `wifi.local_players` | `4` | how many can join a host |
