@@ -389,6 +389,35 @@ first: its far region grew. A single 0007 part is `MELONDS_JIT_NO<name>=1`.
    runtime/scheduler, not a third). Continuing from `ARM_Ret` without returning to the loop was tried, exact, and
    net worse (+144k with the busy ARM7): dropped.
 
+## Aimed at the device (2026-10-11, fourth session)
+
+After HeartGold showed that qemu's instruction counts in JIT code don't carry over, this round went for real work
+on the main thread, as HeartGold's A55 profile spreads it: 3D geometry (11.9%), 2D (15.5%), audio and DMA (6.2%), and
+two build settings for the in-order A55. All exact (`check.sh` FAILS=0 with everything on and with every toggle
+off; each agent's own checks below), all on by default, **none measured on the device yet**.
+
+| Change | Toggle (default on) | qemu-count, main-thread work it targets |
+|---|---|---|
+| 0011: the geometry engine's fast paths: GX writes and the command loop inline (no calls per FIFO entry), NEON matrix multiplies and vertex transforms (bit-exact s64), view-volume pre-test and one division per axis in polygon setup, enabled lights only | `render.geom_fast` (`MELONDS_GEOMFAST=0`) | geometry on stress L5/L10/ramp: 59% of before; per vertex 2,190 -> 1,306 instructions, 714 -> 443 loads/stores, ~40 -> ~2.5 calls; divisions per strip quad 12 -> 6 |
+| `gpu2d/`: NEON output stage, 16- and 256-colour text BGs (tbl/lane loads), direct-colour bitmaps, blending and brightness 4 pixels at a time, per-line sprite lists, affine BGs 4 pixels per stage, the compositor's 3D and backdrop passes folded in | `render.2d_fast` | 2D bucket: membench 60%, cpubench 61%, ds2dtest 80% of before; also with `render.2d_thread=on` |
+| 0013: only the sound channels that are due run (NEON finds them and sums the mix); sound DMA and capture straight to main RAM; main RAM DMA and GX FIFO DMA direct | `core.fast_mix`, `core.fast_dma` | audio: sndbench 71%, dmasnd 94%; DMA: dmasnd 73% |
+| melonDS's core with `-fno-semantic-interposition` (it is built position-independent, so GCC kept every core function a call) | CMake `BANANADS_CORE_NOINTERPOSE` | main thread -1.1% (cpubench), -1.3% (membench) |
+| `-mcpu=cortex-a55` for aarch64 builds: scheduling for the A55's in-order pipeline | CMake `BANANADS_CPU` (empty: generic) | none (qemu doesn't model the pipeline; the gain, if any, shows only on the device) |
+| LTO for aarch64 builds | CMake `BANANADS_LTO` | main thread -0.6% (cpubench), -5% (membench); binary 7% smaller |
+
+New test ROMs: `tests/geomtest` (matrix ops, CLIPMTX/VECMTX reads, POS/VEC/BOX tests, logged to RAM), `tests/sndbench`
+(16 channels, every format, both captures), and `headless.audio_dump=<file>` for comparing the sound output byte for
+byte. Checks per change: pictures (every 10th or 30th frame of 300, soft and Gengis, `render.2d_thread` off and on,
+savestate reloads), `bananads-difftest --every` toggle off against on, the audio dump, random unit tests of the NEON
+code against the C code (with sabotaged builds caught), and CI's PC and BananaJIT builds.
+
+On the device, `tools/device/hgprofile.sh` now also A/Bs `render.geom_fast`, `render.2d_fast` and
+`core.fast_mix`/`core.fast_dma`. The build settings need two builds: `-DBANANADS_CPU=` (generic) and
+`-DBANANADS_LTO=OFF` against the defaults.
+
+Left, by agent: the geometry's FIFO ring buffer (savestates hold both FIFOs) and its vertex copies; rotscale
+sprites and OBJ mosaic, skipping unchanged lines in 2D; the mix's per-sample tail and batched ARM9 DMA for VRAM.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser

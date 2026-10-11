@@ -1,6 +1,6 @@
 #!/bin/sh
 # on the handheld: hgprofile.sh <bananads>: where HeartGold's time goes with this build, for choosing the next
-# optimization by the device instead of by qemu counts (docs/PERF.md). About 5 minutes; writes
+# optimization by the device instead of by qemu counts (docs/PERF.md). About 8 minutes; writes
 # /storage/bananads-profile-<date>.txt to paste back. Needs /storage/bananads-dev/{hg.nds,hg.sav,walk.txt} (as
 # hgquick.sh) and perf. Clock pinned at 1992 MHz (performance governor), put back on exit.
 B=$1; [ -x "$B" ] || { echo "usage: hgprofile.sh <bananads binary>"; exit 1; }
@@ -36,8 +36,13 @@ run "render.2d_thread=on, gengis_threads=1" --set render.2d_thread=on --set rend
 run "core.slice=auto (timing trade)" --set core.slice=auto
 run "core.fast_gxdma=on core.fast_spu=on" --set core.fast_gxdma=on --set core.fast_spu=on
 run "jit.codegen=old" --set jit.codegen=old
+run "render.geom_fast=off" --set render.geom_fast=off
+run "render.2d_fast=off" --set render.2d_fast=off
+run "render.2d_fast=off, render.2d_thread=on" --set render.2d_fast=off --set render.2d_thread=on
+run "core.fast_mix=off core.fast_dma=off" --set core.fast_mix=off --set core.fast_dma=off
 run "all new parts off" --set jit.codegen=old --set core.fast_loop=off --set core.fast_timers=off --set core.fast_sched=off \
-  --set jit.vramfast=off --set jit.iodirect=off --set render.vramtrack_skip=off --set jit.iofast=off
+  --set jit.vramfast=off --set jit.iodirect=off --set render.vramtrack_skip=off --set jit.iofast=off \
+  --set render.geom_fast=off --set render.2d_fast=off --set core.fast_mix=off --set core.fast_dma=off
 
 echo >> $OUT
 if command -v perf > /dev/null; then
