@@ -274,6 +274,7 @@ void old_poly(uint8_t *poly, uint8_t *verts, const void *hv, const void *hv2, un
 void new_poly(uint8_t *poly, uint8_t *verts, const void *hv, const void *hv2, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer);
 extern uint64_t ab_hash;
 extern unsigned ab_calls;
+extern int ab_edges;
 extern uintptr_t ds_base;
 static int test_poly(int iters) {
     enum { NV = 6144 };
@@ -312,6 +313,7 @@ static int test_poly(int iters) {
         uint32_t d3 = rnd() & ~0x20u;
         if (it & 1) d3 |= 0x20;                                                 /* edge marking */
         int defer = (it >> 1) & 1;
+        ab_edges = (d3 >> 5) & 1;                       /* (array 10 is hashed only when something reads it) */
         uint64_t h0 = ab_hash = 14695981039346656037ull; unsigned c0 = ab_calls = 0;
         old_poly(poly, verts, hv, hv2, bin_top, bin_bot, (int)hy0 - 1, d3, defer);
         uint64_t h1 = ab_hash; unsigned c1 = ab_calls;

@@ -6,7 +6,9 @@
  *   - the vertices' 3x screen coordinates, computed by hr_vertices() from the same clip-space values and viewport as
  *     DraStic's geometry_perspective_apply_hires_asm (hooked in rast.c; its math in the comment there);
  *   - our own polygon walker, hr_polygon(): render_polygon_4x's edge walks and span setup from spec/edges.c, with
- *     the line width 768 and span arrays of 64 entries, a chain's lines stopped at the window (EDGES_LINE_CAP);
+ *     the line width 768 and span arrays of 64 entries, a chain's lines stopped at the window (EDGES_LINE_CAP), on
+ *     walk.c's fused routines (walk_impl.h: an edge's five routines in one pass over its lines; edges_impl.h's
+ *     per-routine NEON form, the reference, with RAST_WALK=0);
  *   - the pixel kernels of fused_asm.c in their hi-res instantiation (rast_kern_h*, strides from the kernel
  *     arguments) through f_run() with layout_3x, including deferred shading and bilinear filtering;
  *   - the bin resolve (edge marking, fog) as spec/resolve.c's, over 768-pixel lines, into a 48 x 768 buffer;
@@ -49,10 +51,22 @@
 /* the edge heights' reciprocals (0x3fffffff + i) / i: DraStic's table stops at 512 lines (its 2x frame has 384), a 3x
  * edge can be 575 lines tall */
 static uint32_t hr_recip[1024];
-__attribute__((constructor)) static void hr_recip_init(void) { for (uint32_t i = 1; i < 1024; i++) hr_recip[i] = (0x3fffffffu + i) / i; }
+static int hr_fused = 1;                /* RAST_WALK=0: edges_impl.h's per-routine walker (the reference) */
+__attribute__((constructor)) static void hr_recip_init(void) {
+    for (uint32_t i = 1; i < 1024; i++) hr_recip[i] = (0x3fffffffu + i) / i;
+    const char *e = getenv("RAST_WALK");
+    if (e) hr_fused = atoi(e) != 0;
+}
 #define EDGES_RECIP_TABLE hr_recip
 #define EDGES_LINE_CAP 1                /* a chain's lines stop at the window (edges_impl.h, interpolate_edges) */
 #include "spec/edges_impl.h"
+/* the fused walker (walk.c's, walk_impl.h) in the 3x layout, the same bytes on the lines f_run reads */
+#define WALK_ARR   HR_SPS
+#define WALK_XMAX  HR_W
+#define WALK_RECIP hr_recip
+#define WALK_CAP   1
+#define WALK_HR    1
+#include "walk_impl.h"
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
 #define U16(p, o) (*(uint16_t *)((uint8_t *)(p) + (o)))
@@ -178,7 +192,24 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, 
     int lines = (int)y_end - (int)(y_top > bin_top ? y_top : bin_top);
     if (lines <= 0) return;
     uint8_t *span = H->spans, *scratch = span + 10 * HR_SPS, *sp = span;
-    if ((d3 >> 5) & 1) {
+    if (hr_fused) {
+        /* walk.c's fused walker: per edge one pass over its lines in registers (edges_impl.h's routines each make a
+         * pass over the chain's lines through the scratch), and the span setup and markers 4 lines a step */
+        const int marks = (d3 >> 5) & 1;
+        const unsigned ys0 = marks ? bin_top - top_clip : bin_top, ye = marks ? y_end + bot_clip : y_end;
+        if (!(flags & 0x18)) {
+            walk_chain(span, &vptr[0], 1, ys0, ye, 1);
+            walk_chain(span + HR_SPS, &vptr[count], -1, ys0, ye, 1);
+        } else {
+            walk_chain(span, &vptr[0], 1, ys0, ye, 0);
+            walk_chain(span + HR_SPS, &vptr[count], -1, ys0, ye, 0);
+        }
+        if (marks) {
+            walk_spans(span, lines + top_clip + bot_clip, 1);
+            sp = span + 4 * top_clip;
+            walk_markers(sp, (uint32_t)lines, (uint32_t)(bot_clip << 1 | top_clip));
+        } else walk_spans(span, lines, 0);
+    } else if ((d3 >> 5) & 1) {
         unsigned ys0 = bin_top - top_clip, ye = y_end + bot_clip, nl = lines + top_clip + bot_clip;
         hr_render_polygon_interpolate_edges_constprop_0(span, scratch, &vptr[0], ys0, ye, flags);
         hr_render_polygon_interpolate_edges_constprop_1(span + HR_SPS, scratch, &vptr[count], ys0, ye, flags);
