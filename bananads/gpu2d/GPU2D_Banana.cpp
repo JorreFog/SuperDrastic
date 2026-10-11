@@ -225,6 +225,95 @@ void Banana2DRegs::From(const melonDS::GPU2D& g)
     EVA = g.EVA;
     EVB = g.EVB;
     EVY = g.EVY;
+    PalBG = PalOBJ = PalBGStale = false;
+    BGExtChanged = OBJExtChanged = false;
+    OAMRebuild = false;
+}
+
+// ---- the memory the drawing reads ----
+
+void BananaRenderer2D::PointAtGPU()
+{
+    if (GPU2D.Num == 0)
+    {
+        BGVRAM = GPU.VRAMFlat_ABG; BGVRAMMask = 0x7FFFF;
+        OBJVRAM = GPU.VRAMFlat_AOBJ; OBJVRAMMask = 0x3FFFF;
+        BGExtMem = GPU.VRAMFlat_ABGExtPal;
+        OBJExtMem = GPU.VRAMFlat_AOBJExtPal;
+        PalMem = &GPU.Palette[0];
+    }
+    else
+    {
+        BGVRAM = GPU.VRAMFlat_BBG; BGVRAMMask = 0x1FFFF;
+        OBJVRAM = GPU.VRAMFlat_BOBJ; OBJVRAMMask = 0x1FFFF;
+        BGExtMem = GPU.VRAMFlat_BBGExtPal;
+        OBJExtMem = GPU.VRAMFlat_BOBJExtPal;
+        PalMem = &GPU.Palette[0x400];
+    }
+}
+
+// sizes of the copies (GPU's VRAM flats for this unit) and where each lives in CopyMem
+static constexpr u32 ExtBGSize = 32*1024, ExtOBJSize = 8*1024, PalSize = 0x400;
+
+void BananaRenderer2D::UseCopies(CopyFn copy, void* ctx)
+{
+    PointAtGPU();
+    CopyTo = copy;
+    CopyCtx = ctx;
+    if (!copy)
+    {
+        CopyMem.reset();
+        return;
+    }
+    u32 bgsize = BGVRAMMask + 1, objsize = OBJVRAMMask + 1;
+    CopyMem.reset(new u8[bgsize + objsize + ExtBGSize + ExtOBJSize + PalSize]);
+    u8* p = CopyMem.get();
+    BGVRAM = p; p += bgsize;
+    OBJVRAM = p; p += objsize;
+    BGExtMem = p; p += ExtBGSize;
+    OBJExtMem = p; p += ExtOBJSize;
+    PalMem = p;
+    // as GPU's now: nothing is drawn from them before the first job applies this (the palettes follow the next
+    // Prepare: they are converted only from what was copied for that line)
+    memcpy(BGVRAM, (GPU2D.Num == 0) ? GPU.VRAMFlat_ABG : GPU.VRAMFlat_BBG, bgsize);
+    memcpy(OBJVRAM, (GPU2D.Num == 0) ? GPU.VRAMFlat_AOBJ : GPU.VRAMFlat_BOBJ, objsize);
+    memcpy(BGExtMem, (GPU2D.Num == 0) ? GPU.VRAMFlat_ABGExtPal : GPU.VRAMFlat_BBGExtPal, ExtBGSize);
+    memcpy(OBJExtMem, (GPU2D.Num == 0) ? GPU.VRAMFlat_AOBJExtPal : GPU.VRAMFlat_BOBJExtPal, ExtOBJSize);
+    memcpy(CopyMem.get() + bgsize + objsize + ExtBGSize + ExtOBJSize, &GPU.Palette[(GPU2D.Num == 0) ? 0 : 0x400], PalSize);
+    NeedResync = false;
+}
+
+// every dirty 512-byte block of a VRAM flat, in runs of consecutive blocks
+template<u32 Size>
+void BananaRenderer2D::CopyDirty(const NonStupidBitField<Size>& dirty, u8* copy, const u8* flat)
+{
+    for (u32 w = 0; w < NonStupidBitField<Size>::DataLength; w++)
+    {
+        u64 bits = dirty.Data[w];
+        while (bits)
+        {
+            u32 first = __builtin_ctzll(bits);
+            u64 run = bits >> first;
+            u32 n = (~run == 0) ? 64 - first : __builtin_ctzll(~run);
+            u32 off = (w * 64 + first) * VRAMDirtyGranularity;
+            CopyTo(CopyCtx, copy + off, flat + off, n * VRAMDirtyGranularity);
+            bits = (n + first >= 64) ? 0 : bits & ~(((1ULL << n) - 1) << first);
+        }
+    }
+}
+
+// after GPU::ResetVRAMCache (reset, savestates) the flats can change without dirty bits: copy them whole
+void BananaRenderer2D::DoResync()
+{
+    NeedResync = false;
+    if (!CopyTo)
+        return;
+    bool a = (GPU2D.Num == 0);
+    CopyTo(CopyCtx, BGVRAM, a ? GPU.VRAMFlat_ABG : GPU.VRAMFlat_BBG, BGVRAMMask + 1);
+    CopyTo(CopyCtx, OBJVRAM, a ? GPU.VRAMFlat_AOBJ : GPU.VRAMFlat_BOBJ, OBJVRAMMask + 1);
+    CopyTo(CopyCtx, BGExtMem, a ? GPU.VRAMFlat_ABGExtPal : GPU.VRAMFlat_BBGExtPal, ExtBGSize);
+    CopyTo(CopyCtx, OBJExtMem, a ? GPU.VRAMFlat_AOBJExtPal : GPU.VRAMFlat_BOBJExtPal, ExtOBJSize);
+    ExtPalsResynced = true;  // the next drawn scanline drops its converted extended palettes
 }
 
 
@@ -232,6 +321,7 @@ BananaRenderer2D::BananaRenderer2D(melonDS::GPU2D& gpu2D, SoftRenderer& parent)
     : Renderer2D(gpu2D), Parent(parent),
       BGExtPalCache(new u32[4*16*256]), ObjTable(new u32[0x2000])
 {
+    PointAtGPU();
     Reset();
 }
 
@@ -274,15 +364,11 @@ void BananaRenderer2D::Reset()
 
 // ---- palettes ----------------------------------------------------------------------------------
 
-void BananaRenderer2D::UpdatePalettes()
+void BananaRenderer2D::UpdatePalettes(bool bg, bool obj, bool bgStale)
 {
-    u32 shift = GPU2D.Num * 2;
-    u32 bgbits = (0x01 | 0x10) << shift;   // the palette half, and its colour 0 (the backdrop)
-    u32 objbits = 0x02 << shift;
-
-    if ((GPU.PaletteDirty & bgbits) || PalBGStale)
+    if (bg)
     {
-        const u16* pal = (const u16*)&GPU.Palette[GPU2D.Num ? 0x400 : 0];
+        const u16* pal = (const u16*)PalMem;
         for (int i = 0; i < 256; i++)
         {
             u32 c = Conv15(pal[i]) | 0xFF000000;
@@ -290,30 +376,26 @@ void BananaRenderer2D::UpdatePalettes()
             PalBG16[i] = (i & 0xF) ? c : 0;
         }
         u32 bd = Conv15(pal[0]) | 0x20000000;
-        if (bd != Backdrop || PalBGStale)
+        if (bd != Backdrop || bgStale)
         {
             Backdrop = bd;
             for (int i = 0; i < 256; i++) BackdropLine[i] = bd;
         }
-        GPU.PaletteDirty &= ~bgbits;
-        PalBGStale = false;
     }
 
-    if ((GPU.PaletteDirty & objbits) || PalOBJStale)
+    if (obj)
     {
-        const u16* pal = (const u16*)&GPU.Palette[GPU2D.Num ? 0x600 : 0x200];
+        const u16* pal = (const u16*)(PalMem + 0x200);
         u32* table = &ObjTable[OBJ_StandardPal];
         for (int i = 0; i < 256; i++)
             table[i] = Conv15(pal[i]);
-        GPU.PaletteDirty &= ~objbits;
-        PalOBJStale = false;
     }
 }
 
 // the 16 OBJ extended palettes, as one 4096-entry table indexed by (palette << 8) | colour
 void BananaRenderer2D::ConvertOBJExtPals()
 {
-    const u16* src = GPU2D.GetOBJExtPal();
+    const u16* src = (const u16*)OBJExtMem;
     for (int i = 0; i < 4096; i++)
         ObjTable[i] = Conv15(src[i]);
     ObjExtValid = true;
@@ -322,7 +404,7 @@ void BananaRenderer2D::ConvertOBJExtPals()
 void BananaRenderer2D::ConvertBGExtPal(u32 idx)
 {
     u32* table = &BGExtPalCache[idx << 8];
-    const u16* src = GPU2D.GetBGExtPal(idx >> 4, idx & 0xF);
+    const u16* src = (const u16*)&BGExtMem[idx << 9];
     table[0] = 0;
     for (int i = 1; i < 256; i++)
         table[i] = Conv15(src[i]) | 0xFF000000;
@@ -508,7 +590,7 @@ void BananaRenderer2D::DrawBG_Text(u32 line, u32 bgnum)
 
     u8* vram;
     u32 vrammask;
-    GPU2D.GetBGVRAM(vram, vrammask);
+    GetBGVRAM(vram, vrammask);
 
     u32 tilesetaddr, tilemapaddr;
     if (GPU2D.Num)
@@ -585,7 +667,7 @@ void BananaRenderer2D::DrawTiledScroll(u32 bgnum, u32 tilemapaddr, u32 tilesetad
 {
     u8* vram;
     u32 vrammask;
-    GPU2D.GetBGVRAM(vram, vrammask);
+    GetBGVRAM(vram, vrammask);
 
     u32 overflowmask = wrap ? 0 : ~(coordmask | 0x7FF);
     u32 flagmask = BGFlagMask(bgnum);
@@ -693,7 +775,7 @@ void BananaRenderer2D::DrawBG_Affine(u32 line, u32 bgnum)
 
     u8* vram;
     u32 vrammask;
-    GPU2D.GetBGVRAM(vram, vrammask);
+    GetBGVRAM(vram, vrammask);
 
     yshift -= 3;
 
@@ -774,7 +856,7 @@ void BananaRenderer2D::DrawBitmap16(u32* out, u32 flag, u32 base, u32 xmask, u32
 {
     u8* vram;
     u32 vrammask;
-    GPU2D.GetBGVRAM(vram, vrammask);
+    GetBGVRAM(vram, vrammask);
 
     u32 ofxmask = wrap ? 0 : ~xmask;
     u32 ofymask = wrap ? 0 : ~ymask;
@@ -843,7 +925,7 @@ void BananaRenderer2D::DrawBitmap8(u32* out, u32 flagmask, u32 base, u32 xmask, 
 {
     u8* vram;
     u32 vrammask;
-    GPU2D.GetBGVRAM(vram, vrammask);
+    GetBGVRAM(vram, vrammask);
 
     u32 ofxmask = wrap ? 0 : ~xmask;
     u32 ofymask = wrap ? 0 : ~ymask;
@@ -972,7 +1054,7 @@ void BananaRenderer2D::DrawBG_Extended(u32 line, u32 bgnum)
 
     u8* vram;
     u32 vrammask;
-    GPU2D.GetBGVRAM(vram, vrammask);
+    GetBGVRAM(vram, vrammask);
 
     yshift -= 3;
 
@@ -1141,39 +1223,33 @@ void BananaRenderer2D::DrawSprites(u32 line)
 void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
 {
     regs.From(GPU2D);
+    if (NeedResync)
+        DoResync();
 
     // the OBJ buffers don't get updated at all if the 2D engine is disabled
     if (!GPU2D.Enabled)
         return;
 
-    u32 oambit = 1u << GPU2D.Num;
-    bool oam = GPU2D.OBJEnable && ((GPU.OAMDirty & oambit) || SpriteTabStale);
-
     if (GPU2D.Num == 0)
     {
         auto objDirty = GPU.VRAMDirty_AOBJ.DeriveState(GPU.VRAMMap_AOBJ, GPU);
-        bool vram = AnyBits(objDirty);
-        if (vram || oam)
-        {
-            Drain(vram ? Wait_OBJVRAM : Wait_OAM);
-            GPU.MakeVRAMFlat_AOBJCoherent(objDirty);
-        }
+        GPU.MakeVRAMFlat_AOBJCoherent(objDirty);
+        if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_AOBJ);
     }
     else
     {
         auto objDirty = GPU.VRAMDirty_BOBJ.DeriveState(GPU.VRAMMap_BOBJ, GPU);
-        bool vram = AnyBits(objDirty);
-        if (vram || oam)
-        {
-            Drain(vram ? Wait_OBJVRAM : Wait_OAM);
-            GPU.MakeVRAMFlat_BOBJCoherent(objDirty);
-        }
+        GPU.MakeVRAMFlat_BOBJCoherent(objDirty);
+        if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_BOBJ);
     }
 
-    if (oam)
+    u32 oambit = 1u << GPU2D.Num;
+    if (GPU2D.OBJEnable && ((GPU.OAMDirty & oambit) || SpriteTabStale))
     {
-        memcpy(OAMCopy, &GPU.OAM[GPU2D.Num ? 0x400 : 0], sizeof(OAMCopy));
-        RebuildSpriteTable();
+        const u8* oam = &GPU.OAM[GPU2D.Num ? 0x400 : 0];
+        if (CopyTo) CopyTo(CopyCtx, OAMCopy, oam, sizeof(OAMCopy));
+        else        memcpy(OAMCopy, oam, sizeof(OAMCopy));
+        regs.OAMRebuild = true;
         GPU.OAMDirty &= ~oambit;
         SpriteTabStale = false;
     }
@@ -1195,6 +1271,9 @@ void BananaRenderer2D::DrawSpritesFrom(u32 line, const Banana2DRegs& regs)
 
     if (!R.OBJEnable)
         return;
+
+    if (R.OAMRebuild)
+        RebuildSpriteTable();
 
     for (int i = 0; i < NumSpriteTab; i++)
     {
@@ -1253,7 +1332,7 @@ void BananaRenderer2D::DrawSprite_Rotscale(u32 num, u32 boundwidth, u32 boundhei
 
     u8* objvram;
     u32 objvrammask;
-    GPU2D.GetOBJVRAM(objvram, objvrammask);
+    GetOBJVRAM(objvram, objvrammask);
 
     s32 centerX = boundwidth >> 1;
     s32 centerY = boundheight >> 1;
@@ -1425,7 +1504,7 @@ void BananaRenderer2D::DrawSprite_Normal(u32 num, u32 width, u32 height, s32 xpo
 
     u8* objvram;
     u32 objvrammask;
-    GPU2D.GetOBJVRAM(objvram, objvrammask);
+    GetOBJVRAM(objvram, objvrammask);
 
     // yflip
     if (attrib[1] & (1<<13))
@@ -1908,6 +1987,8 @@ void BananaRenderer2D::DrawScanline(u32 line)
 void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
 {
     regs.From(GPU2D);
+    if (NeedResync)
+        DoResync();
 
     if (!GPU2D.Enabled || GPU2D.ForcedBlank)
         return;
@@ -1920,40 +2001,63 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
     if (dispcnt & (1<<13))
         GPU2D.Win0Active = (GPU2D.Win0Active & 0x1) | ((GPU2D.Win0Coords[1] < GPU2D.Win0Coords[0]) ? 0x2 : 0);
 
-    u32 shift = GPU2D.Num * 2;
-    bool pal = (GPU.PaletteDirty & (0x13 << shift)) || PalBGStale || PalOBJStale;
+    if (ExtPalsResynced)
+    {
+        regs.BGExtChanged = regs.OBJExtChanged = true;
+        ExtPalsResynced = false;
+    }
 
-    bool bgExtChanged = false, objExtChanged = false;
     if (GPU2D.Num == 0)
     {
         auto bgDirty = GPU.VRAMDirty_ABG.DeriveState(GPU.VRAMMap_ABG, GPU);
         auto bgExtPalDirty = GPU.VRAMDirty_ABGExtPal.DeriveState(GPU.VRAMMap_ABGExtPal, GPU);
         auto objExtPalDirty = GPU.VRAMDirty_AOBJExtPal.DeriveState(&GPU.VRAMMap_AOBJExtPal, GPU);
-        bool vram = AnyBits(bgDirty) || AnyBits(bgExtPalDirty) || AnyBits(objExtPalDirty);
-        if (!(vram || pal))
-            return;
-        Drain(vram ? Wait_BGVRAM : Wait_Palette);
         GPU.MakeVRAMFlat_ABGCoherent(bgDirty);
-        bgExtChanged = GPU.MakeVRAMFlat_ABGExtPalCoherent(bgExtPalDirty);
-        objExtChanged = GPU.MakeVRAMFlat_AOBJExtPalCoherent(objExtPalDirty);
+        regs.BGExtChanged |= GPU.MakeVRAMFlat_ABGExtPalCoherent(bgExtPalDirty);
+        regs.OBJExtChanged |= GPU.MakeVRAMFlat_AOBJExtPalCoherent(objExtPalDirty);
+        if (CopyTo)
+        {
+            CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_ABG);
+            CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_ABGExtPal);
+            CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_AOBJExtPal);
+        }
     }
     else
     {
         auto bgDirty = GPU.VRAMDirty_BBG.DeriveState(GPU.VRAMMap_BBG, GPU);
         auto bgExtPalDirty = GPU.VRAMDirty_BBGExtPal.DeriveState(GPU.VRAMMap_BBGExtPal, GPU);
         auto objExtPalDirty = GPU.VRAMDirty_BOBJExtPal.DeriveState(&GPU.VRAMMap_BOBJExtPal, GPU);
-        bool vram = AnyBits(bgDirty) || AnyBits(bgExtPalDirty) || AnyBits(objExtPalDirty);
-        if (!(vram || pal))
-            return;
-        Drain(vram ? Wait_BGVRAM : Wait_Palette);
         GPU.MakeVRAMFlat_BBGCoherent(bgDirty);
-        bgExtChanged = GPU.MakeVRAMFlat_BBGExtPalCoherent(bgExtPalDirty);
-        objExtChanged = GPU.MakeVRAMFlat_BOBJExtPalCoherent(objExtPalDirty);
+        regs.BGExtChanged |= GPU.MakeVRAMFlat_BBGExtPalCoherent(bgExtPalDirty);
+        regs.OBJExtChanged |= GPU.MakeVRAMFlat_BOBJExtPalCoherent(objExtPalDirty);
+        if (CopyTo)
+        {
+            CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_BBG);
+            CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_BBGExtPal);
+            CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_BOBJExtPal);
+        }
     }
-    if (bgExtChanged) BGExtPalValid = 0;
-    if (objExtChanged) ObjExtValid = false;
 
-    UpdatePalettes();
+    // the palettes: converted by the drawing when changed (bgbits: the BG half and its colour 0, the backdrop)
+    u32 shift = GPU2D.Num * 2;
+    u32 bgbits = (0x01 | 0x10) << shift;
+    u32 objbits = 0x02 << shift;
+    u32 paloff = GPU2D.Num ? 0x400 : 0;
+    if ((GPU.PaletteDirty & bgbits) || PalBGStale)
+    {
+        regs.PalBG = true;
+        regs.PalBGStale = PalBGStale;
+        if (CopyTo) CopyTo(CopyCtx, (void*)PalMem, &GPU.Palette[paloff], 0x200);
+        GPU.PaletteDirty &= ~bgbits;
+        PalBGStale = false;
+    }
+    if ((GPU.PaletteDirty & objbits) || PalOBJStale)
+    {
+        regs.PalOBJ = true;
+        if (CopyTo) CopyTo(CopyCtx, (void*)(PalMem + 0x200), &GPU.Palette[paloff + 0x200], 0x200);
+        GPU.PaletteDirty &= ~objbits;
+        PalOBJStale = false;
+    }
 }
 
 void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d)
@@ -1978,6 +2082,11 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
             dst[i] = 0xFF3F3F3F;
         return;
     }
+
+    if (R.BGExtChanged) BGExtPalValid = 0;
+    if (R.OBJExtChanged) ObjExtValid = false;
+    if (R.PalBG || R.PalOBJ)
+        UpdatePalettes(R.PalBG, R.PalOBJ, R.PalBGStale);
 
     u32 dispcnt = R.DispCnt;
     u8 enable = R.LayerEnable;

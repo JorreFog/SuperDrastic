@@ -40,13 +40,14 @@ namespace melonDS
 // Use it exactly like SoftRenderer: nds->GPU.SetRenderer(std::make_unique<BananaRenderer>(*nds)).
 //
 // SetThreaded2D(true) (render.2d_thread) draws the 2D lines on a thread of their own. On the emulator's thread,
-// each scanline and sprite line only snapshots what it needs (BananaRenderer2D::Prepare*: the registers, plus the
-// 3D layer's line and the VRAM or FIFO display line when used) into a ring of jobs; the thread draws them in order
-// into the back framebuffer. Memory the drawing reads (VRAM flats, converted palettes, OAM) changes only after the
-// thread has caught up (Drain2D), so every line sees it as it was at its own time. The emulator's thread waits for
-// the thread before SwapBuffers (the frontend reads the framebuffer after the frame), before Reset/Stop and
-// savestates, and draws in place, as without the thread, while display capture is on (capture reads the lines
-// back into VRAM at their time).
+// each scanline and sprite line only snapshots what it needs into a ring of jobs: the registers
+// (BananaRenderer2D::Prepare*), the 3D layer's line and the VRAM or FIFO display line when shown, and, through a
+// copy log, every VRAM block, palette half and OAM that changed since the last line. The 2D thread applies a job's
+// log to the engines' own copies of that memory, then draws the job into the back framebuffer, in order. So every
+// line is drawn from memory as it was at its own time, and the emulator never waits for the drawing, except:
+// before SwapBuffers (the frontend reads the framebuffer after the frame), Reset, Stop and savestates; when the job
+// ring or the log is full; and while display capture is on, when the emulator's thread waits for the 2D thread
+// and draws the lines itself (capture reads them back into VRAM at their time).
 class BananaRenderer : public SoftRenderer
 {
 public:
@@ -56,6 +57,7 @@ public:
     void Reset() override;
     void Stop() override;
     void PreSavestate() override;
+    void PostSavestate() override;
 
     void DrawScanline(u32 line) override;
     void DrawSprites(u32 line) override;
@@ -65,6 +67,7 @@ public:
     void SetThreaded2D(bool on);
     bool IsThreaded2D() const { return Thread2D; }
     bool Drain2D();   // wait until the 2D thread has drawn every line handed to it (false: it already had)
+    void Resync2D();  // after GPU::ResetVRAMCache (a savestate): the copies are made again from GPU's memory
 
 private:
     void OutputLineA(u32* dst, u32 dispcnt, u16 brightness, const u16* display);
@@ -85,6 +88,7 @@ private:
         Banana2DRegs Regs[2];
         alignas(16) u32 Line3D[256];  // the 3D layer's line, when unit A's DISPCNT enables 3D
         alignas(16) u16 Display[256];
+        u64 LogEnd;                 // the copy log up to here is applied before the job is drawn
     };
     static constexpr u32 NumJobs = 128;
     static constexpr u32 KickBatch = 16;  // jobs handed over before the thread is woken (fewer wakeups)
@@ -95,8 +99,21 @@ private:
     void Execute(Job& job);
     void WorkerLoop();
     void StopWorker();
-    static bool DrainHook(void* self) { return ((BananaRenderer*)self)->Drain2D(); }
+    // the copy log: a ring of {destination, length, data} records, 16-byte aligned. LogWrite (the emulator's
+    // thread) and LogRead (whichever thread draws, as it applies records) count bytes since the start.
+    static constexpr u32 LogSize = 4 << 20;
+    static constexpr u32 LogChunk = 64 << 10;
+    struct LogRecord { u8* Dst; u64 Len; };   // Dst null: skip to the ring's end
+    std::unique_ptr<u8[]> Log;
+    u64 LogWrite = 0;
+    std::atomic<u64> LogRead{0};
+    static void CopyHook(void* self, void* dst, const void* src, u32 len) { ((BananaRenderer*)self)->LogCopy(dst, src, len); }
+    void LogCopy(void* dst, const void* src, u32 len);
+    void LogReserve(u64 bytes);
+    void ApplyLog(u64 end);
     void DrawScanlineInPlace(u32 line);
+    void PrepareScanlineJob(Job& job, u32 line, u32*& line3d);
+    void PrepareSpritesJob(Job& job, u32 line);
 
     bool Thread2D = false;
     std::unique_ptr<Job[]> Jobs;
@@ -107,7 +124,7 @@ private:
     std::condition_variable Wake;
     bool KickPending = false, Quit = false;
     std::thread Worker;
-    u64 StatJobs = 0, StatInPlace = 0;
+    u64 StatJobs = 0, StatInPlace = 0, StatLogBytes = 0, StatWaits = 0;
 };
 
 }
