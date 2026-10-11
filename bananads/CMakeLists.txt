@@ -75,6 +75,13 @@ if(BANANADS_MELONDS_PATCHES)
     endforeach()
 endif()
 add_subdirectory(${MELONDS_SRC} melonds EXCLUDE_FROM_ALL)
+# melonDS builds everything position-independent (CMAKE_POSITION_INDEPENDENT_CODE), so GCC may not inline or
+# call directly any of the core's non-inline functions (another module could interpose them). BananaDS links the
+# core statically into one executable: nothing can, so say so. The same code, fewer calls (BANANADS_CORE_NOINTERPOSE).
+option(BANANADS_CORE_NOINTERPOSE "Build melonDS's core with -fno-semantic-interposition" ON)
+if(BANANADS_CORE_NOINTERPOSE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(core PRIVATE -fno-semantic-interposition)
+endif()
 
 # BananaJIT: our own code generator in melonDS's JIT framework, in place of melonDS's ARMJIT_A64 compiler.
 # melonDS picks its compiler in src/ARMJIT_Compiler.h; one guarded line there lets BANANADS_JIT pick ours
