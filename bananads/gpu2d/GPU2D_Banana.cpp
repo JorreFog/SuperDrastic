@@ -1337,9 +1337,20 @@ void BananaRenderer2D::DrawSprites(u32 line)
     DrawSpritesFrom(line, regs);
 }
 
+// what a sprite line reads of the registers (DrawSpritesFrom and the sprite drawing)
+void Banana2DRegs::FromSprites(const melonDS::GPU2D& g)
+{
+    Enabled = g.Enabled;
+    OBJEnable = g.OBJEnable;
+    DispCnt = g.DispCnt;
+    OBJMosaicLine = g.OBJMosaicLine;
+    OAMRebuild = false;
+}
+
 void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
 {
-    regs.From(GPU2D);
+    if (Banana2DFast) regs.FromSprites(GPU2D);
+    else              regs.From(GPU2D);
     if (NeedResync)
         DoResync();
 
@@ -1374,7 +1385,17 @@ void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
 
 void BananaRenderer2D::DrawSpritesFrom(u32 line, const Banana2DRegs& regs)
 {
-    R = regs;
+    if (Banana2DFast)
+    {
+        // (only what PrepareSprites copied: the next scanline sets the whole of R)
+        R.Enabled = regs.Enabled;
+        R.OBJEnable = regs.OBJEnable;
+        R.DispCnt = regs.DispCnt;
+        R.OBJMosaicLine = regs.OBJMosaicLine;
+        R.OAMRebuild = regs.OAMRebuild;
+    }
+    else
+        R = regs;
 
     if (!R.Enabled)
         return;

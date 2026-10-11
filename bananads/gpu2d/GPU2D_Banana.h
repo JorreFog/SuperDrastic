@@ -59,6 +59,7 @@ struct Banana2DRegs
     bool OAMRebuild;                      // rebuild the sprite table from OAMCopy
 
     void From(const melonDS::GPU2D& g);
+    void FromSprites(const melonDS::GPU2D& g);  // render.2d_fast: only what a sprite line reads
 };
 
 // BananaRenderer2D: a drop-in replacement for melonDS's SoftRenderer2D.
