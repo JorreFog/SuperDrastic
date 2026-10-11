@@ -281,9 +281,11 @@ void Compiler::FlushCycles() {
 }
 
 void Compiler::LoadFlags() {
+    if (FlagsEpoch == A.flagEpoch) return;  // nothing has written the host's NZCV since it held the guest's
     A.lsri(W5, RCPSR, 28);
     A.lsli(W5, W5, 28);
     A.msr_nzcv(W5);
+    FlagsEpoch = A.flagEpoch;
 }
 
 // AddCycles_CI(internal): a nonsequential code fetch (index 0/2, not AddCycles_C's 1/3) plus the internal
@@ -556,6 +558,7 @@ void Compiler::CompileALU() {
         case 11: A.adds(ZR, n, op2); break;                          // CMN
         }
         if (f) {
+            FlagsEpoch = A.flagEpoch;  // the host's NZCV is the guest's now (all four go to CPSR below)
             A.mrs_nzcv(W6);
             A.ubfx(W6, W6, 28, 4);
             A.bfi(RCPSR, W6, 28, 4);
@@ -1219,19 +1222,23 @@ bool Compiler::LoadLiteral(int size, int rd, u32 addr) {
     return true;
 }
 
-// x8-x15 (the fast-memory base and guest r8-r14) around a call from a slow path, plus `extra` bytes of stack
-// for its own use at sp+64. The guest's r0-r7, CPSR and cycles are in callee-saved registers.
+// x8-x15 (the fast-memory base and guest r8-r14) and the host's NZCV around a call from a slow path, plus
+// `extra` bytes of stack for its own use at sp+80. The guest's r0-r7, CPSR and cycles are in callee-saved registers.
 void Compiler::SaveCallerSaved(u32 extra) {
-    A.subxi(SP, SP, 64 + extra);
+    A.subxi(SP, SP, 80 + extra);
     for (int r = 8; r < 16; r += 2) A.stpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
+    A.mrs_nzcv((Reg)16);  // the block may be holding the guest's flags in the host's NZCV
+    A.strx((Reg)16, SP, 64);
     A.movi((Reg)16, R15);  // what the memory handlers read (the ARM7 BIOS checks the PC)
     A.str((Reg)16, RCPU, off_R(15));
     A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
 }
 
 void Compiler::RestoreCallerSaved(u32 extra) {
+    A.ldrx((Reg)16, SP, 64);
+    A.msr_nzcv((Reg)16);
     for (int r = 8; r < 16; r += 2) A.ldpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
-    A.addxi(SP, SP, 64 + extra);
+    A.addxi(SP, SP, 80 + extra);
 }
 
 // The access through melonDS's own slow functions (the ones its JIT's fast memory falls back to), with W1 the
@@ -1319,9 +1326,9 @@ void Compiler::SlowBlockTransfer(bool load, const int* regs, int n) {
     const u32 extra = (u32)((n * 8 + 15) & ~15);
     SaveCallerSaved(extra);
     if (!load)
-        for (int i = 0; i < n; i++) A.str(host(regs[i]), SP, 64 + i * 8);
+        for (int i = 0; i < n; i++) A.str(host(regs[i]), SP, 80 + i * 8);
     A.mov(W0, W1);
-    A.addxi(W1, SP, 64);
+    A.addxi(W1, SP, 80);
     A.movz(W2, (u32)n);
     const void* fn;
     if (CurCPU->Num == 0) {
@@ -1333,10 +1340,12 @@ void Compiler::SlowBlockTransfer(bool load, const int* regs, int n) {
                   : (dsi ? (const void*)&SlowBlockTransfer7<true, 1> : (const void*)&SlowBlockTransfer7<true, 0>);
     }
     A.jump(fn, true);
+    A.ldrx((Reg)16, SP, 64);
+    A.msr_nzcv((Reg)16);
     for (int r = 8; r < 16; r += 2) A.ldpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
     if (load)
-        for (int i = 0; i < n; i++) A.ldr(host(regs[i]), SP, 64 + i * 8);
-    A.addxi(SP, SP, 64 + extra);
+        for (int i = 0; i < n; i++) A.ldr(host(regs[i]), SP, 80 + i * 8);
+    A.addxi(SP, SP, 80 + extra);
 }
 
 // A block transfer with block timing: the words go straight between the guest registers and fast memory, two at
@@ -1560,6 +1569,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
     Loaded = Dirt = 0;
     FastMem = !Exact && NDS.JIT.FastMemoryEnabled();
     MemBaseOK = false;
+    FlagsEpoch = A.flagEpoch - 1;
     SlowPaths.clear();
 
     A.ldr(RCycles, RCPU, offsetof(ARM, Cycles));  // the prologue: PrologueBytes, skipped by linked jumps

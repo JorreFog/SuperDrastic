@@ -147,6 +147,12 @@ BananaDS is GPL, and DraStic is closed source. So:
 A change to melonDS's JIT is best sent upstream to melonDS as well, so BananaDS's core stays unpatched
 (docs/CORE.md).
 
+**One exception, decided by the owner on 2026-10-11: Gengis Engine.** BananaDS's 3D renderer `gengis/` is
+SuperDrastic's rasterizer (PR #8). Its pixel pipeline reproduces DraStic r2.5.2.2's 3D routines bit for bit, and
+it was written against `src/rast/spec/`, C ports of those routines made from the reverse engineering. The owner
+chose to use it in BananaDS anyway, for its speed. The rule above still holds for everything else, the JIT
+included. `gengis/README.md` lists what came from where.
+
 ## Testing a CPU back-end: `bananads-difftest`
 
 `tools/difftest.cpp` runs a ROM on two CPU configurations (default: interpreter, then JIT) and reports the

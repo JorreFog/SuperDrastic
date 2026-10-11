@@ -16,6 +16,9 @@ enum Cond : uint32_t { EQ, NE, CS, CC, MI, PL, VS, VC, HI, LS, GE, LT, GT, LE, A
 struct A64 {
     uint32_t* code;  // where the next word goes
     uint32_t* start;
+    // Bumped by every instruction that writes the host's NZCV and by every call (which may): a compiler can tell
+    // whether the flags it left in NZCV are still there.
+    uint32_t flagEpoch = 0;
 
     explicit A64(uint32_t* at = nullptr) : code(at), start(at) {}
     void put(uint32_t w) { *code++ = w; }
@@ -28,9 +31,9 @@ struct A64 {
         return (x ? 0x80000000u : 0) | base[op] | sh << 22 | m << 16 | (amt & 63) << 10 | n << 5 | d;
     }
     void add(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(false, 0, d, n, m, sh, a)); }
-    void adds(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(false, 1, d, n, m, sh, a)); }
+    void adds(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { flagEpoch++; put(addsub_reg(false, 1, d, n, m, sh, a)); }
     void sub(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(false, 2, d, n, m, sh, a)); }
-    void subs(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(false, 3, d, n, m, sh, a)); }
+    void subs(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { flagEpoch++; put(addsub_reg(false, 3, d, n, m, sh, a)); }
     void addx(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(true, 0, d, n, m, sh, a)); }
 
     // ADD/SUB (immediate, 0-4095, optionally << 12): op as above; n may be SP for ADD/SUB
@@ -40,8 +43,8 @@ struct A64 {
     }
     void addi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(false, 0, d, n, imm, false)); }
     void subi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(false, 2, d, n, imm, false)); }
-    void cmpi(Reg n, uint32_t imm) { put(addsub_imm(false, 3, ZR, n, imm, false)); }
-    void cmpx(Reg n, Reg m) { put(addsub_reg(true, 3, ZR, n, m, LSL, 0)); }
+    void cmpi(Reg n, uint32_t imm) { flagEpoch++; put(addsub_imm(false, 3, ZR, n, imm, false)); }
+    void cmpx(Reg n, Reg m) { flagEpoch++; put(addsub_reg(true, 3, ZR, n, m, LSL, 0)); }
     void addx_sxtw(Reg d, Reg n, Reg m) { put(0x8B20C000 | m << 16 | n << 5 | d); }  // d = n + (s64)(s32)m
     void addxi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 0, d, n, imm, false)); }
 
@@ -56,12 +59,12 @@ struct A64 {
     void orr(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(logic_reg(false, 2, d, n, m, sh, a)); }
     void orn(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(logic_reg(false, 3, d, n, m, sh, a)); }
     void eor(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(logic_reg(false, 4, d, n, m, sh, a)); }
-    void ands(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(logic_reg(false, 6, d, n, m, sh, a)); }
+    void ands(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { flagEpoch++; put(logic_reg(false, 6, d, n, m, sh, a)); }
     void mov(Reg d, Reg m) { orr(d, ZR, m); }
     void movx(Reg d, Reg m) { put(logic_reg(true, 2, d, ZR, m, LSL, 0)); }
     void orrx(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(logic_reg(true, 2, d, n, m, sh, a)); }
     void tst(Reg n, Reg m) { ands(ZR, n, m); }
-    void tstx(Reg n) { put(logic_reg(true, 6, ZR, n, n, LSL, 0)); }  // ANDS XZR, Xn, Xn (64-bit N/Z)
+    void tstx(Reg n) { flagEpoch++; put(logic_reg(true, 6, ZR, n, n, LSL, 0)); }  // ANDS XZR, Xn, Xn (64-bit N/Z)
 
     // ADC/SBC (flags in, optionally out)
     static uint32_t adcsbc(int op, Reg d, Reg n, Reg m) {  // 0 ADC, 1 ADCS, 2 SBC, 3 SBCS
@@ -69,9 +72,9 @@ struct A64 {
         return base[op] | m << 16 | n << 5 | d;
     }
     void adc(Reg d, Reg n, Reg m) { put(adcsbc(0, d, n, m)); }
-    void adcs(Reg d, Reg n, Reg m) { put(adcsbc(1, d, n, m)); }
+    void adcs(Reg d, Reg n, Reg m) { flagEpoch++; put(adcsbc(1, d, n, m)); }
     void sbc(Reg d, Reg n, Reg m) { put(adcsbc(2, d, n, m)); }
-    void sbcs(Reg d, Reg n, Reg m) { put(adcsbc(3, d, n, m)); }
+    void sbcs(Reg d, Reg n, Reg m) { flagEpoch++; put(adcsbc(3, d, n, m)); }
 
     // Shifts by register (the amount is taken mod 32, unlike ARM's: callers handle >= 32)
     static uint32_t shiftv(Shift sh, Reg d, Reg n, Reg m) { return 0x1AC02000 | m << 16 | sh << 10 | n << 5 | d; }
@@ -129,7 +132,7 @@ struct A64 {
 
     // Flags
     void mrs_nzcv(Reg t) { put(0xD53B4200 | t); }
-    void msr_nzcv(Reg t) { put(0xD51B4200 | t); }
+    void msr_nzcv(Reg t) { flagEpoch++; put(0xD51B4200 | t); }
     void cset(Reg d, Cond c) { put(0x1A9F07E0 | (c ^ 1) << 12 | d); }  // CSINC d, wzr, wzr, !c
     void csel(Reg d, Reg n, Reg m, Cond c) { put(0x1A800000 | m << 16 | c << 12 | n << 5 | d); }
 
@@ -205,7 +208,7 @@ struct A64 {
     void andi(Reg d, Reg n, uint32_t v) { put(logic_imm(0, d, n, v)); }   // v must be encodable
     void orri(Reg d, Reg n, uint32_t v) { put(logic_imm(1, d, n, v)); }
     void eori(Reg d, Reg n, uint32_t v) { put(logic_imm(2, d, n, v)); }
-    void tsti(Reg n, uint32_t v) { put(logic_imm(3, ZR, n, v)); }
+    void tsti(Reg n, uint32_t v) { flagEpoch++; put(logic_imm(3, ZR, n, v)); }
 
     // Branches. Offsets are in words from the branch itself; patch() fills one in later.
     static uint32_t b_(int32_t words) { return 0x14000000 | (words & 0x3FFFFFF); }
@@ -214,7 +217,7 @@ struct A64 {
     static uint32_t cbz_(Reg t, int32_t words) { return 0x34000000 | (words & 0x7FFFF) << 5 | t; }
     static uint32_t cbnz_(Reg t, int32_t words) { return 0x35000000 | (words & 0x7FFFF) << 5 | t; }
     void br(Reg n) { put(0xD61F0000 | n << 5); }
-    void blr(Reg n) { put(0xD63F0000 | n << 5); }
+    void blr(Reg n) { flagEpoch++; put(0xD63F0000 | n << 5); }
     void ret() { put(0xD65F03C0); }
     void nop() { put(0xD503201F); }
     void brk() { put(0xD4200000); }
@@ -233,6 +236,7 @@ struct A64 {
     // A direct branch or call to an absolute address, when it's within +-128 MB; else through x16.
     void jump(const void* target, bool link) {
         int64_t d = ((const uint8_t*)target - (const uint8_t*)code) / 4;
+        if (link) flagEpoch++;
         if (d >= -(1 << 25) && d < (1 << 25)) put(link ? bl_((int32_t)d) : b_((int32_t)d));
         else { movix((Reg)16, (uint64_t)(uintptr_t)target); link ? blr((Reg)16) : br((Reg)16); }
     }

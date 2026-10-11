@@ -1,4 +1,7 @@
 #include "emu.h"
+#ifdef BANANADS_GENGIS
+#include "gengis_renderer.h"
+#endif
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -201,8 +204,18 @@ bool Emu::load_rom(const std::string& path) {
     RendererSettings rs{};
     rs.ScaleFactor = 1;
     rs.Threaded = cfg_.flag("render.threaded", true);
-    nds_->SetRenderer(std::make_unique<SoftRenderer>(*nds_));
-    nds_->GetRenderer().SetRenderSettings(rs);
+#ifdef BANANADS_GENGIS
+    // render.renderer: gengis (the default: Gengis Engine, SuperDrastic's rasterizer, on render.gengis_threads
+    // threads) or soft (melonDS's software renderer, render.threaded)
+    if (cfg_.str("render.renderer", "gengis") == "gengis") {
+        nds_->SetRenderer(std::make_unique<GengisSoftRenderer>(*nds_, (int)cfg_.num("render.gengis_threads", 3),
+                                                               cfg_.flag("render.gengis_defer", false)));
+    } else
+#endif
+    {
+        nds_->SetRenderer(std::make_unique<SoftRenderer>(*nds_));
+        nds_->GetRenderer().SetRenderSettings(rs);
+    }
 
     time_t t = time(nullptr);
     tm lt;

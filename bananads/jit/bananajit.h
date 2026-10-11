@@ -55,7 +55,8 @@ private:
     void Need(int guest);      // load it if this block hasn't yet
     void Dirty(int guest);     // it now holds a new value
     void FlushRegs(bool forget);  // store dirty registers; forget = they must be reloaded (after a call)
-    void LoadFlags();          // host NZCV <- CPSR
+    void LoadFlags();          // host NZCV <- CPSR, unless the host's NZCV still holds them
+    u32 FlagsEpoch = ~0u;      // host NZCV == CPSR's NZCV while this equals A.flagEpoch
     void ExitBlock(bool known = false, u32 knownPC = 0);  // knownPC: the R15 it leaves, when constant
     void Fallback(bool thumb);
     void CompileALU();

@@ -9,7 +9,11 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 |---|---|---|
 | `frontend` | `sdl` (or `headless` in a build without SDL) | `sdl`, `headless`; `kms` comes with milestone D |
 | `jit` | `on` | melonDS's JIT; `off` for the interpreter (slow, for debugging) |
-| `render.threaded` | `on` | the software 3D renderer on its own thread |
+| `jit.timing` | `block` | BananaJIT's timing: `block` (melonDS's JIT's level: fast memory, cycles counted per block) or `exact` (the interpreter's, cycle for cycle; slower) |
+| `render.renderer` | `gengis` | the 3D renderer: `gengis` (Gengis Engine, SuperDrastic's rasterizer, on several threads; aarch64 builds) or `soft` (melonDS's software renderer) |
+| `render.gengis_threads` | `3` | Gengis Engine's render threads (the emulator's thread also renders a bin when it has to wait for one) |
+| `render.gengis_defer` | `off` | Gengis Engine's deferred shading of opaque polygons |
+| `render.threaded` | `on` | melonDS's software 3D renderer on its own thread (`render.renderer=soft`) |
 | `save.dir` | the ROM's folder | where `<game>.sav` lives |
 | `save.per_game_folder` | `off` | `<save.dir>/<game>/<game>.sav` (ROCKNIXDS #42/#56) |
 | `state.dir` | the save folder | savestates: `<game>.resume.mst` (the quit/resume state) and `<game>.<1-3>.mst`, each with a `.pic` |
