@@ -115,5 +115,10 @@ int main() {
     E("umaddl x0, w1, w2, x17", a.umaddl((Reg)0, (Reg)1, (Reg)2, (Reg)17));
     E("orr x17, x19, x9, lsl #32", a.orrx((Reg)17, (Reg)19, (Reg)9, LSL, 32));
     E("tst x17, x17", a.tstx((Reg)17));
+    E("stp w3, w4, [sp]", a.stp((Reg)3, (Reg)4, SP, 0));
+    E("stp w26, w9, [sp, #8]", a.stp((Reg)26, (Reg)9, SP, 8));
+    E("stp w9, w10, [x2, #252]", a.stp((Reg)9, (Reg)10, (Reg)2, 252));
+    E("ldp w19, w20, [x3, #56]", a.ldp((Reg)19, (Reg)20, (Reg)3, 56));
+    E("ldp w3, w4, [sp, #-8]", a.ldp((Reg)3, (Reg)4, SP, -8));
     return 0;
 }

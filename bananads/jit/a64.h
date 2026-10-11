@@ -151,6 +151,11 @@ struct A64 {
     void mulx(Reg d, Reg n, Reg m) { put(0x9B007C00 | m << 16 | n << 5 | d); }  // MADD d, n, m, xzr
     void ldrx_reg_lsl3(Reg t, Reg n, Reg m) { put(0xF8607800 | m << 16 | n << 5 | t); }  // [Xn, Xm, LSL #3]
 
+    // Load/store register pair, 32-bit (W), signed scaled offset (imm7 * 4, -256..252): block transfers gather
+    // and scatter the register list through a scratch buffer two words at a time with these.
+    void stp(Reg t, Reg t2, Reg n, int32_t off) { put(0x29000000 | ((uint32_t)(off / 4) & 0x7F) << 15 | t2 << 10 | n << 5 | t); }
+    void ldp(Reg t, Reg t2, Reg n, int32_t off) { put(0x29400000 | ((uint32_t)(off / 4) & 0x7F) << 15 | t2 << 10 | n << 5 | t); }
+
     // Branches. Offsets are in words from the branch itself; patch() fills one in later.
     static uint32_t b_(int32_t words) { return 0x14000000 | (words & 0x3FFFFFF); }
     static uint32_t bl_(int32_t words) { return 0x94000000 | (words & 0x3FFFFFF); }
