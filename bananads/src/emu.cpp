@@ -46,10 +46,13 @@ static void mkdirs(const std::string& dir) {
 }
 
 static bool read_file(const std::string& path, std::vector<uint8_t>& out) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) return false;
-    out.assign(std::istreambuf_iterator<char>(f), {});
-    return true;
+    const std::streamoff n = f.tellg();
+    if (n < 0) return false;
+    out.resize((size_t)n);
+    f.seekg(0);
+    return n == 0 || (bool)f.read((char*)out.data(), n);  // in one read: a 128 MB ROM byte by byte took seconds
 }
 
 // Write next to it, then rename: a save is never half written, whatever happens to the power.

@@ -166,6 +166,7 @@ struct A64 {
     void subxi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 2, d, n, imm, false)); }  // n/d may be SP
 
     void addxi12(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 0, d, n, imm, true)); }  // + imm << 12
+    void subxi12(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 2, d, n, imm, true)); }  // - imm << 12
     void add_uxtw(Reg d, Reg n, Reg m) { put(0x8B204000 | m << 16 | n << 5 | d); }  // Xd = Xn + (u64)Wm
     // ADRP: Xd = the 4 KB page of `target`, from the page of this instruction (+-4 GB)
     void adrp(Reg d, const void* target) {

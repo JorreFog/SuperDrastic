@@ -18,6 +18,10 @@
 #include "Platform.h"
 
 extern "C" void ARM_Ret();
+extern "C" void BJ_RetState();  // linkage.S: stores w28 (cycles) and w27 (CPSR), then ARM_Ret
+// linkage.S's ARM_Dispatch and BJ_RetState read these offsets
+extern "C" const melonDS::u32 bj_offsets[2];
+extern "C" const melonDS::u32 bj_offsets[2] = { (melonDS::u32)offsetof(melonDS::ARM, Cycles), (melonDS::u32)offsetof(melonDS::ARM, CPSR) };
 
 namespace melonDS {
 
@@ -64,16 +68,17 @@ static FILE* PerfMap() {
     return f;
 }
 
+// ... and each block's code as it is compiled (/tmp/bananajit-<pid>.code: u64 address, u32 bytes, the code), so a
+// profile's hot blocks can be disassembled (the code memory is reset before the compiler is destroyed)
+static FILE* CodeDump() {
+    static FILE* f = getenv("BANANAJIT_PERFMAP") ? fopen(("/tmp/bananajit-" + std::to_string(getpid()) + ".code").c_str(), "wb")
+                                                 : nullptr;
+    return f;
+}
+
 Compiler::~Compiler() {
-    if (PerfMap()) {
-        fflush(PerfMap());
-        char name[96];
-        snprintf(name, sizeof name, "/tmp/bananajit-%d-%llx.bin", (int)getpid(), (unsigned long long)(uintptr_t)CodeBase);
-        if (FILE* f = fopen(name, "wb")) {
-            fwrite(CodeBase, 1, (u8*)A.here() - CodeBase, f);
-            fclose(f);
-        }
-    }
+    if (PerfMap()) fflush(PerfMap());
+    if (CodeDump()) fflush(CodeDump());
     ARMJIT_Global::FreeCodeMem(CodeMemBase);
 }
 
@@ -281,12 +286,15 @@ void Compiler::FlushCycles() {
     ConstantCycles = 0;
 }
 
-void Compiler::LoadFlags() {
+// cond: the condition the flags are for (-1: all four needed). EQ, NE, MI and PL read only N and Z, which a
+// logical S instruction's TST leaves right in the host's NZCV (its C and V are not the guest's)
+void Compiler::LoadFlags(int cond) {
     if (FlagsEpoch == A.flagEpoch) return;  // nothing has written the host's NZCV since it held the guest's
+    if ((cond == 0 || cond == 1 || cond == 4 || cond == 5) && NZEpoch == A.flagEpoch) return;
     A.lsri(W5, RCPSR, 28);
     A.lsli(W5, W5, 28);
     A.msr_nzcv(W5);
-    FlagsEpoch = A.flagEpoch;
+    FlagsEpoch = NZEpoch = A.flagEpoch;
 }
 
 // AddCycles_CI(internal): a nonsequential code fetch (index 0/2, not AddCycles_C's 1/3) plus the internal
@@ -318,67 +326,90 @@ s32 Compiler::CyclesC() const {
 // two loads that ARM_Dispatch's entry needs), and only the way back to the loop stores them. knownPC: the R15
 // this exit leaves, when the compiler knows it (a block that runs on into the next instruction); it is then
 // stored on the way back only, and instrAddr is a constant.
-static constexpr u32 PrologueBytes = 8;
+// x16 <- the address p, from the CPU pointer when it is within 16 MB of it (two adds), else as a constant
+void Compiler::AddrNearCPU(Reg d, const void* p) {
+    const intptr_t delta = (const u8*)p - (const u8*)CurCPU;
+    const uintptr_t mag = delta < 0 ? (uintptr_t)-delta : (uintptr_t)delta;
+    if (mag < (1u << 24)) {
+        const u32 hi = (u32)(mag >> 12), lo = (u32)(mag & 0xFFF);
+        Reg src = RCPU;
+        if (hi) { delta < 0 ? A.subxi12(d, RCPU, hi) : A.addxi12(d, RCPU, hi); src = d; }
+        if (lo || !hi) delta < 0 ? A.subxi(d, src, lo) : A.addxi(d, src, lo);
+        return;
+    }
+    A.movix(d, (uint64_t)(uintptr_t)p);
+}
 
 void Compiler::ExitBlock(bool known, u32 knownPC, int thumbAfter, bool addrInW0) {
     const bool thumbExit = thumbAfter < 0 ? Thumb : thumbAfter != 0;
     FlushCycles();
     FlushRegs(false);
-    auto back = [&]() {  // to the loop, with the state it reads in memory
+    auto back = [&]() {  // to the loop, with the state it reads in memory (BJ_RetState stores cycles and CPSR)
         if (known) { A.movi(W0, knownPC); A.str(W0, RCPU, off_R(15)); }
-        A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
-        A.str(RCycles, RCPU, offsetof(ARM, Cycles));
-        A.jump((const void*)&ARM_Ret, false);
+        A.jump((const void*)&BJ_RetState, false);
     };
     if (!LinkBlocks) { back(); return; }
     const Reg X0r = W0, X16 = (Reg)16, X17 = (Reg)17;
     if (addrInW0) A.mov(W2, W0);  // (the Timestamp/Target pair is loaded into x17/x0 below)
     u64* ts = CurCPU->Num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp;  // its Target is the next u64
 
+    std::vector<A64::Fixup> toBack;
     A.ldr(X16, RCPU, offsetof(ARM, StopExecution));
-    auto stop = A.cbnz_fwd(X16);
+    toBack.push_back(A.cbnz_fwd(X16));
 
-    A.movix(X16, (uint64_t)(uintptr_t)ts);
+    AddrNearCPU(X16, ts);
     A.ldpx(X17, X0r, X16, 0);     // Timestamp, Target
     A.addx_sxtw(X17, X17, RCycles);
     A.strx(X17, X16, 0);
     A.movz(RCycles, 0);
     A.cmpx(X17, X0r);
-    auto late = A.bcond_fwd(CS);  // Timestamp >= Target (unsigned)
+    toBack.push_back(A.bcond_fwd(CS));  // Timestamp >= Target (unsigned)
 
     if (known) {
-        A.movi(X0r, knownPC - (thumbExit ? 2 : 4));  // instrAddr
-    } else if (addrInW0) {
-        A.mov(X0r, W2);  // EmitJumpTo's instrAddr (R15 and the Thumb bit are in place)
+        // The loop set the lookup region up for this block's address before compiling it, and a block only runs
+        // while its region is the loop's: a target in the same region has its table entry at a known address
+        const u32 instrAddr = knownPC - (thumbExit ? 2 : 4);
+        const u32 off = instrAddr - CurCPU->FastBlockLookupStart;
+        if (!CurCPU->FastBlockLookup || off >= CurCPU->FastBlockLookupSize) {
+            for (auto f : toBack) A.land(f);
+            back();  // another region: the loop sets it up
+            return;
+        }
+        A.movix(X16, (uint64_t)(uintptr_t)&CurCPU->FastBlockLookup[off >> 1]);
+        A.ldrx(X16, X16, 0);
+        A.lsrxi(X17, X16, 32);
+        A.movi(X0r, instrAddr | (CurCPU->Num ? 1 : 0));
+        A.subs(ZR, X17, X0r);
+        toBack.push_back(A.bcond_fwd(NE));
     } else {
-        A.ldr(X0r, RCPU, off_R(15));
-        A.ubfx(X17, RCPSR, 5, 1);     // Thumb: 2, ARM: 4
-        A.lsli(X17, X17, 1);
-        A.movz(X16, 4);
-        A.sub(X17, X16, X17);
-        A.sub(X0r, X0r, X17);         // instrAddr
+        if (addrInW0) {
+            A.mov(X0r, W2);  // EmitJumpTo's instrAddr (R15 and the Thumb bit are in place)
+        } else {
+            A.ldr(X0r, RCPU, off_R(15));
+            A.ubfx(X17, RCPSR, 5, 1);     // Thumb: 2, ARM: 4
+            A.lsli(X17, X17, 1);
+            A.movz(X16, 4);
+            A.sub(X17, X16, X17);
+            A.sub(X0r, X0r, X17);         // instrAddr
+        }
+        A.ldr(X16, RCPU, offsetof(ARM, FastBlockLookupStart));
+        A.sub(X17, X0r, X16);         // offset (huge when below Start)
+        A.ldr(X16, RCPU, offsetof(ARM, FastBlockLookupSize));
+        A.subs(ZR, X17, X16);
+        toBack.push_back(A.bcond_fwd(CS));
+        A.ldrx(X16, RCPU, offsetof(ARM, FastBlockLookup));
+        A.lsri(X17, X17, 1);
+        A.ldrx_reg_lsl3(X16, X16, X17);
+        if (CurCPU->Num) A.addi(X0r, X0r, 1);  // instrAddr | 1 (it is even)
+        A.lsrxi(X17, X16, 32);
+        A.subs(ZR, X17, X0r);
+        toBack.push_back(A.bcond_fwd(NE));
     }
-    A.ldr(X16, RCPU, offsetof(ARM, FastBlockLookupStart));
-    A.sub(X17, X0r, X16);         // offset (huge when below Start)
-    A.ldr(X16, RCPU, offsetof(ARM, FastBlockLookupSize));
-    A.subs(ZR, X17, X16);
-    auto outside = A.bcond_fwd(CS);
-    A.ldrx(X16, RCPU, offsetof(ARM, FastBlockLookup));
-    A.lsri(X17, X17, 1);
-    A.ldrx_reg_lsl3(X16, X16, X17);
-    if (CurCPU->Num) A.addi(X0r, X0r, 1);  // instrAddr | 1 (it is even)
-    A.lsrxi(X17, X16, 32);
-    A.subs(ZR, X17, X0r);
-    auto miss = A.bcond_fwd(NE);
-    A.adrp(X17, CodeBase);        // the code memory is page-aligned
-    A.addxi(X17, X17, PrologueBytes);
+    A.adrp(X17, CodeBase);        // the code memory is page-aligned; blocks have no prologue (ARM_Dispatch's)
     A.add_uxtw(X16, X17, X16);    // the low 32 bits: the entry's offset in code memory
     A.br(X16);
 
-    A.land(stop);
-    A.land(late);
-    A.land(outside);
-    A.land(miss);
+    for (auto f : toBack) A.land(f);
     back();
 }
 
@@ -544,6 +575,7 @@ void Compiler::CompileALU() {
         }
         if (flags & (ARMInstrInfo::flag_N | ARMInstrInfo::flag_Z)) {
             A.tst(d, d);
+            NZEpoch = A.flagEpoch;  // (N and Z are the guest's; C and V are not)
             A.mrs_nzcv(W6);
             A.ubfx(W6, W6, 30, 2);
             A.bfi(RCPSR, W6, 30, 2);
@@ -563,7 +595,7 @@ void Compiler::CompileALU() {
         case 11: A.adds(ZR, n, op2); break;                          // CMN
         }
         if (f) {
-            FlagsEpoch = A.flagEpoch;  // the host's NZCV is the guest's now (all four go to CPSR below)
+            FlagsEpoch = NZEpoch = A.flagEpoch;  // the host's NZCV is the guest's now (all four go to CPSR below)
             A.mrs_nzcv(W6);
             A.ubfx(W6, W6, 28, 4);
             A.bfi(RCPSR, W6, 28, 4);
@@ -626,6 +658,7 @@ void Compiler::CompileMul() {
         Dirty(rdHi);
         if (flags & (flag_N | flag_Z)) {
             A.tst(host(rdHi), host(rdHi));
+            NZEpoch = A.flagEpoch;
             A.mrs_nzcv(W6);
             A.ubfx(W6, W6, 30, 2);
             A.bfi(RCPSR, W6, 30, 2);
@@ -643,6 +676,7 @@ void Compiler::CompileMul() {
         }
         if (flags & (flag_N | flag_Z)) {
             A.tstx(X17);
+            NZEpoch = A.flagEpoch;
             A.mrs_nzcv(W6);
             A.ubfx(W6, W6, 30, 2);
             A.bfi(RCPSR, W6, 30, 2);
@@ -1227,29 +1261,56 @@ bool Compiler::LoadLiteral(int size, int rd, u32 addr) {
     return true;
 }
 
-// x8-x15 (the fast-memory base and guest r8-r14) and the host's NZCV around a call from a slow path, plus
-// `extra` bytes of stack for its own use at sp+80. The guest's r0-r7, CPSR and cycles are in callee-saved registers.
-void Compiler::SaveCallerSaved(u32 extra) {
-    A.subxi(SP, SP, 80 + extra);
-    for (int r = 8; r < 16; r += 2) A.stpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
-    A.mrs_nzcv((Reg)16);  // the block may be holding the guest's flags in the host's NZCV
-    A.strx((Reg)16, SP, 64);
-    A.movi((Reg)16, R15);  // what the memory handlers read (the ARM7 BIOS checks the PC)
-    A.str((Reg)16, RCPU, off_R(15));
-    A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
+// What a slow path's call must keep, as it is where the access is compiled: x8 (the fast-memory base) when the
+// block relies on it, the host registers of the guest's r8-r14 that hold their values, and the host's NZCV when it
+// holds the guest's flags. (r0-r7, the CPSR and the cycles are in callee-saved registers.)
+Compiler::SaveSet Compiler::LiveSet() const {
+    u32 m = MemBaseOK ? 1 : 0;
+    for (int g = 8; g < 15; g++)
+        if (Loaded & (1 << g)) m |= 1u << (host(g) - 8);
+    return {(u8)m, FlagsEpoch == A.flagEpoch || NZEpoch == A.flagEpoch};
 }
 
-void Compiler::RestoreCallerSaved(u32 extra) {
-    A.ldrx((Reg)16, SP, 64);
-    A.msr_nzcv((Reg)16);
-    for (int r = 8; r < 16; r += 2) A.ldpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
+// That set around a call from a slow path, plus `extra` bytes of stack for its own use at sp+80
+void Compiler::SaveCallerSaved(u32 extra, SaveSet ss) {
+    A.subxi(SP, SP, 80 + extra);
+    for (int k = 0; k < 4; k++) {
+        const bool a = (ss.regs >> (2 * k)) & 1, b = (ss.regs >> (2 * k + 1)) & 1;
+        const Reg r0 = (Reg)(8 + 2 * k), r1 = (Reg)(9 + 2 * k);
+        if (a && b) A.stpx(r0, r1, SP, 16 * k);
+        else if (a) A.strx(r0, SP, 16 * k);
+        else if (b) A.strx(r1, SP, 16 * k + 8);
+    }
+    if (ss.nzcv) {
+        A.mrs_nzcv((Reg)16);
+        A.strx((Reg)16, SP, 64);
+    }
+    if (CurCPU->Num == 1) {  // the ARM7's BIOS can only be read from inside it: its handlers check the PC
+        A.movi((Reg)16, R15);
+        A.str((Reg)16, RCPU, off_R(15));
+    }
+}
+
+void Compiler::RestoreCallerSaved(u32 extra, SaveSet ss) {
+    if (ss.nzcv) {
+        A.ldrx((Reg)16, SP, 64);
+        A.msr_nzcv((Reg)16);
+    }
+    for (int k = 0; k < 4; k++) {
+        const bool a = (ss.regs >> (2 * k)) & 1, b = (ss.regs >> (2 * k + 1)) & 1;
+        const Reg r0 = (Reg)(8 + 2 * k), r1 = (Reg)(9 + 2 * k);
+        if (a && b) A.ldpx(r0, r1, SP, 16 * k);
+        else if (a) A.ldrx(r0, SP, 16 * k);
+        else if (b) A.ldrx(r1, SP, 16 * k + 8);
+    }
     A.addxi(SP, SP, 80 + extra);
 }
 
 // The access through melonDS's own slow functions (the ones its JIT's fast memory falls back to), with W1 the
 // address and `val` a store's value; a load's value ends in `dst`. Nothing else changes.
-void Compiler::SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, Reg val) {
+void Compiler::SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, Reg val, SaveSet ss) {
     const bool dsi = NDS.ConsoleType != 0;
+    const bool flagsFull = FlagsEpoch == A.flagEpoch, flagsNZ = NZEpoch == A.flagEpoch;
     const void* fn;
     if (CurCPU->Num == 0) {
         if (load) fn = size == 4 ? (dsi ? (const void*)&SlowRead9<u32, 1> : (const void*)&SlowRead9<u32, 0>)
@@ -1266,7 +1327,7 @@ void Compiler::SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, 
                 : size == 2 ? (dsi ? (const void*)&SlowWrite7<u16, 1> : (const void*)&SlowWrite7<u16, 0>)
                             : (dsi ? (const void*)&SlowWrite7<u8, 1> : (const void*)&SlowWrite7<u8, 0>);
     }
-    SaveCallerSaved(0);
+    SaveCallerSaved(0, ss);
     // SlowRead*<u32> rotates an unaligned word; a load that doesn't (Thumb's PC/SP-relative LDR) passes it aligned
     auto addr = [&]() { if (load && size == 4 && !rotate) A.andi(W0, W1, ~3u); else A.mov(W0, W1); };
     if (CurCPU->Num == 0) {  // SlowRead9(addr, cpu) / SlowWrite9(addr, cpu, val)
@@ -1278,11 +1339,15 @@ void Compiler::SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, 
         if (!load) A.mov(W1, val);
     }
     A.jump(fn, true);
-    RestoreCallerSaved(0);
+    RestoreCallerSaved(0, ss);
     if (load) {
         if (size == 4) A.mov(dst, W0);
         else if (size == 2) sign ? A.sxth(dst, W0) : A.uxth(dst, W0);
         else sign ? A.sxtb(dst, W0) : A.uxtb(dst, W0);
+    }
+    if (ss.nzcv) {  // (restored: the guest's flags are still in the host's NZCV)
+        if (flagsFull) FlagsEpoch = A.flagEpoch;
+        if (flagsNZ) NZEpoch = A.flagEpoch;
     }
 }
 
@@ -1292,7 +1357,7 @@ void Compiler::SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, 
 void Compiler::FastAccess(bool load, int size, bool sign, bool rotate, int rd, Reg val) {
     const Reg dst = load ? host(rd) : val;
     if (StaticSlow()) {
-        SlowAccess(load, size, sign, rotate, dst, val);
+        SlowAccess(load, size, sign, rotate, dst, val, LiveSet());
     } else {
         EnsureMemBase();
         u32* seq = A.here();
@@ -1313,10 +1378,11 @@ void Compiler::FastAccess(bool load, int size, bool sign, bool rotate, int rd, R
             else A.strb_reg(val, (Reg)8, idx);
         }
         const u32 r15 = R15;
+        const SaveSet ss = LiveSet();
         SlowPaths.push_back({seq, {at}, A.here(), [=]() {
             const u32 keep = R15;
             R15 = r15;
-            SlowAccess(load, size, sign, rotate, dst, val);
+            SlowAccess(load, size, sign, rotate, dst, val, ss);
             R15 = keep;
         }});
     }
@@ -1326,10 +1392,11 @@ void Compiler::FastAccess(bool load, int size, bool sign, bool rotate, int rd, R
 
 // A block transfer's slow path: melonDS's SlowBlockTransfer9/7 with the words in a stack buffer (u64 slots).
 // W1 holds the lowest address. A load's registers are written from the buffer after x8-x15 are restored.
-void Compiler::SlowBlockTransfer(bool load, const int* regs, int n) {
+void Compiler::SlowBlockTransfer(bool load, const int* regs, int n, SaveSet ss) {
     const bool dsi = NDS.ConsoleType != 0;
+    const bool flagsFull = FlagsEpoch == A.flagEpoch, flagsNZ = NZEpoch == A.flagEpoch;
     const u32 extra = (u32)((n * 8 + 15) & ~15);
-    SaveCallerSaved(extra);
+    SaveCallerSaved(extra, ss);
     if (!load)
         for (int i = 0; i < n; i++) A.str(host(regs[i]), SP, 80 + i * 8);
     A.mov(W0, W1);
@@ -1345,12 +1412,24 @@ void Compiler::SlowBlockTransfer(bool load, const int* regs, int n) {
                   : (dsi ? (const void*)&SlowBlockTransfer7<true, 1> : (const void*)&SlowBlockTransfer7<true, 0>);
     }
     A.jump(fn, true);
-    A.ldrx((Reg)16, SP, 64);
-    A.msr_nzcv((Reg)16);
-    for (int r = 8; r < 16; r += 2) A.ldpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
+    // a load's words: into the registers that are not restored now, and into the stack slots of those that are
+    // (the restore then puts them in place)
     if (load)
-        for (int i = 0; i < n; i++) A.ldr(regs[i] == 15 ? W0 : host(regs[i]), SP, 80 + i * 8);
-    A.addxi(SP, SP, 80 + extra);
+        for (int i = 0; i < n; i++) {
+            const int g = regs[i];
+            const Reg h = g == 15 ? W0 : host(g);
+            if (g != 15 && h >= 8 && h <= 15 && ((ss.regs >> (h - 8)) & 1)) {
+                A.ldr((Reg)16, SP, 80 + i * 8);
+                A.str((Reg)16, SP, 8 * (h - 8));  // (the low half of its x slot)
+            } else {
+                A.ldr(h, SP, 80 + i * 8);
+            }
+        }
+    RestoreCallerSaved(extra, ss);
+    if (ss.nzcv) {
+        if (flagsFull) FlagsEpoch = A.flagEpoch;
+        if (flagsNZ) NZEpoch = A.flagEpoch;
+    }
 }
 
 // A block transfer with block timing: the words go straight between the guest registers and fast memory, two at
@@ -1362,7 +1441,7 @@ bool Compiler::FastBlockTransfer(bool load, int rn, const int* regs, int n) {
     for (int i = 0; i < n; i++) if (regs[i] != 15) load ? Dirty(regs[i]) : Need(regs[i]);
     auto xr = [&](int g) { return g == 15 ? W0 : host(g); };  // a loaded PC goes to W0 (CompileJump)
     if (StaticSlow()) {
-        SlowBlockTransfer(load, regs, n);
+        SlowBlockTransfer(load, regs, n, LiveSet());
     } else {
         EnsureMemBase();
         u32* seq = A.here();
@@ -1383,10 +1462,11 @@ bool Compiler::FastBlockTransfer(bool load, int rn, const int* regs, int n) {
         }
         std::vector<int> list(regs, regs + n);
         const u32 r15 = R15;
+        const SaveSet ss = LiveSet();
         SlowPaths.push_back({seq, faulting, A.here(), [=]() {
             const u32 keep = R15;
             R15 = r15;
-            SlowBlockTransfer(load, list.data(), (int)list.size());
+            SlowBlockTransfer(load, list.data(), (int)list.size(), ss);
             R15 = keep;
         }});
     }
@@ -1807,11 +1887,10 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
     Loaded = Dirt = 0;
     FastMem = !Exact && NDS.JIT.FastMemoryEnabled();
     MemBaseOK = false;
-    FlagsEpoch = A.flagEpoch - 1;
+    FlagsEpoch = NZEpoch = A.flagEpoch - 1;
     SlowPaths.clear();
 
-    A.ldr(RCycles, RCPU, offsetof(ARM, Cycles));  // the prologue: PrologueBytes, skipped by linked jumps
-    A.ldr(RCPSR, RCPU, offsetof(ARM, CPSR));
+    // (no prologue: ARM_Dispatch loads the cycles and CPSR, and linked blocks keep them in w28/w27)
 
     static const bool trace = getenv("BANANAJIT_TRACE") != nullptr;
     if (trace)
@@ -1867,6 +1946,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
         }
 
         A64::Fixup skip{};
+        bool preFull = true;
         bool conditional = cond < 0xE && !(!thumb && kind == ARMInstrInfo::ak_BLX_IMM);
         CurConditional = conditional;
         if (conditional) {
@@ -1879,7 +1959,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
                 FlushRegs(false);
             }
             FlushCycles();
-            LoadFlags();
+            LoadFlags((int)cond);
+            preFull = FlagsEpoch == A.flagEpoch;  // (N and Z only, when the condition reads no more)
             skip = A.bcond_fwd((Cond)(cond ^ 1));
         }
 
@@ -1947,6 +2028,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
             ConstantCycles = cyc;
             special(false);
             A.land(join);
+            // the skip path's host C and V are not the guest's when only N and Z were valid before the branch
+            if (!preFull && FlagsEpoch == A.flagEpoch) FlagsEpoch = A.flagEpoch - 1;
         } else {
             special(true);
         }
@@ -1966,9 +2049,13 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
     CurConditional = false;
 
     __builtin___clear_cache((char*)start, (char*)A.here());
-    if (PerfMap())
+    if (PerfMap()) {
         fprintf(PerfMap(), "%llx %llx bj%d_%s_%08x\n", (unsigned long long)(uintptr_t)start,
                 (unsigned long long)((u8*)A.here() - (u8*)start), cpu->Num ? 7 : 9, thumb ? "t" : "a", instrs[0].Addr);
+        const uint64_t at = (uint64_t)(uintptr_t)start;
+        const uint32_t len = (uint32_t)((u8*)A.here() - (u8*)start);
+        fwrite(&at, 8, 1, CodeDump()); fwrite(&len, 4, 1, CodeDump()); fwrite(start, 1, len, CodeDump());
+    }
     return (JitBlockEntry)start;
 }
 

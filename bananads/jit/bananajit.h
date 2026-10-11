@@ -51,12 +51,14 @@ public:
 
 private:
     using Reg = bananajit::Reg;
+    struct SaveSet { u8 regs; bool nzcv; };  // what a slow path's call keeps: regs bit k = x(8 + k)
     Reg host(int guest) const;
     void Need(int guest);      // load it if this block hasn't yet
     void Dirty(int guest);     // it now holds a new value
     void FlushRegs(bool forget);  // store dirty registers; forget = they must be reloaded (after a call)
-    void LoadFlags();          // host NZCV <- CPSR, unless the host's NZCV still holds them
+    void LoadFlags(int cond = -1);  // host NZCV <- CPSR, unless the host's NZCV still holds what cond reads
     u32 FlagsEpoch = ~0u;      // host NZCV == CPSR's NZCV while this equals A.flagEpoch
+    u32 NZEpoch = ~0u;         // host N and Z == CPSR's while this equals A.flagEpoch
     // knownPC: the R15 it leaves, when constant; thumbAfter: the Thumb state then (-1: the block's)
     // addrInW0: the target's instruction address is in W0 (EmitJumpTo), R15 and the Thumb bit already set
     void ExitBlock(bool known = false, u32 knownPC = 0, int thumbAfter = -1, bool addrInW0 = false);
@@ -70,6 +72,7 @@ private:
     bool CompileBranch();
     static bool StaticBranch(bool thumb, u16 kind, int num);
     void StoreCPU(Reg r, size_t off);  // a u32 field of the CPU at any offset
+    void AddrNearCPU(Reg d, const void* p);
     void Fallback(bool thumb);
     void CompileALU();
     void CompileMul();         // MUL/MLA/UMULL/UMLAL/SMULL/SMLAL, and Thumb MUL
@@ -106,11 +109,12 @@ private:
     void ChargeTaken(s32 n);   // cycles that only the executed path pays
     bool LoadLiteral(int size, int rd, u32 addr);
     void FastAccess(bool load, int size, bool sign, bool rotate, int rd, Reg val);
-    void SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, Reg val);
+    void SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, Reg val, SaveSet ss);
     bool FastBlockTransfer(bool load, int rn, const int* regs, int n);
-    void SlowBlockTransfer(bool load, const int* regs, int n);
-    void SaveCallerSaved(u32 extra);
-    void RestoreCallerSaved(u32 extra);
+    void SlowBlockTransfer(bool load, const int* regs, int n, SaveSet ss);
+    SaveSet LiveSet() const;
+    void SaveCallerSaved(u32 extra, SaveSet ss);
+    void RestoreCallerSaved(u32 extra, SaveSet ss);
     bool StaticSlow() const;   // the access goes to memory fast memory never maps (I/O...): straight to the call
     struct Deferred { u32* seq; std::vector<u32*> faulting; u32* back; std::function<void()> emit; };
     std::vector<Deferred> SlowPaths;  // this block's slow paths, emitted after its code
