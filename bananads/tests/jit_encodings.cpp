@@ -18,6 +18,27 @@ static void emit(const char* text, void (*f)(A64&)) {
 #define E(text, body) emit(text, [](A64& a) { body; })
 
 int main() {
+    E("and w16, w1, #0xfffffffc", a.andi((Reg)16, (Reg)1, 0xFFFFFFFC));
+    E("and w16, w1, #0xfffffffe", a.andi((Reg)16, (Reg)1, 0xFFFFFFFE));
+    E("and w0, w2, #0xff", a.andi((Reg)0, (Reg)2, 0xFF));
+    E("orr w27, w27, #0x20", a.orri((Reg)27, (Reg)27, 0x20));
+    E("eor w1, w2, #0x80000000", a.eori((Reg)1, (Reg)2, 0x80000000));
+    E("tst w27, #0x20000000", a.tsti((Reg)27, 0x20000000));
+    E("and w3, w4, #0x55555555", a.andi((Reg)3, (Reg)4, 0x55555555));
+    E("and w3, w4, #0xf0f0f0f0", a.andi((Reg)3, (Reg)4, 0xF0F0F0F0));
+    E("and w3, w4, #0xffff0000", a.andi((Reg)3, (Reg)4, 0xFFFF0000));
+    E("and w3, w4, #0x3ff8", a.andi((Reg)3, (Reg)4, 0x3FF8));
+    E("ubfiz w17, w1, #3, #2", a.ubfiz((Reg)17, (Reg)1, 3, 2));
+    E("ldrsb w0, [x8, x16]", a.ldrsb_reg((Reg)0, (Reg)8, (Reg)16));
+    E("ldrsh w9, [x8, x16]", a.ldrsh_reg((Reg)9, (Reg)8, (Reg)16));
+    E("ldrh w0, [x2, #6]", a.ldrh((Reg)0, (Reg)2, 6));
+    E("uxtb w0, w0", a.uxtb((Reg)0, (Reg)0));
+    E("uxth w9, w0", a.uxth((Reg)9, (Reg)0));
+    E("stp x8, x9, [sp, #16]", a.stpx((Reg)8, (Reg)9, SP, 16));
+    E("ldp x14, x15, [sp, #48]", a.ldpx((Reg)14, (Reg)15, SP, 48));
+    E("sub sp, sp, #80", a.subxi(SP, SP, 80));
+    E("add x16, x29, #0x123, lsl #12", a.addxi12((Reg)16, (Reg)29, 0x123));
+    E("add x16, x17, w16, uxtw", a.add_uxtw((Reg)16, (Reg)17, (Reg)16));
     E("add w1, w2, w3", a.add((Reg)1, (Reg)2, (Reg)3));
     E("add w1, w2, w3, lsl #5", a.add((Reg)1, (Reg)2, (Reg)3, LSL, 5));
     E("adds w19, w20, w21, lsr #31", a.adds((Reg)19, (Reg)20, (Reg)21, LSR, 31));

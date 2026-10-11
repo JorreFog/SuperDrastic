@@ -18,6 +18,9 @@
 #if defined(JIT_ENABLED) && defined(__aarch64__)
 
 #include <cstddef>
+#include <functional>
+#include <unordered_map>
+#include <vector>
 
 #include "ARM.h"
 #include "ARMJIT_Internal.h"
@@ -35,7 +38,7 @@ public:
     bool CanCompile(bool thumb, u16 kind);
     void Reset();
     bool IsJITFault(const u8* pc);
-    u8* RewriteMemAccess(u8* pc);  // BananaJIT doesn't use fastmem yet: never reached
+    u8* RewriteMemAccess(u8* pc);  // a fast-memory access faulted: send it to its slow path from now on
     JitBlockEntry AddEntryOffset(u32 offset) { return (JitBlockEntry)(CodeBase + offset); }
     u32 SubEntryOffset(JitBlockEntry entry) { return (u32)((u8*)entry - CodeBase); }
 
@@ -53,7 +56,7 @@ private:
     void Dirty(int guest);     // it now holds a new value
     void FlushRegs(bool forget);  // store dirty registers; forget = they must be reloaded (after a call)
     void LoadFlags();          // host NZCV <- CPSR
-    void ExitBlock();
+    void ExitBlock(bool known = false, u32 knownPC = 0);  // knownPC: the R15 it leaves, when constant
     void Fallback(bool thumb);
     void CompileALU();
     void CompileMul();         // MUL/MLA/UMULL/UMLAL/SMULL/SMLAL, and Thumb MUL
@@ -76,6 +79,30 @@ private:
     void AddCyclesCI(s32 internal);  // emit AddCycles_CI(internal) to RCycles now (taken-path cycles)
     void FlushCycles();
     s32 CyclesC() const;       // what the interpreter's AddCycles_C charges for CurInstr
+
+    // Block timing (jit.timing=block, the default): melonDS's JIT's level of timing, for speed. Loads and stores
+    // go straight to the framework's fast memory (one host load or store; a fault sends that access to a slow
+    // path for good) and their cycles are counted when the block is compiled, from the access the framework saw
+    // when it decoded the block. Literal loads become constants. jit.timing=exact keeps the interpreter's timing.
+    bool Exact = false;        // jit.timing=exact (BANANAJIT_EXACT)
+    bool FastMem = false;      // this block: block timing with the framework's fast memory on
+    bool MemBaseOK = false;    // x8 holds this CPU's fast-memory base (calls clobber it)
+    bool CurConditional = false;
+    void EnsureMemBase();
+    s32 BlockMemCycles(bool store) const;  // AddCycles_CDI/CD at compile time (melonDS's JIT's formulas)
+    void ChargeTaken(s32 n);   // cycles that only the executed path pays
+    bool LoadLiteral(int size, int rd, u32 addr);
+    void FastAccess(bool load, int size, bool sign, bool rotate, int rd, Reg val);
+    void SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, Reg val);
+    bool FastBlockTransfer(bool load, int rn, const int* regs, int n);
+    void SlowBlockTransfer(bool load, const int* regs, int n);
+    void SaveCallerSaved(u32 extra);
+    void RestoreCallerSaved(u32 extra);
+    bool StaticSlow() const;   // the access goes to memory fast memory never maps (I/O...): straight to the call
+    struct Deferred { u32* seq; std::vector<u32*> faulting; u32* back; std::function<void()> emit; };
+    std::vector<Deferred> SlowPaths;  // this block's slow paths, emitted after its code
+    struct Patch { u32 seq, slow; };
+    std::unordered_map<u32, Patch> Patches;  // a faulting load/store's code offset -> its sequence and slow path
 
     melonDS::NDS& NDS;
     u8* CodeBase = nullptr;

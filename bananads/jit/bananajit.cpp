@@ -4,7 +4,11 @@
 #if defined(JIT_ENABLED) && defined(__aarch64__)
 
 #include <cassert>
+#include <algorithm>
+#include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <unistd.h>
 #include <vector>
 
 #include "ARMInterpreter.h"
@@ -41,6 +45,9 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
                  offsetof(ARM, FastBlockLookup) < 32768 && offsetof(ARM, StopExecution) % 4 == 0;
     DoMul = !getenv("BANANAJIT_NO_MUL");
     DoLDM = !getenv("BANANAJIT_NO_LDM");
+    Exact = getenv("BANANAJIT_EXACT") != nullptr;
+    Platform::Log(Platform::LogLevel::Info, "[bananajit] timing %s\n",
+                  Exact ? "exact (the interpreter's, cycle for cycle)" : "per block, with fast memory");
     Platform::Log(Platform::LogLevel::Info, "[bananajit] BananaDS's own JIT, %zu MB of code memory, ARM9 loads %s\n",
                   CodeSize >> 20, FastLoads ? "inline" : "through calls");
     Platform::Log(Platform::LogLevel::Info, "[bananajit] blocks %s, ARM9 stores %s\n",
@@ -48,15 +55,49 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
     Platform::Log(Platform::LogLevel::Info, "[bananajit] ARM7 loads/stores %s\n", FastMem7On ? "inline" : "through calls");
 }
 
-Compiler::~Compiler() { ARMJIT_Global::FreeCodeMem(CodeMemBase); }
+// BANANAJIT_PERFMAP=1: name every block for perf (/tmp/perf-<pid>.map, perf's JIT map format) and write the
+// code memory out at exit (/tmp/bananajit-<pid>-<base>.bin), so a profile's hot addresses can be disassembled.
+static FILE* PerfMap() {
+    static FILE* f = getenv("BANANAJIT_PERFMAP") ? fopen(("/tmp/perf-" + std::to_string(getpid()) + ".map").c_str(), "w")
+                                                 : nullptr;
+    return f;
+}
 
-void Compiler::Reset() { A = A64((uint32_t*)CodeBase); }
+Compiler::~Compiler() {
+    if (PerfMap()) {
+        fflush(PerfMap());
+        char name[96];
+        snprintf(name, sizeof name, "/tmp/bananajit-%d-%llx.bin", (int)getpid(), (unsigned long long)(uintptr_t)CodeBase);
+        if (FILE* f = fopen(name, "wb")) {
+            fwrite(CodeBase, 1, (u8*)A.here() - CodeBase, f);
+            fclose(f);
+        }
+    }
+    ARMJIT_Global::FreeCodeMem(CodeMemBase);
+}
+
+void Compiler::Reset() {
+    A = A64((uint32_t*)CodeBase);
+    Patches.clear();
+    SlowPaths.clear();
+}
 
 bool Compiler::IsJITFault(const u8* pc) { return pc >= CodeBase && pc < CodeBase + CodeSize; }
 
+// A fast-memory access faulted (its address isn't mapped: I/O, VRAM, code the framework write-protects...). Its
+// sequence's first instruction becomes a branch to the slow path compiled for it, which does the access through
+// melonDS's functions and comes back after the sequence. Execution resumes at that branch. It stays slow.
 u8* Compiler::RewriteMemAccess(u8* pc) {
-    Platform::Log(Platform::LogLevel::Error, "[bananajit] a memory fault in JIT code: fastmem must be off\n");
-    return pc;
+    auto it = Patches.find((u32)(pc - CodeBase));
+    if (it == Patches.end()) {
+        Platform::Log(Platform::LogLevel::Error, "[bananajit] a fault at %p that isn't a fast-memory access\n", pc);
+        abort();
+    }
+    u32* seq = (u32*)(CodeBase + it->second.seq);
+    u32* slow = (u32*)(CodeBase + it->second.slow);
+    *seq = A64::b_((int32_t)(slow - seq));
+    __builtin___clear_cache((char*)seq, (char*)(seq + 1));
+    return (u8*)seq;
 }
 
 // --- what is native ---
@@ -270,15 +311,22 @@ s32 Compiler::CyclesC() const {
 //   entry = FastBlockLookup[(instrAddr - Start) / 2]; not (instrAddr | Num) -> back (it compiles the block);
 //   else jump to the entry: what ARM_Dispatch would have done.
 // The lookup reads the framework's table every time, so invalidated blocks are never jumped to.
-void Compiler::ExitBlock() {
+// The cycles and CPSR stay in w28/w27 into the next block: a linked jump enters past the block's prologue (the
+// two loads that ARM_Dispatch's entry needs), and only the way back to the loop stores them. knownPC: the R15
+// this exit leaves, when the compiler knows it (a block that runs on into the next instruction); it is then
+// stored on the way back only, and instrAddr is a constant.
+static constexpr u32 PrologueBytes = 8;
+
+void Compiler::ExitBlock(bool known, u32 knownPC) {
     FlushCycles();
     FlushRegs(false);
-    A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
-    if (!LinkBlocks) {
+    auto back = [&]() {  // to the loop, with the state it reads in memory
+        if (known) { A.movi(W0, knownPC); A.str(W0, RCPU, off_R(15)); }
+        A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
         A.str(RCycles, RCPU, offsetof(ARM, Cycles));
         A.jump((const void*)&ARM_Ret, false);
-        return;
-    }
+    };
+    if (!LinkBlocks) { back(); return; }
     const Reg X0r = W0, X16 = (Reg)16, X17 = (Reg)17;
     u64* ts = CurCPU->Num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp;  // its Target is the next u64
 
@@ -286,20 +334,23 @@ void Compiler::ExitBlock() {
     auto stop = A.cbnz_fwd(X16);
 
     A.movix(X16, (uint64_t)(uintptr_t)ts);
-    A.ldrx(X17, X16, 0);
+    A.ldpx(X17, X0r, X16, 0);     // Timestamp, Target
     A.addx_sxtw(X17, X17, RCycles);
     A.strx(X17, X16, 0);
     A.movz(RCycles, 0);
-    A.ldrx(X0r, X16, 8);
     A.cmpx(X17, X0r);
     auto late = A.bcond_fwd(CS);  // Timestamp >= Target (unsigned)
 
-    A.ldr(X0r, RCPU, off_R(15));
-    A.ubfx(X17, RCPSR, 5, 1);     // Thumb: 2, ARM: 4
-    A.lsli(X17, X17, 1);
-    A.movz(X16, 4);
-    A.sub(X17, X16, X17);
-    A.sub(X0r, X0r, X17);         // instrAddr
+    if (known) {
+        A.movi(X0r, knownPC - (Thumb ? 2 : 4));  // instrAddr
+    } else {
+        A.ldr(X0r, RCPU, off_R(15));
+        A.ubfx(X17, RCPSR, 5, 1);     // Thumb: 2, ARM: 4
+        A.lsli(X17, X17, 1);
+        A.movz(X16, 4);
+        A.sub(X17, X16, X17);
+        A.sub(X0r, X0r, X17);         // instrAddr
+    }
     A.ldr(X16, RCPU, offsetof(ARM, FastBlockLookupStart));
     A.sub(X17, X0r, X16);         // offset (huge when below Start)
     A.ldr(X16, RCPU, offsetof(ARM, FastBlockLookupSize));
@@ -312,18 +363,16 @@ void Compiler::ExitBlock() {
     A.lsrxi(X17, X16, 32);
     A.subs(ZR, X17, X0r);
     auto miss = A.bcond_fwd(NE);
-    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
-    A.mov(X16, X16);              // the low 32 bits: the entry's offset in code memory
-    A.movix(X17, (uint64_t)(uintptr_t)CodeBase);
-    A.addx(X16, X17, X16);
+    A.adrp(X17, CodeBase);        // the code memory is page-aligned
+    A.addxi(X17, X17, PrologueBytes);
+    A.add_uxtw(X16, X17, X16);    // the low 32 bits: the entry's offset in code memory
     A.br(X16);
 
     A.land(stop);
     A.land(late);
     A.land(outside);
     A.land(miss);
-    A.str(RCycles, RCPU, offsetof(ARM, Cycles));
-    A.jump((const void*)&ARM_Ret, false);
+    back();
 }
 
 // --- one instruction through melonDS's interpreter ---
@@ -345,6 +394,7 @@ void Compiler::Fallback(bool thumb) {
     else if (CurInstr.Info.Kind == ARMInstrInfo::ak_BLX_IMM) fn = (const void*)&ARMInterpreter::A_BLX_IMM;
     else fn = (const void*)InterpretARM[CurInstr.Info.Kind];
     A.jump(fn, true);
+    MemBaseOK = false;
     A.ldr(RCycles, RCPU, offsetof(ARM, Cycles));
     A.ldr(RCPSR, RCPU, offsetof(ARM, CPSR));
 }
@@ -633,6 +683,7 @@ void Compiler::CallOut(const void* fn) {
     }
     A.movx(W0, RCPU);
     A.jump(fn, true);
+    MemBaseOK = false;
     A.ldr(RCycles, RCPU, offsetof(ARM, Cycles));
     A.ldr(RCPSR, RCPU, offsetof(ARM, CPSR));
     for (int g = 8; g < 15; g++)
@@ -1001,6 +1052,14 @@ void Compiler::CompileMem() {
         else imm = in & 0xFFF;
     }
 
+    using namespace ARMInstrInfo;
+    // block timing: a load from the literal pool is a constant
+    if (FastMem && load && rn == 15 && pre && !wb && rd != 15 && !regoff &&
+        (kind == ak_LDR_IMM || kind == ak_LDRB_IMM || kind == ak_LDRH_IMM)) {
+        const u32 addr = up ? PCValue + imm : PCValue - imm;
+        if (LoadLiteral(kind == ak_LDR_IMM ? 4 : kind == ak_LDRB_IMM ? 1 : 2, rd, addr)) return;
+    }
+
     // the base, and the address -> W1
     Reg base;
     if (rn == 15) { A.movi(W4, PCValue); base = W4; }
@@ -1012,6 +1071,33 @@ void Compiler::CompileMem() {
     };
     if (pre) apply(W1, base);
     else A.mov(W1, base);
+
+    if (FastMem) {  // block timing: straight to fast memory
+        int size = 4;
+        bool sign = false;
+        if (half) {
+            if (load) {
+                size = kind <= ak_LDRH_POST_IMM ? 2 : kind <= ak_LDRSB_POST_IMM ? 1 : 2;
+                sign = kind > ak_LDRH_POST_IMM;
+            } else size = 2;
+        } else if (in & (1 << 22)) size = 1;
+        Reg val = W2;  // a store's value: the guest register itself unless the write-back changes it first
+        if (!load) {
+            if (rd == 15) A.movi(W2, R15 + 4);
+            else {
+                Need(rd);
+                if (wb && rd == rn) A.mov(W2, host(rd));
+                else val = host(rd);
+            }
+        }
+        if (wb) {
+            if (pre) A.mov(host(rn), W1);
+            else apply(host(rn), host(rn));
+            Dirty(rn);
+        }
+        FastAccess(load, size, sign, !NoRotate, rd, val);
+        return;
+    }
 
     // a store's value -> W2, before the base is written back (STR r0, [r0], #4 stores the old r0)
     if (!load) {
@@ -1027,7 +1113,6 @@ void Compiler::CompileMem() {
     }
 
     const void* fn;
-    using namespace ARMInstrInfo;
     if (half) {
         if (kind <= ak_STRH_POST_IMM) fn = (const void*)&bj_strh;
         else if (kind <= ak_LDRH_POST_IMM) fn = (const void*)&bj_ldrh;
@@ -1067,6 +1152,231 @@ void Compiler::CompileMem() {
         A.mov(host(rd), W0);
         Dirty(rd);
     }
+}
+
+
+// --- block timing: fast memory, compile-time cycles, literals ---
+
+void Compiler::EnsureMemBase() {
+    if (MemBaseOK) return;
+    A.movix((Reg)8, (uint64_t)(uintptr_t)(CurCPU->Num ? NDS.JIT.Memory.FastMem7Start : NDS.JIT.Memory.FastMem9Start));
+    MemBaseOK = true;
+}
+
+// The interpreter's AddCycles_CDI (loads) / AddCycles_CD (stores), with the data cycles and region the framework
+// recorded for this instruction when it decoded the block: what melonDS's JIT charges (Comp_AddCycles_CDI/CD).
+s32 Compiler::BlockMemCycles(bool store) const {
+    const s32 D = CurInstr.DataCycles;
+    if (CurCPU->Num == 0) {
+        const s32 C = (R15 & 2) ? 0 : CurInstr.CodeCycles;
+        return std::max(C + D - 6, std::max(C, D));
+    }
+    const s32 C = NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2];
+    const bool dataMain = (CurInstr.DataRegion >> 24) == 2, codeMain = (R15 >> 24) == 2;
+    auto overlap = [](s32 c, s32 d) { return std::max(c + d - 3, std::max(c, d)); };
+    if (store) return dataMain != codeMain ? overlap(C, D) : C + D;
+    if (dataMain) return codeMain ? C + D : overlap(C + 1, D);
+    return codeMain ? overlap(C, D + 1) : C + D + 1;
+}
+
+void Compiler::ChargeTaken(s32 n) {
+    if (!CurConditional) { ConstantCycles += n; return; }
+    if (n > 0 && n < 4096) A.addi(RCycles, RCycles, n);
+    else if (n) { A.movi((Reg)16, (u32)n); A.add(RCycles, RCycles, (Reg)16); }
+}
+
+// An access the framework saw go to memory that fast memory never maps (I/O, the wireless...): it would fault
+// every time, so it goes straight to the call. A conditional one may not have run when the block was decoded,
+// so it gets the fast path (as in melonDS's JIT).
+bool Compiler::StaticSlow() const {
+    if (CurConditional) return false;
+    const int region = CurCPU->Num == 0 ? NDS.JIT.Memory.ClassifyAddress9(CurInstr.DataRegion)
+                                        : NDS.JIT.Memory.ClassifyAddress7(CurInstr.DataRegion);
+    return !NDS.JIT.Memory.IsFastmemCompatible(region);
+}
+
+// A load from the code's own literal pool (LDR rd, [pc, #i]; Thumb LDR rd, [pc, #i]) becomes a constant. The
+// framework tracks the literal's address with the block, so a write to it recompiles the block, and a literal
+// that has been written once (InvalidLiterals) is loaded normally from then on.
+bool Compiler::LoadLiteral(int size, int rd, u32 addr) {
+    if (!NDS.JIT.LiteralOptimizationsEnabled() || CurInstr.Info.SpecialKind != ARMInstrInfo::special_LoadLiteral)
+        return false;
+    const u32 local = NDS.JIT.LocaliseCodeAddress(CurCPU->Num, addr);
+    if (!local || NDS.JIT.InvalidLiterals.Find(local) != -1) return false;
+    u32 v;
+    const u32 keep = CurCPU->R[15];
+    CurCPU->R[15] = R15;  // the ARM7 BIOS can only be read from inside it
+    if (size == 4) {
+        CurCPU->DataRead32(addr & ~3u, &v);
+        const u32 r = (addr & 3) * 8;
+        if (r && !NoRotate) v = (v >> r) | (v << (32 - r));
+    } else if (size == 2) CurCPU->DataRead16(addr & ~1u, &v);
+    else CurCPU->DataRead8(addr, &v);
+    CurCPU->R[15] = keep;
+    A.movi(host(rd), v);
+    Dirty(rd);
+    ChargeTaken(BlockMemCycles(false));
+    return true;
+}
+
+// x8-x15 (the fast-memory base and guest r8-r14) around a call from a slow path, plus `extra` bytes of stack
+// for its own use at sp+64. The guest's r0-r7, CPSR and cycles are in callee-saved registers.
+void Compiler::SaveCallerSaved(u32 extra) {
+    A.subxi(SP, SP, 64 + extra);
+    for (int r = 8; r < 16; r += 2) A.stpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
+    A.movi((Reg)16, R15);  // what the memory handlers read (the ARM7 BIOS checks the PC)
+    A.str((Reg)16, RCPU, off_R(15));
+    A.str(RCPSR, RCPU, offsetof(ARM, CPSR));
+}
+
+void Compiler::RestoreCallerSaved(u32 extra) {
+    for (int r = 8; r < 16; r += 2) A.ldpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
+    A.addxi(SP, SP, 64 + extra);
+}
+
+// The access through melonDS's own slow functions (the ones its JIT's fast memory falls back to), with W1 the
+// address and `val` a store's value; a load's value ends in `dst`. Nothing else changes.
+void Compiler::SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, Reg val) {
+    const bool dsi = NDS.ConsoleType != 0;
+    const void* fn;
+    if (CurCPU->Num == 0) {
+        if (load) fn = size == 4 ? (dsi ? (const void*)&SlowRead9<u32, 1> : (const void*)&SlowRead9<u32, 0>)
+                     : size == 2 ? (dsi ? (const void*)&SlowRead9<u16, 1> : (const void*)&SlowRead9<u16, 0>)
+                                 : (dsi ? (const void*)&SlowRead9<u8, 1> : (const void*)&SlowRead9<u8, 0>);
+        else fn = size == 4 ? (dsi ? (const void*)&SlowWrite9<u32, 1> : (const void*)&SlowWrite9<u32, 0>)
+                : size == 2 ? (dsi ? (const void*)&SlowWrite9<u16, 1> : (const void*)&SlowWrite9<u16, 0>)
+                            : (dsi ? (const void*)&SlowWrite9<u8, 1> : (const void*)&SlowWrite9<u8, 0>);
+    } else {
+        if (load) fn = size == 4 ? (dsi ? (const void*)&SlowRead7<u32, 1> : (const void*)&SlowRead7<u32, 0>)
+                     : size == 2 ? (dsi ? (const void*)&SlowRead7<u16, 1> : (const void*)&SlowRead7<u16, 0>)
+                                 : (dsi ? (const void*)&SlowRead7<u8, 1> : (const void*)&SlowRead7<u8, 0>);
+        else fn = size == 4 ? (dsi ? (const void*)&SlowWrite7<u32, 1> : (const void*)&SlowWrite7<u32, 0>)
+                : size == 2 ? (dsi ? (const void*)&SlowWrite7<u16, 1> : (const void*)&SlowWrite7<u16, 0>)
+                            : (dsi ? (const void*)&SlowWrite7<u8, 1> : (const void*)&SlowWrite7<u8, 0>);
+    }
+    SaveCallerSaved(0);
+    // SlowRead*<u32> rotates an unaligned word; a load that doesn't (Thumb's PC/SP-relative LDR) passes it aligned
+    auto addr = [&]() { if (load && size == 4 && !rotate) A.andi(W0, W1, ~3u); else A.mov(W0, W1); };
+    if (CurCPU->Num == 0) {  // SlowRead9(addr, cpu) / SlowWrite9(addr, cpu, val)
+        if (!load) A.mov(W2, val);
+        addr();
+        A.movx(W1, RCPU);
+    } else {                 // SlowRead7(addr) / SlowWrite7(addr, val)
+        addr();
+        if (!load) A.mov(W1, val);
+    }
+    A.jump(fn, true);
+    RestoreCallerSaved(0);
+    if (load) {
+        if (size == 4) A.mov(dst, W0);
+        else if (size == 2) sign ? A.sxth(dst, W0) : A.uxth(dst, W0);
+        else sign ? A.sxtb(dst, W0) : A.uxtb(dst, W0);
+    }
+}
+
+// One load or store with block timing. W1 holds the address, `val` a store's value; a load goes straight into
+// the guest register rd. The fast path is the host access into the framework's fast-memory window (x8 + the
+// aligned address); its slow path is compiled after the block and reached only once the access has faulted.
+void Compiler::FastAccess(bool load, int size, bool sign, bool rotate, int rd, Reg val) {
+    const Reg dst = load ? host(rd) : val;
+    if (StaticSlow()) {
+        SlowAccess(load, size, sign, rotate, dst, val);
+    } else {
+        EnsureMemBase();
+        u32* seq = A.here();
+        Reg idx = (Reg)1;  // x1: a W write zeroed its upper half
+        if (size > 1) { A.andi((Reg)16, W1, size == 4 ? ~3u : ~1u); idx = (Reg)16; }
+        u32* at = A.here();
+        if (load) {
+            if (size == 4) A.ldr_reg(dst, (Reg)8, idx);
+            else if (size == 2) sign ? A.ldrsh_reg(dst, (Reg)8, idx) : A.ldrh_reg(dst, (Reg)8, idx);
+            else sign ? A.ldrsb_reg(dst, (Reg)8, idx) : A.ldrb_reg(dst, (Reg)8, idx);
+            if (size == 4 && rotate) {
+                A.ubfiz((Reg)17, W1, 3, 2);
+                A.rorv(dst, dst, (Reg)17);
+            }
+        } else {
+            if (size == 4) A.str_reg(val, (Reg)8, idx);
+            else if (size == 2) A.strh_reg(val, (Reg)8, idx);
+            else A.strb_reg(val, (Reg)8, idx);
+        }
+        const u32 r15 = R15;
+        SlowPaths.push_back({seq, {at}, A.here(), [=]() {
+            const u32 keep = R15;
+            R15 = r15;
+            SlowAccess(load, size, sign, rotate, dst, val);
+            R15 = keep;
+        }});
+    }
+    if (load) Dirty(rd);
+    ChargeTaken(BlockMemCycles(!load));
+}
+
+// A block transfer's slow path: melonDS's SlowBlockTransfer9/7 with the words in a stack buffer (u64 slots).
+// W1 holds the lowest address. A load's registers are written from the buffer after x8-x15 are restored.
+void Compiler::SlowBlockTransfer(bool load, const int* regs, int n) {
+    const bool dsi = NDS.ConsoleType != 0;
+    const u32 extra = (u32)((n * 8 + 15) & ~15);
+    SaveCallerSaved(extra);
+    if (!load)
+        for (int i = 0; i < n; i++) A.str(host(regs[i]), SP, 64 + i * 8);
+    A.mov(W0, W1);
+    A.addxi(W1, SP, 64);
+    A.movz(W2, (u32)n);
+    const void* fn;
+    if (CurCPU->Num == 0) {
+        A.movx(W3, RCPU);
+        fn = load ? (dsi ? (const void*)&SlowBlockTransfer9<false, 1> : (const void*)&SlowBlockTransfer9<false, 0>)
+                  : (dsi ? (const void*)&SlowBlockTransfer9<true, 1> : (const void*)&SlowBlockTransfer9<true, 0>);
+    } else {
+        fn = load ? (dsi ? (const void*)&SlowBlockTransfer7<false, 1> : (const void*)&SlowBlockTransfer7<false, 0>)
+                  : (dsi ? (const void*)&SlowBlockTransfer7<true, 1> : (const void*)&SlowBlockTransfer7<true, 0>);
+    }
+    A.jump(fn, true);
+    for (int r = 8; r < 16; r += 2) A.ldpx((Reg)r, (Reg)(r + 1), SP, (r - 8) * 8);
+    if (load)
+        for (int i = 0; i < n; i++) A.ldr(host(regs[i]), SP, 64 + i * 8);
+    A.addxi(SP, SP, 64 + extra);
+}
+
+// A block transfer with block timing: the words go straight between the guest registers and fast memory, two at
+// a time (LDP/STP). W1 holds the lowest address. Returns false for the forms it leaves to the exact path: a load
+// whose list holds its base (the base is needed after a partial fault).
+bool Compiler::FastBlockTransfer(bool load, int rn, const int* regs, int n) {
+    if (load)
+        for (int i = 0; i < n; i++) if (regs[i] == rn) return false;
+    for (int i = 0; i < n; i++) load ? Dirty(regs[i]) : Need(regs[i]);
+    if (StaticSlow()) {
+        SlowBlockTransfer(load, regs, n);
+    } else {
+        EnsureMemBase();
+        u32* seq = A.here();
+        A.andi((Reg)16, W1, ~3u);
+        A.addx((Reg)16, (Reg)8, (Reg)16);
+        std::vector<u32*> faulting;
+        int i = 0;
+        while (i < n) {
+            faulting.push_back(A.here());
+            if (i + 1 < n) {
+                load ? A.ldp(host(regs[i]), host(regs[i + 1]), (Reg)16, i * 4)
+                     : A.stp(host(regs[i]), host(regs[i + 1]), (Reg)16, i * 4);
+                i += 2;
+            } else {
+                load ? A.ldr(host(regs[i]), (Reg)16, i * 4) : A.str(host(regs[i]), (Reg)16, i * 4);
+                i++;
+            }
+        }
+        std::vector<int> list(regs, regs + n);
+        const u32 r15 = R15;
+        SlowPaths.push_back({seq, faulting, A.here(), [=]() {
+            const u32 keep = R15;
+            R15 = r15;
+            SlowBlockTransfer(load, list.data(), (int)list.size());
+            R15 = keep;
+        }});
+    }
+    ChargeTaken(BlockMemCycles(!load));
+    return true;
 }
 
 // --- ARM/Thumb block transfers (LDM/STM, PUSH/POP/LDMIA/STMIA), native ---
@@ -1162,6 +1472,14 @@ void Compiler::CompileBlockTransfer() {
     if (startOff > 0) A.addi(W1, host(rn), startOff);
     else if (startOff < 0) A.subi(W1, host(rn), -startOff);
     else A.mov(W1, host(rn));
+
+    if (FastMem && !storeBaseRunning && FastBlockTransfer(load, (int)rn, regs, ns)) {  // block timing
+        if (doWriteback) {
+            wbDelta >= 0 ? A.addi(host(rn), host(rn), (u32)wbDelta) : A.subi(host(rn), host(rn), (u32)-wbDelta);
+            Dirty(rn);
+        }
+        return;
+    }
     A.movix(BUF, (uint64_t)(uintptr_t)&BlockXferBuf[0]);
 
     if (load) {
@@ -1199,6 +1517,7 @@ void Compiler::CompileBlockTransfer() {
     A.movx(W0, RCPU);
     A.movi(W3, (u32)n);
     A.jump(load ? (const void*)&bj_blockload : (const void*)&bj_blockstore, true);
+    MemBaseOK = false;
     A.ldr(RCycles, RCPU, offsetof(ARM, Cycles));
     A.ldr(RCPSR, RCPU, offsetof(ARM, CPSR));
     for (int g = 8; g < 15; g++)
@@ -1239,8 +1558,11 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
     Thumb = thumb;
     ConstantCycles = 0;
     Loaded = Dirt = 0;
+    FastMem = !Exact && NDS.JIT.FastMemoryEnabled();
+    MemBaseOK = false;
+    SlowPaths.clear();
 
-    A.ldr(RCycles, RCPU, offsetof(ARM, Cycles));
+    A.ldr(RCycles, RCPU, offsetof(ARM, Cycles));  // the prologue: PrologueBytes, skipped by linked jumps
     A.ldr(RCPSR, RCPU, offsetof(ARM, CPSR));
 
     static const bool trace = getenv("BANANAJIT_TRACE") != nullptr;
@@ -1251,6 +1573,8 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
                           instrs[i].Info.Kind, TraceName(thumb, instrs[i]),
                           instrs[i].SetFlags, instrs[i].BranchFlags);
 
+    bool exitKnown = false;
+    u32 exitPC = 0;
     for (int i = 0; i < count; i++) {
         CurInstr = instrs[i];
         R15 = CurInstr.Addr + (thumb ? 4 : 8);
@@ -1275,8 +1599,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
         // The framework's rule: the PC is stored for the interpreter, for a branch it followed, and at the end
         // of a block that doesn't end in an unconditional branch. Before the condition check: a conditional
         // instruction that is skipped must leave the PC right too (a loop's untaken branch at a block's end).
+        // A block that runs on past its last instruction (a native one, or the unconditional space) leaves a PC
+        // the compiler knows: ExitBlock stores it on its way back to the loop only.
+        const bool lastKnown = last && (native || nop) && !(CurInstr.BranchFlags & branch_FollowCondTaken);
+        if (lastKnown) { exitKnown = true; exitPC = R15; }
         if ((!native && !nop) || (CurInstr.BranchFlags & branch_FollowCondTaken) ||
-            (last && (!CurInstr.Info.Branches() || cond < 0xE))) {
+            (last && !lastKnown && (!CurInstr.Info.Branches() || cond < 0xE))) {
             A.movi(W0, R15);
             A.str(W0, RCPU, off_R(15));
         }
@@ -1288,7 +1616,9 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
 
         A64::Fixup skip{};
         bool conditional = cond < 0xE && !(!thumb && kind == ARMInstrInfo::ak_BLX_IMM);
+        CurConditional = conditional;
         if (conditional) {
+            if (native && FastMem && (nk == 2 || nk == 5)) EnsureMemBase();  // set on both paths
             if (native) {  // whatever it touches is loaded on both paths
                 for (int g = 0; g < 15; g++)
                     if ((CurInstr.Info.SrcRegs | CurInstr.Info.DstRegs) & (1 << g)) Need(g);
@@ -1356,8 +1686,23 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
         }
     }
 
-    ExitBlock();
+    ExitBlock(exitKnown, exitPC);
+
+    // the fast-memory accesses' slow paths, out of the way of the block's own code
+    for (auto& d : SlowPaths) {
+        u32* slow = A.here();
+        d.emit();
+        A.put(A64::b_((int32_t)(d.back - A.here())));
+        for (u32* f : d.faulting)
+            Patches[(u32)((u8*)f - CodeBase)] = {(u32)((u8*)d.seq - CodeBase), (u32)((u8*)slow - CodeBase)};
+    }
+    SlowPaths.clear();
+    CurConditional = false;
+
     __builtin___clear_cache((char*)start, (char*)A.here());
+    if (PerfMap())
+        fprintf(PerfMap(), "%llx %llx bj%d_%s_%08x\n", (unsigned long long)(uintptr_t)start,
+                (unsigned long long)((u8*)A.here() - (u8*)start), cpu->Num ? 7 : 9, thumb ? "t" : "a", instrs[0].Addr);
     return (JitBlockEntry)start;
 }
 

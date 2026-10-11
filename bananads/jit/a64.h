@@ -155,6 +155,57 @@ struct A64 {
     // and scatter the register list through a scratch buffer two words at a time with these.
     void stp(Reg t, Reg t2, Reg n, int32_t off) { put(0x29000000 | ((uint32_t)(off / 4) & 0x7F) << 15 | t2 << 10 | n << 5 | t); }
     void ldp(Reg t, Reg t2, Reg n, int32_t off) { put(0x29400000 | ((uint32_t)(off / 4) & 0x7F) << 15 | t2 << 10 | n << 5 | t); }
+    // The same, 64-bit (X), imm7 * 8: the fast-memory slow paths save x8-x15 on the stack with these.
+    void stpx(Reg t, Reg t2, Reg n, int32_t off) { put(0xA9000000 | ((uint32_t)(off / 8) & 0x7F) << 15 | t2 << 10 | n << 5 | t); }
+    void ldpx(Reg t, Reg t2, Reg n, int32_t off) { put(0xA9400000 | ((uint32_t)(off / 8) & 0x7F) << 15 | t2 << 10 | n << 5 | t); }
+    void subxi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 2, d, n, imm, false)); }  // n/d may be SP
+
+    void addxi12(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 0, d, n, imm, true)); }  // + imm << 12
+    void add_uxtw(Reg d, Reg n, Reg m) { put(0x8B204000 | m << 16 | n << 5 | d); }  // Xd = Xn + (u64)Wm
+    // ADRP: Xd = the 4 KB page of `target`, from the page of this instruction (+-4 GB)
+    void adrp(Reg d, const void* target) {
+        int64_t pages = ((int64_t)(uintptr_t)target >> 12) - ((int64_t)(uintptr_t)code >> 12);
+        put(0x90000000 | (uint32_t)(pages & 3) << 29 | (uint32_t)((pages >> 2) & 0x7FFFF) << 5 | d);
+    }
+
+    // Sign-extending register-offset loads into W, [Xn, Xm] (fast memory's LDRSB/LDRSH)
+    void ldrsb_reg(Reg t, Reg n, Reg m) { put(0x38E06800 | m << 16 | n << 5 | t); }
+    void ldrsh_reg(Reg t, Reg n, Reg m) { put(0x78E06800 | m << 16 | n << 5 | t); }
+    // Unsigned scaled-offset loads (the far side of a block transfer's fast path)
+    void ldrh(Reg t, Reg n, uint32_t off) { put(0x79400000 | (off / 2) << 10 | n << 5 | t); }
+    void uxtb(Reg d, Reg n) { put(bfm(0x53000000, d, n, 0, 7)); }
+    void uxth(Reg d, Reg n) { put(bfm(0x53000000, d, n, 0, 15)); }
+    void ubfiz(Reg d, Reg n, uint32_t lsb, uint32_t width) { put(bfm(0x53000000, d, n, (32 - lsb) & 31, width - 1)); }
+
+    // Logical (immediate), 32-bit: AND/ORR/EOR/ANDS with a bitmask immediate. encode_mask32 returns the N:immr:imms
+    // field (13 bits) for a 32-bit value AArch64 can encode, or -1 (0 and ~0 can't be).
+    static int32_t encode_mask32(uint32_t v) {
+        if (v == 0 || v == ~0u) return -1;
+        for (uint32_t size = 2; size <= 32; size <<= 1) {  // the smallest repeating element
+            uint32_t mask = size == 32 ? ~0u : (1u << size) - 1, e = v & mask;
+            bool rep = true;
+            for (uint32_t i = size; i < 32; i += size) if (((v >> i) & mask) != e) { rep = false; break; }
+            if (!rep) continue;
+            for (uint32_t r = 0; r < size; r++) {  // e is a run of ones rotated right by r
+                uint32_t rot = r ? ((e << r) | (e >> (size - r))) & mask : e;  // rotate left by r: undo it
+                if (rot && ((rot + 1) & rot) == 0) {  // ones from bit 0 up
+                    uint32_t ones = __builtin_popcount(rot);
+                    if (ones == size) return -1;
+                    uint32_t imms = ((~(size * 2 - 1)) & 0x3F) | (ones - 1);  // the size marker, then ones-1
+                    return (int32_t)((r & (size - 1)) << 6 | (imms & 0x3F));
+                }
+            }
+            return -1;
+        }
+        return -1;
+    }
+    static uint32_t logic_imm(uint32_t opc, Reg d, Reg n, uint32_t v) {
+        return 0x12000000 | opc << 29 | (uint32_t)encode_mask32(v) << 10 | n << 5 | d;
+    }
+    void andi(Reg d, Reg n, uint32_t v) { put(logic_imm(0, d, n, v)); }   // v must be encodable
+    void orri(Reg d, Reg n, uint32_t v) { put(logic_imm(1, d, n, v)); }
+    void eori(Reg d, Reg n, uint32_t v) { put(logic_imm(2, d, n, v)); }
+    void tsti(Reg n, uint32_t v) { put(logic_imm(3, ZR, n, v)); }
 
     // Branches. Offsets are in words from the branch itself; patch() fills one in later.
     static uint32_t b_(int32_t words) { return 0x14000000 | (words & 0x3FFFFFF); }

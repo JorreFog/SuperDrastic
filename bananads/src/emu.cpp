@@ -156,7 +156,12 @@ bool Emu::load_rom(const std::string& path) {
     args.OutputSampleRate = 48000.0;
     if (!cfg_.flag("jit", true)) args.JIT = std::nullopt;
 #ifdef BANANADS_JIT
-    else args.JIT->FastMemory = false;  // BananaJIT doesn't do fastmem yet (docs/JIT.md)
+    // jit.timing: block (the default) is melonDS's JIT's level of timing, with fast memory and per-block cycles;
+    // exact is the interpreter's timing, cycle for cycle (the jit.* gates below compare in that mode)
+    const bool exact = cfg_.str("jit.timing", "block") == "exact";
+    if (args.JIT) args.JIT->FastMemory = !exact;
+    if (exact) setenv("BANANAJIT_EXACT", "1", 1);
+    else unsetenv("BANANAJIT_EXACT");
     // jit.fastloads=off: ARM9 loads through calls instead of inline (for bananads-difftest: both must agree)
     if (cfg_.flag("jit.fastloads", true)) unsetenv("BANANAJIT_NO_FASTLOADS");
     else setenv("BANANAJIT_NO_FASTLOADS", "1", 1);
