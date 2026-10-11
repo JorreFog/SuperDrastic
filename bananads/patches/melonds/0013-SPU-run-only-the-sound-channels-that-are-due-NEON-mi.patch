@@ -1,4 +1,4 @@
-From a92dd5e40b87f96399de219482abb4418b25806a Mon Sep 17 00:00:00 2001
+From e87d5206234111dde8299f5337810d0a81312519 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 22:57:24 +0000
 Subject: [PATCH] SPU: run only the sound channels that are due, NEON mixer
@@ -18,12 +18,12 @@ straight to GPU3D::Write32 (as FastGXDMA), and between main RAM addresses straig
 check; the ARM9's main RAM -> fixed destination timing is UnitTimings9_32's MRAM burst table lookup, chosen once
 per run instead of per unit.
 ---
- src/DMA.cpp |  66 +++++++++++++-
- src/DMA.h   |   5 ++
+ src/DMA.cpp |  66 +++++++++++-
+ src/DMA.h   |   5 +
  src/NDS.h   |   2 +
- src/SPU.cpp | 252 ++++++++++++++++++++++++++++++++++++++++++++++++++--
- src/SPU.h   |  34 ++++++-
- 5 files changed, 349 insertions(+), 10 deletions(-)
+ src/SPU.cpp | 292 +++++++++++++++++++++++++++++++++++++++++++++++++---
+ src/SPU.h   |  34 +++++-
+ 5 files changed, 384 insertions(+), 15 deletions(-)
 
 diff --git a/src/DMA.cpp b/src/DMA.cpp
 index caf5032..3e49ef7 100644
@@ -151,7 +151,7 @@ index 4539a1e..0828204 100644
      u32 IME[2];
      u32 IE[2];
 diff --git a/src/SPU.cpp b/src/SPU.cpp
-index d797043..7023fd2 100644
+index d797043..ea289b8 100644
 --- a/src/SPU.cpp
 +++ b/src/SPU.cpp
 @@ -25,6 +25,10 @@
@@ -202,12 +202,12 @@ index d797043..7023fd2 100644
 +    FastDirty = true;
 +}
 +
-+void SPU::SyncFastTimers(u64 lastmix)
++void SPU::SyncFastTimers(u32 lastmix)
 +{
 +    for (SPUChannel& chan : Channels)
 +    {
 +        if (!chan.FastLazy) continue;
-+        chan.Timer += (u32)(lastmix - chan.FastSync) * FastCycles;
++        chan.Timer += (lastmix - chan.FastSync) * FastCycles;
 +        chan.FastSync = lastmix;
 +    }
 +}
@@ -269,6 +269,49 @@ index d797043..7023fd2 100644
      {
          for (u32 i = 0; i < burstlen; i += 4)
          {
+@@ -493,7 +549,7 @@ void SPUChannel::Start()
+     }
+ }
+ 
+-void SPUChannel::NextSample_PCM8()
++inline void SPUChannel::NextSample_PCM8() // (inline: -fPIC would keep it out of line, interposable)
+ {
+     Pos++;
+     if (Pos < 0) return;
+@@ -516,7 +572,7 @@ void SPUChannel::NextSample_PCM8()
+     CurSample = val << 8;
+ }
+ 
+-void SPUChannel::NextSample_PCM16()
++inline void SPUChannel::NextSample_PCM16() // (inline: -fPIC would keep it out of line, interposable)
+ {
+     Pos++;
+     if (Pos < 0) return;
+@@ -539,7 +595,7 @@ void SPUChannel::NextSample_PCM16()
+     CurSample = val;
+ }
+ 
+-void SPUChannel::NextSample_ADPCM()
++inline void SPUChannel::NextSample_ADPCM() // (inline: -fPIC would keep it out of line, interposable)
+ {
+     Pos++;
+     if (Pos < 8)
+@@ -614,13 +670,13 @@ void SPUChannel::NextSample_ADPCM()
+     CurSample = ADPCMVal;
+ }
+ 
+-void SPUChannel::NextSample_PSG()
++inline void SPUChannel::NextSample_PSG() // (inline: -fPIC would keep it out of line, interposable)
+ {
+     Pos++;
+     CurSample = PSGTable[(Cnt >> 24) & 0x7][Pos & 0x7];
+ }
+ 
+-void SPUChannel::NextSample_Noise()
++inline void SPUChannel::NextSample_Noise() // (inline: -fPIC would keep it out of line, interposable)
+ {
+     if (NoiseVal & 0x1)
+     {
 @@ -774,7 +830,15 @@ void SPUCaptureUnit::FIFO_FlushData()
  {
      for (u32 i = 0; i < 4; i++)
@@ -286,7 +329,7 @@ index d797043..7023fd2 100644
          // Calls the NDS or DSi version, depending on the class
  
          FIFOReadPos++;
-@@ -856,20 +920,178 @@ void SPUCaptureUnit::Run(u32 cycles, s32 sample)
+@@ -856,20 +920,208 @@ void SPUCaptureUnit::Run(u32 cycles, s32 sample)
  }
  
  
@@ -302,9 +345,9 @@ index d797043..7023fd2 100644
 +// and 3 are left out of the mixers as Mix does (SOUNDCNT bits 12 and 13).
 +// FastMix: Run<type> for a channel known to be on, keyed already (KeyOn false), long enough and not interpolated
 +// (FastValid), whose timer overflows in this Mix (timer: Timer plus this Mix's cycles): its sample loop and output,
-+// without Run's checks, with the NextSample and FIFO reads inline.
++// without Run's checks, with the NextSample and FIFO reads inline (flatten: one call per sample, nothing below it).
 +template<u32 type>
-+[[gnu::flatten]] static s32 RunValid(SPUChannel& chan, u32 timer)
++[[gnu::noinline, gnu::flatten]] static s32 RunValid(SPUChannel& chan, u32 timer)
 +{
 +    chan.Timer = timer;
 +    while (chan.Timer >> 16)
@@ -331,7 +374,7 @@ index d797043..7023fd2 100644
 +
 +void SPU::MixChannelsFast(u32 spucycles, s32& left, s32& right, s32& ch1, s32& ch3)
 +{
-+    const u64 mix = ++FastCount;
++    const u32 mix = ++FastCount;
 +    if (spucycles != FastCycles)
 +    {
 +        SyncFastTimers(mix - 1);
@@ -341,36 +384,51 @@ index d797043..7023fd2 100644
 +
 +    // No register written and no channel's timer overflowing since the last time they ran: every channel's output
 +    // is the same, so the sums are too. The timers are owed this Mix's cycles (SyncFastTimers).
-+    if (!FastDirty && mix < FastNextDue)
++    if (!FastDirty && (s32)(mix - FastNextDue) < 0)
 +    {
 +        left = FastLeft; right = FastRight; ch1 = FastCh1; ch3 = FastCh3;
 +        return;
 +    }
 +
-+    // Run the channels that are due (all of them after a register write); the others keep their output
-+    const bool all = FastDirty;
++    // Run the channels that are due (all of them after a register write); the others keep their output. Running a
++    // channel that isn't due is harmless (it adds its cycles and keeps its output), skipping one that is due isn't.
++    u32 duemask = 0xFFFF;
++    if (!FastDirty)
++    {
++#if defined(__aarch64__)
++        // NEON: lanes whose (due - mix) <= 0, as a 16-bit mask
++        static const u32 bitsv[16] = {1,2,4,8, 16,32,64,128, 256,512,1024,2048, 4096,8192,16384,32768};
++        const uint32_t mixv = mix;
++        const uint32x4_t m = vdupq_n_u32(mixv);
++        uint32x4_t acc = vdupq_n_u32(0);
++        for (int q = 0; q < 4; q++)
++        {
++            int32x4_t d = vreinterpretq_s32_u32(vsubq_u32(vld1q_u32(&ChanDue[q*4]), m));
++            acc = vorrq_u32(acc, vandq_u32(vcleq_s32(d, vdupq_n_s32(0)), vld1q_u32(&bitsv[q*4])));
++        }
++        duemask = vaddvq_u32(acc);
++#else
++        duemask = 0;
++        for (int i = 0; i < 16; i++)
++            if ((s32)(ChanDue[i] - mix) <= 0) duemask |= 1u << i;
++#endif
++    }
 +    FastDirty = false;
 +    const u32 cycshift = (spucycles & (spucycles - 1)) ? 0 : __builtin_ctz(spucycles);
-+    u64 nextdue = ~0ull;
-+    for (int i = 0; i < 16; i++)
++    for (; duemask; duemask &= duemask - 1)
 +    {
-+        if (!all && ChanDue[i] > mix)
-+        {
-+            if (ChanDue[i] < nextdue) nextdue = ChanDue[i];
-+            continue;
-+        }
-+
++        const int i = __builtin_ctz(duemask);
 +        SPUChannel& chan = Channels[i];
 +        if (chan.FastLazy)
 +        {
 +            // the Mixes skipped since it last ran, before this one
-+            chan.Timer += (u32)(mix - 1 - chan.FastSync) * spucycles;
++            chan.Timer += (mix - 1 - chan.FastSync) * spucycles;
 +            chan.FastLazy = false;
 +        }
 +        if (!(chan.Cnt & (1u<<31)))
 +        {
 +            ChanL[i] = 0; ChanR[i] = 0; ChanOut[i] = 0;
-+            ChanDue[i] = ~0ull; // until a write turns it on
++            ChanDue[i] = mix + 0x7FFFFFFF; // until a write turns it on (and then a while)
 +            continue;
 +        }
 +
@@ -407,21 +465,36 @@ index d797043..7023fd2 100644
 +            ChanOut[i] = val; ChanL[i] = l; ChanR[i] = r;
 +        }
 +
-+        u64 due;
 +        if (chan.FastValid)
 +        {
 +            // its timer overflows in the Mix that takes it to 0x10000
 +            chan.FastLazy = true;
 +            chan.FastSync = mix;
 +            u32 rem = 0x10000 - chan.Timer + spucycles - 1;
-+            due = mix + (cycshift ? (rem >> cycshift) : (rem / spucycles));
++            ChanDue[i] = mix + (cycshift ? (rem >> cycshift) : (rem / spucycles));
 +        }
 +        else
-+            due = mix + 1; // runs every Mix
-+        ChanDue[i] = due;
-+        if (due < nextdue) nextdue = due;
++            ChanDue[i] = mix + 1; // runs every Mix
 +    }
-+    FastNextDue = nextdue;
++
++    // the next Mix with a channel due
++#if defined(__aarch64__)
++    {
++        const uint32x4_t m = vdupq_n_u32(mix);
++        int32x4_t mn = vminq_s32(
++            vminq_s32(vreinterpretq_s32_u32(vsubq_u32(vld1q_u32(&ChanDue[0]), m)),
++                      vreinterpretq_s32_u32(vsubq_u32(vld1q_u32(&ChanDue[4]), m))),
++            vminq_s32(vreinterpretq_s32_u32(vsubq_u32(vld1q_u32(&ChanDue[8]), m)),
++                      vreinterpretq_s32_u32(vsubq_u32(vld1q_u32(&ChanDue[12]), m))));
++        FastNextDue = mix + (u32)vminvq_s32(mn);
++    }
++#else
++    {
++        s32 mn = 0x7FFFFFFF;
++        for (int i = 0; i < 16; i++) mn = std::min(mn, (s32)(ChanDue[i] - mix));
++        FastNextDue = mix + (u32)mn;
++    }
++#endif
 +
 +    ch1 = ChanOut[1];
 +    ch3 = ChanOut[3];
@@ -468,7 +541,7 @@ index d797043..7023fd2 100644
  
          // TODO: addition from capture registers
          Channels[0].PanOutput(ch0, left, right);
-@@ -886,11 +1108,19 @@ void SPU::Mix(u32 spucycles)
+@@ -886,11 +1138,19 @@ void SPU::Mix(u32 spucycles)
              s32 channel = chan->DoRun(spucycles);
              chan->PanOutput(channel, left, right);
          }
@@ -489,7 +562,7 @@ index d797043..7023fd2 100644
          {
              s32 val = left;
  
-@@ -901,7 +1131,12 @@ void SPU::Mix(u32 spucycles)
+@@ -901,7 +1161,12 @@ void SPU::Mix(u32 spucycles)
              Capture[0].Run(spucycles, val);
          }
  
@@ -503,7 +576,7 @@ index d797043..7023fd2 100644
          {
              s32 val = right;
  
-@@ -1276,6 +1511,7 @@ u32 SPU::Read32(u32 addr)
+@@ -1276,6 +1541,7 @@ u32 SPU::Read32(u32 addr)
  
  void SPU::Write8(u32 addr, u8 val)
  {
@@ -511,7 +584,7 @@ index d797043..7023fd2 100644
      if (addr < 0x04000500)
      {
          SPUChannel* chan = &Channels[(addr >> 4) & 0xF];
-@@ -1317,6 +1553,7 @@ void SPU::Write8(u32 addr, u8 val)
+@@ -1317,6 +1583,7 @@ void SPU::Write8(u32 addr, u8 val)
  
  void SPU::Write16(u32 addr, u16 val)
  {
@@ -519,7 +592,7 @@ index d797043..7023fd2 100644
      if (addr < 0x04000500)
      {
          SPUChannel* chan = &Channels[(addr >> 4) & 0xF];
-@@ -1366,6 +1603,7 @@ void SPU::Write16(u32 addr, u16 val)
+@@ -1366,6 +1633,7 @@ void SPU::Write16(u32 addr, u16 val)
  
  void SPU::Write32(u32 addr, u32 val)
  {
@@ -528,7 +601,7 @@ index d797043..7023fd2 100644
      {
          SPUChannel* chan = &Channels[(addr >> 4) & 0xF];
 diff --git a/src/SPU.h b/src/SPU.h
-index 34af364..2e57b23 100644
+index 34af364..ad653e2 100644
 --- a/src/SPU.h
 +++ b/src/SPU.h
 @@ -98,6 +98,14 @@ public:
@@ -541,7 +614,7 @@ index 34af364..2e57b23 100644
 +    bool FastMem = false;
 +    // FastMix: Timer is owed one Mix's cycles for each skipped Mix after FastSync (SPU::SyncFastTimers adds them)
 +    bool FastLazy = false;
-+    u64 FastSync = 0;
++    u32 FastSync = 0;
 +
      void FIFO_BufferData();
      template<typename T> T FIFO_ReadData();
@@ -593,12 +666,12 @@ index 34af364..2e57b23 100644
 +    // FastMix's skipping: Mix number FastCount; the first Mix at which a channel's timer overflows (FastNextDue);
 +    // set by any SPU register write or state change (FastDirty): the next Mix runs the channels
 +    bool FastDirty = true;
-+    u64 FastCount = 0;
-+    u64 FastNextDue = 0;
++    u32 FastCount = 0; // (compared as differences, so wrapping is fine)
++    u32 FastNextDue = 0;
 +    u32 FastCycles = 0;
 +    s32 FastLeft = 0, FastRight = 0, FastCh1 = 0, FastCh3 = 0;
-+    u64 ChanDue[16] {}; // the Mix at which each channel runs next (~0: off)
-+    void SyncFastTimers(u64 lastmix);
++    alignas(16) u32 ChanDue[16] {}; // the Mix at which each channel runs next (off: 2^31-1 Mixes on)
++    void SyncFastTimers(u32 lastmix);
 +    alignas(16) s32 ChanL[16] {};
 +    alignas(16) s32 ChanR[16] {};
 +    s32 ChanOut[16] {};
