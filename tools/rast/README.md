@@ -472,10 +472,11 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   eighth of the translucent kernels'): 0 of 340000 batches differ; the scene cycle's differing bins as DraStic's
   renderer's at every checkpoint to 62400 bins with the compositor's checks 0 differ, with deferred shading to
   112800, S4 0 bins in 16800, the stress ROM's 6 bins in 4800, the four 3x runs without signals.
-  Fifth round, 2D: `ds2d.c` (the section "DraStic's 2D scanline routines" below) replaces seven of DraStic's 2D
-  routines in a first commit and ten more in a second, each exact (`t_ds2d.c`, RAST_2DCHECK=1 over the 2D and 3D
-  scenes); modeled A55 cycles a frame: every 2x / 3x game's conversion 0.62 -> 0.29 M, the field scene S7 frame 4.49
-  -> 4.21 M, the 2D scene cycle 3.44 -> 2.82 M (DraStic's 2D routines and ours together).
+  Fifth round, 2D: `ds2d.c` (the section "DraStic's 2D scanline routines" below) replaces DraStic's 2D leaf routines
+  in four batches (seven, ten, two, five; five more measured slower or equal and left off), each exact (`t_ds2d.c`,
+  RAST_2DCHECK=1 over the 2D and 3D scenes); modeled A55 cycles a frame: every 2x / 3x game's conversion 0.62 -> 0.29
+  M, the field scene S7 frame 4.49 -> 4.21 M; on the 2D scene cycle the replaced routines 1.68 -> 1.02 M (calls a
+  frame x cycles a call: the cycle's frame totals vary with the part of its scene mix a 90 s run reaches).
   Fifth round, the geometry stage: four of DraStic's geometry functions on the emulation thread are replaced through
   the same hook mechanism (`dsgeom.c`, the section below): the command queue's fast paths, the vertex batch's append,
   the vertex block's transform rescheduled for the A55 and the polygon binning visiting only occupied rows; checked
@@ -626,10 +627,10 @@ per-call costs are exact: about 620 instructions a quarter before, 45 / 30 / 150
 ## DraStic's 2D scanline routines (`src/rast/ds2d.c`, `ds2d_asm.S`, exact)
 
 DraStic composites every DS line on the emulation thread, so its 2D routines sit on every frame's critical path; at
-2x half of the field scene's frame is DraStic's own non-3D code. `ds2d.c` replaces seven of them through rast_hook()
-(the entry's first four instructions checked, a jump into librast, the trampoline kept for the check mode), each with
-the same bytes and no other effect a caller can see (all their callers are C, so the standard calling convention is
-all a replacement keeps; `ds2d.c`'s header lists the callers):
+2x half of the field scene's frame is DraStic's own non-3D code. `ds2d.c` replaced seven of them first, through
+rast_hook() (the entry's first four instructions checked, a jump into librast, the trampoline kept for the check
+mode), each with the same bytes and no other effect a caller can see (all their callers are C, so the standard
+calling convention is all a replacement keeps; `ds2d.c`'s header lists the callers):
 
 - `render_scanline_color_convert_direct_32_2x_asm` (two quarters' 6-bit planes into a 512-pixel xRGB row, 768 calls a
   frame in every 2x / 3x game): the same zip / st4 loop with `ldr q` at a register offset and the loads a step ahead,
@@ -869,16 +870,22 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
   S7). ds2d.c now owns the conversion hook, so it could take the rows by plane pointer; first prove that nothing
   reads the planes between the composite and the conversion (render_scanline memsets and reuses them in some
   display modes; display capture reads them).
-- DraStic's 2D path after `ds2d.c` (the section above): what is left is C. render_scanline_obj_c (6.8 KB, 0.26 M
-  on the 2D scene cycle and the largest 2D item of any sprite-heavy game: its per-pixel loops store the colour, the
-  index and the attribute byte per sprite pixel) can only be taken whole: DraStic's OBJ renderer re-implemented
-  exactly (1D / 2D mapping, bitmap and affine sprites, mosaic, the OBJ window) against the decompiler's C, with
-  RAST_2DCHECK over sprite scenes; next render_scanline_bitmap_8bpp / _16bpp (3.5 KB each, 0.06 / 0.05 M, mode 3-5
-  games), render_scanline_capture_blended_3d (324 B, 0.04 M when a game captures every frame), the affine tile
-  renderers (render_scanline_affine_render_tiles_*_asm, 0.036 M: variable-length runs with overlapping 16-byte
-  stores) and render_scanline_bg (0.10 M on the 2D cycle, nearly all of it its horizontal mosaic loops).
-  render_scanline_2d (0.10-0.34 M) and render_scanline (0.06 M) are per-line drivers whose cost is prologue and
-  inlined NEON (L4: the OBJ lines' bit-15 visibility bitmaps): not hookable without replacing them whole.
+- DraStic's 2D path after `ds2d.c` (the section above). Leaves left: the palette lookup by tbl / tbx over the
+  palette's two byte planes (models at ~330 cycles a 256-pixel call against 558, but rests on llvm-mca's model of
+  a four-register tbl / tbx, one a cycle: measure the A55's on a device first); a fused 4bpp text BG line
+  (render_scanline_tiled_ext with its three leaves: the visibility bits from the span's nibbles, ~60-150 of ~760
+  cycles a line). Tried and not worth it: the affine renderers' pair step pipelined across pairs (31 -> 27 modeled
+  cycles, and it needs an entry check that the line buffer overlaps none of the inputs), color_convert_shade_32_2x
+  (master brightness fades; 75 -> 76 cycles a step in C NEON: both bound by the widening multiply-accumulates).
+  Otherwise what is left is C. render_scanline_obj_c (6.8 KB, 0.25 M on the 2D scene cycle, ~1400 modeled cycles a
+  line, and the largest 2D item of any sprite-heavy game: its per-pixel loops store the colour, the index and the
+  attribute byte per sprite pixel) can only be taken whole or behind a dispatch that hands every case but the common
+  one (regular tile sprites) to the original: DraStic's OBJ renderer re-implemented exactly against the decompiler's
+  C, with RAST_2DCHECK over the sprite scenes. Next render_scanline_bitmap_8bpp / _16bpp (3.5 KB each, 5000 / 1700
+  cycles a line, mode 3-5 games), render_scanline_bg (0.10 M on the 2D cycle, nearly all of it its horizontal mosaic
+  loops), color_effects_apply_offset_c (1600 a line, a scrolled 3D layer's blend). render_scanline_2d (0.05-0.34 M)
+  and render_scanline (0.06 M) are per-line drivers whose cost is prologue and inlined NEON (L4: the OBJ lines'
+  bit-15 visibility bitmaps): not hookable without replacing them whole.
 - The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate; IPC
   ~0.8-0.98 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
   finds 0.1% more). Across blocks the translucent tail, the alpha stages and the st4 stores are done (Status); the
