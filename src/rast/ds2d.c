@@ -189,6 +189,7 @@ static void rg_load(const rgn *r, int nr, const uint8_t *buf) {
     for (int i = 0; i < nr; i++) { memcpy(r[i].p, buf + o, r[i].n); o += r[i].n; }
 }
 
+static unsigned long chk_cap_paths[3];             /* the captures' paths checked: direct, no source B, source B */
 static void chk_report(void) {                      /* under chk_lock, every 2 s */
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
@@ -196,7 +197,8 @@ static void chk_report(void) {                      /* under chk_lock, every 2 s
     chk_last = now;
     fprintf(stderr, "[ds2d] check:");
     for (int h = 0; h < H_N; h++) fprintf(stderr, " %s %lu calls, %lu differ;", hname[h], chk_n[h], chk_bad[h]);
-    fprintf(stderr, "\n");
+    fprintf(stderr, " capture paths: direct %lu, no source B %lu, source B %lu\n", chk_cap_paths[0], chk_cap_paths[1],
+            chk_cap_paths[2]);
 }
 
 /* after ours ran with chk_in saved and chk_ours holding its result, and the original with the same input bytes:
@@ -1145,7 +1147,9 @@ static void chk_vis12(uint8_t *out, const uint16_t *src) {
  * >> 5, umin), the last w % 16 pixels by the scalar formula. Only out[0..w) is written. Arguments where the result
  * could depend on the order (out over the width field or over a source, other than out == srcb exactly, which the
  * originals and this both do pixel by pixel in place) go to the original. Callers: render_scanline_2d (C) and
- * render_scanline_capture (C, a tail call). */
+ * render_scanline_capture (C, a tail call). The direct case calls DraStic's direct capture as a C function where the
+ * original tail-calls it: the same three arguments, and the asm keeps the callee-saved registers (C callers reach it
+ * through those tail calls), so returning through us is the same to our caller. */
 typedef void (*capb_fn)(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const void *srca);
 typedef void (*capd_fn)(uint8_t *cap, uint16_t *out, const void *srca);
 static capb_fn orig_capb, orig_capb3d;
@@ -1219,6 +1223,8 @@ void ds2d_capb3d(uint8_t *cap, uint16_t *out, const uint16_t *srcb, const uint32
 }
 static void chk_capb_any(int h, int is3d, uint8_t *cap, uint16_t *out, const uint16_t *srcb, const void *a) {
     uint16_t w16; memcpy(&w16, cap + 0x4c, 2);
+    uint64_t hb; memcpy(&hb, cap + 0x40, 8);
+    int path = !cap[0x55] && cap[0x54] == 16 ? 0 : (is3d ? srcb != 0 : hb != 0) ? 2 : 1;
     size_t on = 2 * (((size_t)w16 + 31) & ~(size_t)31);     /* the direct captures store 32 pixels a step */
     rgn r[2] = { padded(out, on ? on : 64), { cap + 0x40, 0x20 } };
     pthread_mutex_lock(&chk_lock);
@@ -1227,6 +1233,7 @@ static void chk_capb_any(int h, int is3d, uint8_t *cap, uint16_t *out, const uin
     rg_save(r, 2, chk_ours);
     rg_load(r, 2, chk_in);
     (is3d ? orig_capb3d : orig_capb)(cap, out, srcb, a);
+    chk_cap_paths[path]++;
     chk_finish(h, r, 2, total);
     pthread_mutex_unlock(&chk_lock);
 }

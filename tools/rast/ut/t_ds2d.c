@@ -894,6 +894,26 @@ static void test_capb(void) {
         }
         n[is3d]++;
     }
+    /* every width 1..256 (the w % 16 tails) with EVA / EVB at their extremes, source B or none, both sources */
+    static const uint8_t ev[8][2] = { { 0, 0 }, { 16, 0 }, { 16, 16 }, { 31, 31 }, { 32, 32 }, { 255, 255 }, { 31, 0 }, { 0, 31 } };
+    unsigned nsweep = 0;
+    for (int w = 1; w <= 256; w++) for (int e = 0; e < 8; e++) for (int hasb = 0; hasb < 2; hasb++) for (int is3d = 0; is3d < 2; is3d++) {
+        int ww;
+        capb_inputs(cap, a, b, is3d, &ww);
+        cap[0x54] = ev[e][0]; cap[0x55] = ev[e][1];
+        if (cap[0x54] == 16 && cap[0x55] == 0 && w % 32) continue;      /* the direct asm: steps of 32 pixels */
+        uint16_t w16 = (uint16_t)w; memcpy(cap + 0x4c, &w16, 2);
+        uint64_t hb = hasb; memcpy(cap + 0x40, &hb, 8);
+        const uint16_t *pb = hasb || !is3d ? b : 0;
+        rndfill(o1, sizeof o1); memcpy(o2, o1, sizeof o1);
+        ds[is3d](cap, (uint16_t *)(o1 + G), pb, a);
+        (is3d ? (capb_fn_t)ds2d_capb3d : (capb_fn_t)ds2d_capb)(cap, (uint16_t *)(o2 + G), pb, a);
+        if (ut_cmp("capture_blended sweep", o1, o2, sizeof o1)) {
+            fprintf(stderr, "  eva %u evb %u w %d srcb %d 3d %d\n", cap[0x54], cap[0x55], w, hasb, is3d);
+            return;
+        }
+        nsweep++;
+    }
     /* out over a source: the original's order (the replacement hands these to it) */
     orig_capb = ds[0]; orig_capb3d = ds[1];
     for (int it = 0; it < 400; it++) {
@@ -922,7 +942,8 @@ static void test_capb(void) {
     }
     if (chk_bad[H_CAPB] + chk_bad[H_CAPB3D] != bad0) { fprintf(stderr, "FAIL capture_blended check wrappers counted differences\n"); ut_fail++; }
     fprintf(stderr, "capture_blended: %u 2D + %u 3D random lines (any EVA / EVB, widths 0..299, %u in place, the direct case), "
-            "400 overlapping, 200 each through the check wrappers equal\n", n[0], n[1], ninplace);
+            "%u in the sweep of widths 1..256 x EVA / EVB extremes, 400 overlapping, 200 each through the check wrappers "
+            "equal\n", n[0], n[1], ninplace, nsweep);
 }
 
 /* ---- the affine BG tile renderers ---- */
