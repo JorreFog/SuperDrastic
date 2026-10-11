@@ -50,11 +50,15 @@ passing group sets up the weights and interpolants (27:, then the weights at 28:
 the latch (the affine weights 6:, the depth-equal test 24:, which with w depth also takes the affine weights and the
 64-bit w products 23:, the 32-bit vertex colour 37:, the alpha modulate and alpha test 46: and the white lines' alpha
 test 45:, the partial-group store 1:) so the common path has no taken branch besides the loop's.
+The hottest kernels (pipe_ok(): 02000 02010 04010 12000 14010 and their hi-res twins) have a second, software-pipelined
+group loop (pipe(), 50: and 80:) for the lines whose flags allow it (the common ones: perspective, no depth-equal
+test, no white line, no alpha stage): each step stores one group while the next group's head (depth test, weights)
+runs in the same block, so that the two chains overlap; kernsched.climb_loop() orders its steady path as a whole.
 Stack: [sp,#32] 8 texels, [sp,#64] the depth words of the group (keep_dep()'s kernels keep them in v25 v26 and
-spill them only at a line's first group), [sp,#96..] spills
+spill them only at a line's first group), [sp,#96..] spills (pipe(): the line's ub vb b0 splats and the fog bytes)
 (bilinear: st, the five bases, the four corner weights, the four nearest-corner masks), [sp,#256] the line's pass masks
 (512 bytes; the hi-res set's frame is 1040 bytes for its 768-pixel lines)."""
-import os, sys
+import os, re, sys
 import kernsched
 from kernsched import schedule
 
@@ -84,6 +88,8 @@ def e(s=""): out.append("\t" + s if s and not s.endswith(":") and not s.startswi
 RL = {}         # the current kernel's per-batch constants in otherwise unused registers: roles()
 OOLS = []       # out-of-line blocks of the group loop, emitted after its latch
 KD = False      # the current kernel's keep_dep() kind: its depth words stay in v25 v26, its pass mask in x8
+FAST = None     # while the pipelined loop's colour stage is generated (pipe()): its substitutions, else None
+FS_UB, FS_VB, FS_B0, FS_FOG = 96, 112, 128, 144  # pipe(): the stack slots of the line's ub vb b0 splats, the fog bytes
 
 def keep_dep(D, T, R, F, B, M):
     """The opaque textured kernels with z or w depth and no register for the dep role kept the group's attribute
@@ -592,13 +598,16 @@ def gather(T):
     addrs("v29", "v27")
     if T in (3, 4):
         for r in range(9, 17): e(f"ldrb w{r}, [x6, w{r}, uxtw]")
-        e("tbz w7, #7, 1f")
-        e("stp w9, w10, [sp, #32]"); e("stp w11, w12, [sp, #40]"); e("stp w13, w14, [sp, #48]"); e("stp w15, w16, [sp, #56]")
-        e("ld2 {v29.8h, v30.8h}, [x28]"); e("xtn v29.8b, v29.8h")                    # the 8 indices
-        e("tbl v30.8b, {v21.16b}, v29.8b"); e("tbl v31.8b, {v20.16b}, v29.8b"); e("tbl v27.8b, {v19.16b}, v29.8b")
-        e("tbl v29.8b, {v18.16b}, v29.8b")
-        e("b 2f")
-        e("1:")
+        p16 = FAST.get("pal16") if FAST else None                   # (pipe(): one of the two, by its flag bit 7)
+        if p16 is None: e("tbz w7, #7, 1f")
+        if p16 is not False:
+            e("stp w9, w10, [sp, #32]"); e("stp w11, w12, [sp, #40]"); e("stp w13, w14, [sp, #48]"); e("stp w15, w16, [sp, #56]")
+            e("ld2 {v29.8h, v30.8h}, [x28]"); e("xtn v29.8b, v29.8h")                # the 8 indices
+            e("tbl v30.8b, {v21.16b}, v29.8b"); e("tbl v31.8b, {v20.16b}, v29.8b"); e("tbl v27.8b, {v19.16b}, v29.8b")
+            e("tbl v29.8b, {v18.16b}, v29.8b")
+            if p16: return
+            e("b 2f")
+            e("1:")
         for r in range(9, 17): e(f"ldr w{r}, [x21, w{r}, uxtw #2]")
     else:
         for r in range(9, 17): e(f"ldr w{r}, [x6, w{r}, uxtw #2]")
@@ -606,18 +615,20 @@ def gather(T):
     e("ld2 {v29.8h, v30.8h}, [x28]")                                              # r | g << 8, b | a << 8
     e("shrn v27.8b, v29.8h, #8"); e("xtn v29.8b, v29.8h")
     e("xtn v31.8b, v30.8h"); e("shrn v30.8b, v30.8h, #8")
-    if T in (3, 4): e("2:")
+    if T in (3, 4) and not FAST: e("2:")
 
 def texture(T, pre_gather=None):
     """texel channels -> tr v29, tg v27, tb v31, ta v30 (8 x u8 each)"""
+    ub, vb = (FAST["ub"], FAST["vb"]) if FAST else ("v13", "v14")
+    if FAST: e(f"ldr {q(ub)}, [sp, #{FS_UB}]"); e(f"ldr {q(vb)}, [sp, #{FS_VB}]")   # (pipe(): v13 v14 hold its head's)
     # u -> v30
     e(f"smull v30.4s, v24.4h, v15.h[{L_DU}]"); e(f"smull2 v29.4s, v24.8h, v15.h[{L_DU}]")
-    e("addhn v30.4h, v30.4s, v13.4s"); e("addhn2 v30.8h, v29.4s, v13.4s")
+    e(f"addhn v30.4h, v30.4s, {ub}.4s"); e(f"addhn2 v30.8h, v29.4s, {ub}.4s")
     e("sshr v30.8h, v30.8h, #3")
     texcoord(0, T, "v30")
     # v -> v27
     e(f"smull v27.4s, v24.4h, v15.h[{L_DV}]"); e(f"smull2 v29.4s, v24.8h, v15.h[{L_DV}]")
-    e("addhn v27.4h, v27.4s, v14.4s"); e("addhn2 v27.8h, v29.4s, v14.4s")
+    e(f"addhn v27.4h, v27.4s, {vb}.4s"); e(f"addhn2 v27.8h, v29.4s, {vb}.4s")
     e("sshr v27.8h, v27.8h, #3")
     texcoord(1, T, "v27")
     if pre_gather: pre_gather()
@@ -694,7 +705,9 @@ def vertex_colour(ch, F, dst, slow=False):
         return
     l = (L_DR, L_DG, L_DB)[ch]
     if not slow:
-        e(f"sqdmulh {dst}.8h, v24.8h, v15.h[{l}]"); e(f"add {dst}.8h, {dst}.8h, v{10 + ch}.8h"); e(f"shrn {dst}.8b, {dst}.8h, #3")
+        c0 = f"v{10 + ch}"
+        if FAST and ch == 2: c0 = FAST["b0"]; e(f"ldr {q(c0)}, [sp, #{FS_B0}]")   # (pipe(): v12 is its head's)
+        e(f"sqdmulh {dst}.8h, v24.8h, v15.h[{l}]"); e(f"add {dst}.8h, {dst}.8h, {c0}.8h"); e(f"shrn {dst}.8b, {dst}.8h, #3")
     else:
         w = "v28" if KD else "v26"                                              # (keep_dep(): v26 holds depth)
         e(f"ushll {dst}.4s, v{10 + ch}.4h, #15"); e(f"mov {w}.16b, {dst}.16b")
@@ -749,12 +762,14 @@ def fused_alpha(T, M, B):
 
 def white_branch(T, M, B):
     """white vertex colour, alpha 31: the texel is the colour (the rgb modulates and the alpha modulate skipped; the
-    st4 kernels copy the texels into the colour's registers out of line, 44:)"""
+    st4 kernels copy the texels into the colour's registers out of line, 44:; not in the pipelined loop: pipe())"""
+    if FAST: return
     e(("tbnz w7, #2, 44f" if st4_store() else "tbnz w7, #2, 45f") if fused_alpha(T, M, B) else "tbnz w7, #2, 1f")
 
 def alpha_stage(T, M, B):
     """after the rgb modulates: the alpha modulate (flag bit 10 clear) and the alpha test (bit 8 clear); the white
-    branch joins before the test"""
+    branch joins before the test (the pipelined loop's lines have neither: pipe())"""
+    if FAST: return
     if not fused_alpha(T, M, B):
         modulate_alpha("1f")
         e("1:")
@@ -807,8 +822,7 @@ def colour(T, F, B, M=0):
         vc = RL["vc"]
         texture(T, lambda: [vertex_colour(ch, F, vc[ch]) for ch in range(3)])
         white_branch(T, M, B)
-        e("tbz w7, #14, 37f")
-        e("38:")
+        if not FAST: e("tbz w7, #14, 37f"); e("38:")
         o = st4_quad() if st4_store() and M == 0 else [None] * 3                # (shade: in the texels' registers)
         ws = ("v24", RL["vs"][0], "v27" if KD == "litp" else "v28") if KD else ("v26", RL["vs"][0], "v25")
         for ch, t, w in zip(range(3), ("v29", "v27", "v31"), ws):           # (keep_dep(): v25 v26 the depth words)
@@ -818,7 +832,7 @@ def colour(T, F, B, M=0):
             e("37:")
             for ch in range(3): vertex_colour(ch, F, vc[ch], True)
             e("b 38b")
-        OOLS.append(ool)
+        if not FAST: OOLS.append(ool)
         alpha_stage(T, M, B)
         return (*st4_quad()[:3], "v30") if st4_store() and M == 0 else ("v29", "v27", "v31", "v30")
     if T:
@@ -889,6 +903,7 @@ def store(D, cols):
         # partial group zips
         r, g, b, a = st4_quad(); t, u = ("v24", "v27") if r in ("v18", "v28") else ("v29", "v25")
         if "fog" in RL: f = RL["fog"][0]
+        elif FAST: e(f"ldr d{t[1:]}, [sp, #{FS_FOG}]"); f = t                      # (pipe(): v23 is its head's)
         else: e(f"dup {t}.8b, v23.b[2]"); f = t
         e(f"orr {a}.8b, v30.8b, {f}.8b")
         if KD in ("flat", "litp"): e(f"shrn {b}.8b, {bsc()}.8h, #6")             # b (keep_dep(): last, into v30)
@@ -1089,10 +1104,12 @@ def lazy_loop(D, T, R, F, M):
         e("tbz w27, #6, 1f"); e("sub x4, x9, x5"); e("add x3, x3, x4"); e("1:")  # start at the first passing pixel
     interpolants_setup(T, F, M)
     if T and not F and M != 1: white_test()
+    if pipe_ok(D, T, R, F, M): pipe_check(D, T, F)     # the line's flags: pipe()'s loop (its entry has 28:'s steps)
     e("28:")                                                                     # (and the depth-equal head's)
     if KD:                                  # the attribute words back (the line setup used v25 v26), st beside them
-        e("ldp q25, q26, [sp, #64]"); e("tbnz w7, #0, 40f"); steps(("v24", "v29", "v30", "v31")); advance(0); e("b 5f")
-    else: e("tbnz w7, #0, 40f"); steps(); advance(0); e("b 5f")
+        e("ldp q25, q26, [sp, #64]"); e("tbnz w7, #0, 40f"); steps(("v24", "v29", "v30", "v31")); advance(0)
+    else: e("tbnz w7, #0, 40f"); steps(); advance(0)
+    e("b 5f")
     e("40:"); advance(1); e("b 5f")
 
 def shade_store(cols):
@@ -1108,6 +1125,215 @@ def shade_store(cols):
         e(f"ldp q24, q28, [x1]"); e(f"bit v24.16b, {cl}.16b, v30.16b"); e(f"bit v28.16b, {ch}.16b, v31.16b"); e("stp q24, q28, [x1]")
         e("b 8b")
     return ool
+
+# the flags of a line pipe()'s loop takes: perspective (bit 0 clear), not depth-equal (1), not white (2), the fast
+# vertex colour (14) and no alpha stages (15: no alpha test, A is 31); (mask, value)
+PIPE_FLAGS = ((1 << 0) | (1 << 1) | (1 << 2) | (1 << 14) | (1 << 15), (1 << 14) | (1 << 15))
+PIPE_FLAGS_FLAT = ((1 << 0) | (1 << 1) | (1 << 2) | (1 << 15), 1 << 15)     # (flat: no vertex colour, no bit 14)
+
+PIPE_CLIMB = 24000       # climb_loop()'s evaluated moves for each pipelined loop (~25 s each; seven distinct loops)
+
+def pipe_ok(D, T, R, F, M):
+    """the kernels with pipe()'s loop: z depth, wrapped textures, opaque: lit direct (02000: keep_dep()'s "lit"), flat
+    direct (02010) and flat paletted (04010: keep_dep()'s "flat")"""
+    if M or D == 2 or R: return False
+    if D == 1 and not (T == 4 or KD == "lit"): return False                     # (14010, 12000)
+    return T == 2 and (KD == "lit" or F == 1 and "dep" in RL) or T == 4 and KD == "flat"     # (not bilinear)
+
+def pipe_cfg(T, F):
+    """pipe()'s registers: dep, the current group's depth words as the colour stage stores them (keep_dep()'s: v25
+    v26, the store ORs pid in; 02010: the dep role's, pid ORed in by the head: pid); H, the next group's head's (d0
+    d1 st w a1 a2 s1 s2: pipe_head()); fast, the colour stage's registers for what it loads instead (FAST); save,
+    the per-line constants it loads from the stack; mov: the weights move from the head's register to v24 after the
+    store (02010: v24 is also the st4 quad's first, which the second copy's renaming would break); flags: the line
+    flags it needs (mask, value; 04010: two loops, by flag bit 7)"""
+    if T == 4:
+        return dict(dep=("v25", "v26"), H=("v13", "v14", "v16", "v17", "v17", "v23", "v23", None),
+                    fast={"ub": "v31", "vb": RL["vs"][1]}, save=("v13", "v14"), flags=PIPE_FLAGS_FLAT)  # (b's scratch)
+    if not F:
+        return dict(dep=("v25", "v26"), H=("v13", "v14", "v22", "v23", "v16", "v17", "v9", "v12"),
+                    fast={"ub": "v31", "vb": "v21", "b0": "v31"}, save=("v13", "v14", "v12"), flags=PIPE_FLAGS)
+    return dict(dep=tuple(RL["dep"]), pid=True, mov=True, H=("v13", "v14", "v22", "v23", "v16", "v17", "v9", "v17"),
+                fast={"ub": "v31", "vb": "v26"}, save=("v13", "v14"), flags=PIPE_FLAGS_FLAT)
+
+def pipe_check(D, T, F):
+    """the line's flags: into pipe()'s loop (50: or 80:) or on"""
+    pf = pipe_cfg(T, F)["flags"]
+    if D == 1: pf = (pf[0] | 1 << 13, pf[1] | 1 << 13)                        # (w depth: the 32-bit products)
+    if T == 4:                                                                   # (bit 7: which of the two)
+        e(f"mov w16, #{pf[0] | 0x80:#x}"); e("and w16, w7, w16"); e(f"mov w15, #{pf[1]:#x}")
+        e("cmp w16, w15"); e("b.eq 50f"); e("orr w15, w15, #0x80"); e("cmp w16, w15"); e("b.eq 80f")
+    else:
+        e(f"mov w16, #{pf[0]:#x}"); e("and w16, w7, w16"); e(f"cmp w16, #{pf[1] >> 12:#x}, lsl #12")
+        e("b.eq 50f")
+
+def pipe_loops(T):
+    """pipe()'s loops of a kernel: (label base, flag bit 7) pairs"""
+    return ((50, False), (80, True)) if T == 4 else ((50, None),)
+
+def capture(f):
+    """f()'s output lines (and result), not emitted"""
+    global out
+    saved, out = out, []
+    try: r = f()
+    finally: lines, out = out, saved
+    return lines, r
+
+def pipe_head(nxt, d0, d1, st, w, a1, a2, s1, s2, m, pid=False, D=0):
+    """pipe(): a group's head (head_block()'s z depth test, steps() and advance()) into d0 d1 (its depth words), st
+    (its weights) and m (its pass mask); w a1 a2 s1 s2 scratch. nxt: the group after the current one (x5 - 8 pixels;
+    none: an empty mask, the attribute words read from the current group's place), else the current one (x5, x2).
+    z: v6 v7 hold the previous group's pixels 4-7 (z0 + 4 steps; the 8 steps' v9 is free), the group's pixels 0-3
+    are those + v8 (4 steps), its pixels 4-7 those + v8 again, which v6 v7 then keep: the same sums as depth() and
+    z_step8()'s (u64 additions, exact). w depth (D = 1, flag bit 13: head_w()'s products): the weights first, the
+    depth words W0 + (dW * st >> 15) from them."""
+    def weights():
+        if s2: steps((st, w, s1, s2))
+        else:                               # (three registers: the halves one after the other, the same operations)
+            for r, d, n in ((st, "v2", "v0"), (w, "v3", "v1")):
+                e(f"frecpe {r}.4s, {d}.4s"); e(f"frecps {s1}.4s, {r}.4s, {d}.4s"); e(f"fmul {r}.4s, {r}.4s, {s1}.4s")
+                e(f"frecps {s1}.4s, {r}.4s, {d}.4s"); e(f"fmul {r}.4s, {r}.4s, {s1}.4s")
+                e(f"fmul {r}.4s, {n}.4s, {r}.4s"); e(f"fcvtzs {r}.4s, {r}.4s, #15")
+            e(f"xtn {st}.4h, {st}.4s"); e(f"xtn2 {st}.8h, {w}.4s")
+        advance(0)
+    if D == 1:
+        weights()
+        e(f"smull {d0}.4s, {st}.4h, v6.h[0]"); e(f"smull2 {d1}.4s, {st}.8h, v6.h[0]")
+        e(f"sshr {d0}.4s, {d0}.4s, #15"); e(f"sshr {d1}.4s, {d1}.4s, #15")
+        e(f"add {d0}.4s, {d0}.4s, v7.4s"); e(f"add {d1}.4s, {d1}.4s, v7.4s")
+    else:
+        e(f"add {a1}.2d, v6.2d, v8.2d"); e(f"add {a2}.2d, v7.2d, v8.2d")
+        e(f"add v6.2d, {a1}.2d, v8.2d"); e(f"add v7.2d, {a2}.2d, v8.2d")
+        e(f"shrn {d0}.2s, {a1}.2d, #30"); e(f"shrn2 {d0}.4s, {a2}.2d, #30")
+        e(f"shrn {d1}.2s, v6.2d, #30"); e(f"shrn2 {d1}.4s, v7.2d, #30")
+    if nxt:     # its pixels min(x5 - 8, 8), 0 if x5 <= 8 (the tail table's row; in m, free until the mask), and its
+                # attribute words' address
+        e(f"mov {m}, #16"); e("cmp x5, #16"); e(f"csel {m}, x5, {m}, lo"); e(f"subs {m}, {m}, #8"); e(f"csel {m}, {m}, xzr, hi")
+        e("add x26, x2, #32"); e("csel x26, x26, x2, hi")
+        e(f"ldp {q(a1)}, {q(a2)}, [x26]")
+    else:
+        e(f"mov {m}, #8"); e("cmp x5, #8"); e(f"csel {m}, x5, {m}, lo")
+        e(f"ldp {q(a1)}, {q(a2)}, [x2]")
+    e(f"bic {a1}.4s, #0xff, lsl #24"); e(f"bic {a2}.4s, #0xff, lsl #24")
+    e(f"cmhi {a1}.4s, {a1}.4s, {d0}.4s"); e(f"cmhi {a2}.4s, {a2}.4s, {d1}.4s")
+    e(f"uzp1 {a1}.8h, {a1}.8h, {a2}.8h")
+    e(f"ldr {q(a2)}, [x20, {m}, lsl #4]"); e(f"and {a1}.16b, {a1}.16b, {a2}.16b")
+    e(f"xtn {a2}.8b, {a1}.8h"); e(f"fmov {m}, d{a2[1:]}")
+    if pid:                                 # (the dep role's words: dep | pid << 24)
+        e(f"ldr {q(a2)}, [x19, #{K['pid24']}]"); e(f"orr {d0}.16b, {d0}.16b, {a2}.16b"); e(f"orr {d1}.16b, {d1}.16b, {a2}.16b")
+    if D != 1: weights()
+
+def pipe(D, T, R, F, B, L=50, p16=None):
+    """The software-pipelined group loop (label L: 50, or 80 for the 16-colour palette's form, p16) of pipe_ok()'s
+    kernels, for the lines whose flags allow it (pipe_check(): the common case; the lazy kernels decide at their entry 27:,
+    the w-depth ones at the line's start, the others run the group loop above). That loop is one chain of dependent
+    stages a group (depth test, weights, coordinates, gather, modulates, store), and the in-order core overlaps only
+    what interleaves in program order: here each step is one block of two groups' work, the current group's colour
+    and store (colour() and store() as the loop above has them for these flags, captured with FAST set: no flag
+    branches) and the next group's head (pipe_head(): its depth test, weights and steps), and kernsched.climb_loop()
+    orders the steady path as a whole. kpath-style cycles a group (llvm-mca's A55 model, tools/rast/dev's path from
+    L+1: to the jump back over two steps): 02000 122 -> 92.5, 02010 122 -> 92.5, 04010 133 -> 101.5 (16 colours 130 ->
+    96.5), 14010 142 -> ~104 (139 -> ~100), 12000 133 -> ~97.
+    Registers (pipe_cfg()): the head takes per-batch constants the colour stage then loads where it uses them: the
+    line's ub vb (b0) splats from the stack (FS_UB FS_VB FS_B0, stored at L:), the texture masks and pid << 24 from
+    the kernel arguments, the fog bytes from FS_FOG; z depth frees v9 (pipe_head()'s z steps). Two copies of the
+    step (L+1: and L+3:) alternate the registers of the current group's weights (v24), depth words (dep) and mask
+    (x8) with the head's (pipe_perm()), so nothing moves between steps (02010: the weights do, by one mov). A full
+    group whose next group has a pixel falls through (the branch tests both masks: cmn, ccmp); the partial group and
+    a next group that fails take L+11: (L+21:), and L+2: tests the following groups alone until one passes. The exit
+    (L+9:) reloads v16 v17 v22 v23 for the loop above (v9 v12-v14 are set up per line). The next group's head never
+    reads past the line: without a next group it reads the current group's attribute words (x26) and its mask is
+    empty."""
+    global FAST
+    c = pipe_cfg(T, F)
+    H, dep = c["H"], c["dep"]
+    e(f"{L}:")
+    for r, o in zip(c["save"], (FS_UB, FS_VB, FS_B0)): e(f"str {q(r)}, [sp, #{o}]")
+    e("dup v16.8b, v23.b[2]"); e(f"str d16, [sp, #{FS_FOG}]")
+    if D == 0:                              # from the lazy entry 27:, in place of 28: (which the depth-equal head
+                                            # shares): the words back, the first group's weights and steps
+        if KD: e("ldp q25, q26, [sp, #64]"); steps(("v24", "v29", "v30", "v31"))
+        else: steps()
+        advance(0)
+        e("add v6.2d, v6.2d, v8.2d"); e("add v7.2d, v7.2d, v8.2d")             # (pipe_head()'s z)
+    else: e(f"b {L + 5}f")                  # (w depth: entered at the line's start, the first group's head first)
+    RL["_pipe"] = sorted(set(H) - {None})                                             # (taken(): loaded where used)
+    FAST = dict(c["fast"], pal16=p16)
+    saved = list(OOLS)
+    try:
+        body, cols = capture(lambda: colour(T, F, B))
+        sbody, ool = capture(lambda: store(D, cols))
+        oolt, _ = capture(ool)
+    finally:
+        FAST = None; del RL["_pipe"]; OOLS[:] = saved
+    pre, stores, k = [], [], 0
+    for l in body + sbody:                  # the colour stage and the store's test (pre), the full group's stores
+        t = l.strip()
+        if t == "8:": break                                                      # (store()'s tail: the latch's here)
+        if t.endswith(":"): continue                                             # (joins of the out-of-line paths)
+        if t == "b.ne 1f": k = 1; continue
+        assert not t.startswith(("tbz", "tbnz", "b", "cbz", "cbnz")), t
+        (stores if k else pre).append(t)
+    assert pre[-1] == "cmn x8, #1"
+    pre.pop()
+    oolt = [l.strip() for l in oolt]
+    assert oolt[0] == "1:" and oolt[-1] == "b 7b"
+    if not KD: oolt.insert(1, "fmov d28, x8")             # (the partial store reads the mask from v28: x8 only here)
+    perm_map = {}
+    mv = c.get("mov")
+    for a, b in ((dep[0], H[0]), (dep[1], H[1])) + ((("v24", H[2]),) if not mv else ()):
+        perm_map[a[1:]] = b[1:]; perm_map[b[1:]] = a[1:]
+    def pipe_perm(t):
+        """the second copy of a step: the current group's weights, depth words and mask in the head's registers and
+        x17, the next group's head into v24, the depth words' and x8 (the first copy's the other way round)"""
+        t = re.sub(r"\b([vqdsbh])(\d+)\b", lambda m: m.group(1) + perm_map.get(m.group(2), m.group(2)), t)
+        return re.sub(r"\b([xw])(8|17)\b", lambda m: m.group(1) + {"8": "17", "17": "8"}[m.group(2)], t)
+    def step(perm, lp, lo, nxt):
+        """one group's step at label lp: perm applied (pipe()'s second copy), its rare cases at lo (the partial group,
+        the next group failing), on into nxt"""
+        P = (lambda t: pipe_perm(t)) if perm else (lambda t: t)
+        m, n = ("x17", "x8") if perm else ("x8", "x17")
+        e(f"{lp}:")
+        for t in capture(lambda: pipe_head(True, *(H[:3] if not perm else (*dep, H[2] if mv else "v24")), *H[3:], n,
+                                           c.get("pid"), D))[0]:
+            e(t.strip())
+        for t in pre: e(P(t))
+        # a full group whose next group has a passing pixel falls through: the next group's test is in the branch
+        e(f"cmn {m}, #1"); e(f"ccmp {n}, #0, #4, eq"); e(f"b.eq {lo}f")
+        for t in stores: e(P(t))
+        e(f"str {m}, [x3], #8")
+        e("subs x5, x5, #8"); e(f"b.ls {L + 9}f")
+        e("add x1, x1, #32"); e("add x2, x2, #32")
+        if mv: e(f"mov v24.16b, {H[2]}.16b")
+        if nxt: e(f"b {nxt}b")
+        def ool():
+            e(f"{lo}:")
+            e(f"cmn {m}, #1"); e(f"b.ne {lo + 1}f")
+            for t in stores: e(P(t))
+            e(f"str {m}, [x3], #8"); e(f"b {lo + 3}f")
+            e(f"{lo + 1}:")
+            for t in oolt[1:-1]: e(P(t))
+            e(f"{lo + 3}:")
+            e("subs x5, x5, #8"); e(f"b.ls {L + 9}b")
+            e("add x1, x1, #32"); e("add x2, x2, #32")
+            if mv: e(f"mov v24.16b, {H[2]}.16b")
+            e(f"cbnz {n}, {L + 3 if not perm else L + 1}b"); e(f"b {L + 2}b")
+        return ool
+    o1 = step(False, L + 1, L + 11, None)
+    o2 = step(True, L + 3, L + 21, L + 1)
+    e(f"{L + 2}:")                                                               # a group failed: test alone
+    e("str xzr, [x3], #8")
+    e("subs x5, x5, #8"); e(f"b.ls {L + 9}f")
+    e("add x1, x1, #32"); e("add x2, x2, #32")
+    e(f"{L + 5}:")
+    pipe_head(False, *dep, "v24", "v29", "v27", "v28", "v30", "v31", "x8", c.get("pid"), D)
+    e(f"cbz x8, {L + 2}b")
+    e(f"b {L + 1}b")
+    e(f"{L + 9}:")
+    e(f"ldr q16, [x19, #{K['s_and']}]"); e(f"ldr q17, [x19, #{K['t_and']}]"); e(f"ldr q22, [x19, #{K['pid24']}]")
+    e(f"ldr d23, [x19, #{K['bytes']}]")
+    e("b 9f")
+    o1(); o2()
 
 def vis_group(D, eq):
     """the untextured visibility pass with z or constant depth (v00, v20: the deferred path's common kernels): a group
@@ -1211,6 +1437,7 @@ def kernel(D, T, R, F, B):
     st = uses_st(D, T, F, 0)
     prologue(name, D, T, R, F, 0, B)
     if lazy(D, st): lazy_loop(D, T, R, F, 0)
+    elif pipe_ok(D, T, R, F, 0): pipe_check(D, T, F)                         # (w depth: at the line's start)
     e("0:")
     if D == 1: head_w(0)
     elif lazy(D, st): head(D, 0)
@@ -1219,6 +1446,8 @@ def kernel(D, T, R, F, B):
     OOLS.append(trans_store(D, cols) if R else store(D, cols))
     latch(D, 0, R)
     flush_ools()
+    if pipe_ok(D, T, R, F, 0):
+        for L, p16 in pipe_loops(T): pipe(D, T, R, F, B, L, p16)
     if not st: test_equal(D)
     depth_ool(D)
     e("9:")
@@ -1256,8 +1485,16 @@ e('.section .note.GNU-stack,"",%progbits')
 # the scheduler's memory facts (kernsched.py): the registers' roles, the same in every kernel. x6 x21 the texture and
 # the palette, x19 the kernel arguments, x20 the constant tables, x22 the span entries: read-only. x1 x2 two distinct
 # lines (colour and attributes; the deferred kernels' owner line in x1 or x2). x3 the pass masks (the frame's bytes
-# from 256 on: every sp + offset access is below) or a line of ids. x28 = sp + 32.
+# from 256 on: every sp + offset access is below) or a line of ids. x28 = sp + 32. x26: pipe()'s next group's
+# attribute words (x2's line; elsewhere the translucent kernels' first ids, a buffer of the caller's: x2's region is
+# the cautious name for it).
 kernsched.REGIONS.update({"x6": "ro", "x21": "ro", "x19": "ro", "x20": "ro", "x22": "ro", "x1": ("buf", "x1"),
-                          "x2": ("buf", "x2"), "x3": ("window", 256, 1 << 20), "x28": ("stack", 32)})
-if os.environ.get("KERNSCHED", "1") != "0": out = schedule(out)    # (KERNSCHED=0: in the order written, to compare)
+                          "x2": ("buf", "x2"), "x3": ("window", 256, 1 << 20), "x28": ("stack", 32),
+                          "x26": ("buf", "x2")})
+if os.environ.get("KERNSCHED", "1") != "0":
+    out = schedule(out)                                             # (KERNSCHED=0: in the order written, to compare)
+    # pipe()'s loops, as a whole (kernsched.climb_loop(): the steady path from 51: to the jump back)
+    for L in (51, 81):
+        for k in [k for k, l in enumerate(out) if l == f"{L}:"]:
+            kernsched.climb_loop(out, k, out.index(f"\tb {L}b", k) + 1, PIPE_CLIMB)
 open(sys.argv[1] if len(sys.argv) > 1 else "rast_kern.S", "w").write("\n".join(out) + "\n")

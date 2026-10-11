@@ -3,7 +3,12 @@
  * The inputs need not be a real polygon's (both versions must compute the same from any input); they are kept in
  * the ranges that keep every access inside the buffers (texture coordinates masked by W-1 and H-1, palette indices
  * bytes) and mostly in the ranges real spans have (depths in 24 bits, weights in [0, 1)), so that the depth test
- * passes and fails, whole groups pass (the straight store) and partial ones store through the masks. */
+ * passes and fails, whole groups pass (the straight store) and partial ones store through the masks. Directed
+ * cases for the pipelined loops (kerngen.py's pipe(): a step tests the next group while it stores the current one):
+ * their flags forced on a quarter of the batches (perspective, no depth-equal test, no white, no alpha stage), lines
+ * of 1, 2, 7, 8, 9, 15, 16, 17, 24, 25 pixels, lines ending at the buffer's edge (x = 512, or 768 in the hi-res set),
+ * and a depth mode whose groups of 8 pixels pass or fail whole (a full group followed by a failing one, a failing
+ * first group). The count of batches with the pipelined loops' flags is printed with the result. */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,7 +58,8 @@ int main(int argc, char **argv) {
     rs = argc > 2 ? strtoull(argv[2], 0, 0) : 0x9e3779b97f4a7c15ull;
     if (!rs) rs = 1;
     for (int c = 1; c < 1024; c++) { recip[c] = (1u << 30) / c; recip_u[c] = 0x80000000u / c; }
-    unsigned long calls = 0, bad = 0;
+    unsigned long calls = 0, bad = 0, piped = 0;
+    static uint32_t xs0[48], cc0[48];
     for (size_t ki = 0; ki < sizeof kt / sizeof kt[0]; ki++) {
         int hr = kt[ki].hr, M = kt[ki].m, D = kt[ki].d, T = kt[ki].t, R = kt[ki].r;
         int lines = hr ? 48 : 32, width = hr ? 768 : 512, sps = hr ? 0x100 : 0xb0;
@@ -83,18 +89,23 @@ int main(int argc, char **argv) {
             uint32_t l = rr(lines), k = 1 + rr(lines - l < 8 ? lines - l : 8);
             if (rr(4) == 0) k = 1 + rr(lines - l);
             memset(bs, 0, sizeof bs);
-            int mode = rr(4);            /* depths: 0 mixed, 1 all pass, 2 all fail, 3 mixed near */
+            int mode = rr(5);            /* depths: 0 mixed, 1 all pass, 2 all fail, 3 mixed near, 4 whole groups */
             uint32_t zbase = rnd() & 0x7fffff;
             for (uint32_t i = 0; i < k; i++) {
                 uint32_t C = rr(8) ? rr(4) ? 1 + rr(40) : 1 + rr(200) : 1 + rr(width - 1);
                 uint32_t Xs = rr(width - C + 1);
+                if (rr(4) == 0) {            /* the group loops' edges: short lines, lines at the buffer's edge */
+                    static const uint8_t cs[] = {1, 2, 7, 8, 9, 15, 16, 17, 24, 25};
+                    C = cs[rr(10)]; if (rr(2)) Xs = width - C; else Xs = rr(width - C + 1);
+                }
                 if (rr(8) == 0) C = 0;
+                xs0[i] = Xs; cc0[i] = C;
                 int32_t W0 = 1 + rr(0xffff), W1 = 1 + rr(0xffff);
                 if (rr(4) == 0) W1 = W0;
                 uint32_t *f = (uint32_t *)bs;
                 #define F(n) f[(n) * sps / 4 + i]
                 F(0) = W0; F(1) = W1 - W0;
-                F(2) = mode == 1 ? 0 : mode == 2 ? 0xfff000 : zbase + rr(0x1000);
+                F(2) = mode == 1 ? 0 : mode == 2 ? 0xfff000 : mode == 4 ? 0x800000 : zbase + rr(0x1000);
                 F(3) = (int32_t)(rr(0x2000)) - 0x1000;
                 F(4) = rnd(); F(5) = rr(2) ? rnd() : (rnd() & 0x0fff0fff);
                 F(6) = rr(0x200) | rr(0x200) << 16;
@@ -116,6 +127,8 @@ int main(int argc, char **argv) {
             if (rr(4) == 0) flags |= 1 << 9;     /* white lines */
             if (rr(4)) flags |= 1 << 10;         /* A is 31 */
             flags |= rr(4) << 11;                /* clamps */
+            if (rr(4) == 0) flags = (flags & ~0x207u) | 0x500;   /* the pipelined loops' flags (kerngen.py's pipe()) */
+            if ((flags & 0x707) == 0x500) piped++;
             /* the buffers: random colours and ids, attribute words by the depth mode */
             for (size_t i = 0; i < sizeof ctx0 / 4; i++) ((uint32_t *)ctx0)[i] = rnd() << 8 ^ rnd();
             uint32_t *at = (uint32_t *)(ctx0 + (hr ? a.attr_off : 0x10000));
@@ -124,6 +137,14 @@ int main(int argc, char **argv) {
                 if (hr) at[i] = (at[i] & 0xff000000) | d;
                 else at[(i / 512) * 512 + (i % 512)] = (at[i] & 0xff000000) | d;
             }
+            if (mode == 4)                   /* each line's groups of 8 (from its first pixel) pass or fail whole */
+                for (uint32_t i = 0; i < k; i++) {
+                    uint64_t gm = (uint64_t)rnd() << 32 | rnd();
+                    for (uint32_t x = 0; x < cc0[i]; x++) {
+                        uint32_t *w = &at[(l + i) * (hr ? width : 512) + xs0[i] + x];
+                        *w = (*w & 0xff000000) | ((gm >> ((x >> 3) & 63)) & 1 ? 0xffffff : 0);
+                    }
+                }
             for (size_t i = 0; i < sizeof own0 / 2; i++) own0[i] = rr(2) ? idx : rr(256);
             memcpy(ctx_a, ctx0, sizeof ctx0); memcpy(ctx_b, ctx0, sizeof ctx0);
             memcpy(own_a, own0, sizeof own0); memcpy(own_b, own0, sizeof own0);
@@ -146,7 +167,8 @@ int main(int argc, char **argv) {
         }
         bad += kbad;
     }
-    printf("kern_ab: %zu kernels, %lu batches, %lu differ\n", sizeof kt / sizeof kt[0], calls, bad);
+    printf("kern_ab: %zu kernels, %lu batches (%lu with the pipelined loops' flags), %lu differ\n",
+           sizeof kt / sizeof kt[0], calls, piped, bad);
     printf(bad ? "FAIL\n" : "PASS\n");
     return bad != 0;
 }
