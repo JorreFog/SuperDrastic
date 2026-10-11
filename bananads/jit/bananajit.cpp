@@ -22,6 +22,7 @@ static constexpr Reg RCPU = (Reg)29, RCycles = (Reg)28, RCPSR = (Reg)27;
 static constexpr Reg W0 = (Reg)0, W1 = (Reg)1, W2 = (Reg)2, W3 = (Reg)3, W4 = (Reg)4, W5 = (Reg)5, W6 = (Reg)6;
 
 static size_t off_R(int i) { return offsetof(ARM, R) + 4 * i; }
+static bool FastLoads9Ok();
 
 Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
     ARMJIT_Global::Init();
@@ -31,8 +32,9 @@ Compiler::Compiler(melonDS::NDS& nds) : NDS(nds) {
     // Every offset BananaJIT stores to must fit an unsigned scaled 12-bit load/store offset.
     assert(offsetof(ARM, CurInstr) < 16380 && offsetof(ARM, CodeCycles) < 16380);
     Reset();
-    Platform::Log(Platform::LogLevel::Info, "[bananajit] BananaDS's own JIT, %zu MB of code memory\n",
-                  CodeSize >> 20);
+    FastLoads = FastLoads9Ok() && !getenv("BANANAJIT_NO_FASTLOADS");
+    Platform::Log(Platform::LogLevel::Info, "[bananajit] BananaDS's own JIT, %zu MB of code memory, ARM9 loads %s\n",
+                  CodeSize >> 20, FastLoads ? "inline" : "through calls");
 }
 
 Compiler::~Compiler() { ARMJIT_Global::FreeCodeMem(CodeMemBase); }
@@ -399,6 +401,133 @@ void Compiler::CallOut(const void* fn) {
         if (Loaded & (1 << g)) A.ldr(host(g), RCPU, off_R(g));
 }
 
+// ARM9 loads, inline: the interpreter's ARMv5::DataRead8/16/32 and AddCycles_CDI, step for step, for the cases
+// that don't leave the CPU: ITCM, DTCM and main RAM. Anything else (no read permission, I/O, VRAM, the
+// cartridge...) takes the slow path, the same call CompileMem makes otherwise. The ARM9 has no data-cache
+// model in melonDS, so the cost depends on the address alone: 1 for the TCMs, else MemTimings[addr >> 12][1]
+// (8/16-bit) or [2] (32-bit). The value ends in W0; W1 holds the address.
+static size_t OffPUMap, OffITCMSize, OffDTCMBase, OffDTCMMask, OffDTCM, OffITCM, OffMemTimings;
+static bool FastLoads9Ok() {
+    OffPUMap = offsetof(ARMv5, PU_Map);
+    OffITCMSize = offsetof(ARMv5, ITCMSize);
+    OffDTCMBase = offsetof(ARMv5, DTCMBase);
+    OffDTCMMask = offsetof(ARMv5, DTCMMask);
+    OffDTCM = offsetof(ARMv5, DTCM);
+    OffITCM = offsetof(ARMv5, ITCM);
+    OffMemTimings = offsetof(ARMv5, MemTimings);
+    auto w = [](size_t o) { return o % 4 == 0 && o < 16384; };
+    auto x = [](size_t o) { return o % 8 == 0 && o < 32768; };
+    (void)x;  // PU_Map, DTCM and MemTimings are far into ARMv5 (past its 4 MB timing table): reached by address
+    return w(OffITCMSize) && w(OffDTCMBase) && w(OffDTCMMask) && OffITCM < 4096 &&
+           w(offsetof(ARM, DataRegion)) && w(offsetof(ARM, DataCycles));
+}
+
+void Compiler::FastLoad9(int size, bool sign, bool rotate, const void* slowfn) {
+    const Reg X2 = W2, X16 = (Reg)16, X17 = (Reg)17;
+    FlushCycles();
+    StoreHigh();  // both paths leave r8-r14 clean: the slow one calls out
+
+    // A block belongs to one CPU object, so the far fields are at fixed addresses.
+    u8* cpu = (u8*)CurCPU;
+
+    // permission: PU_Map[addr >> 12] & 1
+    A.movix(X16, (uint64_t)(uintptr_t)(cpu + OffPUMap));
+    A.ldrx(X16, X16, 0);
+    A.lsri(X17, W1, 12);
+    A.ldrb_reg(X17, X16, X17);
+    A.ubfx(X17, X17, 0, 1);
+    auto noPerm = A.cbz_fwd(X17);
+    A.str(W1, RCPU, offsetof(ARM, DataRegion));
+
+    // the aligned address -> W16
+    if (size == 4) { A.lsri(X16, W1, 2); A.lsli(X16, X16, 2); }
+    else if (size == 2) { A.lsri(X16, W1, 1); A.lsli(X16, X16, 1); }
+    else A.mov(X16, W1);
+
+    // what the interpreter's AddCycles_CDI adds, numD in W17 -> W17
+    const s32 C = Thumb && (R15 & 2) ? 0 : CurInstr.CodeCycles;
+    auto charge = [&]() {
+        if (C > 6) A.addi(X17, X17, C - 6);           // max(C, numD + C - 6)
+        if (C > 0) {                                  // (C <= 6: max(C, numD))
+            A.movi(X2, (u32)C);
+            A.subs(ZR, X17, X2);
+            A.csel(X17, X17, X2, HI);
+        }
+        A.add(RCycles, RCycles, X17);
+    };
+    auto load = [&](Reg base, Reg idx) {
+        if (size == 4) A.ldr_reg(W0, base, idx);
+        else if (size == 2) A.ldrh_reg(W0, base, idx);
+        else A.ldrb_reg(W0, base, idx);
+    };
+
+    // ITCM: addr < ITCMSize
+    A.ldr(X17, RCPU, OffITCMSize);
+    A.subs(ZR, X16, X17);
+    auto toITCM = A.bcond_fwd(CC);
+    // DTCM: (addr & DTCMMask) == DTCMBase
+    A.ldr(X17, RCPU, OffDTCMMask);
+    A.and_(X17, X16, X17);
+    A.ldr(X2, RCPU, OffDTCMBase);
+    A.subs(ZR, X17, X2);
+    auto toDTCM = A.bcond_fwd(EQ);
+    // main RAM: 0x02xxxxxx
+    A.lsri(X17, X16, 24);
+    A.cmpi(X17, 2);
+    auto notMain = A.bcond_fwd(NE);
+    A.movix(X2, (uint64_t)(uintptr_t)&NDS.MainRAM);
+    A.ldrx(X2, X2, 0);
+    A.movix(X17, (uint64_t)(uintptr_t)&NDS.MainRAMMask);
+    A.ldr(X17, X17, 0);
+    A.and_(X17, X16, X17);
+    load(X2, X17);
+    // numD = MemTimings[addr >> 12][size == 4 ? 2 : 1]
+    A.movix(X2, (uint64_t)(uintptr_t)(cpu + OffMemTimings));
+    A.lsri(X17, X16, 12);
+    A.addx(X2, X2, X17, LSL, 2);
+    A.ldrb(X17, X2, size == 4 ? 2 : 1);
+    A.str(X17, RCPU, offsetof(ARM, DataCycles));
+    charge();
+    auto done1 = A.b_fwd();
+
+    // the TCMs: numD = 1
+    auto tcm = [&](bool itcm) {
+        if (itcm) {
+            A.addxi(X2, RCPU, (u32)OffITCM);
+            A.ubfx(X17, X16, 0, 15);  // & (ITCMPhysicalSize - 1)
+        } else {
+            A.movix(X2, (uint64_t)(uintptr_t)(cpu + OffDTCM));
+            A.ldrx(X2, X2, 0);
+            A.ubfx(X17, X16, 0, 14);  // & (DTCMPhysicalSize - 1)
+        }
+        load(X2, X17);
+        A.movz(X17, 1);
+        A.str(X17, RCPU, offsetof(ARM, DataCycles));
+        charge();
+    };
+    A.land(toITCM);
+    tcm(true);
+    auto done2 = A.b_fwd();
+    A.land(toDTCM);
+    tcm(false);
+    // shared by the fast paths: the word's rotation, the sign
+    A.land(done1);
+    A.land(done2);
+    if (size == 4 && rotate) {
+        A.ubfx(X17, W1, 0, 2);
+        A.lsli(X17, X17, 3);
+        A.rorv(W0, W0, X17);
+    }
+    if (sign) size == 2 ? A.sxth(W0, W0) : A.sxtb(W0, W0);
+    auto done = A.b_fwd();
+
+    // everything else: the interpreter's own functions
+    A.land(noPerm);
+    A.land(notMain);
+    CallOut(slowfn);
+    A.land(done);
+}
+
 void Compiler::CompileMem() {
     const u32 in = CurInstr.Instr;
     const u16 kind = CurInstr.Info.Kind;
@@ -458,7 +587,17 @@ void Compiler::CompileMem() {
         fn = load ? (byte ? (const void*)&bj_ldrb : NoRotate ? (const void*)&bj_ldr_raw : (const void*)&bj_ldr)
                   : (byte ? (const void*)&bj_strb : (const void*)&bj_str);
     }
-    CallOut(fn);
+    if (load && CurCPU->Num == 0 && FastLoads) {
+        int size = 4;
+        bool sign = false;
+        if (half) {
+            size = kind <= ak_LDRH_POST_IMM ? 2 : kind <= ak_LDRSB_POST_IMM ? 1 : 2;
+            sign = kind > ak_LDRH_POST_IMM;
+        } else if (in & (1 << 22)) size = 1;
+        FastLoad9(size, sign, !NoRotate, fn);
+    } else {
+        CallOut(fn);
+    }
     if (load) {
         A.mov(host(rd), W0);
         Dirty(rd);

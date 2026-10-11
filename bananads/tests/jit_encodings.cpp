@@ -88,5 +88,14 @@ int main() {
     E("cbnz w3, #-16", a.put(A64::cbnz_((Reg)3, -4)));
     // a forward fixup: b.eq over two nops lands 12 bytes on
     E("b.eq #12\nnop\nnop", { auto f = a.bcond_fwd(EQ); a.nop(); a.nop(); a.land(f); });
+    E("add x16, x16, x17, lsl #2", a.addx((Reg)16, (Reg)16, (Reg)17, LSL, 2));
+    E("cmp w17, #2", a.cmpi((Reg)17, 2));
+    E("sxtb w0, w0", a.sxtb((Reg)0, (Reg)0));
+    E("sxth w0, w1", a.sxth((Reg)0, (Reg)1));
+    E("csel w17, w17, w16, hi", a.csel((Reg)17, (Reg)17, (Reg)16, HI));
+    E("ldr w0, [x2, x17]", a.ldr_reg((Reg)0, (Reg)2, (Reg)17));
+    E("ldrh w0, [x2, x17]", a.ldrh_reg((Reg)0, (Reg)2, (Reg)17));
+    E("ldrb w17, [x16, x17]", a.ldrb_reg((Reg)17, (Reg)16, (Reg)17));
+    E("cbnz w3, #8", a.put(A64::cbnz_((Reg)3, 2)));
     return 0;
 }

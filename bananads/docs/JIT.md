@@ -12,7 +12,7 @@ does block decoding, the block cache, invalidation and idle-loop detection; Bana
 `ARMJIT_A64` compiler, through one guarded line that CMake adds to melonDS's `src/ARMJIT_Compiler.h`. It was
 written from the Arm Architecture Reference Manual, with no DraStic code.
 
-- **The encoder** (`jit/a64.h`): one function per instruction form. `tests/jit_encodings.sh` checks all 69 forms
+- **The encoder** (`jit/a64.h`): one function per instruction form. `tests/jit_encodings.sh` checks all 78 forms
   against LLVM's assembler (`ctest`, any host).
 - **Registers:**
   - x29 holds the CPU, w28 the cycles, w27 the CPSR.
@@ -29,6 +29,12 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
     write-back) and LDRH/STRH/LDRSB/LDRSH. The address is computed natively. The access goes through the same
     functions the interpreter calls (`DataRead*`/`DataWrite*` and `AddCycles_CD/CDI`), so its timing and
     side effects are the interpreter's.
+  - ARM9 loads (all of the above load forms, ARM and Thumb) inline, with no call, for ITCM, DTCM and main RAM.
+    It follows `ARMv5::DataRead8/16/32` and `AddCycles_CDI` step for step: the PU_Map read permission,
+    DataRegion, DataCycles (1 for the TCMs, else `MemTimings[addr >> 12][1 or 2]`), and the cycle formula.
+    melonDS models no ARM9 data cache, so this is exact. Any other address, or no permission, takes the
+    call. `jit.fastloads=off` turns it off; with it on or off, `bananads-difftest --every` finds main RAM
+    byte-identical after every frame (CI, ARM and Thumb), so it changes no cycle.
   - Thumb: every Thumb instruction that means exactly what an ARM instruction means is compiled as that ARM
     instruction (`ThumbToARM`). That covers shifts by an immediate, add/subtract, MOV/CMP/ADD/SUB with
     immediates, the register ALU ops, the high-register ADD/CMP/MOV, PC/SP-relative ADD, ADD SP, and every
@@ -59,8 +65,10 @@ stress ROMs are bound by 3D, not by the CPUs.
    timing has to be matched first), then linking blocks with static targets directly.
 2. LDM/STM and PUSH/POP.
 3. MUL/MLA (the interpreter charges by operand size), shifts by a register.
-4. Fastmem for loads and stores in main RAM, with the framework's fault patching.
-5. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
+4. Stores inline, like the loads. A store to main RAM or ITCM can hit compiled code: it needs the framework's
+   invalidation check, `ARMJIT::CheckAndInvalidate`, which melonDS's write functions call.
+5. ARM7 loads inline. `ARMv4`'s cycle formula depends on the code and data regions at run time.
+6. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
 
 ## The DraStic JIT study (2026-10-11)
 

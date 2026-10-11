@@ -31,7 +31,7 @@ struct A64 {
     void adds(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(false, 1, d, n, m, sh, a)); }
     void sub(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(false, 2, d, n, m, sh, a)); }
     void subs(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(false, 3, d, n, m, sh, a)); }
-    void addx(Reg d, Reg n, Reg m) { put(addsub_reg(true, 0, d, n, m, LSL, 0)); }
+    void addx(Reg d, Reg n, Reg m, Shift sh = LSL, uint32_t a = 0) { put(addsub_reg(true, 0, d, n, m, sh, a)); }
 
     // ADD/SUB (immediate, 0-4095, optionally << 12): op as above; n may be SP for ADD/SUB
     static uint32_t addsub_imm(bool x, int op, Reg d, Reg n, uint32_t imm12, bool lsl12) {
@@ -40,6 +40,7 @@ struct A64 {
     }
     void addi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(false, 0, d, n, imm, false)); }
     void subi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(false, 2, d, n, imm, false)); }
+    void cmpi(Reg n, uint32_t imm) { put(addsub_imm(false, 3, ZR, n, imm, false)); }
     void addxi(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 0, d, n, imm, false)); }
 
     // Logical (shifted register): op 0 AND, 1 BIC, 2 ORR, 3 ORN, 4 EOR, 5 EON, 6 ANDS, 7 BICS
@@ -84,6 +85,8 @@ struct A64 {
     void lsli(Reg d, Reg n, uint32_t s) { put(bfm(0x53000000, d, n, (32 - s) & 31, 31 - s)); }  // 1-31
     void lsri(Reg d, Reg n, uint32_t s) { put(bfm(0x53000000, d, n, s, 31)); }                  // 1-31
     void asri(Reg d, Reg n, uint32_t s) { put(bfm(0x13000000, d, n, s, 31)); }                  // 1-31
+    void sxtb(Reg d, Reg n) { put(bfm(0x13000000, d, n, 0, 7)); }
+    void sxth(Reg d, Reg n) { put(bfm(0x13000000, d, n, 0, 15)); }
     void rori(Reg d, Reg n, uint32_t s) { put(0x13800000 | n << 16 | (s & 31) << 10 | n << 5 | d); }  // EXTR
 
     // Wide moves
@@ -109,6 +112,7 @@ struct A64 {
     void mrs_nzcv(Reg t) { put(0xD53B4200 | t); }
     void msr_nzcv(Reg t) { put(0xD51B4200 | t); }
     void cset(Reg d, Cond c) { put(0x1A9F07E0 | (c ^ 1) << 12 | d); }  // CSINC d, wzr, wzr, !c
+    void csel(Reg d, Reg n, Reg m, Cond c) { put(0x1A800000 | m << 16 | c << 12 | n << 5 | d); }
 
     // Loads and stores, unsigned scaled offset from a 64-bit base
     void ldr(Reg t, Reg n, uint32_t off) { put(0xB9400000 | (off / 4) << 10 | n << 5 | t); }
@@ -118,6 +122,10 @@ struct A64 {
     void strb(Reg t, Reg n, uint32_t off) { put(0x39000000 | off << 10 | n << 5 | t); }
     void ldrb(Reg t, Reg n, uint32_t off) { put(0x39400000 | off << 10 | n << 5 | t); }
     void strh(Reg t, Reg n, uint32_t off) { put(0x79000000 | (off / 2) << 10 | n << 5 | t); }
+    // Register offset: [Xn, Xm] (Xm unscaled, its upper half must be zero)
+    void ldr_reg(Reg t, Reg n, Reg m) { put(0xB8606800 | m << 16 | n << 5 | t); }
+    void ldrh_reg(Reg t, Reg n, Reg m) { put(0x78606800 | m << 16 | n << 5 | t); }
+    void ldrb_reg(Reg t, Reg n, Reg m) { put(0x38606800 | m << 16 | n << 5 | t); }
 
     // Branches. Offsets are in words from the branch itself; patch() fills one in later.
     static uint32_t b_(int32_t words) { return 0x14000000 | (words & 0x3FFFFFF); }
@@ -136,6 +144,7 @@ struct A64 {
     Fixup b_fwd() { Fixup f{code, 0}; put(b_(0)); return f; }
     Fixup bcond_fwd(Cond c) { Fixup f{code, 1}; put(bcond_(c, 0)); return f; }
     Fixup cbz_fwd(Reg t) { Fixup f{code, 2}; put(cbz_(t, 0)); return f; }
+    Fixup cbnz_fwd(Reg t) { Fixup f{code, 2}; put(cbnz_(t, 0)); return f; }
     void land(Fixup f) {
         int32_t words = (int32_t)(code - f.at);
         if (f.kind == 0) *f.at |= words & 0x3FFFFFF;
