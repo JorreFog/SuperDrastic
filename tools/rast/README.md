@@ -311,6 +311,20 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   at the right edge), `t_resolve.c` (its edge drivers on rectangles of ids against DraStic's), S4's frame diff 0 bins
   with the compositor's checks 0 differ, the scene cycle's differing bins as DraStic's renderer's at every checkpoint
   to 81600 bins (6845 tables checked, 0 differ).
+  Then the generated 2x lines (`res2gen.py`): the 16 alphas of a parity by one tbl over its four registers instead of
+  two uzp2 .8h and a uzp2 .16b (a cycle whatever the table's size in llvm-mca's A55), which needs the four in
+  consecutive registers: the allocator reserves a quad when a group's first value is produced (the resolve's loads as
+  two quads, its even pixels made in place of one after the odd ones, the bitmap pass's loads as a quad; one set in
+  flight, two left no quad free), and a third line for the fog-only resolve (res2_line_raw_asm: the words split unmasked
+  as DraStic's modulate_*_resolve write them, the entries from the raw alpha bytes as compvis.h takes them) replaces
+  split_line and the table pass after it. llvm-mca, whole functions: res2_line_asm 708 -> 664 cycles, comp_vis_line_asm
+  469 -> 411, the raw line 595 against ~320 + 411. Modeled A55 cycles a frame (against dd36c2d's profiles): the field
+  scene S7 at 2x res2_line_asm 0.271 -> 0.255 M, at 3x comp_vis_line_asm 0.179 -> 0.157 M. `t_resolve.c` (res2_resolve's
+  block and entries against DraStic's resolve and the port; the fx test's fog-only modes now return entries, which it
+  checks against the port on DraStic's block: it failed a first build whose raw line read its weights through the wrong
+  pointer, which the scene cycle with the compositor's checks passed: its scenes never take the fog-only resolve),
+  `t_comp_hook.c`, the scene cycle with the compositor's checks (its bins as DraStic's renderer's to 69600 bins, 5809
+  tables against the C port, 0 differ).
   Fifth round, overdraw (`defer.c`, the deferred kernels). Measured first, per bin (a C NEON build's RAST_STATS): the
   stress ROM writes 1.5 opaque pixels per covered one (1.25-1.75 in every bin), the field scene S7 1.0 everywhere, the
   fog and edge-marking scene S4 1.15 (1.0 in 75% of its bins, up to 2.25 in its heaviest); polygons whose depth test
@@ -503,12 +517,14 @@ renderer hooked (`RAST=ours`/`diff`, `DSFLIP_RAST=1`):
   and edge marking, the bin's resolve (DraStic's `video_3d_resolve_bin_asm_4x`: the colour lines masked to 29 bits
   and split into the even and odd half-rows) and the table's 64 entries come from the same registers, a line at a
   time. With edge marking (res2_resolve_fx(), see Status) the same pass writes the fogged and marked lines; with
-  fog alone `comp_bin` reads the block back with the generator's second function (`ldr q` + `uzp2` for the alphas
-  instead of compvis.h's `ld4`; at 3x too). Both are list-scheduled for
+  fog alone a third function writes the fogged lines unmasked and their entries (fifth round), and at 3x `comp_bin`
+  reads the block back with the generator's second function (`ldr q` + `tbl` for the alphas instead of compvis.h's
+  `ld4`). All are list-scheduled for
   llvm-mca's A55 model, which retires in order: an instruction that would write back before an earlier one waits,
   so every 7-cycle `ld2` (11-cycle `ld4`) stalls what follows it (DraStic's resolve loop: 68 cycles per 32
-  pixels). Modeled cycles a line of 512 pixels: resolve and both half-rows' entries 707, against DraStic's
-  resolve 1088 plus `comp_bin`'s ~610; `comp_bin` alone 468. A frame (`cycles.py`, 90 s): stress ROM L4 0.413 +
+  pixels). Modeled cycles a line of 512 pixels: resolve and both half-rows' entries 664 (707 before the fifth
+  round's tbl), against DraStic's resolve 1088 plus `comp_bin`'s ~610; `comp_bin` alone 411 (468).
+  A frame (`cycles.py`, 90 s): stress ROM L4 0.413 +
   0.234 M -> 0.292 M (frame 21.83 -> 21.49 M); fog and edge marking S4 `comp_bin` 0.234 -> 0.196 M. Exact:
   `t_resolve.c` (the block against DraStic's resolve, the entries against the C port, alpha bytes of any value),
   `t_comp_hook.c`, and `RAST=diff RAST_COMPCHECK=1` on the scene cycle (DraStic's renderer's differing bins at
