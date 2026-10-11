@@ -442,6 +442,16 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   generation word per polygon, release/acquire), would save up to ~700 modeled cycles in ~660 of L4's 1166
   polygon-bins a frame (~0.4 M at 2x), less the copies; the walk's weights stay per bin. Contiguous bins per thread
   (the scheduling's choice) would let a per-thread cache do the same without sharing.
+- Tried in the fourth round, not kept: (1) walk_spans with the chains' arrays exchanged per polygon (the forward chain
+  into the right arrays when its second vertex lies right of the backward chain's; DraStic's tie rules then take
+  r + 1 in the compares, exact: t_walk.c and `ut/hr_ab` pass and fail mutants), so that L4's steps swap no line: the
+  step 19 -> 13 modeled cycles, but walk_polygon_4x as a whole did not drop (1.433 -> 1.441 M on L4 at 2x; S7's
+  polygons have the other winding anyway). (2) one_batch at 2x (above). (3) At 3x without edge marking, not drawing
+  context lines 0 and 49 (nothing reads them: 2 of 50 lines; h02000 9.70 -> 9.38 M on L4 at 3x), but the kernels are
+  not strictly line-local: a kern_ab-style test (a batch against the same batch without its first or last line,
+  every other line compared) fails h24000 (16-colour paletted, constant depth) and the shade kernel hs400, so a
+  trimmed batch would not give 4f63ae7's bytes; find out what crosses lines there first (the 16-colour gather's
+  bytes through the stack?).
 - 3x: the top vertex for tied vertices; later the hi-res 3D
   layer presented through the dsflip shader instead of downsampled.
   Polygons of 9 and 10 vertices: DraStic's render_polygon_4x takes the walk's ninth vertex as base + 0 and never
