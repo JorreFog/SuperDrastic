@@ -288,6 +288,20 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   `t_resolve.c`, S4's frame diff 0 bins in 4800 with the compositor's checks 0 differ, the scene cycle's differing
   bins as DraStic's renderer's at every checkpoint reached (to 19200 bins in 330 s on a loaded host), the compositor's
   checks 0 differ.
+  Then the edge marking's id screen at 2x (`res2.c` edge_lines2x) on per-bin planes, as hr.c's at 3x: the bin's 32
+  attribute lines' top bytes once as byte planes (edge_tplanes2x, a buffer per render thread, with a line of the
+  clear attribute's byte for bins 0 and 11's neighbour), and the screen on them, two blocks of 16 pixels a step while
+  no block is forced (56 modeled cycles a step of 32 pixels against 61 a block from the words: 16 ldr q and 12 uzp2).
+  The plane pass gathers each four words' byte 3 by one tbl (a cycle in llvm-mca's A55) from 16 ldr q a step of 64
+  pixels, 13 modeled cycles a step of 32 against the two levels of uzp2's 22, which the 3x edge_tplanes takes too; and
+  the last block of a pair, whose right neighbours are the clear attribute, is screened like the others at both scales
+  (its top byte in the plane's place; it was always taken in full). Modeled A55 cycles a frame: S4 at 2x edge_lines2x
+  0.50 -> 0.27 M plus the planes' 0.10 M (-0.13 M); S4 at 3x edge_tplanes 0.30 -> 0.19 M (edge_lines 0.53 -> 0.55
+  M: the base profile's 76 frames are another part of the scene; the screened last block is ~1% of its steps).
+  `ut/hr_ab` against 4f63ae7 (two seeds; the polygon-like contexts' rectangles end at and beside block boundaries and
+  at the right edge), `t_resolve.c` (its edge drivers on rectangles of ids against DraStic's), S4's frame diff 0 bins
+  with the compositor's checks 0 differ, the scene cycle's differing bins as DraStic's renderer's at every checkpoint
+  to 81600 bins (6845 tables checked, 0 differ).
   Fifth round, overdraw (`defer.c`, the deferred kernels). Measured first, per bin (a C NEON build's RAST_STATS): the
   stress ROM writes 1.5 opaque pixels per covered one (1.25-1.75 in every bin), the field scene S7 1.0 everywhere, the
   fog and edge-marking scene S4 1.15 (1.0 in 75% of its bins, up to 2.25 in its heaviest); polygons whose depth test
@@ -585,9 +599,8 @@ kerngen.py` writes the kernels unscheduled and unclimbed.
   0 (Status); res2.c's fog_zero_b2() bound (any table, the offset and the shift) now screens hr.c's fog_line too
   (Status, fifth round), and hr.c's edge marking could take res2.c's skip of the key compares (S4 2x: edge marking
   1.02 -> 0.57 -> 0.50 M with the top-byte screen, fog 0.89 -> 0.78 -> 0.60 M with the depth screen). The 2x edge
-  screen's skipped step (61 modeled cycles: 16 ldr q, 12 uzp2, two ext, the xors) is near the issue limit; the next
-  saving there is fewer loads: a bin's top-byte planes made once, as hr.c's edge_tplanes does at 3x (each line is read
-  by three steps).
+  screen now reads a bin's top-byte planes made once, as hr.c's at 3x (fifth round); its skipped pair of blocks (56
+  modeled cycles: 12 loads, the xors and ors, one max) is near the issue limit.
 - Deferred shading (fifth round, Status): a better per-bin predictor than the depth complexity, which cannot tell
   polygons drawn back to front (overdraw) from front to back (cheap one-pass failures): the overdraw itself (written
   and owned pixels: the visibility and shade kernels would return counts instead of their any-pass flags). The shade
