@@ -546,8 +546,9 @@ def climb_loop(lines, start, end, evals, seed=1):
     """A loop's steady path, lines[start:end] (from its head label to its jump back; its conditional branches not
     taken, kerngen.py's pipelined loops), reordered as a whole: the blocks were scheduled one at a time, each for its
     own branch, but in the loop the next group's head (whose results the next step reads first) competes with the
-    current group's colour stage in one block. A hill climb on the machine model running the path three times over:
-    each step moves one instruction of a block to another place its dependences (dag()) allow, after its last
+    current group's colour stage in one block. A hill climb on the machine model running the path twice over (the
+    second pass carries the first's state, as the loop does; three passes found the same orders): each step moves one
+    instruction of a block to another place its dependences (dag()) allow, after its last
     predecessor and before its first successor (labels and branches stay), and keeps the order when the loop runs no
     slower; `evals` such moves, fewer when a quarter of them pass without a gain. Deterministic (its own xorshift
     generator, seeded); identical paths are climbed once."""
@@ -577,7 +578,7 @@ def climb_loop(lines, start, end, evals, seed=1):
             items.append(ins); orders.append(list(range(len(ins)))); preds.append([[j for j, _ in pi] for pi in p]); succ.append(sc)
         def run(orders):
             m = Machine()
-            for _ in range(3):
+            for _ in range(2):
                 for it, o in zip(items, orders):
                     if o is None:
                         if it is BR: m.issue(BR)
