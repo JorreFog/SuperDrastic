@@ -16,6 +16,7 @@ option(BANANADS_SDL "SDL2 frontend (a desktop window, for development)" ON)
 option(BANANADS_ALSA "ALSA audio out and microphone in (the handheld path)" ON)
 option(BANANADS_LAN "Local wireless between two handhelds over the network (needs libenet)" OFF)
 set(BANANADS_MELONDS_DIR "" CACHE PATH "A melonDS checkout to build against instead of the pinned one")
+set(BANANADS_JIT "melonds" CACHE STRING "The CPU recompiler on aarch64: melonds (melonDS's) or banana (BananaJIT, docs/JIT.md)")
 
 # The core. The commit is pinned: a new one is a reviewed change (docs/CORE.md says how to move it).
 set(BANANADS_MELONDS_COMMIT 906e9ebb27da8c6a715cd7abab4abfe8a8d29427)
@@ -39,6 +40,33 @@ else()
     set(MELONDS_SRC ${melonds_SOURCE_DIR})
 endif()
 add_subdirectory(${MELONDS_SRC} melonds EXCLUDE_FROM_ALL)
+
+# BananaJIT: our own code generator in melonDS's JIT framework, in place of melonDS's ARMJIT_A64 compiler.
+# melonDS picks its compiler in src/ARMJIT_Compiler.h; one guarded line there lets BANANADS_JIT pick ours
+# (a no-op for builds without it). The define is PUBLIC: every file that sees melonDS's NDS must agree on
+# which compiler it holds.
+if(BANANADS_JIT STREQUAL "banana")
+    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        message(FATAL_ERROR "BANANADS_JIT=banana generates AArch64 code: build for aarch64")
+    endif()
+    set(SEL ${MELONDS_SRC}/src/ARMJIT_Compiler.h)
+    file(READ ${SEL} SELTXT)
+    if(NOT SELTXT MATCHES "BANANADS_JIT")
+        string(REPLACE "#elif defined(__aarch64__)\n#include \"ARMJIT_A64/ARMJIT_Compiler.h\""
+            "#elif defined(__aarch64__) && defined(BANANADS_JIT)\n#include \"bananajit.h\"\n#elif defined(__aarch64__)\n#include \"ARMJIT_A64/ARMJIT_Compiler.h\""
+            SELTXT2 "${SELTXT}")
+        if(SELTXT2 STREQUAL SELTXT)
+            message(FATAL_ERROR "melonDS's ARMJIT_Compiler.h changed; BananaJIT's hook needs updating")
+        endif()
+        file(WRITE ${SEL} "${SELTXT2}")
+    endif()
+    get_target_property(CORE_SRCS core SOURCES)
+    list(FILTER CORE_SRCS EXCLUDE REGEX "ARMJIT_A64/")
+    set_property(TARGET core PROPERTY SOURCES ${CORE_SRCS})
+    target_sources(core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/jit/bananajit.cpp ${CMAKE_CURRENT_SOURCE_DIR}/jit/linkage.S)
+    target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/jit ${MELONDS_SRC}/src)
+    target_compile_definitions(core PUBLIC BANANADS_JIT=1)
+endif()
 
 # melonDS's network helpers, without its Qt frontend. LAN and netplay need ENet; slirp (Nintendo WFC) doesn't.
 find_package(PkgConfig REQUIRED)
@@ -85,6 +113,11 @@ add_executable(bananads-tests tests/tests.cpp src/config.cpp src/emu.cpp src/pla
 target_include_directories(bananads-tests PRIVATE src)
 target_link_libraries(bananads-tests PRIVATE core bananads-net pthread)
 add_test(NAME host COMMAND bananads-tests)
+
+# BananaJIT's encoder against LLVM's assembler (runs on any host: it only encodes).
+add_executable(bananads-jit-encodings tests/jit_encodings.cpp)
+target_include_directories(bananads-jit-encodings PRIVATE jit)
+add_test(NAME jit-encodings COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/jit_encodings.sh $<TARGET_FILE:bananads-jit-encodings>)
 
 # The differential harness for CPU back-ends (tools/difftest.cpp, docs/JIT.md).
 add_executable(bananads-difftest tools/difftest.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)

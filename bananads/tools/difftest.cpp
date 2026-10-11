@@ -107,9 +107,11 @@ static void report(const Opts& o, const Snapshot& A, const Snapshot& B, long fra
     }
     static const char* name[17] = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8",
                                    "r9", "r10", "r11", "r12", "sp", "lr", "pc", "cpsr"};
+    printf("  ARM9 pc: %08x / %08x, ARM7 pc: %08x / %08x\n", A.regs[0][15], B.regs[0][15], A.regs[1][15],
+           B.regs[1][15]);
     for (int c = 0; c < 2; c++)
         for (int r = 0; r < 17; r++)
-            if (A.regs[c][r] != B.regs[c][r])
+            if (r != 15 && A.regs[c][r] != B.regs[c][r])
                 printf("  %s %s: %08x / %08x\n", c ? "ARM7" : "ARM9", name[r], A.regs[c][r], B.regs[c][r]);
     size_t px = 0;
     for (size_t i = 0; i < A.screens.size(); i++) px += A.screens[i] != B.screens[i];

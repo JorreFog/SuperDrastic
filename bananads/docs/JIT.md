@@ -1,7 +1,49 @@
-# BananaDS's CPU: melonDS's JIT, and what the DraStic JIT study can bring to it
+# BananaDS's CPU: BananaJIT, melonDS's JIT, and the DraStic JIT study
 
-BananaDS runs the DS's two CPUs on **melonDS's JIT** (`ARMJIT_A64`, on by default; `jit=off` for its
-interpreter). That JIT is GPL code, maintained upstream, and already in this build.
+BananaDS runs the DS's two CPUs through a JIT (`jit=off` gives melonDS's interpreter). There are two to pick
+from at build time:
+- `-DBANANADS_JIT=melonds` (the default) is melonDS's own `ARMJIT_A64` compiler.
+- `-DBANANADS_JIT=banana` is **BananaJIT**, BananaDS's own code generator (below).
+
+## BananaJIT
+
+BananaJIT is in `jit/`. It is a new AArch64 code generator inside melonDS's JIT framework. The framework still
+does block decoding, the block cache, invalidation and idle-loop detection; BananaJIT replaces only the
+`ARMJIT_A64` compiler, through one guarded line that CMake adds to melonDS's `src/ARMJIT_Compiler.h`. It was
+written from the Arm Architecture Reference Manual, with no DraStic code.
+
+- **The encoder** (`jit/a64.h`): one function per instruction form. `tests/jit_encodings.sh` checks all 69 forms
+  against LLVM's assembler (`ctest`, any host).
+- **Registers:**
+  - x29 holds the CPU, w28 the cycles, w27 the CPSR.
+  - Guest r0-r7 live in w19-w26 and r8-r14 in w9-w15. Each is loaded on first use and stored back only if it
+    was written: at exits, and before any call out.
+- **Flags:** ARM's condition codes and NZCV bit positions are the same as AArch64's. A condition is
+  `msr nzcv` plus one `b.cond`. An S instruction takes its flags straight from the host's arithmetic (`mrs
+  nzcv`), and only for the flags a later instruction reads (the framework's SetFlags analysis).
+- **Cycles:** each instruction costs what melonDS's interpreter charges for it, taken or skipped.
+- **What is native (phase 1):** ARM data processing (all 16 operations, immediate and immediate-shift operands,
+  RRX and the #32 shift forms, with the shifter's carry), when Rd isn't the PC.
+- **Everything else** runs through melonDS's interpreter, one instruction at a time, using the framework's
+  protocol (R15, CurInstr and CodeCycles set first, and the PC stored before the condition check). So every
+  instruction works from the start.
+- **Fastmem:** off with BananaJIT for now.
+
+**Checked (aarch64 under qemu):** the stress ROMs `dsstress-L1`, `L5`, `L10`, `dsswap` and `dsstress-ramp`
+give pictures identical to the interpreter's at frames 150, 300, 450 and 600 (CI checks L5). In `dsstress-L5`,
+869 of the 1,598 compiled instructions are native. RAM drifts from frame 9 on through block-granularity timing,
+as with melonDS's JIT (frame 6), with the same pictures. **Not checked:** a device, real games, speed. qemu's
+numbers don't say anything about the A55.
+
+`BANANAJIT_TRACE=1` logs every compiled block: each instruction's address, kind, and whether it is native.
+
+**Next, in order of what the trace shows the interpreter still doing:**
+1. Loads and stores (LDR/STR immediate, LDRH/STRH, LDM/STM): through melonDS's memory functions, then
+   fastmem.
+2. Branches (B, BL, BX) natively, and linking blocks with static targets directly.
+3. Thumb: the same operations, decoded from Thumb.
+4. Shifts by a register, multiplies, and the DSP instructions.
+5. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
 
 ## The DraStic JIT study (2026-10-11)
 

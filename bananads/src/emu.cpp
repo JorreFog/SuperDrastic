@@ -155,6 +155,9 @@ bool Emu::load_rom(const std::string& path) {
     NDSArgs args;  // FreeBIOS and a generated firmware: no BIOS or firmware files needed, as with DraStic
     args.OutputSampleRate = 48000.0;
     if (!cfg_.flag("jit", true)) args.JIT = std::nullopt;
+#ifdef BANANADS_JIT
+    else args.JIT->FastMemory = false;  // BananaJIT doesn't do fastmem yet (docs/JIT.md)
+#endif
 
     auto& hdr = args.Firmware.GetHeader();
     auto mac = wifi_mac();

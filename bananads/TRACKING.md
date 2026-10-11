@@ -1,6 +1,6 @@
 # Work in progress, and what it means for BananaDS
 
-A lot is moving in SuperDrastic and ROCKNIXDS at once. This is the list of what's open, as of **2026-10-11**, and
+A lot is moving in SuperDrastic and ROCKNIXDS at once. This is the list of what's open, as of **2026-10-11 09:30 UTC**, and
 what each piece means for BananaDS. Update it when a PR merges or a branch moves: change the row, and port what
 the "For BananaDS" column asks for.
 
@@ -8,10 +8,19 @@ the "For BananaDS" column asks for.
 DraStic/SuperDrastic on one test branch. **BananaDS** is this emulator. They are different things. BananaDS isn't
 part of codename Banana's device checks.
 
+## Sessions working now (not pushed yet)
+
+| Session | What | Where | For BananaDS |
+|---|---|---|---|
+| "Drastic JIT compiler reverse engineering" | A map of DraStic r2.5.2.2's ARM-to-AArch64 JIT, made with REA. It found DraStic JIT bugs with an interpreter-against-JIT test ROM, and prototyped runtime patches for them (`fixes.c`) | **Only in that session's container** (`/home/user/drastic-jit-re`, plus its scratchpad); no repo | Ideas and bug classes only, written fresh (docs/JIT.md). `fixes.c` belongs in SuperDrastic, for DraStic. Its test-ROM builder is its own code and the best input for `bananads-difftest`, **once pushed** |
+| "Gengis Engine optimization" | PR #8's team run: kernels, a walker, resolves, 2D and geometry routines. In modeled A55 cycles, 31-45% below 0.5.0-beta.1 and 53-59% below DraStic at 2x | `claude/gengis-a55-scheduling` (head 2ed5954 at 08:59); final report due ~12:10 UTC | docs/GENGIS.md: the self-contained core (kernels, `walk_impl.h`, `res2`, `binsched`, the `hr` downsample) behind a small API is milestone F's option 2 |
+| "Banana Linux distribution" | A lightweight RG DS / RG DS Plus distribution called Banana: Buildroot, busybox init, a sleep daemon, the ROCKNIXDS Pixel UI as its own frontend. DS games go through SuperDrastic + DraStic | Only in that session's container (`/home/user/Banana`) | A natural home for BananaDS later: as the `[nds]` system's second core, next to `superdrastic` |
+
 ## SuperDrastic (JorreFog/SuperDrastic)
 
 | PR / branch | What | State | For BananaDS |
 |---|---|---|---|
+| #9 `claude/bananads` | **BananaDS** itself, with BananaJIT (docs/JIT.md) | draft, CI green | this folder |
 | #8 `claude/gengis-a55-scheduling` | Gengis Engine: A55 scheduling, pipelined kernels, a NEON walker, fused resolves, DraStic's geometry stage and 2D routines replaced | draft, active (updated 2026-10-11) | Milestone F, option 2. Its `walk.c` and `res2.c` are the hi-res walker and resolve a melonDS `Renderer3D` would need. `dsgeom.c` and `ds2d.c` are DraStic-only. Track its kernels' measured costs |
 | #7 `claude/open-issues-rocknix-nightly-1l4s4w` | 0.5.0-beta.1-rocknixds.8: in-game menu fixes (#3, #4, #5), ROCKNIXDS #26 mic and #49 brightness, #47 3x lines | draft, in `banana` | The mic fixes (DC blocker, leak from the level above the floor, hysteresis, 120 ms hold) **are in `src/mic.cpp`**. Port the menu fixes and the per-screen brightness sliders with `menu.c` (E) |
 | #6 `claude/cpugov-3x-memory` | cpugov: 3x gets its own remembered-drops file | draft, not in `banana` | When `cpugov.c` is ported (E), key its memory per renderer and scale from the start |

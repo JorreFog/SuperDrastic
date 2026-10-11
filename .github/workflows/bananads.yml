@@ -24,7 +24,7 @@ jobs:
           cmake -S bananads -B build-pc -DBANANADS_LAN=ON
           cmake --build build-pc -j"$(nproc)"
       - name: Host tests
-        run: ./build-pc/bananads-tests
+        run: ctest --test-dir build-pc --output-on-failure
       - name: Smoke test (the stress ROM, headless)
         run: |
           python3 stressrom/build.py
@@ -46,6 +46,20 @@ jobs:
           qemu-aarch64 -L /usr/aarch64-linux-gnu build-a64/bananads-tests
           qemu-aarch64 -L /usr/aarch64-linux-gnu build-a64/bananads --frontend headless --set headless.frames=120 \
             --set save.dir=smoke --set wifi.dns=off stressrom/out/dsstress-L5.nds 2>&1 | grep '120 frames'
+      - name: BananaJIT (aarch64, qemu) gives the interpreter's pictures
+        run: |
+          PKG_CONFIG_LIBDIR=/nonexistent cmake -S bananads -B build-bj \
+            -DCMAKE_TOOLCHAIN_FILE=$PWD/bananads/cmake/aarch64-linux-gnu.cmake -DBANANADS_SDL=OFF -DBANANADS_ALSA=OFF \
+            -DBANANADS_JIT=banana
+          cmake --build build-bj -j"$(nproc)"
+          for j in on off; do
+            mkdir -p bj-$j
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads --frontend headless --set jit=$j \
+              --set headless.frames=300 --set headless.dump_dir=bj-$j --set headless.dump_every=150 \
+              --set save.dir=smoke --set wifi.dns=off --set resume.on_start=off stressrom/out/dsstress-L5.nds
+          done
+          cmp bj-on/frame150.ppm bj-off/frame150.ppm
+          cmp bj-on/frame300.ppm bj-off/frame300.ppm
       - uses: actions/upload-artifact@v4
         with:
           name: bananads-aarch64
