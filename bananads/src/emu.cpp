@@ -235,8 +235,13 @@ bool Emu::load_rom(const std::string& path) {
     // default until measured on the handheld
     nds_->FastGXDMA = cfg_.flag("core.fast_gxdma", false);
     nds_->FastSPU = cfg_.flag("core.fast_spu", false);
-    // core.fast_sched: the scheduler keeps its next event instead of walking its list every slice (patch 0006; exact)
-    nds_->SetFastSched(cfg_.flag("core.fast_sched", false));
+    // core.fast_sched: the scheduler keeps its next event instead of walking its list every slice (patch 0006; exact,
+    // on by default since core.fast_loop needs it)
+    nds_->SetFastSched(cfg_.flag("core.fast_sched", true));
+    // core.fast_timers: a CPU's timers run only when one of them overflows; core.fast_loop: RunFrame's slice loop for
+    // the JIT with the common cases inline, used with core.fast_sched (patch 0009; both exact, default on)
+    nds_->SetFastTimers(cfg_.flag("core.fast_timers", true));
+    nds_->SetFastLoop(cfg_.flag("core.fast_loop", true));
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;
