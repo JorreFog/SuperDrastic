@@ -3,10 +3,15 @@
  *   EDGES_ARR        bytes per span array (DraStic: 0xb0 = 44 entries; hi-res bins of 48 lines: 0x100)
  *   EDGES_XMAX       the x clamp of setup_spans (DraStic: 0x200, the line width)
  *   EDGES_LINKAGE    empty or static
+ *   EDGES_NEON       1: the routines below in NEON (the hi-res pipeline, tools/rast/ut/t_edges.c's spec_neon_ set);
+ *                    0 or undefined: the plain C ports. Both write the same bytes (DraStic's overruns included).
  * The math is edges.c's, verified bit-exact against DraStic in the spec_ instantiation; the hi-res one differs only
  * in these constants. */
 #ifndef EDGES_LINKAGE
 #define EDGES_LINKAGE
+#endif
+#ifndef EDGES_NEON
+#define EDGES_NEON 0
 #endif
 #define EA(k) ((k) * EDGES_ARR)
 #include <arm_neon.h>
@@ -21,14 +26,44 @@ static inline void wr16(uint8_t *p, uint32_t v) { uint16_t t = (uint16_t)v; memc
 static inline void wr32(uint8_t *p, uint32_t v) { memcpy(p, &v, 4); }
 static inline void wrf(uint8_t *p, float v) { memcpy(p, &v, 4); }
 
+#ifdef EDGES_RECIP_TABLE
+/* the edge heights' reciprocals from a u32[1024] table (EDGES_RECIP_TABLE, an expression): DraStic's own
+ * reciprocal_table (the same values as below), or the hi-res pipeline's, which goes on past 512 lines */
+EDGES_LINKAGE uint32_t EDGES_FN(edges_reciprocal)(int32_t i) { return (uint32_t)i < 1024 ? (EDGES_RECIP_TABLE)[i] : 0; }
+#else
 EDGES_LINKAGE uint32_t EDGES_FN(edges_reciprocal)(int32_t i) {
     if (i >= 1 && i <= 512) return (uint32_t)(0x3fffffffu + (uint32_t)i) / (uint32_t)i;
     return 0;   /* 0 and 513..1023 are zero in DraStic; outside 0..1023 DraStic reads past the table */
 }
+#endif
 
 /* ---------------------------------------------------------------------------------------------------------------- */
 EDGES_LINKAGE void EDGES_FN(render_polygon_edge_perspective_coefficients)(float *outf, vtx_t **pairs, const uint8_t *counts, uint32_t n,
                                                        int32_t skip) {
+#if EDGES_NEON
+    /* lanes (num, den) of lines j, j+1 in p and j+2, j+3 in q: each lane accumulates d4 as the C port's v0..v3 */
+    float *out = outf;
+    for (uint32_t e = 0; e < n; e++) {
+        const uint8_t *a = pairs[2 * e], *b = pairs[2 * e + 1];
+        int32_t wa = (int32_t)rd32(a), wb = (int32_t)rd32(b);
+        int32_t h = (int32_t)((uint32_t)rd16(b + 6) - rd16(a + 6));
+        float A = (float)wa, D = (float)(int32_t)((uint32_t)wa - (uint32_t)wb), B = (float)wb, H = (float)h;
+        float n0 = 0.0f * B, d0 = B * H;
+        if (e == 0) { float k = (float)skip; n0 = n0 + k * A; d0 = d0 + k * D; }
+        float32x2_t v0 = { n0, d0 }, d1 = { A, D };
+        float32x2_t d2 = vadd_f32(d1, d1), d3 = vadd_f32(d1, d2), d4 = vadd_f32(d2, d2);
+        float32x4_t p = vcombine_f32(v0, vadd_f32(v0, d1)), q = vcombine_f32(vadd_f32(v0, d2), vadd_f32(v0, d3));
+        float32x4_t dd = vcombine_f32(d4, d4);
+        int32_t cnt = counts[e];
+        do {
+            vst1q_f32(out, p); vst1q_f32(out + 4, q);
+            out += 8;
+            p = vaddq_f32(p, dd); q = vaddq_f32(q, dd);
+            cnt -= 4;
+        } while (cnt > 0);
+        out += cnt * 2;
+    }
+#else
     uint8_t *out = (uint8_t *)outf;
     for (uint32_t e = 0; e < n; e++) {
         const uint8_t *a = pairs[2 * e], *b = pairs[2 * e + 1];
@@ -69,9 +104,43 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_perspective_coefficients)(float 
         } while (cnt > 0);
         out += (intptr_t)cnt * 8;
     }
+#endif
 }
 
 EDGES_LINKAGE void EDGES_FN(render_polygon_edge_perspective_steps)(int16_t *outp, const float *inp, int32_t total) {
+#if EDGES_NEON
+    /* straight from the input (in place, the 16 bytes written trail the 64 read), two groups of 8 at a time while
+     * more than 8 are left: the same groups, each written once, as DraStic's one at a time */
+#define STEP8(in, out) do { \
+        float32x4x2_t p = vld2q_f32(in), q = vld2q_f32((in) + 8); \
+        float32x4_t r0 = vrecpeq_f32(p.val[1]), r1 = vrecpeq_f32(q.val[1]); \
+        r0 = vmulq_f32(r0, vrecpsq_f32(r0, p.val[1])); r1 = vmulq_f32(r1, vrecpsq_f32(r1, q.val[1])); \
+        r0 = vmulq_f32(r0, vrecpsq_f32(r0, p.val[1])); r1 = vmulq_f32(r1, vrecpsq_f32(r1, q.val[1])); \
+        vst1q_s16(out, vcombine_s16(vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(p.val[0], r0), 15)), \
+                                    vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(q.val[0], r1), 15)))); \
+    } while (0)
+    const float *in = inp;
+    int16_t *out = outp;
+    do {
+        if (total > 8) {
+            float32x4x2_t a = vld2q_f32(in), b = vld2q_f32(in + 8), c = vld2q_f32(in + 16), d = vld2q_f32(in + 24);
+            float32x4_t ra = vrecpeq_f32(a.val[1]), rb = vrecpeq_f32(b.val[1]), rc = vrecpeq_f32(c.val[1]), rd = vrecpeq_f32(d.val[1]);
+            ra = vmulq_f32(ra, vrecpsq_f32(ra, a.val[1])); rb = vmulq_f32(rb, vrecpsq_f32(rb, b.val[1]));
+            rc = vmulq_f32(rc, vrecpsq_f32(rc, c.val[1])); rd = vmulq_f32(rd, vrecpsq_f32(rd, d.val[1]));
+            ra = vmulq_f32(ra, vrecpsq_f32(ra, a.val[1])); rb = vmulq_f32(rb, vrecpsq_f32(rb, b.val[1]));
+            rc = vmulq_f32(rc, vrecpsq_f32(rc, c.val[1])); rd = vmulq_f32(rd, vrecpsq_f32(rd, d.val[1]));
+            vst1q_s16(out, vcombine_s16(vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(a.val[0], ra), 15)),
+                                        vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(b.val[0], rb), 15))));
+            vst1q_s16(out + 8, vcombine_s16(vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(c.val[0], rc), 15)),
+                                            vmovn_s32(vcvtq_n_s32_f32(vmulq_f32(d.val[0], rd), 15))));
+            in += 32; out += 16; total -= 16;
+        } else {
+            STEP8(in, out);
+            in += 16; out += 8; total -= 8;
+        }
+    } while (total > 0);
+#undef STEP8
+#else
     uint8_t *out = (uint8_t *)outp;
     const uint8_t *in = (const uint8_t *)inp;
     do {
@@ -92,12 +161,34 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_perspective_steps)(int16_t *outp
         out += 16;
         total -= 8;
     } while (total > 0);
+#endif
 }
 
 EDGES_LINKAGE void EDGES_FN(render_polygon_edge_interpolate_w)(vtx_t **pairs, uint8_t *spans, const int16_t *stepsp,
                                             const uint8_t *counts, uint32_t n) {
     uint8_t *o = spans + EA(0);
     const uint8_t *st = (const uint8_t *)stepsp;
+#if EDGES_NEON
+    /* the s64 products d * q of 8 lines, their bits 15-46 (shrn) + w_a */
+    for (uint32_t e = 0; e < n; e++) {
+        uint32_t wa = rd32(pairs[2 * e]), wb = rd32(pairs[2 * e + 1]);
+        const int32x2_t d = vdup_n_s32((int32_t)(wb - wa));
+        const uint32x4_t w0 = vdupq_n_u32(wa);
+        int32_t cnt = counts[e];
+        do {
+            int16x8_t q = vld1q_s16((const int16_t *)st);
+            int32x4_t ql = vmovl_s16(vget_low_s16(q)), qh = vmovl_high_s16(q);
+            int32x4_t rl = vshrn_high_n_s64(vshrn_n_s64(vmull_s32(d, vget_low_s32(ql)), 15), vmull_s32(d, vget_high_s32(ql)), 15);
+            int32x4_t rh = vshrn_high_n_s64(vshrn_n_s64(vmull_s32(d, vget_low_s32(qh)), 15), vmull_s32(d, vget_high_s32(qh)), 15);
+            vst1q_u32((uint32_t *)o, vaddq_u32(vreinterpretq_u32_s32(rl), w0));
+            vst1q_u32((uint32_t *)(o + 16), vaddq_u32(vreinterpretq_u32_s32(rh), w0));
+            st += 16; o += 32;
+            cnt -= 8;
+        } while (cnt > 0);
+        st += (intptr_t)cnt * 2;
+        o += (intptr_t)cnt * 4;
+    }
+#else
     for (uint32_t e = 0; e < n; e++) {
         uint32_t wa = rd32(pairs[2 * e]), wb = rd32(pairs[2 * e + 1]);
         int32_t d = (int32_t)(wb - wa);
@@ -113,6 +204,7 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_interpolate_w)(vtx_t **pairs, ui
         st += (intptr_t)cnt * 2;
         o += (intptr_t)cnt * 4;
     }
+#endif
 }
 
 static inline uint16_t c6(uint32_t v) { return (uint16_t)(2 * v + (v != 0)); }
@@ -137,6 +229,28 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_interpolate_parameters)(vtx_t **
         uint32_t sbase = (uint32_t)((int32_t)sa * 32768) + (ds > 0 ? 0x800 : 0);
         uint32_t tbase = (uint32_t)((int32_t)ta * 32768) + (dt > 0 ? 0x800 : 0);
         int32_t cnt = counts[e];
+#if EDGES_NEON
+        /* 4 lines: s16 x s16 products + the u32 bases, bits 15-30 (shrn), interleaved as the halves of the words by
+         * zip1 and stored with str q (st2 models slower on the A55: 38 -> 28 cycles a step); b's words are b << 16.
+         * The products are smull and add (the empty asm keeps clang from making each a mov of the base and an smlal:
+         * the same sums, 29 -> 27 modeled cycles a step, the five products issuing back to back) */
+        const uint32x4_t vs = vdupq_n_u32(sbase), vt = vdupq_n_u32(tbase), vr = vdupq_n_u32(cbase[0]);
+        const uint32x4_t vg = vdupq_n_u32(cbase[1]), vb = vdupq_n_u32(cbase[2]);
+#define PAR(base, d) ({ int32x4_t p_ = vmull_n_s16(q, d); __asm__("" : "+w"(p_)); \
+                        vshrn_n_u32(vaddq_u32(base, vreinterpretq_u32_s32(p_)), 15); })
+        do {
+            int16x4_t q = vld1_s16((const int16_t *)st);
+            uint16x4_t s = PAR(vs, ds), t = PAR(vt, dt), r = PAR(vr, dc[0]), g = PAR(vg, dc[1]);
+            uint16x8_t st8 = vzip1q_u16(vcombine_u16(s, s), vcombine_u16(t, t)), rg8 = vzip1q_u16(vcombine_u16(r, r), vcombine_u16(g, g));
+            __asm__("" : "+w"(st8), "+w"(rg8));         /* (zip1 and str q: the compiler would make st2 of them again) */
+            vst1q_u16((uint16_t *)ost, st8);
+            vst1q_u16((uint16_t *)org, rg8);
+            vst1q_u32((uint32_t *)oxb, vshll_n_u16(PAR(vb, dc[2]), 16));    /* x 0 (DraStic: stale v26.h[k]) */
+            st += 8; ost += 16; org += 16; oxb += 16;
+            cnt -= 4;
+        } while (cnt > 0);
+#undef PAR
+#else
         do {
             for (int k = 0; k < 4; k++) {
                 int32_t q = (int16_t)rd16(st + 2 * k);
@@ -151,6 +265,7 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_edge_interpolate_parameters)(vtx_t **
             st += 8; ost += 16; org += 16; oxb += 16;
             cnt -= 4;
         } while (cnt > 0);
+#endif
         ost += (intptr_t)cnt * 4; org += (intptr_t)cnt * 4; oxb += (intptr_t)cnt * 4;
         st += (intptr_t)cnt * 2;
     }
@@ -174,6 +289,25 @@ static void interp_x(vtx_t **pairs, uint8_t *spans, const uint8_t *counts, uint3
         uint64_t z = (uint64_t)za << 39;
         if (e == 0) { x += xs * skip; z += (uint64_t)skip * zs; }
         uint32_t cnt = counts[e];
+#if EDGES_NEON
+        /* 4 lines a step: x + i xs (u32) and z + i zs (u64) wrap as the sums do; the x halfwords merged into the
+         * words (their high halves, b, are interpolate_parameters') */
+        if (cnt >= 4) {
+            static const uint32_t iota[4] = { 0, 1, 2, 3 };
+            uint32x4_t xv = vmlaq_n_u32(vdupq_n_u32(x), vld1q_u32(iota), xs);
+            const uint32x4_t x4 = vdupq_n_u32(xs * 4), vf = vdupq_n_u32(vflag), lo = vdupq_n_u32(0xffff);
+            uint64x2_t za = { z, z + zs }, zb = { z + 2 * zs, z + 3 * zs };
+            const uint64x2_t z4 = vdupq_n_u64(4 * zs);
+            for (; cnt >= 4; cnt -= 4) {
+                uint32x4_t wv = vld1q_u32((const uint32_t *)ox);
+                vst1q_u32((uint32_t *)ox, vbslq_u32(lo, vorrq_u32(vf, vshrq_n_u32(xv, 18)), wv));
+                if (withz) vst1q_u32((uint32_t *)oz, vshrn_high_n_u64(vshrn_n_u64(za, 30), zb, 30));
+                xv = vaddq_u32(xv, x4); za = vaddq_u64(za, z4); zb = vaddq_u64(zb, z4);
+                oz += 16; ox += 16;
+            }
+            x = vgetq_lane_u32(xv, 0); z = vgetq_lane_u64(za, 0);
+        }
+#endif
         for (uint32_t i = 0; i < cnt; i++) {
             if (withz) wr32(oz, (uint32_t)(z >> 30));
             wr16(ox, vflag | (x >> 18));
@@ -202,6 +336,16 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_interpolate_edges)(void *unused, uint
     uint32_t n = 0, total = 0, skip0 = 0;
     vtx_t *prev = vptr[0];
     uint32_t yp = rd16(prev + 6);
+#ifdef EDGES_LINE_CAP
+    /* (the hi-res instantiation) at most y_end - y_start lines a chain, the most that the span setup and the kernels
+     * read. A chain that goes down, up and down again (a self-intersecting polygon, or the repeated vertices of 9 and
+     * 10) covers lines twice, and its lines run on in the arrays: past 64 entries the right chain's arrays overwrite
+     * the next arrays' (the left chain's) first entries, past 128 lines its perspective coefficients run past the end
+     * of the span block. DraStic's walker does the same with its 44-entry arrays (the spec_ instantiations keep it:
+     * t_edges.c compares them with DraStic's); at 3x the chain stops at the window instead: the lines within it are
+     * the same, what used to be overwritten is the chain's own. */
+    const int32_t cap = (int32_t)y_end - (int32_t)y_start;
+#endif
     if (y_end > yp) {
         vtx_t **q = vptr + dir;
         do {
@@ -211,6 +355,9 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_interpolate_edges)(void *unused, uint
             uint32_t sk = 0;
             if (y_start > yp) { len += (int32_t)(yp - y_start); sk = y_start - yp; }
             if (y1 > y_end) len += (int32_t)(y_end - y1);
+#ifdef EDGES_LINE_CAP
+            if (len > cap - (int32_t)total) { len = cap - (int32_t)total; if (len <= 0) break; }
+#endif
             if (len > 0) {
                 if (n == 16) break;                     /* the arrays hold 16 edges (never reached by DraStic's polygons) */
                 counts[n] = (uint8_t)len;
@@ -246,6 +393,34 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_interpolate_edges_constprop_1)(uint8_
 
 /* ---------------------------------------------------------------------------------------------------------------- */
 EDGES_LINKAGE void EDGES_FN(render_polygon_setup_spans_4x)(uint8_t *s, int32_t lines) {
+#if EDGES_NEON
+    /* 4 lines a step (8 per iteration, as DraStic's): each left/right pair selected by the swap mask, the x halves
+     * masked and clamped, the right arrays rewritten as 16-bit (x b, s t, r g) or 32-bit (w, z) differences */
+    const uint32x4_t m15 = vdupq_n_u32(0x7fff), xmax = vdupq_n_u32(EDGES_XMAX), hi = vdupq_n_u32(0xffff0000u);
+    uint8_t *p = s;
+    do {
+        for (int h = 0; h < 2; h++, p += 16) {
+            uint32x4_t xl = vld1q_u32((const uint32_t *)(p + EA(8))), xr = vld1q_u32((const uint32_t *)(p + EA(9)));
+            uint32x4_t sw = vcgeq_u32(vandq_u32(xl, m15), vandq_u32(xr, m15));
+#define PAIR(k, L, R) uint32x4_t L##0 = vld1q_u32((const uint32_t *)(p + EA(k))), R##0 = vld1q_u32((const uint32_t *)(p + EA(k + 1))); \
+                      uint32x4_t L = vbslq_u32(sw, R##0, L##0), R = vbslq_u32(sw, L##0, R##0)
+            PAIR(4, sl, sr); PAIR(0, wl, wr); PAIR(6, rl, rr); PAIR(2, zl, zr);
+#undef PAIR
+            uint32x4_t L = vbslq_u32(sw, xr, xl), R = vbslq_u32(sw, xl, xr);
+            L = vbslq_u32(hi, L, vminq_u32(vandq_u32(L, m15), xmax));
+            R = vbslq_u32(hi, R, vminq_u32(vandq_u32(R, m15), xmax));
+            vst1q_u32((uint32_t *)(p + EA(8)), L);
+            vst1q_u32((uint32_t *)(p + EA(9)), vreinterpretq_u32_u16(vsubq_u16(vreinterpretq_u16_u32(R), vreinterpretq_u16_u32(L))));
+            vst1q_u32((uint32_t *)(p + EA(4)), sl);
+            vst1q_u32((uint32_t *)(p + EA(5)), vreinterpretq_u32_u16(vsubq_u16(vreinterpretq_u16_u32(sr), vreinterpretq_u16_u32(sl))));
+            vst1q_u32((uint32_t *)(p + EA(0)), wl); vst1q_u32((uint32_t *)(p + EA(1)), vsubq_u32(wr, wl));
+            vst1q_u32((uint32_t *)(p + EA(6)), rl);
+            vst1q_u32((uint32_t *)(p + EA(7)), vreinterpretq_u32_u16(vsubq_u16(vreinterpretq_u16_u32(rr), vreinterpretq_u16_u32(rl))));
+            vst1q_u32((uint32_t *)(p + EA(2)), zl); vst1q_u32((uint32_t *)(p + EA(3)), vsubq_u32(zr, zl));
+        }
+        lines -= 8;
+    } while (lines > 0);
+#else
     uint32_t i = 0;
     do {
         for (uint32_t k = 0; k < 8; k++, i++) {
@@ -276,6 +451,7 @@ EDGES_LINKAGE void EDGES_FN(render_polygon_setup_spans_4x)(uint8_t *s, int32_t l
         }
         lines -= 8;
     } while (lines > 0);
+#endif
 }
 
 EDGES_LINKAGE void EDGES_FN(render_polygon_setup_edge_markers_c)(uint8_t *p, uint32_t lines, uint32_t clip) {

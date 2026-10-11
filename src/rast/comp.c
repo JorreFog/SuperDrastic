@@ -12,9 +12,10 @@
  * 2. Table (RAST_COMP=2, the default): the result depends only on the 1 KiB of pixels the pointer addresses, and in
  *    the 2x path that is a half-row of the 3D output frame (frame + line*0x1000 + q*0x400). So the render threads
  *    compute it once per finished bin (comp_bin(), called by rast.c's and hr.c's bin loops right after the bin's
- *    output block is written: 64 half-rows of 0x400 bytes, rows y at +y*0x800, parity p at +p*0x400) into a table
- *    per output frame; the hook copies the table entry when the pointer is a half-row of a frame whose table is
- *    valid, and computes with NEON otherwise.
+ *    output block is written: 64 half-rows of 0x400 bytes, rows y at +y*0x800, parity p at +p*0x400; res2.c's
+ *    res2_vis_bin(), compvis.h's results scheduled for the A55; or, but for the fog-only resolve, res2.c's resolves
+ *    while they write the block, through comp_bin_table()) into a table per output frame; the hook copies the table
+ *    entry when the pointer is a half-row of a frame whose table is valid, and computes with NEON otherwise.
  *
  * The table's validity rule: tvalid[slot] is set only while the frame's bytes are the ones the table was computed
  * from. DraStic writes the two output frames (sys + SYS_FRAMEBUF, 2 x 0xc0000) only in
@@ -23,7 +24,9 @@
  *     memcpy()s the last rendered frame (SYS_LAST) into SYS_OUTPUT. hook_uf4() wraps it: before, it invalidates
  *     the frame the call may write (the unpublished one with threaded_3d; the bins also invalidate SYS_OUTPUT when
  *     they start); after, it recomputes the 44 gap-row entries and validates the frame if all 12 bins ran, copies
- *     the source's table and validity if it copied, or restores the old validity if nothing was written.
+ *     the source's table and validity if it copied, or restores the old validity if nothing was written. Around
+ *     DraStic's function it also opens and closes the frame's bin queue, from which the render threads claim their
+ *     bins (binsched.c).
  *   - update_frame_3d_1x (1x frames, whose lines are also 0x400 apart) and reset_video_3d (memset): both
  *     invalidate every table, before and after.
  * Ordering: with threaded_3d=0, rendering (line 215) and compositing (line 192, or line by line) run one after the
@@ -50,6 +53,9 @@
  *    the planes with 0x40 bytes either side, the 3D pixels and the engine's first 0x400 bytes; counts per path every
  *    2 s ("[comp] composite:" lines, "[compcheck]" for a difference).
  *
+ * 4. DraStic's edge-marking gap passes (the bin boundary rows after the bins): replaced by the same bytes from res2.c's
+ *    NEON stages (res2_gaps_neon), skipped at 3x, where they marked those rows from stale data (at hook_gaps).
+ *
  * RAST_COMP (or DSFLIP_RAST_COMP): 0 off (DraStic's function), 1 the NEON replacement only, 2 (default) with the
  * table. RAST_COMPFUSE (DSFLIP_RAST_COMPFUSE) 0 leaves render_scanline_2d_composite alone. */
 #define _GNU_SOURCE
@@ -63,6 +69,8 @@
 #include "comp.h"
 #include "compvis.h"
 #include "compfuse.h"
+#include "res2.h"
+#include "binsched.h"
 #include "spec/composite.h"
 
 #define U32(p, o) (*(uint32_t *)((uint8_t *)(p) + (o)))
@@ -178,10 +186,21 @@ void comp_bin(uint8_t *sys, unsigned bin, int count) {
     if (s < 0 || bin >= NBINS) return;
     const uint8_t *blk = out + (size_t)bin * BIN_BYTES;
     unsigned e0 = s * HALF_ROWS + bin * 64;
-    for (unsigned h = 0; h < 64; h++)
-        tflag[e0 + h] = (uint8_t)comp_vis_neon(tbits[e0 + h], (const uint32_t *)(blk + h * 0x400));
+    res2_vis_bin(blk, &tbits[e0], &tflag[e0]);      /* compvis.h's results, scheduled for the A55 (res2.c) */
     if (count) __atomic_fetch_add(&bins_done, 1, __ATOMIC_RELAXED);
 }
+
+/* comp_bin() for a resolve that computes the entries itself (res2.c, while it writes the block): the bin's 64
+ * entries, or 0 when the table is off or the output is not one of its frames (then comp_bin() as usual, a no-op) */
+int comp_bin_table(uint8_t *sys, unsigned bin, uint8_t (**bits)[32], uint8_t **flags) {
+    if (!use_tab || bin >= NBINS) return 0;
+    int s = slot_of(PTR(sys, SYS_OUTPUT));
+    if (s < 0) return 0;
+    *bits = &tbits[s * HALF_ROWS + bin * 64];
+    *flags = &tflag[s * HALF_ROWS + bin * 64];
+    return 1;
+}
+void comp_bin_done(void) { __atomic_fetch_add(&bins_done, 1, __ATOMIC_RELAXED); }
 
 static void hook_uf4(uint8_t *sys, uint32_t skip) {
     uintptr_t b = (uintptr_t)sys + SYS_FRAMEBUF;
@@ -193,7 +212,9 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
         for (int s = 0; s < 2; s++) if (s != p) set_valid(s, 0);
     }
     unsigned long n0 = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE);
+    sched_frame_begin();                                         /* the render threads' bin queue (binsched.c) */
     orig_uf4(sys, skip);
+    sched_frame_end(sys);
     unsigned long n = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE) - n0;
     uint8_t *o = PTR(sys, SYS_OUTPUT), *last = PTR(sys, SYS_LAST);
     int so = slot_of(o), sl = slot_of(last);
@@ -219,6 +240,61 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
         if (compcheck) __atomic_fetch_add(&cc_upd[2], 1, __ATOMIC_RELAXED);
     }
 }
+
+/* ---- DraStic's edge-marking gap passes (update_frame_3d_4x, edge marking on, after the bins) ----
+ * They re-mark the bin boundary rows 32k-1 and 32k from gap buffers that the 2x bin resolves fill (res2.c res2_gaps()
+ * has the details). At 3x (hr.c) each bin is resolved with its neighbour lines in its context, those rows included,
+ * and nothing fills the gap buffers: the pass marked the rows from stale data (zeros in a game started at 3x, so all
+ * 22 rows transparent every frame: measured on the fog and edge-marking scene S4, 11264 pixels a frame with alpha 0
+ * there and none in the rows beside them). The three are replaced (the plain one's 4th instruction is an adrp: no
+ * trampoline) by res2_gaps_neon(), the same bytes from res2.c's NEON stages (output rows and gap buffers; t_resolve
+ * compares it with the three), skipped once the 3x pipeline has resolved a bin (comp_hr_frame(); the scale is fixed
+ * at start-up). RAST_GAPHOOK=0 leaves DraStic's passes alone, 2 runs res2_gaps() instead (DraStic's driver with its
+ * own leaf routines). */
+#define DS_GAPS           0x56630      /* video_3d_resolve_bin_edge_mark_gaps_4x(vb) */
+#define DS_GAPS_FOG_FULL  0x580c0      /* video_3d_resolve_bin_edge_mark_fog_full_gaps_4x(vb) */
+#define DS_GAPS_FOG_ALPHA 0x586d0      /* video_3d_resolve_bin_edge_mark_fog_alpha_gaps_4x(vb) */
+#define DS_EDGE_IDENTIFY  0x9d368      /* video_3d_edge_identify_asm_4x(u8 edge[], above, line, below, clear) */
+#define DS_EDGE_MARK      0x9d2d8      /* video_3d_edge_mark_asm_4x(out, colour, edge[], edge colours) */
+#define DS_FOG_WEIGHTS    0x9cf00      /* video_3d_fog_calculate_weights_asm_4x(attr, u8 w[], table, params) */
+#define DS_FOG_MOD_FULL   0x9cff8      /* video_3d_fog_modulate_full_intermediate_asm_4x(dst, src, w[], fog colour) */
+#define DS_FOG_MOD_ALPHA  0x9d18c      /* video_3d_fog_modulate_alpha_intermediate_asm_4x(dst, src, w[], fog colour) */
+#define DSG(type, off) ((type)(ds_base + (off)))
+static int hr_frames;                   /* atomic: the 3x pipeline renders the frames */
+void comp_hr_frame(void) { __atomic_store_n(&hr_frames, 1, __ATOMIC_RELAXED); }
+static res2_gap_leaves gap_leaves;
+static int gap_mode;                    /* RAST_GAPHOOK: 1 res2_gaps_neon, 2 res2_gaps */
+static void hook_gaps(uint8_t *vb, int fog) {
+    if (__atomic_load_n(&hr_frames, __ATOMIC_RELAXED)) return;
+    if (gap_mode == 2) res2_gaps(vb, fog, &gap_leaves);
+    else res2_gaps_neon(vb, fog);
+}
+static void hook_gaps_plain(uint8_t *vb) { hook_gaps(vb, 0); }
+static void hook_gaps_fog_full(uint8_t *vb) { hook_gaps(vb, 1); }
+static void hook_gaps_fog_alpha(uint8_t *vb) { hook_gaps(vb, 2); }
+static const uint32_t expect_gaps[4] = { 0xd109c3ff, 0x91492001, 0x9146e003, 0xb0000842 };
+static const uint32_t expect_gaps_fog[4] = { 0xd10a43ff, 0x9146e001, 0x91492002, 0xa9007bfd };  /* both fog modes */
+static void gaps_init(void) {
+    const char *e = getenv("RAST_GAPHOOK");
+    gap_mode = e ? atoi(e) : 1;
+    if (gap_mode <= 0) return;
+    gap_leaves.identify = DSG(void (*)(uint8_t *, const uint32_t *, const uint32_t *, const uint32_t *, uint32_t), DS_EDGE_IDENTIFY);
+    gap_leaves.mark = DSG(void (*)(uint8_t *, const uint32_t *, const uint8_t *, const uint8_t *), DS_EDGE_MARK);
+    gap_leaves.weights = DSG(void (*)(const uint32_t *, uint8_t *, const uint8_t *, uint32_t), DS_FOG_WEIGHTS);
+    gap_leaves.modulate[0] = DSG(void (*)(uint32_t *, const uint32_t *, const uint8_t *, uint32_t), DS_FOG_MOD_FULL);
+    gap_leaves.modulate[1] = DSG(void (*)(uint32_t *, const uint32_t *, const uint8_t *, uint32_t), DS_FOG_MOD_ALPHA);
+    /* all three or none (a frame must not mix DraStic's and ours: they are the same bytes, but the 3x skip must hold) */
+    if (memcmp((const void *)(ds_base + DS_GAPS), expect_gaps, 16) || memcmp((const void *)(ds_base + DS_GAPS_FOG_FULL), expect_gaps_fog, 16) ||
+        memcmp((const void *)(ds_base + DS_GAPS_FOG_ALPHA), expect_gaps_fog, 16)) {
+        fprintf(stderr, "[comp] unknown edge-marking gap passes, left alone\n");
+        return;
+    }
+    rast_hook(DS_GAPS, expect_gaps, (void *)hook_gaps_plain);
+    rast_hook(DS_GAPS_FOG_FULL, expect_gaps_fog, (void *)hook_gaps_fog_full);
+    rast_hook(DS_GAPS_FOG_ALPHA, expect_gaps_fog, (void *)hook_gaps_fog_alpha);
+    fprintf(stderr, "[comp] edge-marking gap passes replaced (%s; skipped at 3x)\n", gap_mode == 2 ? "DraStic's driver" : "NEON");
+}
+#undef DSG
 
 static void hook_uf1(uint8_t *sys, uint32_t skip) {
     invalidate_all(); orig_uf1(sys, skip); invalidate_all();
@@ -360,6 +436,7 @@ void comp_init(void) {
     if (!e) e = getenv("RAST_COMP");
     comp_mode = e ? atoi(e) : 2;
     compcheck = getenv("RAST_COMPCHECK") && atoi(getenv("RAST_COMPCHECK"));
+    gaps_init();
     if (comp_mode <= 0) return;
     if (comp_mode >= 2) {
         /* the table needs all three wrappers; any unknown entry leaves it off */

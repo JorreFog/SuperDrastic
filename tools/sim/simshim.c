@@ -2,15 +2,18 @@
  * diagnostics for that. Preloaded only in the simulator, never on a handheld.
  *   - SDL_JoystickName(NULL): DraStic asks for joystick 0's name whether or not one exists
  *   - remap_file_pages: qemu-user doesn't implement it; done as the kernel does, an mmap of the same file
- *   - a crash handler that names the DraStic function, and long condition-variable waits with their caller */
+ *   - a crash handler that names the DraStic function, and long condition-variable waits with their caller
+ *   - shm_open / shm_unlink: a name of its own for each process's guest memory (see there) */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <link.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/mman.h>
 #include <time.h>
 #include <ucontext.h>
@@ -62,6 +65,24 @@ int remap_file_pages(void *addr, size_t size, int prot, size_t pgoff, int flags)
             return r == MAP_FAILED ? -1 : 0;
         }
     errno = EINVAL; return -1;
+}
+
+/* DraStic's initialize_memory backs the emulated main RAM and VRAM with shm_open("drastic_mapped_memory.dat" and
+ * "drastic_mapped_memory_vram.dat", O_RDWR | O_CREAT, no O_EXCL), sizes them and only then shm_unlinks them: two
+ * simulator runs that start together open the same objects and share their guest memory (and with remap_file_pages
+ * above, every view of it), which corrupts both or hangs one at boot. Each process gets names of its own here. */
+static const char *shm_own(const char *name, char *buf, size_t n) {
+    const char *b = name[0] == '/' ? name + 1 : name;
+    if (strncmp(b, "drastic_mapped_", 15)) return name;
+    snprintf(buf, n, "%s.%d", name, (int)getpid()); return buf;
+}
+int shm_open(const char *name, int fl, mode_t mode) {
+    static int (*real)(const char *, int, mode_t); if (!real) real = (int (*)(const char *, int, mode_t))dlsym(RTLD_NEXT, "shm_open");
+    char b[256]; return real(shm_own(name, b, sizeof b), fl, mode);
+}
+int shm_unlink(const char *name) {
+    static int (*real)(const char *); if (!real) real = (int (*)(const char *))dlsym(RTLD_NEXT, "shm_unlink");
+    char b[256]; return real(shm_own(name, b, sizeof b));
 }
 
 static double nowd(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec / 1e9; }

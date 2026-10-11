@@ -17,11 +17,12 @@
  * function is patched as comp_init() patches it (a copy of rast.c's rast_hook) and called through its entry: the
  * jump to the hook, the arguments as a caller leaves them, and the trampoline back into the original, against the
  * C port.
- * run.sh t_comp_hook.c ../../../src/rast/spec/composite.c */
+ * run.sh t_comp_hook.c ../../../src/rast/spec/composite.c ../../../src/rast/res2.c ../../../src/rast/res2_line.S */
 #include "ut.h"
 #include <stddef.h>
 #include <sys/mman.h>
 #include "comp.c"
+#include "binsched.c"            /* the bin queue that hook_uf4 opens and closes around the update (nothing renders here) */
 
 uintptr_t ds_base;
 /* rast.c's rast_hook(), copied (rast.c is not linked here): the 4 original words into an executable buffer with a jump

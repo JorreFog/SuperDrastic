@@ -299,6 +299,59 @@ int f_run_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned
     return f_run(&layout_2x, ctx, spans, poly, buf, line0, nlines, flags, v0, dmode, idx);
 }
 
+/* the batch loop's end of a batch: from line i on, the first line that has no pixels or does not fit (n: the batch's
+ * pixels so far), else nlines; 8 lines a step as prefix sums (the scalar loop cost ~10 modeled A55 cycles a line, a
+ * chain of dependent loads and compares). The counts are the low halves of array 9's words; the lanes from nlines on
+ * end the batch, so their bytes (read within the array: lines up to nlines + 6 < its 44 or 64 entries) never count,
+ * and the sums of the others stay below 2^16 (8 counts of at most 768) */
+static inline unsigned batch_end(const uint8_t *cnt, unsigned i, unsigned nlines, unsigned n, unsigned bmax) {
+    static const uint16_t iota[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    const uint16x8_t io = vld1q_u16(iota), z = vdupq_n_u16(0);
+    unsigned room = bmax - n;                                       /* (the room left, compared off the sums' chain) */
+    while (i < nlines) {
+        uint16x8_t c = vuzp1q_u16(vld1q_u16((const uint16_t *)(cnt + 4 * i)), vld1q_u16((const uint16_t *)(cnt + 4 * i + 16)));
+        uint16x8_t s = vaddq_u16(c, vextq_u16(z, c, 7));            /* prefix sums: lanes j - 1, j - 2..3, j - 4..7 */
+        s = vaddq_u16(s, vextq_u16(z, s, 6));
+        s = vaddq_u16(s, vextq_u16(z, s, 4));
+        uint16x8_t stop = vorrq_u16(vceqq_u16(c, z), vcgeq_u16(io, vdupq_n_u16((uint16_t)(nlines - i))));
+        uint16x8_t end = vorrq_u16(vcgtq_u16(s, vdupq_n_u16((uint16_t)room)), stop);
+        uint64_t m = vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(end, 4)), 0);
+        if (m) return i + ((unsigned)__builtin_ctzll(m) >> 3);
+        room -= vgetq_lane_u16(s, 7);
+        i += 8;
+    }
+    return i;
+}
+
+/* the polygon's lines with pixels in one batch: they are one run, lines f..e-1 (the lines before and after have none:
+ * a polygon's tips are often lines of width 0), and all of them fit (sum <= bmax). That is what f_run's loop finds
+ * with batch_end (it skips the lines without pixels, the batch from f ends at e); here one pass of independent steps
+ * over the counts (their sum and min, the lanes from e on masked; a lane's sum stays below 2^16, as does the total: at
+ * most 64 lines of 768 pixels at 3x) instead of batch_end's chain of prefix sums and compares, ~40 modeled A55 cycles
+ * a step of 8 lines. Returns e (0: not one batch) and f in *first. The hi-res pipeline's batches (up to 4096 pixels)
+ * nearly always are the whole polygon */
+static inline unsigned one_batch(const uint8_t *cnt8, unsigned nlines, unsigned bmax, unsigned *first) {
+    static const uint16_t iota[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    const uint16_t *cnt = (const uint16_t *)cnt8;
+    unsigned f = 0, e = nlines;
+    while (f < e && !cnt[2 * f]) f++;
+    while (e > f && !cnt[2 * (e - 1)]) e--;
+    if (f == e) return 0;
+    uint16x8_t acc = vdupq_n_u16(0), mn = vdupq_n_u16(0xffff);
+    unsigned i = f;
+    for (; i + 8 <= e; i += 8) {
+        uint16x8_t c = vuzp1q_u16(vld1q_u16(cnt + 2 * i), vld1q_u16(cnt + 2 * i + 8));
+        acc = vaddq_u16(acc, c); mn = vminq_u16(mn, c);
+    }
+    if (i < e) {            /* the last lines: lanes from e on count 0 pixels and are not 0 for the min */
+        uint16x8_t c = vuzp1q_u16(vld1q_u16(cnt + 2 * i), vld1q_u16(cnt + 2 * i + 8));
+        uint16x8_t in = vcltq_u16(vld1q_u16(iota), vdupq_n_u16((uint16_t)(e - i)));
+        acc = vaddq_u16(acc, vandq_u16(c, in)); mn = vminq_u16(mn, vornq_u16(c, in));
+    }
+    *first = f;
+    return vminvq_u16(mn) && vaddvq_u16(acc) <= bmax ? e : 0;
+}
+
 int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0,
           unsigned nlines, unsigned flags, uint8_t *v0, int dmode, unsigned idx) {
     poly_t P;
@@ -345,16 +398,31 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
     /* batches: runs of lines with pixels, at most 512 pixels (DraStic's batches: the flat colour and the id quirk
      * follow them); the hi-res pipeline, with lines of up to 768 pixels and no exactness to keep, batches longer */
     const unsigned bmax = L->hr ? 4096 : 512;
-    unsigned line = line0, left = nlines, i = 0;
-    while (left) {
-        while (left && !U16(spans, SPO(PP, 9) + 4 * i)) { i++; line++; left--; }
-        if (!left) break;
-        unsigned first = i, k = 0, n = 0;
-        while (left) {
-            unsigned c = U16(spans, SPO(PP, 9) + 4 * i);
-            if (!c || (k && n + c > bmax)) break;
-            n += c; k++; i++; left--;
+    const uint16_t *cnt = (const uint16_t *)(spans + SPO(PP, 9));   /* the lines' pixel counts: cnt[2 * line] */
+    if (defer_auto && !(flags & 1) && dmode != 2) {
+        /* defer_bin()'s measure: the opaque polygons' pixels, 8 lines a step (lanes from nlines on masked; the
+         * array's 44 or 64 entries hold nlines + 7: 39, 57) */
+        static const uint16_t iota[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+        const uint16x8_t io = vld1q_u16(iota);
+        uint16x8_t acc = vdupq_n_u16(0);
+        for (unsigned j = 0; j < nlines; j += 8) {
+            uint16x8_t c = vuzp1q_u16(vld1q_u16(cnt + 2 * j), vld1q_u16(cnt + 2 * j + 8));
+            acc = vaddq_u16(acc, vandq_u16(c, vcltq_u16(io, vdupq_n_u16((uint16_t)(nlines - j)))));
         }
+        defer_px += vaddlvq_u16(acc);
+    }
+    /* (one_batch at 3x only: at 2x, with 512 pixels a batch, half of L4's polygon-bins are more than one, and the
+     * test cost more than it saved: f_run 0.64 -> 0.73 M modeled cycles a frame) */
+    unsigned i = 0, one = L->hr && nlines ? one_batch((const uint8_t *)cnt, nlines, bmax, &i) : 0;   /* (from line i) */
+    while (i < nlines) {
+        unsigned n = cnt[2 * i];
+        if (!n) { i++; continue; }
+        /* a batch: this line, then the next ones while they have pixels and fit (n <= bmax, a line has at most bmax
+         * pixels) */
+        unsigned first = i;
+        i = one ? one : batch_end((const uint8_t *)cnt, i + 1, nlines, n, bmax);
+        one = 0;
+        unsigned k = i - first, line = line0 + first;
         uint8_t *bs = spans + 4 * first;
         if (0) {        } else if (flags & 1) {
             /* the quirk: a line with 5 mod 8 pixels gets the next line's first new id as its last id (the batch's
@@ -375,7 +443,6 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
             if (bf) bf(&P, bs, k, line, 0);
             else for (unsigned l = 0; l < k; l++) line_px(&P, bs + 4 * l, bs, line + l, 0);
         }
-        line += k;
     }
     if ((P.fogused & 1) && (((flags & 1) && (P.attr & (1u << 15))) || (!(flags & 1) && (P.attr & (1u << 15)))))
         U32(ctx, L->hdr_off + 0x14) = 1;

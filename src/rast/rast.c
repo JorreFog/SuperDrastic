@@ -2,7 +2,8 @@
  *
  * DraStic calls video_3d_render_bins_4x(ctx) once per render thread per frame. We patch its entry with a branch to
  * rast_render_bins(). RAST env: "off" leaves DraStic alone, "ours" renders with ours only, "diff" (development)
- * renders every bin with both, compares the resolved output and keeps DraStic's, logging any mismatch. */
+ * renders every bin with both, compares the resolved output and keeps DraStic's, logging any mismatch. Which bins a
+ * thread renders: binsched.c (claimed from the frame's queue, longest first; DraStic's fixed sets in diff mode). */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <link.h>
@@ -17,6 +18,9 @@
 #include "rast.h"
 #include "fused.h"
 #include "comp.h"
+#include "ds2d.h"
+#include "res2.h"
+#include "binsched.h"
 
 uintptr_t ds_base;
 static int mode;                 /* 0 off, 1 ours, 2 diff */
@@ -62,32 +66,43 @@ static void clear_bin(uint8_t *ctx, uint8_t *sys, uint8_t *geom, unsigned y0) {
     }
 }
 
+/* the bin's resolve into its output block and the compositor's visibility table entries for it, while the block is in
+ * cache: res2.c's NEON forms of DraStic's resolves (video_3d_resolve_bin_asm_4x, and with fog and / or edge marking
+ * its drivers' stages fused per line), the plain resolve's pass writing the block and the entries from the same
+ * registers; the fog-only resolve's block (unmasked) then gets its entries from comp_bin() */
 static void resolve_bin(uint8_t *ctx, uint8_t *sys, unsigned bin) {
     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
     uint8_t *out = PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES;
     unsigned m = ((d3 >> 5) & 1) << 2 | ((d3 >> 6) & 3);       /* edge marking, fog alpha-only, fog */
     if (U8(ctx, CTX_NO_EDGE)) m &= ~4u;
-    typedef void (*rfn)(void *, void *, unsigned long);
-    switch (m) {
-    case 2: DSFN(rfn, DS_RESOLVE_FOG_FULL_4X)(ctx, out, m); break;
-    case 3: DSFN(rfn, DS_RESOLVE_FOG_ALPHA_4X)(ctx, out, m); break;
-    case 4: case 5: DSFN(rfn, DS_RESOLVE_EDGE_4X)(ctx, out, bin); break;
-    case 6: DSFN(rfn, DS_RESOLVE_EDGE_FOG_FULL_4X)(ctx, out, bin); break;
-    case 7: DSFN(rfn, DS_RESOLVE_EDGE_FOG_ALPHA_4X)(ctx, out, bin); break;
-    default: DSFN(void (*)(void *, void *), DS_RESOLVE_BIN_ASM_4X)(out, ctx); break;
+    uint8_t (*bits)[32], *flags;
+    int tab = comp_bin_table(sys, bin, &bits, &flags);
+    if (m & 6 ? res2_resolve_fx(ctx, out, bin, m, tab ? bits : 0, tab ? flags : 0)
+              : (res2_resolve(out, (const uint32_t *)(ctx + CTX_COLOR), tab ? bits : 0, tab ? flags : 0), 1)) {
+        if (tab) comp_bin_done();
+        return;
     }
+    comp_bin(sys, bin, 1);
 }
 
 static __thread int in_defer;    /* hook_setup: the polygon goes to the deferred queue */
+static int walk = 1;             /* RAST_WALK=0: DraStic's render_polygon_4x walks every polygon (else walk.c, most) */
+static walk_setup_fn hook_setup;
 static void render_list(uint8_t *ctx, const uint8_t *list, uint8_t *polys, uint8_t *verts, unsigned y0, int defer) {
     typedef void (*pfn)(void *, void *, void *, unsigned long, unsigned long);
     uint32_t n = U32(list, 0x1000);
+    /* walk.c's setup: hook_setup's choice made once (it runs inside our bin loop, so in_ours is set) when nothing
+     * per polygon decides it (deferred queueing, RAST_PDIFF); DraStic's own render_polygon_4x calls the hook */
+    walk_setup_fn *setup = defer || pdiff ? hook_setup : pipe_sel ? f_setup_4x : b0_setup_4x;
     for (uint32_t i = 0; i < n; i++) {
         uint8_t *poly = polys + 32 * (size_t)((const uint16_t *)list)[i];
         /* deferred: modulate-shaded polygons queue up; the others (toon, highlight, shadow) flush and render now */
-        in_defer = defer && !((U32(poly, 4) >> 4) & 3);
-        if (defer && !in_defer) defer_flush(&layout_2x, ctx);
-        DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
+        if (defer) {
+            in_defer = !((U32(poly, 4) >> 4) & 3);
+            if (!in_defer) defer_flush(&layout_2x, ctx);
+        }
+        if (!walk || !walk_polygon_4x(ctx, poly, verts, y0, y0 + 32, setup))
+            DSFN(pfn, DS_RENDER_POLYGON_4X)(ctx, poly, verts, y0, y0 + 32);
     }
     in_defer = 0;
     if (defer) defer_flush(&layout_2x, ctx);
@@ -104,26 +119,28 @@ static void stats_bin(uint8_t *ctx, uint8_t *sys) {
     __atomic_fetch_add(&st_covered, cov, __ATOMIC_RELAXED);
 }
 
-static void render_bins(uint8_t *ctx) {
+/* the thread's bins: DraStic's fixed set (first, first + stride, ...) or, when binsched.c's queue is open (dyn), the
+ * bins it claims from the frame's queue, longest first */
+static void render_bins(uint8_t *ctx, int dyn) {
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
-    unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride;
     unsigned buf = U8(geom, GEOM_SWAP_BUF) ^ 1;
     uint8_t *verts = geom + GEOM_VERTS + buf * GEOM_VERTS_BUF;
     uint8_t *opa = geom + GEOM_POLYS_OPA + buf * GEOM_POLYS_BUF, *trl = geom + GEOM_POLYS_TRL + buf * GEOM_POLYS_BUF;
     uint32_t ntrl = U32(geom, GEOM_TRL_COUNT + buf * GEOM_POLYS_BUF);
     f_begin_frame();
-    for (unsigned k = 0; k < nb; k++) {
-        unsigned bin = U8(ctx, CTX_FIRST_BIN) + k * stride, y0 = bin * 32;
+    sched_it it;
+    sched_start(&it, ctx, dyn);
+    for (int b; (b = sched_next(&it)) >= 0;) {
+        unsigned bin = (unsigned)b, y0 = bin * 32;
         clear_bin(ctx, sys, geom, y0);
         U64(ctx, CTX_LINEMASK) = 0xffffffffull;
-        render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0, rast_defer && pipe_sel == 3 && !pdiff);
+        render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0, defer_bin(bin, 2 * 32 * 512) && pipe_sel == 3 && !pdiff);
         if (rast_stats) stats_bin(ctx, sys);
         if (ntrl) {
             memset(ctx + CTX_IDBUF, 0xff, 0x4000);
             render_list(ctx, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, y0, 0);
         }
-        resolve_bin(ctx, sys, bin);
-        comp_bin(sys, bin, 1);          /* the compositor's visibility table, while the block is in cache */
+        resolve_bin(ctx, sys, bin);     /* and the compositor's visibility table, while the block is in cache */
     }
 }
 
@@ -132,15 +149,17 @@ static void render_bins(uint8_t *ctx) {
 static pthread_mutex_t stat_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned long st_bins, st_bad, st_calls;
 
-static void diff_render_bins(uint8_t *ctx) {
+/* both renderers on the context's fixed bins (first, first + stride, ...); returns the differing ones */
+static unsigned long diff_bins(uint8_t *ctx, unsigned *nbp) {
     uint8_t *sys = PTR(ctx, CTX_SYS);
     unsigned stride = U8(ctx, CTX_BIN_STRIDE), nb = NBINS / stride, first = U8(ctx, CTX_FIRST_BIN);
+    *nbp = nb;
     orig_render_bins(ctx);
     uint8_t *out = PTR(sys, SYS_OUTPUT);
     static __thread uint8_t *ref;
     if (!ref) ref = malloc(NBINS * BIN_BYTES);
     for (unsigned k = 0; k < nb; k++) { unsigned b = first + k * stride; memcpy(ref + b * BIN_BYTES, out + b * BIN_BYTES, BIN_BYTES); }
-    in_ours = 1; render_bins(ctx); in_ours = 0;
+    in_ours = 1; render_bins(ctx, 0); in_ours = 0;     /* the same fixed bins as DraStic's (binsched.c) */
     unsigned long bad = 0;
     for (unsigned k = 0; k < nb; k++) {
         unsigned b = first + k * stride;
@@ -157,6 +176,27 @@ static void diff_render_bins(uint8_t *ctx) {
             memcpy(out + b * BIN_BYTES, ref + b * BIN_BYTES, BIN_BYTES);
             comp_bin(sys, b, 0);        /* the block changed after render_bins computed its entries */
         }
+    }
+    return bad;
+}
+
+/* DraStic's fixed bins; or (RAST_SCHEDDIFF=1) the bins claimed from binsched.c's queue, each through both renderers with
+ * the context's first bin and stride set to that bin alone (DraStic's loop: bin first + k * stride for k < 12 /
+ * stride), restored after. The differing bins can then differ from the fixed sets' run where DraStic's own quirk
+ * pixels read scratch memory that another bin left (README, Status) */
+static void diff_render_bins(uint8_t *ctx) {
+    unsigned long bad = 0, nb = 0;
+    sched_it it;
+    sched_start(&it, ctx, sched_diff);
+    if (!it.dyn) { unsigned n; bad = diff_bins(ctx, &n); nb = n; }
+    else {
+        uint8_t first = U8(ctx, CTX_FIRST_BIN), stride = U8(ctx, CTX_BIN_STRIDE);
+        for (int b; (b = sched_next(&it)) >= 0;) {
+            unsigned n;
+            U8(ctx, CTX_FIRST_BIN) = (uint8_t)b; U8(ctx, CTX_BIN_STRIDE) = NBINS;
+            bad += diff_bins(ctx, &n); nb += n;
+        }
+        U8(ctx, CTX_FIRST_BIN) = first; U8(ctx, CTX_BIN_STRIDE) = stride;
     }
     pthread_mutex_lock(&stat_lock);
     st_calls++; st_bins += nb; st_bad += bad;
@@ -203,12 +243,20 @@ static void dump_frame(uint8_t *ctx) {
     fclose(f);
 }
 
+/* binsched.c's workers (RAST_WORKERS): the bin loop on a worker's own context, claiming */
+static void worker_render(uint8_t *ctx) {
+    in_ours = 1;
+    comp_bins_begin(PTR(ctx, CTX_SYS));
+    (rast_scale == 3 ? hr_render_bins : render_bins)(ctx, 1);
+    in_ours = 0;
+}
+
 static int print_frames;         /* RAST_FRAMES=1: the frame count every 10 frames (profiling runs) */
 static void hook_entry(uint8_t *ctx) {
     static __thread int named;
     if (!named) { named = 1; pthread_setname_np(pthread_self(), "rast-3d"); }  /* the performance log's per-thread CPU */
     comp_bins_begin(PTR(ctx, CTX_SYS));
-    if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; (rast_scale == 3 ? hr_render_bins : render_bins)(ctx); in_ours = 0; }
+    if (mode == 2) diff_render_bins(ctx); else { in_ours = 1; (rast_scale == 3 ? hr_render_bins : render_bins)(ctx, 1); in_ours = 0; }
     if (dump_dir) dump_frame(ctx);
     if (print_frames && U8(ctx, CTX_FIRST_BIN) == 0) {
         static unsigned long n;
@@ -338,8 +386,10 @@ __attribute__((constructor)) static void rast_init(void) {
     if (!mode) return;
     if (!e) e = "ours";
     { const char *t = getenv("DSFLIP_RAST_TEXFILTER"); if (!t) t = getenv("RAST_TEXFILTER"); if (t) rast_texfilter = atoi(t); }
-    /* deferred shading pays only when shading is expensive (bilinear filtering): on with it unless set */
-    { const char *t = getenv("DSFLIP_RAST_DEFER"); if (!t) t = getenv("RAST_DEFER"); rast_defer = t ? atoi(t) : rast_texfilter != 0; }
+    /* deferred shading pays only when shading is expensive (bilinear filtering): on with it unless set (0 off, 1 always,
+     * 2 per bin: defer.c's defer_bin()) */
+    { const char *t = getenv("DSFLIP_RAST_DEFER"); if (!t) t = getenv("RAST_DEFER"); rast_defer = t ? atoi(t) : rast_texfilter != 0;
+      if (rast_defer == 2) defer_auto = 1, rast_defer = 0; }
     { const char *t = getenv("DSFLIP_RAST_SCALE"); if (!t) t = getenv("RAST_SCALE"); if (t) rast_scale = atoi(t) == 3 ? 3 : 2; }
     if (mode == 2) rast_scale = 2;
     hr_vcheck = getenv("RAST_VCHECK") != 0;
@@ -350,6 +400,7 @@ __attribute__((constructor)) static void rast_init(void) {
     pdiff = getenv("RAST_PDIFF") != 0;
     if (getenv("RAST_PDIFF_STRICT")) pdiff_strict = atoi(getenv("RAST_PDIFF_STRICT"));
     if (getenv("RAST_PIPE")) pipe_sel = atoi(getenv("RAST_PIPE"));
+    if (getenv("RAST_WALK")) walk = atoi(getenv("RAST_WALK"));
     { extern int use_neon; use_neon = pipe_sel >= 1 ? pipe_sel : 1; }
     if (getenv("RAST_DUMP_EVERY")) dump_every = atoi(getenv("RAST_DUMP_EVERY"));
     dl_iterate_phdr(cb, 0);
@@ -361,7 +412,10 @@ __attribute__((constructor)) static void rast_init(void) {
         if (!orig_persp) { fprintf(stderr, "[rast] cannot hook the vertex transform, 3x off\n"); rast_scale = 2; }
         else if (dump_dir) hr_frame = calloc(768 * 576, 4);
     }
+    sched_init(mode == 1 ? worker_render : 0);  /* the bins' queue (binsched.c; opened by comp.c's frame wrapper) */
     comp_init();                         /* the compositor's 3D visibility step (comp.c) */
+    ds2d_init();                         /* DraStic's 2D scanline routines (ds2d.c) */
+    { extern void geom_init(void); geom_init(); }   /* DraStic's geometry stage (dsgeom.c) */
     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
     fprintf(stderr, "[rast] Gengis Engine: hooked video_3d_render_bins_4x, mode %s, scale %d\n", e, rast_scale);
 }

@@ -7,4 +7,9 @@
 void comp_init(void);                                   /* rast_init, renderer hooked: installs per RAST_COMP */
 void comp_bins_begin(uint8_t *sys);                     /* a render thread starts on the output frame */
 void comp_bin(uint8_t *sys, unsigned bin, int count);   /* the bin's output block is final: its 64 table entries */
+/* or, for a resolve that computes them (res2.c): the bin's entries (0: no table), then comp_bin_done() */
+int comp_bin_table(uint8_t *sys, unsigned bin, uint8_t (**bits)[32], uint8_t **flags);
+void comp_bin_done(void);
+/* the 3x pipeline (hr.c) resolves its bins with their neighbour lines: DraStic's edge-marking gap passes are skipped */
+void comp_hr_frame(void);
 #endif
