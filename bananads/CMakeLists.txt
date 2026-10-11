@@ -60,6 +60,25 @@ if(BANANADS_JIT STREQUAL "banana")
         endif()
         file(WRITE ${SEL} "${SELTXT2}")
     endif()
+    # ...and in ARMJIT.cpp, where the framework retires or invalidates a block, a call that unlinks the exits
+    # jumping straight to it (BananaJIT's block chaining, docs/JIT.md)
+    set(FW ${MELONDS_SRC}/src/ARMJIT.cpp)
+    file(READ ${FW} FWTXT)
+    if(NOT FWTXT MATCHES "UnlinkBlock")
+        set(FWTXT2 "${FWTXT}")
+        string(REPLACE "void ARMJIT::RetireJitBlock(JitBlock* block) noexcept\n{\n"
+            "void ARMJIT::RetireJitBlock(JitBlock* block) noexcept\n{\n#ifdef BANANADS_JIT\n    JITCompiler.UnlinkBlock(block->EntryPoint);\n#endif\n"
+            FWTXT2 "${FWTXT2}")
+        string(REPLACE "        FastBlockLookupRegions[block->StartAddrLocal >> 27][(block->StartAddrLocal & 0x7FFFFFF) / 2] = (u64)UINT32_MAX << 32;"
+            "#ifdef BANANADS_JIT\n        JITCompiler.UnlinkBlock(block->EntryPoint);\n#endif\n        FastBlockLookupRegions[block->StartAddrLocal >> 27][(block->StartAddrLocal & 0x7FFFFFF) / 2] = (u64)UINT32_MAX << 32;"
+            FWTXT2 "${FWTXT2}")
+        string(REGEX MATCHALL "UnlinkBlock" HOOKS "${FWTXT2}")
+        list(LENGTH HOOKS NHOOKS)
+        if(NOT NHOOKS EQUAL 2)
+            message(FATAL_ERROR "melonDS's ARMJIT.cpp changed; BananaJIT's unlink hooks need updating")
+        endif()
+        file(WRITE ${FW} "${FWTXT2}")
+    endif()
     get_target_property(CORE_SRCS core SOURCES)
     list(FILTER CORE_SRCS EXCLUDE REGEX "ARMJIT_A64/")
     set_property(TARGET core PROPERTY SOURCES ${CORE_SRCS})

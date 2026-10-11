@@ -180,6 +180,9 @@ bool Emu::load_rom(const std::string& path) {
     // jit.mul=off: multiply and register-shift through the interpreter (for bananads-difftest: both must agree)
     if (cfg_.flag("jit.mul", true)) unsetenv("BANANAJIT_NO_MUL");
     else setenv("BANANAJIT_NO_MUL", "1", 1);
+    // jit.sys=off: MRS/MSR (CPSR forms) and CLZ through the interpreter (for bananads-difftest)
+    if (cfg_.flag("jit.sys", true)) unsetenv("BANANAJIT_NO_SYS");
+    else setenv("BANANAJIT_NO_SYS", "1", 1);
     // jit.jumps=off: jumps to a register (BX/BLX, LDM/POP with the PC; block timing) through the interpreter
     if (cfg_.flag("jit.jumps", true)) unsetenv("BANANAJIT_NO_JUMPS");
     else setenv("BANANAJIT_NO_JUMPS", "1", 1);

@@ -39,6 +39,8 @@ public:
     void Reset();
     bool IsJITFault(const u8* pc);
     u8* RewriteMemAccess(u8* pc);  // a fast-memory access faulted: send it to its slow path from now on
+    void Link(u32* slot, ARM* cpu, u8* entry);   // ARM_Dispatch (bj_link_pending): an exit's slot -> that block
+    void UnlinkBlock(JitBlockEntry entry);       // the framework retires the block: its incoming links go
     JitBlockEntry AddEntryOffset(u32 offset) { return (JitBlockEntry)(CodeBase + offset); }
     u32 SubEntryOffset(JitBlockEntry entry) { return (u32)((u8*)entry - CodeBase); }
 
@@ -56,6 +58,9 @@ private:
     void Need(int guest);      // load it if this block hasn't yet
     void Dirty(int guest);     // it now holds a new value
     void FlushRegs(bool forget);  // store dirty registers; forget = they must be reloaded (after a call)
+    bool Resident = true;      // r0-r14 stay in host registers across linked blocks (linkage.S loads/stores them)
+    void StoreAll();
+    void LoadAll();
     void LoadFlags(int cond = -1);  // host NZCV <- CPSR, unless the host's NZCV still holds what cond reads
     u32 FlagsEpoch = ~0u;      // host NZCV == CPSR's NZCV while this equals A.flagEpoch
     u32 NZEpoch = ~0u;         // host N and Z == CPSR's while this equals A.flagEpoch
@@ -63,9 +68,22 @@ private:
     // addrInW0: the target's instruction address is in W0 (EmitJumpTo), R15 and the Thumb bit already set
     void ExitBlock(bool known = false, u32 knownPC = 0, int thumbAfter = -1, bool addrInW0 = false);
     void EmitJumpTo();
+    void GenJumpToStub(int num);
+    void AddCPUOff(Reg d, size_t off);
+    u32* JumpToStub[2] = {nullptr, nullptr};
+    struct ColdTail { std::vector<bananajit::A64::Fixup> fix; bool known; u32 pc; u32* slot; };
+    void SyncTime();
+    void RefreshBudget();
+    struct Slot { u32 orig; u32 pc; u8 num; };
+    std::unordered_map<u32, Slot> Slots;               // an exit's slot (code offset) -> its link path's B, its target
+    std::unordered_map<u32, std::vector<u32>> Links;   // a block's entry (code offset) -> the slots linked to it
+    std::vector<ColdTail> ColdTails;  // the exits' ways back to the loop, emitted after the block
     static int DynJump(bool thumb, u32 instr, u16 kind, int num);  // 0 no, 1 BX/BLX reg, 2 LDM/POP with the PC
     bool CompileJump(int form);
     bool DoJumps = true;  // jit.jumps=off: jumps to a register through the interpreter
+    static bool SysNative(bool thumb, u32 instr, u16 kind, int num);  // MRS/MSR (CPSR), CLZ
+    void CompileSys();
+    bool DoSys = true;    // jit.sys=off: MRS/MSR/CLZ through the interpreter
     // block timing: B, BL, BLX imm and Thumb B, B<cond>, BL (merged) with their target known when compiled, as
     // melonDS's JIT does them (fetch cycles counted at compile time); the taken path leaves the block itself unless
     // the framework follows the branch. Returns whether it did (the rest of the taken path is then dead).
@@ -109,7 +127,14 @@ private:
     void ChargeTaken(s32 n);   // cycles that only the executed path pays
     bool LoadLiteral(int size, int rd, u32 addr);
     void FastAccess(bool load, int size, bool sign, bool rotate, int rd, Reg val);
-    void SlowAccess(bool load, int size, bool sign, bool rotate, Reg dst, Reg val, SaveSet ss);
+    u32* GenMemStub(int num, bool load, int kind, int r);
+    void GenTimeStubs(int num);
+    void AddCPUOffS(Reg d, int64_t off);
+    int64_t TimestampOff(int num) const;
+    u32* LoadStub[2][6][16] = {};
+    u32* StoreStub[2][3][16] = {};
+    u32* SyncStub[2] = {};
+    u32* BudgetStub[2] = {};
     bool FastBlockTransfer(bool load, int rn, const int* regs, int n);
     void SlowBlockTransfer(bool load, const int* regs, int n, SaveSet ss);
     SaveSet LiveSet() const;
@@ -118,7 +143,7 @@ private:
     bool StaticSlow() const;   // the access goes to memory fast memory never maps (I/O...): straight to the call
     struct Deferred { u32* seq; std::vector<u32*> faulting; u32* back; std::function<void()> emit; };
     std::vector<Deferred> SlowPaths;  // this block's slow paths, emitted after its code
-    struct Patch { u32 seq, slow; };
+    struct Patch { u32 seq, slow; u8 call, len; };  // call: BL the shared stub at slow and NOP the rest (len words)
     std::unordered_map<u32, Patch> Patches;  // a faulting load/store's code offset -> its sequence and slow path
 
     melonDS::NDS& NDS;

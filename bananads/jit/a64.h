@@ -168,6 +168,12 @@ struct A64 {
     void addxi12(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 0, d, n, imm, true)); }  // + imm << 12
     void subxi12(Reg d, Reg n, uint32_t imm) { put(addsub_imm(true, 2, d, n, imm, true)); }  // - imm << 12
     void add_uxtw(Reg d, Reg n, Reg m) { put(0x8B204000 | m << 16 | n << 5 | d); }  // Xd = Xn + (u64)Wm
+    void subx(Reg d, Reg n, Reg m) { put(addsub_reg(true, 2, d, n, m, LSL, 0)); }
+    // ADR: Xd = the address `target` (+-1 MB from this instruction)
+    void adr(Reg d, const void* target) {
+        int64_t off = (const uint8_t*)target - (const uint8_t*)code;
+        put(0x10000000 | (uint32_t)(off & 3) << 29 | (uint32_t)((off >> 2) & 0x7FFFF) << 5 | d);
+    }
     // ADRP: Xd = the 4 KB page of `target`, from the page of this instruction (+-4 GB)
     void adrp(Reg d, const void* target) {
         int64_t pages = ((int64_t)(uintptr_t)target >> 12) - ((int64_t)(uintptr_t)code >> 12);
