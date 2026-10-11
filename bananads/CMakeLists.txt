@@ -85,3 +85,8 @@ add_executable(bananads-tests tests/tests.cpp src/config.cpp src/emu.cpp src/pla
 target_include_directories(bananads-tests PRIVATE src)
 target_link_libraries(bananads-tests PRIVATE core bananads-net pthread)
 add_test(NAME host COMMAND bananads-tests)
+
+# The differential harness for CPU back-ends (tools/difftest.cpp, docs/JIT.md).
+add_executable(bananads-difftest tools/difftest.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
+target_include_directories(bananads-difftest PRIVATE src)
+target_link_libraries(bananads-difftest PRIVATE core bananads-net pthread)

@@ -207,6 +207,14 @@ void Emu::touch(int x, int y) {
 }
 void Emu::release_touch() { nds_->ReleaseScreen(); }
 
+const uint8_t* Emu::main_ram() const { return nds_->MainRAM; }
+uint32_t Emu::main_ram_size() const { return nds_->MainRAMMask + 1; }
+void Emu::cpu_regs(int cpu, uint32_t r[17]) const {
+    const ARM& a = cpu == 0 ? (const ARM&)nds_->ARM9 : (const ARM&)nds_->ARM7;
+    memcpy(r, a.R, 16 * 4);
+    r[16] = a.CPSR;
+}
+
 const uint32_t* Emu::top() const {
     void *t = nullptr, *b = nullptr;
     nds_->GPU.GetFramebuffers(&t, &b);
