@@ -327,6 +327,48 @@ M -> 0.39 M (the quarters of engine B, which has no 3D layer, stay with DraStic'
 -> 0.07 M; frame totals 16.6 M (was 17.8) and 3.5 M (was 3.4; the totals move by about 0.5 M between runs, the
 per-call costs are exact: about 620 instructions a quarter before, 45 / 30 / 150 after).
 
+## DraStic's 2D scanline routines (`src/rast/ds2d.c`, `ds2d_asm.S`, exact)
+
+DraStic composites every DS line on the emulation thread, so its 2D routines sit on every frame's critical path; at
+2x half of the field scene's frame is DraStic's own non-3D code. `ds2d.c` replaces seven of them through rast_hook()
+(the entry's first four instructions checked, a jump into librast, the trampoline kept for the check mode), each with
+the same bytes and no other effect a caller can see (all their callers are C, so the standard calling convention is
+all a replacement keeps; `ds2d.c`'s header lists the callers):
+
+- `render_scanline_color_convert_direct_32_2x_asm` (two quarters' 6-bit planes into a 512-pixel xRGB row, 768 calls a
+  frame in every 2x / 3x game): the same zip / st4 loop with `ldr q` at a register offset and the loads a step ahead,
+  23 modeled cycles per 32 pixels against 50 (DraStic's odd alpha bytes, `movi .4h #0xff`, kept). Its 1x sibling
+  (`_32_1x`, hires_3d off) the same way, 21 against 43; the 16-bit conversions do not run with 32-bit output.
+- `render_scanline_select_pixels` (the quarter's layer merge: DraStic's u16 passes binary / binary_scalar through a
+  stack line, expand_6bit_split, binary32 / binary32_alpha for the 3D bytes; ~630 cycles a quarter with one layer):
+  one pass per 32 pixels in registers, specialised for 1..5 layers and for the 3D bytes; overlapping buffers go to
+  DraStic's.
+- `render_scanline_color_effects_apply_asm` (the blend of two planar quarters, S4's blending quarters): 32 pixels a
+  step from `ldr q`, 63 cycles against 89 per 16.
+- `render_scanline_select_blend_enable_asm` and `render_scanline_priority_encode_single_asm`: the same walks with
+  `ldr q` / `str q` instead of `ld1` / `st1` of two registers with writeback, skipping layers that change nothing.
+- `render_scanline_tiled_span_4bpp_asm` (a 4bpp text BG line, the costliest DraStic routine of the 2D scenes): each
+  step's scalar loads (flags, map entries, the four tile rows by `ldr s` + `ld1` lanes) issued during the step before,
+  the palettes by `ldr q` + `uzp` instead of `ld2`, the pixels by `zip` + `str q` instead of `st2`; 63 modeled cycles
+  per 4 tiles against 94. Its first instruction is an `adr`, so the check mode reaches the original through
+  `ds2d_span4_orig` (its first four instructions' effects, then a jump to its fifth) instead of the trampoline.
+
+`RAST_2D=0` (or `DSFLIP_RAST_2D=0`) leaves them alone (otherwise a bit mask of the hooks, default all);
+`RAST_2DCHECK=1` runs every call twice, ours and then DraStic's (through the trampoline) on the same input bytes, and
+compares the outputs with 64 bytes either side (`[ds2d] check:` counts every 2 s, `[ds2dcheck]` lines for a
+difference). Exactness: `tools/rast/ut/t_ds2d.c` (each routine against the original on random inputs of any byte
+values with guard bytes, the overlap cases, the check wrappers, and the patched entries called through DraStic's own
+addresses); `RAST_2DCHECK=1` in the emulator, 0 differences: the 2D scene cycle (4.1 M conversions, 1.9 M spans,
+1.6 M merges, 0.28 M blends, 0.8 M blend masks), the stress ROM L4, the 3D scene cycle at 3x with `RAST_COMPCHECK=1`
+(0.98 M merges through comp.c's checked composites) and at 2x with `RAST=diff` (DraStic's renderer's differing bins
+at every checkpoint), and the 3D scene cycle at 1x (hires_3d off, from a private copy of the run directory: 2.2 M
+1x conversions).
+Cost per frame, modeled A55 cycles (`cycles.py`, the replaced routines against DraStic's, 90-100 s runs): every 2x /
+3x game's conversion 0.62 -> 0.29 M; the field scene S7 0.66 -> 0.32 M (frame 4.49 -> 4.21 M); the fog and blending
+scene S4 1.09 -> 0.57 M (conversion, merge chain 0.23 -> 0.18, colour effects 0.18 -> 0.07, blend masks 0.035 ->
+0.008, encoder 0.030 -> 0.023); the stress ROM L4 1.17 -> 0.67 M (merge chain 0.48 -> 0.33); the 2D scene cycle 1.32
+-> 0.79 M (4bpp spans 0.27 -> 0.19, merge chain 0.32 -> 0.25; frame 3.42 -> 2.95 M).
+
 ## How it works
 
 `src/rast/spec/`: DraStic's ~85 raster routines ported to exact C, each unit-tested bit for bit against the
@@ -387,14 +429,15 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   edge_tplanes does at 3x (each line is read by three steps).
 - The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
   the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
-- The composite's row-level shortcut: when both quarters of an output row are fused, convert the 3D frame straight
-  into the scanout and skip the planes (~0.08 M a frame; needs the convert hook keyed by plane pointer).
-- DraStic's 2x line conversion (`render_scanline_color_convert_direct_32_2x_asm`, called from render_scanline for
-  every output line: 768 calls a frame, 0.62 M cycles at IPC 0.45 in every game, 2x and 3x): its `ld1 {q}` loads
-  with writeback hold the A55's load pipe ~5 cycles each in llvm-mca's model. The same loop with `ldr q` at a
-  register offset (x3 as the offset, `cmp x3, #256` as the test; still 31 instructions and the same registers)
-  models at 28 cycles a group of 32 pixels instead of 50: ~0.25 M a frame (S7 at 2x: ~5%). Needs a replacement
-  hooked in (rast_hook to a function in librast) and a unit test against the original.
+- The composite's row-level shortcut: when both quarters of an output row are fused (comp.c's all-3D pass, 0.15 M on
+  S7; its ld4 form models better than ldr q + uzp), convert the 3D frame straight into the output row (ld4, shl,
+  zip, st4: ~30 modeled cycles per 32 pixels against the conversion's 23 plus the planes' ~24, ~0.2 M a frame on
+  S7). ds2d.c now owns the conversion hook, so it could take the rows by plane pointer; first prove that nothing
+  reads the planes between the composite and the conversion (render_scanline memsets and reuses them in some
+  display modes; display capture reads them).
+- DraStic's 2D path after `ds2d.c` (the section above): render_scanline_2d itself (C, 0.10-0.34 M; its costliest
+  blocks are inlined NEON over the layer lines, not a function a hook can take); in 2D games render_scanline_obj_c
+  (C, 0.23 M on the 2D scene cycle), palette_lookup_8bpp (0.10 M), the 8bpp spans and render_scanline_bg.
 - The group loop is one dependence chain per group (depth test, reciprocal, interpolants, gather, modulate; IPC
   ~0.8-0.98 in the model): within its blocks the scheduler is near the model's optimum (a hill climb over its orders
   finds 0.1% more). Across blocks the translucent tail, the alpha stages and the st4 stores are done (Status); the
