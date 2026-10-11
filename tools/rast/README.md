@@ -41,16 +41,18 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   st4 stores, the 2x fog and edge-marking resolves, the 3x edge marking's id screen and walker stores, the 2x span
   setup and batch splitting) and the third (the opaque kernels' attribute words kept in registers and st4 for the
   paletted ones, the 2x and 3x fog's depth screens, the edge screens' loads, the 3x downsample's uniform steps, the 2x
-  walker's edge steps):
+  walker's edge steps), and the fourth and fifth (DraStic's 2D scanline routines replaced, the render threads'
+  bin queue, the fog's zero step at both scales, the 3x walker on the 2x walker's fused routines, the deferred
+  kernels' visibility group in one block, the five hottest kernels' software-pipelined group loops):
 
-  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of the first round | second round | third round, net |
-  |---|---|---|---|---|---|---|
-  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) | 18.1 M (-3.3%) | 17.7 M (-0.9%) |
-  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) | 4.08 M (0.0%) | 3.92 M (-2.2%) |
-  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) | 9.75 M (-11.7%) | 9.12 M (-5.2%) |
-  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) | 34.2 M (-3.3%) | 33.8 M (-0.3%) |
-  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) | 7.41 M (-2.3%) | 7.13 M (-2.9%) |
-  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) | 18.9 M (-7.5%) | 17.7 M (-6.0%) |
+  | | DraStic's renderer | 0.5.0-beta.1 | scheduled, NEON walker | all of the first round | second round | third round, net | fourth and fifth, net |
+  |---|---|---|---|---|---|---|---|
+  | stress ROM L4, 2x | 39.9 M | 24.7 M | 22.1 M (-10.4%) | 19.2 M (-22.2%) | 18.1 M (-3.3%) | 17.7 M (-0.9%) | 16.7 M (-5.3%) |
+  | field scene S7, 2x | 7.69 M | 5.33 M | 5.20 M (-2.4%) | 4.57 M (-14.3%) | 4.08 M (0.0%) | 3.92 M (-2.2%) | 3.59 M (-8.4%) |
+  | fog and edge marking S4, 2x | 19.0 M | 13.6 M | 12.9 M (-5.5%) | 11.5 M (-15.1%) | 9.75 M (-11.7%) | 9.12 M (-5.2%) | 7.85 M (-13.9%) |
+  | stress ROM L4, 3x | | 48.5 M | 38.8 M (-20.0%) | 35.9 M (-26.0%) | 34.2 M (-3.3%) | 33.8 M (-0.3%) | 30.2 M (-10.6%) |
+  | field scene S7, 3x | | 9.65 M | 8.36 M (-13.4%) | 8.08 M (-16.3%) | 7.41 M (-2.3%) | 7.13 M (-2.9%) | 6.68 M (-6.3%) |
+  | fog and edge marking S4, 3x | | 27.0 M | 24.4 M (-9.4%) | 21.0 M (-22.3%) | 18.9 M (-7.5%) | 17.7 M (-6.0%) | 14.8 M (-16.6%) |
 
   The totals include 0.07-0.83 M a frame of blocks outside DraStic and librast (cycles.py's `[other]`) that vary
   from run to run: the second round's changes are against the first round's profiles with those taken out (L4 2x
@@ -59,6 +61,9 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   them. The third round's column is net of them, against the second round's net figures (its profiles, run beside
   a scene-cycle diff, reached fewer frames and so a different part of each ROM's scene mix: the per-function
   figures in its paragraphs below are the firmer measure; the stress ROM's kernels and walker -0.22 M a frame).
+  The fourth and fifth rounds' column is net of them too, against the third's (90 s profiles of each ROM beside
+  other simulator jobs: L4 2x 699 frames, S7 4382, S4 2560, L4 3x 415, S7 3x 1525, S4 3x 752). S7 spends ~45% of
+  its 3D time in the kernel 14010, whose lines do not take the pipelined loop yet (1.31 M a frame at 2x, as before).
 
   The same pixels: RAST=diff gives DraStic's renderer's differing bins (the quirk above) at all 38 checkpoints of
   the scene cycle to 91200 bins. Since then each group starts with one basic block (`kerngen.py`'s head()): the
