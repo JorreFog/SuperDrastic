@@ -2033,7 +2033,7 @@ struct CompStep
 // (opaque where the alpha byte is nonzero, with the 3D flag added); every other step's pixels are
 // opaque exactly where their flag byte is nonzero, so the same test serves all steps
 template<int N, bool needSecond, bool has3d>
-static void CompositeN(const CompStep* steps, const u32* startLine, u32* outTop, u32* outSecond)
+static void CompositeN(const CompStep* steps, const u32* startLine, bool onBackdrop, u32* outTop, u32* outSecond)
 {
     // (the step pointers and priority values in registers for the whole line)
     const u32* line[N > 0 ? N : 1];
@@ -2050,9 +2050,11 @@ static void CompositeN(const CompStep* steps, const u32* startLine, u32* outTop,
         orv[k] = VDup(steps[k].raw3d ? 0x40000000 : 0);
     }
     const V4 flagbyte = VDup(0xFF000000);
+    // painting onto the backdrop: its colour from a register, not BackdropLine (one load less per 4 pixels)
+    const V4 backdrop = VDup(startLine[0]);
     for (int i = 0; i < 256; i += 4)
     {
-        V4 top = VLoad(startLine + i);
+        V4 top = onBackdrop ? backdrop : VLoad(startLine + i);
         V4 sec = VZero();
         for (int k = 0; k < N; k++)
         {
@@ -2130,13 +2132,14 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
     }
 
     const CompStep* s = steps + start;
+    const bool onBackdrop = Banana2DFast && startLine == BackdropLine;   // (BackdropLine is all one colour)
     bool has3d = false;
     for (int k = start; k < n; k++) has3d |= steps[k].raw3d;
     switch (n - start)
     {
 #define BANANA_COMP(N) case N: \
-        if (has3d) { if (needSecond) CompositeN<N, true, true>(s, startLine, outTop, outSecond); else CompositeN<N, false, true>(s, startLine, outTop, outSecond); } \
-        else       { if (needSecond) CompositeN<N, true, false>(s, startLine, outTop, outSecond); else CompositeN<N, false, false>(s, startLine, outTop, outSecond); } \
+        if (has3d) { if (needSecond) CompositeN<N, true, true>(s, startLine, onBackdrop, outTop, outSecond); else CompositeN<N, false, true>(s, startLine, onBackdrop, outTop, outSecond); } \
+        else       { if (needSecond) CompositeN<N, true, false>(s, startLine, onBackdrop, outTop, outSecond); else CompositeN<N, false, false>(s, startLine, onBackdrop, outTop, outSecond); } \
         break;
     BANANA_COMP(0) BANANA_COMP(1) BANANA_COMP(2) BANANA_COMP(3)
     BANANA_COMP(4) BANANA_COMP(5) BANANA_COMP(6) BANANA_COMP(7) BANANA_COMP(8)   // at most 4 BGs + 4 OBJ steps
