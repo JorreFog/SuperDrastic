@@ -1,4 +1,4 @@
-From d1418bc5b462bd605cca99904a3cc702d31fdb1a Mon Sep 17 00:00:00 2001
+From 418e35bd022a93311916a78a0b018a212eadf2aa Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 17:43:24 +0000
 Subject: [PATCH] NDS: the scheduler slice as a setting, with an adaptive mode
@@ -10,12 +10,12 @@ is melonDS's fixed slice. The hooks sit on the IPC case labels of the IO
 handlers, so other IO costs nothing; NextTarget gains one load and
 compare. SliceIPCAccesses and SliceNearIPCCycles count, for statistics.
 ---
- src/NDS.cpp | 73 +++++++++++++++++++++++++++++++++--------------------
- src/NDS.h   | 24 ++++++++++++++++++
- 2 files changed, 70 insertions(+), 27 deletions(-)
+ src/NDS.cpp | 74 ++++++++++++++++++++++++++++++++++-------------------
+ src/NDS.h   | 24 +++++++++++++++++
+ 2 files changed, 71 insertions(+), 27 deletions(-)
 
 diff --git a/src/NDS.cpp b/src/NDS.cpp
-index c6dc85f..0408504 100644
+index c6dc85f..60de04b 100644
 --- a/src/NDS.cpp
 +++ b/src/NDS.cpp
 @@ -49,7 +49,8 @@ namespace melonDS
@@ -51,15 +51,16 @@ index c6dc85f..0408504 100644
  u64 NDS::NextTarget()
  {
      u64 minEvent = UINT64_MAX;
-@@ -830,7 +840,16 @@ u64 NDS::NextTarget()
+@@ -830,7 +840,17 @@ u64 NDS::NextTarget()
          mask >>= 1;
      }
  
 -    u64 max = SysTimestamp + kMaxIterationCycles;
 +    // The adaptive slice (SetSlice): long slices only while neither CPU has touched the IPC registers or WRAMCNT
-+    // for SliceHold cycles. Scheduled events (timers, DMA, the GPU, IRQs from them) still end a slice exactly,
-+    // as nothing below changes the minEvent path; what a longer slice coarsens is only how the two CPUs'
-+    // instruction streams interleave. The CPUs talk through the IPC registers, which the hooks see, and through
++    // for SliceHold cycles. Events already scheduled (timers, DMA, video, the IRQs they raise) still end a slice
++    // on time (the minEvent path), and so do the ARM9's new ones (Reschedule); what a longer slice coarsens is how
++    // the two CPUs' instruction streams interleave, and events the ARM7 schedules inside a slice, which run at its
++    // end, as at 64, but up to a slice late. The CPUs talk through the IPC registers, which the hooks see, and through
 +    // main RAM, which they can't (fast memory): a handshake polled purely in main RAM (spinlocks, flags) still
 +    // sees the other CPU's writes up to one idle slice late, and so does the first IPC access after a quiet
 +    // period (the slice it lands in is already long). Shared WRAM is never visible to both CPUs at once
@@ -69,7 +70,7 @@ index c6dc85f..0408504 100644
  
      if (minEvent < max + kIterationCycleMargin)
          return minEvent;
-@@ -2832,8 +2851,8 @@ u8 NDS::ARM9IORead8(u32 addr)
+@@ -2832,8 +2852,8 @@ u8 NDS::ARM9IORead8(u32 addr)
      case 0x04000132: return KeyCnt[0] & 0xFF;
      case 0x04000133: return KeyCnt[0] >> 8;
  
@@ -80,7 +81,7 @@ index c6dc85f..0408504 100644
  
      case 0x040001A0: return NDSCartSlots[0]->ReadSPICnt(0) & 0xFF;
      case 0x040001A1: return NDSCartSlots[0]->ReadSPICnt(0) >> 8;
-@@ -2943,8 +2962,8 @@ u16 NDS::ARM9IORead16(u32 addr)
+@@ -2943,8 +2963,8 @@ u16 NDS::ARM9IORead16(u32 addr)
      case 0x04000130: LagFrameFlag = false; return KeyInput & 0xFFFF;
      case 0x04000132: return KeyCnt[0];
  
@@ -91,7 +92,7 @@ index c6dc85f..0408504 100644
          {
              u16 val = IPCFIFOCnt9;
              if (IPCFIFO9.IsEmpty())     val |= 0x0001;
-@@ -3064,7 +3083,7 @@ u32 NDS::ARM9IORead32(u32 addr)
+@@ -3064,7 +3084,7 @@ u32 NDS::ARM9IORead32(u32 addr)
  
      case 0x04000130: LagFrameFlag = false; return (KeyInput & 0xFFFF) | (KeyCnt[0] << 16);
  
@@ -100,7 +101,7 @@ index c6dc85f..0408504 100644
      case 0x04000184: return NDS::ARM9IORead16(addr);
  
      case 0x040001A0: return NDSCartSlots[0]->ReadSPICnt(0) | (NDSCartSlots[0]->ReadSPIData(0) << 16);
-@@ -3096,7 +3115,7 @@ u32 NDS::ARM9IORead32(u32 addr)
+@@ -3096,7 +3116,7 @@ u32 NDS::ARM9IORead32(u32 addr)
      case 0x04000300: return PostFlag9;
      case 0x04000304: return PowerControl9;
  
@@ -109,7 +110,7 @@ index c6dc85f..0408504 100644
          if (IPCFIFOCnt9 & 0x8000)
          {
              u32 ret;
-@@ -3181,7 +3200,7 @@ void NDS::ARM9IOWrite8(u32 addr, u8 val)
+@@ -3181,7 +3201,7 @@ void NDS::ARM9IOWrite8(u32 addr, u8 val)
          KeyCnt[0] = (KeyCnt[0] & 0x00FF) | (val << 8);
          return;
  
@@ -118,7 +119,7 @@ index c6dc85f..0408504 100644
          IPCSync7 &= 0xFFF0;
          IPCSync7 |= (val & 0x0F);
          IPCSync9 &= 0xB0FF;
-@@ -3237,7 +3256,7 @@ void NDS::ARM9IOWrite8(u32 addr, u8 val)
+@@ -3237,7 +3257,7 @@ void NDS::ARM9IOWrite8(u32 addr, u8 val)
      case 0x04000244: GPU.MapVRAM_E(4, val); return;
      case 0x04000245: GPU.MapVRAM_FG(5, val); return;
      case 0x04000246: GPU.MapVRAM_FG(6, val); return;
@@ -127,7 +128,7 @@ index c6dc85f..0408504 100644
      case 0x04000248: GPU.MapVRAM_H(7, val); return;
      case 0x04000249: GPU.MapVRAM_I(8, val); return;
  
-@@ -3315,7 +3334,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+@@ -3315,7 +3335,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
          KeyCnt[0] = val;
          return;
  
@@ -136,7 +137,7 @@ index c6dc85f..0408504 100644
          IPCSync7 &= 0xFFF0;
          IPCSync7 |= ((val & 0x0F00) >> 8);
          IPCSync9 &= 0xB0FF;
-@@ -3326,7 +3345,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+@@ -3326,7 +3346,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
          }
          return;
  
@@ -145,7 +146,7 @@ index c6dc85f..0408504 100644
          if (val & 0x0008)
              IPCFIFO9.Clear();
          if ((val & 0x0004) && (!(IPCFIFOCnt9 & 0x0004)) && IPCFIFO9.IsEmpty())
-@@ -3338,7 +3357,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+@@ -3338,7 +3358,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
          IPCFIFOCnt9 = (val & 0x8404) | (IPCFIFOCnt9 & 0x4000);
          return;
  
@@ -154,7 +155,7 @@ index c6dc85f..0408504 100644
          NDS::ARM9IOWrite32(addr, val | (val << 16));
          return;
  
-@@ -3403,7 +3422,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
+@@ -3403,7 +3423,7 @@ void NDS::ARM9IOWrite16(u32 addr, u16 val)
          GPU.MapVRAM_E(4, val & 0xFF);
          GPU.MapVRAM_FG(5, val >> 8);
          return;
@@ -163,7 +164,7 @@ index c6dc85f..0408504 100644
          GPU.MapVRAM_FG(6, val & 0xFF);
          MapSharedWRAM(val >> 8);
          return;
-@@ -3504,7 +3523,7 @@ void NDS::ARM9IOWrite32(u32 addr, u32 val)
+@@ -3504,7 +3524,7 @@ void NDS::ARM9IOWrite32(u32 addr, u32 val)
      case 0x04000184:
          NDS::ARM9IOWrite16(addr, val);
          return;
@@ -172,7 +173,7 @@ index c6dc85f..0408504 100644
          if (IPCFIFOCnt9 & 0x8000)
          {
              if (IPCFIFO9.IsFull())
-@@ -3557,7 +3576,7 @@ void NDS::ARM9IOWrite32(u32 addr, u32 val)
+@@ -3557,7 +3577,7 @@ void NDS::ARM9IOWrite32(u32 addr, u32 val)
          GPU.MapVRAM_CD(2, (val >> 16) & 0xFF);
          GPU.MapVRAM_CD(3, val >> 24);
          return;
@@ -181,7 +182,7 @@ index c6dc85f..0408504 100644
          GPU.MapVRAM_E(4, val & 0xFF);
          GPU.MapVRAM_FG(5, (val >> 8) & 0xFF);
          GPU.MapVRAM_FG(6, (val >> 16) & 0xFF);
-@@ -3656,8 +3675,8 @@ u8 NDS::ARM7IORead8(u32 addr)
+@@ -3656,8 +3676,8 @@ u8 NDS::ARM7IORead8(u32 addr)
  
      case 0x04000138: return RTC.Read() & 0xFF;
  
@@ -192,7 +193,7 @@ index c6dc85f..0408504 100644
  
      case 0x040001A0: return NDSCartSlots[0]->ReadSPICnt(1) & 0xFF;
      case 0x040001A1: return NDSCartSlots[0]->ReadSPICnt(1) >> 8;
-@@ -3720,8 +3739,8 @@ u16 NDS::ARM7IORead16(u32 addr)
+@@ -3720,8 +3740,8 @@ u16 NDS::ARM7IORead16(u32 addr)
  
      case 0x04000138: return RTC.Read();
  
@@ -203,7 +204,7 @@ index c6dc85f..0408504 100644
          {
              u16 val = IPCFIFOCnt7;
              if (IPCFIFO7.IsEmpty())     val |= 0x0001;
-@@ -3791,7 +3810,7 @@ u32 NDS::ARM7IORead32(u32 addr)
+@@ -3791,7 +3811,7 @@ u32 NDS::ARM7IORead32(u32 addr)
      case 0x04000134: return RCnt | (KeyInput & 0xFFFF0000);
      case 0x04000138: return RTC.Read();
  
@@ -212,7 +213,7 @@ index c6dc85f..0408504 100644
      case 0x04000184: return NDS::ARM7IORead16(addr);
  
      case 0x040001A0: return NDSCartSlots[0]->ReadSPICnt(1) | (NDSCartSlots[0]->ReadSPIData(1) << 16);
-@@ -3807,7 +3826,7 @@ u32 NDS::ARM7IORead32(u32 addr)
+@@ -3807,7 +3827,7 @@ u32 NDS::ARM7IORead32(u32 addr)
      case 0x04000304: return PowerControl7;
      case 0x04000308: return ARM7BIOSProt;
  
@@ -221,7 +222,7 @@ index c6dc85f..0408504 100644
          if (IPCFIFOCnt7 & 0x8000)
          {
              u32 ret;
-@@ -3866,7 +3885,7 @@ void NDS::ARM7IOWrite8(u32 addr, u8 val)
+@@ -3866,7 +3886,7 @@ void NDS::ARM7IOWrite8(u32 addr, u8 val)
  
      case 0x04000138: RTC.Write(val, true); return;
  
@@ -230,7 +231,7 @@ index c6dc85f..0408504 100644
          IPCSync9 &= 0xFFF0;
          IPCSync9 |= (val & 0x0F);
          IPCSync7 &= 0xB0FF;
-@@ -3973,7 +3992,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
+@@ -3973,7 +3993,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
  
      case 0x04000138: RTC.Write(val, false); return;
  
@@ -239,7 +240,7 @@ index c6dc85f..0408504 100644
          IPCSync9 &= 0xFFF0;
          IPCSync9 |= ((val & 0x0F00) >> 8);
          IPCSync7 &= 0xB0FF;
-@@ -3984,7 +4003,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
+@@ -3984,7 +4004,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
          }
          return;
  
@@ -248,7 +249,7 @@ index c6dc85f..0408504 100644
          if (val & 0x0008)
              IPCFIFO7.Clear();
          if ((val & 0x0004) && (!(IPCFIFOCnt7 & 0x0004)) && IPCFIFO7.IsEmpty())
-@@ -3996,7 +4015,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
+@@ -3996,7 +4016,7 @@ void NDS::ARM7IOWrite16(u32 addr, u16 val)
          IPCFIFOCnt7 = (val & 0x8404) | (IPCFIFOCnt7 & 0x4000);
          return;
  
@@ -257,7 +258,7 @@ index c6dc85f..0408504 100644
          NDS::ARM7IOWrite32(addr, val | (val << 16));
          return;
  
-@@ -4138,7 +4157,7 @@ void NDS::ARM7IOWrite32(u32 addr, u32 val)
+@@ -4138,7 +4158,7 @@ void NDS::ARM7IOWrite32(u32 addr, u32 val)
      case 0x04000184:
          NDS::ARM7IOWrite16(addr, val);
          return;
