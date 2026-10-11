@@ -287,6 +287,43 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   0.59 -> 0.50 M. `ut/hr_ab` against 4f63ae7 (fog 2000, resolve + downsample 400, walker 10000 cases: the same),
   `t_resolve.c`, S4's frame diff 0 bins in 4800 with the compositor's checks 0 differ, the scene cycle's differing bins as DraStic's renderer's at every checkpoint reached (to 19200 bins
   in 330 s on a loaded host), the compositor's checks 0 differ.
+  Fifth round, overdraw (`defer.c`, the deferred kernels). Measured first, per bin (a C NEON build's RAST_STATS): the
+  stress ROM writes 1.5 opaque pixels per covered one (1.25-1.75 in every bin), the field scene S7 1.0 everywhere, the
+  fog and edge-marking scene S4 1.15 (1.0 in 75% of its bins, up to 2.25 in its heaviest); polygons whose depth test
+  fails a whole group are already cheap in the one-pass kernels (the lazy loop: ~4% of 02000's groups on the stress
+  ROM), so an exact coarse depth rejection has little left to skip. Deferred shading, modeled (all bins deferred, the
+  stress ROM at 2x), cost 14.61 M cycles a frame of librast against 13.95 M in one pass: its visibility kernel v00 2.37 M
+  (five blocks a group, ~36 cycles a full group and ~20 more for the 20% partial ones) and the shade kernels slower a
+  group than the one-pass ones (s200 143 kpath cycles against 02000's 122: none of the third round's registers). Now
+  the untextured visibility kernels with z or constant depth (v00 v20, `kerngen.py`'s vis_group()) take a group in one
+  block with no branch but the loop's: the test's mask merges the attribute words and the polygon's index into the
+  loaded ones with bit and both are stored for every group (29 modeled cycles a group, every group; v00 2.37 -> 2.02 M
+  a frame); the lit direct-textured and lit paletted shade kernels keep the vertex colour in registers as the one-pass
+  ones do (`roles()`'s vc and vs, the index, fog bit and A in the depth's v6-v9): kpath s200 143 -> 113, s100 160 ->
+  131, s400 153 -> 123, s300 170 -> 144 (s200 3.27 -> 2.72 M a frame); the owner buffer is no longer cleared after
+  every flush (32 KiB a bin at 2x: the indices run on between flushes, and it is cleared when they would reach
+  0xffff), and the queue copies only the polygon's lines of the span arrays the shade pass reads (in defer_poly
+  itself, 16 bytes a step, instead of libc's memcpy of the whole block: defer_poly 0.05 -> 0.21 M a frame on the
+  stress ROM with bilinear filtering, the memcpy's cost gone from outside librast; a wash). The stress ROM all
+  deferred, same-session profiles (the opaque kernels, f_run and the queue, M cycles a frame): 2x 7.70 in one pass,
+  7.58 deferred (break-even at overdraw 1.5: the shade pass saves what the visibility pass and the second setup
+  cost); 3x 15.35 -> 14.71 (a line holds 1.5 times the groups to share its setup). A per-bin choice
+  (`defer_bin()`, `RAST_DEFER=2`, both scales: a bin is deferred when its opaque span pixels of the frame before, which
+  f_run() counts, are above twice its pixels) takes S4's heaviest bins (overdraw 1.5-2.25 at 2x) and leaves the stress
+  ROM's (depth complexity 1.5-2.0, 2x 7.77, 3x 15.20) and S7's (none of its bins deferred, 1.42 M)
+  in one pass; but on S4 it loses: 2x 4.76 -> 4.88 M, 3x 9.98 -> 10.21 M (with a threshold of 1.5
+  more): the depth complexity does not tell polygons drawn back to front from front to back, and S4's flat paletted
+  kernels save little a group (kpath 133 in one pass, 122 shaded). So with nearest filtering the default stays one
+  pass, the per-bin choice an option (Next: the overdraw itself as its measure); bilinear filtering (deferred by
+  default) takes the cheaper visibility pass: the stress ROM 2x, the opaque kernels, f_run and the queue 14.63 ->
+  14.42 M a frame (v00 2.37 -> 2.03). Exact: `ut/kern_ab` against 4f63ae7 (the deferred kernels of both sets: 0 of
+  85000 batches differ, seeds 7 and 11; 0 of 51000, seed 13), the scene cycle with `RAST_DEFER=2` and the
+  compositor's check: DraStic's renderer's differing bins at all 41 checkpoints to 98400 bins, 0 differ in the
+  check; with `RAST_DEFER=1` (every opaque polygon deferred) at every checkpoint to 43200 bins (a loaded host); 3x
+  has no DraStic reference: `RAST_DCHECK=1` (new, hr.c) renders every bin's opaque list both ways from the same
+  context and compares colours, attribute words, ids and the fog flag (with `RAST_DEFER=2`: stress ROM 1200 bins,
+  S4 1200, S7 6000: 0 differ), `ut/hr_ab` against 4f63ae7 PASS, the 3x runs of S7, S4, S2 and the stress ROM with
+  `RAST_DEFER=2` (0 signals).
 - Not yet measured on a handheld.
 
 ## Options beyond DraStic's rendering
@@ -304,9 +341,11 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
   only where they still own the pixel: a pixel is shaded once however many polygons covered it. Same bits as the
   one-pass render (checked with `RAST=diff` on the stress ROM and the scenes). Toon, highlight and shadow polygons
   flush the queue and render at once. It pays only when shading is expensive relative to the per-line setup, which
-  runs twice: with nearest filtering it is slower (stress ROM, overdraw 1.5: +2.5%; field scene, overdraw 1.0:
+  runs twice: with nearest filtering it was slower (stress ROM, overdraw 1.5: +2.5%; field scene, overdraw 1.0:
   +28%), with bilinear filtering faster on the stress ROM (20.9 against 22.6 M) and still +10% on the field scene.
-  So it is on by default with bilinear filtering and off otherwise (`RAST_DEFER=0/1` overrides).
+  After the fifth round (Status) the stress ROM gains 1.5% of the opaque work at 2x and 4% at 3x. It is on
+  with bilinear filtering and off otherwise; `RAST_DEFER=0/1` overrides, `RAST_DEFER=2` chooses per bin
+  (`defer_bin()`: the bins whose opaque polygons of the frame before rasterized more than twice their pixels).
 
 - **3x internal resolution** (`DSFLIP_RAST_SCALE` / `RAST_SCALE=3`, `src/rast/hr.c`). The scene is rendered at
   768x576 and supersampled into DraStic's 2x frame: every bin at 48 lines x 768 (plus a neighbour line above and
@@ -521,8 +560,12 @@ cycle), with the state the block before leaves; `KERNSCHED=0 python3 kerngen.py`
   M with the depth screen). The 2x edge screen's skipped step (61 modeled cycles: 16 ldr q, 12 uzp2, two ext, the xors) is
   near the issue limit; the next saving there is fewer loads: a bin's top-byte planes made once, as hr.c's
   edge_tplanes does at 3x (each line is read by three steps).
-- The deferred shade pass without re-setup (keep the visibility pass's kernel arguments in the queue entry) and
-  the per-line overhead of the visibility pass; 64-bit texel-pair loads in the bilinear gathers.
+- Deferred shading (fifth round, Status): a better per-bin predictor than the depth complexity, which cannot tell
+  polygons drawn back to front (overdraw) from front to back (cheap one-pass failures): the overdraw itself (written
+  and owned pixels: the visibility and shade kernels would return counts instead of their any-pass flags). The shade
+  pass without f_run's re-setup (keep the kernel arguments and the batches in the queue entry; f_run 0.64 -> 0.94 M a
+  frame with every polygon deferred) and the visibility pass's per-line z setup (26 cycles a line, 0.27 M); w-depth and
+  textured visibility kernels in vis_group()'s form; 64-bit texel-pair loads in the bilinear gathers.
 - The composite's row-level shortcut: when both quarters of an output row are fused (comp.c's all-3D pass, 0.15 M on
   S7; its ld4 form models better than ldr q + uzp), convert the 3D frame straight into the output row (ld4, shl,
   zip, st4: ~30 modeled cycles per 32 pixels against the conversion's 23 plus the planes' ~24, ~0.2 M a frame on

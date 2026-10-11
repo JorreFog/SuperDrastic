@@ -42,7 +42,11 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
           unsigned nlines, unsigned flags, uint8_t *v0, int dmode, unsigned idx);
 void f_begin_frame(void);       /* per render thread, per frame: forgets the texture classifications */
 /* defer.c */
-extern int rast_defer, rast_texfilter;
+extern int rast_defer, rast_texfilter, defer_auto;
+extern __thread unsigned long defer_px;     /* the opaque polygons' span pixels (f_run; defer_bin's per-bin choice) */
+int defer_bin(unsigned bin, unsigned px);   /* deferred shading for this bin (rast_defer; with defer_auto: the frame before's
+                                             * opaque pixels in it above px) */
+void defer_measure_reset(void);             /* hr.c's RAST_DCHECK: forgets the measures of the reference render */
 uint16_t *defer_owner(void);
 void defer_poly(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0,
                 unsigned nlines, unsigned flags, uint8_t *v0);
