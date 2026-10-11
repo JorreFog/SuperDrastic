@@ -1,6 +1,6 @@
-From 5f16f14a3b55e0a0310860e76b8628fe7b418138 Mon Sep 17 00:00:00 2001
+From e44420b4db44c9e75b80dd8fe6e3d7184d130e93 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
-Date: Sun, 11 Oct 2026 21:05:52 +0000
+Date: Sun, 11 Oct 2026 21:10:13 +0000
 Subject: [PATCH] ARMJIT_A64: fewer host instructions per block and per exit
 
 Each change is on by default and exact (same cycles, memory and pictures). MELONDS_JIT_OLDCODEGEN=1
@@ -56,7 +56,7 @@ turns off one. All are read once, when the compiler is created.
   guest registers leave free holds the Timestamp's address.
 - DYNADDR (needs EXITSTUB): the JumpTo functions also leave the next block's address in w4, and an
   unconditional register jump's exit looks the block up from it (DynExitA) instead of from R15 and
-  the T bit.
+  the T bit (w4 has bit 0 set for Thumb: DYNCACHE's key).
 - DYNCACHE (needs DYNADDR): such an exit keeps the key (address | T) of the block it last learnt in
   a word after a link slot: the same key goes through ExitCheck and the slot, linked to that block
   (UnlinkBlock unlinks it as any other); another key goes to DynExitA; the first time, ExitCheck and
