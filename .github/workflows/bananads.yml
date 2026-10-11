@@ -113,6 +113,19 @@ jobs:
               python3 bananads/tools/check_results.py $tests dump.txt
             done
           done
+      - name: The handheld test kit (docs/DEVICE-TEST.md)
+        run: |
+          # arm64 SDL2/ALSA for the kit's window frontend; without them package-device.sh builds headless-only
+          sudo dpkg --add-architecture arm64 || true
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources || true
+          printf 'Types: deb\nURIs: http://ports.ubuntu.com/ubuntu-ports\nSuites: noble noble-updates\nComponents: main universe\nArchitectures: arm64\n' \
+            | sudo tee /etc/apt/sources.list.d/arm64-ports.sources > /dev/null
+          (sudo apt-get update -qq && sudo apt-get install -y -qq libsdl2-dev:arm64 libasound2-dev:arm64) || true
+          mkdir -p kit && sh bananads/tools/package-device.sh kit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bananads-device
+          path: kit/bananads-device-*.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: bananads-aarch64

@@ -16,6 +16,10 @@ the same as ROCKNIXDS's `docs/handoff-local.md`). Everything else can be done an
 
 ## B. How fast is it? (the first device check)
 
+**The kit for this is ready:** `docs/DEVICE-TEST.md`. `device-test.sh` runs everything below, plus a
+correctness pass on real hardware, and writes the report. The commands below are what it automates.
+
+
 DraStic at 2x is the bar: 60 fps in real games on the RG DS. melonDS renders 3D at 1x in software and runs the
 CPUs through its JIT.
 
