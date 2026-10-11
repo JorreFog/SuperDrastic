@@ -207,7 +207,8 @@ bool Emu::load_rom(const std::string& path) {
 
     // jit.iofast=on|off sets MELONDS_IOFAST (melonDS patch 0005: the JIT slow paths' direct routes for main RAM,
     // the GX FIFO and IE/IF/IME/DISPSTAT/VCOUNT/KEYINPUT), which the NDS reads as it's created; unset, the
-    // environment decides (default on). For A/B runs, bananads-difftest --a jit.iofast=on --b jit.iofast=off.
+    // environment decides (default on; MELONDS_IOFAST_ROUTES=mask picks routes). For A/B runs, bananads-difftest
+    // --a jit.iofast=on --b jit.iofast=off.
     {
         const std::string iofast = cfg_.str("jit.iofast", "");
         if (iofast == "on") setenv("MELONDS_IOFAST", "1", 1);

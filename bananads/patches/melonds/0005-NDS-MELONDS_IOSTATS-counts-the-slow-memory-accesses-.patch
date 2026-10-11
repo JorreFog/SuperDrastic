@@ -1,4 +1,4 @@
-From 0e205d9e16f3d0a97e96ef54e19b2ee804e1efd3 Mon Sep 17 00:00:00 2001
+From e92f202660417284267732958d6055d9c7f9eeed Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 18:04:45 +0000
 Subject: [PATCH] NDS: MELONDS_IOSTATS counts the slow memory accesses;
@@ -28,22 +28,23 @@ dispatch:
   (clearing LagFrameFlag as ARM9IORead16 does), IME, IE and IF halves: plain reads of state.
 SlowBlockTransfer9 does the TCM checks and the routes per word, without a call per word. The JIT
 charges a slow access's cycles in the compiled code, from the decoder's DataCycles, so the routes
-change no timing. The default is on; ARMJIT::Reset re-reads the variable, so a front-end can set it
-per console.
+change no timing. The default is on. MELONDS_IOFAST_ROUTES=mask keeps only some of them, for A/B runs
+of one route at a time: 1 main RAM, 2 VRAM, 4 the GX ports, 8 the IO register reads (default 0xF).
+ARMJIT::Reset re-reads both variables, so a front-end can set them per console.
 ---
- src/ARMJIT.cpp        | 183 ++++++++++++++++++++++++++++++++++++++++--
+ src/ARMJIT.cpp        | 187 ++++++++++++++++++++++++++++++++++++++++--
  src/ARMJIT_Memory.cpp |   6 ++
  src/CMakeLists.txt    |   1 +
  src/NDS.cpp           |  24 ++++++
  src/NDS.h             |   1 +
- src/NDS_IOFast.cpp    | 166 ++++++++++++++++++++++++++++++++++++++
- src/NDS_IOFast.h      |  68 ++++++++++++++++
- 7 files changed, 441 insertions(+), 8 deletions(-)
+ src/NDS_IOFast.cpp    | 171 ++++++++++++++++++++++++++++++++++++++
+ src/NDS_IOFast.h      |  78 ++++++++++++++++++
+ 7 files changed, 460 insertions(+), 8 deletions(-)
  create mode 100644 src/NDS_IOFast.cpp
  create mode 100644 src/NDS_IOFast.h
 
 diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
-index 421b75a..d0e3a27 100644
+index 421b75a..9d96779 100644
 --- a/src/ARMJIT.cpp
 +++ b/src/ARMJIT.cpp
 @@ -18,6 +18,7 @@
@@ -54,7 +55,7 @@ index 421b75a..d0e3a27 100644
  #include <string.h>
  #include <assert.h>
  #include <unordered_map>
-@@ -92,8 +93,100 @@ u32 ARMJIT::LocaliseCodeAddress(u32 num, u32 addr) const noexcept
+@@ -92,8 +93,104 @@ u32 ARMJIT::LocaliseCodeAddress(u32 num, u32 addr) const noexcept
      return 0;
  }
  
@@ -66,12 +67,13 @@ index 421b75a..d0e3a27 100644
 +template <typename T>
 +static inline bool IOFastRead9(melonDS::NDS& nds, u32 addr, T& val)
 +{
-+    if ((addr >> 24) == 0x02)
++    const u32 routes = IOFastRoutes;
++    if ((routes & iofast_MainRAM) && (addr >> 24) == 0x02)
 +    {
 +        val = *(T*)&nds.MainRAM[addr & nds.MainRAMMask];
 +        return true;
 +    }
-+    if (sizeof(T) >= 2 && (addr >> 24) == 0x06)
++    if (sizeof(T) >= 2 && (routes & iofast_VRAM) && (addr >> 24) == 0x06)
 +    {
 +        melonDS::GPU& gpu = nds.GPU;
 +        switch (addr & 0x00E00000)
@@ -83,6 +85,8 @@ index 421b75a..d0e3a27 100644
 +        default:         gpu.SyncVRAM_LCDC(addr, false); val = gpu.ReadVRAM_LCDC<T>(addr); return true;
 +        }
 +    }
++    if (!(routes & iofast_IORead))
++        return false;
 +    if (sizeof(T) == 4)
 +    {
 +        switch (addr)
@@ -113,13 +117,14 @@ index 421b75a..d0e3a27 100644
 +template <typename T>
 +static inline bool IOFastWrite9(melonDS::NDS& nds, u32 addr, u32 val)
 +{
-+    if ((addr >> 24) == 0x02)
++    const u32 routes = IOFastRoutes;
++    if ((routes & iofast_MainRAM) && (addr >> 24) == 0x02)
 +    {
 +        nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(addr);
 +        *(T*)&nds.MainRAM[addr & nds.MainRAMMask] = val;
 +        return true;
 +    }
-+    if (sizeof(T) >= 2 && (addr >> 24) == 0x06)
++    if (sizeof(T) >= 2 && (routes & iofast_VRAM) && (addr >> 24) == 0x06)
 +    {
 +        nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_VRAM>(addr);
 +        melonDS::GPU& gpu = nds.GPU;
@@ -135,7 +140,7 @@ index 421b75a..d0e3a27 100644
 +    // the geometry engine's FIFO (0x04000400-43F) and command ports (0x04000440-5FF): ARM9IOWrite32 hands
 +    // these to GPU3D::Write32, which drops them while the geometry engine is off and gives the FIFO port to
 +    // WriteToGXFIFO
-+    if (sizeof(T) == 4 && addr - 0x04000400 < 0x200)
++    if (sizeof(T) == 4 && (routes & iofast_GX) && addr - 0x04000400 < 0x200)
 +    {
 +        GPU3D& gpu3d = nds.GPU.GPU3D;
 +        if (addr < 0x04000440)
@@ -156,7 +161,7 @@ index 421b75a..d0e3a27 100644
  {
      u32 offset = addr & 0x3;
      addr &= ~(sizeof(T) - 1);
-@@ -103,6 +196,8 @@ T SlowRead9(u32 addr, ARMv5* cpu)
+@@ -103,6 +200,8 @@ T SlowRead9(u32 addr, ARMv5* cpu)
          val = *(T*)&cpu->ITCM[addr & 0x7FFF];
      else if ((addr & cpu->DTCMMask) == cpu->DTCMBase)
          val = *(T*)&cpu->DTCM[addr & 0x3FFF];
@@ -165,7 +170,7 @@ index 421b75a..d0e3a27 100644
      else if (std::is_same<T, u32>::value)
          val = NDS::Current->ARM9Read32(addr);
      else if (std::is_same<T, u16>::value)
-@@ -117,7 +212,14 @@ T SlowRead9(u32 addr, ARMv5* cpu)
+@@ -117,7 +216,14 @@ T SlowRead9(u32 addr, ARMv5* cpu)
  }
  
  template <typename T, int ConsoleType>
@@ -181,7 +186,7 @@ index 421b75a..d0e3a27 100644
  {
      u32 offset = addr & 0x3;
      addr &= ~(sizeof(T) - 1);
-@@ -137,7 +239,14 @@ T SlowRead7(u32 addr)
+@@ -137,7 +243,14 @@ T SlowRead7(u32 addr)
  }
  
  template <typename T, int ConsoleType>
@@ -197,7 +202,7 @@ index 421b75a..d0e3a27 100644
  {
      addr &= ~(sizeof(T) - 1);
  
-@@ -150,6 +259,9 @@ void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
+@@ -150,6 +263,9 @@ void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
      {
          *(T*)&cpu->DTCM[addr & 0x3FFF] = val;
      }
@@ -207,7 +212,7 @@ index 421b75a..d0e3a27 100644
      else if (std::is_same<T, u32>::value)
      {
          NDS::Current->ARM9Write32(addr, val);
-@@ -165,7 +277,14 @@ void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
+@@ -165,7 +281,14 @@ void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
  }
  
  template <typename T, int ConsoleType>
@@ -223,7 +228,7 @@ index 421b75a..d0e3a27 100644
  {
      addr &= ~(sizeof(T) - 1);
  
-@@ -177,16 +296,62 @@ void SlowWrite7(u32 addr, u32 val)
+@@ -177,16 +300,62 @@ void SlowWrite7(u32 addr, u32 val)
          NDS::Current->ARM7Write8(addr, val);
  }
  
@@ -288,7 +293,7 @@ index 421b75a..d0e3a27 100644
          addr += 4;
      }
  }
-@@ -195,12 +360,13 @@ template <bool Write, int ConsoleType>
+@@ -195,12 +364,13 @@ template <bool Write, int ConsoleType>
  void SlowBlockTransfer7(u32 addr, u64* data, u32 num)
  {
      addr &= ~0x3;
@@ -304,7 +309,7 @@ index 421b75a..d0e3a27 100644
          addr += 4;
      }
  }
-@@ -238,6 +404,7 @@ ARMJIT::~ARMJIT() noexcept
+@@ -238,6 +408,7 @@ ARMJIT::~ARMJIT() noexcept
  
  void ARMJIT::Reset() noexcept
  {
@@ -492,10 +497,10 @@ index 729706b..9441cec 100644
  #include "DMA.h"
 diff --git a/src/NDS_IOFast.cpp b/src/NDS_IOFast.cpp
 new file mode 100644
-index 0000000..ac73d45
+index 0000000..2787c88
 --- /dev/null
 +++ b/src/NDS_IOFast.cpp
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,171 @@
 +/*
 +    Copyright 2016-2026 melonDS team
 +
@@ -536,17 +541,22 @@ index 0000000..ac73d45
 +}
 +
 +bool IOStatsOn = (IOStatsFrom = ReadIOStatsEnv()) != 0;
-+static bool ReadIOFastEnv()
++static u32 ReadIOFastEnv()
 +{
 +    const char* e = getenv("MELONDS_IOFAST");
-+    return !(e && e[0] == '0');
++    if (e && e[0] == '0')
++        return 0;
++    const char* r = getenv("MELONDS_IOFAST_ROUTES");
++    return r ? (u32)strtoul(r, nullptr, 0) & 0xF : 0xF;
 +}
 +
-+bool IOFastOn = ReadIOFastEnv();
++u32 IOFastRoutes = ReadIOFastEnv();
++bool IOFastOn = IOFastRoutes != 0;
 +
 +void IOFastInit() noexcept
 +{
-+    IOFastOn = ReadIOFastEnv();
++    IOFastRoutes = ReadIOFastEnv();
++    IOFastOn = IOFastRoutes != 0;
 +}
 +
 +namespace
@@ -664,10 +674,10 @@ index 0000000..ac73d45
 +}
 diff --git a/src/NDS_IOFast.h b/src/NDS_IOFast.h
 new file mode 100644
-index 0000000..7155c33
+index 0000000..3de27cb
 --- /dev/null
 +++ b/src/NDS_IOFast.h
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,78 @@
 +/*
 +    Copyright 2016-2026 melonDS team
 +
@@ -693,7 +703,7 @@ index 0000000..7155c33
 +// IO register access (NDS::ARM9IO* / ARM7IO*, whoever makes it: JIT, interpreter or DMA), and prints the top
 +// entries to stderr at exit. Off, each counting site costs one predicted-not-taken branch.
 +//
-+// MELONDS_IOFAST=0 turns off the direct routes the JIT's slow paths take for the hottest addresses (ARMJIT.cpp,
++// MELONDS_IOFAST=0 turns off the direct routes (MELONDS_IOFAST_ROUTES=mask keeps only some, iofast_* below) the JIT's slow paths take for the hottest addresses (ARMJIT.cpp,
 +// ARMJIT_Memory.cpp). Each route does what the NDS::ARM9Read/Write chain does for that address, minus the
 +// dispatch; the JIT charges a slow access's cycles in the compiled code, so no timing changes either way.
 +
@@ -722,12 +732,22 @@ index 0000000..7155c33
 +    iostat_Count
 +};
 +
++// the routes MELONDS_IOFAST_ROUTES picks (a mask, default all), for A/B runs of one route at a time
++enum
++{
++    iofast_MainRAM = 1,     // main RAM reads and writes (LDM/STM, pages holding compiled code)
++    iofast_VRAM = 2,        // VRAM 16- and 32-bit reads and writes
++    iofast_GX = 4,          // the GX FIFO and command ports, 32-bit writes
++    iofast_IORead = 8,      // DISPSTAT/VCOUNT, KEYINPUT, IME/IE/IF reads
++};
++
 +extern bool IOStatsOn;
-+extern bool IOFastOn;
++extern bool IOFastOn;       // MELONDS_IOFAST isn't 0 and the mask isn't empty
++extern u32 IOFastRoutes;
 +
 +// counts one access of `size` bytes (or a block of `words` words) at addr; only called when IOStatsOn
 +void IOStatsCount(int kind, u32 addr, u32 size, u32 words) noexcept;
-+// (re)reads MELONDS_IOFAST; ARMJIT::Reset calls it, so a front-end can set it per console
++// (re)reads MELONDS_IOFAST and MELONDS_IOFAST_ROUTES; ARMJIT::Reset calls it, so a front-end can set it per console
 +void IOFastInit() noexcept;
 +
 +#define MELONDS_IOSTAT(kind, addr, size, words) \
