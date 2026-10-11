@@ -1,8 +1,8 @@
-From e8d7971af7c577dc7846fc817c847b0339bd52a8 Mon Sep 17 00:00:00 2001
+From 151627f84406bd2728c73f7747e5e555568457c9 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 17:59:11 +0000
-Subject: [PATCH] NDS: exact shortcuts for GXFIFO DMA and idle sound channels,
- off by default
+Subject: [PATCH 4/4] NDS: exact shortcuts for GXFIFO DMA and idle sound
+ channels, off by default
 
 FastGXDMA: a DMA word from main RAM to 0x04000400 goes straight to
 GPU3D::Write32, without ARM9Read32, ARM9Write32 and ARM9IOWrite32's
