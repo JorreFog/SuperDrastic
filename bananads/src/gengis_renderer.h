@@ -65,6 +65,15 @@ private:
     std::vector<std::thread> Threads;
 };
 
+// before a savestate: BananaRenderer's 2D thread (render.2d_thread) idle
+// and after one: its copies of VRAM made again (GPU::DoSavestate clears the VRAM flats without dirty bits)
+inline void Drain2D(melonDS::SoftRenderer*) {}
+inline void Resync2D(melonDS::SoftRenderer*) {}
+#ifdef BANANADS_2D
+inline void Drain2D(melonDS::BananaRenderer* r) { r->Drain2D(); }
+inline void Resync2D(melonDS::BananaRenderer* r) { r->Resync2D(); }
+#endif
+
 // a software renderer (melonDS's, or BananaRenderer with the Banana 2D engine) with Gengis as the 3D renderer
 template <class Base>
 class GengisRendererOn : public Base {
@@ -72,8 +81,11 @@ public:
     GengisRendererOn(melonDS::NDS& nds, int threads, bool defer) : Base(nds) {
         this->Rend3D = std::make_unique<GengisRenderer3D>(this->GPU.GPU3D, threads, defer);
     }
-    void PreSavestate() override { this->Rend3D->FinishRendering(); }
-    void PostSavestate() override {}
+    void PreSavestate() override {
+        Drain2D(this);
+        this->Rend3D->FinishRendering();
+    }
+    void PostSavestate() override { Resync2D(this); }
     void SetRenderSettings(melonDS::RendererSettings&) override {}
 };
 using GengisSoftRenderer = GengisRendererOn<melonDS::SoftRenderer>;

@@ -23,11 +23,39 @@
 
 #include <memory>
 
+#include "NonStupidBitfield.h"
+
 #include "GPU2D.h"
 #include "GPU_Soft.h"
 
 namespace melonDS
 {
+
+// The 2D unit's registers one scanline reads, as GPU2D holds them when the line is drawn (same names as GPU2D's).
+// A line is drawn from this copy, so it can be drawn later, on another thread (render.2d_thread).
+struct Banana2DRegs
+{
+    bool Enabled;
+    u8 LayerEnable, OBJEnable, ForcedBlank;
+    u32 DispCnt;
+    u16 BGCnt[4];
+    u16 BGXPos[4], BGYPos[4];
+    s16 BGRotA[2], BGRotC[2];
+    s32 BGXRefInternal[2], BGYRefInternal[2];
+    u8 Win0Coords[4], Win1Coords[4], WinCnt[4];
+    u8 Win0Active, Win1Active;
+    u8 BGMosaicSize[2], OBJMosaicSize[2];
+    u32 BGMosaicLine, OBJMosaicLine;
+    u16 BlendCnt;
+    u8 EVA, EVB, EVY;
+
+    // what Prepare* found changed for this line (the drawing redoes its tables from them)
+    bool PalBG, PalOBJ, PalBGStale;       // convert the BG / OBJ standard palette
+    bool BGExtChanged, OBJExtChanged;     // the extended palettes' VRAM changed
+    bool OAMRebuild;                      // rebuild the sprite table from OAMCopy
+
+    void From(const melonDS::GPU2D& g);
+};
 
 // BananaRenderer2D: a drop-in replacement for melonDS's SoftRenderer2D.
 //
@@ -59,8 +87,50 @@ public:
     void VBlank() override {}
     void VBlankEnd() override {}
 
+    // A scanline in two halves, for drawing it on another thread (BananaRenderer, render.2d_thread):
+    //  * Prepare* run on the emulator's thread at the line's time. They copy the registers into `regs`, do the
+    //    line's side effects on GPU2D (the windows' horizontal state) and GPU (the VRAM flats, the palette and OAM
+    //    dirty flags), and note in `regs` what the drawing must redo.
+    //  * Draw*From draw the line from `regs` and the memory below; on either thread, one at a time, in order.
+    // DrawScanline/DrawSprites are the two back to back.
+    //
+    // The memory the drawing reads is GPU's (VRAM flats, palette; OAM through OAMCopy), or, after UseCopies, this
+    // engine's own copies of it: Prepare* then hand every change (the dirty VRAM blocks, palette halves, OAM) to
+    // `copy`, which BananaRenderer applies on the 2D thread just before it draws that line, so each line sees memory
+    // as it was at its own time while the emulator goes on changing GPU's.
+    void PrepareScanline(Banana2DRegs& regs);
+    void PrepareSprites(Banana2DRegs& regs);
+    void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d);
+    void DrawSpritesFrom(u32 line, const Banana2DRegs& regs);
+
+    typedef void (*CopyFn)(void* ctx, void* dst, const void* src, u32 len);
+    void UseCopies(CopyFn copy, void* ctx);   // copy null: back to GPU's memory
+    void SetCopyFn(CopyFn copy, void* ctx) { CopyTo = copy; CopyCtx = ctx; }  // (after UseCopies)
+    void Resync() { NeedResync = true; }      // copy all of GPU's VRAM flats at the next Prepare*
+
 private:
     SoftRenderer& Parent;
+
+    Banana2DRegs R;             // the registers of the line being drawn
+    const u32* Line3D = nullptr; // the 3D layer's line for it
+    alignas(8) u16 OAMCopy[512]; // this unit's OAM, copied when the sprite table is rebuilt
+
+    // the memory the drawing reads: GPU's, or the copies (UseCopies)
+    u8* BGVRAM; u32 BGVRAMMask;
+    u8* OBJVRAM; u32 OBJVRAMMask;
+    u8* BGExtMem;               // 4 slots of 16 palettes
+    u8* OBJExtMem;              // 16 palettes
+    const u8* PalMem;           // BG palette, then OBJ palette at 0x200
+    std::unique_ptr<u8[]> CopyMem;
+    CopyFn CopyTo = nullptr;
+    void* CopyCtx = nullptr;
+    bool NeedResync = false;
+    bool ExtPalsResynced = false;
+    void PointAtGPU();
+    template<u32 Size> void CopyDirty(const NonStupidBitField<Size>& dirty, u8* copy, const u8* flat);
+    void DoResync();
+    void GetBGVRAM(u8*& data, u32& mask) const { data = BGVRAM; mask = BGVRAMMask; }
+    void GetOBJVRAM(u8*& data, u32& mask) const { data = OBJVRAM; mask = OBJVRAMMask; }
 
     // OBJ line pixel format, the same as melonDS's SoftRenderer2D
     enum : u32
@@ -127,7 +197,7 @@ private:
     u8 LayerFull;       // bit per BG: every pixel of the layer line is opaque
     u8 OBJPrioPresent;  // bit per priority: opaque sprite pixels with that priority exist
 
-    void UpdatePalettes();
+    void UpdatePalettes(bool bg, bool obj, bool bgStale);
     inline const u32* GetBGExtPal(u32 slot, u32 pal)
     {
         u32 idx = (slot << 4) | pal;

@@ -11,6 +11,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `jit` | `on` | melonDS's JIT; `off` for the interpreter (slow, for debugging) |
 | `jit.timing` | `block` | BananaJIT's timing: `block` (melonDS's JIT's level: fast memory, cycles counted per block) or `exact` (the interpreter's, cycle for cycle; slower) |
 | `render.2d` | `banana` | the 2D renderer: `banana` (the Banana 2D engine, gpu2d/: melonDS's picture, pixel for pixel, in about a third of the time) or `melonds` (melonDS's own) |
+| `render.2d_thread` | `off` | `on` draws the Banana 2D engine's lines (`render.2d=banana`) on a thread of their own (`bananads-2d`), the same pictures: the emulator's thread only snapshots each line (its registers, the 3D layer's line, and the VRAM, palette and OAM changes since the last line, through a copy log) and waits for the thread at the end of the frame. While display capture is on (a game's DISPCAPCNT), that frame's lines are drawn on the emulator's thread, as with `off`. It logs what it did when the game quits (`[2d]`) |
 | `render.renderer` | `gengis` | the 3D renderer: `gengis` (Gengis Engine, SuperDrastic's rasterizer, on several threads; aarch64 builds) or `soft` (melonDS's software renderer) |
 | `render.gengis_threads` | `3` | Gengis Engine's render threads (the emulator's thread also renders a bin when it has to wait for one) |
 | `render.gengis_defer` | `off` | Gengis Engine's deferred shading of opaque polygons |
@@ -38,6 +39,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `sdl.scale` | `2` | the window's size |
 | `headless.frames` | `600` | how many frames `headless` runs |
 | `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
+| `headless.reload_at` | none | after this frame, save the state to slot 3 and load it straight back (a test of the savestate path) |
 | `headless.measure_from` | `0` | also report the fps from this frame on (a game's scene, after loading) |
 | `headless.input` | none | scripted presses: `<frame>:<keys>[:<frames held>]`, comma-separated, keys joined by `+` (`a b select start right left up down r l x y`), held 6 frames by default: `600:start,900:a:10` |
 | `log.file` | none | a copy of the log (stderr always gets it) |

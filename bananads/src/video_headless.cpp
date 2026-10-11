@@ -71,6 +71,9 @@ int run_headless(Emu& emu, const Config& cfg) {
     long done = 0;
     // headless.measure_from: also report the fps from this frame on (a game's scene after its loading)
     const long from = cfg.num("headless.measure_from", 0);
+    // headless.reload_at: after this frame, save the state to slot 3 and load it straight back (tests the savestate
+    // path: the run should go on as if nothing happened)
+    const long reload = cfg.num("headless.reload_at", -1);
     auto tm = t0;
     for (; done < frames && !emu.stopped(); done++) {
         if (done == from) tm = std::chrono::steady_clock::now();
@@ -82,6 +85,8 @@ int run_headless(Emu& emu, const Config& cfg) {
         }
         emu.run_frame();
         while (emu.audio(snd.data(), 4096) > 0) {}  // drain it, as a sound device would
+        if (done + 1 == reload && !(emu.save_state(3) && emu.load_state(3)))
+            Log(LogLevel::Error, "[headless] headless.reload_at: the state didn't save and load back\n");
         if (!dir.empty() && every > 0 && (done + 1) % every == 0)
             dump_ppm(dir + "/frame" + std::to_string(done + 1) + ".ppm", emu.top(), emu.bottom());
     }
