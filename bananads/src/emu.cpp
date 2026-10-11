@@ -245,6 +245,12 @@ bool Emu::load_rom(const std::string& path) {
             nds_->SetRenderer(std::make_unique<SoftRenderer>(*nds_));
         nds_->GetRenderer().SetRenderSettings(rs);
     }
+#ifdef BANANADS_2D
+    // render.2d_thread: on draws the Banana 2D engine's lines on a thread of its own (gpu2d/GPU_Banana.h), the same
+    // pictures; off (the default) draws them on the emulator's thread
+    if (banana2d && cfg_.flag("render.2d_thread", false))
+        static_cast<BananaRenderer&>(nds_->GetRenderer()).SetThreaded2D(true);
+#endif
 
     time_t t = time(nullptr);
     tm lt;

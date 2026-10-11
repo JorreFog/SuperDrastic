@@ -11,6 +11,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `jit` | `on` | melonDS's JIT; `off` for the interpreter (slow, for debugging) |
 | `jit.timing` | `block` | BananaJIT's timing: `block` (melonDS's JIT's level: fast memory, cycles counted per block) or `exact` (the interpreter's, cycle for cycle; slower) |
 | `render.2d` | `banana` | the 2D renderer: `banana` (the Banana 2D engine, gpu2d/: melonDS's picture, pixel for pixel, in about a third of the time) or `melonds` (melonDS's own) |
+| `render.2d_thread` | `off` | `on` draws the Banana 2D engine's lines (`render.2d=banana`) on a thread of their own, the same pictures: the emulator's thread only snapshots each line's registers (and the 3D layer's line) and waits for the thread at the end of the frame, and whenever VRAM, the palettes or OAM changed since the lines it has handed over. While display capture is on (a game's DISPCAPCNT), that frame's lines are drawn on the emulator's thread as with `off` |
 | `render.renderer` | `gengis` | the 3D renderer: `gengis` (Gengis Engine, SuperDrastic's rasterizer, on several threads; aarch64 builds) or `soft` (melonDS's software renderer) |
 | `render.gengis_threads` | `3` | Gengis Engine's render threads (the emulator's thread also renders a bin when it has to wait for one) |
 | `render.gengis_defer` | `off` | Gengis Engine's deferred shading of opaque polygons |

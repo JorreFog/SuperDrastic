@@ -29,6 +29,27 @@
 namespace melonDS
 {
 
+// The 2D unit's registers one scanline reads, as GPU2D holds them when the line is drawn (same names as GPU2D's).
+// A line is drawn from this copy, so it can be drawn later, on another thread (render.2d_thread).
+struct Banana2DRegs
+{
+    bool Enabled;
+    u8 LayerEnable, OBJEnable, ForcedBlank;
+    u32 DispCnt;
+    u16 BGCnt[4];
+    u16 BGXPos[4], BGYPos[4];
+    s16 BGRotA[2], BGRotC[2];
+    s32 BGXRefInternal[2], BGYRefInternal[2];
+    u8 Win0Coords[4], Win1Coords[4], WinCnt[4];
+    u8 Win0Active, Win1Active;
+    u8 BGMosaicSize[2], OBJMosaicSize[2];
+    u32 BGMosaicLine, OBJMosaicLine;
+    u16 BlendCnt;
+    u8 EVA, EVB, EVY;
+
+    void From(const melonDS::GPU2D& g);
+};
+
 // BananaRenderer2D: a drop-in replacement for melonDS's SoftRenderer2D.
 //
 // It produces the same Output2D line (18-bit colour + layer flags) as SoftRenderer2D, pixel for
@@ -59,8 +80,29 @@ public:
     void VBlank() override {}
     void VBlankEnd() override {}
 
+    // A scanline in two halves, for drawing it on another thread (BananaRenderer, render.2d_thread):
+    //  * Prepare* run on the emulator's thread at the line's time. They copy the registers into `regs`, do the
+    //    line's side effects on GPU2D (the windows' horizontal state), and bring what the drawing reads from
+    //    memory up to date: the VRAM flats, the converted palettes, the sprite table and the copy of OAM. Before
+    //    any of those changes they call the drain hook, which waits for the lines already handed to the other
+    //    thread, so a line is always drawn from memory as it was at its own time.
+    //  * Draw*From draw the line from `regs` and that memory alone; on either thread, one at a time, in order.
+    // DrawScanline/DrawSprites are the two back to back.
+    void SetDrainHook(void (*fn)(void*), void* ctx) { DrainFn = fn; DrainCtx = ctx; }
+    void PrepareScanline(Banana2DRegs& regs);
+    void PrepareSprites(Banana2DRegs& regs);
+    void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d);
+    void DrawSpritesFrom(u32 line, const Banana2DRegs& regs);
+
 private:
     SoftRenderer& Parent;
+
+    Banana2DRegs R;             // the registers of the line being drawn
+    const u32* Line3D = nullptr; // the 3D layer's line for it
+    alignas(8) u16 OAMCopy[512]; // this unit's OAM, copied when the sprite table is rebuilt
+    void (*DrainFn)(void*) = nullptr;
+    void* DrainCtx = nullptr;
+    void Drain() { if (DrainFn) DrainFn(DrainCtx); }
 
     // OBJ line pixel format, the same as melonDS's SoftRenderer2D
     enum : u32
