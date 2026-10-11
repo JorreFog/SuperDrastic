@@ -26,6 +26,9 @@
 #if !defined(BANANA_NO_SIMD) && (defined(__ARM_NEON) || defined(__aarch64__))
 #include <arm_neon.h>
 #define BANANA_SIMD 1
+#ifdef __aarch64__
+#define BANANA_NEON 1
+#endif
 namespace melonDS
 {
 typedef uint32x4_t V4;
@@ -121,6 +124,8 @@ static inline u32 VHorAnd(V4 a) { return a.v[0] & a.v[1] & a.v[2] & a.v[3]; }
 
 namespace melonDS
 {
+
+bool Banana2DFast = true;
 
 // 15-bit palette colour to the 18-bit internal format; bit 15 is the low green bit
 // (melonDS: applies to BG/OBJ palette colours, not to direct colour)
@@ -344,6 +349,7 @@ void BananaRenderer2D::Reset()
     memset(SecondLine, 0, sizeof(SecondLine));
     memset(PalBG256, 0, sizeof(PalBG256));
     memset(PalBG16, 0, sizeof(PalBG16));
+    memset(PalBG16Planes, 0, sizeof(PalBG16Planes));
     memset(ObjTable.get(), 0, 0x2000 * sizeof(u32));
     Backdrop = 0x20000000;
     for (int i = 0; i < 256; i++) BackdropLine[i] = Backdrop;
@@ -352,10 +358,14 @@ void BananaRenderer2D::Reset()
     BGExtPalValid = 0;
     ObjExtValid = false;
     NumSpriteTab = 0;
+    memset(SpriteLines, 0, sizeof(SpriteLines));
     SpriteTabStale = true;
     NumSprites = 0;
     ObjXMin = 256; ObjXMax = 0;
+    ObjDirtyMin = 256; ObjDirtyMax = 0;
+    ObjWinDirty = false;
     WindowsOn = false;
+    Raw3D = false;
     LayerDrawn = 0;
     LayerFull = 0;
     OBJPrioPresent = 0;
@@ -374,6 +384,11 @@ void BananaRenderer2D::UpdatePalettes(bool bg, bool obj, bool bgStale)
             u32 c = Conv15(pal[i]) | 0xFF000000;
             PalBG256[i] = i ? c : 0;
             PalBG16[i] = (i & 0xF) ? c : 0;
+            // planar copy for the NEON 16-colour text BGs: R, G, B bytes of each 16-colour palette, colour 0 black
+            u32 p16 = PalBG16[i];
+            PalBG16Planes[i >> 4][(i & 0xF)]      = (u8)p16;
+            PalBG16Planes[i >> 4][16 + (i & 0xF)] = (u8)(p16 >> 8);
+            PalBG16Planes[i >> 4][32 + (i & 0xF)] = (u8)(p16 >> 16);
         }
         u32 bd = Conv15(pal[0]) | 0x20000000;
         if (bd != Backdrop || bgStale)
@@ -461,6 +476,19 @@ void BananaRenderer2D::CalcWindowMask()
     if (dispcnt & (1<<15))
     {
         u8 c = R.WinCnt[3];
+#ifdef BANANA_NEON
+        if (Banana2DFast)
+        {
+            // 16 pixels per step, a select instead of a branch per pixel
+            uint8x16_t vc = vdupq_n_u8(c);
+            for (int i = 0; i < 256; i += 16)
+            {
+                uint8x16_t ow = vld1q_u8(&OBJWindow[i]);
+                vst1q_u8(&WindowMask[i], vbslq_u8(vtstq_u8(ow, ow), vc, vld1q_u8(&WindowMask[i])));
+            }
+        }
+        else
+#endif
         for (int i = 0; i < 256; i++)
             if (OBJWindow[i]) WindowMask[i] = c;
     }
@@ -619,6 +647,90 @@ void BananaRenderer2D::DrawBG_Text(u32 line, u32 bgnum)
     u32* out = BGLine(bgnum) - (xoff & 0x7);
     bool full = true;
     bool drawn = false;
+
+#ifdef BANANA_NEON
+    if (bpp8 && Banana2DFast)
+    {
+        // 256-colour tiles: the map from block pointers as for 16 colours; the 8 palette entries of a tile row loaded
+        // straight into two vector lanes each (no scalar and/store per pixel), masked and stored as two vectors
+        const u16* block[2] = { (const u16*)&vram[tilemapaddr & vrammask],
+                                (const u16*)&vram[(tilemapaddr + (widexmask << 3)) & vrammask] };
+        const u32 rowoff[2] = { tilesetaddr + (row << 3), tilesetaddr + ((7 - row) << 3) };
+        const uint32x4_t vmask = vdupq_n_u32(flagmask), zero = vdupq_n_u32(0);
+        for (int t = 0; t < 33; t++, xt += 8, out += 8)
+        {
+            u16 tile = block[(xt & widexmask) >> 8][(xt >> 3) & 31];
+            u64 pix = *(u64*)&vram[(rowoff[(tile >> 11) & 1] + ((tile & 0x03FF) << 6)) & vrammask];
+            if (pix == 0)
+            {
+                vst1q_u32(out, zero);
+                vst1q_u32(out + 4, zero);
+                full = false;
+                continue;
+            }
+            drawn = true;
+            if (HasZeroByte(pix)) full = false;
+            if (tile & (1<<10)) pix = __builtin_bswap64(pix);
+            const u32* pal = extpal ? GetBGExtPal(extpalslot, tile >> 12) : PalBG256;
+            uint32x4_t lo = vld1q_dup_u32(&pal[pix & 0xFF]);
+            lo = vld1q_lane_u32(&pal[(pix >> 8) & 0xFF], lo, 1);
+            lo = vld1q_lane_u32(&pal[(pix >> 16) & 0xFF], lo, 2);
+            lo = vld1q_lane_u32(&pal[(pix >> 24) & 0xFF], lo, 3);
+            uint32x4_t hi = vld1q_dup_u32(&pal[(pix >> 32) & 0xFF]);
+            hi = vld1q_lane_u32(&pal[(pix >> 40) & 0xFF], hi, 1);
+            hi = vld1q_lane_u32(&pal[(pix >> 48) & 0xFF], hi, 2);
+            hi = vld1q_lane_u32(&pal[pix >> 56], hi, 3);
+            vst1q_u32(out, vandq_u32(lo, vmask));
+            vst1q_u32(out + 4, vandq_u32(hi, vmask));
+        }
+        if (drawn) LayerDrawn |= (1 << bgnum);
+        if (full) LayerFull |= (1 << bgnum);
+        return;
+    }
+    if (!bpp8 && Banana2DFast)
+    {
+        // 16-colour tiles, 8 pixels per tile row: the 8 nibbles spread to 8 index bytes (reversed for an X flip), looked up
+        // in the tile palette's R, G and B planes and in a flag plane (0 for colour 0, else this BG's flag), and stored
+        // interleaved as 8 pixels (st4). The scalar loop below does the same with 8 loads and 8 stores per tile.
+        const uint8x8_t m0f = vdup_n_u8(0x0F);
+        const uint8x8_t perm[2] = { vcreate_u8(0x0706050403020100ULL), vcreate_u8(0x0001020304050607ULL) };
+        const uint8x16_t flagplane = vsetq_lane_u8(0, vdupq_n_u8((u8)(1u << bgnum)), 0);
+        const uint8x16_t zero = vdupq_n_u8(0);
+        uint8x8_t minidx = vdup_n_u8(0xFF);
+        // the line's (at most two) 32-entry map blocks: 64-byte aligned, so each is contiguous in VRAM
+        const u16* block[2] = { (const u16*)&vram[tilemapaddr & vrammask],
+                                (const u16*)&vram[(tilemapaddr + (widexmask << 3)) & vrammask] };
+        const u32 rowoff[2] = { tilesetaddr + (row << 2), tilesetaddr + ((7 - row) << 2) };
+        for (int t = 0; t < 33; t++, xt += 8, out += 8)
+        {
+            u16 tile = block[(xt & widexmask) >> 8][(xt >> 3) & 31];
+            u32 pix = *(u32*)&vram[(rowoff[(tile >> 11) & 1] + ((tile & 0x03FF) << 5)) & vrammask];
+            if (pix == 0)
+            {
+                vst1q_u8((u8*)out, zero);
+                vst1q_u8((u8*)(out + 4), zero);
+                full = false;
+                continue;
+            }
+            drawn = true;
+            uint8x8_t b = vreinterpret_u8_u32(vdup_n_u32(pix));
+            uint8x8_t idx = vzip1_u8(vand_u8(b, m0f), vshr_n_u8(b, 4));
+            idx = vtbl1_u8(idx, perm[(tile >> 10) & 1]);
+            minidx = vmin_u8(minidx, idx);
+            const u8* pl = PalBG16Planes[tile >> 12];
+            uint8x8x4_t o;
+            o.val[0] = vqtbl1_u8(vld1q_u8(pl), idx);
+            o.val[1] = vqtbl1_u8(vld1q_u8(pl + 16), idx);
+            o.val[2] = vqtbl1_u8(vld1q_u8(pl + 32), idx);
+            o.val[3] = vqtbl1_u8(flagplane, idx);
+            vst4_u8((u8*)out, o);
+        }
+        if (vminv_u8(minidx) == 0) full = false;
+        if (drawn) LayerDrawn |= (1 << bgnum);
+        if (full) LayerFull |= (1 << bgnum);
+        return;
+    }
+#endif
 
     for (int t = 0; t < 33; t++, xt += 8, out += 8)
     {
@@ -784,6 +896,46 @@ void BananaRenderer2D::DrawBG_Affine(u32 line, u32 bgnum)
     u32 acc = 0;   // OR of outputs, for emptiness
     u32 all = ~0u; // AND of outputs, for fullness
 
+    if (Banana2DFast)
+    {
+        // four pixels per step, each stage (map byte, tile pixel, palette entry) done for all four before the next,
+        // so the in-order A55 isn't waiting on one pixel's chain of three dependent loads; outside the map (no
+        // wrap) a pixel is zeroed with a select; two pixels per 64-bit and/or/store
+        const u8* pal8 = vram;
+        const u64 fm = (u64)flagmask | ((u64)flagmask << 32);
+        u64 acc64 = 0, all64 = ~0ULL;
+        u32 m[4], o[4];
+        for (int i = 0; i < 256; i += 4)
+        {
+            u32 rx[4], ry[4];
+            for (int k = 0; k < 4; k++)
+            {
+                rx[k] = rotX; ry[k] = rotY;
+                rotX += rotA; rotY += rotC;
+            }
+            for (int k = 0; k < 4; k++)
+            {
+                o[k] = (rx[k] | ry[k]) & overflowmask;
+                m[k] = pal8[(tilemapaddr + ((((ry[k] & coordmask) >> 11) << yshift) + ((rx[k] & coordmask) >> 11))) & vrammask];
+            }
+            for (int k = 0; k < 4; k++)
+                m[k] = pal8[(tilesetaddr + (m[k] << 6) + (((ry[k] >> 8) & 0x7) << 3) + ((rx[k] >> 8) & 0x7)) & vrammask];
+            for (int k = 0; k < 4; k++)
+                m[k] = o[k] ? 0 : PalBG256[m[k]];
+            u64 p0 = ((u64)m[0] | ((u64)m[1] << 32)) & fm;
+            u64 p1 = ((u64)m[2] | ((u64)m[3] << 32)) & fm;
+            *(u64*)&out[i] = p0;
+            *(u64*)&out[i + 2] = p1;
+            acc64 |= p0 | p1;
+            all64 &= p0 & p1;
+        }
+        acc = (u32)acc64 | (u32)(acc64 >> 32);
+        all = (u32)all64 & (u32)(all64 >> 32);
+        if (acc) LayerDrawn |= (1 << bgnum);
+        if (all) LayerFull |= (1 << bgnum);
+        return;
+    }
+
     for (int i = 0; i < 256; i++)
     {
         u32 c = 0;
@@ -808,9 +960,52 @@ void BananaRenderer2D::DrawBG_Affine(u32 line, u32 bgnum)
 }
 
 // direct-colour pixels, contiguous in VRAM and in the output
+#ifdef BANANA_NEON
+// AND / OR of the 32-bit pixels whose low and high halves are the lanes of lo and hi
+static inline u32 HorAnd16(uint16x8_t lo, uint16x8_t hi)
+{
+    uint64x2_t l = vreinterpretq_u64_u16(lo), h = vreinterpretq_u64_u16(hi);
+    u64 a = vgetq_lane_u64(l, 0) & vgetq_lane_u64(l, 1), b = vgetq_lane_u64(h, 0) & vgetq_lane_u64(h, 1);
+    a &= a >> 32; a &= a >> 16; b &= b >> 32; b &= b >> 16;
+    return (u32)(a & 0xFFFF) | ((u32)(b & 0xFFFF) << 16);
+}
+static inline u32 HorOr16(uint16x8_t lo, uint16x8_t hi)
+{
+    uint64x2_t l = vreinterpretq_u64_u16(lo), h = vreinterpretq_u64_u16(hi);
+    u64 a = vgetq_lane_u64(l, 0) | vgetq_lane_u64(l, 1), b = vgetq_lane_u64(h, 0) | vgetq_lane_u64(h, 1);
+    a |= a >> 32; a |= a >> 16; b |= b >> 32; b |= b >> 16;
+    return (u32)(a & 0xFFFF) | ((u32)(b & 0xFFFF) << 16);
+}
+#endif
+
 static inline void ConvertRun16(u32* out, const u16* src, int n, u32 flag, u32& acc, u32& all)
 {
     int j = 0;
+#ifdef BANANA_NEON
+    if (Banana2DFast && n >= 8)
+    {
+        // 8 pixels in 16-bit lanes: low halves R | G << 8, high halves B | the flag, zeroed where bit 15 is clear,
+        // stored interleaved (st2)
+        const uint16x8_t m3e = vdupq_n_u16(0x3E), vflag = vdupq_n_u16((u16)(flag >> 16));
+        uint16x8_t accLo = vdupq_n_u16(0), accHi = accLo, allLo = vdupq_n_u16(0xFFFF), allHi = allLo;
+        for (; j + 8 <= n; j += 8)
+        {
+            uint16x8_t c = vld1q_u16(src + j);
+            uint16x8_t a = vreinterpretq_u16_s16(vshrq_n_s16(vreinterpretq_s16_u16(c), 15));
+            uint16x8_t r = vandq_u16(vshlq_n_u16(c, 1), m3e);
+            uint16x8_t g = vandq_u16(vshrq_n_u16(c, 4), m3e);
+            uint16x8_t b = vandq_u16(vshrq_n_u16(c, 9), m3e);
+            uint16x8x2_t o;
+            o.val[0] = vandq_u16(vsliq_n_u16(r, g, 8), a);
+            o.val[1] = vandq_u16(vorrq_u16(b, vflag), a);
+            vst2q_u16((u16*)(out + j), o);
+            accLo = vorrq_u16(accLo, o.val[0]); accHi = vorrq_u16(accHi, o.val[1]);
+            allLo = vandq_u16(allLo, o.val[0]); allHi = vandq_u16(allHi, o.val[1]);
+        }
+        acc |= HorOr16(accLo, accHi);
+        all &= HorAnd16(allLo, allHi);
+    }
+#endif
     if (n >= 4)
     {
         V4 vacc = VZero(), vall = VDup(~0u);
@@ -1211,6 +1406,19 @@ void BananaRenderer2D::RebuildSpriteTable()
         e.boundwidth = boundwidth;
     }
     NumSpriteTab = n;
+
+    // render.2d_fast: the entries each sprite line can draw, as bits in table order
+    if (Banana2DFast)
+    {
+        memset(SpriteLines, 0, sizeof(SpriteLines));
+        for (int i = 0; i < n; i++)
+        {
+            const SpriteEntry& e = SpriteTab[i];
+            u64 bit = 1ULL << (i & 63);
+            for (u32 h = 0; h < e.boundheight; h++)
+                SpriteLines[(e.ypos + h) & 0xFF][i >> 6] |= bit;
+        }
+    }
 }
 
 void BananaRenderer2D::DrawSprites(u32 line)
@@ -1220,9 +1428,20 @@ void BananaRenderer2D::DrawSprites(u32 line)
     DrawSpritesFrom(line, regs);
 }
 
+// what a sprite line reads of the registers (DrawSpritesFrom and the sprite drawing)
+void Banana2DRegs::FromSprites(const melonDS::GPU2D& g)
+{
+    Enabled = g.Enabled;
+    OBJEnable = g.OBJEnable;
+    DispCnt = g.DispCnt;
+    OBJMosaicLine = g.OBJMosaicLine;
+    OAMRebuild = false;
+}
+
 void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
 {
-    regs.From(GPU2D);
+    if (Banana2DFast) regs.FromSprites(GPU2D);
+    else              regs.From(GPU2D);
     if (NeedResync)
         DoResync();
 
@@ -1255,9 +1474,57 @@ void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
     }
 }
 
+// one sprite table entry on sprite line `line` (inside its Y range)
+inline void BananaRenderer2D::DrawSpriteEntry(u32 line, const SpriteEntry& e)
+{
+    s32 ypos;
+    if ((e.flags & 6) == 4)
+    {
+        // sprite mosaic (not for OBJ-window sprites): Y position latched by the register side
+        ypos = (R.OBJMosaicLine - e.ypos) & 0xFF;
+        if (ypos >= e.boundheight) ypos = 0;
+    }
+    else
+        ypos = (line - e.ypos) & 0xFF;
+
+    s32 xpos = e.xpos;
+    if (!(e.flags & 2))
+    {
+        s32 x0 = xpos < 0 ? 0 : xpos;
+        s32 x1 = xpos + e.boundwidth; if (x1 > 256) x1 = 256;
+        if (x0 < ObjXMin) ObjXMin = x0;
+        if (x1 > ObjXMax) ObjXMax = x1;
+    }
+    else
+        ObjWinDirty = true;
+
+    if (e.flags & 1)
+    {
+        if (e.flags & 2) DrawSprite_Rotscale<true>(e.num, e.boundwidth, e.boundheight, e.width, e.height, xpos, ypos);
+        else             DrawSprite_Rotscale<false>(e.num, e.boundwidth, e.boundheight, e.width, e.height, xpos, ypos);
+    }
+    else
+    {
+        if (e.flags & 2) DrawSprite_Normal<true>(e.num, e.width, e.height, xpos, ypos);
+        else             DrawSprite_Normal<false>(e.num, e.width, e.height, xpos, ypos);
+    }
+
+    NumSprites++;
+}
+
 void BananaRenderer2D::DrawSpritesFrom(u32 line, const Banana2DRegs& regs)
 {
-    R = regs;
+    if (Banana2DFast)
+    {
+        // (only what PrepareSprites copied: the next scanline sets the whole of R)
+        R.Enabled = regs.Enabled;
+        R.OBJEnable = regs.OBJEnable;
+        R.DispCnt = regs.DispCnt;
+        R.OBJMosaicLine = regs.OBJMosaicLine;
+        R.OAMRebuild = regs.OAMRebuild;
+    }
+    else
+        R = regs;
 
     if (!R.Enabled)
         return;
@@ -1265,9 +1532,26 @@ void BananaRenderer2D::DrawSpritesFrom(u32 line, const Banana2DRegs& regs)
     NumSprites = 0;
     ObjXMin = 256;
     ObjXMax = 0;
-    memset(OBJLine, 0, sizeof(OBJLine));
-    memset(OBJTransAttr, 0, sizeof(OBJTransAttr));
-    memset(OBJWindow, 0, sizeof(OBJWindow));
+    if (Banana2DFast)
+    {
+        // only what the last sprite line wrote (its sprites' extent, the whole line after OBJ mosaic)
+        if (ObjDirtyMax > ObjDirtyMin)
+        {
+            memset(&OBJLine[ObjDirtyMin], 0, (ObjDirtyMax - ObjDirtyMin) * 4);
+            memset(&OBJTransAttr[ObjDirtyMin], 0, ObjDirtyMax - ObjDirtyMin);
+        }
+        if (ObjWinDirty)
+            memset(OBJWindow, 0, sizeof(OBJWindow));
+        ObjDirtyMin = 256;
+        ObjDirtyMax = 0;
+        ObjWinDirty = false;
+    }
+    else
+    {
+        memset(OBJLine, 0, sizeof(OBJLine));
+        memset(OBJTransAttr, 0, sizeof(OBJTransAttr));
+        memset(OBJWindow, 0, sizeof(OBJWindow));
+    }
 
     if (!R.OBJEnable)
         return;
@@ -1275,45 +1559,31 @@ void BananaRenderer2D::DrawSpritesFrom(u32 line, const Banana2DRegs& regs)
     if (R.OAMRebuild)
         RebuildSpriteTable();
 
-    for (int i = 0; i < NumSpriteTab; i++)
+    // render.2d_fast: only the entries on this line (the same ones, in the same order)
+    if (Banana2DFast)
     {
-        const SpriteEntry& e = SpriteTab[i];
-
-        if (((line - e.ypos) & 0xFF) >= e.boundheight)
-            continue;
-
-        s32 ypos;
-        if ((e.flags & 6) == 4)
+        for (int w = 0; w < 2; w++)
+        for (u64 bits = SpriteLines[line & 0xFF][w]; bits; bits &= bits - 1)
         {
-            // sprite mosaic (not for OBJ-window sprites): Y position latched by the register side
-            ypos = (R.OBJMosaicLine - e.ypos) & 0xFF;
-            if (ypos >= e.boundheight) ypos = 0;
+            int i = w * 64 + __builtin_ctzll(bits);
+            if (i >= NumSpriteTab)
+                break;
+            const SpriteEntry& e = SpriteTab[i];
+            if (((line - e.ypos) & 0xFF) < e.boundheight)
+                DrawSpriteEntry(line, e);
         }
-        else
-            ypos = (line - e.ypos) & 0xFF;
-
-        s32 xpos = e.xpos;
-        if (!(e.flags & 2))
-        {
-            s32 x0 = xpos < 0 ? 0 : xpos;
-            s32 x1 = xpos + e.boundwidth; if (x1 > 256) x1 = 256;
-            if (x0 < ObjXMin) ObjXMin = x0;
-            if (x1 > ObjXMax) ObjXMax = x1;
-        }
-
-        if (e.flags & 1)
-        {
-            if (e.flags & 2) DrawSprite_Rotscale<true>(e.num, e.boundwidth, e.boundheight, e.width, e.height, xpos, ypos);
-            else             DrawSprite_Rotscale<false>(e.num, e.boundwidth, e.boundheight, e.width, e.height, xpos, ypos);
-        }
-        else
-        {
-            if (e.flags & 2) DrawSprite_Normal<true>(e.num, e.width, e.height, xpos, ypos);
-            else             DrawSprite_Normal<false>(e.num, e.width, e.height, xpos, ypos);
-        }
-
-        NumSprites++;
     }
+    else
+    {
+        for (int i = 0; i < NumSpriteTab; i++)
+        {
+            const SpriteEntry& e = SpriteTab[i];
+            if (((line - e.ypos) & 0xFF) < e.boundheight)
+                DrawSpriteEntry(line, e);
+        }
+    }
+    ObjDirtyMin = ObjXMin;
+    ObjDirtyMax = ObjXMax;
 }
 
 template<bool window>
@@ -1743,6 +2013,8 @@ void BananaRenderer2D::ApplySpriteMosaicX()
     // the mosaic can move opaque pixels anywhere along the line
     ObjXMin = 0;
     ObjXMax = 256;
+    ObjDirtyMin = 0;
+    ObjDirtyMax = 256;
 }
 
 // resolve the OBJ line into colours (melonDS InterleaveSprites, all priorities at once). The colour
@@ -1773,6 +2045,57 @@ void BananaRenderer2D::ResolveSpritesImpl()
     OBJPrioPresent = present;
 }
 
+#ifdef BANANA_NEON
+// ResolveSpritesImpl four pixels at a time: palette colours gathered with four scalar loads, direct colours
+// converted in the lanes, no OBJPrio line (the compositor reads the priority from OBJLine)
+template<bool windows>
+void BananaRenderer2D::ResolveSpritesNeon(int x0, int x1)
+{
+    const u32* table = ObjTable.get();
+    const uint32x4_t vopaque = vdupq_n_u32(OBJ_IsOpaque), vdirect = vdupq_n_u32(OBJ_DirectColor);
+    const uint32x4_t one = vdupq_n_u32(1), m3 = vdupq_n_u32(3), zero = vdupq_n_u32(0);
+    uint32x4_t present = zero;
+    for (int i = x0; i < x1; i += 4)
+    {
+        if (!(i & 15) && i + 16 <= x1)
+        {
+            // 16 pixels with no opaque sprite pixel (most of a line's sprite extent): one test, two stores
+            uint32x4x4_t q = vld1q_u32_x4(&OBJLine[i]);
+            uint32x4_t any = vorrq_u32(vorrq_u32(q.val[0], q.val[1]), vorrq_u32(q.val[2], q.val[3]));
+            if (vmaxvq_u32(vandq_u32(any, vopaque)) == 0)
+            {
+                vst1q_u32(&OBJColor[i], zero); vst1q_u32(&OBJColor[i + 4], zero);
+                vst1q_u32(&OBJColor[i + 8], zero); vst1q_u32(&OBJColor[i + 12], zero);
+                i += 12;
+                continue;
+            }
+        }
+        uint32x4_t p = vld1q_u32(&OBJLine[i]);
+        uint32x4_t op = vtstq_u32(p, vopaque);
+        if (windows)
+            op = vandq_u32(op, vtstq_u32(VFromBytes4(*(const u32*)&WindowMask[i]), vdupq_n_u32(0x10)));
+        if (vmaxvq_u32(op) == 0)
+        {
+            vst1q_u32(&OBJColor[i], zero);
+            continue;
+        }
+        uint32x4_t pal = vdupq_n_u32(table[vgetq_lane_u32(p, 0) & 0x1FFF]);
+        pal = vsetq_lane_u32(table[vgetq_lane_u32(p, 1) & 0x1FFF], pal, 1);
+        pal = vsetq_lane_u32(table[vgetq_lane_u32(p, 2) & 0x1FFF], pal, 2);
+        pal = vsetq_lane_u32(table[vgetq_lane_u32(p, 3) & 0x1FFF], pal, 3);
+        uint32x4_t dc = vorrq_u32(vorrq_u32(vshlq_n_u32(vandq_u32(p, vdupq_n_u32(0x1F)), 1),
+                                            vshlq_n_u32(vandq_u32(p, vdupq_n_u32(0x3E0)), 4)),
+                                  vshlq_n_u32(vandq_u32(p, vdupq_n_u32(0x7C00)), 7));
+        uint32x4_t c = vbslq_u32(vtstq_u32(p, vdirect), dc, pal);
+        c = vorrq_u32(c, vandq_u32(p, vdupq_n_u32(0xFF000000)));
+        vst1q_u32(&OBJColor[i], vandq_u32(c, op));
+        uint32x4_t prio = vandq_u32(vshrq_n_u32(p, 16), m3);
+        present = vorrq_u32(present, vandq_u32(vshlq_u32(one, vreinterpretq_s32_u32(prio)), op));
+    }
+    OBJPrioPresent = (u8)VHorOr(present);
+}
+#endif
+
 void BananaRenderer2D::ResolveSprites()
 {
     int x0 = ObjXMin, x1 = ObjXMax;
@@ -1782,11 +2105,24 @@ void BananaRenderer2D::ResolveSprites()
         OBJPrioPresent = 0;
         return;
     }
+#ifdef BANANA_NEON
+    // (OBJLine is transparent outside the sprites' extent: the extent can be rounded out to 4 pixels)
+    if (Banana2DFast) { x0 &= ~3; x1 = (x1 + 3) & ~3; }
+#endif
     if (x0 > 0) memset(OBJColor, 0, x0 * 4);
     if (x1 < 256) memset(OBJColor + x1, 0, (256 - x1) * 4);
 
     if (!ObjExtValid && (R.DispCnt & (1u << 31)))
         ConvertOBJExtPals();
+
+#ifdef BANANA_NEON
+    if (Banana2DFast)
+    {
+        if (WindowsOn) ResolveSpritesNeon<true>(x0, x1);
+        else           ResolveSpritesNeon<false>(x0, x1);
+        return;
+    }
+#endif
 
     if (WindowsOn) ResolveSpritesImpl<true>();
     else           ResolveSpritesImpl<false>();
@@ -1799,25 +2135,53 @@ struct CompStep
 {
     const u32* line;
     const u32* prio;   // null for a BG; the OBJ priority line for a sprite step
-    u32 prioval;
+    u32 prioval;       // compared with the prio line's pixels and priomask
+    u32 priomask;
+    bool raw3d;        // line is the 3D layer's own line, converted here (DrawBG_3D's conversion)
 };
 
 // painter's algorithm over N layer lines, four pixels at a time with the top (and second) pixel kept
 // in registers; startLine is the layer everything is painted onto (the backdrop, or a layer that
-// covers the whole line)
-template<int N, bool needSecond>
-static void CompositeN(const CompStep* steps, const u32* startLine, u32* outTop, u32* outSecond)
+// covers the whole line). has3d: a step is the 3D layer's own line, made into DrawBG_3D's pixels here
+// (opaque where the alpha byte is nonzero, with the 3D flag added); every other step's pixels are
+// opaque exactly where their flag byte is nonzero, so the same test serves all steps
+template<int N, bool needSecond, bool has3d, bool onBackdrop>
+static void CompositeLoop(const CompStep* steps, const u32* startLine, u32* outTop, u32* outSecond)
 {
+    // (the step pointers and priority values in registers for the whole line)
+    const u32* line[N > 0 ? N : 1];
+    const u32* prio[N > 0 ? N : 1];
+    V4 prioval[N > 0 ? N : 1];
+    V4 priomask[N > 0 ? N : 1];
+    V4 orv[N > 0 ? N : 1];
+    for (int k = 0; k < N; k++)
+    {
+        line[k] = steps[k].line;
+        prio[k] = steps[k].prio;
+        prioval[k] = VDup(steps[k].prioval);
+        priomask[k] = VDup(steps[k].priomask);
+        orv[k] = VDup(steps[k].raw3d ? 0x40000000 : 0);
+    }
+    const V4 flagbyte = VDup(0xFF000000);
+    // painting onto the backdrop: its colour from a register, not BackdropLine (one load less per 4 pixels)
+    const V4 backdrop = VDup(startLine[0]);
     for (int i = 0; i < 256; i += 4)
     {
-        V4 top = VLoad(startLine + i);
+        V4 top = onBackdrop ? backdrop : VLoad(startLine + i);
         V4 sec = VZero();
         for (int k = 0; k < N; k++)
         {
-            V4 c = VLoad(steps[k].line + i);
-            V4 m = VNonZero(c);
-            if (steps[k].prio)
-                m = VAnd(m, VEq(VLoad(steps[k].prio + i), VDup(steps[k].prioval)));
+            V4 c = VLoad(line[k] + i);
+            V4 m;
+            if (has3d)
+            {
+                m = VNonZero(VAnd(c, flagbyte));
+                c = VOr(c, orv[k]);
+            }
+            else
+                m = VNonZero(c);
+            if (prio[k])
+                m = VAnd(m, VEq(VAnd(VLoad(prio[k] + i), priomask[k]), prioval[k]));
             if (needSecond)
                 sec = VSel(m, top, sec);
             top = VSel(m, c, top);
@@ -1828,6 +2192,14 @@ static void CompositeN(const CompStep* steps, const u32* startLine, u32* outTop,
     }
 }
 
+// (the backdrop case as its own loop, so neither has a test per step)
+template<int N, bool needSecond, bool has3d>
+static void CompositeN(const CompStep* steps, const u32* startLine, bool onBackdrop, u32* outTop, u32* outSecond)
+{
+    if (onBackdrop) CompositeLoop<N, needSecond, has3d, true>(steps, startLine, outTop, outSecond);
+    else            CompositeLoop<N, needSecond, has3d, false>(steps, startLine, outTop, outSecond);
+}
+
 void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
 {
     // painter's order, back to front: for each priority 3..0, BG3, BG2, BG1, BG0 of that priority,
@@ -1835,20 +2207,26 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
     CompStep steps[8];
     u8 full[8];
     int n = 0;
+    // sprites of a single priority: every opaque OBJColor pixel has it, no priority test
+    // (fast: the priority is read from OBJLine's bits 16-17, ResolveSpritesNeon doesn't write OBJPrio)
+    const u32* objprio = !Banana2DFast ? OBJPrio : !(OBJPrioPresent & (OBJPrioPresent - 1)) ? nullptr : OBJLine;
+    u32 priomask = Banana2DFast ? OBJ_BGPrioMask : ~0u;
+    u32 prioshift = Banana2DFast ? 16 : 0;
     for (int p = 3; p >= 0; p--)
     {
         for (int bg = 3; bg >= 0; bg--)
         {
             if ((LayerDrawn & (1<<bg)) && ((R.BGCnt[bg] & 0x3) == p))
             {
-                steps[n] = { BGLine(bg), nullptr, 0 };
+                bool raw = (bg == 0) && Raw3D;
+                steps[n] = { raw ? Line3D : BGLine(bg), nullptr, 0, 0, raw };
                 full[n] = (LayerFull >> bg) & 1;
                 n++;
             }
         }
         if (OBJPrioPresent & (1<<p))
         {
-            steps[n] = { OBJColor, OBJPrio, (u32)p };
+            steps[n] = { OBJColor, objprio, (u32)p << prioshift, priomask, false };
             full[n] = 0;
             n++;
         }
@@ -1875,15 +2253,151 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
     }
 
     const CompStep* s = steps + start;
+    const bool onBackdrop = Banana2DFast && startLine == BackdropLine;   // (BackdropLine is all one colour)
+    bool has3d = false;
+    for (int k = start; k < n; k++) has3d |= steps[k].raw3d;
     switch (n - start)
     {
-#define BANANA_COMP(N) case N: if (needSecond) CompositeN<N, true>(s, startLine, outTop, outSecond); else CompositeN<N, false>(s, startLine, outTop, outSecond); break;
+#define BANANA_COMP(N) case N: \
+        if (has3d) { if (needSecond) CompositeN<N, true, true>(s, startLine, onBackdrop, outTop, outSecond); else CompositeN<N, false, true>(s, startLine, onBackdrop, outTop, outSecond); } \
+        else       { if (needSecond) CompositeN<N, true, false>(s, startLine, onBackdrop, outTop, outSecond); else CompositeN<N, false, false>(s, startLine, onBackdrop, outTop, outSecond); } \
+        break;
     BANANA_COMP(0) BANANA_COMP(1) BANANA_COMP(2) BANANA_COMP(3)
     BANANA_COMP(4) BANANA_COMP(5) BANANA_COMP(6) BANANA_COMP(7) BANANA_COMP(8)   // at most 4 BGs + 4 OBJ steps
     default: break;
 #undef BANANA_COMP
     }
 }
+
+#ifdef BANANA_NEON
+// melonDS's colour operations (GPU_ColorOp.h) on four pixels, exactly: red and blue are computed packed in one lane
+// (each channel's sum stays below 2^16 before the shift, so neither reaches the other)
+static inline uint32x4_t VBlendN(uint32x4_t v1, uint32x4_t v2, uint32x4_t eva, uint32x4_t evb, int shift)
+{
+    const uint32x4_t mrb = vdupq_n_u32(0x3F003F), mg = vdupq_n_u32(0x3F00);
+    uint32x4_t rb = vdupq_n_u32(shift == 4 ? 0x080008 : 0x100010);
+    uint32x4_t g = vdupq_n_u32(shift == 4 ? 0x000800 : 0x001000);
+    rb = vmlaq_u32(rb, vandq_u32(v1, mrb), eva);
+    rb = vmlaq_u32(rb, vandq_u32(v2, mrb), evb);
+    g = vmlaq_u32(g, vandq_u32(v1, mg), eva);
+    g = vmlaq_u32(g, vandq_u32(v2, mg), evb);
+    if (shift == 4) { rb = vshrq_n_u32(rb, 4); g = vshrq_n_u32(g, 4); }
+    else            { rb = vshrq_n_u32(rb, 5); g = vshrq_n_u32(g, 5); }
+    uint32x4_t r = vminq_u32(vandq_u32(rb, vdupq_n_u32(0xFF)), vdupq_n_u32(0x3F));
+    uint32x4_t b = vminq_u32(vandq_u32(rb, vdupq_n_u32(0x7F0000)), vdupq_n_u32(0x3F0000));
+    g = vminq_u32(vandq_u32(g, vdupq_n_u32(0x7F00)), mg);
+    return vorrq_u32(vorrq_u32(r, g), vorrq_u32(b, vdupq_n_u32(0xFF000000)));
+}
+
+template<bool up>
+static inline uint32x4_t VBright(uint32x4_t val, uint32x4_t evy)
+{
+    uint32x4_t rb = vandq_u32(val, vdupq_n_u32(0x3F003F));
+    uint32x4_t g = vandq_u32(val, vdupq_n_u32(0x3F00));
+    if (up)
+    {
+        rb = vaddq_u32(rb, vandq_u32(vshrq_n_u32(vmlaq_u32(vdupq_n_u32(8 * 0x010001), vsubq_u32(vdupq_n_u32(0x3F003F), rb), evy), 4), vdupq_n_u32(0x3F003F)));
+        g = vaddq_u32(g, vandq_u32(vshrq_n_u32(vmlaq_u32(vdupq_n_u32(8 * 0x000100), vsubq_u32(vdupq_n_u32(0x3F00), g), evy), 4), vdupq_n_u32(0x3F00)));
+    }
+    else
+    {
+        rb = vsubq_u32(rb, vandq_u32(vshrq_n_u32(vmlaq_u32(vdupq_n_u32(7 * 0x010001), rb, evy), 4), vdupq_n_u32(0x3F003F)));
+        g = vsubq_u32(g, vandq_u32(vshrq_n_u32(vmlaq_u32(vdupq_n_u32(7 * 0x000100), g, evy), 4), vdupq_n_u32(0x3F00)));
+    }
+    return vorrq_u32(vorrq_u32(rb, g), vdupq_n_u32(0xFF000000));
+}
+
+// a pixel's BLDCNT 1st-target bit (FirstBitTab) from its flag byte f
+static inline uint32x4_t VFirstBit(uint32x4_t f)
+{
+    uint32x4_t r = vbslq_u32(vtstq_u32(f, vdupq_n_u32(0x40)), vdupq_n_u32(0x01), f);
+    return vbslq_u32(vtstq_u32(f, vdupq_n_u32(0x80)), vdupq_n_u32(0x10), r);
+}
+
+template<bool up>
+void BananaRenderer2D::BrightnessPassNeon(u32* dst)
+{
+    const uint32x4_t bc = vdupq_n_u32(R.BlendCnt), evy = vdupq_n_u32(R.EVY), m20 = vdupq_n_u32(0x20);
+    const u8* wm = WindowsOn ? WindowMask : AllOnes;
+    for (int i = 0; i < 256; i += 4)
+    {
+        uint32x4_t val = vld1q_u32(&TopLine[i]);
+        uint32x4_t hit = vtstq_u32(VFirstBit(vshrq_n_u32(val, 24)), bc);
+        hit = vandq_u32(hit, vtstq_u32(VFromBytes4(*(const u32*)&wm[i]), m20));
+        vst1q_u32(&dst[i], vbslq_u32(hit, VBright<up>(val, evy), val));
+    }
+}
+
+// EffectsPass four pixels at a time: every result the lanes can need, then the same choices as masks
+template<u32 effect>
+void BananaRenderer2D::EffectsPassNeon(u32* dst)
+{
+    const u32 blendCnt = R.BlendCnt;
+    const uint32x4_t bc = vdupq_n_u32(blendCnt), evy = vdupq_n_u32(R.EVY);
+    const uint32x4_t EVA = vdupq_n_u32(R.EVA), EVB = vdupq_n_u32(R.EVB);
+    const uint32x4_t m1f = vdupq_n_u32(0x1F), m40 = vdupq_n_u32(0x40), m80 = vdupq_n_u32(0x80), m20 = vdupq_n_u32(0x20);
+    const uint32x4_t sixteen = vdupq_n_u32(16), one = vdupq_n_u32(1), thirtytwo = vdupq_n_u32(32);
+    const uint32x4_t zero = vdupq_n_u32(0);
+    // brightness for sprite / 3D / BG pixels that aren't blended: BLDCNT bit 4 / bit 0 / the pixel's own bit
+    const uint32x4_t sprBright = vdupq_n_u32((effect >= 2 && (blendCnt & 0x10)) ? ~0u : 0);
+    const uint32x4_t d3Bright = vdupq_n_u32((effect >= 2 && (blendCnt & 0x01)) ? ~0u : 0);
+    const u8* wm = WindowsOn ? WindowMask : AllOnes;
+
+    for (int i = 0; i < 256; i += 4)
+    {
+        uint32x4_t val1 = vld1q_u32(&TopLine[i]);
+        uint32x4_t val2 = vld1q_u32(&SecondLine[i]);
+        uint32x4_t f1 = vshrq_n_u32(val1, 24);
+        uint32x4_t f2 = vshrq_n_u32(val2, 24);
+        // Target2Tab
+        uint32x4_t t2 = vbslq_u32(vtstq_u32(f2, m40), vdupq_n_u32(0x100), vshlq_n_u32(f2, 8));
+        t2 = vbslq_u32(vtstq_u32(f2, m80), vdupq_n_u32(0x1000), t2);
+        uint32x4_t second = vtstq_u32(t2, bc);
+        uint32x4_t inwin = vtstq_u32(VFromBytes4(*(const u32*)&wm[i]), m20);
+
+        uint32x4_t spr = vtstq_u32(f1, m80);
+        uint32x4_t d3 = vbicq_u32(vtstq_u32(f1, m40), spr);
+        uint32x4_t bg = vmvnq_u32(vorrq_u32(spr, d3));
+
+        uint32x4_t out = val1;
+        uint32x4_t useBright;   // lanes that take the brightness result
+        uint32x4_t useB4;       // lanes that take ColorBlend4
+
+        // sprites: blended over a 2nd target (their own alpha for bitmap sprites), else maybe brightness
+        useB4 = vandq_u32(spr, second);
+        useBright = vandq_u32(vbicq_u32(spr, second), vandq_u32(sprBright, inwin));
+        // BG pixels (and the backdrop): the effect where the pixel is a 1st target inside the effect window
+        if (effect != 0)
+        {
+            uint32x4_t cond = vandq_u32(vandq_u32(bg, vtstq_u32(f1, bc)), inwin);
+            if (effect == 1) useB4 = vorrq_u32(useB4, vandq_u32(cond, second));
+            else             useBright = vorrq_u32(useBright, cond);
+        }
+        // 3D pixels: ColorBlend5 over a 2nd target, else maybe brightness
+        uint32x4_t useB5 = vandq_u32(d3, second);
+        useBright = vorrq_u32(useBright, vandq_u32(vbicq_u32(d3, second), vandq_u32(d3Bright, inwin)));
+
+        if (vmaxvq_u32(useB4))
+        {
+            uint32x4_t own = vandq_u32(spr, vtstq_u32(f1, m40));
+            uint32x4_t eva = vbslq_u32(own, vandq_u32(f1, m1f), EVA);
+            uint32x4_t evb = vbslq_u32(own, vsubq_u32(sixteen, vandq_u32(f1, m1f)), EVB);
+            out = vbslq_u32(useB4, VBlendN(val1, val2, eva, evb, 4), out);
+        }
+        if (vmaxvq_u32(useB5))
+        {
+            uint32x4_t eva = vaddq_u32(vandq_u32(f1, m1f), one);
+            uint32x4_t b5 = VBlendN(val1, val2, eva, vsubq_u32(thirtytwo, eva), 5);
+            b5 = vbslq_u32(vceqq_u32(eva, thirtytwo), val1, b5);
+            out = vbslq_u32(useB5, b5, out);
+        }
+        if (effect >= 2 && vmaxvq_u32(useBright))
+            out = vbslq_u32(useBright, VBright<effect == 2>(val1, evy), out);
+        (void)zero;
+        vst1q_u32(&dst[i], out);
+    }
+}
+#endif
 
 // brightness up/down with no 2nd targets in BLDCNT: the only effect that can apply is on 1st-target
 // pixels inside the effect window
@@ -2097,6 +2611,7 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
 
     LayerDrawn = 0;
     LayerFull = 0;
+    Raw3D = false;
 
     // BG types per mode: 0 none, 1 text, 2 affine, 3 extended, 4 large, 5 3D
     enum { T_None, T_Text, T_Affine, T_Ext, T_Large, T_3D };
@@ -2128,7 +2643,9 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
         switch (type[bg])
         {
         case T_3D:
-            DrawBG_3D();
+            // with no window to apply, the compositor converts the 3D line itself (one pass less)
+            if (Banana2DFast && !WindowsOn) Raw3D = true;
+            else                            DrawBG_3D();
             LayerDrawn |= (1<<bg);
             break;
         case T_Text:
@@ -2182,12 +2699,33 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
     if (!secondTargets)
     {
         Composite(TopLine, nullptr, false);
+#ifdef BANANA_NEON
+        if (Banana2DFast)
+        {
+            if (effect == 2) BrightnessPassNeon<true>(dst);
+            else             BrightnessPassNeon<false>(dst);
+            return;
+        }
+#endif
         if (effect == 2) BrightnessPass<true>(dst);
         else             BrightnessPass<false>(dst);
         return;
     }
 
     Composite(TopLine, SecondLine, true);
+#ifdef BANANA_NEON
+    if (Banana2DFast)
+    {
+        switch (effect)
+        {
+        case 0: EffectsPassNeon<0>(dst); break;
+        case 1: EffectsPassNeon<1>(dst); break;
+        case 2: EffectsPassNeon<2>(dst); break;
+        default: EffectsPassNeon<3>(dst); break;
+        }
+        return;
+    }
+#endif
     switch (effect)
     {
     case 0: EffectsPass<0>(dst); break;

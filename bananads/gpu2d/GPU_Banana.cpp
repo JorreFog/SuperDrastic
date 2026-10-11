@@ -26,6 +26,9 @@
 #include "Platform.h"
 #include "GPU_Banana.h"
 #include "GPU_ColorOp.h"
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+#include <arm_neon.h>
+#endif
 
 namespace melonDS
 {
@@ -58,12 +61,122 @@ void BananaRenderer::FillLine(u32* dst, u32 val)
         dst[i] = val;
 }
 
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+// 16 pixels at a time, one plane per byte (ld4/st4): out byte = (c << 2) | (c >> 4), the top two bits of the 6-bit
+// channel repeated (Expand); with master brightness on the 6-bit channels first, exactly ColorBrightnessUp(c, f, 0)
+// and ColorBrightnessDown(c, f, 0xF) (each channel's result fits in its 6 bits, so the packed masks drop nothing)
+static inline uint8x16_t Expand6(uint8x16_t c)
+{
+    uint8x16_t t = vshlq_n_u8(c, 2);
+    return vsriq_n_u8(t, t, 6);
+}
+
+template<int mode>
+static inline uint8x16_t Bright6(uint8x16_t c, uint8x8_t f)
+{
+    c = vandq_u8(c, vdupq_n_u8(0x3F));
+    if (mode == 1)
+    {
+        // c + (((63 - c) * f) >> 4)
+        uint8x16_t d = vsubq_u8(vdupq_n_u8(0x3F), c);
+        uint8x8_t lo = vshrn_n_u16(vmull_u8(vget_low_u8(d), f), 4);
+        uint8x16_t r = vshrn_high_n_u16(lo, vmull_high_u8(d, vcombine_u8(f, f)), 4);
+        return vaddq_u8(c, r);
+    }
+    else
+    {
+        // c - ((c * f + 15) >> 4)
+        uint16x8_t bias = vdupq_n_u16(15);
+        uint8x8_t lo = vshrn_n_u16(vmlal_u8(bias, vget_low_u8(c), f), 4);
+        uint8x16_t r = vshrn_high_n_u16(lo, vmlal_high_u8(bias, c, vcombine_u8(f, f)), 4);
+        return vsubq_u8(c, r);
+    }
+}
+
+template<int mode>
+static void WriteLineNeon(u32* dst, const u32* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint8x16x4_t s = vld4q_u8((const u8*)(src + i));
+        uint8x16_t r = s.val[0], g = s.val[1], b = s.val[2];
+        if (mode)
+        {
+            r = Bright6<mode>(r, f);
+            g = Bright6<mode>(g, f);
+            b = Bright6<mode>(b, f);
+        }
+        uint8x16x4_t o;
+        o.val[0] = Expand6(b);
+        o.val[1] = Expand6(g);
+        o.val[2] = Expand6(r);
+        o.val[3] = vdupq_n_u8(0xFF);
+        vst4q_u8((u8*)(dst + i), o);
+    }
+}
+
+// 16 direct-colour pixels (display modes 2 and 3) to the three 6-bit channel planes
+static inline void Planes15(const u16* p, uint8x16_t& r, uint8x16_t& g, uint8x16_t& b)
+{
+    uint16x8_t c0 = vld1q_u16(p), c1 = vld1q_u16(p + 8);
+    uint16x8_t m = vdupq_n_u16(0x3E);
+    r = vcombine_u8(vmovn_u16(vandq_u16(vshlq_n_u16(c0, 1), m)), vmovn_u16(vandq_u16(vshlq_n_u16(c1, 1), m)));
+    g = vcombine_u8(vmovn_u16(vandq_u16(vshrq_n_u16(c0, 4), m)), vmovn_u16(vandq_u16(vshrq_n_u16(c1, 4), m)));
+    b = vcombine_u8(vmovn_u16(vandq_u16(vshrq_n_u16(c0, 9), m)), vmovn_u16(vandq_u16(vshrq_n_u16(c1, 9), m)));
+}
+
+template<int mode>
+static void OutputDisplayNeonT(u32* dst, const u16* display, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint8x16_t r, g, b;
+        Planes15(display + i, r, g, b);
+        if (mode)
+        {
+            r = Bright6<mode>(r, f);
+            g = Bright6<mode>(g, f);
+            b = Bright6<mode>(b, f);
+        }
+        uint8x16x4_t o;
+        o.val[0] = Expand6(b);
+        o.val[1] = Expand6(g);
+        o.val[2] = Expand6(r);
+        o.val[3] = vdupq_n_u8(0xFF);
+        vst4q_u8((u8*)(dst + i), o);
+    }
+}
+
+// display modes 2 and 3: the conversion to the 18-bit format fused with WriteLine
+static void OutputDisplayNeon(u32* dst, const u16* display, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      OutputDisplayNeonT<1>(dst, display, factor);
+    else if (mode == 2 && factor) OutputDisplayNeonT<2>(dst, display, factor);
+    else                          OutputDisplayNeonT<0>(dst, display, 0);
+}
+#endif
+
 // master brightness and colour expansion in one pass
 void BananaRenderer::WriteLine(u32* dst, const u32* src, u16 brightness)
 {
     u32 mode = brightness >> 14;
     u32 factor = brightness & 0x1F;
     if (factor > 16) factor = 16;
+
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    if (Banana2DFast)
+    {
+        if (mode == 1 && factor)      WriteLineNeon<1>(dst, src, factor);
+        else if (mode == 2 && factor) WriteLineNeon<2>(dst, src, factor);
+        else                          WriteLineNeon<0>(dst, src, 0);
+        return;
+    }
+#endif
 
     if (mode == 1 && factor)
     {
@@ -98,6 +211,13 @@ void BananaRenderer::OutputLineA(u32* dst, u32 dispcnt, u16 brightness, const u1
     case 2: // VRAM display
     case 3: // FIFO display
         {
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+            if (Banana2DFast && display)
+            {
+                OutputDisplayNeon(dst, display, brightness);
+                return;
+            }
+#endif
             alignas(16) u32 tmp[256];
             if (display)
             {

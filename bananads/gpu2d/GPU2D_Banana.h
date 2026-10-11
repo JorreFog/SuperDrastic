@@ -31,6 +31,10 @@
 namespace melonDS
 {
 
+// render.2d_fast (default on): the NEON paths of the Banana 2D engine (output stage, 16-colour text BGs, direct-colour
+// bitmaps) and the sprite line's partial clears. Off: the portable code they replace. The same pixels either way.
+extern bool Banana2DFast;
+
 // The 2D unit's registers one scanline reads, as GPU2D holds them when the line is drawn (same names as GPU2D's).
 // A line is drawn from this copy, so it can be drawn later, on another thread (render.2d_thread).
 struct Banana2DRegs
@@ -55,6 +59,7 @@ struct Banana2DRegs
     bool OAMRebuild;                      // rebuild the sprite table from OAMCopy
 
     void From(const melonDS::GPU2D& g);
+    void FromSprites(const melonDS::GPU2D& g);  // render.2d_fast: only what a sprite line reads
 };
 
 // BananaRenderer2D: a drop-in replacement for melonDS's SoftRenderer2D.
@@ -164,6 +169,7 @@ private:
     // standard palettes converted to the 18-bit format (flag byte 0xFF = opaque marker, 0 = transparent)
     alignas(16) u32 PalBG256[256];  // 256-colour: entry 0 transparent
     alignas(16) u32 PalBG16[256];   // 16-colour: every 16th entry transparent
+    alignas(16) u8 PalBG16Planes[16][48];  // PalBG16 by 16-colour palette, as R, G, B planes of 16 bytes
     u32 Backdrop;
     bool PalBGStale, PalOBJStale;
 
@@ -188,11 +194,15 @@ private:
     };
     SpriteEntry SpriteTab[128];
     int NumSpriteTab;
+    u64 SpriteLines[256][2];    // render.2d_fast: bit i set when SpriteTab[i] covers the sprite line (low 8 bits)
     bool SpriteTabStale;
 
     u32 NumSprites;
     int ObjXMin, ObjXMax;   // screen extent touched by non-window sprites on this line
+    int ObjDirtyMin, ObjDirtyMax;  // render.2d_fast: where OBJLine/OBJTransAttr may be nonzero
+    bool ObjWinDirty;              // render.2d_fast: OBJWindow may be nonzero
     bool WindowsOn;
+    bool Raw3D;         // BG0 is the 3D layer, composited straight from Line3D (no BGLine(0) this scanline)
     u8 LayerDrawn;      // bit per BG: a layer line exists for this scanline
     u8 LayerFull;       // bit per BG: every pixel of the layer line is opaque
     u8 OBJPrioPresent;  // bit per priority: opaque sprite pixels with that priority exist
@@ -225,9 +235,11 @@ private:
                      s32 rotA, s32 rotC, s32 rotX, s32 rotY, u32 bgnum);
 
     void RebuildSpriteTable();
+    inline void DrawSpriteEntry(u32 line, const SpriteEntry& e);
     void ApplySpriteMosaicX();
     void ResolveSprites();
     template<bool windows> void ResolveSpritesImpl();
+    template<bool windows> void ResolveSpritesNeon(int x0, int x1);
     template<bool window> inline void PutOBJ(s32 x, u32 color, u32 attr);
     inline void PutOBJ4(s32 x, u32 idx4, u32 attr);
     template<bool window> void DrawSprite_Rotscale(u32 num, u32 boundwidth, u32 boundheight, u32 width, u32 height, s32 xpos, s32 ypos);
@@ -236,6 +248,8 @@ private:
     void Composite(u32* outTop, u32* outSecond, bool needSecond);
     template<bool up> void BrightnessPass(u32* dst);
     template<u32 effect> void EffectsPass(u32* dst);
+    template<bool up> void BrightnessPassNeon(u32* dst);
+    template<u32 effect> void EffectsPassNeon(u32* dst);
 };
 
 }
