@@ -21,5 +21,7 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
 void defer_poly(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
                 unsigned flags, uint8_t *v0) { rec(L, spans, line0, nlines, flags, v0, 1); }
 void defer_flush(const layout_t *L, uint8_t *ctx) {}
+int defer_bin(unsigned bin, unsigned area) { return rast_defer; }
+void defer_measure_reset(void) {}
 void f_begin_frame(void) {}
 void comp_bin(uint8_t *sys, unsigned bin, int count) {}

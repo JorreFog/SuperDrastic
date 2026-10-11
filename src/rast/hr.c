@@ -657,6 +657,13 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t 
     }
 }
 
+/* RAST_DCHECK=1 (development): every bin's opaque list is rendered both ways, in one pass and deferred, from the same
+ * context, and the context's colours, attribute words, ids and fog-used word compared (3x has no DraStic reference:
+ * deferred shading, chosen per bin, must give the one pass's bytes) */
+static int hr_dcheck;
+static unsigned long dc_bins, dc_bad;
+__attribute__((constructor)) static void hr_dcheck_init(void) { hr_dcheck = getenv("RAST_DCHECK") != 0; }
+
 /* ---- the bin loop (in place of rast.c's render_bins when the scale is 3) ---- */
 void hr_render_bins(uint8_t *ctx) {
     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
@@ -678,7 +685,23 @@ void hr_render_bins(uint8_t *ctx) {
         hr_clear_bin(H, sys, geom, hy0);
         U32(H->ctx, HR_HDR + 0x10) = 0xffffffffu; U32(H->ctx, HR_HDR + 0x14) = 0;
         U64(H->ctx, HR_HDR + 0x18) = ~0ull;             /* the shadow line mask (fused.c line_px): all lines clean */
-        hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, rast_defer);
+        /* deferred shading: rast_defer, or per bin (RAST_DEFER=2, defer.c: where the opaque polygons' pixels of the
+         * frame before are above twice the bin's) */
+        const int defer = defer_bin(bin, 2 * HR_BL * HR_W);
+        static __thread uint8_t *dc_save, *dc_ref;
+        if (hr_dcheck) {
+            if (!dc_save) { dc_save = malloc(HR_CTX_SIZE); dc_ref = malloc(HR_CTX_SIZE); }
+            memcpy(dc_save, H->ctx, HR_CTX_SIZE);
+            hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, !defer);
+            memcpy(dc_ref, H->ctx, HR_CTX_SIZE); memcpy(H->ctx, dc_save, HR_CTX_SIZE);
+            defer_measure_reset();          /* (defer_bin's measures: the chosen render's only, as without the check) */
+        }
+        hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, defer);
+        if (hr_dcheck) {
+            int bad = memcmp(dc_ref, H->ctx, HR_HDR) || U32(dc_ref, HR_HDR + 0x14) != U32(H->ctx, HR_HDR + 0x14);
+            unsigned long n = __atomic_add_fetch(&dc_bins, 1, __ATOMIC_RELAXED), b = __atomic_add_fetch(&dc_bad, bad, __ATOMIC_RELAXED);
+            if (n % 1200 == 0) fprintf(stderr, "[rast] dcheck: %lu bins, %lu differ\n", n, b);
+        }
         if (ntrl) {
             memset(H->ctx + HR_ID, 0xff, HR_CL * HR_W);
             hr_render_list(H, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);

@@ -128,7 +128,7 @@ static void render_bins(uint8_t *ctx) {
         unsigned bin = U8(ctx, CTX_FIRST_BIN) + k * stride, y0 = bin * 32;
         clear_bin(ctx, sys, geom, y0);
         U64(ctx, CTX_LINEMASK) = 0xffffffffull;
-        render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0, rast_defer && pipe_sel == 3 && !pdiff);
+        render_list(ctx, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, y0, defer_bin(bin, 2 * 32 * 512) && pipe_sel == 3 && !pdiff);
         if (rast_stats) stats_bin(ctx, sys);
         if (ntrl) {
             memset(ctx + CTX_IDBUF, 0xff, 0x4000);
@@ -349,8 +349,10 @@ __attribute__((constructor)) static void rast_init(void) {
     if (!mode) return;
     if (!e) e = "ours";
     { const char *t = getenv("DSFLIP_RAST_TEXFILTER"); if (!t) t = getenv("RAST_TEXFILTER"); if (t) rast_texfilter = atoi(t); }
-    /* deferred shading pays only when shading is expensive (bilinear filtering): on with it unless set */
-    { const char *t = getenv("DSFLIP_RAST_DEFER"); if (!t) t = getenv("RAST_DEFER"); rast_defer = t ? atoi(t) : rast_texfilter != 0; }
+    /* deferred shading pays only when shading is expensive (bilinear filtering): on with it unless set (0 off, 1 always,
+     * 2 per bin: defer.c's defer_bin()) */
+    { const char *t = getenv("DSFLIP_RAST_DEFER"); if (!t) t = getenv("RAST_DEFER"); rast_defer = t ? atoi(t) : rast_texfilter != 0;
+      if (rast_defer == 2) defer_auto = 1, rast_defer = 0; }
     { const char *t = getenv("DSFLIP_RAST_SCALE"); if (!t) t = getenv("RAST_SCALE"); if (t) rast_scale = atoi(t) == 3 ? 3 : 2; }
     if (mode == 2) rast_scale = 2;
     hr_vcheck = getenv("RAST_VCHECK") != 0;

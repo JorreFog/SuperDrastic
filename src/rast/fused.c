@@ -370,6 +370,18 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
      * follow them); the hi-res pipeline, with lines of up to 768 pixels and no exactness to keep, batches longer */
     const unsigned bmax = L->hr ? 4096 : 512;
     const uint16_t *cnt = (const uint16_t *)(spans + SPO(PP, 9));   /* the lines' pixel counts: cnt[2 * line] */
+    if (defer_auto && !(flags & 1) && dmode != 2) {
+        /* defer_bin()'s measure: the opaque polygons' pixels, 8 lines a step (lanes from nlines on masked; the
+         * array's 44 or 64 entries hold nlines + 7: 39, 57) */
+        static const uint16_t iota[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+        const uint16x8_t io = vld1q_u16(iota);
+        uint16x8_t acc = vdupq_n_u16(0);
+        for (unsigned j = 0; j < nlines; j += 8) {
+            uint16x8_t c = vuzp1q_u16(vld1q_u16(cnt + 2 * j), vld1q_u16(cnt + 2 * j + 8));
+            acc = vaddq_u16(acc, vandq_u16(c, vcltq_u16(io, vdupq_n_u16((uint16_t)(nlines - j)))));
+        }
+        defer_px += vaddlvq_u16(acc);
+    }
     unsigned i = 0;
     while (i < nlines) {
         unsigned n = cnt[2 * i];
