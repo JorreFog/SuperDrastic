@@ -254,6 +254,36 @@ parallel, split by file (the generated code, the per-slice runtime and scheduler
 JIT), plus the coordinator's block-load change. Everything is exact and behind toggles. **No fps number was taken:
 the handheld can't be reached from here**, so the measure is host instructions per emulated frame under qemu.
 
+### On the device: HeartGold, RG DS Plus, 1992 MHz (the owner's run of 2b1d9bf)
+
+**With everything on, HeartGold went to a black screen at its first overworld frame** (frame 1200 of hgquick's
+walk; hgquick then reported ~105 fps of a hung game). Bisected: every new toggle off fixes it, `jit.codegen=old`
+alone fixes it, and inside 0007 `MELONDS_JIT_NOLOOPREGS=1` alone fixes it (so do the parts LOOPREGS depends on:
+SELFLOOP, CONDEXIT, EXITSTUB, EXITPC, LINK). **LOOPREGS is now off by default** (`MELONDS_JIT_LOOPREGS=1` turns it
+on, for finding the cause). Its cause isn't known: every test ROM's pictures and RAM are identical with it on, so
+HeartGold has a loop shape the tests don't. Ruled out by reading: a register written later in the loop and stale at
+an earlier exit (every written register counts as dirty from the loop's start). The repro on the device:
+```
+<bin> --frontend headless --set save.dir=/tmp/hgb --set state.dir=/tmp/hgb --set resume.on_start=off \
+  --set resume.on_quit=off --set wifi.dns=off --set headless.frames=1200 --set render.gengis_threads=2 \
+  --set headless.dump_dir=/tmp/hgt --set headless.dump_every=1200 --set headless.input=$(cat walk.txt) hg.nds
+md5sum < /tmp/hgt/frame1200.ppm   # good 12e33782..., bad 8fa8c332...
+```
+
+Speed (local clang builds, ~4% slower than CI's gcc builds; compare only with each other):
+
+| Build | HeartGold fps |
+|---|---|
+| stock melonDS JIT | 59.0 |
+| mj5 (0001-0002 and the host flags) | 61.8 |
+| 2b1d9bf, `MELONDS_JIT_NOSELFLOOP=1` | 66.9 |
+| 2b1d9bf, `jit.codegen=old` | 66.7 |
+
+**The qemu counts below don't carry over to this game.** 0001-0010 give about +8% over mj5, and 0007's code
+generation (59% of the JIT code's instructions on cpubench) adds nothing measurable on HeartGold. What did show is
+the C++ side (0008, 0009, 0010). So the next work goes by a device profile of the current build, not by qemu
+counts: `tools/device/hgprofile.sh`.
+
 ### How it was measured
 
 - `tools/perf/qemu-count/` (its README): a qemu TCG plugin counts the main thread's AArch64 instructions per
@@ -267,7 +297,7 @@ the handheld can't be reached from here**, so the measure is host instructions p
 - `tests/membench/`: a frame of a game's memory traffic (BG/OBJ VRAM, OAM, palette, the divider and square root,
   IO polling, IME/IF, IPC with a halting ARM7, the GX FIFO, stores into a code page).
 
-### Results (thousands of host instructions per frame; before = the branch before 0007-0010)
+### Results under qemu (thousands of host instructions per frame; before = the branch before 0007-0010; LOOPREGS on, which is now off by default: +329k on cpubench Thumb)
 
 | ROM | main thread | JIT code | JIT runtime + scheduler | memory paths | CPU emulation (the last three) |
 |---|---|---|---|---|---|
@@ -290,7 +320,8 @@ by the memory paths on cpubench, not by the JIT's generated code (59%, 54% and 6
   each way) +1,000; EXITSTUB (ExitCheck/DynExit: one extended add, `ARM_Ret` from a literal, a variant without the
   CPSR store, a shorter lookup) +695; EXITPC (a constant exit's R15 stored by the stub) +577; SELFLOOP (a jump back
   to the block's own start checks inline, through a slot linked from the start) +440; LOOPREGS (such loops keep
-  their guest registers in host registers round the loop) +329; KEEPFLAGS (fastmem call functions keep NZCV) +193;
+  their guest registers in host registers round the loop; **off by default since the HeartGold hang**,
+  `MELONDS_JIT_LOOPREGS=1`) +329; KEEPFLAGS (fastmem call functions keep NZCV) +193;
   LAZYFLAGS (flags stay in NZCV until needed) +168; FOLDEXIT +97; DEAD (dead `cls`/`clz`, CodeCycles stores and R15
   loads) +85; FASTENTRY (x26 set by a 3-instruction prologue at the block's entry, skipped by linked exits) +46;
   DYNADDR +34; DYNCACHE (a per-site cache for `bx lr`/`pop {pc}`/`ldr pc`, linked like a known exit) +24; MEMADDR
