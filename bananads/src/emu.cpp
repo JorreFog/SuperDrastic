@@ -242,6 +242,15 @@ bool Emu::load_rom(const std::string& path) {
             setenv("MELONDS_MEMFAST", std::to_string(mask).c_str(), 1);
     }
 
+    // render.geom_fast=on|off sets MELONDS_GEOMFAST (melonDS patch 0011: the 3D geometry engine's fast paths, exact;
+    // read as the NDS is created; default on). Unset, the environment decides; as with jit.iofast, a difftest sets it
+    // on both --a and --b.
+    {
+        const std::string geom = cfg_.str("render.geom_fast", "");
+        if (geom == "on") setenv("MELONDS_GEOMFAST", "1", 1);
+        else if (geom == "off") setenv("MELONDS_GEOMFAST", "0", 1);
+    }
+
     setup_wifi();
     setup_local();
 
