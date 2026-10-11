@@ -40,10 +40,15 @@
 // seconds (cpugov_boost); the windows meanwhile don't count (the stall isn't a drop at any clock) and the clock from
 // before comes back after it.
 //
-// DSFLIP_CPU_MAX can be a soft bound (DSFLIP_CPU_MAX_SOFT=1): above it only while the game is below full speed with
-// real work going on, or drops CPU-bound frames, at it. A hard bound made heavy 3D games at 2x run at 45-55 fps all
-// session long at a power profile's cap (players' logs, 1.5: Call of Duty and Final Fantasy - The 4 Heroes of Light
-// below full speed in 74% and 38% of their play at 1416-1608 MHz). A hard bound is applied from the start.
+// DSFLIP_CPU_MAX can be a soft bound (DSFLIP_CPU_MAX_SOFT=1): above it only while the game is below full speed and
+// CPU-bound (a thread over TARGET, a frame over BLAME_PEAK, or DraStic's threads over SLOW_SUM cores together), or drops
+// CPU-bound frames, at it. A hard bound made heavy 3D games at 2x run at 45-55 fps all session long at a power profile's
+// cap (players' logs, 1.5: Call of Duty and Final Fantasy - The 4 Heroes of Light below full speed in 74% and 38% of
+// their play at 1416-1608 MHz). Either bound is applied from the start: a soft one used to start at the clock the menu
+// left (the top) and step down from there, and a game slowed by something else than the CPU (the RG DS Plus, test build
+// 4: its audio drained 3% fast, the frames came at 57-58/s with the busiest thread at ~50%) was "slow" at every step,
+// struck 1416-1800 MHz in the memory and sat at 1992 MHz whatever the power profile. Below full speed without those
+// signs, the clock goes up only to the bound, and the clock it was at is avoided briefly but not remembered.
 //
 // DSFLIP_CPUGOV=0: off (the clock stays as ROCKNIX set it). DSFLIP_CPU_MIN / DSFLIP_CPU_MAX (kHz): bounds.
 // DSFLIP_CPUGOV_MEMORY=0: start every session knowing nothing. DSFLIP_CPUGOV_LOG=1: one log line per decision window
@@ -77,6 +82,7 @@ extern volatile int dsflip_screen_w;        /* dsflip.c: DraStic's screen width,
 #define MAX_STRIKES 6                        /* more wouldn't ban it longer (30 s << 5 is past BAD_MAX_S already) */
 #define BLAME_PEAK 0.80                      /* a drop is held against the clock only after a frame this heavy (last 1 s)... */
 #define IDLE_BUSY 0.25                       /* ...and ignored with the busiest thread below this (menu, quitting) */
+#define SLOW_SUM 1.2                         /* below full speed, DraStic's threads this many cores together: CPU-bound */
 #define FPS_WINDOWS 4                        /* the frame rate is judged over 1 s: 250 ms holds only ~15 frames */
 #define DOWN_AFTER 8                         /* windows (2 s) in a row that fit a lower clock before stepping down */
 #define MAXT 64
@@ -278,10 +284,17 @@ static void *gov_thread(void *a) {
          * is in DraStic's 3D helper threads (Dragon Quest Monsters: main 38%, three helpers 35% each, presents at
          * 52-58/s and the clock stepped down to 1104 as "light"), so all of DraStic's threads together count too */
         else if (behind) {
-            why = "slow"; if (want <= cur) want = step_up(cur);                              /* +1 step... */
+            /* CPU-bound: past a soft bound, and remembered; otherwise (waiting on something else: the audio, the
+             * display) up to the bound only, and the clock it was at avoided for BAD_FOR_S */
+            int cpu = umax > TARGET || peak1s >= BLAME_PEAK || usum > SLOW_SUM;
+            int top = cpu && soft_max ? hwmax_ : fmax_;
+            why = cpu ? "slow" : "slow, light frames";
+            if (want > top) want = top;
+            if (want <= cur) want = fit_to(cur + 1, top);                                     /* +1 step... */
             int c = idx(cur);                                                                /* ...and the clock that was */
-            if (c >= 0 && cur < (soft_max ? hwmax_ : fmax_)) { bad_until[c] = t + ban_ns(strikes[c]); strikes[c]++; mem_save(); }   /* too slow is held
+            if (c >= 0 && cur < top && cpu) { bad_until[c] = t + ban_ns(strikes[c]); strikes[c]++; mem_save(); }   /* too slow is held
                 against it like a drop: stepping back down to it after 15 s "light" and up again made a 1104/1416 see-saw */
+            else if (c >= 0 && cur < top && bad_until[c] < t + ban_ns(0)) bad_until[c] = t + ban_ns(0);
         }
         if (!dropped) {                                  /* a window without a drop: time towards forgiveness */
             int forgiven = 0;
@@ -330,8 +343,8 @@ void cpugov_start(void) {
     { const char *sm = getenv("DSFLIP_CPU_MAX_SOFT"); soft_max = sm && *sm == '1' && fmax_ < hwmax_; }
     dsflip_log("[cpugov] on: %d..%d MHz%s, target %.0f%% load of the busiest DraStic thread\n", fmin_ / 1000, fmax_ / 1000,
                soft_max ? " (soft: higher while the game can't keep up)" : "", TARGET * 100);
-    /* a hard bound holds from the start: the session begins at the clock the menu left (often the top) */
-    if (!soft_max && cur > fmax_ && wr_int(POL "scaling_max_freq", fmax_) == 0) cur = fmax_;
+    /* the bound holds from the start (soft or hard): the session begins at the clock the menu left (often the top) */
+    if (cur > fmax_ && wr_int(POL "scaling_max_freq", fmax_) == 0) cur = fmax_;
     gov_on = 1;
     pthread_t th;
     if (!pthread_create(&th, 0, gov_thread, 0)) pthread_setname_np(th, "dsf-cpugov");
