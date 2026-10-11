@@ -278,6 +278,7 @@ void Emu::setup_slice() {
     const long slice = adaptive ? 64 : cfg_.num("core.slice", 64);
     long idle = cfg_.num("core.slice_idle", adaptive ? 512 : slice);
     long hold = cfg_.num("core.slice_hold", 4096);
+    slice_stats_ = cfg_.num("core.slice_stats", 0);
     auto ok = [](long v) { return v >= 1 && v <= 16384; };
     if (!ok(slice) || !ok(idle) || hold < 0 || hold > (1 << 24)) {
         Log(LogLevel::Warn, "[emu] core.slice=%s / slice_idle=%ld / slice_hold=%ld out of range; using 64\n", s.c_str(),
@@ -288,7 +289,6 @@ void Emu::setup_slice() {
     nds_->SetSlice((s32)slice, (s32)idle, (u32)hold);
     if (slice != 64 || idle != slice)
         Log(LogLevel::Info, "[emu] scheduler slice %ld, %ld while %ld cycles away from IPC\n", slice, idle, hold);
-    slice_stats_ = cfg_.num("core.slice_stats", 0);
 }
 
 void Emu::run_frame() {
