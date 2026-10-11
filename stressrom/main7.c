@@ -19,6 +19,10 @@ void main7(void) {
             WRAM16[i] = (u16)(WRAM16[i] + WRAM8[i]);
             WRAM32[i] = WRAM32[i] ^ ((u32)WRAM16[i] << (i & 15));
             sum += WRAM32[i] + (u32)(signed char)WRAM8[i];
+            /* An ARM7 multiply so the jit.mul difftest gate exercises the ARM7 MUL path: WRAM32[i] spans the
+             * full 32-bit range, so its leading sign/zero bits vary and all of the ARM7's per-high-byte MUL
+             * cycle buckets fire across a frame. */
+            sum += WRAM32[i] * (i | 0x10101);
         }
         SHARED[n & 255] += sum;
         SHARED[256] = ++n;
