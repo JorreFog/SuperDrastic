@@ -12,7 +12,7 @@ does block decoding, the block cache, invalidation and idle-loop detection; Bana
 `ARMJIT_A64` compiler, through one guarded line that CMake adds to melonDS's `src/ARMJIT_Compiler.h`. It was
 written from the Arm Architecture Reference Manual, with no DraStic code.
 
-- **The encoder** (`jit/a64.h`): one function per instruction form. `tests/jit_encodings.sh` checks all 82 forms
+- **The encoder** (`jit/a64.h`): one function per instruction form. `tests/jit_encodings.sh` checks all 86 forms
   against LLVM's assembler (`ctest`, any host).
 - **Registers:**
   - x29 holds the CPU, w28 the cycles, w27 the CPSR.
@@ -35,6 +35,11 @@ written from the Arm Architecture Reference Manual, with no DraStic code.
     melonDS models no ARM9 data cache, so this is exact. Any other address, or no permission, takes the
     call. `jit.fastloads=off` turns it off; with it on or off, `bananads-difftest --every` finds main RAM
     byte-identical after every frame (CI, ARM and Thumb), so it changes no cycle.
+  - ARM9 stores inline for DTCM and main RAM (ARMv5::DataWrite*, AddCycles_CD, NDS::ARM9Write*). A main-RAM
+    store goes inline only when melonDS's code bitmap (`CodeIndexMainRAM`, which its `CheckAndInvalidate`
+    reads) has no compiled code in that 16-byte chunk; then the check would have done nothing. Code
+    there, ITCM, no write permission or any other address: the call. `jit.faststores=off`; main RAM is
+    identical after every frame with it on or off (CI).
   - Block linking: a block's exit does what melonDS's `Execute` loop does between two blocks, in the same
     order: the StopExecution check, `Timestamp += Cycles`, the Target check, the region check and the
     FastBlockLookup lookup. Then it jumps straight into the next block instead of returning. The table is
@@ -71,10 +76,8 @@ stress ROMs are bound by 3D, not by the CPUs.
    to keep the run-time cost to stay exact.
 2. LDM/STM and PUSH/POP.
 3. MUL/MLA (the interpreter charges by operand size), shifts by a register.
-4. Stores inline, like the loads. A store to main RAM or ITCM can hit compiled code: it needs the framework's
-   invalidation check, `ARMJIT::CheckAndInvalidate`, which melonDS's write functions call.
-5. ARM7 loads inline. `ARMv4`'s cycle formula depends on the code and data regions at run time.
-6. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
+4. ARM7 loads and stores inline. `ARMv4`'s cycle formula depends on the code and data regions at run time.
+5. A device: `headless` fps against melonDS's JIT (docs/PLAN.md B).
 
 ## The DraStic JIT study (2026-10-11)
 

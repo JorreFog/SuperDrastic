@@ -129,6 +129,10 @@ struct A64 {
     void ldr_reg(Reg t, Reg n, Reg m) { put(0xB8606800 | m << 16 | n << 5 | t); }
     void ldrh_reg(Reg t, Reg n, Reg m) { put(0x78606800 | m << 16 | n << 5 | t); }
     void ldrb_reg(Reg t, Reg n, Reg m) { put(0x38606800 | m << 16 | n << 5 | t); }
+    void str_reg(Reg t, Reg n, Reg m) { put(0xB8206800 | m << 16 | n << 5 | t); }
+    void strh_reg(Reg t, Reg n, Reg m) { put(0x78206800 | m << 16 | n << 5 | t); }
+    void strb_reg(Reg t, Reg n, Reg m) { put(0x38206800 | m << 16 | n << 5 | t); }
+    void mulx(Reg d, Reg n, Reg m) { put(0x9B007C00 | m << 16 | n << 5 | d); }  // MADD d, n, m, xzr
     void ldrx_reg_lsl3(Reg t, Reg n, Reg m) { put(0xF8607800 | m << 16 | n << 5 | t); }  // [Xn, Xm, LSL #3]
 
     // Branches. Offsets are in words from the branch itself; patch() fills one in later.

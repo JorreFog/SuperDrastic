@@ -101,5 +101,9 @@ int main() {
     E("add x17, x17, w28, sxtw", a.addx_sxtw((Reg)17, (Reg)17, (Reg)28));
     E("ldr x16, [x16, x17, lsl #3]", a.ldrx_reg_lsl3((Reg)16, (Reg)16, (Reg)17));
     E("lsr x17, x16, #32", a.lsrxi((Reg)17, (Reg)16, 32));
+    E("str w2, [x3, x17]", a.str_reg((Reg)2, (Reg)3, (Reg)17));
+    E("strh w2, [x3, x17]", a.strh_reg((Reg)2, (Reg)3, (Reg)17));
+    E("strb w2, [x3, x17]", a.strb_reg((Reg)2, (Reg)3, (Reg)17));
+    E("mul x0, x0, x4", a.mulx((Reg)0, (Reg)0, (Reg)4));
     return 0;
 }

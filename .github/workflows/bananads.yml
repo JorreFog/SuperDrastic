@@ -71,13 +71,15 @@ jobs:
           done
           cmp bjt-on/frame150.ppm bjt-off/frame150.ppm
           cmp bjt-on/frame300.ppm bjt-off/frame300.ppm
-      - name: BananaJIT's inline ARM9 loads cost exactly what the calls do (main RAM equal after every frame)
+      - name: BananaJIT's inline loads/stores and block linking change no cycle (main RAM equal after every frame)
         run: |
           for rom in stressrom/out/dsstress-L5.nds stressrom/out-thumb/dsstress-L5.nds; do
             qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
               --a jit=on --a jit.fastloads=off --b jit=on --b jit.fastloads=on $rom
             qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
               --a jit=on --a jit.link=off --b jit=on --b jit.link=on $rom
+            qemu-aarch64 -L /usr/aarch64-linux-gnu build-bj/bananads-difftest --every --frames 120 \
+              --a jit=on --a jit.faststores=off --b jit=on --b jit.faststores=on $rom
           done
       - uses: actions/upload-artifact@v4
         with:
