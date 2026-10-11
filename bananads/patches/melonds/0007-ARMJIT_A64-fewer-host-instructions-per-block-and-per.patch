@@ -1,0 +1,1461 @@
+From e44420b4db44c9e75b80dd8fe6e3d7184d130e93 Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 21:10:13 +0000
+Subject: [PATCH] ARMJIT_A64: fewer host instructions per block and per exit
+
+Each change is on by default and exact (same cycles, memory and pictures). MELONDS_JIT_OLDCODEGEN=1
+turns all of them off (the code is then what patches 0001-0006 generate); MELONDS_JIT_NO<name>=1
+turns off one. All are read once, when the compiler is created.
+
+- FASTENTRY: the fast memory base (x26) is set by a prologue at each block's entry (MOVZ and a MOVK
+  per other non-zero halfword: the same size for all of a CPU's blocks), which the runtime
+  dispatches to; link slots and DynExit enter past it (x26 is callee-saved and only blocks of the
+  same CPU set it), so a linked block doesn't reload it.
+- CONDEXIT: a conditional branch with a constant target ending a block gets a known exit each way
+  (ExitCheck and a link slot), instead of DynExit's lookup; the condition is checked again on the
+  host's flags or RCPSR.
+- MEMADDR: a 16/32-bit [rn] fast access uses rn as the address instead of a copy in w0; a patched
+  (faulted) access moves it to w0 before its call (LoadStorePatch::AddrReg).
+- CODESTORES: ARM7 CodeRegion/CodeCycles in one 64-bit store; a constant jump skips storing
+  CodeRegion/CodeCycles (ARM7) or RegionCodeCycles (ARM9) when the block already stored the same
+  values on every path to it.
+- DEAD: no CLS/CLZ before ARM7 multiplies (Comp_AddCycles_CI ignores the register), no ARM9
+  CodeCycles store before compiled instructions (only the interpreter reads it), no R15 load into a
+  host register for a conditional B/BL.
+- EXITSTUB: ExitCheck/DynExit add the cycles with one sxtw-extended add, return to ARM_Ret through a
+  literal, and come in a variant without the CPSR store for blocks that left RCPSR as it is in
+  memory; DynExit computes the lookup address in fewer instructions and loads the code base from a
+  literal.
+- EXITPC (needs EXITSTUB): a constant exit's R15 is stored by the stub (ExitCheckPC, from a literal
+  word after the link slot) instead of a mov/movk/str in the block; so is the not-taken exit's of a
+  conditional immediate branch ending a block (no R15 store before it).
+- SELFLOOP (needs EXITPC): an exit back to the block's own start, when nothing in the block stores
+  R15 (so memory still has the block's), does ExitCheck's work inline and goes round through a link
+  slot linked from the start (UnlinkBlock unlinks it as any other); back to the loop stores R15.
+- LOOPREGS (needs SELFLOOP and CONDEXIT): such a loop block (only compiled instructions, no block
+  transfers, MSR/MRS, register jumps or R15 operands, no branch followed when taken) loads every
+  guest register it uses once at its entry and keeps them in host registers round the loop (no
+  unloading; slow memory calls save and reload caller-saved ones); every way out stores them all. A
+  Thumb PUSH/POP/LDMIA/STMIA of one register (not PC) qualifies: with the register loaded it is
+  Comp_MemAccessBlock's single access.
+- KEEPFLAGS: the functions a faulted fast memory access is patched to call keep the host's NZCV, so
+  a fast access no longer ends the host flags' validity (conditions after loads branch on them).
+- FOLDEXIT (needs CONDEXIT): a conditional immediate branch ending a block has its taken way's exit
+  inside the branch (stores, one cycle add of its jump cycles plus the block's constant ones, known
+  by then: the not-taken way's are the last) and its other way's at the end, instead of a join and a
+  second condition check.
+- LAZYFLAGS (needs KEEPFLAGS): an unconditional instruction's four flags stay in the host's NZCV
+  (PendingFlags) until something would change or read NZCV/RCPSR (the emitter calls FlagsTouched
+  first: Write32 for an NZCV writer or an instruction naming w27, BL before taking its offset), an
+  instruction not known safe starts, or an exit, which puts them in RCPSR on its way only. An
+  unconditional ADD/SUB/RSB/CMP/CMN/NEG that reads no flags and sets two or more drops pending ones
+  (it overwrites all four the same way before anything can read them). In a LOOPREGS block, when the
+  loop puts all four flags in RCPSR before reading any, the way round leaves them and the CPSR store
+  out; the loop's check then compares Timestamp and Target by the sign of their difference (no NZCV
+  write), so its ways out still find the flags in NZCV. A callee-saved host register the loop's
+  guest registers leave free holds the Timestamp's address.
+- DYNADDR (needs EXITSTUB): the JumpTo functions also leave the next block's address in w4, and an
+  unconditional register jump's exit looks the block up from it (DynExitA) instead of from R15 and
+  the T bit (w4 has bit 0 set for Thumb: DYNCACHE's key).
+- DYNCACHE (needs DYNADDR): such an exit keeps the key (address | T) of the block it last learnt in
+  a word after a link slot: the same key goes through ExitCheck and the slot, linked to that block
+  (UnlinkBlock unlinks it as any other); another key goes to DynExitA; the first time, ExitCheck and
+  back to the loop asking ARM_Dispatch to link the slot, and Link learns the dispatched block's key.
+
+MELONDS_JIT_PERFMAP also names the shared stubs in the map (stub_e9xx/e7xx JumpTo, ec0n ExitCheck,
+ed0n DynExit, eb00 the rest), and MELONDS_JIT_PERFDIR puts the map and code dump elsewhere than
+/tmp.
+---
+ src/ARMJIT_A64/ARMJIT_ALU.cpp       |  15 +-
+ src/ARMJIT_A64/ARMJIT_Branch.cpp    |  69 ++-
+ src/ARMJIT_A64/ARMJIT_Compiler.cpp  | 701 +++++++++++++++++++++++++---
+ src/ARMJIT_A64/ARMJIT_Compiler.h    |  80 +++-
+ src/ARMJIT_A64/ARMJIT_LoadStore.cpp |  41 +-
+ src/dolphin/Arm64Emitter.cpp        |  10 +
+ src/dolphin/Arm64Emitter.h          |   4 +
+ 7 files changed, 833 insertions(+), 87 deletions(-)
+
+diff --git a/src/ARMJIT_A64/ARMJIT_ALU.cpp b/src/ARMJIT_A64/ARMJIT_ALU.cpp
+index 1368c7b..4b1ca1f 100644
+--- a/src/ARMJIT_A64/ARMJIT_ALU.cpp
++++ b/src/ARMJIT_A64/ARMJIT_ALU.cpp
+@@ -172,6 +172,14 @@ void Compiler::Comp_RetriveFlags(bool retriveCV)
+     if (retriveCV && (want & (want - 1)))
+     {
+         // two or more wanted: all four (the instruction sets them all), in three instructions instead of two each
++        const bool always = Thumb ? CurInstr.Info.Kind != ARMInstrInfo::tk_BCOND : CurInstr.Cond() >= 0xE;
++        if (always && LoopMode)
++            LoopFlagsWritten = 0xF;
++        if (always && OptLazyFlags)
++        {
++            PendingFlags = true;   // (FlushFlags puts them in RCPSR when needed)
++            return;
++        }
+         MRS(X0, FIELD_NZCV);
+         ANDI2R(RCPSR, RCPSR, 0x0FFFFFFF);
+         ORR(RCPSR, RCPSR, W0);
+@@ -628,7 +636,8 @@ void Compiler::Comp_Mul_Mla(bool S, bool mla, ARM64Reg rd, ARM64Reg rm, ARM64Reg
+     }
+     else
+     {
+-        CLS(W0, rs);
++        if (!OptDead)   // (Comp_AddCycles_CI ignores the register: its result was never used)
++            CLS(W0, rs);
+         Comp_AddCycles_CI(mla ? 1 : 0, W0, ArithOption(W0, ST_LSR, 3));
+     }
+ 
+@@ -661,7 +670,9 @@ void Compiler::A_Comp_Mul_Long()
+     }
+     else
+     {
+-        if (sign)
++        if (OptDead)
++            ;   // (Comp_AddCycles_CI ignores the register: the count was never used)
++        else if (sign)
+             CLS(W0, rs);
+         else
+             CLZ(W0, rs);
+diff --git a/src/ARMJIT_A64/ARMJIT_Branch.cpp b/src/ARMJIT_A64/ARMJIT_Branch.cpp
+index c4af33b..37a549d 100644
+--- a/src/ARMJIT_A64/ARMJIT_Branch.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Branch.cpp
+@@ -68,8 +68,11 @@ void Compiler::Comp_JumpTo(u32 addr, bool forceNonConstantCycles)
+         u32 compileTimeCodeCycles = cpu9->RegionCodeCycles;
+         cpu9->RegionCodeCycles = regionCodeCycles;
+ 
+-        MOVI2R(W0, regionCodeCycles);
+-        STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARMv5, RegionCodeCycles));
++        if (!Comp_KnownCodeStore(regionCodeCycles))
++        {
++            MOVI2R(W0, regionCodeCycles);
++            STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARMv5, RegionCodeCycles));
++        }
+ 
+         setupRegion = newregion != oldregion;
+         if (setupRegion)
+@@ -120,10 +123,20 @@ void Compiler::Comp_JumpTo(u32 addr, bool forceNonConstantCycles)
+         cpu7->CodeRegion = codeRegion;
+         cpu7->CodeCycles = codeCycles;
+ 
+-        MOVI2R(W0, codeRegion);
+-        STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CodeRegion));
+-        MOVI2R(W0, codeCycles);
+-        STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CodeCycles));
++        if (!OptCodeStores)
++        {
++            MOVI2R(W0, codeRegion);
++            STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CodeRegion));
++            MOVI2R(W0, codeCycles);
++            STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CodeCycles));
++        }
++        else if (!Comp_KnownCodeStore(codeRegion | ((u64)(u32)codeCycles << 32)))
++        {
++            // both in one (unaligned) 64-bit store: they are neighbours
++            static_assert(offsetof(ARM, CodeCycles) == offsetof(ARM, CodeRegion) + 4, "CodeRegion, CodeCycles");
++            MOVI2R(X0, codeRegion | ((u64)(u32)codeCycles << 32));
++            STUR(X0, RCPU, offsetof(ARM, CodeRegion));
++        }
+ 
+         if (addr & 0x1)
+         {
+@@ -155,21 +168,39 @@ void Compiler::Comp_JumpTo(u32 addr, bool forceNonConstantCycles)
+         cpu7->CodeCycles = addr >> 15;
+     }
+ 
+-    if (Exit)
++    JumpR15Deferred = Exit && ExitR15Deferrable;   // (then the exit stores it)
++    if (Exit && !JumpR15Deferred)
+     {
+         MOVI2R(W0, newPC);
+         STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++        R15Stored = true;
+     }
+     LastJumpKnown = true;   // (block linking: Comp_Exit's known target)
+     LastJumpR15 = newPC;
+     LastJumpThumb = toThumb;
+-    if ((Thumb || CurInstr.Cond() >= 0xE) && !forceNonConstantCycles)
++    if (FoldCondExit)
++        FoldJumpCycles = cycles;   // (added with the block's constant cycles at the taken way's exit)
++    else if ((Thumb || CurInstr.Cond() >= 0xE) && !forceNonConstantCycles)
+         ConstantCycles += cycles;
+     else
+         ADD(RCycles, RCycles, cycles);
+ }
+ 
+ 
++bool Compiler::Comp_KnownCodeStore(u64 value)
++{
++    // true: the block already stored this value on every path to here, nothing to store. Else the caller stores
++    // it, and when this instruction always runs, it is known from here on.
++    if (!OptCodeStores)
++        return false;
++    if (KnownCodeValid && KnownCodeValue == value)
++        return true;
++    const bool always = Thumb ? CurInstr.Info.Kind != ARMInstrInfo::tk_BCOND : CurInstr.Cond() >= 0xE;
++    KnownCodeValid = always;
++    KnownCodeValue = value;
++    return false;
++}
++
+ void* Compiler::Gen_JumpTo9(int kind)
+ {
+     AlignCode16();
+@@ -200,6 +231,8 @@ void* Compiler::Gen_JumpTo9(int kind)
+             ANDI2R(RCPSR, RCPSR, ~0x20);
+ 
+         ANDI2R(W0, W0, ~3);
++        if (OptDynAddr)
++            MOV(W4, W0);   // (the next block's address, for DynExitA; | 1 for Thumb below)
+         ADD(W0, W0, 4);
+         STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARMv5, R[15]));
+ 
+@@ -218,6 +251,8 @@ void* Compiler::Gen_JumpTo9(int kind)
+         }
+ 
+         ANDI2R(W0, W0, ~1);
++        if (OptDynAddr)
++            ORRI2R(W4, W0, 1);   // (| 1: Thumb, for DynExitA and DYNCACHE's key)
+         ADD(W0, W0, 2);
+         STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARMv5, R[15]));
+ 
+@@ -259,6 +294,8 @@ void* Compiler::Gen_JumpTo7(int kind)
+         if (kind == 0)
+             ANDI2R(RCPSR, RCPSR, ~0x20);
+ 
++        if (OptDynAddr)
++            MOV(W4, W0);
+         ADD(W3, W0, 4);
+         STR(INDEX_UNSIGNED, W3, RCPU, offsetof(ARM, R[15]));
+ 
+@@ -280,6 +317,8 @@ void* Compiler::Gen_JumpTo7(int kind)
+ 
+         ANDI2R(W0, W0, ~1);
+ 
++        if (OptDynAddr)
++            ORRI2R(W4, W0, 1);
+         ADD(W3, W0, 2);
+         STR(INDEX_UNSIGNED, W3, RCPU, offsetof(ARM, R[15]));
+ 
+@@ -292,6 +331,8 @@ void* Compiler::Gen_JumpTo7(int kind)
+ void Compiler::Comp_JumpTo(Arm64Gen::ARM64Reg addr, bool switchThumb, bool restoreCPSR)
+ {
+     IrregularCycles = true;
++    KnownCodeValid = false;   // (the run-time jump stores them)
++    R15Stored = true;         // (and R15)
+ 
+     if (!restoreCPSR)
+     {
+@@ -299,6 +340,7 @@ void Compiler::Comp_JumpTo(Arm64Gen::ARM64Reg addr, bool switchThumb, bool resto
+             CPSRDirty = true;
+         MOV(W0, addr);
+         BL((Num ? JumpToFuncs7 : JumpToFuncs9)[switchThumb ? 0 : (Thumb + 1)]);
++        LastJumpViaFunc = OptDynAddr;   // (W4: the next block's address)
+     }
+     else
+     {
+@@ -370,6 +412,17 @@ void Compiler::T_Comp_BCOND()
+ 
+     Comp_BranchSpecialBehaviour(true);
+ 
++    if (FoldCondExit)
++    {
++        // the taken way's exit here, this way goes on to the not taken one
++        Comp_FoldTakenExit(true);
++        FoldActive = true;
++        SetJumpTarget(skipExecute);
++        Comp_AddCycles_C(true);
++        Comp_BranchSpecialBehaviour(false);
++        return;
++    }
++
+     FixupBranch skipFailed = B();
+     SetJumpTarget(skipExecute);
+     Comp_AddCycles_C(true);
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index ee12807..4ff7bdc 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -265,6 +265,36 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+ #endif
+     SetCodePtr(0);
+ 
++    {
++        // patch 0007's code generation improvements: MELONDS_JIT_OLDCODEGEN=1 turns all of them off, or one
++        // MELONDS_JIT_NO<name>=1 each
++        const bool old = getenv("MELONDS_JIT_OLDCODEGEN") && atoi(getenv("MELONDS_JIT_OLDCODEGEN"));
++        OptFastEntry = !old && !getenv("MELONDS_JIT_NOFASTENTRY");
++        OptCondExit = !old && !getenv("MELONDS_JIT_NOCONDEXIT");
++        OptMemAddr = !old && !getenv("MELONDS_JIT_NOMEMADDR");
++        OptCodeStores = !old && !getenv("MELONDS_JIT_NOCODESTORES");
++        OptDead = !old && !getenv("MELONDS_JIT_NODEAD");
++        OptExitStub = !old && !getenv("MELONDS_JIT_NOEXITSTUB");
++        OptDynAddr = OptExitStub && !getenv("MELONDS_JIT_NODYNADDR");
++        OptDynCache = OptDynAddr && !getenv("MELONDS_JIT_NODYNCACHE") && !getenv("MELONDS_JIT_NOLINK");
++        OptExitPC = OptExitStub && !getenv("MELONDS_JIT_NOEXITPC") && !getenv("MELONDS_JIT_NOLINK");   // (ExitCheckPC)
++        OptSelfLoop = OptExitPC && !getenv("MELONDS_JIT_NOSELFLOOP");
++        OptKeepFlags = !old && !getenv("MELONDS_JIT_NOKEEPFLAGS");
++        OptLoopRegs = OptSelfLoop && OptCondExit && !getenv("MELONDS_JIT_NOLOOPREGS");
++        OptLazyFlags = OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
++        FlagsWatch = OptLazyFlags;
++        OptFoldExit = OptCondExit && !getenv("MELONDS_JIT_NOFOLDEXIT") && !getenv("MELONDS_JIT_NOLINK");
++        // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
++        for (int num = 0; num < 2; num++)
++        {
++            const u64 base = (u64)(uintptr_t)(num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
++            u32 n = 1;
++            for (int hw = 1; hw < 4; hw++)
++                n += ((base >> (16 * hw)) & 0xFFFF) != 0;
++            EntrySkip[num] = OptFastEntry ? 4 * n : 0;
++        }
++    }
++
+     for (int i = 0; i < 3; i++)
+     {
+         JumpToFuncs9[i] = Gen_JumpTo9(i);
+@@ -358,6 +388,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         RET();
+     }
+ 
++    // the patched (faulted) fast memory accesses' functions; with OptKeepFlags they keep the host's NZCV
++    const BitSet32 patchSaved = OptKeepFlags ? BitSet32({16, 30}) | CallerSavedPushRegs : BitSet32({30}) | CallerSavedPushRegs;
+     for (int consoleType = 0; consoleType < 2; consoleType++)
+     {
+         for (int num = 0; num < 2; num++)
+@@ -379,7 +411,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+                     {
+                         MOV(W1, rdMapped);
+                     }
+-                    ABI_PushRegisters(BitSet32({30}) | CallerSavedPushRegs);
++                    if (OptKeepFlags)
++                        MRS(X16, FIELD_NZCV);   // (the host's flags survive the call: they may hold the guest's)
++                    ABI_PushRegisters(patchSaved);
+                     if (consoleType == 0)
+                     {
+                         switch ((8 << size) |  num)
+@@ -405,7 +439,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+                         }
+                     }
+                     
+-                    ABI_PopRegisters(BitSet32({30}) | CallerSavedPushRegs);
++                    ABI_PopRegisters(patchSaved);
++                    if (OptKeepFlags)
++                        _MSR(FIELD_NZCV, X16);
+                     RET();
+ 
+                     for (int signextend = 0; signextend < 2; signextend++)
+@@ -413,7 +449,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+                         PatchedLoadFuncs[consoleType][num][size][signextend][reg] = GetRXPtr();
+                         if (num == 0)
+                             MOV(X1, RCPU);
+-                        ABI_PushRegisters(BitSet32({30}) | CallerSavedPushRegs);
++                        if (OptKeepFlags)
++                            MRS(X16, FIELD_NZCV);
++                        ABI_PushRegisters(patchSaved);
+                         if (consoleType == 0)
+                         {
+                             switch ((8 << size) |  num)
+@@ -438,7 +476,9 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+                             case 9: QuickCallFunction(X3, SlowRead7<u8, 1>); break;
+                             }
+                         }
+-                        ABI_PopRegisters(BitSet32({30}) | CallerSavedPushRegs);
++                        ABI_PopRegisters(patchSaved);
++                        if (OptKeepFlags)
++                            _MSR(FIELD_NZCV, X16);
+                         if (size == 32)
+                             MOV(rdMapped, W0);
+                         else if (signextend)
+@@ -462,10 +502,19 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+     SetCodeBase((u8*)GetRWPtr(), (u8*)GetRXPtr());
+ 
+     // DynExit's code base, now that it is known
+-    const u64 base = (u64)(uintptr_t)GetRXBase();
+     for (int num = 0; num < 2; num++)
++    for (int c = 0; c < 2; c++)
+     {
+-        u32* p = DynExitBase[num];
++        // (+ the entry prologue's size: a linked entry skips it)
++        const u64 base = (u64)(uintptr_t)GetRXBase() + EntrySkip[num];
++        u32* p = DynExitBase[num][c];
++        if (DynExitLiteral)
++        {
++            memcpy(p, &base, 8);   // (data: the stub loads it)
++            if (DynExitBaseA[num][c])
++                memcpy(DynExitBaseA[num][c], &base, 8);
++            continue;
++        }
+         p[0] = 0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 17;                       // movz x17, #.., lsl #0
+         for (int hw = 1; hw < 4; hw++)
+             p[hw] = 0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 17;  // movk x17, #.., lsl #16*hw
+@@ -475,11 +524,21 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+     LinkBlocks = !getenv("MELONDS_JIT_NOLINK");
+     if (getenv("MELONDS_JIT_PERFMAP"))
+     {
+-        char path[64];
+-        snprintf(path, sizeof(path), "/tmp/perf-%d.map", (int)getpid());
++        // (MELONDS_JIT_PERFDIR: somewhere else than /tmp, for runs side by side)
++        const char* dir = getenv("MELONDS_JIT_PERFDIR") ? getenv("MELONDS_JIT_PERFDIR") : "/tmp";
++        char path[512];
++        snprintf(path, sizeof(path), "%s/perf-%d.map", dir, (int)getpid());
+         PerfMap = fopen(path, "w");
+-        snprintf(path, sizeof(path), "/tmp/melonjit-%d.code", (int)getpid());
++        snprintf(path, sizeof(path), "%s/melonjit-%d.code", dir, (int)getpid());
+         CodeDump = fopen(path, "wb");
++        // the shared stubs too, named stub_<id>: e9xx/e7xx JumpTo (kind), ec0n ExitCheck, ed0n DynExit, eb00 the
++        // banked register and patched memory functions
++        const u8* order[] = {(u8*)JumpToFuncs9[0], (u8*)JumpToFuncs7[0], (u8*)JumpToFuncs9[1],
++            (u8*)JumpToFuncs7[1], (u8*)JumpToFuncs9[2], (u8*)JumpToFuncs7[2], (u8*)StubsStart[0], (u8*)StubsStart[1],
++            (u8*)StubsStart[2], (u8*)StubsStart[3], (u8*)ReadBanked, GetRXBase()};
++        const u32 ids[] = {0xe900, 0xe700, 0xe901, 0xe701, 0xe902, 0xe702, 0xec00, 0xed00, 0xec01, 0xed01, 0xeb00};
++        for (int i = 0; i < 11; i++)
++            DumpBlock("stub", ids[i], order[i], order[i + 1]);
+     }
+ }
+ 
+@@ -723,21 +782,99 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+         if (ConstantCycles)
+             ADD(RCycles, RCycles, ConstantCycles);
+         if (taken)
+-            Comp_Exit(LastJumpKnown, LastJumpR15, LastJumpThumb);
++            Comp_Exit(LastJumpKnown, LastJumpR15, LastJumpThumb, LastJumpKnown && JumpR15Deferred);
+         else
+             Comp_Exit(true, R15, Thumb);    // not taken: on to the next instruction (its R15 is stored)
+     }
+ }
+ 
+-void Compiler::Comp_Exit(bool known, u32 knownR15, bool thumbAfter)
++void Compiler::Comp_Exit(bool known, u32 knownR15, bool thumbAfter, bool storeR15)
+ {
+-    // (an exit doesn't come back: the code after it has the host flags the code before it had)
++    // (an exit doesn't come back: the code after it has the host flags the code before it had, and its pending
++    // flags: they go in RCPSR on the exit's way only)
+     const u32 epoch = FlagsEpoch;
+-    Comp_ExitTo(known, knownR15, thumbAfter);
++    const bool pending = PendingFlags;
++    const bool selfLoop = LinkBlocks && known && OptSelfLoop && storeR15 && !R15Stored && knownR15 == BlockEntryR15
++        && thumbAfter == Thumb;
++    // the way round a LoopMode loop that puts all four flags in RCPSR before reading any: they needn't go in
++    // RCPSR (nor RCPSR in memory: only the interpreter and the loop read it, and CPSRDirty is set past the loop's
++    // start), only on the ways out, from x1 (the check overwrites NZCV)
++    ExitLazyLoop = selfLoop && LoopMode && OptLazyFlags && !LoopFlagsEarlyRead && LoopFlagsWritten == 0xF;
++    ExitFlagsPending = pending && ExitLazyLoop;
++    if (ExitFlagsPending)
++        PendingFlags = false;   // (the loop's check leaves NZCV as it is)
++    else
++        FlushFlags();
++    Comp_ExitTo(known, knownR15, thumbAfter, storeR15);
++    PendingFlags = pending;
++    ExitFlagsPending = ExitLazyLoop = false;
+     FlagsEpoch = epoch;
+ }
+ 
+-void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter)
++void Compiler::FlushFlags()
++{
++    // the pending flags into RCPSR, as Comp_RetriveFlags does
++    if (!PendingFlags)
++        return;
++    PendingFlags = false;
++    MRS(X17, FIELD_NZCV);
++    ANDI2R(RCPSR, RCPSR, 0x0FFFFFFF);
++    ORR(RCPSR, RCPSR, W17);
++}
++
++void Compiler::FlagsTouched()
++{
++    // (the emitter, before an instruction that changes NZCV or touches RCPSR)
++    if (PendingFlags)
++        FlushFlags();
++}
++
++bool Compiler::DropsPendingFlags(const FetchedInstr& in)
++{
++    // an unconditional arithmetic instruction that reads no flags, sets two or more (so all four go in RCPSR from
++    // NZCV, Comp_RetriveFlags) and doesn't jump
++    if (__builtin_popcount(in.SetFlags & 0xF) < 2 || (in.Info.ReadFlags & 0xF) || (in.Info.DstRegs & (1 << 15)))
++        return false;
++    const u16 k = in.Info.Kind;
++    if (Thumb)
++        return k == ARMInstrInfo::tk_ADD_REG_ || k == ARMInstrInfo::tk_SUB_REG_ || k == ARMInstrInfo::tk_ADD_IMM_
++            || k == ARMInstrInfo::tk_SUB_IMM_ || k == ARMInstrInfo::tk_CMP_IMM || k == ARMInstrInfo::tk_ADD_IMM
++            || k == ARMInstrInfo::tk_SUB_IMM || k == ARMInstrInfo::tk_NEG_REG || k == ARMInstrInfo::tk_CMP_REG
++            || k == ARMInstrInfo::tk_CMN_REG || k == ARMInstrInfo::tk_CMP_HIREG;
++    if (in.Cond() != 0xE)
++        return false;
++    return (k >= ARMInstrInfo::ak_SUB_REG_LSL_IMM_S && k <= ARMInstrInfo::ak_SUB_IMM_S)
++        || (k >= ARMInstrInfo::ak_RSB_REG_LSL_IMM_S && k <= ARMInstrInfo::ak_RSB_IMM_S)
++        || (k >= ARMInstrInfo::ak_ADD_REG_LSL_IMM_S && k <= ARMInstrInfo::ak_ADD_IMM_S)
++        || (k >= ARMInstrInfo::ak_CMP_REG_LSL_IMM && k <= ARMInstrInfo::ak_CMP_IMM)
++        || (k >= ARMInstrInfo::ak_CMN_REG_LSL_IMM && k <= ARMInstrInfo::ak_CMN_IMM);
++}
++
++bool Compiler::LazySafe(const FetchedInstr& in)
++{
++    // pending flags may stay pending over this instruction: compiled, reads no flags (or is an immediate branch,
++    // which checks them on the host's flags) and only touches NZCV/RCPSR in ways the emitter's hook sees
++    const u16 k = in.Info.Kind;
++    if (!CanCompile(Thumb, k))
++        return false;
++    if (Thumb)
++    {
++        if (k == ARMInstrInfo::tk_BCOND || k == ARMInstrInfo::tk_B)
++            return true;
++        if (LoopMode && (k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP || k == ARMInstrInfo::tk_LDMIA
++            || k == ARMInstrInfo::tk_STMIA))
++            return true;   // (in a LoopMode block only one register, not PC: a single access, LoopBlock)
++        return k < ARMInstrInfo::tk_PUSH && !(in.Info.ReadFlags & 0xF);
++    }
++    if ((k == ARMInstrInfo::ak_B || k == ARMInstrInfo::ak_BL) && in.Cond() != 0xF)
++        return true;
++    if (in.Cond() < 0xE || (in.Info.ReadFlags & 0xF))
++        return false;
++    return k < ARMInstrInfo::ak_SMLAxy || k == ARMInstrInfo::ak_CLZ
++        || (k >= ARMInstrInfo::ak_STR_REG_LSL && k <= ARMInstrInfo::ak_LDRSH_POST_IMM && !(k >= ARMInstrInfo::ak_LDRD_REG && k <= ARMInstrInfo::ak_STRD_POST_IMM));
++}
++
++void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool storeR15)
+ {
+     if (!LinkBlocks)
+     {
+@@ -745,24 +882,144 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter)
+         return;
+     }
+ 
++    // RCPSR as in memory (nothing in this block changed it: CPSR is in memory at every block's entry) needs no store
++    const int c = (OptExitStub && !CPSRDirty) ? 0 : 1;
++
++    if (!known && LastJumpViaFunc && OptDynCache)
++    {
++        // DYNCACHE: the target's key (address | T, in W4) against the one this exit learnt; the same: ExitCheck and
++        // the slot, linked to that block; else DynExitA, or the first time, ExitCheck and back to the loop asking
++        // ARM_Dispatch to link the slot (Link learns the key then)
++        u32* litRW = nullptr;
++        u8* litRX = nullptr;
++        FixupBranch learnt;
++        {
++            // ldr w1, <key>: the key word comes after the slot, below
++            litRW = (u32*)GetWriteableRWPtr();
++            litRX = (u8*)GetRXPtr();
++            Write32(0x18000000 | 1);
++        }
++        CMP(W4, W1);
++        FixupBranch miss = B(CC_NEQ);
++        BL(ExitCheck[Num][c]);
++        u8* slot = GetWriteableRWPtr();
++        u8* slotRX = (u8*)GetRXPtr();
++        SwapCodeRegion();
++        u8* learnPath = (u8*)GetRXPtr();
++        SwapCodeRegion();
++        B(learnPath);
++        u8* keyRX = (u8*)GetRXPtr();
++        Write32(2);   // (no key has bit 1 set without bit 0: a Thumb key has bit 0, an ARM one neither)
++        *litRW |= (u32)((keyRX - litRX) / 4) << 5;
++        SetJumpTarget(miss);
++        CMP(W1, 2);
++        FixupBranch learn = B(CC_EQ);
++        B(DynExitA[Num][c]);
++        SetJumpTarget(learn);
++        BL(ExitCheck[Num][c]);
++        B(learnPath);
++        LinkSlots[(u32)(slotRX - GetRXBase())] = {*(u32*)slot, 0, Num, (u32)(keyRX - GetRXBase())};
++
++        // the learn path (the slot's until linked, and the first miss's): link the slot to the block the loop
++        // dispatches next
++        SwapCodeRegion();
++        MOVP2R(X16, slotRX);
++        MOVP2R(X17, &melonds_jit_link[0]);
++        STP(INDEX_SIGNED, X16, RCPU, X17, 0);
++        QuickTailCall(X16, ARM_Ret);
++        FlushIcacheSection(learnPath, (u8*)GetRXPtr());
++        SwapCodeRegion();
++        return;
++    }
++
+     if (!known)
+     {
+-        B(DynExit[Num]);
++        B((LastJumpViaFunc ? DynExitA : DynExit)[Num][c]);
+         return;
+     }
+ 
+-    // the checks (ExitCheck), then the slot: a B to its link path in the far region, until ARM_Dispatch links it
+-    BL(ExitCheck[Num]);
++    // A loop back to this block's own start (with R15 in memory still the block's: nothing in it stores R15, so
++    // it is the one its entry had): ExitCheck's work inline, then the slot, linked from the start, and no R15
++    // store on the way round. Back to the loop stores R15 first.
++    const bool selfLoop = OptSelfLoop && storeR15 && !R15Stored && knownR15 == BlockEntryR15 && thumbAfter == Thumb;
++    // the pending flags into RCPSR, on a way out of the loop
++    auto flagsOut = [&]()
++    {
++        if (ExitFlagsPending)
++        {
++            MRS(X17, FIELD_NZCV);
++            ANDI2R(RCPSR, RCPSR, 0x0FFFFFFF);
++            ORR(RCPSR, RCPSR, W17);
++        }
++    };
++    FixupBranch stop, late;
++    if (selfLoop)
++    {
++        LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
++        stop = CBNZ(W0);
++        ARM64Reg ts = LoopMode && LoopTsReg != INVALID_REG ? LoopTsReg : X16;
++        if (ts == X16)
++            MOVP2R(X16, Num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp);
++        LDP(INDEX_SIGNED, X17, X0, ts, 0);
++        Write32(0x8B200000 | (28 << 16) | (6 << 13) | (17 << 5) | 17);   // add x17, x17, w28, sxtw
++        STR(INDEX_UNSIGNED, X17, ts, 0);
++        MOVI2R(RCycles, 0);
++        if (LoopMode)
++        {
++            // Timestamp >= Target without touching NZCV (both far below 2^63): bit 63 of their difference
++            SUB(X0, X17, X0);
++            late = TBZ(X0, 63);
++        }
++        else
++        {
++            CMP(X17, X0);
++            late = B(CC_HS);
++        }
++        if (c && !ExitLazyLoop)
++            STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
++    }
++    else
++    {
++        // the checks (ExitCheck), then the slot: a B to its link path in the far region, until ARM_Dispatch links
++        // it. With storeR15, ExitCheckPC first stores the R15 in the word after the slot.
++        BL(storeR15 ? ExitCheckPC[Num][c] : ExitCheck[Num][c]);
++    }
+     u8* slot = GetWriteableRWPtr();
+     u8* slotRX = (u8*)GetRXPtr();
+     SwapCodeRegion();
+     u8* linkPath = (u8*)GetRXPtr();
+     SwapCodeRegion();
+     B(linkPath);
++    if (storeR15 && !selfLoop)
++        Write32(knownR15);   // (data, never executed: the slot before it is a B)
+     LinkSlots[(u32)(slotRX - GetRXBase())] = {*(u32*)slot, knownR15, Num | (thumbAfter ? 2u : 0u)};
++    if (selfLoop)
++    {
++        // linked now, as Link would (UnlinkBlock puts the link path back when the block goes); in LoopMode past
++        // the entry's register loads, with the registers where they are
++        const u8* entry = LoopMode ? LoopBodyRX : BlockStartRX + EntrySkip[Num];
++        *(u32*)slot = 0x14000000 | ((u32)((entry - slotRX) / 4) & 0x3FFFFFF);
++        LinkedTo[(u32)(BlockStartRX - GetRXBase())].push_back((u32)(slotRX - GetRXBase()));
++        SetJumpTarget(stop);
++        SetJumpTarget(late);
++        flagsOut();
++        if (LoopMode)
++            RegCache.PrepareExit();
++        MOVI2R(W0, knownR15);
++        STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++        QuickTailCall(X16, ARM_Ret);
++    }
+ 
+     // the link path: ask ARM_Dispatch to link the slot to the block the loop dispatches next, then back to it
+     SwapCodeRegion();
++    if (selfLoop)
++    {
++        flagsOut();
++        if (LoopMode)
++            RegCache.PrepareExit();
++        MOVI2R(W0, knownR15);   // (not stored on the way here)
++        STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++    }
+     MOVP2R(X16, slotRX);
+     MOVP2R(X17, &melonds_jit_link[0]);
+     STP(INDEX_SIGNED, X16, RCPU, X17, 0);
+@@ -778,18 +1035,45 @@ void Compiler::Gen_ExitStubs(int num)
+     // Cycles = 0, and on (a return to the exit's slot) while Timestamp < Target. Back to the loop is a return
+     // to ARM_Ret, which keeps the return stack in step.
+     u64* ts = num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp;   // its Target is the next u64
+-    ExitCheck[num] = GetRXPtr();
++
++    // the shared part: Timestamp += Cycles, Cycles = 0, to *stop/*late when the loop has to take over
++    auto checks = [&](FixupBranch& stop, FixupBranch& late)
+     {
+         LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
+-        FixupBranch stop = CBNZ(W0);
++        stop = CBNZ(W0);
+         MOVP2R(X16, ts);
+         LDP(INDEX_SIGNED, X17, X0, X16, 0);
+-        SXTW(X1, RCycles);
+-        ADD(X17, X17, X1);
++        if (OptExitStub)
++            Write32(0x8B200000 | (28 << 16) | (6 << 13) | (17 << 5) | 17);   // add x17, x17, w28, sxtw
++        else
++        {
++            SXTW(X1, RCycles);
++            ADD(X17, X17, X1);
++        }
+         STR(INDEX_UNSIGNED, X17, X16, 0);
+         MOVI2R(RCycles, 0);
+         CMP(X17, X0);
+-        FixupBranch late = B(CC_HS);
++        late = B(CC_HS);
++    };
++    // back to the loop from a BL'd stub: x30 = ARM_Ret from a literal, and a return there
++    auto retToLoop = [&]()
++    {
++        const bool pad = ((uintptr_t)GetRXPtr() + 8) & 7;
++        Write32(0x58000000 | ((pad ? 3 : 2) << 5) | 30);   // ldr x30, <the literal below>
++        RET();
++        if (pad)
++            Write32(0xD503201F);
++        const u64 ret = (u64)(uintptr_t)ARM_Ret;
++        Write32((u32)ret);
++        Write32((u32)(ret >> 32));
++    };
++
++    StubsStart[num * 2] = GetRXPtr();
++    if (!OptExitStub)
++    {
++        ExitCheck[num][0] = ExitCheck[num][1] = GetRXPtr();
++        FixupBranch stop, late;
++        checks(stop, late);
+         STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));   // (the next block reads it from memory)
+         RET();
+         SetJumpTarget(stop);
+@@ -797,36 +1081,74 @@ void Compiler::Gen_ExitStubs(int num)
+         MOVP2R(X30, (void*)ARM_Ret);
+         RET();
+     }
++    else
++    {
++        for (int c = 1; c >= 0; c--)
++        {
++            // ExitCheckPC: R15 from the word after the exit's slot (x30 points to the slot), then ExitCheck
++            ExitCheckPC[num][c] = GetRXPtr();
++            LDR(INDEX_UNSIGNED, W0, X30, 4);
++            STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++            ExitCheck[num][c] = GetRXPtr();
++            FixupBranch stop, late;
++            checks(stop, late);
++            if (c)
++                STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));   // (the next block reads it from memory)
++            RET();
++            SetJumpTarget(stop);
++            SetJumpTarget(late);
++            retToLoop();
++        }
++    }
+ 
+     // DynExit (a B from an exit whose target is only known at run time, in R15 and the CPSR's T bit): the same
+     // checks, then the block from FastBlockLookup as the loop finds it: instrAddr = R15 - (Thumb ? 2 : 4); outside
+     // FastBlockLookupStart/Size, back to the loop (it sets the region up); the block is
+     // FastBlockLookup[(instrAddr - Start) / 2] when that entry's upper half is (instrAddr | Num), else back (to
+     // compile it)
+-    DynExit[num] = GetRXPtr();
++    StubsStart[num * 2 + 1] = GetRXPtr();
++    DynExitLiteral = OptExitStub;
++    for (int a = 0; a < (OptDynAddr ? 2 : 1); a++)
++    for (int c = 1; c >= (OptExitStub ? 0 : 1); c--)
+     {
+-        LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
+-        FixupBranch stop = CBNZ(W0);
+-        MOVP2R(X16, ts);
+-        LDP(INDEX_SIGNED, X17, X0, X16, 0);
+-        SXTW(X1, RCycles);
+-        ADD(X17, X17, X1);
+-        STR(INDEX_UNSIGNED, X17, X16, 0);
+-        MOVI2R(RCycles, 0);
+-        CMP(X17, X0);
+-        FixupBranch late = B(CC_HS);
+-        STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
++        (a ? DynExitA : DynExit)[num][c] = GetRXPtr();
++        FixupBranch stop, late;
++        checks(stop, late);
++        if (c)
++            STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
+ 
+-        LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
+-        UBFX(W1, RCPSR, 5, 1);
+-        MOVI2R(W2, 4);
+-        SUB(W1, W2, W1, ArithOption(W1, ST_LSL, 1));
+-        SUB(W0, W0, W1);
+-        LDR(INDEX_UNSIGNED, W16, RCPU, offsetof(ARM, FastBlockLookupStart));
+-        SUB(W17, W0, W16);
+-        LDR(INDEX_UNSIGNED, W16, RCPU, offsetof(ARM, FastBlockLookupSize));
+-        CMP(W17, W16);
+-        FixupBranch outside = B(CC_HS);
++        if (!a)
++        {
++            LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++            UBFX(W1, RCPSR, 5, 1);
++        }
++        FixupBranch outside;
++        if (OptExitStub)
++        {
++            static_assert(offsetof(ARM, FastBlockLookupSize) == offsetof(ARM, FastBlockLookupStart) + 4, "lookup");
++            if (a)
++                ANDI2R(W0, W4, ~1);   // (R15 - (Thumb ? 2 : 4), as the JumpTo function left it, | 1 for Thumb)
++            else
++            {
++                SUB(W0, W0, 4);
++                ADD(W0, W0, W1, ArithOption(W1, ST_LSL, 1));
++            }
++            LDP(INDEX_SIGNED, W16, W1, RCPU, offsetof(ARM, FastBlockLookupStart));
++            SUB(W17, W0, W16);
++            CMP(W17, W1);
++            outside = B(CC_HS);
++        }
++        else
++        {
++            MOVI2R(W2, 4);
++            SUB(W1, W2, W1, ArithOption(W1, ST_LSL, 1));
++            SUB(W0, W0, W1);
++            LDR(INDEX_UNSIGNED, W16, RCPU, offsetof(ARM, FastBlockLookupStart));
++            SUB(W17, W0, W16);
++            LDR(INDEX_UNSIGNED, W16, RCPU, offsetof(ARM, FastBlockLookupSize));
++            CMP(W17, W16);
++            outside = B(CC_HS);
++        }
+         LDR(INDEX_UNSIGNED, X16, RCPU, offsetof(ARM, FastBlockLookup));
+         LSR(W17, W17, 1);
+         LDR(X16, X16, ArithOption(X17, true));
+@@ -834,11 +1156,21 @@ void Compiler::Gen_ExitStubs(int num)
+             ORRI2R(W0, W0, 1);
+         CMP(X0, X16, ArithOption(X16, ST_LSR, 32));
+         FixupBranch miss = B(CC_NEQ);
+-        // the blocks' code base (GetRXBase() once the constructor has moved it past the stubs): four
+-        // instructions that the constructor fills in then (MOVZ/MOVK into X17)
+-        DynExitBase[num] = (u32*)GetWriteableRWPtr();
+-        for (int i = 0; i < 4; i++)
+-            Write32(0xD503201F);
++        u32* lit = nullptr;
++        if (OptExitStub)
++        {
++            // the blocks' code base (GetRXBase() once the constructor has moved it past the stubs): a literal
++            // after this stub that the constructor fills in then
++            lit = (u32*)GetWriteableRWPtr();
++            Write32(0x58000000 | 17);   // ldr x17, <literal>: offset set below
++        }
++        else
++        {
++            // ... or four instructions that the constructor fills in then (MOVZ/MOVK into X17)
++            DynExitBase[num][c] = (u32*)GetWriteableRWPtr();
++            for (int i = 0; i < 4; i++)
++                Write32(0xD503201F);
++        }
+         ADD(X16, X17, W16, ArithOption(W16));   // + the entry's offset (uxtw)
+         BR(X16);
+         SetJumpTarget(stop);
+@@ -846,15 +1178,128 @@ void Compiler::Gen_ExitStubs(int num)
+         SetJumpTarget(outside);
+         SetJumpTarget(miss);
+         QuickTailCall(X16, ARM_Ret);
++        if (lit)
++        {
++            if (((uintptr_t)GetRXPtr()) & 7)
++                Write32(0xD503201F);
++            u32*& base = (a ? DynExitBaseA : DynExitBase)[num][c];
++            base = (u32*)GetWriteableRWPtr();
++            *lit |= (u32)(((u8*)base - (u8*)lit) / 4) << 5;
++            Write32(0);
++            Write32(0);
++        }
++    }
++    if (!OptExitStub)
++    {
++        DynExit[num][0] = DynExit[num][1];
++        DynExitBase[num][0] = DynExitBase[num][1];
++    }
++}
++
++void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
++{
++    // A conditional immediate branch ending the block (FoldCondExit), its taken way: what the block's end does
++    // for it, here. The block's constant cycles are known: the not taken way's (Comp_AddCycles_C(true), when
++    // notTakenCycles) are the last to come, and both ways add all of them.
++    const s32 c = Num ? NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 1 : 3]
++        : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles);
++    const u32 total = ConstantCycles + (notTakenCycles ? c : 0) + FoldJumpCycles;
++    const bool self = OptSelfLoop && LinkBlocks && JumpR15Deferred && !R15Stored && LastJumpR15 == BlockEntryR15
++        && LastJumpThumb == Thumb;
++    if (!(LoopMode && self))
++    {
++        // (the stores the block's end makes: its RegCache.Flush, or in LoopMode PrepareExit)
++        BitSet16 dirty(RegCache.DirtyRegs);
++        for (int reg : dirty)
++            SaveReg(reg, RegCache.Mapping[reg]);
++    }
++    if (total)
++        ADD(RCycles, RCycles, total);
++    Comp_Exit(true, LastJumpR15, LastJumpThumb, JumpR15Deferred);
++}
++
++bool Compiler::LoopBlock(FetchedInstr instrs[], int instrsCount)
++{
++    // LoopMode: the block ends in an immediate branch back to its own start (the self loop exit, inline), and
++    // nothing in it unloads guest registers or needs R15 in one: compiled instructions only (no interpreter), no
++    // block transfers, MSR/MRS or jumps through registers, no R15 operand, no branch followed when taken (its
++    // R15 store); single memory accesses keep their registers loaded round a slow call (PushRegs, no unloading)
++    if (!OptLoopRegs || !LinkBlocks)
++        return false;
++    const FetchedInstr& last = instrs[instrsCount - 1];
++    u32 target;
++    if (Thumb)
++    {
++        if (last.Info.Kind == ARMInstrInfo::tk_BCOND)
++            target = last.Addr + 4 + ((s32)(last.Instr << 24) >> 23);
++        else if (last.Info.Kind == ARMInstrInfo::tk_B)
++            target = last.Addr + 4 + ((s32)((last.Instr & 0x7FF) << 21) >> 20);
++        else
++            return false;
++    }
++    else
++    {
++        if ((last.Info.Kind != ARMInstrInfo::ak_B && last.Info.Kind != ARMInstrInfo::ak_BL) || last.Cond() == 0xF)
++            return false;
++        target = last.Addr + 8 + ((s32)(last.Instr << 8) >> 6);
++    }
++    if (target != instrs[0].Addr || (last.BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken)))
++        return false;
++    for (int i = 0; i < instrsCount; i++)
++    {
++        const FetchedInstr& in = instrs[i];
++        const u16 k = in.Info.Kind;
++        if (!CanCompile(Thumb, k) || (in.BranchFlags & branch_FollowCondTaken))
++            return false;
++        const bool immBranch = Thumb ? (k == ARMInstrInfo::tk_BCOND || k == ARMInstrInfo::tk_B)
++            : ((k == ARMInstrInfo::ak_B || k == ARMInstrInfo::ak_BL) && in.Cond() != 0xF);
++        if (((in.Info.SrcRegs | in.Info.DstRegs) & (1 << 15)) && !immBranch)
++            return false;
++        // (a Thumb block transfer of one register, PC not among them, is a single access when the register is
++        // loaded, as all are here: Comp_MemAccessBlock's first case)
++        const bool single = Thumb && __builtin_popcount((in.Instr & 0xFF)
++            | (((k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP) && (in.Instr & 0x100)) ? 0x100 : 0)) == 1;
++        if (Thumb ? (((k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP || k == ARMInstrInfo::tk_LDMIA
++                || k == ARMInstrInfo::tk_STMIA) && !(single && !(in.Info.DstRegs & (1 << 15))))
++                || k == ARMInstrInfo::tk_BL_LONG_1 || k == ARMInstrInfo::tk_BL_LONG_2)
++            : (k == ARMInstrInfo::ak_LDM || k == ARMInstrInfo::ak_STM || k == ARMInstrInfo::ak_MSR_IMM
++                || k == ARMInstrInfo::ak_MSR_REG || k == ARMInstrInfo::ak_MRS || k == ARMInstrInfo::ak_BLX_IMM))
++            return false;
+     }
++    return true;
++}
++
++void Compiler::Comp_EntryPrologue()
++{
++    // The entry the runtime dispatches to: x26 = the CPU's fast memory base, in EntrySkip[Num] bytes (the same for
++    // all its blocks). Exits that go straight on into a block (link slots, DynExit) enter past it: x26 is
++    // callee-saved and only blocks of the same CPU set it, so it still holds the base there.
++    const u64 base = (u64)(uintptr_t)(Num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
++    Write32(0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 26);                          // movz x26, #.., lsl #0
++    for (int hw = 1; hw < 4; hw++)
++        if ((base >> (16 * hw)) & 0xFFFF)
++            Write32(0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 26);   // movk x26, #.., lsl #16*hw
+ }
+ 
+ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+ {
++    entry += EntrySkip[cpu->Num];   // (past the entry prologue)
+     const u32 off = (u32)(slotRX - GetRXBase());
+     auto it = LinkSlots.find(off);
+-    if (it == LinkSlots.end() || it->second.r15 != cpu->R[15]
+-        || it->second.num != (cpu->Num | ((cpu->CPSR & 0x20) ? 2u : 0u)))
++    if (it == LinkSlots.end())
++        return;
++    if (it->second.lit)
++    {
++        // a DYNCACHE slot: it learns the key of the block it goes to, the one the loop dispatches now
++        if (it->second.num != cpu->Num)
++            return;
++        const bool thumb = cpu->CPSR & 0x20;
++        const u32 key = (cpu->R[15] - (thumb ? 2 : 4)) | (thumb ? 1 : 0);
++        NDS.JIT.JitEnableWrite();
++        *(u32*)(RWBase() + it->second.lit) = key;
++        NDS.JIT.JitEnableExecute();
++    }
++    else if (it->second.r15 != cpu->R[15] || it->second.num != (cpu->Num | ((cpu->CPSR & 0x20) ? 2u : 0u)))
+         return;
+     const s64 d = ((s64)(entry - GetRXBase()) - (s64)off) / 4;
+     if (d < -(1 << 25) || d >= (1 << 25))
+@@ -864,7 +1309,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+     *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
+     NDS.JIT.JitEnableExecute();
+     FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
+-    LinkedTo[(u32)(entry - GetRXBase())].push_back(off);
++    LinkedTo[(u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
+ }
+ 
+ void Compiler::UnlinkBlock(JitBlockEntry entry)
+@@ -909,6 +1354,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+ 
+     JitBlockEntry res = (JitBlockEntry)GetRXPtr();
+     const ptrdiff_t farStart = OtherCodeRegion;
++    BlockStartRX = (u8*)res;
++    BlockEntryR15 = instrs[0].Addr + (thumb ? 2 : 4);
++    R15Stored = false;
++    PendingFlags = false;
++    LoopFlagsWritten = 0;
++    LoopFlagsEarlyRead = false;
+ 
+     Thumb = thumb;
+     Num = cpu->Num;
+@@ -918,15 +1369,48 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+     CPSRDirty = false;
+     InvalidateHostFlags();
+ 
+-    if (hasMemInstr)
++    KnownCodeValid = false;
++    if (OptFastEntry)
++        Comp_EntryPrologue();
++    else if (hasMemInstr)
+         MOVP2R(RMemBase, Num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
+ 
++    LoopMode = LoopBlock(instrs, instrsCount);
++    if (LoopMode)
++    {
++        // every guest register the block uses in a host register from here on, none ever unloaded; all count as
++        // dirty, so every way out of the block stores them (their memory copies go stale round the loop)
++        u16 used = 0, written = 0;
++        for (int i = 0; i < instrsCount; i++)
++        {
++            used |= instrs[i].Info.SrcRegs | instrs[i].Info.DstRegs;
++            written |= instrs[i].Info.DstRegs;
++        }
++        for (int reg : BitSet16(used & 0x7FFF))
++            RegCache.LoadRegister(reg, true);
++        RegCache.DirtyRegs = written & 0x7FFF;
++        // a callee-saved host register left free: the Timestamp's address for the loop's check
++        LoopTsReg = INVALID_REG;
++        for (int r = W25; r >= W19; r--)
++            if (!(RegCache.NativeRegsUsed & (1u << r)))
++            {
++                LoopTsReg = EncodeRegTo64((ARM64Reg)r);
++                MOVP2R(LoopTsReg, Num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp);
++                break;
++            }
++        LoopBodyRX = (u8*)GetRXPtr();
++        if (OptLazyFlags)
++            CPSRDirty = true;   // (the way round may leave RCPSR out of memory: every exit stores it)
++    }
++
+     for (int i = 0; i < instrsCount; i++)
+     {
+         CurInstr = instrs[i];
+         R15 = CurInstr.Addr + (Thumb ? 4 : 8);
+         CodeRegion = R15 >> 24;
+         LastJumpKnown = false;
++        JumpR15Deferred = false;
++        LastJumpViaFunc = false;
+ 
+         CompileFunc comp = Thumb
+             ? T_Comp[CurInstr.Info.Kind]
+@@ -934,19 +1418,49 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+ 
+         Exit = i == (instrsCount - 1) || (CurInstr.BranchFlags & branch_FollowCondNotTaken);
+ 
++        const u16 k0 = CurInstr.Info.Kind;
++        if (LoopMode && (CurInstr.Info.ReadFlags & 0xF) && LoopFlagsWritten != 0xF)
++            LoopFlagsEarlyRead = true;
++        if (PendingFlags && DropsPendingFlags(CurInstr))
++            PendingFlags = false;   // (this instruction puts all four in RCPSR, by the same way, before anything
++                                    // can read them: the pending ones would only be overwritten)
++        if (PendingFlags && !LazySafe(CurInstr))
++            FlushFlags();
++
+         //printf("%x instr %x regs: r%x w%x n%x flags: %x %x %x\n", R15, CurInstr.Instr, CurInstr.Info.SrcRegs, CurInstr.Info.DstRegs, CurInstr.Info.ReadFlags, CurInstr.Info.NotStrictlyNeeded, CurInstr.Info.WriteFlags, CurInstr.SetFlags);
+ 
+         bool isConditional = Thumb ? CurInstr.Info.Kind == ARMInstrInfo::tk_BCOND : CurInstr.Cond() < 0xE;
+-        if (comp == NULL || (CurInstr.BranchFlags & branch_FollowCondTaken) || (i == instrsCount - 1 && (!CurInstr.Info.Branches() || isConditional)))
++        const bool isLast = i == instrsCount - 1;
++        const bool followCond = CurInstr.BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken);
++        // OptExitPC: a constant jump's exit stores R15 itself (Comp_JumpTo leaves it) when the exit is sure to be
++        // a known one: the taken way of a branch followed when not taken, or the block's end, unconditional or
++        // (OptCondExit) with an exit each way
++        ExitR15Deferrable = OptExitPC && LinkBlocks && ((CurInstr.BranchFlags & branch_FollowCondNotTaken)
++            || (isLast && (!isConditional || (OptCondExit && !followCond))));
++        // ... and so does the not-taken exit of a conditional immediate branch ending the block: nothing in
++        // between reads R15 (no call), so it needn't be stored before it
++        LastNotTakenR15Deferred = ExitR15Deferrable && OptCondExit && isLast && isConditional && !followCond && comp
++            && (Thumb ? CurInstr.Info.Kind == ARMInstrInfo::tk_BCOND
++                      : (CurInstr.Info.Kind == ARMInstrInfo::ak_B || CurInstr.Info.Kind == ARMInstrInfo::ak_BL));
++        FoldCondExit = OptFoldExit && isLast && isConditional && !followCond && comp
++            && (Thumb ? CurInstr.Info.Kind == ARMInstrInfo::tk_BCOND
++                      : (CurInstr.Info.Kind == ARMInstrInfo::ak_B || CurInstr.Info.Kind == ARMInstrInfo::ak_BL));
++        FoldActive = false;
++        if (comp == NULL || (CurInstr.BranchFlags & branch_FollowCondTaken) || (isLast && (!CurInstr.Info.Branches() || isConditional)))
+         {
+-            MOVI2R(W0, R15);
+-            STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++            if (!LastNotTakenR15Deferred)
++            {
++                MOVI2R(W0, R15);
++                STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++                R15Stored = true;
++            }
+             if (comp == NULL)
+             {
+                 MOVI2R(W0, CurInstr.Instr);
+                 STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CurInstr));
+             }
+-            if (Num == 0)
++            // (an ARM9 instruction's CodeCycles is read only by the interpreter, which a compiled one doesn't call)
++            if (Num == 0 && (comp == NULL || !OptDead))
+             {
+                 MOVI2R(W0, (s32)CurInstr.CodeCycles);
+                 STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CodeCycles));
+@@ -958,6 +1472,25 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+             SaveCycles();
+             SaveCPSR();
+             RegCache.Flush();
++            KnownCodeValid = false;   // (the interpreter may jump)
++            R15Stored = true;
++        }
++        else if (LoopMode)
++        {
++            // (RegCache.Prepare without its loading and unloading: everything is loaded)
++            BitSet16 invalidated(RegCache.LiteralsLoaded & CurInstr.Info.DstRegs);
++            for (int reg : invalidated)
++                RegCache.UnloadLiteral(reg);
++        }
++        else if (OptDead && !Thumb && isConditional
++            && (CurInstr.Info.Kind == ARMInstrInfo::ak_B || CurInstr.Info.Kind == ARMInstrInfo::ak_BL))
++        {
++            // a conditional B/BL "writes" R15, so the cache would load R15's value into a host register (the
++            // instruction's old value, for the way it isn't taken) that nothing reads: the branch uses the constant
++            const u16 dst = instrs[i].Info.DstRegs;
++            instrs[i].Info.DstRegs &= ~(1 << 15);
++            RegCache.Prepare(Thumb, i);
++            instrs[i].Info.DstRegs = dst;
+         }
+         else
+             RegCache.Prepare(Thumb, i);
+@@ -1012,7 +1545,17 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+ 
+                 Comp_BranchSpecialBehaviour(true);
+ 
+-                if (cond < 0xE)
++                if (cond < 0xE && FoldCondExit)
++                {
++                    // the taken way's exit here, this way goes on to the not taken one
++                    Comp_FoldTakenExit(IrregularCycles);
++                    FoldActive = true;
++                    SetJumpTarget(skipExecute);
++                    if (IrregularCycles)
++                        Comp_AddCycles_C(true);
++                    Comp_BranchSpecialBehaviour(false);
++                }
++                else if (cond < 0xE)
+                 {
+                     if (IrregularCycles || (CurInstr.BranchFlags & branch_FollowCondTaken))
+                     {
+@@ -1049,7 +1592,24 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         }
+     }
+ 
+-    RegCache.Flush();
++    if (LoopMode && !(JumpR15Deferred && LastJumpKnown && !R15Stored && LastJumpR15 == BlockEntryR15
++        && LastJumpThumb == Thumb))
++        LoopMode = false;   // (not the loop LoopBlock expected after all: an ordinary end, all stored below)
++    if (FoldActive)
++    {
++        // not taken (the taken way's exit is in the branch, Comp_FoldTakenExit)
++        if (LoopMode)
++            RegCache.PrepareExit();
++        else
++            RegCache.Flush();
++        if (ConstantCycles)
++            ADD(RCycles, RCycles, ConstantCycles);
++        Comp_Exit(true, R15, Thumb, LastNotTakenR15Deferred);
++    }
++    else
++    {
++    if (!LoopMode)
++        RegCache.Flush();
+ 
+     if (ConstantCycles)
+         ADD(RCycles, RCycles, ConstantCycles);
+@@ -1060,11 +1620,32 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         if (!last.Info.Branches())
+             Comp_Exit(true, R15, Thumb);
+         else if (LastJumpKnown && !cond)
+-            Comp_Exit(true, LastJumpR15, LastJumpThumb);
++            Comp_Exit(true, LastJumpR15, LastJumpThumb, JumpR15Deferred);
++        else if (LastJumpKnown && OptCondExit
++            && !(last.BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken)))
++        {
++            // a conditional branch with a constant target: both ways are known. The condition is checked again
++            // (nothing since it changed the guest's flags; the host's still hold them when they did), and each
++            // way gets its own exit. R15 in memory is already right both ways (the taken way's Comp_JumpTo stored
++            // the target, the other the instruction's R15 before it).
++            const u32 c = Thumb ? (last.Instr >> 8) & 0xF : last.Cond();
++            FixupBranch notTaken = CheckCondition(c);
++            Comp_Exit(true, LastJumpR15, LastJumpThumb, JumpR15Deferred);
++            SetJumpTarget(notTaken);
++            if (LoopMode)
++                RegCache.PrepareExit();
++            Comp_Exit(true, R15, Thumb, LastNotTakenR15Deferred);
++        }
+         else
++        {
++            if (cond)
++                LastJumpViaFunc = false;   // (W4 is the jump's only on the way it was taken)
+             Comp_Exit(false, 0, Thumb);
++        }
++    }
+     }
+ 
++    PendingFlags = false;   // (every way out has put them in RCPSR)
+     FlushIcache();
+ 
+     if (PerfMap)
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index 3cf6f69..78e22f6 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -93,6 +93,7 @@ struct LoadStorePatch
+     void* PatchFunc;
+     s32 PatchOffset;
+     u32 PatchSize;
++    Arm64Gen::ARM64Reg AddrReg = Arm64Gen::W0;   // where the address is when not in W0 (the patch moves it there)
+ };
+ 
+ class Compiler : public Arm64Gen::ARM64XEmitter
+@@ -239,21 +240,88 @@ public:
+     // target is known when compiling has a slot: a B that ARM_Dispatch patches to the target block once the loop
+     // has dispatched it after this exit (melonds_jit_link, Link), and that UnlinkBlock puts back when the framework
+     // retires or invalidates the target. Other exits look the next block up in FastBlockLookup.
+-    void Comp_Exit(bool known, u32 knownR15, bool thumbAfter);
+-    void Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter);
++    // storeR15: the exit's R15 isn't in memory yet; the exit stores it (ExitCheckPC, from the word after its slot)
++    void Comp_Exit(bool known, u32 knownR15, bool thumbAfter, bool storeR15 = false);
++    void Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool storeR15);
+     void Gen_ExitStubs(int num);
+-    void* ExitCheck[2] = {};
+-    void* DynExit[2] = {};
+-    u32* DynExitBase[2] = {};
++    // [num][1]: the stubs store the CPSR before going on into the next block; [num][0] (OptExitStub, for exits
++    // whose block left RCPSR as it is in memory) don't
++    void* ExitCheck[2][2] = {};
++    void* ExitCheckPC[2][2] = {};
++    void* DynExit[2][2] = {};
++    u32* DynExitBase[2][2] = {};
++    void* DynExitA[2][2] = {};    // (OptDynAddr: DynExit with the next block's address in W4, from a JumpTo function)
++    u32* DynExitBaseA[2][2] = {};
++    bool OptDynAddr = true;       // NODYNADDR: the JumpTo functions leave the address in W4 and an exit after one
++                                  // looks the block up from it (DynExitA)
++    bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
++    bool OptDynCache = true;      // NODYNCACHE: such an exit keeps the last target it went to (its key: address | T)
++                                  // in a word after a link slot it links to that block, like a known exit's
++    const void* StubsStart[4] = {};   // ExitCheck9, DynExit9, ExitCheck7, DynExit7 (for the perf map)
++    bool DynExitLiteral = false;  // DynExitBase is a u64 literal (OptExitStub), not four MOVZ/MOVK to fill in
++    bool JumpR15Deferred = false; // this instruction's constant jump left storing R15 to its exit (OptExitPC)
++    bool ExitR15Deferrable = false;       // ... which it may (CompileBlock decides per instruction)
++    bool LastNotTakenR15Deferred = false; // the block's last instruction's R15 isn't stored before it (OptExitPC)
+     void Link(u8* slotRX, ARM* cpu, u8* entry);
+     void UnlinkBlock(JitBlockEntry entry);
+     bool LastJumpKnown = false;   // the instruction being compiled jumped to a constant address (Comp_JumpTo(u32))
+     u32 LastJumpR15 = 0;
+     bool LastJumpThumb = false;
+-    struct LinkSlot { u32 orig; u32 r15; u32 num; };          // num: the CPU's, | 2 when the target is Thumb code
++    struct LinkSlot { u32 orig; u32 r15; u32 num; u32 lit = 0; };   // num: the CPU's, | 2 when the target is Thumb
++                                                              // code; lit: a DYNCACHE slot's key word, 0 otherwise
+     std::unordered_map<u32, LinkSlot> LinkSlots;              // a slot's offset in code memory -> its link path's B
+     std::unordered_map<u32, std::vector<u32>> LinkedTo;       // a block's entry offset -> the slots that jump to it
+     bool LinkBlocks = true;       // MELONDS_JIT_NOLINK=1: every exit goes back to the loop, as melonDS's does
++
++    // Code generation improvements (patch 0007), each on unless its MELONDS_JIT_NO* variable is set (or
++    // MELONDS_JIT_OLDCODEGEN=1, which turns them all off). Read once, in the constructor.
++    bool OptFastEntry = true;     // NOFASTENTRY: x26 set by a per-block entry prologue that linked exits skip
++    bool OptCondExit = true;      // NOCONDEXIT: a conditional branch ending a block gets two known (linkable) exits
++    bool OptMemAddr = true;       // NOMEMADDR: no copy of the base register for [rn] accesses
++    bool OptCodeStores = true;    // NOCODESTORES: CodeRegion/CodeCycles/RegionCodeCycles stores deduplicated
++    bool OptDead = true;          // NODEAD: no dead CLS/CLZ before ARM7 multiplies, ARM9 CodeCycles stores for
++                                  // compiled instructions, or R15 loads for conditional branches
++    bool OptExitStub = true;      // NOEXITSTUB: shorter exit stubs, and no CPSR store when RCPSR is unchanged
++    bool OptExitPC = true;        // NOEXITPC: a constant exit's R15 stored by the exit stub, from a literal
++    bool OptSelfLoop = true;      // NOSELFLOOP: an exit back to its own block's start does the checks inline
++    bool OptLoopRegs = true;      // NOLOOPREGS: a block that loops back to its own start keeps the guest registers
++                                  // it uses in host registers round the loop (LoopMode)
++    bool LoopMode = false;        // the block being compiled does (LoopBlock decides)
++    u8* LoopBodyRX = nullptr;     // ... where its loop goes back to: past the entry's loads
++    bool LoopBlock(FetchedInstr instrs[], int instrsCount);
++    bool OptFoldExit = true;      // NOFOLDEXIT: a conditional immediate branch ending a block takes its exits from
++                                  // each way directly (no join, no second condition check, one cycle add each)
++    bool FoldCondExit = false;    // the instruction being compiled is such a branch
++    bool FoldActive = false;      // ... and has its taken way's exit already (Comp_FoldTakenExit)
++    u32 FoldJumpCycles = 0;       // ... with the jump's cycles still to add
++    void Comp_FoldTakenExit(bool notTakenCycles);
++    bool OptLazyFlags = true;     // NOLAZYFLAGS: in a LoopMode block, an arithmetic instruction's flags stay in the
++                                  // host's NZCV until something would change or read them (PendingFlags), and the
++                                  // way round the loop leaves them out when the loop sets all four before reading any
++    bool PendingFlags = false;    // the host's NZCV holds the guest's four flags, not yet in RCPSR
++    bool ExitFlagsPending = false;    // (Comp_ExitTo: the self loop exit's check keeps NZCV, which has the pending
++                                      // flags; its ways out put them in RCPSR)
++    Arm64Gen::ARM64Reg LoopTsReg = Arm64Gen::INVALID_REG;   // LoopMode: a host register the block's guest registers
++                                      // left free, holding the Timestamp's address for the loop's check
++    bool ExitLazyLoop = false;    // (Comp_ExitTo: the self loop exit leaves the flags and the CPSR store out)
++    void FlushFlags();
++    void FlagsTouched() override;
++    bool LazySafe(const FetchedInstr& in);
++    bool DropsPendingFlags(const FetchedInstr& in);
++    u32 LoopFlagsWritten = 0;     // LoopMode: an unconditional instruction has put all four flags in RCPSR (0xF)...
++    bool LoopFlagsEarlyRead = false;  // ... or something read them before
++    bool OptKeepFlags = true;     // NOKEEPFLAGS: a faulted fast memory access's call keeps the host's NZCV, so
++                                  // the guest's flags held there stay valid across fast memory accesses
++    u8* BlockStartRX = nullptr;   // the block being compiled: its entry
++    u32 BlockEntryR15 = 0;        // ... the R15 exits into it store
++    bool R15Stored = false;       // ... and whether its code so far stores R15 (or may: calls, the interpreter)
++    u32 EntrySkip[2] = {0, 0};    // the entry prologue's size in bytes, per CPU (0 without OptFastEntry)
++    void Comp_EntryPrologue();
++    // CodeRegion/CodeCycles (ARM7) or RegionCodeCycles (ARM9) as this block last stored them on every path to here
++    // (KnownCodeValid), so a constant jump storing the same values again can skip it
++    bool KnownCodeValid = false;
++    u64 KnownCodeValue = 0;
++    bool Comp_KnownCodeStore(u64 value);
+     u8* RWBase() { return GetWriteableRWPtr() - GetCodeOffset(); }
+ 
+     // MELONDS_JIT_PERFMAP=1: /tmp/perf-<pid>.map for perf, and the blocks' code in /tmp/melonjit-<pid>.code
+diff --git a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+index f9ea08b..12f2844 100644
+--- a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
++++ b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+@@ -48,8 +48,14 @@ u8* Compiler::RewriteMemAccess(u8* pc)
+ 
+         SetCodePtrUnsafe(pcOffset + patch.PatchOffset);
+ 
++        int used = 1;
++        if (patch.AddrReg != W0)
++        {
++            MOV(W0, patch.AddrReg);   // (the access used the base register as its address: the call wants W0)
++            used++;
++        }
+         BL(patch.PatchFunc);
+-        for (int i = 0; i < patch.PatchSize / 4 - 1; i++)
++        for (int i = 0; i < (int)patch.PatchSize / 4 - used; i++)
+             HINT(HINT_NOP);
+         FlushIcacheSection((u8*)pc + patch.PatchOffset, (u8*)GetRXPtr());
+ 
+@@ -153,6 +159,20 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+     if (addrIsStatic)
+         staticAddress = RegCache.LiteralValues[rn] + offset.Imm * ((flags & memop_SubtractOffset) ? -1 : 1);
+ 
++    u32 expectedTarget = Num == 0
++        ? NDS.JIT.Memory.ClassifyAddress9(addrIsStatic ? staticAddress : CurInstr.DataRegion)
++        : NDS.JIT.Memory.ClassifyAddress7(addrIsStatic ? staticAddress : CurInstr.DataRegion);
++    const bool fastPath = NDS.JIT.FastMemoryEnabled()
++        && ((!Thumb && CurInstr.Cond() != 0xE) || NDS.JIT.Memory.IsFastmemCompatible(expectedTarget));
++
++    // [rn] (no offset, no write-back) as a 16 or 32-bit fast access: the address is rn itself, no copy into W0
++    // (a patched access moves it there before its call). Not for a load into rn: the rotate reads the address
++    // after the load.
++    ARM64Reg addrReg = W0;
++    if (OptMemAddr && fastPath && size > 8 && offset.IsImm && !offset.Imm
++        && !(flags & (memop_Post|memop_Writeback)) && ((flags & memop_Store) || rd != rn))
++        addrReg = rnMapped;
++
+     if (!offset.IsImm)
+         Comp_RegShiftImm(offset.Reg.ShiftType, offset.Reg.ShiftAmount, false, offset, W2);
+     // offset might has become an immediate
+@@ -165,7 +185,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+             else
+                 ADD(finalAddr, rnMapped, offset.Imm);
+         }
+-        else if (finalAddr != rnMapped)
++        else if (finalAddr != rnMapped && addrReg == W0)
+             MOV(finalAddr, rnMapped);
+     }
+     else
+@@ -185,11 +205,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+     if (!(flags & memop_Post) && (flags & memop_Writeback))
+         MOV(rnMapped, W0);
+ 
+-    u32 expectedTarget = Num == 0
+-        ? NDS.JIT.Memory.ClassifyAddress9(addrIsStatic ? staticAddress : CurInstr.DataRegion)
+-        : NDS.JIT.Memory.ClassifyAddress7(addrIsStatic ? staticAddress : CurInstr.DataRegion);
+-
+-    if (NDS.JIT.FastMemoryEnabled() && ((!Thumb && CurInstr.Cond() != 0xE) || NDS.JIT.Memory.IsFastmemCompatible(expectedTarget)))
++    if (fastPath)
+     {
+         ptrdiff_t memopStart = GetCodeOffset();
+         LoadStorePatch patch;
+@@ -199,9 +215,11 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+             ? PatchedStoreFuncs[NDS.ConsoleType][Num][__builtin_ctz(size) - 3][rdMapped]
+             : PatchedLoadFuncs[NDS.ConsoleType][Num][__builtin_ctz(size) - 3][!!(flags & memop_SignExtend)][rdMapped];
+ 
++        patch.AddrReg = addrReg;
++
+         // take a chance at fastmem
+         if (size > 8)
+-            ANDI2R(W1, W0, addressMask);
++            ANDI2R(W1, addrReg, addressMask);
+         
+         ptrdiff_t loadStorePosition = GetCodeOffset();
+         if (flags & memop_Store)
+@@ -213,7 +231,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+             LDRGeneric(size, flags & memop_SignExtend, rdMapped, size > 8 ? X1 : X0, RMemBase);
+             if (size == 32 && !addrIsStatic)
+             {
+-                UBFIZ(W0, W0, 3, 2);
++                UBFIZ(W0, addrReg, 3, 2);
+                 RORV(rdMapped, rdMapped, W0);
+             }
+         }
+@@ -221,7 +239,8 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+         patch.PatchOffset = memopStart - loadStorePosition;
+         patch.PatchSize = GetCodeOffset() - memopStart;
+         LoadStorePatches[loadStorePosition] = patch;
+-        FlagsEpoch++;   // (it may become a call)
++        if (!OptKeepFlags)
++            FlagsEpoch++;   // (it may become a call; with OptKeepFlags that keeps NZCV)
+     }
+     else
+     {
+@@ -229,7 +248,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+         if (addrIsStatic)
+             func = NDS.JIT.Memory.GetFuncForAddr(CurCPU, staticAddress, flags & memop_Store, size);
+ 
+-        PushRegs(false, false);
++        PushRegs(false, false, !LoopMode);   // (LoopMode: no register unloaded, they stay loaded round the loop)
+ 
+         if (func)
+         {
+diff --git a/src/dolphin/Arm64Emitter.cpp b/src/dolphin/Arm64Emitter.cpp
+index 96f32c3..abb89a2 100644
+--- a/src/dolphin/Arm64Emitter.cpp
++++ b/src/dolphin/Arm64Emitter.cpp
+@@ -392,6 +392,13 @@ static bool WritesNZCV(u32 v)
+ 
+ void ARM64XEmitter::Write32(u32 value)
+ {
++  // (not for an instruction whose encoding holds its own address: B/BL, B.cond, CBZ/TBZ, ADR/ADRP, LDR literal;
++  // BL calls FlagsTouched itself, before computing its offset)
++  if (FlagsWatch && (WritesNZCV(value) || (value & 0x1F) == 27)
++      && (value & 0x7C000000) != 0x14000000 && (value & 0x7C000000) != 0x34000000
++      && (value & 0xFF000010) != 0x54000000 && (value & 0x1F000000) != 0x10000000
++      && (value & 0x3B000000) != 0x18000000)
++    FlagsTouched();
+   if (WritesNZCV(value))
+     FlagsEpoch++;
+   std::memcpy(m_rwbase + m_code, &value, sizeof(u32));
+@@ -1127,6 +1134,9 @@ void ARM64XEmitter::B(const void* ptr)
+ }
+ void ARM64XEmitter::BL(const void* ptr)
+ {
++  // melonDS: (a call: before its offset is taken, since FlagsTouched may emit code)
++  if (FlagsWatch)
++    FlagsTouched();
+   EncodeUnconditionalBranchInst(1, ptr);
+ }
+ 
+diff --git a/src/dolphin/Arm64Emitter.h b/src/dolphin/Arm64Emitter.h
+index eaf9d8e..47481fa 100644
+--- a/src/dolphin/Arm64Emitter.h
++++ b/src/dolphin/Arm64Emitter.h
+@@ -554,6 +554,10 @@ public:
+ 
+   // melonDS: counts the instructions emitted that write the host's NZCV, calls included (Write32)
+   u32 FlagsEpoch = 0;
++  // melonDS: with FlagsWatch, FlagsTouched() runs before emitting an instruction that writes NZCV (or may: a
++  // call) or names register 27 in its low five bits (the AArch64 JIT's guest CPSR, written or tested there)
++  bool FlagsWatch = false;
++  virtual void FlagsTouched() {}
+   void SetCodePtr(ptrdiff_t ptr);
+   void SetCodePtrUnsafe(ptrdiff_t ptr);
+   void SetCodeBase(u8* rwbase, u8* rxbase);
+-- 
+2.43.0
+
