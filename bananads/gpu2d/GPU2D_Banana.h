@@ -197,6 +197,8 @@ private:
 
     u32 NumSprites;
     int ObjXMin, ObjXMax;   // screen extent touched by non-window sprites on this line
+    int ObjDirtyMin, ObjDirtyMax;  // render.2d_fast: where OBJLine/OBJTransAttr may be nonzero
+    bool ObjWinDirty;              // render.2d_fast: OBJWindow may be nonzero
     bool WindowsOn;
     bool Raw3D;         // BG0 is the 3D layer, composited straight from Line3D (no BGLine(0) this scanline)
     u8 LayerDrawn;      // bit per BG: a layer line exists for this scanline
@@ -234,6 +236,7 @@ private:
     void ApplySpriteMosaicX();
     void ResolveSprites();
     template<bool windows> void ResolveSpritesImpl();
+    template<bool windows> void ResolveSpritesNeon(int x0, int x1);
     template<bool window> inline void PutOBJ(s32 x, u32 color, u32 attr);
     inline void PutOBJ4(s32 x, u32 idx4, u32 attr);
     template<bool window> void DrawSprite_Rotscale(u32 num, u32 boundwidth, u32 boundheight, u32 width, u32 height, s32 xpos, s32 ypos);
