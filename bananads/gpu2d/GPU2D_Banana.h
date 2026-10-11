@@ -245,6 +245,8 @@ private:
     void Composite(u32* outTop, u32* outSecond, bool needSecond);
     template<bool up> void BrightnessPass(u32* dst);
     template<u32 effect> void EffectsPass(u32* dst);
+    template<bool up> void BrightnessPassNeon(u32* dst);
+    template<u32 effect> void EffectsPassNeon(u32* dst);
 };
 
 }

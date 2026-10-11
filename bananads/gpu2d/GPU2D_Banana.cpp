@@ -2096,6 +2096,136 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
     }
 }
 
+#ifdef BANANA_NEON
+// melonDS's colour operations (GPU_ColorOp.h) on four pixels, exactly: red and blue are computed packed in one lane
+// (each channel's sum stays below 2^16 before the shift, so neither reaches the other)
+static inline uint32x4_t VBlendN(uint32x4_t v1, uint32x4_t v2, uint32x4_t eva, uint32x4_t evb, int shift)
+{
+    const uint32x4_t mrb = vdupq_n_u32(0x3F003F), mg = vdupq_n_u32(0x3F00);
+    uint32x4_t rb = vdupq_n_u32(shift == 4 ? 0x080008 : 0x100010);
+    uint32x4_t g = vdupq_n_u32(shift == 4 ? 0x000800 : 0x001000);
+    rb = vmlaq_u32(rb, vandq_u32(v1, mrb), eva);
+    rb = vmlaq_u32(rb, vandq_u32(v2, mrb), evb);
+    g = vmlaq_u32(g, vandq_u32(v1, mg), eva);
+    g = vmlaq_u32(g, vandq_u32(v2, mg), evb);
+    if (shift == 4) { rb = vshrq_n_u32(rb, 4); g = vshrq_n_u32(g, 4); }
+    else            { rb = vshrq_n_u32(rb, 5); g = vshrq_n_u32(g, 5); }
+    uint32x4_t r = vminq_u32(vandq_u32(rb, vdupq_n_u32(0xFF)), vdupq_n_u32(0x3F));
+    uint32x4_t b = vminq_u32(vandq_u32(rb, vdupq_n_u32(0x7F0000)), vdupq_n_u32(0x3F0000));
+    g = vminq_u32(vandq_u32(g, vdupq_n_u32(0x7F00)), mg);
+    return vorrq_u32(vorrq_u32(r, g), vorrq_u32(b, vdupq_n_u32(0xFF000000)));
+}
+
+template<bool up>
+static inline uint32x4_t VBright(uint32x4_t val, uint32x4_t evy)
+{
+    uint32x4_t rb = vandq_u32(val, vdupq_n_u32(0x3F003F));
+    uint32x4_t g = vandq_u32(val, vdupq_n_u32(0x3F00));
+    if (up)
+    {
+        rb = vaddq_u32(rb, vandq_u32(vshrq_n_u32(vmlaq_u32(vdupq_n_u32(8 * 0x010001), vsubq_u32(vdupq_n_u32(0x3F003F), rb), evy), 4), vdupq_n_u32(0x3F003F)));
+        g = vaddq_u32(g, vandq_u32(vshrq_n_u32(vmlaq_u32(vdupq_n_u32(8 * 0x000100), vsubq_u32(vdupq_n_u32(0x3F00), g), evy), 4), vdupq_n_u32(0x3F00)));
+    }
+    else
+    {
+        rb = vsubq_u32(rb, vandq_u32(vshrq_n_u32(vmlaq_u32(vdupq_n_u32(7 * 0x010001), rb, evy), 4), vdupq_n_u32(0x3F003F)));
+        g = vsubq_u32(g, vandq_u32(vshrq_n_u32(vmlaq_u32(vdupq_n_u32(7 * 0x000100), g, evy), 4), vdupq_n_u32(0x3F00)));
+    }
+    return vorrq_u32(vorrq_u32(rb, g), vdupq_n_u32(0xFF000000));
+}
+
+// a pixel's BLDCNT 1st-target bit (FirstBitTab) from its flag byte f
+static inline uint32x4_t VFirstBit(uint32x4_t f)
+{
+    uint32x4_t r = vbslq_u32(vtstq_u32(f, vdupq_n_u32(0x40)), vdupq_n_u32(0x01), f);
+    return vbslq_u32(vtstq_u32(f, vdupq_n_u32(0x80)), vdupq_n_u32(0x10), r);
+}
+
+template<bool up>
+void BananaRenderer2D::BrightnessPassNeon(u32* dst)
+{
+    const uint32x4_t bc = vdupq_n_u32(R.BlendCnt), evy = vdupq_n_u32(R.EVY), m20 = vdupq_n_u32(0x20);
+    const u8* wm = WindowsOn ? WindowMask : AllOnes;
+    for (int i = 0; i < 256; i += 4)
+    {
+        uint32x4_t val = vld1q_u32(&TopLine[i]);
+        uint32x4_t hit = vtstq_u32(VFirstBit(vshrq_n_u32(val, 24)), bc);
+        hit = vandq_u32(hit, vtstq_u32(VFromBytes4(*(const u32*)&wm[i]), m20));
+        vst1q_u32(&dst[i], vbslq_u32(hit, VBright<up>(val, evy), val));
+    }
+}
+
+// EffectsPass four pixels at a time: every result the lanes can need, then the same choices as masks
+template<u32 effect>
+void BananaRenderer2D::EffectsPassNeon(u32* dst)
+{
+    const u32 blendCnt = R.BlendCnt;
+    const uint32x4_t bc = vdupq_n_u32(blendCnt), evy = vdupq_n_u32(R.EVY);
+    const uint32x4_t EVA = vdupq_n_u32(R.EVA), EVB = vdupq_n_u32(R.EVB);
+    const uint32x4_t m1f = vdupq_n_u32(0x1F), m40 = vdupq_n_u32(0x40), m80 = vdupq_n_u32(0x80), m20 = vdupq_n_u32(0x20);
+    const uint32x4_t sixteen = vdupq_n_u32(16), one = vdupq_n_u32(1), thirtytwo = vdupq_n_u32(32);
+    const uint32x4_t zero = vdupq_n_u32(0);
+    // brightness for sprite / 3D / BG pixels that aren't blended: BLDCNT bit 4 / bit 0 / the pixel's own bit
+    const uint32x4_t sprBright = vdupq_n_u32((effect >= 2 && (blendCnt & 0x10)) ? ~0u : 0);
+    const uint32x4_t d3Bright = vdupq_n_u32((effect >= 2 && (blendCnt & 0x01)) ? ~0u : 0);
+    const u8* wm = WindowsOn ? WindowMask : AllOnes;
+
+    for (int i = 0; i < 256; i += 4)
+    {
+        uint32x4_t val1 = vld1q_u32(&TopLine[i]);
+        uint32x4_t val2 = vld1q_u32(&SecondLine[i]);
+        uint32x4_t f1 = vshrq_n_u32(val1, 24);
+        uint32x4_t f2 = vshrq_n_u32(val2, 24);
+        // Target2Tab
+        uint32x4_t t2 = vbslq_u32(vtstq_u32(f2, m40), vdupq_n_u32(0x100), vshlq_n_u32(f2, 8));
+        t2 = vbslq_u32(vtstq_u32(f2, m80), vdupq_n_u32(0x1000), t2);
+        uint32x4_t second = vtstq_u32(t2, bc);
+        uint32x4_t inwin = vtstq_u32(VFromBytes4(*(const u32*)&wm[i]), m20);
+
+        uint32x4_t spr = vtstq_u32(f1, m80);
+        uint32x4_t d3 = vbicq_u32(vtstq_u32(f1, m40), spr);
+        uint32x4_t bg = vmvnq_u32(vorrq_u32(spr, d3));
+
+        uint32x4_t out = val1;
+        uint32x4_t useBright;   // lanes that take the brightness result
+        uint32x4_t useB4;       // lanes that take ColorBlend4
+
+        // sprites: blended over a 2nd target (their own alpha for bitmap sprites), else maybe brightness
+        useB4 = vandq_u32(spr, second);
+        useBright = vandq_u32(vbicq_u32(spr, second), vandq_u32(sprBright, inwin));
+        // BG pixels (and the backdrop): the effect where the pixel is a 1st target inside the effect window
+        if (effect != 0)
+        {
+            uint32x4_t cond = vandq_u32(vandq_u32(bg, vtstq_u32(f1, bc)), inwin);
+            if (effect == 1) useB4 = vorrq_u32(useB4, vandq_u32(cond, second));
+            else             useBright = vorrq_u32(useBright, cond);
+        }
+        // 3D pixels: ColorBlend5 over a 2nd target, else maybe brightness
+        uint32x4_t useB5 = vandq_u32(d3, second);
+        useBright = vorrq_u32(useBright, vandq_u32(vbicq_u32(d3, second), vandq_u32(d3Bright, inwin)));
+
+        if (vmaxvq_u32(useB4))
+        {
+            uint32x4_t own = vandq_u32(spr, vtstq_u32(f1, m40));
+            uint32x4_t eva = vbslq_u32(own, vandq_u32(f1, m1f), EVA);
+            uint32x4_t evb = vbslq_u32(own, vsubq_u32(sixteen, vandq_u32(f1, m1f)), EVB);
+            out = vbslq_u32(useB4, VBlendN(val1, val2, eva, evb, 4), out);
+        }
+        if (vmaxvq_u32(useB5))
+        {
+            uint32x4_t eva = vaddq_u32(vandq_u32(f1, m1f), one);
+            uint32x4_t b5 = VBlendN(val1, val2, eva, vsubq_u32(thirtytwo, eva), 5);
+            b5 = vbslq_u32(vceqq_u32(eva, thirtytwo), val1, b5);
+            out = vbslq_u32(useB5, b5, out);
+        }
+        if (effect >= 2 && vmaxvq_u32(useBright))
+            out = vbslq_u32(useBright, VBright<effect == 2>(val1, evy), out);
+        (void)zero;
+        vst1q_u32(&dst[i], out);
+    }
+}
+#endif
+
 // brightness up/down with no 2nd targets in BLDCNT: the only effect that can apply is on 1st-target
 // pixels inside the effect window
 template<bool up>
@@ -2396,12 +2526,33 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
     if (!secondTargets)
     {
         Composite(TopLine, nullptr, false);
+#ifdef BANANA_NEON
+        if (Banana2DFast)
+        {
+            if (effect == 2) BrightnessPassNeon<true>(dst);
+            else             BrightnessPassNeon<false>(dst);
+            return;
+        }
+#endif
         if (effect == 2) BrightnessPass<true>(dst);
         else             BrightnessPass<false>(dst);
         return;
     }
 
     Composite(TopLine, SecondLine, true);
+#ifdef BANANA_NEON
+    if (Banana2DFast)
+    {
+        switch (effect)
+        {
+        case 0: EffectsPassNeon<0>(dst); break;
+        case 1: EffectsPassNeon<1>(dst); break;
+        case 2: EffectsPassNeon<2>(dst); break;
+        default: EffectsPassNeon<3>(dst); break;
+        }
+        return;
+    }
+#endif
     switch (effect)
     {
     case 0: EffectsPass<0>(dst); break;
