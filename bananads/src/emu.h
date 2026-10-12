@@ -8,7 +8,7 @@
 #include "config.h"
 #include "mic.h"
 
-namespace melonDS { class NDS; class Net; }
+namespace melonDS { class NDS; class Net; class BananaRenderer; }
 
 namespace bananads {
 
@@ -35,6 +35,10 @@ public:
     const uint32_t* top() const;
     const uint32_t* bottom() const;
     int scale() const { return scale_; }  // render.scale: 1, or 2 with Gengis Engine and the Banana 2D engine
+    // The next frames drawn straight into these instead (frontend=kms: the scanout buffers), a screen at scale() each
+    // with rows packed, only ever written; top() and bottom() then return them once the frame is finished. Set
+    // between frames. False when the renderer can't (only the Banana 2D engine's can); null, null: back to its own.
+    bool draw_into(uint32_t* top, uint32_t* bottom);
 
     int audio(int16_t* stereo, int max_frames);  // what the SPU made since the last call
 
@@ -72,6 +76,7 @@ private:
     bool stop_ = false;
     bool local_ = false;
     int scale_ = 1;
+    melonDS::BananaRenderer* banana_ = nullptr;  // the renderer, when it's the Banana 2D engine's
     std::unique_ptr<uint8_t[]> save_copy_;
     uint32_t save_len_ = 0;
     uint64_t save_dirty_us_ = 0;  // when the game last wrote its save; 0 = written out

@@ -73,6 +73,11 @@ public:
     void SetHires(QuarterFn fn, void* ctx);
     int Scale() const { return Quarter ? 2 : 1; }
     bool GetFramebuffers(void** top, void** bottom) override;
+    // The frontend's own buffers for the next frame (frontend=kms: the scanout buffers themselves, so nothing is
+    // copied): a screen at Scale() each, rows packed (256 or 512 pixels), only ever written, line by line. Set between
+    // frames; that frame's lines all go there, and GetFramebuffers returns them once it is finished. Null, null: the
+    // renderer's own framebuffers again (the last frame drawn elsewhere is forgotten).
+    void SetOutput(u32* top, u32* bottom);
 
     bool Drain2D();   // wait until the 2D thread has drawn every line handed to it (false: it already had)
     void Resync2D();  // after GPU::ResetVRAMCache (a savestate): the copies are made again from GPU's memory
@@ -90,6 +95,8 @@ private:
     QuarterFn Quarter = nullptr;
     void* QuarterCtx = nullptr;
     std::unique_ptr<u32[]> HiFB[2][2];
+    u32* Out[2] = {};    // SetOutput's: the frame being drawn goes here
+    u32* Front[2] = {};  // the last finished frame's, when it went to SetOutput's
 
     // ---- the 2D thread (render.2d_thread) ----
     struct Job

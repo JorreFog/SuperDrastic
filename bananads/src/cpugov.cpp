@@ -1,16 +1,21 @@
-// The lowest CPU clock that keeps the game at full speed: SuperDrastic's governor (src/cpugov.c, plan-1.4 section 7),
-// fed by BananaDS's KMS frontend instead of DraStic's presents. Read SuperDrastic's file for the measurements behind
-// every constant; in short:
+// The lowest CPU clock that keeps the game at full speed. The frame is SuperDrastic's governor (src/cpugov.c, plan-1.4
+// section 7: the clock steps, the bans and their memory, the savestate boost), fed by BananaDS's KMS frontend; what it
+// decides on is its own:
 //
 // BananaLinux runs DS games under the "performance" governor (banana-perf), all four A55s at the top clock, on the
-// understanding that the emulator lowers it per game (docs/EMULATORS.md). Every 250 ms this thread reads the CPU time
-// of each of BananaDS's threads, the heaviest frame's CPU time on the emulator's thread, the frames shown and the
-// frames the queue dropped. The busiest thread's load u at clock f predicts the clock that loads it to TARGET
-// (f * u / TARGET), and the heaviest frame must fit PEAK_TARGET of a refresh the same way. Up at once when a window
-// needs it (busy, a heavy frame, a drop, below full speed); down one step only after DOWN_AFTER windows in a row that
-// all fit lower. A clock that dropped a CPU-bound frame is banned for 30 s (doubling per further drop, up to 10 min),
-// remembered per game and scale in <cpugov.dir>/<rom>.<1x|2x>; two minutes at it or lower without a drop forgive one
-// strike. A savestate boosts to the top clock while it is written (cpugov_boost).
+// understanding that the emulator lowers it per game (docs/EMULATORS.md). It decides on what a clock costs where it
+// is, not on a prediction: every 250 ms it reads the frames the emulator fell behind the DS's schedule (GovFeed::late,
+// counted by the frontend's emulator thread: each whole frame once, stalls left out) and the frames emulated. Any
+// late frame, or under 58.5 emulated frames a second over the last second while the game runs: one step up at once
+// (two for three late frames or more), and the clock it was at is banned for 30 s (doubling per further strike, up
+// to 10 min), remembered per game and scale in <cpugov.dir>/<rom>.<1x|2x>. Clean (no late frame, full speed) for
+// DOWN_AFTER windows in a row: one step down, unless that clock is banned. Two minutes clean at a clock or lower
+// forgive it one strike. A savestate boosts to the top clock while it is written (cpugov_boost).
+//
+// A prediction from the load (SuperDrastic's: the busiest thread's load and the heaviest frame scaled linearly to a
+// lower clock, with headroom on top) held HeartGold at 1800 MHz although 1104 MHz keeps up: the emulator's time per
+// frame doesn't shrink in proportion to the clock (its memory waits don't), and the frame queue makes a frame that
+// takes longer than a refresh harmless as long as the next one is quicker. Only the frames actually lost say that.
 //
 // Settings: cpugov (on), cpugov.min_khz (1104000: 816 MHz dropped frames at 2x even in a still scene),
 // cpugov.max_khz (the hardware's top), cpugov.max_soft (off: past max_khz while the game can't keep up),
@@ -22,6 +27,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -37,9 +43,10 @@ using melonDS::Platform::LogLevel;
 
 namespace bananads {
 
-#define POL "/sys/devices/system/cpu/cpufreq/policy0/"
-static const int WINDOW_MS = 250;
-static const double TARGET = 0.72, HIGH = 0.85, PEAK_TARGET = 0.80, PEAK_HIGH = 0.95, BLAME_PEAK = 0.80, IDLE_BUSY = 0.25;
+static std::string pol_dir = "/sys/devices/system/cpu/cpufreq/policy0/";  // cpugov.sysfs (the tests' own)
+static std::string pol(const char* f) { return pol_dir + f; }
+static int window_ms = 250;  // cpugov.window_ms (the tests')
+static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5;
 static const int BAD_FOR_S = 30, BAD_MAX_S = 600, FORGIVE_MS = 120000, MAX_STRIKES = 6, FPS_WINDOWS = 4, DOWN_AFTER = 8;
 static const int MAXT = 64, NF = 24;
 
@@ -52,7 +59,6 @@ static std::atomic<bool> gov_on{false}, gov_run{false};
 static std::thread gov_th;
 static GovFeed* feed_;
 static std::string mem_dir, mem_rom, mem_path;
-static double last_peak;
 
 static long long ban_ns(int k) {
     long long s = (long long)BAD_FOR_S << (k < 5 ? k : 5);
@@ -83,14 +89,19 @@ static std::string rd_str(const char* p) {
     return b;
 }
 
-static void set_clock(int khz, const char* why, double u, double fps) {
+static std::string fps_str(double fps) {  // (not measured yet since the last change: -)
+    char b[16] = "-";
+    if (fps >= 0) snprintf(b, sizeof b, "%.1f", fps);
+    return b;
+}
+static void set_clock(int khz, const char* why, long late, double u, double fps) {
     if (khz == cur) return;
-    if (wr_int(POL "scaling_max_freq", khz)) {
+    if (wr_int(pol("scaling_max_freq").c_str(), khz)) {
         Log(LogLevel::Warn, "[cpugov] can't set %d kHz\n", khz);
         return;
     }
-    Log(LogLevel::Info, "[cpugov] %d -> %d MHz (%s: busiest thread %.0f%%, heaviest frame %.0f%% of 16.7 ms, %.1f fps)\n",
-        cur / 1000, khz / 1000, why, u * 100, last_peak * 100, fps);
+    Log(LogLevel::Info, "[cpugov] %d -> %d MHz (%s: %ld frames late, busiest thread %.0f%%, %s fps)\n", cur / 1000,
+        khz / 1000, why, late, u * 100, fps_str(fps).c_str());
     cur = khz;
 }
 static int fit_to(double khz, int top) {
@@ -98,7 +109,6 @@ static int fit_to(double khz, int top) {
         if (freqs[i] >= fmin_ && freqs[i] <= top && freqs[i] >= khz) return freqs[i];
     return top;
 }
-static int fit(double khz) { return fit_to(khz, fmax_); }
 static int step_up(int khz) { return fit_to(khz + 1, soft_max ? hwmax_ : fmax_); }
 static int idx(int khz) {
     for (int i = 0; i < nf; i++)
@@ -143,9 +153,9 @@ static void mem_load(int scale) {
         }
         fclose(f);
     }
-    Log(LogLevel::Info, "[cpugov] remembered drops for %s%s\n", mem_path.c_str(), said.empty() ? ": none" : said.c_str());
+    Log(LogLevel::Info, "[cpugov] remembered strikes for %s%s\n", mem_path.c_str(), said.empty() ? ": none" : said.c_str());
 }
-// one step down, unless that clock dropped a frame recently
+// one step down, unless that clock was late recently
 static int step_down(int khz) {
     int best = khz;
     for (int i = 0; i < nf; i++)
@@ -166,11 +176,15 @@ static void gov_loop() {
     int tids[MAXT];
     long long last[MAXT];
     int nt = 0;
-    long drops_prev = feed_->drops;
+    long late_prev = feed_->late;
     long long t_prev = 0, fps_t[FPS_WINDOWS] = {0};
     long fps_p[FPS_WINDOWS] = {0};
+    // the frame rate over the last FPS_WINDOWS windows (a second: over one window, a frame more or less is 4 fps),
+    // unknown (-1) until there are that many since it started again (a new clock, a savestate)
+    auto restart_fps = [&] {
+        for (int k = 0; k < FPS_WINDOWS; k++) fps_t[k] = 0;
+    };
     int fi = 0, low = 0, rescan = 0, boosted = 0;
-    double peaks[FPS_WINDOWS] = {0};
     {
         timespec n;
         clock_gettime(CLOCK_MONOTONIC, &n);
@@ -200,9 +214,9 @@ static void gov_loop() {
             memcpy(tids, nt_, sizeof(int) * n);
             memcpy(last, nl, sizeof(long long) * n);
             nt = n;
-            rescan = 1000 / WINDOW_MS;
+            rescan = std::max(1, 1000 / window_ms);
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(WINDOW_MS));
+        std::this_thread::sleep_for(std::chrono::milliseconds(window_ms));
         if (!gov_run) break;
         timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -220,8 +234,8 @@ static void gov_loop() {
             last[k] = ns;
         }
         long pres = feed_->frames;
-        double fps = 60;
-        if (fps_t[fi]) fps = (pres - fps_p[fi]) * 1e9 / (t - fps_t[fi]);
+        double fps = -1;
+        if (fps_t[fi] && t > fps_t[fi]) fps = (pres - fps_p[fi]) * 1e9 / (t - fps_t[fi]);
         fps_t[fi] = t;
         fps_p[fi] = pres;
         fi = (fi + 1) % FPS_WINDOWS;
@@ -235,57 +249,38 @@ static void gov_loop() {
                 cur = hwmax_;
             } else {
                 Log(LogLevel::Info, "[cpugov] savestate done: back to %d MHz\n", boosted / 1000);
-                if (wr_int(POL "scaling_max_freq", boosted) == 0) cur = boosted;
+                if (wr_int(pol("scaling_max_freq").c_str(), boosted) == 0) cur = boosted;
                 boosted = 0;
-                for (int k = 0; k < FPS_WINDOWS; k++) fps_t[k] = 0, peaks[k] = 0;
+                restart_fps();
             }
-            feed_->work_max_ns = 0;
-            drops_prev = feed_->drops;
+            late_prev = feed_->late;
             low = 0;
             continue;
         }
-        double peak = feed_->work_max_ns.exchange(0) / 16.67e6;
-        last_peak = peak;
-        peaks[fi] = peak;
-        double peak1s = 0;
-        for (int k = 0; k < FPS_WINDOWS; k++)
-            if (peaks[k] > peak1s) peak1s = peaks[k];
-        long drops = feed_->drops, dropped = drops - drops_prev;
-        drops_prev = drops;
-        double need = cur * umax / TARGET, needp = cur * peak / PEAK_TARGET;
-        bool behind = fps < 58.5 && fps > 5 && (umax > 0.5 || usum > 1.0);
-        int want = fit_to(need > needp ? need : needp, soft_max && behind ? hwmax_ : fmax_);
-        int fits = soft_max ? fit_to(need > needp ? need : needp, hwmax_) : want;
+        const long late_now = feed_->late, late = late_now - late_prev;
+        late_prev = late_now;
+        const bool running = umax >= IDLE_BUSY;
+        const bool slow = fps >= 0 && fps < SLOW_FPS && fps > 5 && (umax > 0.5 || usum > 1.0);
+        const int top = soft_max ? hwmax_ : fmax_;
         const char* why = nullptr;
-        if (umax > HIGH) why = "busy";
-        else if (peak > PEAK_HIGH) why = "heavy frame";
-        else if (dropped && umax < IDLE_BUSY)
-            Log(LogLevel::Info, "[cpugov] drop ignored: the game isn't running (busiest thread %.0f%%)\n", umax * 100);
-        else if (dropped) {
-            bool blame = peak1s >= BLAME_PEAK || umax > TARGET;
-            why = blame ? "dropped" : "dropped, light frames";
-            if (want <= cur) want = blame ? step_up(cur) : fit(cur + 1);
+        int want = cur;
+        if (late && !running)
+            Log(LogLevel::Info, "[cpugov] %ld late frames ignored: the game isn't running (busiest thread %.0f%%)\n", late,
+                umax * 100);
+        else if (late || slow) {
+            why = late ? "late" : "slow";
+            want = step_up(cur);
+            if (late >= 3 || (fps >= 0 && fps < 50)) want = step_up(want);
             int c = idx(cur);
-            int top = soft_max ? hwmax_ : fmax_;
-            if (c >= 0 && cur < top && blame) {
+            if (c >= 0 && cur < top) {
                 bad_until[c] = t + ban_ns(strikes[c]);
                 strikes[c]++;
                 for (int i = 0; i < nf; i++)
                     if (freqs[i] <= cur) proof_ms[i] = 0;
                 mem_save();
-            } else if (c >= 0 && cur < top && bad_until[c] < t + ban_ns(0))
-                bad_until[c] = t + ban_ns(0);
-        } else if (behind) {
-            why = "slow";
-            if (want <= cur) want = step_up(cur);
-            int c = idx(cur);
-            if (c >= 0 && cur < (soft_max ? hwmax_ : fmax_)) {
-                bad_until[c] = t + ban_ns(strikes[c]);
-                strikes[c]++;
-                mem_save();
             }
         }
-        if (!dropped) {
+        if (!why && !late) {
             bool forgiven = false;
             for (int i = 0; i < nf; i++)
                 if (strikes[i] && freqs[i] >= cur && (proof_ms[i] += dt / 1000000) >= FORGIVE_MS) {
@@ -296,19 +291,44 @@ static void gov_loop() {
                 }
             if (forgiven) mem_save();
         }
-        if (why && want > cur) {
-            set_clock(want, why, umax, fps);
+        const int was = cur;
+        if (why) {
+            set_clock(want, why, late, umax, fps);
             low = 0;
-        } else if (fits < cur && fps >= 59 && usum < 1.2 * cur / (double)step_down(cur)) {
+        } else if (!late && (fps < 0 || fps >= 59)) {  // clean: the next clock down once it has been for DOWN_AFTER windows
             if (++low >= DOWN_AFTER) {
-                set_clock(step_down(cur), "light", umax, fps);
+                set_clock(step_down(cur), "clean", late, umax, fps);
                 low = 0;
             }
         } else
             low = 0;
+        if (cur != was) {  // what comes next is the new clock's: the backlog and the frame rate start again
+            feed_->rebase = true;
+            restart_fps();
+        }
         if (verbose)
-            Log(LogLevel::Info, "[cpugov] window: busiest %.0f%% peak frame %.0f%% fps %.1f drops %ld at %d MHz, fits %d\n",
-                umax * 100, peak * 100, fps, dropped, cur / 1000, want / 1000);
+            Log(LogLevel::Info, "[cpugov] window: %ld late, busiest %.0f%%, %s fps at %d MHz\n", late, umax * 100,
+                fps_str(fps).c_str(), cur / 1000);
+    }
+}
+
+Pacer::Pacer(GovFeed& feed, std::chrono::nanoseconds period)
+    : feed_(feed), period_(period), due_(std::chrono::steady_clock::now()) {}
+
+void Pacer::wait() {
+    due_ += period_;
+    const auto now = std::chrono::steady_clock::now();
+    if (feed_.rebase.exchange(false) && now > due_) {
+        due_ = now;
+        behind_ = 0;
+    }
+    const long b = now > due_ ? (long)((now - due_) / period_) : 0;
+    if (b > behind_ && b - behind_ <= 2) feed_.late += b - behind_;
+    behind_ = b;
+    if (due_ > now) std::this_thread::sleep_until(due_);
+    else if (now - due_ > period_ * 4) {  // too far behind (or back from a stop): don't run to catch up
+        due_ = now;
+        behind_ = 0;
     }
 }
 
@@ -318,28 +338,30 @@ void cpugov_start(const Config& cfg, GovFeed* feed) {
         return;
     }
     verbose = cfg.flag("cpugov.log", false);
+    pol_dir = cfg.str("cpugov.sysfs", pol_dir);
+    window_ms = std::max(10, (int)cfg.num("cpugov.window_ms", 250));
     mem_on = cfg.flag("cpugov.memory", true);
-    std::string gov = rd_str(POL "scaling_governor");
+    std::string gov = rd_str(pol("scaling_governor").c_str());
     if (gov != "performance") {
         Log(LogLevel::Info, "[cpugov] off: the governor is %s, not performance\n", gov.empty() ? "unknown" : gov.c_str());
         return;
     }
     // one clock domain only (the RK3566/RK3568's four A55s)
     for (const char* p : {"policy1", "policy2", "policy4", "policy6"})
-        if (access((std::string("/sys/devices/system/cpu/cpufreq/") + p).c_str(), F_OK) == 0) {
+        if (access((pol_dir + "../" + p).c_str(), F_OK) == 0) {
             Log(LogLevel::Info, "[cpugov] off: more than one CPU cluster\n");
             return;
         }
-    std::string avail = rd_str(POL "scaling_available_frequencies");
+    std::string avail = rd_str(pol("scaling_available_frequencies").c_str());
     nf = 0;
     for (char* s = strtok(&avail[0], " "); s && nf < NF; s = strtok(nullptr, " ")) freqs[nf++] = atoi(s);
     for (int i = 1; i < nf; i++)
         for (int j = i; j > 0 && freqs[j] < freqs[j - 1]; j--) std::swap(freqs[j], freqs[j - 1]);
-    cur = before_ = rd_int(POL "scaling_max_freq");
-    hwmax_ = rd_int(POL "cpuinfo_max_freq");
+    cur = before_ = rd_int(pol("scaling_max_freq").c_str());
+    hwmax_ = rd_int(pol("cpuinfo_max_freq").c_str());
     fmax_ = (int)cfg.num("cpugov.max_khz", hwmax_);
     fmin_ = (int)cfg.num("cpugov.min_khz", 1104000);
-    if (nf < 2 || cur <= 0 || access(POL "scaling_max_freq", W_OK)) {
+    if (nf < 2 || cur <= 0 || access(pol("scaling_max_freq").c_str(), W_OK)) {
         Log(LogLevel::Info, "[cpugov] off: no writable cpufreq\n");
         before_ = -1;
         return;
@@ -362,9 +384,9 @@ void cpugov_start(const Config& cfg, GovFeed* feed) {
                 mem_rom = b ? b + 1 : cmd + i;
             }
     }
-    Log(LogLevel::Info, "[cpugov] on: %d..%d MHz%s, target %.0f%% load of the busiest thread\n", fmin_ / 1000,
-        fmax_ / 1000, soft_max ? " (soft: higher while the game can't keep up)" : "", TARGET * 100);
-    if (!soft_max && cur > fmax_ && wr_int(POL "scaling_max_freq", fmax_) == 0) cur = fmax_;
+    Log(LogLevel::Info, "[cpugov] on: %d..%d MHz%s, down a step after %d s without a late frame\n", fmin_ / 1000,
+        fmax_ / 1000, soft_max ? " (soft: higher while the game can't keep up)" : "", DOWN_AFTER * window_ms / 1000);
+    if (!soft_max && cur > fmax_ && wr_int(pol("scaling_max_freq").c_str(), fmax_) == 0) cur = fmax_;
     feed_ = feed;
     gov_on = true;
     gov_run = true;
@@ -379,7 +401,7 @@ void cpugov_boost(int ms) {
     if (until <= boost_until) return;
     bool fresh = boost_until <= t;
     boost_until = until;
-    if (fresh) wr_int(POL "scaling_max_freq", hwmax_);  // at once, not at the next window
+    if (fresh) wr_int(pol("scaling_max_freq").c_str(), hwmax_);  // at once, not at the next window
 }
 
 void cpugov_stop() {
@@ -387,7 +409,7 @@ void cpugov_stop() {
     gov_run = false;
     if (gov_th.joinable()) gov_th.join();
     gov_on = false;
-    if (before_ > 0 && wr_int(POL "scaling_max_freq", before_) == 0)
+    if (before_ > 0 && wr_int(pol("scaling_max_freq").c_str(), before_) == 0)
         Log(LogLevel::Info, "[cpugov] back to %d MHz\n", before_ / 1000);
 }
 

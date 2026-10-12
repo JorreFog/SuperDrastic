@@ -6,14 +6,17 @@
 //   Virtual-2 in QEMU); kms.top is the top screen. The modes stay as they are (the kernel command line's, else the
 //   panel's preferred one: the DTB carries a measured 60 Hz), and everything is given back on exit (closing the
 //   device drops master; the menu modesets again).
-// - Each frame is written into DRM dumb buffers, one per panel, and both go to the screen in ONE atomic commit
+// - Each frame is drawn into DRM dumb buffers, one per panel, and both go to the screen in ONE atomic commit
 //   (DRM_MODE_ATOMIC_NONBLOCK | PAGE_FLIP_EVENT): the same emulated frame on both panels. The display plane scales
-//   the 256x192 (512x384 at render.scale=2) buffer to the panel itself (VOP2 on the RG DS: no copy, no GPU); where
-//   the plane can't scale (QEMU's virtio GPU) the frame is scaled by a whole number on the CPU and centred.
+//   the 256x192 (512x384 at render.scale=2) buffer to the panel itself (VOP2 on the RG DS), and the Banana 2D
+//   engine draws each line straight into it (Emu::draw_into: no copy, no GPU). Where the plane can't scale (QEMU's
+//   virtio GPU), or with another renderer, the finished frame is copied in instead, scaled by a whole number on the
+//   CPU and centred in the first case.
 // - Frames queue (as sdl.present=queue): the emulator runs on its own thread at the DS's rate, and each finished
 //   frame is committed as soon as the previous flip is done, so a game whose frames take 19 and 12 ms in turn
 //   (HeartGold at 1104 MHz) still shows one new frame per refresh. Up to kms.queue frames wait; past that the oldest
-//   is dropped (counted).
+//   is dropped (counted). The presenter (this thread) runs SCHED_FIFO (kms.rt), as SuperDrastic's does: its work per
+//   wake-up is tiny, but a late one finds the last flip still pending and the frame waits a refresh.
 // - Input: the pad (rocknix-singleadc-joypad, and any keyboard) read, never grabbed (bananad reads the same device
 //   for the lid, power and volume keys, which are ignored here). The touchscreen is the device whose sysfs path
 //   contains kms.touch (BANANADS_TOUCH: fe5e0000.i2c, the bottom panel's). F (BTN_MODE) + Start quits; F + R saves
@@ -77,11 +80,22 @@ static long long now_us() {
     return t.tv_sec * 1000000LL + t.tv_nsec / 1000;
 }
 
-static long long thread_cpu_ns() {
-    timespec t;
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
-    return t.tv_sec * 1000000000LL + t.tv_nsec;
-}
+// a priority-inheriting mutex (dsflip's): the presenter runs SCHED_FIFO, the emulator's thread doesn't, and on a
+// busy core a plain one could leave the presenter waiting behind a preempted emulator thread
+struct PiMutex {
+    pthread_mutex_t m;
+    PiMutex() {
+        pthread_mutexattr_t a;
+        pthread_mutexattr_init(&a);
+        pthread_mutexattr_setprotocol(&a, PTHREAD_PRIO_INHERIT);
+        pthread_mutex_init(&m, &a);
+        pthread_mutexattr_destroy(&a);
+    }
+    ~PiMutex() { pthread_mutex_destroy(&m); }
+    void lock() { pthread_mutex_lock(&m); }
+    void unlock() { pthread_mutex_unlock(&m); }
+};
+using Lock = std::lock_guard<PiMutex>;
 
 // ---- the display ----------------------------------------------------------------------------------------------
 
@@ -108,12 +122,13 @@ struct Display {
     int W = 0, H = 0;         // the panels' mode
     int fw = 0, fh = 0;       // a DS screen's size at render.scale
     bool hw = true;           // the plane scales the frame; else the CPU does, into panel-sized buffers
+    bool direct = false;      // the emulator draws straight into the buffers (hw, rows packed, the Banana 2D engine)
     int k = 1, ox = 0, oy = 0;  // CPU scaling: the whole-number factor and where the picture sits
     Buf buf[2][NB];
     SlotState state[NB] = {};
     std::deque<int> queue;    // frames waiting, oldest first
     int committed = -1, scanout = -1, pending = 0;
-    std::mutex mu;
+    PiMutex mu;
     double period_us = 16666.7;
     // statistics (kms.stats, the governor)
     std::atomic<long> made{0}, dropped{0}, shown{0};
@@ -311,8 +326,6 @@ struct Display {
         }
         scanout = 0;
         state[0] = SCANOUT;
-        Log(LogLevel::Info, "[kms] %s top, %s bottom, %dx%d at %.3f Hz; %dx%d frames scaled by %s\n", p[0].name.c_str(),
-            p[1].name.c_str(), W, H, 1e6 / period_us, fw, fh, hw ? "the display plane" : "the CPU");
         return true;
     }
 
@@ -388,7 +401,7 @@ struct Display {
 
     // ---- the emulator's side: a slot to write the next frame into, then queue it ----
     int take() {
-        std::lock_guard<std::mutex> l(mu);
+        Lock l(mu);
         for (int s = 0; s < NB; s++)
             if (state[s] == FREE) {
                 state[s] = WRITING;
@@ -401,6 +414,16 @@ struct Display {
         state[s] = WRITING;
         return s;
     }
+    // the emulator draws a frame straight into slot s (Emu::draw_into), rows packed as it wants them
+    bool packed() const {
+        if (!hw) return false;
+        for (auto& pb : buf)
+            for (auto& b : pb)
+                if (b.pitch != (uint32_t)fw * 4) return false;
+        return true;
+    }
+    uint32_t* map(int panel, int s) { return (uint32_t*)buf[panel][s].map; }
+    // or the finished frame is copied in
     void write(int s, const uint32_t* top, const uint32_t* bot) {
         const uint32_t* src[2] = {top, bot};
         for (int i = 0; i < 2; i++) {
@@ -427,7 +450,7 @@ struct Display {
     }
     void publish(int s, int depth) {
         {
-            std::lock_guard<std::mutex> l(mu);
+            Lock l(mu);
             state[s] = QUEUED;
             queue.push_back(s);
             made++;
@@ -443,7 +466,7 @@ struct Display {
     // ---- the presenter's side ----
     // with no flip pending, the oldest waiting frame goes to both panels in one commit
     void commit_next() {
-        std::lock_guard<std::mutex> l(mu);
+        Lock l(mu);
         if (pending || queue.empty()) return;
         int s = queue.front();
         drmModeAtomicReq* r = drmModeAtomicAlloc();
@@ -460,7 +483,7 @@ struct Display {
         pending = 2;
     }
     void flipped(long long t) {
-        std::lock_guard<std::mutex> l(mu);
+        Lock l(mu);
         if (--pending > 0) return;
         if (scanout >= 0) state[scanout] = FREE;
         scanout = committed;
@@ -579,6 +602,11 @@ int run_kms(Emu& emu, const Config& cfg) {
         dp.close();
         return 1;
     }
+    dp.direct = dp.packed() && emu.draw_into(dp.map(0, 1), dp.map(1, 1));  // (each frame is given its own slot)
+    Log(LogLevel::Info, "[kms] %s top, %s bottom, %dx%d at %.3f Hz; %dx%d frames %s, scaled by %s\n",
+        dp.p[0].name.c_str(), dp.p[1].name.c_str(), dp.W, dp.H, 1e6 / dp.period_us, dp.fw, dp.fh,
+        dp.direct ? "drawn straight into the scanout buffers" : "copied into the scanout buffers",
+        dp.hw ? "the display plane" : "the CPU");
     std::vector<InputDev> devs = open_inputs(touch);
 
     // power.cpu_latency_us: hold the cores out of idle states slower to leave than this while the game runs (PM QoS,
@@ -610,8 +638,7 @@ int run_kms(Emu& emu, const Config& cfg) {
 
     std::thread emu_thread([&] {
         pthread_setname_np(pthread_self(), "bds-emu");
-        const auto frame = std::chrono::nanoseconds(16715180);  // 1 / 59.8261 Hz
-        auto due = std::chrono::steady_clock::now();
+        Pacer pace(feed);
         int touched = -1;
         while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
             if (int s = in_save.exchange(0)) {
@@ -629,22 +656,27 @@ int run_kms(Emu& emu, const Config& cfg) {
                 else emu.touch(t & 0xFFFF, t >> 16);
                 touched = t;
             }
-            const long long c0 = thread_cpu_ns();
+            const int s = dp.take();
+            if (dp.direct) emu.draw_into(dp.map(0, s), dp.map(1, s));
             emu.run_frame();
-            const long long work = thread_cpu_ns() - c0;
-            long long prev = feed.work_max_ns.load(std::memory_order_relaxed);
-            while (work > prev && !feed.work_max_ns.compare_exchange_weak(prev, work)) {}
-            int s = dp.take();
-            dp.write(s, emu.top(), emu.bottom());
+            if (!dp.direct) dp.write(s, emu.top(), emu.bottom());
             dp.publish(s, depth);
-            due += frame;
-            auto now = std::chrono::steady_clock::now();
-            if (due > now) std::this_thread::sleep_until(due);
-            else if (now - due > frame * 4) due = now;  // too far behind (or back from sleep): don't run to catch up
+            pace.wait();  // (and the governor's signal: the frames it fell behind)
         }
         run = false;
         wake();  // the presenter
     });
+
+    // kms.rt: the presenter at SCHED_FIFO 5, below the sound thread (10), as dsflip's below its audio pump. Set after
+    // the other threads are started (a new thread takes its creator's policy), and dropped again before the quit's
+    // savestate
+    const bool rt = cfg.flag("kms.rt", true);
+    if (rt) {
+        sched_param sp{};
+        sp.sched_priority = 5;
+        if (int e = pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp))
+            Log(LogLevel::Info, "[kms] no real-time priority for the presenter: %s\n", strerror(e));
+    }
 
     drmEventContext ev{};
     ev.version = 3;
@@ -668,8 +700,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         }
         if (pfd[0].revents & POLLIN) drmHandleEvent(dp.fd, &ev);
         dp.commit_next();
-        feed.frames = dp.shown.load();
-        feed.drops = dp.dropped.load();
+        feed.frames = dp.made.load();
 
         for (size_t i = 2; i < pfd.size(); i++) {
             if (!(pfd[i].revents & POLLIN)) continue;
@@ -733,7 +764,7 @@ int run_kms(Emu& emu, const Config& cfg) {
             const double sec = (t - since) / 1e6;
             long rep;
             {
-                std::lock_guard<std::mutex> l(dp.mu);
+                Lock l(dp.mu);
                 rep = dp.repeats;
             }
             Log(LogLevel::Info, "[kms] %ld frames shown in %.2f s (%.2f/s), %.2f emulated/s: %ld refreshes without a new frame, %ld dropped\n",
@@ -749,6 +780,10 @@ int run_kms(Emu& emu, const Config& cfg) {
     const bool signalled = g_quit;
     run = false;
     if (emu_thread.joinable()) emu_thread.join();
+    if (rt) {
+        sched_param sp{};
+        pthread_setschedparam(pthread_self(), SCHED_OTHER, &sp);
+    }
     Log(LogLevel::Info, "[kms] %s: %ld frames shown, %ld dropped\n", signalled ? "asked to quit" : "quit",
         dp.shown.load(), dp.dropped.load());
 
@@ -763,6 +798,7 @@ int run_kms(Emu& emu, const Config& cfg) {
 #endif
     for (auto& d : devs) ::close(d.fd);
     if (qos >= 0) ::close(qos);
+    emu.draw_into(nullptr, nullptr);  // (the buffers go with the device)
     dp.close();
     ::close(g_wake);
     g_wake = -1;

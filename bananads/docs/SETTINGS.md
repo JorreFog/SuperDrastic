@@ -63,16 +63,19 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `kms.top` | `$BANANADS_TOP`, else `DSI-2` | the connector of the panel that shows the top screen; the other connected panel of the same type shows the bottom one (`Virtual-2` in QEMU) |
 | `kms.touch` | `$BANANADS_TOUCH`, else `fe5e0000.i2c` | the bottom panel's touchscreen: the input device whose sysfs path contains this |
 | `kms.queue` | `2` | the most finished frames waiting for the screen (1-3); past that the oldest is dropped. Frames are committed one per refresh, so a game whose frames take 19 and 12 ms in turn still shows a new one at every refresh |
+| `kms.rt` | `on` | the presenter (the thread that commits the frames) at `SCHED_FIFO` 5, below the sound thread, as SuperDrastic's: a late wake-up finds the last flip still pending and the frame waits a refresh |
 | `kms.stats` | `0` | every this many frames shown, log the rate of new frames on the panels, the frames emulated per second, the refreshes that showed no new frame and the frames dropped |
-| `cpugov` | `on` | with `frontend=kms`: the lowest CPU clock that keeps the game at full speed, set through `scaling_max_freq` under the `performance` governor and put back on exit (SuperDrastic's governor, src/cpugov.cpp says how it decides); off when the governor isn't `performance` |
+| `cpugov` | `on` | with `frontend=kms`: the lowest CPU clock that keeps the game at full speed, set through `scaling_max_freq` under the `performance` governor and put back on exit (src/cpugov.cpp says how it decides: one step up whenever the emulator falls a frame behind the DS's schedule at the clock it's at, and one step down after 2 s without, never onto a clock that was late recently); off when the governor isn't `performance` |
 | `cpugov.min_khz`, `cpugov.max_khz` | `1104000`, the hardware's top | its bounds |
 | `cpugov.max_soft` | `off` | `on`: past `cpugov.max_khz` while the game can't keep up |
-| `cpugov.memory` | `on` | remember per game (and scale) the clocks that dropped frames, in `cpugov.dir` |
+| `cpugov.memory` | `on` | remember per game (and scale) the clocks that were late, in `cpugov.dir` |
 | `cpugov.dir` | `$BANANADS_DATA/cpugov` | |
 | `cpugov.log` | `off` | a log line per 250 ms decision window |
+| `cpugov.sysfs`, `cpugov.window_ms` | the CPU's `cpufreq/policy0/`, `250` | for tests (tests/cpugov_test.cpp): another cpufreq folder, another window |
 | `power.cpu_latency_us` | `0` | with `frontend=kms`: hold the cores out of idle states that take longer than this to leave, for the game's lifetime (PM QoS through `/dev/cpu_dma_latency`; the RK3566/RK3568's `cpu-sleep` takes 220 us, and 100 here kept HeartGold at 2x ~1.5% faster). `0`: the kernel decides. Costs battery: measure before keeping it on |
 | `headless.frames` | `600` | how many frames `headless` runs |
 | `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
+| `headless.direct` | `off` | `on`: every frame drawn straight into a ring of the frontend's buffers (`Emu::draw_into`), as `frontend=kms` draws into the scanout buffers; the pictures must be the same as without (the Banana 2D engine only) |
 | `headless.reload_at` | none | after this frame, save the state to slot 3 and load it straight back (a test of the savestate path) |
 | `headless.audio_dump` | none | write the raw audio the SPU hands the frontend (`SPU::ReadOutput`: stereo s16 at the output rate, 48000 Hz) to this file, so two builds' audio compares byte for byte with `cmp` |
 | `headless.measure_from` | `0` | also report the fps from this frame on (a game's scene, after loading) |

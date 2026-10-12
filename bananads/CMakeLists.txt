@@ -260,6 +260,12 @@ target_include_directories(bananads-tests PRIVATE src)
 target_link_libraries(bananads-tests PRIVATE core bananads-net pthread)
 add_test(NAME host COMMAND bananads-tests)
 
+# The CPU governor against a simulated game on a made-up cpufreq folder (tests/cpugov_test.cpp, ~25 s).
+add_executable(bananads-cpugov-test tests/cpugov_test.cpp src/cpugov.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
+target_include_directories(bananads-cpugov-test PRIVATE src)
+target_link_libraries(bananads-cpugov-test PRIVATE core bananads-net pthread)
+add_test(NAME cpugov COMMAND bananads-cpugov-test ${CMAKE_CURRENT_BINARY_DIR}/cpugov-test HeartGold.nds)
+
 # BananaJIT's encoder against LLVM's assembler (runs on any host: it only encodes).
 add_executable(bananads-jit-encodings tests/jit_encodings.cpp)
 target_include_directories(bananads-jit-encodings PRIVATE jit)
