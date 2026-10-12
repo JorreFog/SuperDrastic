@@ -1,4 +1,4 @@
-From eab3468d0c4fcbf1982971900528fd9361297a93 Mon Sep 17 00:00:00 2001
+From 4b07c6218280c035f763e6413eb4910ff5e53110 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 22:57:24 +0000
 Subject: [PATCH] SPU: run only the sound channels that are due, NEON mixer
@@ -18,15 +18,15 @@ straight to GPU3D::Write32 (as FastGXDMA), and between main RAM addresses straig
 check; the ARM9's main RAM -> fixed destination timing is UnitTimings9_32's MRAM burst table lookup, chosen once
 per run instead of per unit.
 ---
- src/DMA.cpp | 127 ++++++++++++++++++++-
+ src/DMA.cpp | 169 ++++++++++++++++++++++++++-
  src/DMA.h   |   6 +
  src/NDS.h   |   2 +
  src/SPU.cpp | 321 ++++++++++++++++++++++++++++++++++++++++++++++++++--
  src/SPU.h   |  36 +++++-
- 5 files changed, 476 insertions(+), 16 deletions(-)
+ 5 files changed, 518 insertions(+), 16 deletions(-)
 
 diff --git a/src/DMA.cpp b/src/DMA.cpp
-index caf5032..7ce3b7d 100644
+index caf5032..7d5b9b5 100644
 --- a/src/DMA.cpp
 +++ b/src/DMA.cpp
 @@ -23,6 +23,7 @@
@@ -103,7 +103,7 @@ index caf5032..7ce3b7d 100644
      {
          while (IterCount > 0 && !Stall)
          {
-@@ -583,6 +634,69 @@ void DMA::Run9()
+@@ -583,6 +634,111 @@ void DMA::Run9()
      {
          // FastGXDMA: what ARM9Write32(0x04000400, ARM9Read32(main RAM)) does on a DS, without the dispatch
          const bool fastgx = NDS.FastGXDMA && NDS.ConsoleType == 0;
@@ -120,6 +120,48 @@ index caf5032..7ce3b7d 100644
 +            u8* const ram = NDS.MainRAM;
 +            const u32 mask = NDS.MainRAMMask;
 +
++            if (DstAddrInc == 0)
++            {
++                // a fixed destination (the GX FIFO's DMA): its page's choice made once, before the loop
++                const u32 dst_id = CurDstAddr >> 14;
++                const u32 dst_rgn = NDS.ARM9Regions[dst_id];
++                const bool mramread = SrcAddrInc > 0 && dst_rgn != Mem9_MainRAM;
++                const std::array<u8, 256>& tab = (dst_rgn == Mem9_GBAROM)
++                    ? DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][7] == 8 ? 2 : 3]
++                    : DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][6] == 2 ? 0 : 1];
++                const u32 dst = CurDstAddr;
++                while (IterCount > 0 && !Stall)
++                {
++                    const u32 src = CurSrcAddr;
++                    const bool srcram = (src >> 24) == 0x02;
++                    u32 t;
++                    if (mramread && srcram)
++                    {
++                        if (burststart || MRAMBurstTable[MRAMBurstCount] == 0)
++                        {
++                            MRAMBurstCount = 0;
++                            MRAMBurstTable = tab;
++                        }
++                        t = MRAMBurstTable[MRAMBurstCount++];
++                    }
++                    else
++                        t = UnitTimings9_32(burststart);
++                    NDS.ARM9Timestamp += t << clockshift;
++                    burststart = false;
++
++                    if (srcram && dst == 0x04000400)
++                        NDS.GPU.GPU3D.Write32(0x04000400, *(u32*)&ram[(src & ~3) & mask]);
++                    else
++                        FastWrite9<u32>(dst, srcram ? *(u32*)&ram[(src & ~3) & mask] : NDS.ARM9Read32(src));
++
++                    CurSrcAddr += SrcAddrInc<<2;
++                    IterCount--;
++                    RemCount--;
++
++                    if (NDS.ARM9Timestamp >= NDS.ARM9Target) break;
++                }
++            }
++            else
 +            while (IterCount > 0 && !Stall)
 +            {
 +                const u32 src = CurSrcAddr, dst = CurDstAddr;
@@ -173,7 +215,7 @@ index caf5032..7ce3b7d 100644
          while (IterCount > 0 && !Stall)
          {
              NDS.ARM9Timestamp += (UnitTimings9_32(burststart) << NDS.ARM9ClockShift);
-@@ -662,12 +776,21 @@ void DMA::Run7()
+@@ -662,12 +818,21 @@ void DMA::Run7()
      }
      else
      {
