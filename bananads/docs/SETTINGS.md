@@ -56,6 +56,10 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `audio.latency_us` | `30000` | ALSA's buffer |
 | `audio.realtime` | `on` | the sound thread at SCHED_FIFO 10, when allowed |
 | `sdl.scale` | `2` | the window's size |
+| `sdl.present` | `queue` | `queue`: the emulator runs on a thread of its own at the DS's rate and the window shows its finished frames in order, one per vsync, each about one vsync after it is done (a steady picture when frames alternate between slower and faster than a vsync, as HeartGold's do at 1104 MHz; one frame more latency). `direct`: each frame shown as soon as it is done, on the emulator's thread (a frame slower than a vsync misses it) |
+| `sdl.stats` | `0` | with `sdl.present=queue`, every this many vsyncs log the vsync rate, the emulated frames per second, the vsyncs that showed no new frame and the frames never shown |
+| `sdl.vsync` | `off` | with `sdl.present=queue`: `on` paces the window's presents by SDL's vsync; `off` by a clock at `sdl.refresh` Hz (under sway on the RG DS Plus SDL's vsync let only ~18 presents a second through; a Wayland compositor shows the newest buffer at its own refresh, so nothing tears) |
+| `sdl.refresh` | `60` | the presents per second with `sdl.vsync=off` (the display's refresh: the RG DS Plus's panels run at 60.003 Hz) |
 | `headless.frames` | `600` | how many frames `headless` runs |
 | `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
 | `headless.reload_at` | none | after this frame, save the state to slot 3 and load it straight back (a test of the savestate path) |
