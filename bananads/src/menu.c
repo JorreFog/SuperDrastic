@@ -1064,82 +1064,165 @@ int bmenu_run(int start) {
     return 1;
 }
 
-/* ---------- pop-ups over the game (ra.c's: a game loaded, an achievement unlocked...) ----------
- * The frontend calls bmenu_overlay with the top screen's finished frame, on the emulator's thread. A pop-up is drawn
- * once, over black and over white, which gives each pixel its colour and its coverage; every frame after that only
- * blends that picture over the game (a ~560x84 box at 640 wide: no glyphs rasterised per frame). */
-static uint32_t *ov_rgb; static uint8_t *ov_a;
-static int ov_w, ov_h, ov_x, ov_y, ov_for_w, ov_for_h, ov_on;
-static long long ov_until;
-static char ov_l1[128], ov_l2[160], ov_badge[600]; static uint32_t ov_accent;
-static void ov_draw(canvas *c, const uint8_t *img, int iw, int ih) {
-    int pad = S(12), bs = c->h - 2 * pad;
-    box(c, 0, 0, c->w, c->h, S(10), S(2) < 1 ? 1 : S(2), C_BORDER, C_PANEL);
-    int tx = pad + S(4);
-    if (img) {
-        box(c, pad, pad, pad + bs, pad + bs, S(6), S(2) < 1 ? 1 : S(2), C_LIGHT, C_DARK);
-        draw_img(c, img, iw, ih, pad + S(2), pad + S(2), bs - 2 * S(2), S(4));
-        tx = pad + bs + S(14);
-    }
-    float tw = (float)(c->w - tx - pad);
-    text(c, &F_MED, ov_l1, (float)tx, (float)S(14), (float)S(16), ov_accent, tw, 0);
-    text(c, &F_REG, ov_l2, (float)tx, (float)S(42), (float)S(20), C_LIGHT, tw, 0);
-}
-static int ov_build(int w, int h) {
-    if (!fonts_ready()) return 0;
-    canvas probe = { 0, w, h, w / 640.0f }, *c = &probe;
-    int bw = S(560), bh = S(84);
-    if (bw > w) bw = w;
-    uint32_t *black = malloc((size_t)bw * bh * 4), *white = malloc((size_t)bw * bh * 4);
-    free(ov_rgb); free(ov_a);
-    ov_rgb = malloc((size_t)bw * bh * 4); ov_a = malloc((size_t)bw * bh);
-    if (!black || !white || !ov_rgb || !ov_a) { free(black); free(white); return 0; }
-    int iw = 0, ih = 0, ch;
-    uint8_t *img = *ov_badge ? stbi_load(ov_badge, &iw, &ih, &ch, 4) : 0;
-    for (int i = 0; i < bw * bh; i++) { black[i] = 0; white[i] = 0xffffff; }
-    canvas cb = { black, bw, bh, c->s }, cw = { white, bw, bh, c->s };
-    ov_draw(&cb, img, iw, ih);
-    ov_draw(&cw, img, iw, ih);
-    if (img) stbi_image_free(img);
-    for (int i = 0; i < bw * bh; i++) {   /* over black: colour x coverage; over white: that plus (1 - coverage) */
+/* ---------- pop-ups over the game: ROCKNIXDS's (SuperDrastic's ui.c), in BananaOS's colours ----------
+ * The frontend calls bmenu_overlay with the top screen's finished frame, on the emulator's thread. As in ROCKNIXDS a
+ * strip 72 rows tall at 640 wide runs along the top of the top screen and slides in and out: an achievement's card
+ * across it (its badge in a light frame, or a tile in the accent colour with a star or an "i"; the first line in the
+ * accent colour, the second in light text), or the volume / brightness pill in its middle (a speaker or a sun, the
+ * menu's 10-segment bar, the percent) for 1.5 s after a key, over a pop-up. bananad writes the keys' level to
+ * /run/banana/osd. A picture is drawn once, over black and over white (its colour and coverage), then only blended
+ * each frame. */
+#define OV_SLIDE_MS 160
+static const char *const PX_STAR[9] = { "....#....", "...###...", "#########", ".#######.", "..#####..", "..##.##..", ".##...##.", "##.....##", "........." };
+static const char *const PX_INFO[9] = { "...###...", "..#####..", "..##.##..", "....##...", "...##....", "...##....", ".........", "...##....", "...##...." };
+static const char *const PX_MUTE[12] = { "............", ".....#......", "....##......", "...###.#...#", "####.#..#.#.", "#..#.#...#..",
+    "#..#.#...#..", "####.#..#.#.", "...###.#...#", "....##......", ".....#......", "............" };
+typedef struct { uint32_t *rgb; uint8_t *a; int w, h, x, y; } ovpic;   /* a picture with coverage, where it goes */
+static ovpic OP, OV;                                   /* the pop-up's card, the volume / brightness pill */
+static int op_on, ov_on, ov_kind, ov_pct = -1, ov_built_pct = -2, ov_built_kind = -1, ov_for_w;
+static long long op_from, op_until, ov_from, ov_until, osd_mt, osd_check;
+static char op_l1[128], op_l2[160], op_badge[600]; static uint32_t op_accent;
+
+/* draw f twice (over black and over white) into a w x h picture with coverage */
+static int ov_make(ovpic *o, int w, int h, int x, int y, float sc, void (*f)(canvas *)) {
+    uint32_t *black = malloc((size_t)w * h * 4), *white = malloc((size_t)w * h * 4);
+    free(o->rgb); free(o->a);
+    o->rgb = malloc((size_t)w * h * 4); o->a = malloc((size_t)w * h);
+    if (!black || !white || !o->rgb || !o->a) { free(black); free(white); o->w = 0; return 0; }
+    for (int i = 0; i < w * h; i++) { black[i] = 0; white[i] = 0xffffff; }
+    canvas cb = { black, w, h, sc }, cw = { white, w, h, sc };
+    f(&cb); f(&cw);
+    for (int i = 0; i < w * h; i++) {
         uint32_t b = black[i], k = white[i];
         int a = 255 - (int)(((k >> 8) & 255) - ((b >> 8) & 255));
         if (a < 0) a = 0; if (a > 255) a = 255;
-        ov_a[i] = (uint8_t)a;
+        o->a[i] = (uint8_t)a;
         uint32_t r = 0, g = 0, bl = 0;
         if (a) { r = ((b >> 16) & 255) * 255 / a; g = ((b >> 8) & 255) * 255 / a; bl = (b & 255) * 255 / a; }
-        ov_rgb[i] = (r > 255 ? 255 : r) << 16 | (g > 255 ? 255 : g) << 8 | (bl > 255 ? 255 : bl);
+        o->rgb[i] = (r > 255 ? 255 : r) << 16 | (g > 255 ? 255 : g) << 8 | (bl > 255 ? 255 : bl);
     }
     free(black); free(white);
-    ov_w = bw; ov_h = bh; ov_x = (w - bw) / 2; ov_y = h - bh - S(14);
-    if (ov_y < 0) ov_y = 0;
-    ov_for_w = w; ov_for_h = h;
+    o->w = w; o->h = h; o->x = x; o->y = y;
     return 1;
 }
-void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
-    long long t = now_ms();
-    if (ov_on && t >= ov_until) ov_on = 0;
-    if (!ov_on) {
-        int ms;
-        if (!ra_popup_take(ov_l1, sizeof ov_l1, ov_l2, sizeof ov_l2, ov_badge, sizeof ov_badge, &ov_accent, &ms)) return;
-        if (!ov_build(w, h)) return;
-        ov_on = 1; ov_until = t + ms;
-    } else if (w != ov_for_w || h != ov_for_h) {
-        if (!ov_build(w, h)) { ov_on = 0; return; }
+/* ROCKNIXDS's card: a light border, the panel inside with the theme's dots */
+static void ov_card(canvas *c, int x0, int y0, int x1, int y1) {
+    int bw = S(2) < 2 ? 2 : S(2);
+    dotbox(c, x0, y0, x1, y1, (float)S(10), bw, C_LIGHT, C_PANEL, C_DOT);
+}
+/* text whose baseline is at y (ui.c's draw_text) */
+static void ov_text(canvas *c, font *F, const char *t, float x, float base, float px, uint32_t rgb, float maxw) {
+    text(c, F, t, x, base - F->asc * px, px, rgb, maxw, 0);
+}
+static void ov_draw_popup(canvas *c) {
+    int x0 = S(8), y0 = S(4), x1 = c->w - S(8), y1 = c->h - S(4), h = y1 - y0, bs = h - S(16), tx;
+    ov_card(c, x0, y0, x1, y1);
+    int iw = 0, ih = 0, ch;
+    uint8_t *img = *op_badge ? stbi_load(op_badge, &iw, &ih, &ch, 4) : 0;
+    if (img) {   /* the badge in a light frame */
+        int bw = S(2) < 2 ? 2 : S(2);
+        rrect(c, x0 + S(8), y0 + S(8), x0 + S(8) + bs, y0 + S(8) + bs, (float)S(6), C_LIGHT, 1.0f);
+        draw_img(c, img, iw, ih, x0 + S(8) + bw, y0 + S(8) + bw, bs - 2 * bw, (float)S(4));
+        stbi_image_free(img);
+    } else {     /* no badge: a tile in the accent colour, a star for an unlock, else an "i" */
+        rrect(c, x0 + S(8), y0 + S(8), x0 + S(8) + bs, y0 + S(8) + bs, (float)S(6), op_accent, 1.0f);
+        int k = bs / 14 > 0 ? bs / 14 : 1;
+        bitmap(c, op_accent == 0xffd84a ? PX_STAR : PX_INFO, 9, x0 + S(8) + (bs - 9 * k) / 2, y0 + S(8) + (bs - 9 * k) / 2, k, 0x12181f);
     }
-    for (int y = 0; y < ov_h; y++) {
-        uint32_t *d = px + (size_t)(ov_y + y) * pitch + ov_x;
-        const uint32_t *s = ov_rgb + (size_t)y * ov_w;
-        const uint8_t *a = ov_a + (size_t)y * ov_w;
-        for (int x = 0; x < ov_w; x++) {
+    tx = x0 + S(8) + bs + S(12);
+    float maxw = (float)(x1 - S(14) - tx);
+    ov_text(c, &F_MED, op_l1, (float)tx, (float)(y0 + S(26)), (float)S(17), op_accent, maxw);
+    ov_text(c, &F_REG, op_l2, (float)tx, (float)(y0 + S(52)), (float)S(20), C_LIGHT, maxw);
+}
+static void ov_draw_level(canvas *c) {   /* the pill's own picture: c is exactly the pill */
+    int x0 = 0, y0 = 0, x1 = c->w, y1 = c->h, cy = (y0 + y1) / 2;
+    ov_card(c, x0, y0, x1, y1);
+    int k = S(2) < 2 ? 2 : S(2);
+    const char *const *ic = ov_kind ? IC_SUN : ov_pct <= 0 ? PX_MUTE : IC_VOL;
+    bitmap(c, ic, 12, x0 + S(14), cy - 6 * k, k, !ov_kind && ov_pct <= 0 ? C_REDL : C_LIGHT);
+    char t[8]; snprintf(t, sizeof t, "%d%%", ov_pct);
+    float tw = text_w(&F_MED, t, (float)S(19), 8);
+    ov_text(c, &F_MED, t, (float)(x1 - S(14)) - tw, (float)(y0 + S(28)), (float)S(19), C_CYAN, tw + 2);
+    int bx0 = x0 + S(14) + 12 * k + S(12), bx1 = x1 - S(14) - (int)ceilf(text_w(&F_MED, "100%", (float)S(19), 8)) - S(10);
+    float seg = (bx1 - bx0) / 10.0f; int gap = S(3) < 2 ? 2 : S(3);
+    for (int i = 0; i < 10; i++) {
+        int sx = bx0 + (int)(i * seg), ex = bx0 + (int)((i + 1) * seg) - gap;
+        fill(c, sx, cy - S(8), ex, cy + S(8), i < (ov_pct + 5) / 10 ? C_CYAN : C_LINE, 1.0f);
+    }
+}
+/* the keys' level, from bananad (a file written in the last 2 s, newer than the last one seen) */
+static void ov_osd(long long t) {
+    if (t < osd_check) return;
+    osd_check = t + 100;
+    struct stat st;
+    if (stat("/run/banana/osd", &st)) return;
+    long long mt = (long long)st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000;
+    if (mt == osd_mt) return;
+    osd_mt = mt;
+    if (time(0) - st.st_mtim.tv_sec > 2) return;
+    FILE *f = fopen("/run/banana/osd", "r");
+    if (!f) return;
+    char what[32]; int pct;
+    if (fscanf(f, "%31s %d", what, &pct) == 2 && pct >= 0) {
+        ov_kind = !strcmp(what, "brightness");
+        ov_pct = pct > 100 ? 100 : pct;
+        if (!ov_on) ov_from = t;
+        ov_on = 1; ov_until = t + 1500;
+    }
+    fclose(f);
+}
+/* blended over the frame, slid up by off rows */
+static void ov_blit(const ovpic *o, uint32_t *px, int pitch, int fh, int off) {
+    for (int y = 0; y < o->h; y++) {
+        int dy = o->y + y - off;
+        if (dy < 0 || dy >= fh) continue;
+        uint32_t *d = px + (size_t)dy * pitch + o->x;
+        const uint32_t *s = o->rgb + (size_t)y * o->w;
+        const uint8_t *a = o->a + (size_t)y * o->w;
+        for (int x = 0; x < o->w; x++) {
             int k = a[x];
             if (!k) continue;
             if (k == 255) { d[x] = s[x]; continue; }
-            uint32_t o = d[x], n = s[x];
-            uint32_t r = (((n >> 16) & 255) * k + ((o >> 16) & 255) * (255 - k)) / 255;
-            uint32_t g = (((n >> 8) & 255) * k + ((o >> 8) & 255) * (255 - k)) / 255;
-            uint32_t b = ((n & 255) * k + (o & 255) * (255 - k)) / 255;
+            uint32_t q = d[x], n = s[x];
+            uint32_t r = (((n >> 16) & 255) * k + ((q >> 16) & 255) * (255 - k)) / 255;
+            uint32_t g = (((n >> 8) & 255) * k + ((q >> 8) & 255) * (255 - k)) / 255;
+            uint32_t b = ((n & 255) * k + (q & 255) * (255 - k)) / 255;
             d[x] = r << 16 | g << 8 | b;
         }
     }
+}
+/* how far a strip is slid up (rows): in over OV_SLIDE_MS from `from`, out over the last OV_SLIDE_MS before `until` */
+static int ov_slide(long long t, long long from, long long until, int rows) {
+    long long in = t - from, out = until - t, m = in < out ? in : out;
+    if (m >= OV_SLIDE_MS) return 0;
+    if (m < 0) m = 0;
+    float e = (float)m / OV_SLIDE_MS; e = 1 - (1 - e) * (1 - e);
+    return (int)((1 - e) * rows + 0.5f);
+}
+void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
+    long long t = now_ms();
+    float sc = w / 640.0f;
+    int strip = (int)lroundf(72 * sc);
+    if (strip > h) strip = h;
+    if (!fonts_ready()) return;
+    if (w != ov_for_w) { ov_for_w = w; ov_built_pct = -2; if (op_on && !ov_make(&OP, w, strip, 0, 0, sc, ov_draw_popup)) op_on = 0; }
+    ov_osd(t);
+    if (ov_on && t >= ov_until) ov_on = 0;
+    if (op_on && t >= op_until) op_on = 0;
+    if (!op_on) {
+        int ms;
+        if (ra_popup_take(op_l1, sizeof op_l1, op_l2, sizeof op_l2, op_badge, sizeof op_badge, &op_accent, &ms) &&
+            ov_make(&OP, w, strip, 0, 0, sc, ov_draw_popup)) { op_on = 1; op_from = t; op_until = t + ms; }
+    }
+    if (ov_on) {   /* the pill over everything, as in ROCKNIXDS */
+        if (ov_pct != ov_built_pct || ov_kind != ov_built_kind) {
+            canvas probe = { 0, w, strip, sc }, *c = &probe;
+            int pw = S(310), ph = S(42);
+            if (!ov_make(&OV, pw, ph, (w - pw) / 2, S(4), sc, ov_draw_level)) { ov_on = 0; return; }
+            ov_built_pct = ov_pct; ov_built_kind = ov_kind;
+        }
+        ov_blit(&OV, px, pitch, h, ov_slide(t, ov_from, ov_until, OV.y + OV.h));
+        return;
+    }
+    if (op_on) ov_blit(&OP, px, pitch, h, ov_slide(t, op_from, op_until, strip));
 }
