@@ -288,6 +288,10 @@ bool Emu::load_rom(const std::string& path) {
 #else
     const bool banana2d = false;
 #endif
+    // render.scale: 2 renders the 3D layer at 2x and gives 512x384 screens (Gengis Engine with the Banana 2D engine;
+    // otherwise 1x)
+    const int scale = cfg_.num("render.scale", 1) == 2 ? 2 : 1;
+    scale_ = 1;
 #ifdef BANANADS_GENGIS
     // render.renderer: gengis (the default: Gengis Engine, SuperDrastic's rasterizer, on render.gengis_threads
     // threads) or soft (melonDS's software renderer, render.threaded)
@@ -295,9 +299,10 @@ bool Emu::load_rom(const std::string& path) {
         const int threads = (int)cfg_.num("render.gengis_threads", 3);
         const bool defer = cfg_.flag("render.gengis_defer", false);
 #ifdef BANANADS_2D
-        if (banana2d)
-            nds_->SetRenderer(std::make_unique<GengisBananaRenderer>(*nds_, threads, defer));
-        else
+        if (banana2d) {
+            nds_->SetRenderer(std::make_unique<GengisBananaRenderer>(*nds_, threads, defer, scale));
+            scale_ = scale;
+        } else
 #endif
             nds_->SetRenderer(std::make_unique<GengisSoftRenderer>(*nds_, threads, defer));
     } else
@@ -328,6 +333,9 @@ bool Emu::load_rom(const std::string& path) {
         nds_->RTC.SetDateTime(fy, fmo, fd, fh, fmi, fs);
     else
         nds_->RTC.SetDateTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec);
+
+    if (scale != scale_)
+        Log(LogLevel::Warn, "[emu] render.scale=2 needs render.renderer=gengis and render.2d=banana: rendering at 1x\n");
 
     nds_->Start();
     Log(LogLevel::Info, "[emu] %s started (JIT %s, MAC %02x:%02x:%02x:%02x:%02x:%02x)\n", game_.c_str(),
@@ -446,8 +454,12 @@ bool Emu::save_state(int slot) {
     if (!write_file_atomic(p, st.Buffer(), st.Length())) return false;
     // Both screens beside it, for the in-game menu's slot pictures (256x384 XRGB8888, top over bottom).
     std::vector<uint32_t> pic(256 * 384);
-    memcpy(pic.data(), top(), 256 * 192 * 4);
-    memcpy(pic.data() + 256 * 192, bottom(), 256 * 192 * 4);
+    const int s = scale_;  // (at 2x every other pixel of every other row)
+    for (int y = 0; y < 192; y++)
+        for (int x = 0; x < 256; x++) {
+            pic[y * 256 + x] = top()[(y * 256 * s + x) * s];
+            pic[(192 + y) * 256 + x] = bottom()[(y * 256 * s + x) * s];
+        }
     write_file_atomic(p + ".pic", pic.data(), pic.size() * 4);
     Log(LogLevel::Info, "[emu] state saved: %s\n", p.c_str());
     return true;

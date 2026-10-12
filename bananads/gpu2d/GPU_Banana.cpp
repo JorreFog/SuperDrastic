@@ -45,6 +45,35 @@ BananaRenderer::~BananaRenderer()
     StopWorker();
 }
 
+void BananaRenderer::SetHires(QuarterFn fn, void* ctx)
+{
+    Drain2D();
+    Quarter = fn;
+    QuarterCtx = ctx;
+    for (auto& b : HiFB)
+        for (auto& f : b)
+        {
+            f = std::make_unique<u32[]>(512 * 384);
+            memset(f.get(), 0, 512 * 384 * sizeof(u32));
+        }
+}
+
+bool BananaRenderer::GetFramebuffers(void** top, void** bottom)
+{
+    if (!Quarter)
+        return SoftRenderer::GetFramebuffers(top, bottom);
+    int frontbuf = BackBuffer ^ 1;
+    *top = HiFB[frontbuf][0].get();
+    *bottom = HiFB[frontbuf][1].get();
+    return true;
+}
+
+u32* BananaRenderer::LineDst(int screen, u32 line)
+{
+    if (Quarter) return &HiFB[BackBuffer][screen][line * 1024];
+    return &Framebuffer[BackBuffer][screen][line * 256];
+}
+
 // 18-bit RGB to the 32-bit BGRA the frontend takes (melonDS ExpandColor, one pixel)
 static inline u32 Expand(u32 c)
 {
@@ -248,6 +277,83 @@ void BananaRenderer::OutputLineB(u32* dst, u32 dispcnt, u16 brightness)
     WriteLine(dst, Output2D[1], brightness);
 }
 
+// ---- 2x: a DS line is two framebuffer rows of 512 pixels ----
+
+// a 256-pixel line with each pixel twice, on both rows
+static void DoubleLine(u32* dst, const u32* src)
+{
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    for (int i = 0; i < 256; i += 4)
+    {
+        uint32x4_t v = vld1q_u32(src + i);
+        uint32x4x2_t z = {{ v, v }};
+        vst2q_u32(dst + 2 * i, z);
+        vst2q_u32(dst + 512 + 2 * i, z);
+    }
+#else
+    for (int i = 0; i < 256; i++)
+        dst[2 * i] = dst[2 * i + 1] = dst[512 + 2 * i] = dst[512 + 2 * i + 1] = src[i];
+#endif
+}
+
+// a 512-pixel row from its even and odd pixels
+static void ZipLine(u32* dst, const u32* even, const u32* odd)
+{
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    for (int i = 0; i < 256; i += 4)
+    {
+        uint32x4x2_t z = {{ vld1q_u32(even + i), vld1q_u32(odd + i) }};
+        vst2q_u32(dst + 2 * i, z);
+    }
+#else
+    for (int i = 0; i < 256; i++)
+    {
+        dst[2 * i] = even[i];
+        dst[2 * i + 1] = odd[i];
+    }
+#endif
+}
+
+// unit A's line: at 2x its four composited quarters when the line showed the 3D layer (HiLines 4), else doubled
+void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display)
+{
+    if (!Quarter)
+    {
+        OutputLineA(dst, dispcnt, brightness, display);
+        return;
+    }
+    alignas(16) u32 q[4][256];
+    OutputLineA(q[0], dispcnt, brightness, display);
+    auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
+    if (((dispcnt >> 16) & 0x3) != 1 || a.HiLines == 1)
+    {
+        DoubleLine(dst, q[0]);
+        return;
+    }
+    for (int k = 1; k < 4; k++)
+        WriteLine(q[k], a.HiOut[k - 1], brightness);
+    ZipLine(dst, q[0], q[1]);
+    ZipLine(dst + 512, q[2], q[3]);
+}
+
+void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness)
+{
+    if (!Quarter)
+    {
+        OutputLineB(dst, dispcnt, brightness);
+        return;
+    }
+    alignas(16) u32 t[256];
+    OutputLineB(t, dispcnt, brightness);
+    DoubleLine(dst, t);
+}
+
+void BananaRenderer::Fill(u32* dst, u32 val)
+{
+    for (int k = 0; k < (Quarter ? 4 : 1); k++)
+        FillLine(dst + 256 * k, val);
+}
+
 // the line unit A's display mode 2 or 3 shows, in GPU memory (null: none)
 static const u16* DisplaySource(melonDS::GPU& gpu, u32 line)
 {
@@ -290,16 +396,17 @@ void BananaRenderer::DrawScanline(u32 line)
         StatInPlace++;
         if (job.Line < 192)
         {
-            static_cast<BananaRenderer2D&>(*Rend2D_A).DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D);
+            const u32* q[4] = { job.Line3D[0], job.Line3D[1], job.Line3D[2], job.Line3D[3] };
+            static_cast<BananaRenderer2D&>(*Rend2D_A).DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D[0], Quarter ? q : nullptr);
             if (job.ScreensEnabled)
-                OutputLineA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
+                EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
             else
-                FillLine(job.DstA, 0xFF000000);
+                Fill(job.DstA, 0xFF000000);
             Output3D = line3d;
             DoCapture(job.Line);
         }
         else
-            FillLine(job.DstA, job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000);
+            Fill(job.DstA, job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000);
     }
 }
 
@@ -322,9 +429,8 @@ void BananaRenderer::SetAInPlace(bool on)
 void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
 {
     job.Kind = Job::Scanline;
-    u32 dstoffset = 256 * line;
-    job.DstA = &Framebuffer[BackBuffer][GPU.ScreenSwap ? 0 : 1][dstoffset];
-    job.DstB = &Framebuffer[BackBuffer][GPU.ScreenSwap ? 1 : 0][dstoffset];
+    job.DstA = LineDst(GPU.ScreenSwap ? 0 : 1, line);
+    job.DstB = LineDst(GPU.ScreenSwap ? 1 : 0, line);
     job.ScreensEnabled = GPU.ScreensEnabled;
 
     // the position used for drawing operations is based on VCOUNT
@@ -336,7 +442,13 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
         line3d = Rend3D->GetLine(line);
         // (only read when BG0 is the 3D layer and enabled; render.2d_fast skips the 1 KB copy otherwise)
         if ((GPU.GPU2D_A.DispCnt & (1<<3)) && (!Banana2DFast || (GPU.GPU2D_A.LayerEnable & 1)))
-            memcpy(job.Line3D, line3d, sizeof(job.Line3D));
+        {
+            if (Quarter)
+                for (int q = 0; q < 4; q++)
+                    memcpy(job.Line3D[q], Quarter(QuarterCtx, line, q), sizeof(job.Line3D[q]));
+            else
+                memcpy(job.Line3D[0], line3d, sizeof(job.Line3D[0]));
+        }
 
         static_cast<BananaRenderer2D&>(*Rend2D_A).PrepareScanline(job.Regs[0]);
         static_cast<BananaRenderer2D&>(*Rend2D_B).PrepareScanline(job.Regs[1]);
@@ -362,37 +474,36 @@ void BananaRenderer::PrepareSpritesJob(Job& job, u32 line)
 
 void BananaRenderer::DrawScanlineInPlace(u32 line)
 {
-    u32 *dstA, *dstB;
-    u32 dstoffset = 256 * line;
-    if (GPU.ScreenSwap)
-    {
-        dstA = &Framebuffer[BackBuffer][0][dstoffset];
-        dstB = &Framebuffer[BackBuffer][1][dstoffset];
-    }
-    else
-    {
-        dstA = &Framebuffer[BackBuffer][1][dstoffset];
-        dstB = &Framebuffer[BackBuffer][0][dstoffset];
-    }
+    u32* dstA = LineDst(GPU.ScreenSwap ? 0 : 1, line);
+    u32* dstB = LineDst(GPU.ScreenSwap ? 1 : 0, line);
 
     // the position used for drawing operations is based on VCOUNT
     line = GPU.VCount;
     if (line < 192)
     {
-        Output3D = Rend3D->GetLine(line);
-
-        Rend2D_A->DrawScanline(line);
+        if (Quarter)
+        {
+            const u32* q[4];
+            for (int k = 0; k < 4; k++) q[k] = Quarter(QuarterCtx, line, k);
+            Output3D = const_cast<u32*>(q[0]);  // (display capture: quarter 0)
+            static_cast<BananaRenderer2D&>(*Rend2D_A).DrawScanlineHires(line, q);
+        }
+        else
+        {
+            Output3D = Rend3D->GetLine(line);
+            Rend2D_A->DrawScanline(line);
+        }
         Rend2D_B->DrawScanline(line);
 
         if (GPU.ScreensEnabled)
         {
-            OutputLineA(dstA, GPU.GPU2D_A.DispCnt, GPU.MasterBrightnessA, DisplaySource(GPU, line));
-            OutputLineB(dstB, GPU.GPU2D_B.DispCnt, GPU.MasterBrightnessB);
+            EmitA(dstA, GPU.GPU2D_A.DispCnt, GPU.MasterBrightnessA, DisplaySource(GPU, line));
+            EmitB(dstB, GPU.GPU2D_B.DispCnt, GPU.MasterBrightnessB);
         }
         else
         {
-            FillLine(dstA, 0xFF000000);
-            FillLine(dstB, 0xFF000000);
+            Fill(dstA, 0xFF000000);
+            Fill(dstB, 0xFF000000);
         }
 
         if (GPU.CaptureEnable)
@@ -402,8 +513,8 @@ void BananaRenderer::DrawScanlineInPlace(u32 line)
     {
         // scanlines outside VCOUNT 0..191 are white (black if the screens are off)
         u32 c = GPU.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000;
-        FillLine(dstA, c);
-        FillLine(dstB, c);
+        Fill(dstA, c);
+        Fill(dstB, c);
     }
 }
 
@@ -445,25 +556,26 @@ void BananaRenderer::Execute(Job& job)
 
     if (job.Line < 192)
     {
-        if (doA) a.DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D);
-        b.DrawScanlineFrom(job.Line, job.Regs[1], job.Line3D);
+        const u32* q[4] = { job.Line3D[0], job.Line3D[1], job.Line3D[2], job.Line3D[3] };
+        if (doA) a.DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D[0], Quarter ? q : nullptr);
+        b.DrawScanlineFrom(job.Line, job.Regs[1], job.Line3D[0]);
 
         if (job.ScreensEnabled)
         {
-            if (doA) OutputLineA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
-            OutputLineB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB);
+            if (doA) EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
+            EmitB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB);
         }
         else
         {
-            if (doA) FillLine(job.DstA, 0xFF000000);
-            FillLine(job.DstB, 0xFF000000);
+            if (doA) Fill(job.DstA, 0xFF000000);
+            Fill(job.DstB, 0xFF000000);
         }
     }
     else
     {
         u32 c = job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000;
-        if (doA) FillLine(job.DstA, c);
-        FillLine(job.DstB, c);
+        if (doA) Fill(job.DstA, c);
+        Fill(job.DstB, c);
     }
 }
 
@@ -674,6 +786,9 @@ void BananaRenderer::Reset()
 {
     Drain2D();
     SoftRenderer::Reset();
+    for (auto& b : HiFB)
+        for (auto& f : b)
+            if (f) memset(f.get(), 0, 512 * 384 * sizeof(u32));
     // GPU::Reset clears the VRAM flats next, without dirty bits
     static_cast<BananaRenderer2D&>(*Rend2D_A).Resync();
     static_cast<BananaRenderer2D&>(*Rend2D_B).Resync();
@@ -696,6 +811,9 @@ void BananaRenderer::Stop()
 {
     Drain2D();
     SoftRenderer::Stop();
+    for (auto& b : HiFB)
+        for (auto& f : b)
+            if (f) memset(f.get(), 0, 512 * 384 * sizeof(u32));
 }
 
 void BananaRenderer::PreSavestate()

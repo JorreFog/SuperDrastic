@@ -2594,6 +2594,19 @@ void BananaRenderer2D::DrawScanline(u32 line)
     DrawScanlineFrom(line, regs, Parent.Output3D);
 }
 
+void BananaRenderer2D::DrawScanlineHires(u32 line, const u32* const* q3d)
+{
+    if (Banana2DFast)
+    {
+        PrepareScanline(R);
+        DrawScanlineFrom(line, R, q3d[0], q3d);
+        return;
+    }
+    Banana2DRegs regs;
+    PrepareScanline(regs);
+    DrawScanlineFrom(line, regs, q3d[0], q3d);
+}
+
 void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
 {
     regs.From(GPU2D);
@@ -2710,11 +2723,12 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
     }
 }
 
-void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d)
+void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d, const u32* const* q3d)
 {
     if (&regs != &R) R = regs;
     Line3D = line3d;
     u32* dst = Parent.Output2D[GPU2D.Num];
+    HiLines = 1;
 
     if (!R.Enabled)
     {
@@ -2767,6 +2781,7 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
     if (bg0_3d && type[0] == T_Text) type[0] = T_3D;
 
     u32 bgmosaic = R.BGMosaicSize[0];
+    bool drew3d = false;
 
     for (u32 bg = 0; bg < 4; bg++)
     {
@@ -2783,6 +2798,7 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
             if (Banana2DFast && !WindowsOn) Raw3D = true;
             else                            DrawBG_3D();
             LayerDrawn |= (1<<bg);
+            drew3d = true;
             break;
         case T_Text:
             if (bgcnt & (1<<7)) DrawBG_Text<true>(line, bg);
@@ -2819,6 +2835,31 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
     else
         OBJPrioPresent = 0;
 
+    if (!q3d || !drew3d)
+    {
+        CompositeTo(dst);
+        return;
+    }
+    // 2x: the layers above, then the compositing once for each of the 3D layer's four lines (quarter 0 into dst,
+    // the others into HiOut), as DraStic composites its 2x frame's quarters
+    CompositeTo(dst);
+    for (int q = 1; q < 4; q++)
+    {
+        Line3D = q3d[q];
+        if (!Raw3D)
+        {
+            DrawBG_3D();
+            if (WindowsOn) ApplyWindow(BGLine(0), 1);
+        }
+        CompositeTo(HiOut[q - 1]);
+    }
+    Line3D = line3d;
+    HiLines = 4;
+}
+
+// the layers drawn by DrawScanlineFrom composited into dst, with the colour effects
+void BananaRenderer2D::CompositeTo(u32* dst)
+{
     // which colour effects can apply on this line? blending (sprite, 3D or the alpha effect) needs
     // a 2nd target in BLDCNT; brightness needs 1st targets
     u32 blendCnt = R.BlendCnt;

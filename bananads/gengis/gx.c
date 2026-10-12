@@ -23,7 +23,22 @@
 #include "fused.h"
 #include "fogzero.h"
 #include "spec/edges.h"
+/* GX_SCALE 2 (gx2.c): the same pipeline at 512x384, as gx2_render_bin */
+#ifndef GX_SCALE
+#define GX_SCALE 1
+#endif
+#if GX_SCALE == 2
+#define gx_render_bin gx2_render_bin
+#endif
 #include "gx.h"
+/* this pipeline's frame: GX_NBINS bins of GX_BL lines of GX_W pixels */
+#undef GX_W
+#undef GX_H
+#undef GX_BL
+#define GX_W (256 * GX_SCALE)
+#define GX_H (192 * GX_SCALE)
+#define GX_BL (16 * GX_SCALE)
+_Static_assert(GX_H / GX_BL == GX_NBINS, "the bins");
 
 _Static_assert(offsetof(gx_texture, texels) == 0x10 && offsetof(gx_texture, palette) == 0x18 &&
                offsetof(gx_texture, width) == 0x40 && offsetof(gx_texture, height) == 0x42 &&
@@ -39,12 +54,17 @@ _Static_assert(sizeof(gx_poly) % 4 == 0, "gx_poly");
  * (DS_RECIP_U = DS_RECIP + 0x1400: the affine steps); 0 for i = 0 */
 #define GX_RECIP_OFF   0x3f27120u
 #define GX_RECIP_U_OFF 0x3f28520u
+#define GX_TABS_N ((GX_RECIP_U_OFF - GX_RECIP_OFF) / 4 + 1024)
+#if GX_SCALE == 1
 uintptr_t ds_base;
-static uint32_t gx_tabs[(GX_RECIP_U_OFF - GX_RECIP_OFF) / 4 + 1024];
+uint32_t gx_tabs[GX_TABS_N];
 int gx_defer;
 /* rast.c's (RAST_STATS: the opaque pixels written, which fused.c counts when it is set) */
 int rast_stats;
 unsigned long st_written, st_covered;
+#else
+extern uint32_t gx_tabs[GX_TABS_N];
+#endif
 
 /* the sys and geom blocks: the fields fused.c reads, at DraStic's offsets (calloc'd: the untouched pages cost no
  * memory) */
@@ -52,7 +72,8 @@ unsigned long st_written, st_covered;
 #define GX_GEOM_SIZE 0x9b00
 #define SYS_ALPHA_REF 0x34eb44
 #define GEOM_TOON     0x99cc
-static uint8_t *gx_sys, *gx_geom;
+#if GX_SCALE == 1
+uint8_t *gx_sys, *gx_geom;
 
 void gx_init(void) {
     if (gx_sys) return;
@@ -71,8 +92,11 @@ void gx_begin_frame(const gx_frame *f) {
     U32(gx_sys, SYS_ALPHA_REF) = f->aref;
     memcpy(gx_geom + GEOM_TOON, f->toon, sizeof f->toon);
 }
+#else
+extern uint8_t *gx_sys, *gx_geom;
+#endif
 
-/* ---- the walker: walk_impl.h in the 1x layout ---- */
+/* ---- the walker: walk_impl.h in this scale's layout ---- */
 #define GX_CL       (GX_BL + 2)         /* context lines: one above and one below the bin */
 #define GX_LSTRIDE  (GX_W * 4)
 #define GX_ATTR     (GX_CL * GX_LSTRIDE)
@@ -89,7 +113,7 @@ void gx_begin_frame(const gx_frame *f) {
 #define WALK_HR    1
 #include "walk_impl.h"
 
-static const layout_t layout_1x = { GX_SPS, GX_LSTRIDE, GX_ATTR, GX_ID, GX_W, GX_W * 2, GX_W, GX_CL, 1, GX_HDR };
+static const layout_t layout_gx = { GX_SPS, GX_LSTRIDE, GX_ATTR, GX_ID, GX_W, GX_W * 2, GX_W, GX_CL, 1, GX_HDR };
 
 typedef struct {
     uint8_t *ctx;                       /* colour | attributes | translucent ids | header (sys, geom, fog used) */
@@ -141,8 +165,8 @@ static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin
     const unsigned line0 = (unsigned)((int)y_first - lb);
     if (line0 + (unsigned)lines > GX_CL) return;     /* (cannot happen: the walk is within the window) */
     uint8_t *rec = (uint8_t *)p->rec;
-    if (defer) defer_poly(&layout_1x, H->ctx, sp, rec, 0, line0, (unsigned)lines, flags, vptr[0]);
-    else f_run(&layout_1x, H->ctx, sp, rec, 0, line0, (unsigned)lines, flags, vptr[0], 0, 0);
+    if (defer) defer_poly(&layout_gx, H->ctx, sp, rec, 0, line0, (unsigned)lines, flags, vptr[0]);
+    else f_run(&layout_gx, H->ctx, sp, rec, 0, line0, (unsigned)lines, flags, vptr[0], 0, 0);
 }
 
 /* ---- clear: the clear colour, or the rear-plane bitmap ---- */
@@ -158,10 +182,10 @@ static void gx_clear(gx_t *H, const gx_frame *f, int y0) {
     for (int l = 0; l < GX_CL; l++) {
         int yl = y0 + l;
         if (yl < 0) yl = 0;
-        const unsigned row = ((unsigned)(yl + f->rear_y) & 0xff) << 8;
+        const unsigned row = ((unsigned)(yl / GX_SCALE + f->rear_y) & 0xff) << 8;
         uint32_t *c = col + l * GX_W, *a = att + l * GX_W;
         for (int i = 0; i < GX_W; i++) {
-            const unsigned ix = row + ((f->rear_x + i) & 0xff);
+            const unsigned ix = row + ((f->rear_x + i / GX_SCALE) & 0xff);
             const uint16_t cv = ci[ix], d = di[ix];
             c[i] = gx_expand555(cv) | ((cv >> 15) & 1) * 31u << 24 | (uint32_t)(d >> 15) << 31;
             a[i] = ((d & 0x7fffu) << 9) | idattr;
@@ -223,10 +247,10 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
         const gx_poly *p = &f->polys[i];
         if (p->ybot <= bin_top || p->ytop >= bin_bot) continue;
         const int d = defer && !((U32(p->rec, 4) >> 4) & 3);       /* modulate-shaded ones are deferred */
-        if (defer && !d) defer_flush(&layout_1x, H->ctx);
+        if (defer && !d) defer_flush(&layout_gx, H->ctx);
         gx_polygon(H, p, bin_top, bin_bot, lb, f->d3, d);
     }
-    if (defer) defer_flush(&layout_1x, H->ctx);
+    if (defer) defer_flush(&layout_gx, H->ctx);
     if (f->ntranslucent) {
         memset(H->ctx + GX_ID, 0xff, GX_CL * GX_W);
         for (unsigned i = nopa; i < f->npolys; i++) {
@@ -238,9 +262,23 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     const uint32_t *res = gx_resolve(H, f);
     /* the layer's format: alpha 5 bits, no flags */
     const uint32x4_t m = vdupq_n_u32(0x1f3f3f3f);
+#if GX_SCALE == 1
     for (int i = 0; i < GX_BL * GX_W; i += 4) vst1q_u32(out + i, vandq_u32(vld1q_u32(res + i), m));
+#else
+    /* each row as its even pixels, then its odd ones: the 2D compositor's four 256-pixel lines of a DS line */
+    for (int l = 0; l < GX_BL; l++) {
+        const uint32_t *r = res + l * GX_W;
+        uint32_t *e = out + l * GX_W, *o = e + GX_W / 2;
+        for (int i = 0; i < GX_W; i += 8) {
+            const uint32x4x2_t v = vld2q_u32(r + i);
+            vst1q_u32(e + i / 2, vandq_u32(v.val[0], m));
+            vst1q_u32(o + i / 2, vandq_u32(v.val[1], m));
+        }
+    }
+#endif
 }
 
+#if GX_SCALE == 1
 /* fused.c's stage-by-stage path for shadow polygons at 2x (b0.c, DraStic's scratch buffers): the 1x layout is a
  * hi-res one, whose shadow polygons take the scalar line path, so it is never called */
 void b0_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,
@@ -248,3 +286,4 @@ void b0_setup_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsi
     (void)ctx; (void)spans; (void)poly; (void)buf; (void)line0; (void)nlines; (void)flags; (void)v0;
     abort();
 }
+#endif

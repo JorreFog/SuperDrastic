@@ -56,7 +56,8 @@ int run_sdl(Emu& emu, const Config& cfg) {
                                        384 * scale, SDL_WINDOW_RESIZABLE);
     SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_PRESENTVSYNC);
     SDL_RenderSetLogicalSize(ren, 256, 384);
-    SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, 256, 384);
+    const int rs = emu.scale();  // render.scale: the screens' pixels (the logical size stays the DS's, for touch)
+    SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, 256 * rs, 384 * rs);
 
     SDL_AudioSpec want{}, have{};
     want.freq = 48000;
@@ -121,8 +122,9 @@ int run_sdl(Emu& emu, const Config& cfg) {
         void* px;
         int pitch;
         SDL_LockTexture(tex, nullptr, &px, &pitch);
-        for (int y = 0; y < 384; y++)
-            memcpy((uint8_t*)px + y * pitch, y < 192 ? emu.top() + y * 256 : emu.bottom() + (y - 192) * 256, 1024);
+        const int w = 256 * rs, h = 192 * rs;
+        for (int y = 0; y < 2 * h; y++)
+            memcpy((uint8_t*)px + y * pitch, y < h ? emu.top() + y * w : emu.bottom() + (y - h) * w, w * 4);
         SDL_UnlockTexture(tex);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);

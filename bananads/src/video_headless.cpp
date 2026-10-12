@@ -12,14 +12,15 @@ using melonDS::Platform::LogLevel;
 
 namespace bananads {
 
-static void dump_ppm(const std::string& path, const uint32_t* top, const uint32_t* bot) {
+static void dump_ppm(const std::string& path, const uint32_t* top, const uint32_t* bot, int s) {
     FILE* f = fopen(path.c_str(), "wb");
     if (!f) return;
-    fprintf(f, "P6\n256 384\n255\n");
-    std::vector<uint8_t> row(256 * 3);
-    for (int y = 0; y < 384; y++) {
-        const uint32_t* src = (y < 192 ? top + y * 256 : bot + (y - 192) * 256);
-        for (int x = 0; x < 256; x++) {
+    const int w = 256 * s, h = 192 * s;
+    fprintf(f, "P6\n%d %d\n255\n", w, 2 * h);
+    std::vector<uint8_t> row(w * 3);
+    for (int y = 0; y < 2 * h; y++) {
+        const uint32_t* src = (y < h ? top + y * w : bot + (y - h) * w);
+        for (int x = 0; x < w; x++) {
             uint32_t p = src[x];
             row[x * 3] = (uint8_t)(p >> 16);
             row[x * 3 + 1] = (uint8_t)(p >> 8);
@@ -94,7 +95,7 @@ int run_headless(Emu& emu, const Config& cfg) {
         if (done + 1 == reload && !(emu.save_state(3) && emu.load_state(3)))
             Log(LogLevel::Error, "[headless] headless.reload_at: the state didn't save and load back\n");
         if (!dir.empty() && every > 0 && (done + 1) % every == 0)
-            dump_ppm(dir + "/frame" + std::to_string(done + 1) + ".ppm", emu.top(), emu.bottom());
+            dump_ppm(dir + "/frame" + std::to_string(done + 1) + ".ppm", emu.top(), emu.bottom(), emu.scale());
     }
     if (af) fclose(af);
     double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();

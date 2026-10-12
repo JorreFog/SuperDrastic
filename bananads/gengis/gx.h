@@ -1,4 +1,4 @@
-/* gx.h: Gengis Engine at 1x for BananaDS (gx.c): the DS's 3D scene rendered into melonDS's 256x192 3D layer by
+/* gx.h: Gengis Engine at 1x and 2x for BananaDS (gx.c, gx2.c): the DS's 3D scene rendered into melonDS's 3D layer by
  * SuperDrastic's rasterizer (its walker, its pixel kernels, its fog and edge-marking resolve), bin by bin, for a pool
  * of render threads. The adapter (gengis_renderer.cpp) fills a gx_frame from melonDS's GPU3D state. */
 #ifndef BANANADS_GX_H
@@ -8,9 +8,9 @@
 extern "C" {
 #endif
 
-#define GX_W 256            /* pixels a line */
+#define GX_W 256            /* pixels a line (at 1x; 2x has twice as many lines of twice as many pixels) */
 #define GX_H 192
-#define GX_BL 16            /* lines a bin */
+#define GX_BL 16            /* lines a bin (at 1x) */
 #define GX_NBINS (GX_H / GX_BL)
 
 /* a polygon as the rasterizer takes it */
@@ -56,6 +56,9 @@ void gx_init(void);
 void gx_begin_frame(const gx_frame *f);
 /* render bin `bin` of the frame into out (GX_BL lines of GX_W pixels, melonDS's 3D layer format) */
 void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
+/* the same at 2x (gx2.c), from 2x vertex positions: 2 * GX_BL rows of 2 * GX_W pixels, each row as its even pixels
+ * (GX_W) then its odd ones (GX_W), so that a DS line's four 256-pixel lines are rows 2y and 2y + 1, even and odd */
+void gx2_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
 static inline uint32_t gx_expand555(uint32_t c) {   /* BGR555 -> r6 | g6 << 8 | b6 << 16 (5 -> 6 as c*2 + (c != 0)) */
     uint32_t p = (c & 0x1f) | ((c >> 5) & 0x1f) << 8 | ((c >> 10) & 0x1f) << 16;
     return (p << 1) + (((p + 0x1f1f1f) >> 5) & 0x010101);

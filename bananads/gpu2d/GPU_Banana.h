@@ -66,6 +66,14 @@ public:
 
     void SetThreaded2D(bool on);
     bool IsThreaded2D() const { return Thread2D; }
+    // render.scale=2: the 3D renderer's four quarter lines of a DS line (quarter q: 2x row 2 * line + (q >> 1), its
+    // even pixels or, q & 1, its odd ones). Unit A composites each line that shows the 3D layer four times, and the
+    // framebuffers become 512x384 (GetFramebuffers); everything else is drawn at 1x and doubled.
+    typedef const u32* (*QuarterFn)(void* ctx, u32 line, int q);
+    void SetHires(QuarterFn fn, void* ctx);
+    int Scale() const { return Quarter ? 2 : 1; }
+    bool GetFramebuffers(void** top, void** bottom) override;
+
     bool Drain2D();   // wait until the 2D thread has drawn every line handed to it (false: it already had)
     void Resync2D();  // after GPU::ResetVRAMCache (a savestate): the copies are made again from GPU's memory
 
@@ -74,6 +82,14 @@ private:
     void OutputLineB(u32* dst, u32 dispcnt, u16 brightness);
     static void WriteLine(u32* dst, const u32* src, u16 brightness);
     static void FillLine(u32* dst, u32 val);
+    // a DS line into the framebuffer at either scale (at 2x dst is two rows of 512)
+    u32* LineDst(int screen, u32 line);
+    void EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display);
+    void EmitB(u32* dst, u32 dispcnt, u16 brightness);
+    void Fill(u32* dst, u32 val);
+    QuarterFn Quarter = nullptr;
+    void* QuarterCtx = nullptr;
+    std::unique_ptr<u32[]> HiFB[2][2];
 
     // ---- the 2D thread (render.2d_thread) ----
     struct Job
@@ -87,7 +103,7 @@ private:
         u32* DstB;
         u16 BrightnessA, BrightnessB;
         Banana2DRegs Regs[2];
-        alignas(16) u32 Line3D[256];  // the 3D layer's line, when unit A's DISPCNT enables 3D
+        alignas(16) u32 Line3D[4][256];  // the 3D layer's line, when unit A's DISPCNT enables 3D (2x: its quarters)
         alignas(16) u16 Display[256];
         u64 LogEnd;                 // the copy log up to here is applied before the job is drawn
     };

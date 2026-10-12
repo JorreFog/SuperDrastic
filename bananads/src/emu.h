@@ -31,9 +31,10 @@ public:
     void touch(int x, int y);                  // bottom-screen pixels, 0..255 x 0..191
     void release_touch();
 
-    // 256x192 XRGB8888 each, valid until the next run_frame().
+    // 256x192 XRGB8888 each (times scale() both ways), valid until the next run_frame().
     const uint32_t* top() const;
     const uint32_t* bottom() const;
+    int scale() const { return scale_; }  // render.scale: 1, or 2 with Gengis Engine and the Banana 2D engine
 
     int audio(int16_t* stereo, int max_frames);  // what the SPU made since the last call
 
@@ -70,6 +71,7 @@ private:
     std::string rom_path_, save_path_, game_;
     bool stop_ = false;
     bool local_ = false;
+    int scale_ = 1;
     std::unique_ptr<uint8_t[]> save_copy_;
     uint32_t save_len_ = 0;
     uint64_t save_dirty_us_ = 0;  // when the game last wrote its save; 0 = written out

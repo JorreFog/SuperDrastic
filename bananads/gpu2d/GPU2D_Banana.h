@@ -105,7 +105,12 @@ public:
     // as it was at its own time while the emulator goes on changing GPU's.
     void PrepareScanline(Banana2DRegs& regs);
     void PrepareSprites(Banana2DRegs& regs);
-    void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d);
+    // q3d (2x, unit A): the 3D layer's four quarter lines (q3d[0] == line3d); when BG0 shows the 3D layer the line
+    // is composited once per quarter: quarter 0 into Output2D, quarters 1-3 into HiOut, and HiLines is 4 (else 1)
+    void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d, const u32* const* q3d = nullptr);
+    void DrawScanlineHires(u32 line, const u32* const* q3d);   // DrawScanline at 2x
+    int HiLines = 1;
+    alignas(16) u32 HiOut[3][256];
     void DrawSpritesFrom(u32 line, const Banana2DRegs& regs);
 
     typedef void (*CopyFn)(void* ctx, void* dst, const void* src, u32 len);
@@ -246,6 +251,7 @@ private:
     template<bool window> void DrawSprite_Normal(u32 num, u32 width, u32 height, s32 xpos, s32 ypos);
 
     void Composite(u32* outTop, u32* outSecond, bool needSecond);
+    void CompositeTo(u32* dst);
     template<bool up> void BrightnessPass(u32* dst);
     template<u32 effect> void EffectsPass(u32* dst);
     template<bool up> void BrightnessPassNeon(u32* dst);

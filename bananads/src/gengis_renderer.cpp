@@ -12,14 +12,15 @@ using namespace melonDS;
 
 namespace bananads {
 
-GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defer) : Renderer3D(gpu3D) {
+GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defer, int scale)
+    : Renderer3D(gpu3D), Scale_(scale == 2 ? 2 : 1) {
     gx_init();
     gx_defer = defer;
     memset(Out, 0, sizeof Out);
     for (auto& d : Done) d.store(0);
     if (threads < 0) threads = 0;
     for (int i = 0; i < threads; i++) Threads.emplace_back([this] { Worker(); });
-    Platform::Log(Platform::LogLevel::Info, "[gengis] Gengis Engine at 1x, %d render threads%s\n", threads,
+    Platform::Log(Platform::LogLevel::Info, "[gengis] Gengis Engine at %dx, %d render threads%s\n", Scale_, threads,
                   defer ? ", deferred shading" : "");
 }
 
@@ -172,7 +173,9 @@ void GengisRenderer3D::Convert() {
             const Vertex* v = p->Vertices[vi];
             uint8_t* r = g.vtx[k];
             const int32_t w = p->WBuffer ? p->FinalZ[vi] : p->FinalW[vi];
-            const uint16_t x = (uint16_t)v->FinalPosition[0], y = (uint16_t)v->FinalPosition[1];
+            // at 2x the position from melonDS's sub-pixel one (4 fraction bits): floor(2 x), as 1x is floor(x)
+            const uint16_t x = (uint16_t)(Scale_ == 2 ? v->HiresPosition[0] >> 3 : v->FinalPosition[0]);
+            const uint16_t y = (uint16_t)(Scale_ == 2 ? v->HiresPosition[1] >> 3 : v->FinalPosition[1]);
             const uint16_t z = (uint16_t)(p->FinalZ[vi] >> 9);
             const uint16_t c = (uint16_t)((v->FinalColor[0] >> 4) | (v->FinalColor[1] >> 4) << 5 | (v->FinalColor[2] >> 4) << 10);
             memcpy(r + 0, &w, 4);
@@ -198,7 +201,7 @@ void GengisRenderer3D::Convert() {
         g.count = (uint8_t)n;
         g.flags = (uint8_t)flags;
         const uint16_t wrap = (uint16_t)((p->TexParam >> 16) & 0xF);
-        const uint32_t a8 = n | flags << 8 | (ybot & 0x1FF) << 23;
+        const uint32_t a8 = n | flags << 8 | (ybot & 0x1FF) << 23;   // (2x: ybot <= 384)
         const gx_texture* tex = (flags & GXF_TEXTURED) ? GetTexture(p->TexParam, p->TexPalette) : nullptr;
         memcpy(g.rec + 2, &wrap, 2);
         memcpy(g.rec + 4, &p->Attr, 4);
@@ -256,7 +259,8 @@ bool GengisRenderer3D::RenderOne() {
     } else {
         while (Converted.load(std::memory_order_acquire) != 2) std::this_thread::yield();
     }
-    gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);
+    if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 4);
+    else gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);
     Done[b].store(Frame.gen, std::memory_order_release);
     { std::lock_guard<std::mutex> l(M); }  // (a waiter between its test and its wait sees the notify)
     BinDone.notify_all();
@@ -309,27 +313,30 @@ void GengisRenderer3D::RenderFrame() {
 
 void GengisRenderer3D::FinishRendering() { WaitAll(); }
 
-u32* GengisRenderer3D::GetLine(int line) {
+u32* GengisRenderer3D::GetLine(int line) { return const_cast<u32*>(GetQuarter(line, 0)); }
+
+const u32* GengisRenderer3D::GetQuarter(int line, int q) {
+    u32* sc = Scrolled[q];
     if (GPU3D.AbortFrame) {
-        memset(Scrolled, 0, sizeof Scrolled);
-        return Scrolled;
+        memset(sc, 0, sizeof Scrolled[0]);
+        return sc;
     }
-    if (line < GX_H) WaitBin((unsigned)line / GX_BL);
+    if (line < GX_H) WaitBin((unsigned)line / GX_BL);  // (the same bin at 2x: 2 * GX_BL rows a bin)
     else line = GX_H - 1;
-    u32* raw = Out + line * GX_W;
+    const u32* raw = Scale_ == 2 ? Out + (2 * line + (q >> 1)) * 2 * GX_W + (q & 1) * GX_W : Out + line * GX_W;
     const u16 xpos = GPU3D.RenderXPos;
     if (!xpos) return raw;
-    // the X scroll, as melonDS's software renderer applies it
+    // the X scroll, as melonDS's software renderer applies it (at 2x 2 * xpos 2x pixels: xpos in each quarter)
     if (xpos & 0x100) {
         int i = 0, j = xpos;
-        for (; j < 512; i++, j++) Scrolled[i] = 0;
-        for (j = 0; i < 256; i++, j++) Scrolled[i] = raw[j];
+        for (; j < 512; i++, j++) sc[i] = 0;
+        for (j = 0; i < 256; i++, j++) sc[i] = raw[j];
     } else {
         int i = 0, j = xpos;
-        for (; j < 256; i++, j++) Scrolled[i] = raw[j];
-        for (; i < 256; i++) Scrolled[i] = 0;
+        for (; j < 256; i++, j++) sc[i] = raw[j];
+        for (; i < 256; i++) sc[i] = 0;
     }
-    return Scrolled;
+    return sc;
 }
 
 }  // namespace bananads

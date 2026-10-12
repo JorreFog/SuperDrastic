@@ -1,6 +1,6 @@
 # gengis/: Gengis Engine in BananaDS
 
-SuperDrastic's 3D rasterizer (Gengis Engine), as melonDS's 3D renderer at 1x (`render.renderer=gengis`, the default
+SuperDrastic's 3D rasterizer (Gengis Engine), as melonDS's 3D renderer at 1x or 2x (`render.renderer=gengis`, `render.scale`, the default
 on aarch64). See `docs/GENGIS.md` for what it does and how it differs from melonDS's renderer.
 
 ## Where the files come from
@@ -10,7 +10,8 @@ Copied unchanged from SuperDrastic `src/rast/` at a63fe5b (PR #8, branch `claude
 `kernsched.py`), `walk_impl.h`, `fogzero.h`, `ds3d.h`, `rast.h`, `spec/edges.h`.
 
 Written for BananaDS:
-- `gx.c`, `gx.h`: the 1x pipeline (bins, contexts, the walk, the clear, the resolve, the output).
+- `gx.c`, `gx.h`: the 1x pipeline (bins, contexts, the walk, the clear, the resolve, the output); `gx2.c` compiles
+  it again at 2x (`render.scale=2`), 32-line bins of 512 pixels, each row stored as its even then its odd pixels.
 - `gx_resolve.h`: hr.c's fog and edge-marking passes, re-parameterised for 256-pixel lines.
 - `../src/gengis_renderer.cpp`: the melonDS side (polygons, textures, the render threads).
 
