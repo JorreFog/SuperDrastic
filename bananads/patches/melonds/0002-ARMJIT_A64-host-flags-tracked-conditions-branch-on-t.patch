@@ -1,0 +1,229 @@
+From 30d370a226a419e7a1ba53fd32ac89d854608fa0 Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 19:20:33 +0200
+Subject: [PATCH 2/3] ARMJIT_A64: host flags tracked (conditions branch on
+ them), all four flags in three instructions, C cycles of unconditional
+ instructions once a block, no dead mov in SUB #imm
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RUpenk3BsbrZDbkXGeg4Qh
+---
+ src/ARMJIT_A64/ARMJIT_ALU.cpp       | 17 ++++++++++++++---
+ src/ARMJIT_A64/ARMJIT_Compiler.cpp  | 28 +++++++++++++++++++++++++++-
+ src/ARMJIT_A64/ARMJIT_Compiler.h    |  9 +++++++++
+ src/ARMJIT_A64/ARMJIT_LoadStore.cpp |  2 ++
+ src/dolphin/Arm64Emitter.cpp        | 16 ++++++++++++++++
+ src/dolphin/Arm64Emitter.h          |  3 +++
+ 6 files changed, 71 insertions(+), 4 deletions(-)
+
+diff --git a/src/ARMJIT_A64/ARMJIT_ALU.cpp b/src/ARMJIT_A64/ARMJIT_ALU.cpp
+index 8c02887d..1368c7b1 100644
+--- a/src/ARMJIT_A64/ARMJIT_ALU.cpp
++++ b/src/ARMJIT_A64/ARMJIT_ALU.cpp
+@@ -164,6 +164,20 @@ void Compiler::Comp_RetriveFlags(bool retriveCV)
+     if (CurInstr.SetFlags)
+         CPSRDirty = true;
+ 
++    // NZCV has the guest's four flags (or N and Z only, without retriveCV) at the guest's bit positions
++    HostFlagsEpoch = FlagsEpoch;
++    HostFlagsMask = retriveCV ? 0xF : 0xC;
++
++    const u32 want = CurInstr.SetFlags & (retriveCV ? 0xF : 0xC);
++    if (retriveCV && (want & (want - 1)))
++    {
++        // two or more wanted: all four (the instruction sets them all), in three instructions instead of two each
++        MRS(X0, FIELD_NZCV);
++        ANDI2R(RCPSR, RCPSR, 0x0FFFFFFF);
++        ORR(RCPSR, RCPSR, W0);
++        return;
++    }
++
+     if (CurInstr.SetFlags & 0x4)
+     {
+         CSET(W0, CC_EQ);
+@@ -275,10 +289,7 @@ void Compiler::Comp_Arithmetic(int op, bool S, ARM64Reg rd, ARM64Reg rn, Op2 op2
+         else
+         {
+             if (op2.IsImm)
+-            {
+-                MOVI2R(W2, op2.Imm);
+                 SUBI2R(rd, rn, op2.Imm, W0);
+-            }
+             else
+                 SUB(rd, rn, op2.Reg.Rm, op2.ToArithOption());
+         }
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 36869440..ee128076 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -94,6 +94,8 @@ void UpdateModeTrampoline(ARM* arm, u32 oldmode, u32 newmode)
+ 
+ void Compiler::A_Comp_MSR()
+ {
++    InvalidateHostFlags();
++
+     Comp_AddCycles_C();
+ 
+     ARM64Reg val;
+@@ -553,6 +555,11 @@ void Compiler::SaveCPSR(bool markClean)
+ 
+ FixupBranch Compiler::CheckCondition(u32 cond)
+ {
++    // the guest flags a condition reads: EQ NE Z, CS CC C, MI PL N, VS VC V, HI LS C Z, GE LT N V, GT LE N Z V
++    static const u8 condFlags[16] = {4, 4, 2, 2, 8, 8, 1, 1, 6, 6, 9, 9, 0xD, 0xD, 0, 0};
++    if (cond < 0xE && (condFlags[cond] & ~HostFlagsValid()) == 0)
++        return B((CCFlags)(cond ^ 1));
++
+     if (cond >= 0x8)
+     {
+         LSR(W1, RCPSR, 28);
+@@ -723,6 +730,14 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+ }
+ 
+ void Compiler::Comp_Exit(bool known, u32 knownR15, bool thumbAfter)
++{
++    // (an exit doesn't come back: the code after it has the host flags the code before it had)
++    const u32 epoch = FlagsEpoch;
++    Comp_ExitTo(known, knownR15, thumbAfter);
++    FlagsEpoch = epoch;
++}
++
++void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter)
+ {
+     if (!LinkBlocks)
+     {
+@@ -901,6 +916,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+     ConstantCycles = 0;
+     RegCache = RegisterCache<Compiler, ARM64Reg>(this, instrs, instrsCount, true);
+     CPSRDirty = false;
++    InvalidateHostFlags();
+ 
+     if (hasMemInstr)
+         MOVP2R(RMemBase, Num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
+@@ -980,6 +996,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+                 IrregularCycles = comp == NULL;
+ 
+                 FixupBranch skipExecute;
++                const u32 epochBefore = FlagsEpoch, flagsBefore = HostFlagsValid();
+                 if (cond < 0xE)
+                     skipExecute = CheckCondition(cond);
+ 
+@@ -1013,6 +1030,13 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+                     {
+                         SetJumpTarget(skipExecute);
+                     }
++
++                    // past the join the host's flags are the guest's only where they are both ways
++                    if (FlagsEpoch != epochBefore)
++                    {
++                        HostFlagsMask = flagsBefore & HostFlagsValid();
++                        HostFlagsEpoch = FlagsEpoch;
++                    }
+                 }
+ 
+             }
+@@ -1076,8 +1100,10 @@ void Compiler::Comp_AddCycles_C(bool forceNonConstant)
+ 
+     if (forceNonConstant)
+         ConstantCycles += cycles;
+-    else
++    else if (!Thumb && CurInstr.Cond() < 0xE)
+         ADD(RCycles, RCycles, cycles);
++    else
++        ConstantCycles += cycles;   // (an unconditional instruction's: added with the block's others)
+ }
+ 
+ void Compiler::Comp_AddCycles_CI(u32 numI)
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index afced8f3..3cf6f69f 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -198,6 +198,14 @@ public:
+ 
+     void Comp_RetriveFlags(bool retriveCV);
+ 
++    // Which guest flags the host's NZCV still holds (N 8, Z 4, C 2, V 1): those of the last Comp_RetriveFlags,
++    // while the emitter's FlagsEpoch hasn't moved since (no instruction that writes NZCV, no call, no fast memory
++    // access, which may become a call when patched). CheckCondition branches on them directly then.
++    u32 HostFlagsEpoch = 0;
++    u32 HostFlagsMask = 0;
++    u32 HostFlagsValid() const { return HostFlagsEpoch == FlagsEpoch ? HostFlagsMask : 0; }
++    void InvalidateHostFlags() { HostFlagsMask = 0; }
++
+     Arm64Gen::FixupBranch CheckCondition(u32 cond);
+ 
+     void Comp_JumpTo(Arm64Gen::ARM64Reg addr, bool switchThumb, bool restoreCPSR = false);
+@@ -232,6 +240,7 @@ public:
+     // has dispatched it after this exit (melonds_jit_link, Link), and that UnlinkBlock puts back when the framework
+     // retires or invalidates the target. Other exits look the next block up in FastBlockLookup.
+     void Comp_Exit(bool known, u32 knownR15, bool thumbAfter);
++    void Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter);
+     void Gen_ExitStubs(int num);
+     void* ExitCheck[2] = {};
+     void* DynExit[2] = {};
+diff --git a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+index ecf767b1..f9ea08b0 100644
+--- a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
++++ b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+@@ -221,6 +221,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+         patch.PatchOffset = memopStart - loadStorePosition;
+         patch.PatchSize = GetCodeOffset() - memopStart;
+         LoadStorePatches[loadStorePosition] = patch;
++        FlagsEpoch++;   // (it may become a call)
+     }
+     else
+     {
+@@ -609,6 +610,7 @@ s32 Compiler::Comp_MemAccessBlock(int rn, BitSet16 regs, bool store, bool preinc
+         {
+             patch.PatchOffset = fastPathStart - loadStoreOffsets[i];
+             LoadStorePatches[loadStoreOffsets[i]] = patch;
++            FlagsEpoch++;   // (it may become a call)
+         }
+ 
+         ABI_PushRegisters({30});
+diff --git a/src/dolphin/Arm64Emitter.cpp b/src/dolphin/Arm64Emitter.cpp
+index c42d4d44..96f32c37 100644
+--- a/src/dolphin/Arm64Emitter.cpp
++++ b/src/dolphin/Arm64Emitter.cpp
+@@ -376,8 +376,24 @@ ptrdiff_t ARM64XEmitter::AlignCodePage()
+   return m_code;
+ }
+ 
++// melonDS: whether an instruction writes the host's NZCV, or may (a call)
++static bool WritesNZCV(u32 v)
++{
++  return (v & 0x3F000000) == 0x31000000      // adds/subs (immediate)
++      || (v & 0x3F000000) == 0x2B000000      // adds/subs (shifted or extended register)
++      || (v & 0x3FE00000) == 0x3A000000      // adcs/sbcs
++      || (v & 0x3FE00000) == 0x3A400000      // ccmn/ccmp
++      || (v & 0x7F800000) == 0x72000000      // ands (immediate)
++      || (v & 0x7F000000) == 0x6A000000      // ands/bics (shifted register)
++      || (v & 0xFFFFFFE0) == 0xD51B4200      // msr nzcv, xt
++      || (v & 0xFC000000) == 0x94000000      // bl
++      || (v & 0xFFFFFC1F) == 0xD63F0000;     // blr
++}
++
+ void ARM64XEmitter::Write32(u32 value)
+ {
++  if (WritesNZCV(value))
++    FlagsEpoch++;
+   std::memcpy(m_rwbase + m_code, &value, sizeof(u32));
+   m_code += sizeof(u32);
+ }
+diff --git a/src/dolphin/Arm64Emitter.h b/src/dolphin/Arm64Emitter.h
+index 0fe4c919..eaf9d8e7 100644
+--- a/src/dolphin/Arm64Emitter.h
++++ b/src/dolphin/Arm64Emitter.h
+@@ -551,6 +551,9 @@ public:
+   }
+ 
+   virtual ~ARM64XEmitter() {}
++
++  // melonDS: counts the instructions emitted that write the host's NZCV, calls included (Write32)
++  u32 FlagsEpoch = 0;
+   void SetCodePtr(ptrdiff_t ptr);
+   void SetCodePtrUnsafe(ptrdiff_t ptr);
+   void SetCodeBase(u8* rwbase, u8* rxbase);
+-- 
+2.56.0
+

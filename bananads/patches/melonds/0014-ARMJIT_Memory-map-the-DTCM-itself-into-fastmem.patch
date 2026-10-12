@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Mon, 12 Oct 2026 08:30:00 +0000
+Subject: [PATCH] ARMJIT_Memory: map the DTCM itself into fastmem
+
+MapAtAddress and Mapping::Unmap leave a hole for the DTCM in the regions it overlaps (main RAM's mirrors). The
+same code ran for the DTCM's own region, where the hole is all of it: nothing was mapped, but the pages were
+marked mapped, so the access faulted again and was rewritten to the slow path. Every DTCM access stayed a slow
+call: most games keep the ARM9's stack there. HeartGold's overworld: ~21,000 slow calls a frame (reads, writes,
+LDM and STM of the stack), gone; on the RG DS Plus at 1104 MHz, 2x, 49.6 -> 60.2 fps; 1x at 1992 MHz 75.9 -> 88.3.
+The same frames. A DTCM smaller than a host page stays on the slow path.
+---
+--- a/src/ARMJIT_Memory.cpp
++++ b/src/ARMJIT_Memory.cpp
+@@ -471,7 +471,9 @@
+ 
+ #ifndef __SWITCH__
+     u32 dtcmEnd = dtcmStart + dtcmSize;
++    // (the hole is for the regions the DTCM overlaps; the DTCM's own mapping is all of it)
+     if (Num == 0
++        && region != memregion_DTCM
+         && dtcmEnd >= Addr
+         && dtcmStart < Addr + Size)
+     {
+@@ -656,7 +658,13 @@
+     u32 dtcmSize = ~NDS.ARM9.DTCMMask + 1;
+     u32 dtcmEnd = dtcmStart + dtcmSize;
+ #ifndef __SWITCH__
++    // (the DTCM's own mapping is all of it: with the hole logic it mapped nothing, but marked its pages mapped, so
++    // the access faulted again and was rewritten to the slow path, and every DTCM access, the ARM9's stack in most
++    // games, stayed there)
++    if (region == memregion_DTCM && mirrorSize < PageSize)
++        return false;
+     if (num == 0
++        && region != memregion_DTCM
+         && dtcmEnd >= mirrorStart
+         && dtcmStart < mirrorStart + mirrorSize)
+     {

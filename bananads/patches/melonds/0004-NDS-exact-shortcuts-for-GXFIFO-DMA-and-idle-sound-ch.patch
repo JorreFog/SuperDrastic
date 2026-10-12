@@ -1,0 +1,90 @@
+From 151627f84406bd2728c73f7747e5e555568457c9 Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 17:59:11 +0000
+Subject: [PATCH 4/4] NDS: exact shortcuts for GXFIFO DMA and idle sound
+ channels, off by default
+
+FastGXDMA: a DMA word from main RAM to 0x04000400 goes straight to
+GPU3D::Write32, without ARM9Read32, ARM9Write32 and ARM9IOWrite32's
+dispatch (DS mode only; timing is computed as before). FastSPU: Mix skips
+channels that are off, whose DoRun returns 0 before touching any state.
+Both leave every result the same.
+---
+ src/DMA.cpp |  7 ++++++-
+ src/NDS.h   |  6 ++++++
+ src/SPU.cpp | 12 ++++++++----
+ 3 files changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/src/DMA.cpp b/src/DMA.cpp
+index b154273..caf5032 100644
+--- a/src/DMA.cpp
++++ b/src/DMA.cpp
+@@ -581,12 +581,17 @@ void DMA::Run9()
+     }
+     else
+     {
++        // FastGXDMA: what ARM9Write32(0x04000400, ARM9Read32(main RAM)) does on a DS, without the dispatch
++        const bool fastgx = NDS.FastGXDMA && NDS.ConsoleType == 0;
+         while (IterCount > 0 && !Stall)
+         {
+             NDS.ARM9Timestamp += (UnitTimings9_32(burststart) << NDS.ARM9ClockShift);
+             burststart = false;
+ 
+-            NDS.ARM9Write32(CurDstAddr, NDS.ARM9Read32(CurSrcAddr));
++            if (fastgx && CurDstAddr == 0x04000400 && (CurSrcAddr >> 24) == 0x02)
++                NDS.GPU.GPU3D.Write32(0x04000400, *(u32*)&NDS.MainRAM[(CurSrcAddr & ~3) & NDS.MainRAMMask]);
++            else
++                NDS.ARM9Write32(CurDstAddr, NDS.ARM9Read32(CurSrcAddr));
+ 
+             CurSrcAddr += SrcAddrInc<<2;
+             CurDstAddr += DstAddrInc<<2;
+diff --git a/src/NDS.h b/src/NDS.h
+index 30b0ddd..0bf5918 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -286,6 +286,12 @@ public: // TODO: Encapsulate the rest of these members
+     u64 SliceIPCAccesses = 0;
+     u64 SliceNearIPCCycles = 0;
+ 
++    // Exact shortcuts (BananaDS), off by default: FastGXDMA sends a main RAM -> GXFIFO DMA's words straight to
++    // GPU3D::Write32, without ARM9Read32/ARM9Write32/ARM9IOWrite32's dispatch; FastSPU doesn't run or pan the
++    // sound channels that are off (their output is 0 either way).
++    bool FastGXDMA = false;
++    bool FastSPU = false;
++
+     u32 IME[2];
+     u32 IE[2];
+     u32 IF[2];
+diff --git a/src/SPU.cpp b/src/SPU.cpp
+index e1d49f9..d797043 100644
+--- a/src/SPU.cpp
++++ b/src/SPU.cpp
+@@ -863,10 +863,13 @@ void SPU::Mix(u32 spucycles)
+ 
+     if (Cnt & (1<<15))
+     {
+-        s32 ch0 = Channels[0].DoRun(spucycles);
+-        s32 ch1 = Channels[1].DoRun(spucycles);
+-        s32 ch2 = Channels[2].DoRun(spucycles);
+-        s32 ch3 = Channels[3].DoRun(spucycles);
++        // FastSPU: a channel that is off returns 0 from DoRun (Run's first check) and pans to 0, so skip it
++        const bool fast = NDS.FastSPU;
++        auto run = [&](SPUChannel& chan) { return (fast && !(chan.Cnt & (1u<<31))) ? 0 : chan.DoRun(spucycles); };
++        s32 ch0 = run(Channels[0]);
++        s32 ch1 = run(Channels[1]);
++        s32 ch2 = run(Channels[2]);
++        s32 ch3 = run(Channels[3]);
+ 
+         // TODO: addition from capture registers
+         Channels[0].PanOutput(ch0, left, right);
+@@ -878,6 +881,7 @@ void SPU::Mix(u32 spucycles)
+         for (int i = 4; i < 16; i++)
+         {
+             SPUChannel* chan = &Channels[i];
++            if (fast && !(chan->Cnt & (1u<<31))) continue;
+ 
+             s32 channel = chan->DoRun(spucycles);
+             chan->PanOutput(channel, left, right);
+-- 
+2.43.0
+

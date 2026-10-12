@@ -1,0 +1,4 @@
+build*/
+tools/*/out/
+tools/perf/qemu-count/libjitcount.so
+qcount-runs/

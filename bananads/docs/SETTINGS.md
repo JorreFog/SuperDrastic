@@ -1,0 +1,77 @@
+# BananaDS settings
+
+In `bananads.conf` (`key = value`, `#` for comments), found in `$BANANADS_DATA`. That is
+`/storage/.config/bananads` when it exists, the current directory otherwise; `--config` names another file. Every
+key can also come from the environment as `BANANADS_<KEY>` (dots become underscores, upper case:
+`BANANADS_WIFI_DNS=altwfc`), which wins over the file, and from `--set key=value`, which wins over both.
+
+| Key | Default | |
+|---|---|---|
+| `frontend` | `sdl` (or `headless` in a build without SDL) | `sdl`, `headless`; `kms` comes with milestone D |
+| `jit` | `on` | melonDS's JIT; `off` for the interpreter (slow, for debugging) |
+| `jit.timing` | `block` | BananaJIT's timing: `block` (melonDS's JIT's level: fast memory, cycles counted per block) or `exact` (the interpreter's, cycle for cycle; slower) |
+| `jit.codegen` | `new` | melonDS's JIT's code generation (patches/melonds/0007): `new` (fewer host instructions per block and per exit: cheaper exit stubs, linkable exits both ways of a block-ending branch, self loops checked inline, host flags kept in NZCV, a per-site cache for returns) or `old` (the code before 0007, byte for byte). Exact either way. Sets `MELONDS_JIT_OLDCODEGEN`; each part is also off alone with its `MELONDS_JIT_NO<name>=1` (docs/PERF.md lists them). `MELONDS_JIT_NOFASTLDM=1` keeps block loads (LDM, POP) off the fastmem path (0008). `MELONDS_JIT_LOOPREGS=1` turns on loops that keep their guest registers in host registers (off: HeartGold hangs with it, docs/PERF.md) |
+| `jit.iofast` | `on` | direct routes for the JIT's slow memory paths: main RAM block transfers, VRAM, the GX FIFO and command ports, IE/IF/IME/DISPSTAT/VCOUNT/KEYINPUT reads (patches/melonds/0005). Exact. Sets `MELONDS_IOFAST`; `MELONDS_IOFAST_ROUTES` picks single routes, `MELONDS_IOSTATS=n` prints the slow accesses by address from frame n |
+| `jit.vramfast` | `on` | VRAM with one bank at a 16 KB page written and read straight to the bank (with the dirty bit and the capture check), OAM and palette straight to the GPU (patches/melonds/0010). Exact. Bit 1 of `MELONDS_MEMFAST` |
+| `jit.iodirect` | `on` | the divider, square root, IPCSYNC/IPCFIFOCNT, the IPC FIFOs and IME/IE/IF read and written straight to their state, other IO registers without the ARM9Read*/ARM7Read* dispatch, one function per hot register for the JIT's static-address calls (patches/melonds/0010). Exact. Bit 2 of `MELONDS_MEMFAST` |
+| `core.slice` | `64` (`auto` at `render.scale=2`) | the scheduler slice: the most system cycles (33.5 MHz) the ARM9 and then the ARM7 run before they are interleaved again (melonDS's `kMaxIterationCycles`, patches/melonds/0003). `64` is melonDS's. Longer is faster (on the RG DS, 256 gave +8.5% and 512 +10% in HeartGold) and an accuracy trade: coarser ARM9/ARM7 interleaving, each CPU seeing the other's writes up to a slice late, which matters for IPC handshakes and anything timing-sensitive between the CPUs; scheduled events (timers, DMA, video, IRQs from them) stay on time, except ones the ARM7 starts inside a slice, which run at its end. `auto`: adaptive, `64` near IPC and `core.slice_idle` away from it. Test many games before changing the default. An event due within 8 cycles of a slice's end (`kIterationCycleMargin`) ends it instead |
+| `core.slice_idle` | `512` with `auto`, `core.slice` otherwise | the slice while neither CPU has touched the IPC registers (IPCSYNC, IPCFIFOCNT, IPCFIFOSEND, IPCFIFORECV) or WRAMCNT for `core.slice_hold` cycles; any value other than `core.slice` makes the slice adaptive. Handshakes through main RAM alone aren't seen (fast memory), and the first IPC access after a quiet spell still lands in a long slice |
+| `core.slice_hold` | `4096` | how many system cycles (4096: about two scanlines) after an IPC access the short slice stays |
+| `core.slice_stats` | `0` | every this many frames, log the IPC accesses per frame and the share of time near one (the short slice's share), for tuning `auto` per game |
+| `core.fast_gxdma` | `off` | DMA words from main RAM to the geometry FIFO go straight to the 3D engine instead of through melonDS's bus and IO dispatch (patches/melonds/0004). Exact: the same results and timing; off until measured on the handheld |
+| `core.fast_spu` | `off` | the mixer skips sound channels that are off (patches/melonds/0004). Exact; off until measured |
+| `core.fast_mix` | `on` | the SPU runs only the sound channels due to take a sample (all of them after a sound register write) and keeps the others' output, sums the mixers with NEON, and sound DMA and capture read and write main RAM without the bus dispatch (patches/melonds/0013). Exact: the same audio byte for byte (`headless.audio_dump`) and the same RAM |
+| `core.fast_dma` | `on` | 32-bit DMA from main RAM to the GX FIFO or between main RAM addresses without the bus dispatch, and the ARM9's main RAM burst timing looked up once per run (patches/melonds/0013). Exact: the same timing and results |
+| `core.fast_sched` | `on` | the scheduler keeps the time of its next event instead of walking its event list twice every slice (patches/melonds/0006, 0009). Exact; on since `core.fast_loop` needs it |
+| `core.fast_timers` | `on` | a CPU's timers run only when one of them overflows, not every slice (patches/melonds/0009). Exact |
+| `core.fast_loop` | `on` | the scheduler's slice loop for the JIT with the common cases inline: block lookup and dispatch, a halted CPU, an idle 3D engine, a slice with no event due (patches/melonds/0009). Exact; used with `core.fast_sched` |
+| `render.geom_fast` | `on` | the 3D geometry engine's fast paths (patches/melonds/0011): the GX command ports and the GX FIFO port reached first, with the FIFO write inline; `GPU3D::Run` with each command's FIFO read, DMA and IRQ checks and cycle accounting inline; NEON for the matrix commands, the clip matrix and the vertex transform (s32 x s32 -> s64, then >> 12, as the C code); clipping only against the planes a polygon's vertices are outside of; one division per axis for a vertex's screen position; a strip's shared vertices keep the previous polygon's Z. Exact (the same vertices, polygons, GXSTAT, FIFO timing and matrix and test results). `MELONDS_GEOMFAST=0` turns it off |
+| `render.2d` | `banana` | the 2D renderer: `banana` (the Banana 2D engine, gpu2d/: melonDS's picture, pixel for pixel, in about a third of the time) or `melonds` (melonDS's own) |
+| `render.2d_thread` | `off` (`on` at `render.scale=2`) | `on` draws the Banana 2D engine's lines (`render.2d=banana`) on a thread of their own (`bananads-2d`), the same pictures: the emulator's thread only snapshots each line (its registers, the 3D layer's line, and the VRAM, palette and OAM changes since the last line, through a copy log) and waits for the thread at the end of the frame. While display capture is on (a game's DISPCAPCNT), that frame's lines are drawn on the emulator's thread, as with `off`. It logs what it did when the game quits (`[2d]`) |
+| `render.2d_fast` | `on` | the Banana 2D engine's fast paths (`render.2d=banana`, on either thread of `render.2d_thread`): NEON (aarch64) for the output stage (master brightness, 6-to-8-bit expansion, display modes 2-3), 16-colour text BGs (palette lookups with `tbl`, 8 pixels per `st4`), 256-colour text BGs, direct-colour bitmaps, colour effects (blending, brightness) and sprite resolving; the 3D layer read by the compositor without a pass of its own; affine BGs 4 pixels per step; per-line sprite lists; partial clears of the sprite line. `off`: the portable code. The same pixels either way. Also `BANANADS_RENDER_2D_FAST=off` |
+| `render.vramtrack_skip` | `on` | VRAM tracking's per-line walk (the Banana 2D engine asks it every line) returns at once when no VRAM mapping changed and its banks have no dirty bit, as the full walk would (patches/melonds/0010). Exact. Bit 4 of `MELONDS_MEMFAST` |
+| `render.renderer` | `gengis` | the 3D renderer: `gengis` (Gengis Engine, SuperDrastic's rasterizer, on several threads; aarch64 builds) or `soft` (melonDS's software renderer) |
+| `render.scale` | `1` | `2` renders the 3D layer at 2x and gives 512x384 screens (`render.renderer=gengis` with `render.2d=banana`; otherwise 1x, with a warning). Gengis Engine renders 512x384 from melonDS's sub-pixel vertex positions; the Banana 2D engine draws its layers at 1x and, on lines where BG0 shows the 3D layer, composites them once for each of the 2x frame's four 256-pixel lines (rows 2y and 2y + 1, even and odd pixels: DraStic's quarters), with blending, windows and brightness; other lines and the bottom screen are doubled. Display capture reads quarter 0. HeartGold, RG DS Plus at 1992 MHz: 65.7 fps against 75.9 at 1x |
+| `render.gengis_threads` | `3` | Gengis Engine's render threads (the emulator's thread also renders a bin when it has to wait for one) |
+| `render.gengis_defer` | `off` | Gengis Engine's deferred shading of opaque polygons |
+| `render.threaded` | `on` | melonDS's software 3D renderer on its own thread (`render.renderer=soft`) |
+| `save.dir` | the ROM's folder | where `<game>.sav` lives |
+| `save.per_game_folder` | `off` | `<save.dir>/<game>/<game>.sav` (ROCKNIXDS #42/#56) |
+| `state.dir` | the save folder | savestates: `<game>.resume.mst` (the quit/resume state) and `<game>.<1-3>.mst`, each with a `.pic` |
+| `resume.on_quit` | `on` | save the resume state when the game is quit |
+| `resume.on_start` | `on` | load it when the game starts |
+| `firmware.nickname` | `BananaDS` | the DS's user name (10 characters at most; games and WFC show it) |
+| `firmware.language` | the firmware's | 0 Japanese, 1 English, 2 French, 3 German, 4 Italian, 5 Spanish |
+| `rtc.fixed` | none | the DS clock's start, `YYYY-MM-DD HH:MM:SS` (or `T` or `_` for the space), instead of the current time: two runs of a game that seeds its random numbers from the clock then go the same way (for tests) |
+| `wifi.dns` | `kaeru` | `kaeru`, `altwfc`, `wiilink`, an IPv4 address, `system` (the handheld's own DNS) or `off` (no Wi-Fi at all) |
+| `wifi.local` | `off` | `host`, or `join:<the host's address>`: local wireless with another handheld (builds with `BANANADS_LAN`) |
+| `wifi.local_players` | `4` | how many can join a host |
+| `mic.source` | `device` | `device` (ALSA or SDL capture) or `none` (only the menu's Blow) |
+| `mic.device` | `default` | the ALSA capture device |
+| `mic.threshold` | `0.15` | how far above the room's noise a sound must be to reach the game (full scale 1). ROCKNIXDS's high / medium / low are 0.03 / 0.15 / 0.3. `0` turns the gate off |
+| `mic.gate` | `3` | the echo gate's factor over the learned speaker leak; `0` turns it off |
+| `mic.coupling_max` | `4` | the most leak it will learn |
+| `mic.hold_ms` | `120` | the shortest time the gate stays open |
+| `audio.out_device` | `default` | the ALSA output device |
+| `audio.latency_us` | `30000` | ALSA's buffer |
+| `audio.realtime` | `on` | the sound thread at SCHED_FIFO 10, when allowed |
+| `sdl.scale` | `2` | the window's size |
+| `sdl.present` | `queue` | `queue`: the emulator runs on a thread of its own at the DS's rate and the window shows its finished frames in order, one per vsync, each about one vsync after it is done (a steady picture when frames alternate between slower and faster than a vsync, as HeartGold's do at 1104 MHz; one frame more latency). `direct`: each frame shown as soon as it is done, on the emulator's thread (a frame slower than a vsync misses it) |
+| `sdl.stats` | `0` | with `sdl.present=queue`, every this many vsyncs log the vsync rate, the emulated frames per second, the vsyncs that showed no new frame and the frames never shown |
+| `sdl.vsync` | `off` | with `sdl.present=queue`: `on` paces the window's presents by SDL's vsync; `off` by a clock at `sdl.refresh` Hz (under sway on the RG DS Plus SDL's vsync let only ~18 presents a second through; a Wayland compositor shows the newest buffer at its own refresh, so nothing tears) |
+| `sdl.refresh` | `60` | the presents per second with `sdl.vsync=off` (the display's refresh: the RG DS Plus's panels run at 60.003 Hz) |
+| `headless.frames` | `600` | how many frames `headless` runs |
+| `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
+| `headless.reload_at` | none | after this frame, save the state to slot 3 and load it straight back (a test of the savestate path) |
+| `headless.audio_dump` | none | write the raw audio the SPU hands the frontend (`SPU::ReadOutput`: stereo s16 at the output rate, 48000 Hz) to this file, so two builds' audio compares byte for byte with `cmp` |
+| `headless.measure_from` | `0` | also report the fps from this frame on (a game's scene, after loading) |
+| `headless.window` | `0` | from `headless.measure_from` on, log the fps of every this many frames, then the slowest window and the slowest frame: how steady the speed is, not only its average |
+| `headless.input` | none | scripted presses: `<frame>:<keys>[:<frames held>]`, comma-separated, keys joined by `+` (`a b select start right left up down r l x y`), held 6 frames by default: `600:start,900:a:10` |
+| `log.file` | none | a copy of the log (stderr always gets it) |
+| `log.level` | `1` | 0 debug, 1 info, 2 warnings, 3 errors |
+
+## The window's keys (`frontend=sdl`)
+
+Arrows: the D-pad. X / Z: A / B. S / A: X / Y. Q / W: L / R. Enter: Start. Right Shift or Backspace: Select. The
+mouse on the bottom screen: the stylus. F1: blow into the mic. F5-F7: save to slot 1-3. F9-F11: load slot 1-3.
+Esc: quit (with the resume state).

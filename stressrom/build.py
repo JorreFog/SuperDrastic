@@ -2,13 +2,19 @@
 """Build dsstress .nds ROMs: a tunable 3D stress load for DraStic (see main9.c).
 
     build.py                      -> out/dsstress-ramp.nds, out/dsstress-L1..L10.nds, out/dsswap.nds
+    STRESS_THUMB=1 build.py       -> the same in out-thumb/, with main9.c compiled as Thumb (BananaJIT's tests)
+    STRESS_ARM7=arm|thumb build.py -> the same in out-arm7[-thumb]/, with the ARM7 running main7.c instead of
+                                     halting (BananaJIT's ARM7 tests)
 Needs clang + ld.lld (targets armv5te for the ARM9; the ARM7 is a 4-byte halt stub).
 Header layout mirrors the minimal ROM DraStic is known to boot: ARM9 at 0x8000, no logo.
 """
 import math, os, struct, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "out")
+THUMB = os.environ.get("STRESS_THUMB") == "1"
+ARM7 = os.environ.get("STRESS_ARM7", "")
+OD = ("out-arm7" + ("-thumb" if ARM7 == "thumb" else "")) if ARM7 else ("out-thumb" if THUMB else "out")
+OUT = os.path.join(HERE, OD)
 os.makedirs(OUT, exist_ok=True)
 
 def fx(v): return int(round(v * 4096))
@@ -43,14 +49,23 @@ with open(os.path.join(OUT, "ld9.ld"), "w") as f: f.write(LD)
 
 T = ["--target=armv5te-none-eabi", "-marm", "-mfloat-abi=soft"]
 def run(cmd): subprocess.run(cmd, check=True, cwd=HERE)
-run(["clang", *T, "-O2", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables", "-ffreestanding", "-fno-builtin", "-nostdlib", "-Wall", "-c", "main9.c", "-o", "out/main9.o"])
-run(["clang", *T, "-c", "crt9.s", "-o", "out/crt9.o"])
-run(["ld.lld", "-T", "out/ld9.ld", "out/crt9.o", "out/main9.o", "-o", "out/arm9.elf"])
-run(["llvm-objcopy", "-O", "binary", "out/arm9.elf", "out/arm9.bin"])
+run(["clang", *T[:1], "-mthumb" if THUMB else "-marm", *T[2:], "-O2", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables", "-ffreestanding", "-fno-builtin", "-nostdlib", "-Wall", "-c", "main9.c", "-o", OD + "/main9.o"])
+run(["clang", *T, "-c", "crt9.s", "-o", OD + "/crt9.o"])
+run(["ld.lld", "-T", OD + "/ld9.ld", OD + "/crt9.o", OD + "/main9.o", "-o", OD + "/arm9.elf"])
+run(["llvm-objcopy", "-O", "binary", OD + "/arm9.elf", OD + "/arm9.bin"])
 arm9 = bytearray(open(os.path.join(OUT, "arm9.bin"), "rb").read())
 assert arm9[4:8] == b"STRS", "config block not at offset 4"
 # ARM7 stub: HALTCNT <- 0x80 in a loop (ldr/strb/b with the address in a literal)
 arm7 = struct.pack("<5I", 0xE59F0008, 0xE3A01080, 0xE5C01001, 0xEAFFFFFB, 0x04000300)
+if ARM7:  # or a workload that never halts (main7.c), linked where the header loads the ARM7 binary
+    with open(os.path.join(OUT, "ld7.ld"), "w") as f:
+        f.write(LD.replace("ENTRY(_start)", "ENTRY(_start7)").replace("0x02000000", "0x02380000"))
+    T7 = ["--target=armv4t-none-eabi", "-mthumb" if ARM7 == "thumb" else "-marm", "-mfloat-abi=soft"]
+    run(["clang", *T7, "-O2", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables", "-ffreestanding", "-fno-builtin", "-nostdlib", "-Wall", "-c", "main7.c", "-o", OD + "/main7.o"])
+    run(["clang", "--target=armv4t-none-eabi", "-marm", "-c", "crt7.s", "-o", OD + "/crt7.o"])
+    run(["ld.lld", "-T", OD + "/ld7.ld", OD + "/crt7.o", OD + "/main7.o", "-o", OD + "/arm7.elf"])
+    run(["llvm-objcopy", "-O", "binary", OD + "/arm7.elf", OD + "/arm7.bin"])
+    arm7 = open(os.path.join(OUT, "arm7.bin"), "rb").read()
 
 def crc16(data, crc=0xFFFF):
     for b in data:
