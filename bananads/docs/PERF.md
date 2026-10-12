@@ -433,6 +433,18 @@ Later rounds the same night (all exact, same toggles; qemu-count unless said):
   DMAs a frame to VRAM/palette/OAM) main thread -18%. Only the audio dump catches small mixing errors (a sabotaged
   pan term passed pictures and RAM): keep it in the checks for SPU work.
 
+- **0012 (GPU):** `VRAMTrackingSet::Unchanged`, 0010's early-return test on its own, so the 2D engine skips deriving
+  (and building a 128-byte empty set for) each of a line's six VRAM tracking sets when nothing changed. Main thread's
+  2D cost on membench: -13% with `render.2d_thread=on`, -4% off.
+- **The HeartGold black screen with LOOPREGS: not reproduced.** `tests/jitloops/` (IRQ-driven wait loops: polling
+  memory the handler writes, VCOUNT/IF/IPCSYNC/GXSTAT, IntrWait in a loop, mid-loop exits, VRAM and GX stores, an
+  ARM7 loop in IRQ mode) is byte-identical with LOOPREGS on and off and equals the interpreter. LOOPREGS stays off.
+  To bisect it on the device: `MELONDS_JIT_LOOPREGS=1` plus one of `MELONDS_JIT_NOLOOPTS=1`,
+  `MELONDS_JIT_NOLOOPSIGNED=1`, `MELONDS_JIT_NOLOOPLAZY=1`, `MELONDS_JIT_NOLOOPXFER=1`; and once with
+  `render.gengis_threads=0` and the 2D thread off (if LOOPREGS is exact, only a race in a renderer thread could turn
+  a different host speed into a different picture). Not covered by the tests: a loop whose own block is invalidated
+  while it runs.
+
 Left, by agent: the geometry's FIFO ring buffer (savestates hold both FIFOs) and its vertex copies; rotscale
 sprites and OBJ mosaic, skipping unchanged lines in 2D; the mix's per-sample tail and batched ARM9 DMA for VRAM.
 
