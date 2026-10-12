@@ -11,8 +11,14 @@ int run_headless(Emu& emu, const Config& cfg);
 
 #ifdef BANANADS_SDL
 // A desktop window with both screens, sound, the mouse as the stylus and the keyboard as the pad. For working on
-// BananaDS without a handheld; the handheld path is KMS (docs/PLAN.md, milestone D).
+// BananaDS without a handheld; the handheld path is KMS.
 int run_sdl(Emu& emu, const Config& cfg);
+#endif
+
+#ifdef BANANADS_KMS
+// The handheld: both screens straight onto the two panels through DRM/KMS, the pad and the touchscreen from evdev,
+// sound through ALSA (frontend_kms.cpp; BananaLinux's docs/EMULATORS.md is the contract it keeps).
+int run_kms(Emu& emu, const Config& cfg);
 #endif
 
 #ifdef BANANADS_ALSA

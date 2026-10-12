@@ -7,7 +7,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 
 | Key | Default | |
 |---|---|---|
-| `frontend` | `sdl` (or `headless` in a build without SDL) | `sdl`, `headless`; `kms` comes with milestone D |
+| `frontend` | `kms` without a display server (no `WAYLAND_DISPLAY` or `DISPLAY`), else `sdl` (`headless` in a build with neither) | `kms` (the handheld's panels), `sdl` (a desktop window), `headless` |
 | `jit` | `on` | melonDS's JIT; `off` for the interpreter (slow, for debugging) |
 | `jit.timing` | `block` | BananaJIT's timing: `block` (melonDS's JIT's level: fast memory, cycles counted per block) or `exact` (the interpreter's, cycle for cycle; slower) |
 | `jit.codegen` | `new` | melonDS's JIT's code generation (patches/melonds/0007): `new` (fewer host instructions per block and per exit: cheaper exit stubs, linkable exits both ways of a block-ending branch, self loops checked inline, host flags kept in NZCV, a per-site cache for returns) or `old` (the code before 0007, byte for byte). Exact either way. Sets `MELONDS_JIT_OLDCODEGEN`; each part is also off alone with its `MELONDS_JIT_NO<name>=1` (docs/PERF.md lists them). `MELONDS_JIT_NOFASTLDM=1` keeps block loads (LDM, POP) off the fastmem path (0008). `MELONDS_JIT_LOOPREGS=1` turns on loops that keep their guest registers in host registers (off: HeartGold hangs with it, docs/PERF.md) |
@@ -60,6 +60,17 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `sdl.stats` | `0` | with `sdl.present=queue`, every this many vsyncs log the vsync rate, the emulated frames per second, the vsyncs that showed no new frame and the frames never shown |
 | `sdl.vsync` | `off` | with `sdl.present=queue`: `on` paces the window's presents by SDL's vsync; `off` by a clock at `sdl.refresh` Hz (under sway on the RG DS Plus SDL's vsync let only ~18 presents a second through; a Wayland compositor shows the newest buffer at its own refresh, so nothing tears) |
 | `sdl.refresh` | `60` | the presents per second with `sdl.vsync=off` (the display's refresh: the RG DS Plus's panels run at 60.003 Hz) |
+| `kms.top` | `$BANANADS_TOP`, else `DSI-2` | the connector of the panel that shows the top screen; the other connected panel of the same type shows the bottom one (`Virtual-2` in QEMU) |
+| `kms.touch` | `$BANANADS_TOUCH`, else `fe5e0000.i2c` | the bottom panel's touchscreen: the input device whose sysfs path contains this |
+| `kms.queue` | `2` | the most finished frames waiting for the screen (1-3); past that the oldest is dropped. Frames are committed one per refresh, so a game whose frames take 19 and 12 ms in turn still shows a new one at every refresh |
+| `kms.stats` | `0` | every this many frames shown, log the rate of new frames on the panels, the frames emulated per second, the refreshes that showed no new frame and the frames dropped |
+| `cpugov` | `on` | with `frontend=kms`: the lowest CPU clock that keeps the game at full speed, set through `scaling_max_freq` under the `performance` governor and put back on exit (SuperDrastic's governor, src/cpugov.cpp says how it decides); off when the governor isn't `performance` |
+| `cpugov.min_khz`, `cpugov.max_khz` | `1104000`, the hardware's top | its bounds |
+| `cpugov.max_soft` | `off` | `on`: past `cpugov.max_khz` while the game can't keep up |
+| `cpugov.memory` | `on` | remember per game (and scale) the clocks that dropped frames, in `cpugov.dir` |
+| `cpugov.dir` | `$BANANADS_DATA/cpugov` | |
+| `cpugov.log` | `off` | a log line per 250 ms decision window |
+| `power.cpu_latency_us` | `0` | with `frontend=kms`: hold the cores out of idle states that take longer than this to leave, for the game's lifetime (PM QoS through `/dev/cpu_dma_latency`; the RK3566/RK3568's `cpu-sleep` takes 220 us, and 100 here kept HeartGold at 2x ~1.5% faster). `0`: the kernel decides. Costs battery: measure before keeping it on |
 | `headless.frames` | `600` | how many frames `headless` runs |
 | `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
 | `headless.reload_at` | none | after this frame, save the state to slot 3 and load it straight back (a test of the savestate path) |
@@ -69,6 +80,14 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `headless.input` | none | scripted presses: `<frame>:<keys>[:<frames held>]`, comma-separated, keys joined by `+` (`a b select start right left up down r l x y`), held 6 frames by default: `600:start,900:a:10` |
 | `log.file` | none | a copy of the log (stderr always gets it) |
 | `log.level` | `1` | 0 debug, 1 info, 2 warnings, 3 errors |
+
+## The handheld's buttons (`frontend=kms`)
+
+The pad as the DS's (A east, B south, X north, Y west, L, R, Start, Select, the d-pad), read and never grabbed: the
+volume keys and the lid stay the system's. F (`BTN_MODE`) + Start: quit (with the resume state). F + R: save to slot
+1. F + L: load slot 1. While F is held the game sees no buttons. A keyboard works too: arrows, Enter (A), Backspace
+(B), X, Y, Page Up / Page Down (L / R), S (Start), Tab (Select), F1 (F); Esc quits. `SIGTERM`, `SIGINT` and `SIGHUP`
+quit the same way, writing the resume state and the save.
 
 ## The window's keys (`frontend=sdl`)
 

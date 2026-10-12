@@ -6,7 +6,8 @@ core that is open source: [melonDS](https://melonds.kuribo64.net). DraStic is no
 
 > Status: **0.1.0, the first scaffold. Not tested on a handheld yet.** It builds for the PC and for aarch64,
 > boots SuperDrastic's 3D stress-test ROM (on a PC and under qemu with the ARM64 JIT), and passes its host tests.
-> It has no handheld display path yet: that is milestone D in [docs/PLAN.md](docs/PLAN.md).
+> Its handheld display path (`frontend=kms`, milestone D) runs on BananaLinux; it has been checked in QEMU there,
+> not yet on the panels themselves.
 
 ## Why a new emulator, and why melonDS
 
@@ -41,8 +42,8 @@ menu, RetroAchievements, the CPU governor. [docs/PORTING.md](docs/PORTING.md) is
 | Wi-Fi (local) | Two handhelds on one network play together through melonDS's LAN: `wifi.local=host` on one, `wifi.local=join:<address>` on the other (build with `-DBANANADS_LAN=ON`, needs libenet) |
 | Saves | `<game>.sav` next to the ROM or in `save.dir`, per-game folders (`save.per_game_folder`, ROCKNIXDS #42/#56). Always written to a temporary file and renamed, a second after the game's last write |
 | Savestates | Slots 1-3 (F5-F7 save, F9-F11 load in the window) and the resume state (slot 0) written on quit, loaded on start (`resume.on_quit`, `resume.on_start`). Each has a `.pic` with both screens for the menu's slot pictures |
-| Frontends | `sdl`: a desktop window for development. `headless`: frames as fast as possible, a benchmark that dumps PPM pictures. `kms`: the handheld path, **not yet** |
-| Sound | SDL in the window. `src/alsa.cpp` is the handheld's: real-time output thread with 256-frame chunks, the PCMs opened one at a time (the PipeWire crash from #26). It's built, but no frontend uses it until `kms` |
+| Frontends | `sdl`: a desktop window for development. `headless`: frames as fast as possible, a benchmark that dumps PPM pictures. `kms`: the handheld path: both screens straight onto the two panels through DRM/KMS (one atomic commit a frame, the display plane scaling, frames queued one refresh), the pad and the touchscreen from evdev, ALSA sound, SIGTERM saves and quits (`src/frontend_kms.cpp`). The default without a display server |
+| Sound | SDL in the window. `src/alsa.cpp` is the handheld's: real-time output thread with 256-frame chunks, the PCMs opened one at a time (the PipeWire crash from #26). `frontend=kms` uses it |
 
 ## Building
 

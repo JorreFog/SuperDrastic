@@ -1,0 +1,772 @@
+// frontend=kms: the handheld path. Both DS screens straight onto the two panels through DRM/KMS (no display server,
+// no compositor, no GPU), the pad and the bottom touchscreen from evdev, sound through ALSA. What BananaLinux's
+// docs/EMULATORS.md asks of an emulator, modelled on SuperDrastic's dsflip.c (the same hardware):
+//
+// - DRM master on the card with two connected panels of kms.top's connector type (BANANADS_TOP: DSI-2 on the RG DS,
+//   Virtual-2 in QEMU); kms.top is the top screen. The modes stay as they are (the kernel command line's, else the
+//   panel's preferred one: the DTB carries a measured 60 Hz), and everything is given back on exit (closing the
+//   device drops master; the menu modesets again).
+// - Each frame is written into DRM dumb buffers, one per panel, and both go to the screen in ONE atomic commit
+//   (DRM_MODE_ATOMIC_NONBLOCK | PAGE_FLIP_EVENT): the same emulated frame on both panels. The display plane scales
+//   the 256x192 (512x384 at render.scale=2) buffer to the panel itself (VOP2 on the RG DS: no copy, no GPU); where
+//   the plane can't scale (QEMU's virtio GPU) the frame is scaled by a whole number on the CPU and centred.
+// - Frames queue (as sdl.present=queue): the emulator runs on its own thread at the DS's rate, and each finished
+//   frame is committed as soon as the previous flip is done, so a game whose frames take 19 and 12 ms in turn
+//   (HeartGold at 1104 MHz) still shows one new frame per refresh. Up to kms.queue frames wait; past that the oldest
+//   is dropped (counted).
+// - Input: the pad (rocknix-singleadc-joypad, and any keyboard) read, never grabbed (bananad reads the same device
+//   for the lid, power and volume keys, which are ignored here). The touchscreen is the device whose sysfs path
+//   contains kms.touch (BANANADS_TOUCH: fe5e0000.i2c, the bottom panel's). F (BTN_MODE) + Start quits; F + R saves
+//   slot 1, F + L loads it.
+// - SIGTERM/SIGINT/SIGHUP quit the same way (the resume state written, then the save): BananaLinux's shutdown waits
+//   5 s for that. SIGSTOP/SIGCONT around sleep only leave a gap: the pacing starts again from the time it wakes.
+#include <dirent.h>
+#include <fcntl.h>
+#include <linux/input.h>
+#include <poll.h>
+#include <pthread.h>
+#include <signal.h>
+#include <sys/eventfd.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <drm_fourcc.h>
+#include <xf86drm.h>
+#include <xf86drmMode.h>
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <climits>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <deque>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "Platform.h"
+#include "cpugov.h"
+#include "frontend.h"
+
+using melonDS::Platform::Log;
+using melonDS::Platform::LogLevel;
+
+namespace bananads {
+
+static std::atomic<bool> g_quit{false};
+static int g_wake = -1;  // eventfd: a signal or a new frame wakes the presenter
+
+static void wake() {
+    if (g_wake >= 0) {
+        uint64_t one = 1;
+        ssize_t r = write(g_wake, &one, sizeof one);
+        (void)r;
+    }
+}
+static void on_signal(int) {
+    g_quit = true;
+    wake();
+}
+
+static long long now_us() {
+    timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec * 1000000LL + t.tv_nsec / 1000;
+}
+
+static long long thread_cpu_ns() {
+    timespec t;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
+    return t.tv_sec * 1000000000LL + t.tv_nsec;
+}
+
+// ---- the display ----------------------------------------------------------------------------------------------
+
+struct Buf {
+    uint32_t fb = 0, handle = 0, pitch = 0, w = 0, h = 0;
+    uint64_t size = 0;
+    uint8_t* map = nullptr;
+};
+
+struct Panel {
+    uint32_t conn = 0, crtc = 0, plane = 0, mode_blob = 0;
+    int crtc_idx = -1;
+    drmModeModeInfo mode{};
+    uint32_t p_fb = 0, p_crtc = 0, p_sx = 0, p_sy = 0, p_sw = 0, p_sh = 0, p_cx = 0, p_cy = 0, p_cw = 0, p_ch = 0;
+    std::string name;
+};
+
+enum SlotState { FREE, WRITING, QUEUED, COMMITTED, SCANOUT };
+
+struct Display {
+    static const int NB = 6;  // writing, up to 3 queued, committed, on screen
+    int fd = -1;
+    Panel p[2];               // [0] = top, [1] = bottom
+    int W = 0, H = 0;         // the panels' mode
+    int fw = 0, fh = 0;       // a DS screen's size at render.scale
+    bool hw = true;           // the plane scales the frame; else the CPU does, into panel-sized buffers
+    int k = 1, ox = 0, oy = 0;  // CPU scaling: the whole-number factor and where the picture sits
+    Buf buf[2][NB];
+    SlotState state[NB] = {};
+    std::deque<int> queue;    // frames waiting, oldest first
+    int committed = -1, scanout = -1, pending = 0;
+    std::mutex mu;
+    double period_us = 16666.7;
+    // statistics (kms.stats, the governor)
+    std::atomic<long> made{0}, dropped{0}, shown{0};
+    long repeats = 0;
+    long long last_flip = 0;
+
+    uint32_t prop(uint32_t obj, uint32_t type, const char* name) {
+        drmModeObjectProperties* pr = drmModeObjectGetProperties(fd, obj, type);
+        uint32_t id = 0;
+        for (uint32_t i = 0; pr && i < pr->count_props && !id; i++) {
+            drmModePropertyRes* q = drmModeGetProperty(fd, pr->props[i]);
+            if (q && !strcmp(q->name, name)) id = q->prop_id;
+            drmModeFreeProperty(q);
+        }
+        drmModeFreeObjectProperties(pr);
+        return id;
+    }
+    uint64_t propval(uint32_t obj, uint32_t type, const char* name) {
+        drmModeObjectProperties* pr = drmModeObjectGetProperties(fd, obj, type);
+        uint64_t v = 0;
+        for (uint32_t i = 0; pr && i < pr->count_props; i++) {
+            drmModePropertyRes* q = drmModeGetProperty(fd, pr->props[i]);
+            if (q && !strcmp(q->name, name)) v = pr->prop_values[i];
+            drmModeFreeProperty(q);
+        }
+        drmModeFreeObjectProperties(pr);
+        return v;
+    }
+
+    bool mkbuf(Buf& b, int w, int h) {
+        drm_mode_create_dumb c{};
+        c.width = w;
+        c.height = h;
+        c.bpp = 32;
+        if (drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &c)) return false;
+        b.handle = c.handle;
+        b.pitch = c.pitch;
+        b.size = c.size;
+        b.w = w;
+        b.h = h;
+        uint32_t hs[4] = {c.handle}, ps[4] = {c.pitch}, os[4] = {0};
+        if (drmModeAddFB2(fd, w, h, DRM_FORMAT_XRGB8888, hs, ps, os, &b.fb, 0)) return false;
+        drm_mode_map_dumb m{};
+        m.handle = c.handle;
+        if (drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &m)) return false;
+        void* p = mmap(nullptr, c.size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, m.offset);
+        if (p == MAP_FAILED) return false;
+        b.map = (uint8_t*)p;
+        memset(b.map, 0, c.size);  // black (the borders of a CPU-scaled picture stay so)
+        return true;
+    }
+    void freebuf(Buf& b) {
+        if (b.map) munmap(b.map, b.size);
+        if (b.fb) drmModeRmFB(fd, b.fb);
+        if (b.handle) {
+            drm_mode_destroy_dumb d{};
+            d.handle = b.handle;
+            drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &d);
+        }
+        b = Buf();
+    }
+    void freebufs() {
+        for (auto& pb : buf)
+            for (auto& b : pb) freebuf(b);
+    }
+
+    void add_plane(drmModeAtomicReq* r, Panel& q, const Buf& b) {
+        drmModeAtomicAddProperty(r, q.plane, q.p_fb, b.fb);
+        drmModeAtomicAddProperty(r, q.plane, q.p_crtc, q.crtc);
+        drmModeAtomicAddProperty(r, q.plane, q.p_sx, 0);
+        drmModeAtomicAddProperty(r, q.plane, q.p_sy, 0);
+        drmModeAtomicAddProperty(r, q.plane, q.p_sw, (uint64_t)b.w << 16);
+        drmModeAtomicAddProperty(r, q.plane, q.p_sh, (uint64_t)b.h << 16);
+        drmModeAtomicAddProperty(r, q.plane, q.p_cx, 0);
+        drmModeAtomicAddProperty(r, q.plane, q.p_cy, 0);
+        drmModeAtomicAddProperty(r, q.plane, q.p_cw, q.mode.hdisplay);
+        drmModeAtomicAddProperty(r, q.plane, q.p_ch, q.mode.vdisplay);
+    }
+
+    // each panel lit in its mode on its CRTC (with ALLOW_MODESET: the menu may have switched them off on letting go)
+    void add_modeset(drmModeAtomicReq* r) {
+        for (auto& q : p) {
+            drmModeAtomicAddProperty(r, q.conn, prop(q.conn, DRM_MODE_OBJECT_CONNECTOR, "CRTC_ID"), q.crtc);
+            drmModeAtomicAddProperty(r, q.crtc, prop(q.crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID"), q.mode_blob);
+            drmModeAtomicAddProperty(r, q.crtc, prop(q.crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE"), 1);
+        }
+    }
+
+    // the device, the panels, the planes, the first (black) frame
+    bool open(const std::string& top, int scale) {
+        std::string type = top.substr(0, top.find('-'));
+        for (int n = 0; n < 8 && fd < 0; n++) {
+            char path[32];
+            snprintf(path, sizeof path, "/dev/dri/card%d", n);
+            int f = ::open(path, O_RDWR | O_CLOEXEC);
+            if (f < 0) continue;
+            fd = f;
+            if (!find_panels(top, type)) {
+                ::close(f);
+                fd = -1;
+                p[0] = p[1] = Panel();
+            }
+        }
+        if (fd < 0) {
+            Log(LogLevel::Error, "[kms] no DRM device with two connected %s panels\n", type.c_str());
+            return false;
+        }
+        // the menu may still be letting go of the device: up to 3 s for DRM master
+        int m = -1;
+        for (int i = 0; i < 300 && (m = drmSetMaster(fd)) != 0; i++) usleep(10000);
+        if (m) Log(LogLevel::Warn, "[kms] not DRM master (%s); trying anyway\n", strerror(errno));
+        drmSetClientCap(fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+        if (drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1)) {
+            Log(LogLevel::Error, "[kms] no atomic modesetting\n");
+            return false;
+        }
+        drmModePlaneRes* pres = drmModeGetPlaneResources(fd);
+        if (!pres) return false;
+        for (int i = 0; i < 2; i++)
+            for (uint32_t j = 0; j < pres->count_planes && !p[i].plane; j++) {
+                drmModePlane* pl = drmModeGetPlane(fd, pres->planes[j]);
+                if (pl && (pl->possible_crtcs & (1u << p[i].crtc_idx)) &&
+                    propval(pl->plane_id, DRM_MODE_OBJECT_PLANE, "type") == DRM_PLANE_TYPE_PRIMARY &&
+                    (i == 0 || pl->plane_id != p[0].plane))
+                    p[i].plane = pl->plane_id;
+                drmModeFreePlane(pl);
+            }
+        if (!p[0].plane || !p[1].plane) {
+            Log(LogLevel::Error, "[kms] no primary plane for both panels\n");
+            drmModeFreePlaneResources(pres);
+            return false;
+        }
+        for (auto& q : p) {
+            const uint32_t o = DRM_MODE_OBJECT_PLANE;
+            q.p_fb = prop(q.plane, o, "FB_ID");
+            q.p_crtc = prop(q.plane, o, "CRTC_ID");
+            q.p_sx = prop(q.plane, o, "SRC_X");
+            q.p_sy = prop(q.plane, o, "SRC_Y");
+            q.p_sw = prop(q.plane, o, "SRC_W");
+            q.p_sh = prop(q.plane, o, "SRC_H");
+            q.p_cx = prop(q.plane, o, "CRTC_X");
+            q.p_cy = prop(q.plane, o, "CRTC_Y");
+            q.p_cw = prop(q.plane, o, "CRTC_W");
+            q.p_ch = prop(q.plane, o, "CRTC_H");
+            drmModeCreatePropertyBlob(fd, &q.mode, sizeof q.mode, &q.mode_blob);
+        }
+        W = p[0].mode.hdisplay;
+        H = p[0].mode.vdisplay;
+        const drmModeModeInfo& md = p[0].mode;
+        if (md.htotal && md.vtotal) period_us = 1e9 / ((double)md.clock * 1000.0 / (md.htotal * md.vtotal)) / 1000.0;
+        fw = 256 * scale;
+        fh = 192 * scale;
+
+        // can the plane scale a DS-sized buffer to the panel? (VOP2 can; QEMU's virtio GPU can't)
+        hw = mkbuf(buf[0][0], fw, fh) && mkbuf(buf[1][0], fw, fh);
+        if (hw) {
+            drmModeAtomicReq* r = drmModeAtomicAlloc();
+            add_modeset(r);
+            for (int i = 0; i < 2; i++) add_plane(r, p[i], buf[i][0]);
+            hw = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_TEST_ONLY | DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr) == 0;
+            drmModeAtomicFree(r);
+        }
+        freebufs();
+        int bw = fw, bh = fh;
+        if (!hw) {
+            k = std::max(1, std::min(W / fw, H / fh));
+            ox = (W - fw * k) / 2;
+            oy = (H - fh * k) / 2;
+            bw = W;
+            bh = H;
+        }
+        for (int s = 0; s < NB; s++)
+            if (!mkbuf(buf[0][s], bw, bh) || !mkbuf(buf[1][s], bw, bh)) {
+                Log(LogLevel::Error, "[kms] can't make scanout buffers\n");
+                drmModeFreePlaneResources(pres);
+                return false;
+            }
+
+        // the first frame (black) on both panels in the mode they have, every other plane on their CRTCs off
+        drmModeAtomicReq* r = drmModeAtomicAlloc();
+        for (uint32_t j = 0; j < pres->count_planes; j++) {
+            uint32_t id = pres->planes[j];
+            if (id == p[0].plane || id == p[1].plane) continue;
+            drmModeAtomicAddProperty(r, id, prop(id, DRM_MODE_OBJECT_PLANE, "FB_ID"), 0);
+            drmModeAtomicAddProperty(r, id, prop(id, DRM_MODE_OBJECT_PLANE, "CRTC_ID"), 0);
+        }
+        drmModeFreePlaneResources(pres);
+        add_modeset(r);
+        for (int i = 0; i < 2; i++) add_plane(r, p[i], buf[i][0]);
+        int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr);
+        drmModeAtomicFree(r);
+        if (ret) {
+            Log(LogLevel::Error, "[kms] the first frame failed: %s\n", strerror(errno));
+            return false;
+        }
+        scanout = 0;
+        state[0] = SCANOUT;
+        Log(LogLevel::Info, "[kms] %s top, %s bottom, %dx%d at %.3f Hz; %dx%d frames scaled by %s\n", p[0].name.c_str(),
+            p[1].name.c_str(), W, H, 1e6 / period_us, fw, fh, hw ? "the display plane" : "the CPU");
+        return true;
+    }
+
+    bool find_panels(const std::string& top, const std::string& type) {
+        drmModeRes* res = drmModeGetResources(fd);
+        if (!res) return false;
+        struct Found { Panel q; std::vector<drmModeModeInfo> modes; bool top; };
+        std::vector<Found> found;
+        uint32_t used = 0;
+        for (int i = 0; i < res->count_connectors && found.size() < 2; i++) {
+            drmModeConnector* c = drmModeGetConnector(fd, res->connectors[i]);
+            if (!c) continue;
+            const char* tn = drmModeGetConnectorTypeName(c->connector_type);
+            if (tn && type == tn && c->connection == DRM_MODE_CONNECTED && c->count_modes > 0) {
+                Found f;
+                // the kernel command line's mode (video=<connector>:<mode>) first, then the panel's preferred one
+                f.q.mode = c->modes[0];
+                for (int m = 0; m < c->count_modes; m++)
+                    if (c->modes[m].type & DRM_MODE_TYPE_PREFERRED) { f.q.mode = c->modes[m]; break; }
+                for (int m = 0; m < c->count_modes; m++)
+                    if (c->modes[m].type & DRM_MODE_TYPE_USERDEF) { f.q.mode = c->modes[m]; break; }
+                f.modes.assign(c->modes, c->modes + c->count_modes);
+                for (int e = 0; e < c->count_encoders && !f.q.crtc; e++) {
+                    drmModeEncoder* enc = drmModeGetEncoder(fd, c->encoders[e]);
+                    if (!enc) continue;
+                    for (int j = 0; j < res->count_crtcs && !f.q.crtc; j++)
+                        if ((enc->possible_crtcs & (1u << j)) && !(used & (1u << j))) {
+                            f.q.crtc = res->crtcs[j];
+                            f.q.crtc_idx = j;
+                            used |= 1u << j;
+                        }
+                    drmModeFreeEncoder(enc);
+                }
+                char name[32];
+                snprintf(name, sizeof name, "%s-%u", tn, c->connector_type_id);
+                f.q.name = name;
+                f.q.conn = c->connector_id;
+                f.top = top == name;
+                if (f.q.crtc) found.push_back(f);
+            }
+            drmModeFreeConnector(c);
+        }
+        drmModeFreeResources(res);
+        if (found.size() < 2) return false;
+        // the top screen: the named connector, else the second one (as banana-ui)
+        if (!found[0].top && !found[1].top) std::swap(found[0], found[1]);
+        if (found[1].top) std::swap(found[0], found[1]);
+        auto same = [&] {
+            return found[0].q.mode.hdisplay == found[1].q.mode.hdisplay &&
+                   found[0].q.mode.vdisplay == found[1].q.mode.vdisplay;
+        };
+        if (!same())
+            for (auto& m : found[1].modes)
+                if (m.hdisplay == found[0].q.mode.hdisplay && m.vdisplay == found[0].q.mode.vdisplay) {
+                    found[1].q.mode = m;
+                    break;
+                }
+        if (!same()) return false;
+        p[0] = found[0].q;
+        p[1] = found[1].q;
+        return true;
+    }
+
+    void close() {
+        if (fd < 0) return;
+        freebufs();
+        for (auto& q : p)
+            if (q.mode_blob) drmModeDestroyPropertyBlob(fd, q.mode_blob);
+        drmDropMaster(fd);
+        ::close(fd);
+        fd = -1;
+    }
+
+    // ---- the emulator's side: a slot to write the next frame into, then queue it ----
+    int take() {
+        std::lock_guard<std::mutex> l(mu);
+        for (int s = 0; s < NB; s++)
+            if (state[s] == FREE) {
+                state[s] = WRITING;
+                return s;
+            }
+        // (can't happen: NB covers every state at once) the oldest waiting frame makes room
+        int s = queue.front();
+        queue.pop_front();
+        dropped++;
+        state[s] = WRITING;
+        return s;
+    }
+    void write(int s, const uint32_t* top, const uint32_t* bot) {
+        const uint32_t* src[2] = {top, bot};
+        for (int i = 0; i < 2; i++) {
+            Buf& b = buf[i][s];
+            if (hw) {
+                for (int y = 0; y < fh; y++) memcpy(b.map + (size_t)y * b.pitch, src[i] + (size_t)y * fw, fw * 4);
+                continue;
+            }
+            // whole-number nearest scaling, written once per output row (dumb buffers are slow to read back)
+            static thread_local std::vector<uint32_t> row;
+            row.resize((size_t)fw * k);
+            for (int y = 0; y < fh; y++) {
+                const uint32_t* in = src[i] + (size_t)y * fw;
+                const uint32_t* out = in;
+                if (k > 1) {
+                    for (int x = 0; x < fw; x++)
+                        for (int j = 0; j < k; j++) row[(size_t)x * k + j] = in[x];
+                    out = row.data();
+                }
+                for (int j = 0; j < k; j++)
+                    memcpy(b.map + (size_t)(oy + y * k + j) * b.pitch + (size_t)ox * 4, out, (size_t)fw * k * 4);
+            }
+        }
+    }
+    void publish(int s, int depth) {
+        {
+            std::lock_guard<std::mutex> l(mu);
+            state[s] = QUEUED;
+            queue.push_back(s);
+            made++;
+            while ((int)queue.size() > depth) {
+                state[queue.front()] = FREE;
+                queue.pop_front();
+                dropped++;
+            }
+        }
+        wake();
+    }
+
+    // ---- the presenter's side ----
+    // with no flip pending, the oldest waiting frame goes to both panels in one commit
+    void commit_next() {
+        std::lock_guard<std::mutex> l(mu);
+        if (pending || queue.empty()) return;
+        int s = queue.front();
+        drmModeAtomicReq* r = drmModeAtomicAlloc();
+        for (int i = 0; i < 2; i++) add_plane(r, p[i], buf[i][s]);
+        int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
+        drmModeAtomicFree(r);
+        if (ret) {
+            if (errno != EBUSY) Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
+            return;  // (tried again at the next wake-up)
+        }
+        queue.pop_front();
+        state[s] = COMMITTED;
+        committed = s;
+        pending = 2;
+    }
+    void flipped(long long t) {
+        std::lock_guard<std::mutex> l(mu);
+        if (--pending > 0) return;
+        if (scanout >= 0) state[scanout] = FREE;
+        scanout = committed;
+        state[scanout] = SCANOUT;
+        committed = -1;
+        shown++;
+        if (last_flip) {
+            long gap = std::lround((t - last_flip) / period_us);
+            if (gap > 1 && gap < 120) repeats += gap - 1;  // refreshes that showed no new frame (not a sleep)
+        }
+        last_flip = t;
+    }
+};
+
+static void on_flip(int, unsigned, unsigned, unsigned, unsigned, void* ud) { ((Display*)ud)->flipped(now_us()); }
+
+// ---- input ----------------------------------------------------------------------------------------------------
+
+struct InputDev {
+    int fd = -1;
+    bool touch = false, pointer = false;
+    int minx = 0, maxx = 0, miny = 0, maxy = 0, x = 0, y = 0;
+    bool down = false, was = false;
+};
+
+static bool bit(const unsigned long* a, int n) { return a[n / (8 * sizeof(long))] >> (n % (8 * sizeof(long))) & 1; }
+
+static uint32_t pad_bit(int code) {
+    switch (code) {
+        case BTN_EAST: case KEY_ENTER: return KeyA;          // the RG DS's A is east (Nintendo layout)
+        case BTN_SOUTH: case KEY_BACKSPACE: return KeyB;
+        case BTN_NORTH: case KEY_X: return KeyX;
+        case BTN_WEST: case KEY_Y: return KeyY;
+        case BTN_TL: case KEY_PAGEUP: return KeyL;
+        case BTN_TR: case KEY_PAGEDOWN: return KeyR;
+        case BTN_START: case KEY_S: return KeyStart;
+        case BTN_SELECT: case KEY_TAB: return KeySelect;
+        case BTN_DPAD_UP: case KEY_UP: return KeyUp;
+        case BTN_DPAD_DOWN: case KEY_DOWN: return KeyDown;
+        case BTN_DPAD_LEFT: case KEY_LEFT: return KeyLeft;
+        case BTN_DPAD_RIGHT: case KEY_RIGHT: return KeyRight;
+        default: return 0;
+    }
+}
+static bool is_hotkey(int code) { return code == BTN_MODE || code == KEY_F1; }
+
+static std::vector<InputDev> open_inputs(const std::string& touch_name) {
+    std::vector<InputDev> devs;
+    DIR* d = opendir("/dev/input");
+    if (!d) return devs;
+    while (dirent* e = readdir(d)) {
+        if (strncmp(e->d_name, "event", 5)) continue;
+        std::string path = std::string("/dev/input/") + e->d_name;
+        int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) continue;
+        unsigned long keys[KEY_MAX / (8 * sizeof(long)) + 1] = {}, abs[ABS_MAX / (8 * sizeof(long)) + 1] = {};
+        ioctl(fd, EVIOCGBIT(EV_KEY, sizeof keys), keys);
+        ioctl(fd, EVIOCGBIT(EV_ABS, sizeof abs), abs);
+        InputDev dv;
+        dv.fd = fd;
+        bool mt = bit(abs, ABS_MT_POSITION_X) && bit(abs, ABS_MT_POSITION_Y);
+        bool st = !mt && bit(abs, ABS_X) && bit(abs, ABS_Y) &&
+                  (bit(keys, BTN_TOUCH) || (bit(keys, BTN_LEFT) && !bit(keys, BTN_SOUTH)));
+        if (mt || st) {
+            // only the bottom panel's touchscreen (the top one's isn't the DS's)
+            char link[300], real[PATH_MAX];
+            snprintf(link, sizeof link, "/sys/class/input/%s/device", e->d_name);
+            if (touch_name.empty() || !realpath(link, real) || !strstr(real, touch_name.c_str())) {
+                ::close(fd);
+                continue;
+            }
+            dv.touch = true;
+            dv.pointer = st && !bit(keys, BTN_TOUCH);
+            input_absinfo ax{}, ay{};
+            ioctl(fd, EVIOCGABS(mt ? ABS_MT_POSITION_X : ABS_X), &ax);
+            ioctl(fd, EVIOCGABS(mt ? ABS_MT_POSITION_Y : ABS_Y), &ay);
+            dv.minx = ax.minimum;
+            dv.maxx = ax.maximum;
+            dv.miny = ay.minimum;
+            dv.maxy = ay.maximum;
+        } else {
+            bool any = bit(abs, ABS_HAT0X);
+            for (int c = KEY_ESC; c < KEY_MAX && !any; c++)
+                if (bit(keys, c) && (pad_bit(c) || is_hotkey(c))) any = true;
+            if (!any) {
+                ::close(fd);
+                continue;
+            }
+        }
+        Log(LogLevel::Info, "[kms] input %s: %s\n", e->d_name, dv.touch ? "the touchscreen" : "buttons");
+        devs.push_back(dv);
+    }
+    closedir(d);
+    return devs;
+}
+
+// ---- the frontend ---------------------------------------------------------------------------------------------
+
+int run_kms(Emu& emu, const Config& cfg) {
+    const char* et = getenv("BANANADS_TOP");
+    const char* eh = getenv("BANANADS_TOUCH");
+    const std::string top = cfg.str("kms.top", et && *et ? et : "DSI-2");
+    const std::string touch = cfg.str("kms.touch", eh && *eh ? eh : "fe5e0000.i2c");
+    const int depth = std::clamp((int)cfg.num("kms.queue", 2), 1, 3);
+    const long every = cfg.num("kms.stats", 0);
+
+    g_wake = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    struct sigaction sa{};
+    sa.sa_handler = on_signal;
+    sigemptyset(&sa.sa_mask);
+    for (int s : {SIGTERM, SIGINT, SIGHUP}) sigaction(s, &sa, nullptr);
+    signal(SIGPIPE, SIG_IGN);
+
+    Display dp;
+    if (!dp.open(top, emu.scale())) {
+        dp.close();
+        return 1;
+    }
+    std::vector<InputDev> devs = open_inputs(touch);
+
+    // power.cpu_latency_us: hold the cores out of idle states slower to leave than this while the game runs (PM QoS,
+    // /dev/cpu_dma_latency; the A55s' cpu-sleep takes 220 us to wake from). 0, the default: the kernel decides
+    int qos = -1;
+    if (long us = cfg.num("power.cpu_latency_us", 0); us > 0) {
+        qos = ::open("/dev/cpu_dma_latency", O_WRONLY | O_CLOEXEC);
+        int32_t v = (int32_t)us;
+        if (qos < 0 || ::write(qos, &v, sizeof v) != sizeof v) {
+            Log(LogLevel::Warn, "[kms] power.cpu_latency_us: %s\n", strerror(errno));
+            if (qos >= 0) ::close(qos);
+            qos = -1;
+        } else
+            Log(LogLevel::Info, "[kms] cores kept out of idle states slower than %ld us\n", us);
+    }
+
+#ifdef BANANADS_ALSA
+    Alsa* snd = alsa_start(emu, cfg);
+#endif
+    GovFeed feed;
+    feed.scale = emu.scale();
+    cpugov_start(cfg, &feed);
+
+    // the presenter's (this thread's) requests for the emulator's thread, applied before its next frame
+    std::atomic<uint32_t> in_keys{0};
+    std::atomic<int> in_touch{-1};  // y << 16 | x, -1 released
+    std::atomic<int> in_save{0}, in_load{0};
+    std::atomic<bool> run{true};
+
+    std::thread emu_thread([&] {
+        pthread_setname_np(pthread_self(), "bds-emu");
+        const auto frame = std::chrono::nanoseconds(16715180);  // 1 / 59.8261 Hz
+        auto due = std::chrono::steady_clock::now();
+        int touched = -1;
+        while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
+            if (int s = in_save.exchange(0)) {
+                cpugov_boost(3000);
+                emu.save_state(s);
+            }
+            if (int s = in_load.exchange(0)) {
+                cpugov_boost(3000);
+                emu.load_state(s);
+            }
+            emu.set_keys(in_keys.load(std::memory_order_relaxed));
+            const int t = in_touch.load(std::memory_order_relaxed);
+            if (t != touched) {
+                if (t < 0) emu.release_touch();
+                else emu.touch(t & 0xFFFF, t >> 16);
+                touched = t;
+            }
+            const long long c0 = thread_cpu_ns();
+            emu.run_frame();
+            const long long work = thread_cpu_ns() - c0;
+            long long prev = feed.work_max_ns.load(std::memory_order_relaxed);
+            while (work > prev && !feed.work_max_ns.compare_exchange_weak(prev, work)) {}
+            int s = dp.take();
+            dp.write(s, emu.top(), emu.bottom());
+            dp.publish(s, depth);
+            due += frame;
+            auto now = std::chrono::steady_clock::now();
+            if (due > now) std::this_thread::sleep_until(due);
+            else if (now - due > frame * 4) due = now;  // too far behind (or back from sleep): don't run to catch up
+        }
+        run = false;
+        wake();  // the presenter
+    });
+
+    drmEventContext ev{};
+    ev.version = 3;
+    ev.page_flip_handler2 = on_flip;  // one event per CRTC: a frame is on screen once both panels' have come
+    uint32_t keys = 0;
+    bool hot = false;
+    std::vector<pollfd> pfd;
+    long shown_mark = 0, made_mark = 0, drop_mark = 0, rep_mark = 0;
+    long long since = now_us();
+    while (run.load()) {
+        pfd.clear();
+        pfd.push_back({dp.fd, POLLIN, 0});
+        pfd.push_back({g_wake, POLLIN, 0});
+        for (auto& d : devs) pfd.push_back({d.fd, POLLIN, 0});
+        if (poll(pfd.data(), pfd.size(), 250) < 0 && errno != EINTR) break;
+        if (g_quit) break;
+        if (pfd[1].revents & POLLIN) {
+            uint64_t v;
+            ssize_t r = read(g_wake, &v, sizeof v);
+            (void)r;
+        }
+        if (pfd[0].revents & POLLIN) drmHandleEvent(dp.fd, &ev);
+        dp.commit_next();
+        feed.frames = dp.shown.load();
+        feed.drops = dp.dropped.load();
+
+        for (size_t i = 2; i < pfd.size(); i++) {
+            if (!(pfd[i].revents & POLLIN)) continue;
+            InputDev& d = devs[i - 2];
+            input_event e[64];
+            ssize_t n;
+            while ((n = read(d.fd, e, sizeof e)) > 0) {
+                for (int j = 0; j < n / (int)sizeof(input_event); j++) {
+                    const input_event& x = e[j];
+                    if (d.touch) {
+                        if (x.type == EV_ABS && (x.code == ABS_MT_POSITION_X || x.code == ABS_X)) d.x = x.value;
+                        else if (x.type == EV_ABS && (x.code == ABS_MT_POSITION_Y || x.code == ABS_Y)) d.y = x.value;
+                        else if (x.type == EV_ABS && x.code == ABS_MT_TRACKING_ID && x.value < 0) d.down = false;
+                        else if (x.type == EV_KEY && (x.code == BTN_TOUCH || (d.pointer && x.code == BTN_LEFT)))
+                            d.down = x.value != 0;
+                        else if (x.type == EV_SYN && x.code == SYN_REPORT) {
+                            if (d.down) {
+                                // the panel's pixel, then the DS's: where the bottom picture is on the panel
+                                double px = d.maxx > d.minx ? (double)(d.x - d.minx) * dp.W / (d.maxx - d.minx + 1) : d.x;
+                                double py = d.maxy > d.miny ? (double)(d.y - d.miny) * dp.H / (d.maxy - d.miny + 1) : d.y;
+                                double rx = dp.hw ? 0 : dp.ox, ry = dp.hw ? 0 : dp.oy;
+                                double rw = dp.hw ? dp.W : dp.fw * dp.k, rh = dp.hw ? dp.H : dp.fh * dp.k;
+                                int tx = std::clamp((int)((px - rx) * 256 / rw), 0, 255);
+                                int ty = std::clamp((int)((py - ry) * 192 / rh), 0, 191);
+                                in_touch = ty << 16 | tx;
+                            } else if (d.was)
+                                in_touch = -1;
+                            d.was = d.down;
+                        }
+                        continue;
+                    }
+                    if (x.type == EV_ABS && x.code == ABS_HAT0X)
+                        keys = (keys & ~(KeyLeft | KeyRight)) | (x.value < 0 ? KeyLeft : x.value > 0 ? KeyRight : 0);
+                    else if (x.type == EV_ABS && x.code == ABS_HAT0Y)
+                        keys = (keys & ~(KeyUp | KeyDown)) | (x.value < 0 ? KeyUp : x.value > 0 ? KeyDown : 0);
+                    if (x.type != EV_KEY || x.value == 2) continue;
+                    if (is_hotkey(x.code)) {
+                        hot = x.value != 0;
+                        continue;
+                    }
+                    if (x.code == KEY_ESC && x.value) g_quit = true;
+                    const uint32_t b = pad_bit(x.code);
+                    if (hot && x.value && b) {  // F + a button: BananaDS's own, not the game's
+                        if (b == KeyStart) g_quit = true;
+                        else if (b == KeyR) in_save = 1;
+                        else if (b == KeyL) in_load = 1;
+                        continue;
+                    }
+                    keys = x.value ? keys | b : keys & ~b;
+                }
+            }
+        }
+        in_keys = hot ? 0 : keys;  // while F is held the game sees no buttons
+        if (g_quit) break;
+
+        // kms.stats: every this many frames shown, the refresh rate of new frames, the frames emulated per second,
+        // the refreshes that showed no new frame and the frames never shown
+        const long s = dp.shown.load();
+        if (every > 0 && s - shown_mark >= every) {
+            const long long t = now_us();
+            const double sec = (t - since) / 1e6;
+            long rep;
+            {
+                std::lock_guard<std::mutex> l(dp.mu);
+                rep = dp.repeats;
+            }
+            Log(LogLevel::Info, "[kms] %ld frames shown in %.2f s (%.2f/s), %.2f emulated/s: %ld refreshes without a new frame, %ld dropped\n",
+                s - shown_mark, sec, (s - shown_mark) / sec, (dp.made - made_mark) / sec, rep - rep_mark,
+                dp.dropped - drop_mark);
+            shown_mark = s;
+            made_mark = dp.made;
+            drop_mark = dp.dropped;
+            rep_mark = rep;
+            since = t;
+        }
+    }
+    const bool signalled = g_quit;
+    run = false;
+    if (emu_thread.joinable()) emu_thread.join();
+    Log(LogLevel::Info, "[kms] %s: %ld frames shown, %ld dropped\n", signalled ? "asked to quit" : "quit",
+        dp.shown.load(), dp.dropped.load());
+
+    // the resume state at the top clock (a save at 2x takes a visible moment at a low one), then the rest
+    if (cfg.flag("resume.on_quit", true)) {
+        cpugov_boost(5000);
+        emu.save_state(0);
+    }
+    cpugov_stop();
+#ifdef BANANADS_ALSA
+    alsa_stop(snd);
+#endif
+    for (auto& d : devs) ::close(d.fd);
+    if (qos >= 0) ::close(qos);
+    dp.close();
+    ::close(g_wake);
+    g_wake = -1;
+    return 0;
+}
+
+}  // namespace bananads
