@@ -115,7 +115,15 @@ rm -f "$DSFLIP_STATE"
 # SuperDrastic retries the display for 3 s itself, so no wait here for the frontend to let go
 ( cd "$WORKDIR" && SDL_VIDEODRIVER=dummy DSFLIP_SHADER="$SHADER" LD_PRELOAD="$LIB${LD_PRELOAD:+:$LD_PRELOAD}" exec "$DRASTIC" "$@" ) &
 P=$!
-trap 'kill -9 $P 2>/dev/null; wait $P; put_back; say "stopped by a signal"; exit 143' TERM INT HUP
+# A stop (a shutdown while playing): with a resume file, SIGUSR1 has SuperDrastic save the game there and quit (BananaLinux
+# waits 5 s for that); without one, or after 4 s, the game is killed
+stop_game() {
+    if [ -n "$DSFLIP_RESUME_FILE" ] && kill -USR1 $P 2>/dev/null; then
+        i=0; while [ $i -lt 40 ] && kill -0 $P 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+    fi
+    kill -9 $P 2>/dev/null; wait $P; put_back; say "stopped by a signal"; exit 143
+}
+trap stop_game TERM INT HUP
 # other services (a battery/charger watcher, say) may change the GPU's governor mid-game: put ours back
 [ -n "$GOV" ] && ( while kill -0 $P 2>/dev/null; do
     sleep 2

@@ -32,6 +32,7 @@
 //   DSHOOK_SHADER=name             ES's DraStic "shader" setting; anything but bilinear/none runs that shader on the
 //                                  GPU (shader.c). DSFLIP_SHADER overrides it
 #define _GNU_SOURCE
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -967,7 +968,7 @@ static int touch_find(const char *want, char *path, size_t n) {   /* the evdev n
     glob_t g; *path = 0;
     if (glob("/sys/class/input/event*", 0, 0, &g)) return -1;
     for (size_t i = 0; i < g.gl_pathc && !*path; i++) {
-        char dev[300], real_[512]; snprintf(dev, sizeof dev, "%s/device", g.gl_pathv[i]);
+        char dev[300], real_[PATH_MAX]; snprintf(dev, sizeof dev, "%s/device", g.gl_pathv[i]);   /* (realpath wants PATH_MAX: a smaller buffer aborts under _FORTIFY_SOURCE) */
         if (realpath(dev, real_) && strstr(real_, want)) snprintf(path, n, "/dev/input/%s", strrchr(g.gl_pathv[i], '/') + 1);
     }
     globfree(&g);

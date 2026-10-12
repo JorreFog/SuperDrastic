@@ -73,24 +73,35 @@ int resume_quit_pending(void);
 
 static long long now_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
 
-/* ---------- colours (ROCKNIXDS Pixel, dark) ---------- */
-#define C_BG      0x141b23
-#define C_DOT     0x1f2833
-#define C_PANEL   0x1a222c
-#define C_BORDER  0x3d4a5a
-#define C_LIGHT   0xe7eef6
-#define C_GREY    0x93a0b0
-#define C_BLUE    0x1a6ea3
-#define C_CYAN    0x7ec8ee
-#define C_DARK    0x12181f
-#define C_RED     0xa3283a
-#define C_REDL    0xff8a96
-#define C_REDDIM  0x6b2a33
-#define C_TEAL    0x1f4645
-#define C_TEALDOT 0x27524f
-#define C_TEALTXT 0xa9c3c2
-#define C_TEALLN  0x4c6a69
-#define C_LINE    0x2e3a49
+/* ---------- colours: ROCKNIXDS Pixel, dark; or BananaOS's (DSFLIP_MENU_THEME=banana: BananaLinux tools/banana-palette.sh's
+ * map over the same theme, the blue accents banana yellow with dark text on them) ---------- */
+static uint32_t C_BG = 0x141b23;
+static uint32_t C_DOT = 0x1f2833;
+static uint32_t C_PANEL = 0x1a222c;
+static uint32_t C_BORDER = 0x3d4a5a;
+static uint32_t C_LIGHT = 0xe7eef6;
+static uint32_t C_GREY = 0x93a0b0;
+static uint32_t C_BLUE = 0x1a6ea3;
+static uint32_t C_CYAN = 0x7ec8ee;
+static uint32_t C_DARK = 0x12181f;
+static uint32_t C_RED = 0xa3283a;
+static uint32_t C_REDL = 0xff8a96;
+static uint32_t C_REDDIM = 0x6b2a33;
+static uint32_t C_TEAL = 0x1f4645;
+static uint32_t C_TEALDOT = 0x27524f;
+static uint32_t C_TEALTXT = 0xa9c3c2;
+static uint32_t C_TEALLN = 0x4c6a69;
+static uint32_t C_LINE = 0x2e3a49;
+static uint32_t C_ONSEL = 0xffffff, C_ONSELSUB = 0xd6e6f5;      /* text and icons on the selected (blue) plate */
+static uint32_t C_PILLBG = 0x243040, C_BODY = 0xc2ccd8, C_DIM = 0x5a6676, C_DIMBG = 0x161d26, C_DIMBORDER = 0x2a3442;
+static uint32_t C_EMPTY0 = 0x1a222c, C_EMPTY1 = 0x202a36, C_NOPIC = 0x2c3a4c, C_BARSEL = 0xe7eef6, C_BAROFFSEL = 0x2e3a49;
+static void theme_banana(void) {
+    C_BG = 0x191820; C_DOT = 0x25232b; C_PANEL = 0x211f26; C_BORDER = 0x4a443f; C_LIGHT = 0xf1ede2; C_GREY = 0xa39d8e;
+    C_BLUE = 0xf0b429; C_CYAN = 0xffe68a; C_DARK = 0x17161c; C_LINE = 0x3a3540;
+    C_ONSEL = 0x17161c; C_ONSELSUB = 0x3a2e14; C_PILLBG = 0x2e2b33; C_BODY = 0xd5cfc2; C_DIM = 0x6b6559;
+    C_DIMBG = 0x1a191f; C_DIMBORDER = 0x3a3540; C_EMPTY0 = 0x1a191f; C_EMPTY1 = 0x24222a; C_NOPIC = 0x38333b;
+    C_BARSEL = 0x17161c; C_BAROFFSEL = 0xc9921f;
+}
 
 /* ---------- drawing: XRGB8888 canvases in ordinary memory, copied to the panel's buffer when done ---------- */
 typedef struct { uint32_t *px; int w, h; float s; } canvas;   /* s: panel width / 640 (layouts are made at 640x480) */
@@ -388,6 +399,38 @@ static int cfg_int(const char *key, int def) {
     return v;
 }
 static int vol, bri, bri_changed;
+/* BananaLinux (/run/banana/mixer, "<card> <control>"): amixer for the volume and the backlights themselves, the value
+ * kept in /data/banana/backlight for bananad to restore at boot; ROCKNIX's volume and brightness scripts otherwise */
+static int banana_os = -1, bri_raw;
+static char mix_card[16] = "0", mix_ctl[64] = "Master";
+static int is_banana(void) {
+    if (banana_os < 0) {
+        FILE *f = fopen("/run/banana/mixer", "r"); banana_os = f != 0;
+        if (f) { char a[16], b[64]; if (fscanf(f, "%15s %63[^\n]", a, b) == 2) { snprintf(mix_card, sizeof mix_card, "%s", a); snprintf(mix_ctl, sizeof mix_ctl, "%s", b); } fclose(f); }
+    }
+    return banana_os;
+}
+static int banana_volume(void) {
+    char cmd[160]; snprintf(cmd, sizeof cmd, "amixer -c %s sget '%s' 2>/dev/null", mix_card, mix_ctl);
+    FILE *p = popen(cmd, "r"); if (!p) return 50;
+    char line[256]; int v = -1;
+    while (fgets(line, sizeof line, p)) { char *b = strchr(line, '['); if (b && v < 0 && strchr(b, '%')) v = atoi(b + 1); }
+    pclose(p);
+    return v < 0 ? 50 : v;
+}
+static int banana_brightness(void) {
+    glob_t g; int pct = 80;
+    if (glob("/sys/class/backlight/*", 0, 0, &g)) return pct;
+    if (g.gl_pathc) {
+        char a[300], b[300]; snprintf(a, sizeof a, "%s/brightness", g.gl_pathv[0]); snprintf(b, sizeof b, "%s/max_brightness", g.gl_pathv[0]);
+        int v = 0, mx = 0; FILE *f;
+        if ((f = fopen(a, "r"))) { if (fscanf(f, "%d", &v) != 1) v = 0; fclose(f); }
+        if ((f = fopen(b, "r"))) { if (fscanf(f, "%d", &mx) != 1) mx = 0; fclose(f); }
+        if (mx > 0) pct = (v * 100 + mx / 2) / mx;
+    }
+    globfree(&g);
+    return pct;
+}
 static pthread_mutex_t wm = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_t wc = PTHREAD_COND_INITIALIZER;
 static int w_vol = -1, w_bri = -1;
 static void *worker(void *a) {       /* ROCKNIX's own scripts (pactl, the settings file): off DraStic's thread */
@@ -397,7 +440,12 @@ static void *worker(void *a) {       /* ROCKNIX's own scripts (pactl, the settin
         while (w_vol < 0 && w_bri < 0) pthread_cond_wait(&wc, &wm);
         int v = w_vol, b = w_bri; w_vol = w_bri = -1;
         pthread_mutex_unlock(&wm);
-        char cmd[96];
+        char cmd[200];
+        if (is_banana()) {
+            if (v >= 0) { snprintf(cmd, sizeof cmd, "amixer -q -c %s sset '%s' %d%% >/dev/null 2>&1", mix_card, mix_ctl, v); if (system(cmd)) {} }
+            if (b >= 0) { FILE *f = fopen("/data/banana/backlight", "w"); if (f) { fprintf(f, "%d\n", bri_raw); fclose(f); } }
+            continue;
+        }
         if (v >= 0) { snprintf(cmd, sizeof cmd, "volume %d >/dev/null 2>&1", v); if (system(cmd)) {} }
         if (b >= 0) { snprintf(cmd, sizeof cmd, "brightness set all %d >/dev/null 2>&1", b); if (system(cmd)) {} }
     }
@@ -418,6 +466,7 @@ static void backlight(int pct) {     /* at once, straight to the panels; the set
         FILE *f = fopen(mp, "r"); int mx = 0; if (f) { if (fscanf(f, "%d", &mx) != 1) mx = 0; fclose(f); }
         if (mx <= 0) continue;
         if ((f = fopen(g.gl_pathv[i], "w"))) { fprintf(f, "%d\n", pct * mx / 100); fclose(f); }
+        if (i == 0) bri_raw = pct * mx / 100;
     }
     globfree(&g);
 }
@@ -475,21 +524,23 @@ static int setup(void) {
         if (!(CV[i].px = malloc((size_t)pw[i] * ph[i] * 4))) return 0;
     }
     if (!(bgtop = malloc((size_t)pw[0] * ph[0] * 4))) return 0;
-    const char *const med[] = { getenv("DSFLIP_MENU_FONT"),
+    { const char *t = getenv("DSFLIP_MENU_THEME"); if (t && !strcmp(t, "banana")) theme_banana(); }
+    const char *const med[] = { getenv("DSFLIP_MENU_FONT"), "/usr/share/banana/rnds/fonts/PixelifySans-Medium.ttf",
         "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf",
         "/storage/.config/emulationstation/themes/rocknixds-pixel-light/rnds/fonts/PixelifySans-Medium.ttf",
         "/usr/share/fonts/liberation/LiberationSans-Bold.ttf", "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
-    const char *const reg[] = { getenv("DSFLIP_MENU_FONT"),
+    const char *const reg[] = { "/usr/share/banana/rnds/fonts/PixelifySans-Regular.ttf", getenv("DSFLIP_MENU_FONT"),
         "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf",
         "/storage/.config/emulationstation/themes/rocknixds-pixel-light/rnds/fonts/PixelifySans-Regular.ttf",
         "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
-    if (!font_load(&F_MED, med, 7) || !font_load(&F_REG, reg, 6)) { dsflip_log("[menu] no font: DraStic's menu instead\n"); return 0; }
+    if (!font_load(&F_MED, med, 8) || !font_load(&F_REG, reg, 7)) { dsflip_log("[menu] no font: DraStic's menu instead\n"); return 0; }
     const char *snd[SND_N] = { "scroll.wav", "select.wav", "back.wav" };
     for (int k = 0; k < SND_N; k++) {
         char p[300];
-        snprintf(p, sizeof p, "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/sounds/%s", snd[k]);
+        snprintf(p, sizeof p, "/usr/share/banana/rnds/sounds/%s", snd[k]);
+        if (access(p, R_OK)) snprintf(p, sizeof p, "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/sounds/%s", snd[k]);
         if (access(p, R_OK)) snprintf(p, sizeof p, "/storage/.config/emulationstation/themes/rocknixds-pixel-light/rnds/sounds/%s", snd[k]);
         load_wav(k, p);
     }
@@ -592,7 +643,7 @@ static void draw_top(void) {
         box(c, px - S(3), py - S(3), px + pw_ + S(3), py + ph_ + S(3), S(6), S(3), C_LIGHT, C_DARK);
         if (s->used && s->pic) draw_pic(c, s->pic, px, py, pw_, ph_);
         else if (s->used) { fill(c, px, py, px + pw_, py + ph_, C_PANEL, 1.0f); text(c, &F_REG, "No picture in this save", c->w / 2.0f, py + ph_ / 2 - S(10), S(18), C_GREY, 0, 1); }
-        else { hatch(c, px, py, px + pw_, py + ph_, 0x1a222c, 0x202a36); text(c, &F_MED, "Empty slot", c->w / 2.0f, py + ph_ / 2 - S(12), S(22), C_GREY, 0, 1); }
+        else { hatch(c, px, py, px + pw_, py + ph_, C_EMPTY0, C_EMPTY1); text(c, &F_MED, "Empty slot", c->w / 2.0f, py + ph_ / 2 - S(12), S(22), C_GREY, 0, 1); }
         char t[48]; snprintf(t, sizeof t, "Slot %d", sel_slot + 1);
         text(c, &F_MED, t, px, py + ph_ + S(14), S(24), C_LIGHT, 0, 0);
         if (s->used) { char w[48]; when_text(s->mt, w, sizeof w); text(c, &F_REG, w, px + pw_, py + ph_ + S(18), S(18), C_TEALTXT, 0, 2); }
@@ -693,7 +744,7 @@ static void draw_header(canvas *c, const char *h, const char *sub, int sub_page)
     if (sub && *sub) text(c, &F_REG, sub, c->w - S(20), S(19), S(16), C_GREY, S(300), 2);
 }
 static void bar(canvas *c, int x, int y, int v, int sel) {      /* 10 segments, the theme's progress look */
-    for (int k = 0; k < 10; k++) fill(c, x + k * S(15), y, x + k * S(15) + S(11), y + S(20), k < (v + 5) / 10 ? (sel ? C_LIGHT : C_CYAN) : C_LINE, 1.0f);
+    for (int k = 0; k < 10; k++) fill(c, x + k * S(15), y, x + k * S(15) + S(11), y + S(20), k < (v + 5) / 10 ? (sel ? C_BARSEL : C_CYAN) : (sel ? C_BAROFFSEL : C_LINE), 1.0f);
 }
 static void dialog(canvas *c, const char *title, const char *body, const char *no, const char *yes, int danger) {
     fill(c, 0, 0, c->w, c->h, C_DARK, 0.65f);
@@ -701,11 +752,11 @@ static void dialog(canvas *c, const char *title, const char *body, const char *n
     box(c, x0, y0, x0 + w, y0 + h, S(14), S(3), C_LIGHT, C_DARK);
     text(c, &F_MED, title, x0 + S(26), y0 + S(22), S(24), C_LIGHT, w - S(52), 0);
     char l1[200], l2[200]; int n = wrap2(&F_REG, body, S(17), w - S(52), l1, l2, sizeof l1);
-    text(c, &F_REG, l1, x0 + S(26), y0 + S(66), S(17), 0xc2ccd8, w - S(52), 0);
-    if (n > 1) text(c, &F_REG, l2, x0 + S(26), y0 + S(90), S(17), 0xc2ccd8, w - S(52), 0);
+    text(c, &F_REG, l1, x0 + S(26), y0 + S(66), S(17), C_BODY, w - S(52), 0);
+    if (n > 1) text(c, &F_REG, l2, x0 + S(26), y0 + S(90), S(17), C_BODY, w - S(52), 0);
     int by = y0 + h - S(60);
     R_DLG_A = pill(c, x0 + w - S(24), by, 1, "A", yes, danger ? C_REDL : C_LIGHT, C_LIGHT, danger ? C_RED : C_BLUE);
-    R_DLG_B = pill(c, R_DLG_A.x0 - S(12), by, 1, "B", no, C_GREY, C_LIGHT, 0x243040);
+    R_DLG_B = pill(c, R_DLG_A.x0 - S(12), by, 1, "B", no, C_GREY, C_LIGHT, C_PILLBG);
 }
 static void draw_bottom(void) {
     canvas *c = &CV[1];
@@ -729,7 +780,7 @@ static void draw_bottom(void) {
             int x = gx0 + (i % 3) * (tw + gap), y = gy0 + (i / 3) * (th + gap), sel = i == sel_main, red = i == 5;
             R_TILE[i] = (rect){ x, y, x + tw, y + th };
             uint32_t bd = sel ? (red ? C_REDL : C_LIGHT) : (red ? C_REDDIM : C_BORDER), bg = sel ? (red ? C_RED : C_BLUE) : C_PANEL;
-            uint32_t fg = sel ? 0xffffff : (red ? C_REDL : C_LIGHT), sub2 = sel ? 0xd6e6f5 : (red ? 0xc98a92 : C_GREY);
+            uint32_t fg = sel ? (red ? 0xffffff : C_ONSEL) : (red ? C_REDL : C_LIGHT), sub2 = sel ? (red ? 0xffd6dc : C_ONSELSUB) : (red ? 0xc98a92 : C_GREY);
             box(c, x, y, x + tw, y + th, S(14), bw, bd, bg);
             int k = S(4) < 2 ? 2 : S(4);
             bitmap(c, tile_icon[i], 12, x + (tw - 12 * k) / 2, y + S(24), k, fg);
@@ -753,17 +804,17 @@ static void draw_bottom(void) {
             slot *sl = &SL[n];
             int x = gx0 + (n % 4) * (cw + gap), y = gy0 + (n / 4) * (ch + gap), sel = n == sel_slot, dim = s == SC_LOAD && !sl->used;
             R_SLOT[n] = (rect){ x, y, x + cw, y + ch };
-            box(c, x, y, x + cw, y + ch, S(10), bw, sel ? C_LIGHT : dim ? 0x2a3442 : C_BORDER, sel ? C_BLUE : dim ? 0x161d26 : C_PANEL);
+            box(c, x, y, x + cw, y + ch, S(10), bw, sel ? C_LIGHT : dim ? C_DIMBORDER : C_BORDER, sel ? C_BLUE : dim ? C_DIMBG : C_PANEL);
             int k = S(3) < 2 ? 2 : S(3);
-            bitmap(c, DIG[(n + 1) % 10], 7, x + S(10), y + S(10), k, dim ? 0x5a6676 : sel ? 0xffffff : C_LIGHT);
+            bitmap(c, DIG[(n + 1) % 10], 7, x + S(10), y + S(10), k, dim ? C_DIM : sel ? C_ONSEL : C_LIGHT);
             const char *tag = n == nb ? "LAST" : "";
-            if (*tag) text(c, &F_MED, tag, x + cw - S(10), y + S(10), S(13), sel ? 0xffffff : C_CYAN, 0, 2);
+            if (*tag) text(c, &F_MED, tag, x + cw - S(10), y + S(10), S(13), sel ? C_ONSEL : C_CYAN, 0, 2);
             int tx0 = x + S(8), tx1 = x + cw - S(8), tth = (tx1 - tx0) * 3 / 4, ty0 = y + S(36);
             if (sl->used && sl->pic) draw_pic(c, sl->pic, tx0, ty0, tx1 - tx0, tth);
-            else if (sl->used) fill(c, tx0, ty0, tx1, ty0 + tth, 0x2c3a4c, 1.0f);
-            else hatch(c, tx0, ty0, tx1, ty0 + tth, dim ? 0x161d26 : 0x1a222c, dim ? 0x1a222c : 0x202a36);
+            else if (sl->used) fill(c, tx0, ty0, tx1, ty0 + tth, C_NOPIC, 1.0f);
+            else hatch(c, tx0, ty0, tx1, ty0 + tth, dim ? C_DIMBG : C_EMPTY0, dim ? C_EMPTY0 : C_EMPTY1);
             char w[48]; if (sl->used) when_text(sl->mt, w, sizeof w); else snprintf(w, sizeof w, "Empty");
-            text(c, &F_REG, w, x + cw / 2.0f, ty0 + tth + S(8), S(13), dim ? 0x5a6676 : sel ? 0xffffff : 0xc2ccd8, cw - S(12), 1);
+            text(c, &F_REG, w, x + cw / 2.0f, ty0 + tth + S(8), S(13), dim ? C_DIM : sel ? C_ONSEL : C_BODY, cw - S(12), 1);
         }
     } else if (s == SC_SET) {
         draw_header(c, "Quick settings", "changes apply at once", 1);
@@ -774,9 +825,9 @@ static void draw_bottom(void) {
             box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
             const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_BRI ? IC_SUN : IC_MIC;
             int k = S(2) < 2 ? 2 : S(2);
-            bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? 0xffffff : C_LIGHT);
+            bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? C_ONSEL : C_LIGHT);
             const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : "Microphone";
-            text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_LIGHT, 0, 0);
+            text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
             char v[32] = "";
             if (id == ROW_VOL || id == ROW_BRI) {
                 int val = id == ROW_VOL ? vol : bri, bx = gx1 - S(110) - S(146);
@@ -784,7 +835,7 @@ static void draw_bottom(void) {
                 R_BAR[r] = (rect){ bx - S(8), y, bx + S(150), y + rh };
                 snprintf(v, sizeof v, "%d%%", val);
             } else snprintf(v, sizeof v, "Test / blow");
-            text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_CYAN, 0, 2);
+            text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
             y += rh + gap;
         }
         const char *help = "";
@@ -835,8 +886,8 @@ static void draw_bottom(void) {
                              th < 0.08f ? "high" : th < 0.22f ? "medium" : "low");
         else snprintf(msg, sizeof msg, "Microphone sensitivity is off in ES, so the game only gets the blow below.");
         int n = wrap2(&F_REG, msg, S(16), x1 - x0 - S(44), l1, l2, sizeof l1);
-        text(c, &F_REG, l1, x0 + S(22), my1 + S(26), S(16), 0xc2ccd8, x1 - x0 - S(44), 0);
-        if (n > 1) text(c, &F_REG, l2, x0 + S(22), my1 + S(50), S(16), 0xc2ccd8, x1 - x0 - S(44), 0);
+        text(c, &F_REG, l1, x0 + S(22), my1 + S(26), S(16), C_BODY, x1 - x0 - S(44), 0);
+        if (n > 1) text(c, &F_REG, l2, x0 + S(22), my1 + S(50), S(16), C_BODY, x1 - x0 - S(44), 0);
         text(c, &F_REG, "A: blow for 3 s, for when the real mic isn't picked up", gx0 + S(4), y1 + S(16), S(16), C_GREY, gx1 - gx0, 0);
     }
     /* footer */
@@ -849,7 +900,7 @@ static void draw_bottom(void) {
     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
     R_FOOT_R = pill(c, c->w - S(20), fy, 1, "A", al, C_CYAN, C_CYAN, C_DARK);
     R_UNDO = (rect){ 0, 0, 0, 0 };
-    if (s == SC_LOAD && undo_ok) R_UNDO = pill(c, R_FOOT_R.x0 - S(12), fy, 1, "Y", "Undo last load", C_GREY, C_LIGHT, 0x243040);
+    if (s == SC_LOAD && undo_ok) R_UNDO = pill(c, R_FOOT_R.x0 - S(12), fy, 1, "Y", "Undo last load", C_GREY, C_LIGHT, C_PILLBG);
     else if (*mid) text(c, &F_REG, mid, c->w / 2.0f, fy + S(11), S(15), C_GREY, 0, 1);
     if (scr == SC_OVERWRITE) {
         char t[64]; snprintf(t, sizeof t, "Replace slot %d?", sel_slot + 1);
@@ -909,7 +960,9 @@ static void activate(void) {
             sel_slot = last_slot >= 0 ? last_slot : nb >= 0 ? nb : 0;
             play(SND_SELECT); dirty_top = dirty_bot = 1; break;
         }
-        case 3: scr = SC_SET; sel_set = 0; vol = cfg_int("audio.volume", 50); bri = cfg_int("display.brightness", 80);
+        case 3: scr = SC_SET; sel_set = 0;
+                if (is_banana()) { vol = banana_volume(); bri = banana_brightness(); }
+                else { vol = cfg_int("audio.volume", 50); bri = cfg_int("display.brightness", 80); }
                 play(SND_SELECT); dirty_top = dirty_bot = 1; break;
         case 4: play(SND_SELECT); close_menu(); resume_press(btn_menu[0] >= 0 ? btn_menu[0] : btn_menu[1]); break;
         case 5: scr = SC_QUIT; play(SND_SELECT); dirty_bot = 1; break;
