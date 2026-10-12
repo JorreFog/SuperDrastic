@@ -57,6 +57,9 @@
 #include "Platform.h"
 #include "cpugov.h"
 #include "frontend.h"
+#ifdef BANANADS_GENGIS
+#include "gengis_renderer.h"
+#endif
 #include "menu.h"
 
 using melonDS::Platform::Log;
@@ -151,6 +154,8 @@ struct Display {
     // kms.shader: each frame drawn through a fragment shader (SuperDrastic's) into panel-sized buffers, shown 1:1
     std::string shader_name;
     bool shader_tried = false, shader_on = false;
+    std::string shader_req;           // from the in-game menu (any thread): taken up by the presenter's next frame
+    bool shader_req_set = false;
     Buf sbuf[2][3];
     int snext = 0;
     int committed = -1, scanout = -1, pending = 0;
@@ -544,12 +549,30 @@ struct Display {
             state[s] = COMMITTED;
         }
         const Buf* out[2] = {&buf[0][s], &buf[1][s]};
+        {
+            std::string want;
+            bool asked = false;
+            {
+                Lock l(mu);
+                if (shader_req_set) { want = shader_req; asked = true; shader_req_set = false; }
+            }
+            if (asked) {
+                if (want == "none") {
+                    if (shader_on) gpu_floor(false);
+                    shader_on = false;
+                    shader_name.clear();
+                } else if (want != shader_name || !shader_on) {
+                    shader_name = want;
+                    shader_tried = false;  // made again below, with the new program
+                }
+            }
+        }
         if (!shader_name.empty() && !shader_tried) {  // GL is made on this thread, at its first frame
             shader_tried = true;
             shader_on = shader_init(fd, shader_name.c_str()) != 0;
             for (int i = 0; i < 2 && shader_on; i++)
-                for (auto& b : sbuf[i]) shader_on = shader_on && mkbuf(b, W, H);
-            if (shader_on) gpu_floor(true);
+                for (auto& b : sbuf[i]) shader_on = shader_on && (b.fb || mkbuf(b, W, H));  // (made once)
+            if (shader_on && gpu_dir.empty()) gpu_floor(true);
             Log(LogLevel::Info, "[kms] shader %s: %s\n", shader_name.c_str(), shader_on ? "on (panel-sized, 1:1)" : "unavailable");
         }
         if (shader_on) {
@@ -586,6 +609,11 @@ struct Display {
     long long shader_us = 0, shader_max_us = 0;
     long shader_n = 0;
     void gpu_floor(bool on) {
+        if (!on && !gpu_dir.empty() && !gpu_min_was.empty()) {
+            std::ofstream(gpu_dir + "/min_freq") << gpu_min_was;
+            gpu_dir.clear();
+            return;
+        }
         if (on) {
             glob_t g;
             if (glob("/sys/class/devfreq/*gpu*", 0, nullptr, &g) == 0 && g.gl_pathc) gpu_dir = g.gl_pathv[0];
@@ -849,6 +877,96 @@ static void mh_sound_play(void* c, int id) {
 #endif
 }
 static void mh_boost(void*, int ms) { cpugov_boost(ms); }
+
+// ---- the emulator's settings on the menu's Quick settings page ----
+// a "key = value" (or "KEY=value") line in a settings file, replaced or added: the choice stays for the next game
+static void set_kv(const std::string& path, const std::string& key, const std::string& value, const char* sep) {
+    std::ifstream f(path);
+    std::string ln, out;
+    bool done = false;
+    while (std::getline(f, ln)) {
+        size_t eq = ln.find('=');
+        std::string k = eq == std::string::npos ? "" : ln.substr(0, eq);
+        while (!k.empty() && (k.back() == ' ' || k.back() == '\t')) k.pop_back();
+        size_t b = k.find_first_not_of(" \t");
+        if (b != std::string::npos) k = k.substr(b);
+        if (!ln.empty() && ln[0] != '#' && k == key) {
+            if (done) continue;
+            out += key + sep + value + "\n";
+            done = true;
+        } else out += ln + "\n";
+    }
+    if (!done) out += key + sep + value + "\n";
+    std::ofstream(path) << out;
+}
+static const char* shader_label(const std::string& n) {
+    static const std::pair<const char*, const char*> names[] = {
+        {"none", "None"}, {"ds-crisp", "Crisp"}, {"ds-crisp-color", "Crisp + DS colours"}, {"ds-grid", "LCD grid"},
+        {"ds-grid-color", "LCD grid + colours"}, {"ds-grid-2x", "LCD grid 2x"}, {"ds-fsr", "FSR"}, {"lcd1x-nds", "LCD (DS colours)"},
+        {"lcd1x", "LCD 1x"}, {"lcd3x", "LCD 3x"}, {"zfast-lcd", "Fast LCD"}, {"nds-color", "DS colours"}, {"retro-v2", "Retro"},
+        {"bevel", "Bevel"}, {"sharp-bilinear", "Sharp bilinear"}, {"sharp-bilinear-scanlines", "Sharp + scanlines"},
+        {"zfast-crt", "Fast CRT"}, {"fxaa", "FXAA"}, {"ds-integer", "Integer"}, {"ds-integer-fill", "Integer fill"},
+        {"nnddss-dot-mizai", "Dot (MiZai)"}, {"nnddss-dot-mizai-rgds", "Dot (MiZai, RG DS+)"}, {"nnddss-retro-tiles", "Retro tiles"},
+        {"drastic-lcd1x", "DraStic LCD"}, {"drastic-lcd1x-nds-color", "DraStic LCD + colours"}, {"drastic-quilez", "DraStic Quilez"},
+        {"drastic-sharp-bilinear", "DraStic sharp"}, {"drastic-sharp-bilinear-nds-color", "DraStic sharp + colours"},
+        {"drastic-zfast-lcd", "DraStic fast LCD"}, {"drastic-zfast-lcd-nds-color", "DraStic fast LCD + colours"}};
+    for (auto& p : names) if (n == p.first) return p.second;
+    return n.c_str();
+}
+struct MenuOpts {
+    std::vector<std::string> shaders;  // "none" first, then the shader folder's
+    int shader = 0;
+    bool edge = true, fog = true;
+};
+static MenuOpts g_opts;
+static void opts_init(const Config& cfg, Display& dp) {
+    MenuOpts& o = g_opts;
+    o.shaders = {"none"};
+    const char* dir = getenv("DSFLIP_SHADER_DIR");
+    std::string d = dir && *dir ? dir : "/usr/lib/superdrastic/shaders";
+    glob_t g;
+    if (glob((d + "/*.frag").c_str(), 0, nullptr, &g) == 0)
+        for (size_t i = 0; i < g.gl_pathc; i++) {
+            std::string f = g.gl_pathv[i];
+            f = f.substr(f.rfind('/') + 1);
+            o.shaders.push_back(f.substr(0, f.size() - 5));
+        }
+    globfree(&g);
+    o.shader = 0;
+    for (size_t i = 0; i < o.shaders.size(); i++) if (o.shaders[i] == dp.shader_name) o.shader = (int)i;
+    o.edge = cfg.flag("render.edge_marking", true);
+    o.fog = cfg.flag("render.fog", true);
+}
+static int mh_opt_count(void*) { return 3; }
+static const char* mh_opt_label(void*, int i) { return i == 0 ? "Shader" : i == 1 ? "Edge marking" : "Fog"; }
+static int mh_opt_values(void*, int i) { return i == 0 ? (int)g_opts.shaders.size() : 2; }
+static const char* mh_opt_value_name(void*, int i, int v) {
+    if (i == 0) return v >= 0 && v < (int)g_opts.shaders.size() ? shader_label(g_opts.shaders[v]) : "?";
+    return v ? "On" : "Off";
+}
+static int mh_opt_get(void*, int i) { return i == 0 ? g_opts.shader : i == 1 ? g_opts.edge : g_opts.fog; }
+static void mh_opt_set(void* c, int i, int v) {
+    MenuHost* h = (MenuHost*)c;
+    if (i == 0) {
+        if (v < 0 || v >= (int)g_opts.shaders.size()) return;
+        g_opts.shader = v;
+        {
+            Lock l(h->dp->mu);
+            h->dp->shader_req = g_opts.shaders[v];
+            h->dp->shader_req_set = true;
+        }
+        // the same choice as Settings > Nintendo DS > Shader (both emulators read it from there)
+        set_kv("/data/banana/superdrastic.conf", "DSFLIP_SHADER", g_opts.shaders[v], "=");
+    } else {
+        (i == 1 ? g_opts.edge : g_opts.fog) = v != 0;
+#ifdef BANANADS_GENGIS
+        GengisRenderer3D::SetEffects(g_opts.edge, g_opts.fog);
+#endif
+        const char* data = getenv("BANANADS_DATA");
+        set_kv(std::string(data && *data ? data : "/data/bananads") + "/bananads.conf", i == 1 ? "render.edge_marking" : "render.fog",
+               v ? "on" : "off", " = ");
+    }
+}
 static void mh_log(void*, const char* line) { Log(LogLevel::Info, "%s", line); }
 
 // ---- the frontend ---------------------------------------------------------------------------------------------
@@ -954,6 +1072,13 @@ int run_kms(Emu& emu, const Config& cfg) {
         h.sound_play = mh_sound_play;
         h.boost = mh_boost;
         h.log = mh_log;
+        opts_init(cfg, dp);
+        h.opt_count = mh_opt_count;
+        h.opt_label = mh_opt_label;
+        h.opt_values = mh_opt_values;
+        h.opt_value_name = mh_opt_value_name;
+        h.opt_get = mh_opt_get;
+        h.opt_set = mh_opt_set;
         bmenu_init(&h);
         bmenu_session_start();
     }

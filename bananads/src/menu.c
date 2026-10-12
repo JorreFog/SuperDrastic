@@ -437,9 +437,13 @@ static canvas CV[2];
 static int pw[2], ph[2];
 
 /* rows of Quick settings that exist on this setup */
-enum { ROW_VOL, ROW_BRI, ROW_MIC };
-static int rows[4], nrows;
-static void make_rows(void) { nrows = 0; rows[nrows++] = ROW_VOL; rows[nrows++] = ROW_BRI; rows[nrows++] = ROW_MIC; }
+enum { ROW_VOL, ROW_BRI, ROW_MIC, ROW_OPT = 100 };   /* ROW_OPT + i: the emulator's option i (bmenu_host's opt_*) */
+static int rows[8], nrows;
+static void make_rows(void) {
+    nrows = 0; rows[nrows++] = ROW_VOL; rows[nrows++] = ROW_BRI; rows[nrows++] = ROW_MIC;
+    int n = H.opt_count ? H.opt_count(H.ctx) : 0;
+    for (int i = 0; i < n && nrows < 8; i++) rows[nrows++] = ROW_OPT + i;
+}
 
 static int setup(void) {
     if (inited) return inited > 0;
@@ -644,7 +648,7 @@ static void draw_top(void) {
 
 /* ---------- bottom panel ---------- */
 typedef struct { int x0, y0, x1, y1; } rect;
-static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[4], R_BAR[4], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_UNDO;
+static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[8], R_BAR[8], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_UNDO;
 static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1; }
 
 static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
@@ -725,7 +729,7 @@ static void draw_bottom(void) {
             case 0: snprintf(h, sizeof h, "or press L3"); break;
             case 1: snprintf(h, sizeof h, "%d slots", NSLOT); break;
             case 2: if (nb >= 0) snprintf(h, sizeof h, "last: slot %d", nb + 1); else snprintf(h, sizeof h, "no saves yet"); break;
-            case 3: snprintf(h, sizeof h, "volume, brightness"); break;
+            case 3: snprintf(h, sizeof h, H.opt_count && H.opt_count(H.ctx) ? "volume, shader, effects" : "volume, brightness"); break;
             case 4: snprintf(h, sizeof h, "from the title screen"); break;
             case 5: snprintf(h, sizeof h, H.resume_on ? "keeps your spot" : "back to the menu"); break;
             }
@@ -753,15 +757,15 @@ static void draw_bottom(void) {
         }
     } else if (s == SC_SET) {
         draw_header(c, "Quick settings", "changes apply at once", 1);
-        int y = gy0, rh = S(54), gap = S(10);
+        int y = gy0, rh = nrows > 3 ? S(48) : S(54), gap = nrows > 3 ? S(6) : S(10);
         for (int r = 0; r < nrows; r++) {
             int sel = r == sel_set, id = rows[r];
             R_ROW[r] = (rect){ gx0, y, gx1, y + rh }; R_BAR[r] = (rect){ 0, 0, 0, 0 };
             box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
-            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_BRI ? IC_SUN : IC_MIC;
+            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_BRI ? IC_SUN : id == ROW_MIC ? IC_MIC : IC_SLIDERS;
             int k = S(2) < 2 ? 2 : S(2);
             bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? C_ONSEL : C_LIGHT);
-            const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : "Microphone";
+            const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : id == ROW_MIC ? "Microphone" : H.opt_label(H.ctx, id - ROW_OPT);
             text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
             char v[32] = "";
             if (id == ROW_VOL || id == ROW_BRI) {
@@ -769,7 +773,8 @@ static void draw_bottom(void) {
                 bar(c, bx, y + (rh - S(20)) / 2, val, sel);
                 R_BAR[r] = (rect){ bx - S(8), y, bx + S(150), y + rh };
                 snprintf(v, sizeof v, "%d%%", val);
-            } else snprintf(v, sizeof v, "Test / blow");
+            } else if (id == ROW_MIC) snprintf(v, sizeof v, "Test / blow");
+            else snprintf(v, sizeof v, "< %s >", H.opt_value_name(H.ctx, id - ROW_OPT, H.opt_get(H.ctx, id - ROW_OPT)));
             text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
             y += rh + gap;
         }
@@ -778,6 +783,7 @@ static void draw_bottom(void) {
         case ROW_VOL: help = "Left / right to change, or tap the bar"; break;
         case ROW_BRI: help = "Left / right to change, both screens"; break;
         case ROW_MIC: help = "A live meter of the mic, and a blow for games that ask for one"; break;
+        default: help = "Left / right to change: it applies at once, and stays for the next game"; break;
         }
         text(c, &F_REG, help, gx0 + S(4), y + S(6), S(16), C_GREY, gx1 - gx0, 0);
     }
@@ -942,6 +948,10 @@ static void adjust(int d) {                     /* left/right on a Quick setting
     int id = rows[sel_set];
     if (id == ROW_VOL) { int v = vol + d * 5; v = v < 0 ? 0 : v > 100 ? 100 : v; if (v != vol) { vol = v; want(vol, -1); play(SND_MOVE); dirty_bot = 1; } }
     else if (id == ROW_BRI) { int v = bri + d * 5; v = v < 5 ? 5 : v > 100 ? 100 : v; if (v != bri) { bri = v; backlight(bri); bri_changed = 1; play(SND_MOVE); dirty_bot = 1; } }
+    else if (id >= ROW_OPT) {                   /* an emulator option: the next value, round the list */
+        int i = id - ROW_OPT, n = H.opt_values(H.ctx, i);
+        if (n > 1) { int v = (H.opt_get(H.ctx, i) + d + n) % n; H.opt_set(H.ctx, i, v); play(SND_MOVE); dirty_bot = 1; }
+    }
 }
 static void nav(int dx, int dy) {
     int moved = 0;
@@ -988,6 +998,7 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
                 if (id == ROW_VOL) { vol = v; want(vol, -1); } else { bri = v < 5 ? 5 : v; backlight(bri); bri_changed = 1; }
                 play(SND_MOVE); dirty_bot = 1;
             } else if (id == ROW_MIC) activate();
+            else if (id >= ROW_OPT) { sel_set = r; adjust(1); }
             else play(SND_MOVE);
             return;
         }

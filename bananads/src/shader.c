@@ -241,11 +241,14 @@ const char *shader_name(void) {
 /* on the presenter thread; returns 0 if the shader can't be used (the caller stays zero-copy) */
 int shader_init(int fd, const char *name) {
     drm_fd = fd;
+    /* EGL and GL once: a later call (another shader chosen while the game runs) only makes the new program, in the
+     * same context, so the frames' imported images stay valid */
+    static int ready; static const char *dir = "/usr/lib/mali/", *how = "default"; static EGLint maj, min;
+    if (!ready) {
     /* ROCKNIX exports MALI_DEFAULT_DISPLAY=wayland system-wide; sway is stopped while we run, so libmali's default
      * display would fail (and would take a GBM device passed to eglGetDisplay for a wl_display: crash). DraStic
      * itself doesn't use libmali (SDL dummy driver), so this only affects our context. */
     setenv("MALI_DEFAULT_DISPLAY", "gbm", 1);
-    const char *dir = "/usr/lib/mali/";
     void *egl = dlopen("/usr/lib/mali/libEGL.so.1", RTLD_NOW | RTLD_LOCAL), *gl = 0;
     if (egl) gl = dlopen("/usr/lib/mali/libGLESv2.so.2", RTLD_NOW | RTLD_LOCAL);
     else { dir = ""; egl = dlopen("libEGL.so.1", RTLD_NOW | RTLD_LOCAL); gl = dlopen("libGLESv2.so.2", RTLD_NOW | RTLD_LOCAL); }
@@ -268,7 +271,6 @@ int shader_init(int fd, const char *name) {
     G(glGetString) G(glPixelStorei) G(glTexImage2D) G(glTexSubImage2D) G(glGetError) G(glDisable)
 
     /* a display: libmali's default one (GBM, see above), else Mesa's surfaceless platform (needs a render node) */
-    EGLint maj = 0, min = 0; const char *how = "default";
     dpy = eglGetDisplay(0);
     if (!dpy || !eglInitialize(dpy, &maj, &min)) {
         SLOG("[shader] default EGL display: error 0x%x\n", eglGetError());
@@ -290,6 +292,8 @@ int shader_init(int fd, const char *name) {
     /* upload path: DraStic's XRGB8888 is B,G,R,X in memory; BGRA uploads need no swizzle in the shader */
     const char *gx = (const char *)glGetString(0x1F03 /* GL_EXTENSIONS */);
     up_fmt = gx && strstr(gx, "GL_EXT_texture_format_BGRA8888") ? 0x80E1 /* GL_BGRA_EXT */ : 0x1908 /* GL_RGBA */;
+    ready = 1;
+    }
     /* .frag files: DSFLIP_SHADER_DIR, ROCKNIX's DraStic shader folder, then shaders/ beside libdsflip.so (the
      * standalone package's layout) */
     char path[600] = "", dirs[3][512]; size_t n; int nd = 0;

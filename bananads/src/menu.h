@@ -41,6 +41,15 @@ typedef struct {
     void (*sound_play)(void* ctx, int id);
     void (*boost)(void* ctx, int ms);               // the top CPU clock for a while (the governor)
     void (*log)(void* ctx, const char* line);
+    // the emulator's own settings on the Quick settings page, after Volume, Brightness and Microphone (the shader,
+    // edge marking, fog...): how many, each one's label, its values' names and the current one; opt_set applies a new
+    // value at once (and keeps it for the next game). opt_count 0 or unset: none
+    int (*opt_count)(void* ctx);
+    const char* (*opt_label)(void* ctx, int i);
+    int (*opt_values)(void* ctx, int i);
+    const char* (*opt_value_name)(void* ctx, int i, int v);
+    int (*opt_get)(void* ctx, int i);
+    void (*opt_set)(void* ctx, int i, int v);
 } bmenu_host;
 
 void bmenu_init(const bmenu_host* host);  // once, before the first bmenu_run
