@@ -23,6 +23,7 @@
 //   slot 1, F + L loads it.
 // - SIGTERM/SIGINT/SIGHUP quit the same way (the resume state written, then the save): BananaLinux's shutdown waits
 //   5 s for that. SIGSTOP/SIGCONT around sleep only leave a gap: the pacing starts again from the time it wakes.
+#include <cstdarg>
 #include <dirent.h>
 #include <fcntl.h>
 #include <linux/input.h>
@@ -101,6 +102,20 @@ using Lock = std::lock_guard<PiMutex>;
 
 // ---- the display ----------------------------------------------------------------------------------------------
 
+// SuperDrastic's shader pass (shader.c): GL on the presenter thread, dumb buffers in and out
+extern "C" {
+int shader_init(int fd, const char* name);
+int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
+void dsflip_log(const char* fmt, ...) {
+    char b[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(b, sizeof b, fmt, ap);
+    va_end(ap);
+    Log(LogLevel::Info, "%s", b);
+}
+}
+
 struct Buf {
     uint32_t fb = 0, handle = 0, pitch = 0, w = 0, h = 0;
     uint64_t size = 0;
@@ -131,6 +146,11 @@ struct Display {
     int mnext[2] = {0, 0};
     SlotState state[NB] = {};
     std::deque<int> queue;    // frames waiting, oldest first
+    // kms.shader: each frame drawn through a fragment shader (SuperDrastic's) into panel-sized buffers, shown 1:1
+    std::string shader_name;
+    bool shader_tried = false, shader_on = false;
+    Buf sbuf[2][3];
+    int snext = 0;
     int committed = -1, scanout = -1, pending = 0;
     PiMutex mu;
     double period_us = 16666.7;
@@ -513,8 +533,24 @@ struct Display {
         Lock l(mu);
         if (pending || queue.empty()) return;
         int s = queue.front();
+        const Buf* out[2] = {&buf[0][s], &buf[1][s]};
+        if (!shader_name.empty() && !shader_tried) {  // GL is made on this thread, at its first frame
+            shader_tried = true;
+            shader_on = shader_init(fd, shader_name.c_str()) != 0;
+            for (int i = 0; i < 2 && shader_on; i++)
+                for (auto& b : sbuf[i]) shader_on = shader_on && mkbuf(b, W, H);
+            Log(LogLevel::Info, "[kms] shader %s: %s\n", shader_name.c_str(), shader_on ? "on (panel-sized, 1:1)" : "unavailable");
+        }
+        if (shader_on) {
+            for (int i = 0; i < 2; i++) {
+                const Buf& a = buf[i][s];
+                Buf& d = sbuf[i][snext];
+                if (shader_draw(a.handle, a.w, a.h, a.pitch, a.fb, d.handle, d.w, d.h, d.pitch, d.fb, i == 1) == 0) out[i] = &d;
+            }
+            snext = (snext + 1) % 3;  // (one on screen, one committed, one drawn)
+        }
         drmModeAtomicReq* r = drmModeAtomicAlloc();
-        for (int i = 0; i < 2; i++) add_plane(r, p[i], buf[i][s]);
+        for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
         int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
         drmModeAtomicFree(r);
         if (ret) {
@@ -793,6 +829,12 @@ int run_kms(Emu& emu, const Config& cfg) {
     if (!dp.open(top, emu.scale())) {
         dp.close();
         return 1;
+    }
+    // kms.shader: a fragment shader's name (SuperDrastic's: ds-grid, ds-crisp, ds-fsr... from DSFLIP_SHADER_DIR), or
+    // none: the display plane scales the frames (the default)
+    {
+        const std::string sh = cfg.str("kms.shader", "none");
+        if (sh != "none" && sh != "bilinear" && !sh.empty()) dp.shader_name = sh;
     }
     dp.direct = dp.packed() && emu.draw_into(dp.map(0, 1), dp.map(1, 1));  // (each frame is given its own slot)
     Log(LogLevel::Info, "[kms] %s top, %s bottom, %dx%d at %.3f Hz; %dx%d frames %s, scaled by %s\n",
