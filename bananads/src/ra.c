@@ -359,12 +359,23 @@ static void save_token(void) {
     chmod(TOKEN_FILE, 0600);
 }
 
+/* "Logged in": a pop-up as soon as the account is in, with its points (SuperDrastic's logs only; asked for in
+ * BananaOS), before the game's own card */
+static void logged_in_popup(void) {
+    const rc_client_user_t* u = rc_client_get_user_info(rc);
+    char l2[160];
+    if (u && u->score) snprintf(l2, sizeof l2, "Logged in as %s \xc2\xb7 %u points", u->display_name ? u->display_name : user, u->score);
+    else snprintf(l2, sizeof l2, "Logged in as %s", u && u->display_name ? u->display_name : user);
+    popup_push("RetroAchievements", l2, 0, 0x6ad07a, 3000);
+}
+
 static void on_login_password(int result, const char* err, rc_client_t* c, void* u);
 static void on_login_token(int result, const char* err, rc_client_t* c, void* u) {
     (void)c;
     (void)u;
     if (result == RC_OK) {
         ralog("[ra] logged in with the saved token as %s\n", user);
+        logged_in_popup();
         logged_in = 1;
         return;
     }
@@ -383,6 +394,7 @@ static void on_login_password(int result, const char* err, rc_client_t* c, void*
     }
     ralog("[ra] logged in as %s\n", user);
     save_token();
+    logged_in_popup();
     logged_in = 1;
 }
 
