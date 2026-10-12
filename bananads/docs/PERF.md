@@ -415,6 +415,24 @@ On the device, `tools/device/hgprofile.sh` now also A/Bs `render.geom_fast`, `re
 `core.fast_mix`/`core.fast_dma`. The build settings need two builds: `-DBANANADS_CPU=` (generic) and
 `-DBANANADS_LTO=OFF` against the defaults.
 
+Later rounds the same night (all exact, same toggles; qemu-count unless said):
+- **0011 geometry:** one reciprocal per new vertex for its screen X/Y and Z (`umulh` by ceil(2^64/W), exact for
+  W in 2..0xFFFF, else the old divisions): 64-bit divisions per strip quad 6 -> 2 (stock melonDS: 12), per separate
+  triangle 9 -> 3; the pipeline helpers forced inline under LTO; the strip's shared vertices read in place unless
+  the polygon is clipped; no IRQ recompute while IF's GX FIFO bit stays; the vertex path without a stack canary
+  (113 -> 99 instructions per vertex). Tried and dropped: one ring buffer for the GX FIFO and pipe (exact with
+  savestate conversion, but more instructions), clearing GXSTAT's busy bits only after a command (not exact: a
+  mid-run savestate differed while pictures and RAM didn't). Geometry on L5: 59% -> 57% of before 0011.
+- **`render.2d_fast`:** 256-colour text BGs (lane loads), affine BGs 4 pixels per stage (fewer dependent-load
+  stalls; the count barely moves), rotscale sprites clipped to the pixels whose source lands in the sprite
+  (-40 to -63%), OBJ mosaic only over the block span that has it, per-line dirty sets tested once, the register
+  snapshot written straight into the engine, the 3D line copied for a 2D-thread job only when BG0 shows it.
+  membench 2D: 55% of before (thread off); with `render.2d_thread=on` the main thread's 2D cost -22%.
+- **0013 audio/DMA:** the Mix's tail skipped when no output can change; ARM9 DMA of 16- and 32-bit units straight
+  to main RAM, palette, OAM and VRAM (the 0010 page table) with `UnitTimings9` unchanged. sndbench (now with 11 ARM9
+  DMAs a frame to VRAM/palette/OAM) main thread -18%. Only the audio dump catches small mixing errors (a sabotaged
+  pan term passed pictures and RAM): keep it in the checks for SPU work.
+
 Left, by agent: the geometry's FIFO ring buffer (savestates hold both FIFOs) and its vertex copies; rotscale
 sprites and OBJ mosaic, skipping unchanged lines in 2D; the mix's per-sample tail and batched ARM9 DMA for VRAM.
 
