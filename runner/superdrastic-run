@@ -144,7 +144,11 @@ if [ "$v" != ready ]; then
     trap - TERM INT HUP
     [ "${DSFLIP_FALLBACK:-1}" = 0 ] && exit 1
     say "running DraStic without SuperDrastic"
-    plain "$@"
+    # not exec'd: DraStic's SDL turns a TERM into a quit event that DraStic ignores, so a stop (a shutdown, the
+    # frontend ending the game) has to kill it, as above
+    ( cd "$WORKDIR" && exec "$DRASTIC" "$@" ) &
+    P=$!
+    trap stop_game TERM INT HUP
 fi
 wait $P; rc=$?
 cpu_back                       # at once: SuperDrastic's governor may have lowered the limit
