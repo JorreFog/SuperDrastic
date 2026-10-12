@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake g++ clang lld llvm python3 pkg-config \
-            libsdl2-dev libasound2-dev libenet-dev g++-aarch64-linux-gnu qemu-user
+            libsdl2-dev libasound2-dev libenet-dev libdrm-dev g++-aarch64-linux-gnu qemu-user
       - name: PC build
         run: |
           cmake -S bananads -B build-pc -DBANANADS_LAN=ON
