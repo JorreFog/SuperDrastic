@@ -44,6 +44,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -53,6 +54,7 @@
 #include "Platform.h"
 #include "cpugov.h"
 #include "frontend.h"
+#include "menu.h"
 
 using melonDS::Platform::Log;
 using melonDS::Platform::LogLevel;
@@ -125,6 +127,8 @@ struct Display {
     bool direct = false;      // the emulator draws straight into the buffers (hw, rows packed, the Banana 2D engine)
     int k = 1, ox = 0, oy = 0;  // CPU scaling: the whole-number factor and where the picture sits
     Buf buf[2][NB];
+    Buf mbuf[2][2];           // the in-game menu's pictures: panel-sized, two a panel (one drawn while one shows)
+    int mnext[2] = {0, 0};
     SlotState state[NB] = {};
     std::deque<int> queue;    // frames waiting, oldest first
     int committed = -1, scanout = -1, pending = 0;
@@ -193,6 +197,46 @@ struct Display {
     void freebufs() {
         for (auto& pb : buf)
             for (auto& b : pb) freebuf(b);
+        for (auto& pb : mbuf)
+            for (auto& b : pb) freebuf(b);
+    }
+
+    // ---- the in-game menu: its pictures straight onto the panels, then the game's frame back ----
+    bool menu_bufs() {
+        for (auto& pb : mbuf)
+            for (auto& b : pb)
+                if (!b.map && !mkbuf(b, W, H)) return false;
+        return true;
+    }
+    // (blocking commits, with no flip of the game's pending: wait_flips first)
+    bool commit_now(int panel0, int panel1, const Buf* b0, const Buf* b1) {
+        drmModeAtomicReq* r = drmModeAtomicAlloc();
+        if (b0) add_plane(r, p[panel0], *b0);
+        if (b1) add_plane(r, p[panel1], *b1);
+        int ret = drmModeAtomicCommit(fd, r, 0, nullptr);
+        drmModeAtomicFree(r);
+        if (ret) Log(LogLevel::Warn, "[kms] menu commit failed: %s\n", strerror(errno));
+        return ret == 0;
+    }
+    void show_menu(int panel, int k) { commit_now(panel, 0, &mbuf[panel][k], nullptr); }
+    void show_game() {
+        Lock l(mu);
+        if (scanout >= 0) commit_now(0, 1, &buf[0][scanout], &buf[1][scanout]);
+    }
+    // the game's top screen as last shown, at the panel's size (nearest)
+    bool grab_top(uint32_t* dst, int pitch, int w, int h) {
+        Lock l(mu);
+        if (scanout < 0) return false;
+        const Buf& b = buf[0][scanout];
+        const int sw = hw ? fw : W, sh = hw ? fh : H;
+        std::vector<uint32_t> row(sw);
+        for (int y = 0; y < h; y++) {
+            const int sy = y * sh / h;
+            memcpy(row.data(), b.map + (size_t)sy * b.pitch, sw * 4);  // (one read of the slow buffer a row)
+            uint32_t* d = (uint32_t*)((uint8_t*)dst + (size_t)y * pitch);
+            for (int x = 0; x < w; x++) d[x] = row[x * sw / w] & 0xFFFFFF;
+        }
+        return true;
     }
 
     void add_plane(drmModeAtomicReq* r, Panel& q, const Buf& b) {
@@ -580,6 +624,154 @@ static std::vector<InputDev> open_inputs(const std::string& touch_name) {
     return devs;
 }
 
+// ---- the in-game menu's host (menu.h): the panels, the input, the emulator, while the game is paused -----------
+
+struct MenuHost {
+    Display* dp = nullptr;
+    Emu* emu = nullptr;
+    std::vector<InputDev>* devs = nullptr;
+    Alsa* snd = nullptr;
+    std::string rom;
+    std::deque<bmenu_ev> q;
+    bool quit = false;
+};
+
+static int menu_key(int code) {
+    switch (code) {
+        case BTN_EAST: case KEY_ENTER: return BM_A;
+        case BTN_SOUTH: case KEY_BACKSPACE: return BM_B;
+        case BTN_WEST: case KEY_Y: return BM_Y;
+        case BTN_TL: case KEY_PAGEUP: return BM_L;
+        case BTN_TR: case KEY_PAGEDOWN: return BM_R;
+        case BTN_START: case KEY_S: return BM_START;
+        case BTN_DPAD_UP: case KEY_UP: return BM_UP;
+        case BTN_DPAD_DOWN: case KEY_DOWN: return BM_DOWN;
+        case BTN_DPAD_LEFT: case KEY_LEFT: return BM_LEFT;
+        case BTN_DPAD_RIGHT: case KEY_RIGHT: return BM_RIGHT;
+        case BTN_THUMBL: case KEY_F2: case KEY_ESC: return BM_MENU;
+        default: return -1;
+    }
+}
+static bool is_menu_button(int code) { return code == BTN_THUMBL || code == KEY_F2; }
+
+static int mh_canvas(void* c, int panel, uint32_t** px, int* pitch, int* w, int* h) {
+    Display* dp = ((MenuHost*)c)->dp;
+    if (panel < 0 || panel > 1 || !dp->menu_bufs()) return -1;
+    const int k = dp->mnext[panel];
+    *px = (uint32_t*)dp->mbuf[panel][k].map;
+    *pitch = (int)dp->mbuf[panel][k].pitch;
+    *w = dp->W;
+    *h = dp->H;
+    return k;
+}
+static void mh_show(void* c, int panel, int k) {
+    Display* dp = ((MenuHost*)c)->dp;
+    dp->show_menu(panel, k);
+    dp->mnext[panel] = k ^ 1;  // the next picture goes into the other one
+}
+static int mh_grab_top(void* c, uint32_t* dst, int pitch, int w, int h) { return ((MenuHost*)c)->dp->grab_top(dst, pitch, w, h); }
+static int mh_poll(void* c, bmenu_ev* out) {
+    MenuHost* m = (MenuHost*)c;
+    if (m->q.empty()) {
+        if (g_quit) m->q.push_back({BM_EV_KEY, BM_START, 1, 0, 0});  // shutting down: the menu closes, the game saves
+        for (auto& d : *m->devs) {
+            input_event e[64];
+            ssize_t n;
+            while ((n = read(d.fd, e, sizeof e)) > 0)
+                for (int j = 0; j < n / (int)sizeof(input_event); j++) {
+                    const input_event& x = e[j];
+                    if (d.touch) {
+                        if (x.type == EV_ABS && (x.code == ABS_MT_POSITION_X || x.code == ABS_X)) d.x = x.value;
+                        else if (x.type == EV_ABS && (x.code == ABS_MT_POSITION_Y || x.code == ABS_Y)) d.y = x.value;
+                        else if (x.type == EV_ABS && x.code == ABS_MT_TRACKING_ID && x.value < 0) d.down = false;
+                        else if (x.type == EV_KEY && (x.code == BTN_TOUCH || (d.pointer && x.code == BTN_LEFT)))
+                            d.down = x.value != 0;
+                        else if (x.type == EV_SYN && x.code == SYN_REPORT) {
+                            if (d.down && !d.was) {
+                                const Display* dp = m->dp;
+                                int px = d.maxx > d.minx ? (int)((double)(d.x - d.minx) * dp->W / (d.maxx - d.minx + 1)) : d.x;
+                                int py = d.maxy > d.miny ? (int)((double)(d.y - d.miny) * dp->H / (d.maxy - d.miny + 1)) : d.y;
+                                m->q.push_back({BM_EV_TOUCH, 0, 1, px, py});
+                            }
+                            d.was = d.down;
+                        }
+                        continue;
+                    }
+                    if (x.type == EV_ABS && (x.code == ABS_HAT0X || x.code == ABS_HAT0Y)) {
+                        const int neg = x.code == ABS_HAT0X ? BM_LEFT : BM_UP, pos = x.code == ABS_HAT0X ? BM_RIGHT : BM_DOWN;
+                        if (x.value) m->q.push_back({BM_EV_KEY, x.value < 0 ? neg : pos, 1, 0, 0});
+                        else {
+                            m->q.push_back({BM_EV_KEY, neg, 0, 0, 0});
+                            m->q.push_back({BM_EV_KEY, pos, 0, 0, 0});
+                        }
+                        continue;
+                    }
+                    if (x.type != EV_KEY || x.value == 2) continue;
+                    const int k = menu_key(x.code);
+                    if (k >= 0) m->q.push_back({BM_EV_KEY, k, x.value ? 1 : 0, 0, 0});
+                }
+        }
+    }
+    if (m->q.empty()) return 0;
+    *out = m->q.front();
+    m->q.pop_front();
+    return 1;
+}
+static int mh_battery(void*, int* charging) {
+    int pct = -1;
+    if (FILE* f = fopen("/sys/class/power_supply/battery/capacity", "r")) {
+        if (fscanf(f, "%d", &pct) != 1) pct = -1;
+        fclose(f);
+    }
+    char st[32] = "";
+    if (FILE* f = fopen("/sys/class/power_supply/battery/status", "r")) {
+        if (!fgets(st, sizeof st, f)) st[0] = 0;
+        fclose(f);
+    }
+    *charging = !strncmp(st, "Charging", 8) || !strncmp(st, "Full", 4);
+    return pct;
+}
+static int mh_save(void* c, int slot) {
+    cpugov_boost(3000);
+    return ((MenuHost*)c)->emu->save_state(slot) ? 0 : -1;
+}
+static int mh_load(void* c, int slot) {
+    cpugov_boost(3000);
+    return ((MenuHost*)c)->emu->load_state(slot) ? 0 : -1;
+}
+static void mh_state_file(void* c, int slot, char* out, int n) {
+    snprintf(out, n, "%s", ((MenuHost*)c)->emu->state_path(slot).c_str());
+}
+static void mh_quit(void* c) { ((MenuHost*)c)->quit = true; }
+static void mh_restart(void* c) {
+    cpugov_boost(2000);
+    ((MenuHost*)c)->emu->restart();
+}
+static void mh_blow(void* c, int ms) { ((MenuHost*)c)->emu->mic().blow(ms); }
+static int mh_mic_meter(void* c, float* level, float* floor_, float* bar) {
+    const Mic::Meter m = ((MenuHost*)c)->emu->mic().meter();
+    *level = m.level;
+    *floor_ = m.floor;
+    *bar = m.bar > m.floor ? m.bar - m.floor : 0;
+    return m.level > 0 || m.floor > 0 ? 1 : 0;
+}
+static void mh_sound_load(void* c, int id, const int16_t* pcm, int frames, int rate, int ch) {
+#ifdef BANANADS_ALSA
+    alsa_ui_load(((MenuHost*)c)->snd, id, pcm, frames, rate, ch);
+#else
+    (void)c, (void)id, (void)pcm, (void)frames, (void)rate, (void)ch;
+#endif
+}
+static void mh_sound_play(void* c, int id) {
+#ifdef BANANADS_ALSA
+    alsa_ui_play(((MenuHost*)c)->snd, id);
+#else
+    (void)c, (void)id;
+#endif
+}
+static void mh_boost(void*, int ms) { cpugov_boost(ms); }
+static void mh_log(void*, const char* line) { Log(LogLevel::Info, "%s", line); }
+
 // ---- the frontend ---------------------------------------------------------------------------------------------
 
 int run_kms(Emu& emu, const Config& cfg) {
@@ -635,12 +827,65 @@ int run_kms(Emu& emu, const Config& cfg) {
     std::atomic<int> in_touch{-1};  // y << 16 | x, -1 released
     std::atomic<int> in_save{0}, in_load{0};
     std::atomic<bool> run{true};
+    // the in-game menu (kms.menu, on): L3 pauses the game at its next frame and opens it on both panels
+    const bool menu_on = cfg.flag("kms.menu", true);
+    std::mutex pm;
+    std::condition_variable pcv;
+    std::atomic<bool> pause_req{false};
+    bool paused = false;
+    MenuHost mh;
+    mh.dp = &dp;
+    mh.emu = &emu;
+    mh.devs = &devs;
+#ifdef BANANADS_ALSA
+    mh.snd = snd;
+#endif
+    {
+        char rom[4096] = "";
+        if (FILE* f = fopen("/proc/self/cmdline", "rb")) {
+            size_t n = fread(rom, 1, sizeof rom - 1, f);
+            fclose(f);
+            rom[n] = 0;
+            for (size_t i = 0; i < n; i += strlen(rom + i) + 1)
+                if (i && rom[i] && rom[i] != '-') mh.rom = rom + i;  // (the last argument: the game)
+        }
+        bmenu_host h{};
+        h.ctx = &mh;
+        h.rom = mh.rom.c_str();
+        h.resume_on = cfg.flag("resume.on_quit", true);
+        h.canvas = mh_canvas;
+        h.show = mh_show;
+        h.grab_top = mh_grab_top;
+        h.poll = mh_poll;
+        h.battery = mh_battery;
+        h.save = mh_save;
+        h.load = mh_load;
+        h.state_file = mh_state_file;
+        h.quit = mh_quit;
+        h.restart = mh_restart;
+        h.blow = mh_blow;
+        h.mic_meter = mh_mic_meter;
+        h.sound_load = mh_sound_load;
+        h.sound_play = mh_sound_play;
+        h.boost = mh_boost;
+        h.log = mh_log;
+        bmenu_init(&h);
+        bmenu_session_start();
+    }
 
     std::thread emu_thread([&] {
         pthread_setname_np(pthread_self(), "bds-emu");
         Pacer pace(feed);
         int touched = -1;
         while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
+            if (pause_req.load(std::memory_order_acquire)) {  // the menu: at a frame's end, until it closes
+                std::unique_lock<std::mutex> l(pm);
+                paused = true;
+                pcv.notify_all();
+                pcv.wait(l, [&] { return !pause_req.load() || !run.load(); });
+                paused = false;
+                continue;
+            }
             if (int s = in_save.exchange(0)) {
                 cpugov_boost(3000);
                 emu.save_state(s);
@@ -664,6 +909,7 @@ int run_kms(Emu& emu, const Config& cfg) {
             pace.wait();  // (and the governor's signal: the frames it fell behind)
         }
         run = false;
+        pcv.notify_all();
         wake();  // the presenter
     });
 
@@ -682,7 +928,41 @@ int run_kms(Emu& emu, const Config& cfg) {
     ev.version = 3;
     ev.page_flip_handler2 = on_flip;  // one event per CRTC: a frame is on screen once both panels' have come
     uint32_t keys = 0;
-    bool hot = false;
+    bool hot = false, menu_down = false;
+    // the menu: the game paused at its next frame, the flips in flight done, then the menu until it closes; the
+    // game's frame back on both panels, no button left held for the game, the game running again
+    const long menu_test = cfg.num("kms.menu_test", 0);  // (tests: the menu opens 3 s in, on page menu_test - 1)
+    const long long t_start = now_us();
+    bool menu_tested = false;
+    auto open_menu = [&](int start) {
+        {
+            std::unique_lock<std::mutex> l(pm);
+            pause_req = true;
+            if (!pcv.wait_for(l, std::chrono::seconds(2), [&] { return paused || !run.load(); }) || !run.load()) {
+                pause_req = false;
+                return;
+            }
+        }
+        for (int i = 0; i < 10 && dp.pending; i++) {
+            pollfd p{dp.fd, POLLIN, 0};
+            if (poll(&p, 1, 50) > 0) drmHandleEvent(dp.fd, &ev);
+        }
+        mh.quit = false;
+        mh.q.clear();
+        bmenu_run(start);
+        dp.show_game();
+        keys = 0;
+        hot = false;
+        menu_down = false;
+        in_keys = 0;
+        in_touch = -1;
+        if (mh.quit) g_quit = true;
+        {
+            std::lock_guard<std::mutex> l(pm);
+            pause_req = false;
+        }
+        pcv.notify_all();
+    };
     std::vector<pollfd> pfd;
     long shown_mark = 0, made_mark = 0, drop_mark = 0, rep_mark = 0;
     long long since = now_us();
@@ -737,6 +1017,14 @@ int run_kms(Emu& emu, const Config& cfg) {
                     else if (x.type == EV_ABS && x.code == ABS_HAT0Y)
                         keys = (keys & ~(KeyUp | KeyDown)) | (x.value < 0 ? KeyUp : x.value > 0 ? KeyDown : 0);
                     if (x.type != EV_KEY || x.value == 2) continue;
+                    if (menu_on && is_menu_button(x.code)) {  // (opens on release: nothing of it reaches the game)
+                        if (x.value) menu_down = true;
+                        else if (menu_down) {
+                            menu_down = false;
+                            open_menu(0);
+                        }
+                        continue;
+                    }
                     if (is_hotkey(x.code)) {
                         hot = x.value != 0;
                         continue;
@@ -754,6 +1042,10 @@ int run_kms(Emu& emu, const Config& cfg) {
             }
         }
         in_keys = hot ? 0 : keys;  // while F is held the game sees no buttons
+        if (menu_test > 0 && !menu_tested && now_us() - t_start > 3000000) {
+            menu_tested = true;
+            open_menu((int)menu_test - 1);
+        }
         if (g_quit) break;
 
         // kms.stats: every this many frames shown, the refresh rate of new frames, the frames emulated per second,

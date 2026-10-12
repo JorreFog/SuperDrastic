@@ -126,6 +126,28 @@ void Emu::setup_local() {
 #endif
 }
 
+// the DS's clock: now, or rtc.fixed
+void Emu::set_clock() {
+    time_t t = time(nullptr);
+    tm lt;
+    localtime_r(&t, &lt);
+    // rtc.fixed ("YYYY-MM-DD HH:MM:SS"): the DS clock starts there instead of now, so that two runs of a game that
+    // reads the clock (to seed its random numbers, say) go the same way; for tests
+    int fy, fmo, fd, fh, fmi, fs;
+    if (sscanf(cfg_.str("rtc.fixed", "").c_str(), "%d-%d-%d%*c%d:%d:%d", &fy, &fmo, &fd, &fh, &fmi, &fs) == 6)
+        nds_->RTC.SetDateTime(fy, fmo, fd, fh, fmi, fs);
+    else
+        nds_->RTC.SetDateTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec);
+}
+
+void Emu::restart() {
+    nds_->Reset();
+    nds_->SetupDirectBoot(game_ + ".nds");
+    set_clock();
+    nds_->Start();
+    Log(LogLevel::Info, "[emu] %s restarted\n", game_.c_str());
+}
+
 bool Emu::load_rom(const std::string& path) {
     std::vector<uint8_t> rom;
     if (!read_file(path, rom) || rom.size() < 0x200) {
@@ -324,16 +346,7 @@ bool Emu::load_rom(const std::string& path) {
     if (banana2d && cfg_.flag("render.2d_thread", scale_ == 2)) banana_->SetThreaded2D(true);
 #endif
 
-    time_t t = time(nullptr);
-    tm lt;
-    localtime_r(&t, &lt);
-    // rtc.fixed ("YYYY-MM-DD HH:MM:SS"): the DS clock starts there instead of now, so that two runs of a game that
-    // reads the clock (to seed its random numbers, say) go the same way; for tests
-    int fy, fmo, fd, fh, fmi, fs;
-    if (sscanf(cfg_.str("rtc.fixed", "").c_str(), "%d-%d-%d%*c%d:%d:%d", &fy, &fmo, &fd, &fh, &fmi, &fs) == 6)
-        nds_->RTC.SetDateTime(fy, fmo, fd, fh, fmi, fs);
-    else
-        nds_->RTC.SetDateTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec);
+    set_clock();
 
     if (scale != scale_)
         Log(LogLevel::Warn, "[emu] render.scale=2 needs render.renderer=gengis and render.2d=banana: rendering at 1x\n");

@@ -25,6 +25,9 @@ int run_kms(Emu& emu, const Config& cfg);
 // Sound out and the microphone in through ALSA, on their own threads (audio.out_device, mic.device).
 struct Alsa;
 Alsa* alsa_start(Emu& emu, const Config& cfg);
+// the in-game menu's sounds: a WAV's samples kept as sound id (0-3), played over the game's output
+void alsa_ui_load(Alsa* a, int id, const int16_t* pcm, int frames, int rate, int channels);
+void alsa_ui_play(Alsa* a, int id);
 void alsa_stop(Alsa* a);
 #endif
 

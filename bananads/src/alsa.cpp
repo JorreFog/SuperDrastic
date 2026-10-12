@@ -3,6 +3,7 @@
 // and the two PCMs are opened one after the other, never at once: opening both together crashed PipeWire's
 // ALSA plugin on the RG DS (ROCKNIXDS #26).
 #include <alsa/asoundlib.h>
+#include <algorithm>
 #include <pthread.h>
 #include <sched.h>
 
@@ -28,6 +29,11 @@ struct Alsa {
     std::string out_dev, in_dev;
     unsigned latency_us;
     bool rt;
+    // the in-game menu's sounds (alsa_ui_*), 48 kHz stereo, mixed over the game's output while one plays
+    std::mutex ui_mu;
+    std::vector<int16_t> ui[4];
+    int ui_id = -1;
+    size_t ui_pos = 0;
 };
 
 static snd_pcm_t* open_pcm(const std::string& dev, snd_pcm_stream_t dir, unsigned ch, unsigned rate, unsigned lat) {
@@ -72,6 +78,15 @@ static void out_thread(Alsa* a) {
         for (int i = got; i < chunk; i++) {
             buf[i * 2] = last[0];
             buf[i * 2 + 1] = last[1];
+        }
+        {
+            std::lock_guard<std::mutex> l(a->ui_mu);
+            if (a->ui_id >= 0) {
+                const std::vector<int16_t>& s = a->ui[a->ui_id];
+                for (int i = 0; i < chunk * 2 && a->ui_pos < s.size(); i++, a->ui_pos++)
+                    buf[i] = (int16_t)std::clamp((int)buf[i] + s[a->ui_pos], -32768, 32767);
+                if (a->ui_pos >= s.size()) a->ui_id = -1;
+            }
         }
         snd_pcm_sframes_t w = snd_pcm_writei(pcm, buf.data(), chunk);
         if (w < 0) snd_pcm_recover(pcm, (int)w, 1);
@@ -129,6 +144,32 @@ void alsa_stop(Alsa* a) {
     if (a->out.joinable()) a->out.join();
     if (a->in.joinable()) a->in.join();  // readi returns within one block (~23 ms)
     delete a;
+}
+
+void alsa_ui_load(Alsa* a, int id, const int16_t* pcm, int frames, int rate, int ch) {
+    if (!a || id < 0 || id >= 4 || frames <= 0 || rate <= 0 || ch < 1) return;
+    // to the output's 48 kHz stereo, linearly
+    const size_t n = (size_t)((double)frames * 48000 / rate);
+    std::vector<int16_t> out(n * 2);
+    for (size_t i = 0; i < n; i++) {
+        const double src = (double)i * rate / 48000;
+        const int j = (int)src;
+        const double f = src - j;
+        for (int c = 0; c < 2; c++) {
+            const int cc = ch > 1 ? c : 0;
+            const int s0 = pcm[(size_t)std::min(j, frames - 1) * ch + cc], s1 = pcm[(size_t)std::min(j + 1, frames - 1) * ch + cc];
+            out[i * 2 + c] = (int16_t)(s0 + (s1 - s0) * f);
+        }
+    }
+    std::lock_guard<std::mutex> l(a->ui_mu);
+    a->ui[id] = std::move(out);
+}
+
+void alsa_ui_play(Alsa* a, int id) {
+    if (!a || id < 0 || id >= 4) return;
+    std::lock_guard<std::mutex> l(a->ui_mu);
+    a->ui_id = a->ui[id].empty() ? -1 : id;
+    a->ui_pos = 0;
 }
 
 }  // namespace bananads

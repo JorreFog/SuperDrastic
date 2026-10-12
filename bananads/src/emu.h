@@ -44,6 +44,7 @@ public:
 
     bool save_state(int slot);  // slot 0 = the quit/resume state
     bool load_state(int slot);
+    void restart();  // the game from its start (the in-game menu's Restart game): a reset, booted straight into it
     std::string state_path(int slot) const;
 
     Mic& mic() { return mic_; }
@@ -67,6 +68,7 @@ private:
     void setup_local();
     void flush_save(bool now);
     void setup_slice();
+    void set_clock();
 
     Config cfg_;
     std::unique_ptr<melonDS::NDS> nds_;

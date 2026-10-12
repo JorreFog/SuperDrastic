@@ -1,0 +1,54 @@
+// menu.h: the in-game menu (menu.c: SuperDrastic's, in BananaOS's colours) and what the frontend gives it. The
+// frontend pauses the game and calls bmenu_run, which draws both panels and reads the input itself until the menu
+// closes; everything it needs from the emulator and the handheld goes through bmenu_host.
+#pragma once
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+enum { BM_A, BM_B, BM_Y, BM_L, BM_R, BM_START, BM_UP, BM_DOWN, BM_LEFT, BM_RIGHT, BM_MENU };
+enum { BM_EV_KEY = 1, BM_EV_TOUCH = 2 };
+typedef struct {
+    int kind;      // BM_EV_KEY: key (BM_*) and down; BM_EV_TOUCH: a touch going down at (x, y), bottom panel pixels
+    int key, down;
+    int x, y;
+} bmenu_ev;
+
+// the menu's own slots 1-8 are the emulator's savestate slots 1-8; slot 9 keeps the game from before a load (undo)
+enum { BM_UNDO_SLOT = 9 };
+
+typedef struct {
+    void* ctx;
+    const char* rom;  // the game's file
+    int resume_on;    // quitting writes the resume state ("keeps your spot")
+    // a buffer to draw the panel's next picture in (panel 0 top, 1 bottom): its index, or -1
+    int (*canvas)(void* ctx, int panel, uint32_t** px, int* pitch, int* w, int* h);
+    void (*show)(void* ctx, int panel, int k);  // buffer k onto the panel
+    // the game's top screen as it was when the menu opened, at the panel's size; 0: none
+    int (*grab_top)(void* ctx, uint32_t* dst, int pitch, int w, int h);
+    int (*poll)(void* ctx, bmenu_ev* ev);           // the next input event; 0: none waiting
+    int (*battery)(void* ctx, int* charging);       // percent, or -1
+    int (*save)(void* ctx, int slot);               // 0: done
+    int (*load)(void* ctx, int slot);               // 0: done
+    void (*state_file)(void* ctx, int slot, char* out, int n);  // the slot's file (+ ".pic": 256x384 XRGB8888)
+    void (*quit)(void* ctx);                        // after the menu closes: the resume state, then the menu
+    void (*restart)(void* ctx);                     // the game from its start
+    void (*blow)(void* ctx, int ms);                // the game hears a blow on the mic
+    int (*mic_meter)(void* ctx, float* level, float* floor_, float* bar);  // -1 no mic, 0 starting, 1 listening
+    void (*sound_load)(void* ctx, int id, const int16_t* pcm, int frames, int rate, int channels);
+    void (*sound_play)(void* ctx, int id);
+    void (*boost)(void* ctx, int ms);               // the top CPU clock for a while (the governor)
+    void (*log)(void* ctx, const char* line);
+} bmenu_host;
+
+void bmenu_init(const bmenu_host* host);  // once, before the first bmenu_run
+// open the menu and run it until it closes: start 0 the main page, 1 Save, 2 Load, 3 Quick settings, 4 the quit
+// question; returns 0 if it couldn't open (no fonts, no panel buffers)
+int bmenu_run(int start);
+void bmenu_session_start(void);  // the game started: "this session" counts from here
+
+#ifdef __cplusplus
+}
+#endif
