@@ -39,6 +39,8 @@
 #include <xf86drmMode.h>
 
 #include <algorithm>
+#include <fstream>
+#include <glob.h>
 #include <atomic>
 #include <chrono>
 #include <climits>
@@ -454,6 +456,7 @@ struct Display {
     }
 
     void close() {
+        gpu_floor(false);
         if (fd < 0) return;
         freebufs();
         for (auto& q : p)
@@ -530,37 +533,77 @@ struct Display {
     // ---- the presenter's side ----
     // with no flip pending, the oldest waiting frame goes to both panels in one commit
     void commit_next() {
-        Lock l(mu);
-        if (pending || queue.empty()) return;
-        int s = queue.front();
+        int s;
+        {
+            Lock l(mu);
+            if (pending || queue.empty()) return;
+            // the oldest frame, taken off the queue so the emulator can't recycle it while the shader draws it (outside
+            // the lock: the emulator's thread never waits for the GPU)
+            s = queue.front();
+            queue.pop_front();
+            state[s] = COMMITTED;
+        }
         const Buf* out[2] = {&buf[0][s], &buf[1][s]};
         if (!shader_name.empty() && !shader_tried) {  // GL is made on this thread, at its first frame
             shader_tried = true;
             shader_on = shader_init(fd, shader_name.c_str()) != 0;
             for (int i = 0; i < 2 && shader_on; i++)
                 for (auto& b : sbuf[i]) shader_on = shader_on && mkbuf(b, W, H);
+            if (shader_on) gpu_floor(true);
             Log(LogLevel::Info, "[kms] shader %s: %s\n", shader_name.c_str(), shader_on ? "on (panel-sized, 1:1)" : "unavailable");
         }
         if (shader_on) {
+            const long long t0 = now_us();
             for (int i = 0; i < 2; i++) {
                 const Buf& a = buf[i][s];
                 Buf& d = sbuf[i][snext];
                 if (shader_draw(a.handle, a.w, a.h, a.pitch, a.fb, d.handle, d.w, d.h, d.pitch, d.fb, i == 1) == 0) out[i] = &d;
             }
+            const long long dt = now_us() - t0;
+            shader_us += dt;
+            shader_n++;
+            if (dt > shader_max_us) shader_max_us = dt;
             snext = (snext + 1) % 3;  // (one on screen, one committed, one drawn)
         }
+        Lock l(mu);
         drmModeAtomicReq* r = drmModeAtomicAlloc();
         for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
         int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
         drmModeAtomicFree(r);
         if (ret) {
             if (errno != EBUSY) Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
-            return;  // (tried again at the next wake-up)
+            state[s] = QUEUED;  // back at the head of the queue: tried again at the next wake-up
+            queue.push_front(s);
+            return;
         }
-        queue.pop_front();
-        state[s] = COMMITTED;
         committed = s;
         pending = 2;
+    }
+    // with a shader, the GPU's lowest clock raised (its on-demand governor ramps too slowly for a pass every
+    // refresh: frames missed their vblank), and put back at the end
+    std::string gpu_dir;
+    std::string gpu_min_was;
+    long long shader_us = 0, shader_max_us = 0;
+    long shader_n = 0;
+    void gpu_floor(bool on) {
+        if (on) {
+            glob_t g;
+            if (glob("/sys/class/devfreq/*gpu*", 0, nullptr, &g) == 0 && g.gl_pathc) gpu_dir = g.gl_pathv[0];
+            globfree(&g);
+            if (gpu_dir.empty()) return;
+            std::ifstream f(gpu_dir + "/min_freq");
+            std::getline(f, gpu_min_was);
+            std::ifstream a(gpu_dir + "/available_frequencies");
+            std::vector<long> fr;
+            for (long v; a >> v;) fr.push_back(v);
+            std::sort(fr.begin(), fr.end());
+            long want = 0;  // 600 MHz, or the highest under it
+            for (long v : fr) if (v <= 600000000) want = v;
+            if (want) std::ofstream(gpu_dir + "/min_freq") << want;
+            Log(LogLevel::Info, "[kms] GPU at least %ld MHz while the shader runs\n", want / 1000000);
+        } else if (!gpu_dir.empty() && !gpu_min_was.empty()) {
+            std::ofstream(gpu_dir + "/min_freq") << gpu_min_was;
+        }
     }
     void flipped(long long t) {
         Lock l(mu);
@@ -1110,6 +1153,11 @@ int run_kms(Emu& emu, const Config& cfg) {
             Log(LogLevel::Info, "[kms] %ld frames shown in %.2f s (%.2f/s), %.2f emulated/s: %ld refreshes without a new frame, %ld dropped\n",
                 s - shown_mark, sec, (s - shown_mark) / sec, (dp.made - made_mark) / sec, rep - rep_mark,
                 dp.dropped - drop_mark);
+            if (dp.shader_n)
+                Log(LogLevel::Info, "[kms] shader: %.1f ms a frame on average, %.1f at most\n",
+                    dp.shader_us / 1000.0 / dp.shader_n, dp.shader_max_us / 1000.0);
+            dp.shader_us = dp.shader_max_us = 0;
+            dp.shader_n = 0;
             shown_mark = s;
             made_mark = dp.made;
             drop_mark = dp.dropped;
