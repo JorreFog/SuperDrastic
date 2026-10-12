@@ -22,3 +22,11 @@ shaders are read from ROCKNIX's `libdrastouch.so` at run time when present, and 
 The libretro shaders above (github.com/libretro/glsl-shaders) are converted to this project's shader interface by
 `tools/shaders/conv.py` (their fragment stage, libretro's names mapped onto u_texture, u_texture_size, u_output_size
 and v_texcoord, parameters at their defaults); each file keeps the original's notice at its top.
+
+Shaders converted from DraStic's post-FX format by `tools/shaders/conv-dfx.py` and included at the project owner's
+request; their files carry no licence notice:
+
+| What | Where | From |
+|---|---|---|
+| DraStic's lcd1x, lcd1x + nds_color, Quilez, sharp_bilinear (+ nds_color), zfast_lcd (+ nds_color) | `shaders/drastic-*.frag` | Android DraStic (Exophase), as bundled on Anbernic's RG DS |
+| Dot_MiZai, Dot_MiZai-rgds+, retro-tiles-rgds+ (Hyllian's retro-tiles, ported by MiZai) | `shaders/nnddss-*.frag` | Anbernic's NNDDSS 1.0.2 update for the RG DS Plus (win.anbernic.com) |
