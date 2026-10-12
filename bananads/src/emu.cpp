@@ -349,7 +349,8 @@ bool Emu::load_rom(const std::string& path) {
 // other's writes up to a slice late. auto (or any core.slice_idle) is adaptive: core.slice_idle cycles while
 // neither CPU has touched the IPC registers or WRAMCNT for core.slice_hold cycles, core.slice (64 for auto) near them.
 void Emu::setup_slice() {
-    const std::string s = cfg_.str("core.slice", "64");
+    // (auto by default at render.scale=2: HeartGold at 1104 MHz 60.2 -> 64.2 fps; 64, melonDS's, at 1x)
+    const std::string s = cfg_.str("core.slice", cfg_.num("render.scale", 1) == 2 ? "auto" : "64");
     const bool adaptive = s == "auto";
     const long slice = adaptive ? 64 : cfg_.num("core.slice", 64);
     long idle = cfg_.num("core.slice_idle", adaptive ? 512 : slice);
