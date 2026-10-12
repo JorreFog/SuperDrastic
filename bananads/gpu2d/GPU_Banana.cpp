@@ -60,6 +60,12 @@ void BananaRenderer::SetHires(QuarterFn fn, void* ctx)
 
 bool BananaRenderer::GetFramebuffers(void** top, void** bottom)
 {
+    if (Front[0])
+    {
+        *top = Front[0];
+        *bottom = Front[1];
+        return true;
+    }
     if (!Quarter)
         return SoftRenderer::GetFramebuffers(top, bottom);
     int frontbuf = BackBuffer ^ 1;
@@ -68,8 +74,17 @@ bool BananaRenderer::GetFramebuffers(void** top, void** bottom)
     return true;
 }
 
+void BananaRenderer::SetOutput(u32* top, u32* bottom)
+{
+    Out[0] = top;
+    Out[1] = bottom;
+    if (!top)
+        Front[0] = Front[1] = nullptr;
+}
+
 u32* BananaRenderer::LineDst(int screen, u32 line)
 {
+    if (Out[screen]) return Out[screen] + line * (Quarter ? 1024 : 256);
     if (Quarter) return &HiFB[BackBuffer][screen][line * 1024];
     return &Framebuffer[BackBuffer][screen][line * 256];
 }
@@ -778,7 +793,9 @@ void BananaRenderer::VBlank()
 
 void BananaRenderer::SwapBuffers()
 {
-    Drain2D();  // the frame's lines are all in the back buffer
+    Drain2D();  // the frame's lines are all in the back buffer (or SetOutput's)
+    Front[0] = Out[0];
+    Front[1] = Out[1];
     SoftRenderer::SwapBuffers();
 }
 

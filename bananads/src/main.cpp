@@ -2,7 +2,8 @@
 //   --config <file>     settings file (default: $BANANADS_DATA/bananads.conf, BANANADS_DATA defaults to
 //                       /storage/.config/bananads when that exists, else the current directory)
 //   --set key=value     one setting, over the file and the environment's BANANADS_* (repeatable)
-//   --frontend <name>   sdl (a desktop window), headless (benchmark/tests); kms is milestone D in docs/PLAN.md
+//   --frontend <name>   kms (the handheld's panels: the default without a display server), sdl (a desktop window),
+//                       headless (benchmark/tests)
 //   --version
 #include <sys/stat.h>
 
@@ -27,7 +28,7 @@ using melonDS::Platform::Log;
 using melonDS::Platform::LogLevel;
 
 static void usage() {
-    fprintf(stderr, "usage: bananads [--config file] [--set key=value]... [--frontend sdl|headless] game.nds\n");
+    fprintf(stderr, "usage: bananads [--config file] [--set key=value]... [--frontend kms|sdl|headless] game.nds\n");
 }
 
 int main(int argc, char** argv) {
@@ -74,13 +75,16 @@ int main(int argc, char** argv) {
     if (cfg.flag("resume.on_start", true) && emu.load_state(0))
         Log(LogLevel::Info, "[resume] resumed where the last session quit\n");
 
-    std::string fe = cfg.str("frontend",
-#ifdef BANANADS_SDL
-                             "sdl"
-#else
-                             "headless"
+    // the default: a window where there is a display server, the panels where there isn't (a handheld's console)
+    const bool display = getenv("WAYLAND_DISPLAY") || getenv("DISPLAY");
+    std::string def = "headless";
+#ifdef BANANADS_KMS
+    def = "kms";
 #endif
-    );
+#ifdef BANANADS_SDL
+    if (display || def == "headless") def = "sdl";
+#endif
+    std::string fe = cfg.str("frontend", def);
     int rc;
     if (fe == "headless") {
         rc = run_headless(emu, cfg);
@@ -90,8 +94,13 @@ int main(int argc, char** argv) {
         rc = run_sdl(emu, cfg);
     }
 #endif
+#ifdef BANANADS_KMS
+    else if (fe == "kms") {
+        rc = run_kms(emu, cfg);
+    }
+#endif
     else {
-        Log(LogLevel::Error, "frontend \"%s\" isn't in this build (see docs/PLAN.md)\n", fe.c_str());
+        Log(LogLevel::Error, "frontend \"%s\" isn't in this build\n", fe.c_str());
         rc = 2;
     }
     if (g_log) fclose(g_log);

@@ -7,9 +7,9 @@ the same as ROCKNIXDS's `docs/handoff-local.md`). Everything else can be done an
 |---|---|---|
 | A | Core and platform layer: melonDS pinned, Platform.h, saves, savestates, the mic gate, WFC DNS, local wireless, SDL and headless frontends, host tests, an aarch64 build | **done in 0.1.0** (PC + qemu; not on a device) |
 | B | **Device:** the speed of melonDS on the handhelds | next |
-| C | **Device:** sound and the mic through ALSA, in a game | code written (`alsa.cpp`), needs D to run |
-| D | The KMS frontend: SuperDrastic's display path, evdev touch and pad | to do |
-| E | SuperDrastic's features: in-game menu, shaders, toasts, RetroAchievements, CPU governor, volume card, quit hotkeys | to do |
+| C | **Device:** sound and the mic through ALSA, in a game | code written (`alsa.cpp`), runs with D; on a device: to do |
+| D | The KMS frontend: SuperDrastic's display path, evdev touch and pad | **done** (`frontend_kms.cpp`; BananaLinux in QEMU, not on the panels yet) |
+| E | SuperDrastic's features: in-game menu, shaders, toasts, RetroAchievements, CPU governor, volume card, quit hotkeys | the CPU governor (`cpugov.cpp`) and the quit/save/load hotkeys are in; the rest to do |
 | F | Hi-res 3D (2x, 3x) | decided after B |
 | G | **Device:** Wi-Fi with real games, online and between two handhelds | to do |
 | H | ROCKNIXDS: BananaDS as a core next to DraStic in the menu | to do |

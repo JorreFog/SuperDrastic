@@ -86,6 +86,16 @@ int run_headless(Emu& emu, const Config& cfg) {
     // window and frame at the end (how steady the speed is, not only its average)
     const long window = cfg.num("headless.window", 0);
     auto tw = t0, tf = t0;
+    // headless.direct: every frame drawn straight into a ring of buffers of the frontend's, as frontend=kms does into
+    // the scanout buffers (the pictures must be the same as without)
+    std::vector<std::vector<uint32_t>> ring;
+    if (cfg.flag("headless.direct", false)) {
+        ring.assign(8, std::vector<uint32_t>((size_t)256 * 192 * emu.scale() * emu.scale(), 0xDEADBEEF));
+        if (!emu.draw_into(ring[0].data(), ring[1].data())) {
+            Log(LogLevel::Error, "[headless] headless.direct: this renderer can't (render.2d=banana can)\n");
+            return 1;
+        }
+    }
     double worst_w = 1e9, worst_f = 0;
     long worst_at = 0;
     for (; done < frames && !emu.stopped(); done++) {
@@ -96,6 +106,7 @@ int run_headless(Emu& emu, const Config& cfg) {
                 if (done >= p.at && done < p.at + p.len) keys |= p.keys;
             emu.set_keys(keys);
         }
+        if (!ring.empty()) emu.draw_into(ring[done % 4 * 2].data(), ring[done % 4 * 2 + 1].data());
         emu.run_frame();
         for (int n; (n = emu.audio(snd.data(), 4096)) > 0;)  // drain it, as a sound device would
             if (af) fwrite(snd.data(), sizeof(int16_t) * 2, n, af);
@@ -117,6 +128,7 @@ int run_headless(Emu& emu, const Config& cfg) {
             dump_ppm(dir + "/frame" + std::to_string(done + 1) + ".ppm", emu.top(), emu.bottom(), emu.scale());
     }
     if (af) fclose(af);
+    if (!ring.empty()) emu.draw_into(nullptr, nullptr);  // (the ring goes with this function)
     double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     Log(LogLevel::Info, "[headless] %ld frames in %.2f s: %.1f fps (%.0f%% of a DS)\n", done, s, done / s,
         done / s / 59.8261 * 100);

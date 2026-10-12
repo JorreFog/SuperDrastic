@@ -5,6 +5,23 @@ SuperDrastic repo, `bananads/`), SuperDrastic's `src/dsflip.c`, and measurements
 (kernel 7.0.2, sway). BananaLinux itself hasn't booted on hardware yet, so nothing here was measured *on*
 BananaLinux.
 
+## Done (2026-10-12)
+
+| Item | Where | State |
+|---|---|---|
+| A1 KMS frontend | `src/frontend_kms.cpp` (`frontend=kms`, the default without a display server) | Both panels in one atomic commit per frame, the plane scaling (the CPU where it can't: QEMU), frames queued one refresh (`kms.queue`), `kms.stats`; evdev pad and touch, never grabbed; F + Start / R / L. The Banana 2D engine draws each line straight into the dumb buffers (`Emu::draw_into`; the copy, 1.5 MB a frame at 2x, only where the plane can't scale or with melonDS's 2D renderer). The presenter at `SCHED_FIFO` (`kms.rt`) with priority-inheriting locks. Run through BananaLinux's menu in QEMU |
+| A2 governor | `src/cpugov.cpp` | SuperDrastic's steps, bans, memory and savestate boost, but decided on the frames the emulator falls behind the DS's schedule at the clock it's at (not a linear prediction from the load, which held HeartGold at 1800 MHz): up a step on any, down a step after 2 s without. `tests/cpugov_test.cpp` runs it against a simulated HeartGold (settles at 1104 MHz, never on 816) |
+| A3 launcher contract | BananaLinux `run-bananads`; `src/frontend_kms.cpp` | The launcher passes the places and the menu's choices as `BANANADS_<KEY>` (BananaDS already read those); SIGTERM/SIGINT/SIGHUP write the resume state and the save and quit |
+| A4 sound | `src/alsa.cpp` | Already 48 kHz, the SPU's own rate: no resampling in `plughw` |
+| B1 package | BananaLinux `buildroot/package/bananads` | CMake from this repository, melonDS a second download, the patches applied by Buildroot (`git apply` inside the CI's checkout would skip every file), the external toolchain's `gcc-ar` for LTO; in both defconfigs |
+| B2 clock profile | not needed | A2 is in; `run-nds` keeps `superdrastic` (`performance`, which the governor lowers) |
+| B3 idle latency | `power.cpu_latency_us` | Off by default until the battery cost is measured |
+| B4 kernel options | BananaLinux `linux-banana.fragment` | `DEBUG_SPINLOCK`, `INIT_ON_ALLOC/FREE_DEFAULT_ON`, `HARDENED_USERCOPY`, `STACKPROTECTOR`, `DEBUG_DEVRES`, `DEBUG_BUGVERBOSE`, `RANDOMIZE_BASE` off |
+| B5, B6 | | not started (hardware experiments) |
+
+Still to do on the device: the measurements below on BananaLinux itself (the KMS presenter's `kms.stats`, the
+governor's log).
+
 ## Where BananaDS stands
 
 - HeartGold's overworld, 2x (`render.scale=2`), CPU pinned at 1104 MHz, headless: **64-66 fps**. Each 60-frame

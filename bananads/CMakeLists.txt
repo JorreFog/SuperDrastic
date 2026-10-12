@@ -15,6 +15,9 @@ endif()
 option(BANANADS_SDL "SDL2 frontend (a desktop window, for development)" ON)
 option(BANANADS_ALSA "ALSA audio out and microphone in (the handheld path)" ON)
 option(BANANADS_LAN "Local wireless between two handhelds over the network (needs libenet)" OFF)
+# The handheld frontend (frontend=kms: both screens on the panels through DRM/KMS, evdev input; needs libdrm): auto
+# builds it when libdrm is there, ON requires it (BananaLinux's package), OFF leaves it out.
+set(BANANADS_KMS "auto" CACHE STRING "The KMS frontend: auto, ON or OFF")
 set(BANANADS_MELONDS_DIR "" CACHE PATH "A melonDS checkout to build against instead of the pinned one")
 set(BANANADS_JIT "melonds" CACHE STRING "The CPU recompiler on aarch64: melonds (melonDS's) or banana (BananaJIT, docs/JIT.md)")
 
@@ -230,6 +233,19 @@ if(BANANADS_SDL)
     target_link_libraries(bananads PRIVATE PkgConfig::SDL2)
     target_compile_definitions(bananads PRIVATE BANANADS_SDL=1)
 endif()
+if(BANANADS_KMS STREQUAL "auto")
+    pkg_check_modules(DRM QUIET IMPORTED_TARGET libdrm)
+    if(NOT DRM_FOUND)
+        message(STATUS "BananaDS: no libdrm, so no KMS frontend (BANANADS_KMS=ON requires it)")
+    endif()
+elseif(BANANADS_KMS)
+    pkg_check_modules(DRM REQUIRED IMPORTED_TARGET libdrm)
+endif()
+if(DRM_FOUND AND BANANADS_KMS)
+    target_sources(bananads PRIVATE src/frontend_kms.cpp src/cpugov.cpp)
+    target_link_libraries(bananads PRIVATE PkgConfig::DRM)
+    target_compile_definitions(bananads PRIVATE BANANADS_KMS=1)
+endif()
 if(BANANADS_ALSA)
     pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
     target_sources(bananads PRIVATE src/alsa.cpp)
@@ -243,6 +259,12 @@ add_executable(bananads-tests tests/tests.cpp src/config.cpp src/emu.cpp src/pla
 target_include_directories(bananads-tests PRIVATE src)
 target_link_libraries(bananads-tests PRIVATE core bananads-net pthread)
 add_test(NAME host COMMAND bananads-tests)
+
+# The CPU governor against a simulated game on a made-up cpufreq folder (tests/cpugov_test.cpp, ~25 s).
+add_executable(bananads-cpugov-test tests/cpugov_test.cpp src/cpugov.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
+target_include_directories(bananads-cpugov-test PRIVATE src)
+target_link_libraries(bananads-cpugov-test PRIVATE core bananads-net pthread)
+add_test(NAME cpugov COMMAND bananads-cpugov-test ${CMAKE_CURRENT_BINARY_DIR}/cpugov-test HeartGold.nds)
 
 # BananaJIT's encoder against LLVM's assembler (runs on any host: it only encodes).
 add_executable(bananads-jit-encodings tests/jit_encodings.cpp)

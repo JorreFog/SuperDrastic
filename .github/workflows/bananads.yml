@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake g++ clang lld llvm python3 pkg-config \
-            libsdl2-dev libasound2-dev libenet-dev g++-aarch64-linux-gnu qemu-user
+            libsdl2-dev libasound2-dev libenet-dev libdrm-dev g++-aarch64-linux-gnu qemu-user
       - name: PC build
         run: |
           cmake -S bananads -B build-pc -DBANANADS_LAN=ON
@@ -34,6 +34,19 @@ jobs:
             2>&1 | tee smoke/log.txt
           grep -q '600 frames' smoke/log.txt
           test -s smoke/frame600.ppm
+      - name: Frames drawn straight into the frontend's buffers (frontend=kms's path) are the same as copied ones
+        run: |
+          python3 bananads/tests/ds2dtest/build.py
+          for rom in stressrom/out/dsstress-L5.nds bananads/tests/ds2dtest/ds2dtest.nds; do
+            for d in off on; do
+              rm -rf direct-$d; mkdir -p direct-$d
+              ./build-pc/bananads --frontend headless --set headless.frames=300 --set headless.dump_dir=direct-$d \
+                --set headless.dump_every=50 --set headless.direct=$d --set headless.reload_at=120 \
+                --set save.dir=direct-$d --set wifi.dns=off --set resume.on_start=off $rom > direct-$d/log.txt 2>&1
+              grep -q '300 frames' direct-$d/log.txt
+            done
+            for f in direct-off/*.ppm; do cmp $f direct-on/${f#direct-off/}; done
+          done
       - name: Differential harness (the interpreter against itself must match)
         run: ./build-pc/bananads-difftest --frames 120 --b jit=off stressrom/out/dsstress-L3.nds
       - name: aarch64 build
