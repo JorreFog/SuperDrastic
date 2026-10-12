@@ -173,11 +173,11 @@ int resume_poll(void *ev) {
     return 1;
 }
 
-/* Exit combos: Start + Select, or Menu + Start, held for EXIT_HOLD_MS quit the game the way the exit hotkey does
+/* Exit combos: Start + Select, or Menu + Start (either control set's menu button), held for EXIT_HOLD_MS quit the game the way the exit hotkey does
  * (with a resume save when that is on). ROCKNIX's DraStic had them through gptokeyb, which this session doesn't
  * run. DSFLIP_EXIT_COMBO=0: off. */
 #define EXIT_HOLD_MS 500
-static int btn_start = -1, btn_select = -1, btn_menu = -1, exit_combo = 1;
+static int btn_start = -1, btn_select = -1, btn_menu = -1, btn_menu2 = -1, exit_combo = 1;   /* menu2: the other set's (F on BananaOS) */
 static uint64_t held_btns;                             /* joystick buttons down, by number */
 static long long combo_since;                          /* when the combo was complete (0: it isn't) */
 static void on_usr1(int sig);
@@ -191,7 +191,7 @@ void resume_saw_event(const void *ev) {
     if (down && (b == btn_save || b == btn_load)) cpugov_boost(3000);
     if (b < 64) { if (down) held_btns |= 1ULL << b; else held_btns &= ~(1ULL << b); }
     #define HELD(x) ((x) >= 0 && (held_btns >> (x) & 1))
-    int combo = exit_combo && HELD(btn_start) && (HELD(btn_select) || HELD(btn_menu));
+    int combo = exit_combo && HELD(btn_start) && (HELD(btn_select) || HELD(btn_menu) || HELD(btn_menu2));
     #undef HELD
     if (!combo) combo_since = 0;
     else if (!combo_since) combo_since = now_ms();
@@ -309,8 +309,9 @@ void resume_start(void) {
     btn_press = btn_release = -1;
     btn_save = control_button("SAVE_STATE"); btn_load = control_button("LOAD_STATE");   /* (also for the CPU boost) */
     btn_start = control_button_any("START"); btn_select = control_button_any("SELECT"); btn_menu = control_button_any("MENU");
+    btn_menu2 = control_button_in("b", "MENU"); if (btn_menu2 == btn_menu) btn_menu2 = -1;
     { const char *x = getenv("DSFLIP_EXIT_COMBO"); exit_combo = !(x && *x == '0'); }
-    if (exit_combo) dsflip_log("[resume] exit combos: start %d + select %d, menu %d + start\n", btn_start, btn_select, btn_menu);
+    if (exit_combo) dsflip_log("[resume] exit combos: start %d + select %d, menu %d or %d + start\n", btn_start, btn_select, btn_menu, btn_menu2);
     const char *p = getenv("DSFLIP_RESUME_FILE");
     if (!p || !*p) return;
     snprintf(resume_path, sizeof resume_path, "%s", p);
