@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -81,8 +82,14 @@ int run_headless(Emu& emu, const Config& cfg) {
     FILE* af = adump.empty() ? nullptr : fopen(adump.c_str(), "wb");
     if (!adump.empty() && !af) Log(LogLevel::Error, "[headless] headless.audio_dump: can't open %s\n", adump.c_str());
     auto tm = t0;
+    // headless.window: from headless.measure_from on, the fps of every this many frames too, and the slowest
+    // window and frame at the end (how steady the speed is, not only its average)
+    const long window = cfg.num("headless.window", 0);
+    auto tw = t0, tf = t0;
+    double worst_w = 1e9, worst_f = 0;
+    long worst_at = 0;
     for (; done < frames && !emu.stopped(); done++) {
-        if (done == from) tm = std::chrono::steady_clock::now();
+        if (done == from) tm = tw = tf = std::chrono::steady_clock::now();
         if (!input.empty()) {
             uint32_t keys = 0;
             for (const Press& p : input)
@@ -94,6 +101,18 @@ int run_headless(Emu& emu, const Config& cfg) {
             if (af) fwrite(snd.data(), sizeof(int16_t) * 2, n, af);
         if (done + 1 == reload && !(emu.save_state(3) && emu.load_state(3)))
             Log(LogLevel::Error, "[headless] headless.reload_at: the state didn't save and load back\n");
+        if (window > 0 && done >= from) {
+            const auto now = std::chrono::steady_clock::now();
+            const double f = std::chrono::duration<double>(now - tf).count();
+            tf = now;
+            if (f > worst_f) { worst_f = f; worst_at = done + 1; }
+            if ((done + 1 - from) % window == 0) {
+                const double w = window / std::chrono::duration<double>(now - tw).count();
+                tw = now;
+                worst_w = std::min(worst_w, w);
+                Log(LogLevel::Info, "[headless] frames %ld-%ld: %.1f fps\n", done + 1 - window, done + 1, w);
+            }
+        }
         if (!dir.empty() && every > 0 && (done + 1) % every == 0)
             dump_ppm(dir + "/frame" + std::to_string(done + 1) + ".ppm", emu.top(), emu.bottom(), emu.scale());
     }
@@ -101,6 +120,9 @@ int run_headless(Emu& emu, const Config& cfg) {
     double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     Log(LogLevel::Info, "[headless] %ld frames in %.2f s: %.1f fps (%.0f%% of a DS)\n", done, s, done / s,
         done / s / 59.8261 * 100);
+    if (window > 0 && done > from)
+        Log(LogLevel::Info, "[headless] slowest window %.1f fps, slowest frame %.1f ms (frame %ld)\n", worst_w,
+            worst_f * 1000, worst_at);
     if (from > 0 && done > from) {
         double sm = std::chrono::duration<double>(std::chrono::steady_clock::now() - tm).count();
         Log(LogLevel::Info, "[headless] frames %ld-%ld: %.1f fps (%.0f%% of a DS)\n", from, done, (done - from) / sm,

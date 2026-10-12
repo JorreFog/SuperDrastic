@@ -61,6 +61,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `headless.reload_at` | none | after this frame, save the state to slot 3 and load it straight back (a test of the savestate path) |
 | `headless.audio_dump` | none | write the raw audio the SPU hands the frontend (`SPU::ReadOutput`: stereo s16 at the output rate, 48000 Hz) to this file, so two builds' audio compares byte for byte with `cmp` |
 | `headless.measure_from` | `0` | also report the fps from this frame on (a game's scene, after loading) |
+| `headless.window` | `0` | from `headless.measure_from` on, log the fps of every this many frames, then the slowest window and the slowest frame: how steady the speed is, not only its average |
 | `headless.input` | none | scripted presses: `<frame>:<keys>[:<frames held>]`, comma-separated, keys joined by `+` (`a b select start right left up down r l x y`), held 6 frames by default: `600:start,900:a:10` |
 | `log.file` | none | a copy of the log (stderr always gets it) |
 | `log.level` | `1` | 0 debug, 1 info, 2 warnings, 3 errors |
