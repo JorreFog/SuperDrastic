@@ -1457,20 +1457,28 @@ void BananaRenderer2D::PrepareSprites(Banana2DRegs& regs)
 
     if (GPU2D.Num == 0)
     {
-        auto objDirty = GPU.VRAMDirty_AOBJ.DeriveState(GPU.VRAMMap_AOBJ, GPU);
-        if (!Banana2DFast || AnyBits(objDirty))   // (most lines: nothing to make coherent or copy)
+        // (render.2d_fast: nothing remapped or written since the last line, most lines, is nothing to do)
+        if (!Banana2DFast || !GPU.VRAMDirty_AOBJ.Unchanged(GPU))
         {
-            GPU.MakeVRAMFlat_AOBJCoherent(objDirty);
-            if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_AOBJ);
+            auto objDirty = GPU.VRAMDirty_AOBJ.DeriveState(GPU.VRAMMap_AOBJ, GPU);
+            if (!Banana2DFast || AnyBits(objDirty))
+            {
+                GPU.MakeVRAMFlat_AOBJCoherent(objDirty);
+                if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_AOBJ);
+            }
         }
     }
     else
     {
-        auto objDirty = GPU.VRAMDirty_BOBJ.DeriveState(GPU.VRAMMap_BOBJ, GPU);
-        if (!Banana2DFast || AnyBits(objDirty))   // (most lines: nothing to make coherent or copy)
+        // (render.2d_fast: nothing remapped or written since the last line, most lines, is nothing to do)
+        if (!Banana2DFast || !GPU.VRAMDirty_BOBJ.Unchanged(GPU))
         {
-            GPU.MakeVRAMFlat_BOBJCoherent(objDirty);
-            if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_BOBJ);
+            auto objDirty = GPU.VRAMDirty_BOBJ.DeriveState(GPU.VRAMMap_BOBJ, GPU);
+            if (!Banana2DFast || AnyBits(objDirty))
+            {
+                GPU.MakeVRAMFlat_BOBJCoherent(objDirty);
+                if (CopyTo) CopyDirty(objDirty, OBJVRAM, GPU.VRAMFlat_BOBJ);
+            }
         }
     }
 
@@ -2611,48 +2619,72 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
 
     if (GPU2D.Num == 0)
     {
-        auto bgDirty = GPU.VRAMDirty_ABG.DeriveState(GPU.VRAMMap_ABG, GPU);
-        auto bgExtPalDirty = GPU.VRAMDirty_ABGExtPal.DeriveState(GPU.VRAMMap_ABGExtPal, GPU);
-        auto objExtPalDirty = GPU.VRAMDirty_AOBJExtPal.DeriveState(&GPU.VRAMMap_AOBJExtPal, GPU);
-        // (render.2d_fast: an empty dirty set, most lines, has nothing to make coherent or copy)
+        // (render.2d_fast: a set with nothing remapped or written since the last line, most lines, is skipped
+        // without deriving it (VRAMTrackingSet::Unchanged, melonDS patch 0012), and an empty derived set has nothing
+        // to make coherent or copy. Deriving one set never changes another's state except through the dirty bits
+        // it clears, and the sets are still derived in the same order, so this is exact.)
         const bool all = !Banana2DFast;
-        if (all || AnyBits(bgDirty))
+        if (all || !GPU.VRAMDirty_ABG.Unchanged(GPU))
         {
-            GPU.MakeVRAMFlat_ABGCoherent(bgDirty);
-            if (CopyTo) CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_ABG);
+            auto bgDirty = GPU.VRAMDirty_ABG.DeriveState(GPU.VRAMMap_ABG, GPU);
+            if (all || AnyBits(bgDirty))
+            {
+                GPU.MakeVRAMFlat_ABGCoherent(bgDirty);
+                if (CopyTo) CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_ABG);
+            }
         }
-        if (all || AnyBits(bgExtPalDirty))
+        if (all || !GPU.VRAMDirty_ABGExtPal.Unchanged(GPU))
         {
-            regs.BGExtChanged |= GPU.MakeVRAMFlat_ABGExtPalCoherent(bgExtPalDirty);
-            if (CopyTo) CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_ABGExtPal);
+            auto bgExtPalDirty = GPU.VRAMDirty_ABGExtPal.DeriveState(GPU.VRAMMap_ABGExtPal, GPU);
+            if (all || AnyBits(bgExtPalDirty))
+            {
+                regs.BGExtChanged |= GPU.MakeVRAMFlat_ABGExtPalCoherent(bgExtPalDirty);
+                if (CopyTo) CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_ABGExtPal);
+            }
         }
-        if (all || AnyBits(objExtPalDirty))
+        if (all || !GPU.VRAMDirty_AOBJExtPal.Unchanged(GPU))
         {
-            regs.OBJExtChanged |= GPU.MakeVRAMFlat_AOBJExtPalCoherent(objExtPalDirty);
-            if (CopyTo) CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_AOBJExtPal);
+            auto objExtPalDirty = GPU.VRAMDirty_AOBJExtPal.DeriveState(&GPU.VRAMMap_AOBJExtPal, GPU);
+            if (all || AnyBits(objExtPalDirty))
+            {
+                regs.OBJExtChanged |= GPU.MakeVRAMFlat_AOBJExtPalCoherent(objExtPalDirty);
+                if (CopyTo) CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_AOBJExtPal);
+            }
         }
     }
     else
     {
-        auto bgDirty = GPU.VRAMDirty_BBG.DeriveState(GPU.VRAMMap_BBG, GPU);
-        auto bgExtPalDirty = GPU.VRAMDirty_BBGExtPal.DeriveState(GPU.VRAMMap_BBGExtPal, GPU);
-        auto objExtPalDirty = GPU.VRAMDirty_BOBJExtPal.DeriveState(&GPU.VRAMMap_BOBJExtPal, GPU);
-        // (render.2d_fast: an empty dirty set, most lines, has nothing to make coherent or copy)
+        // (render.2d_fast: a set with nothing remapped or written since the last line, most lines, is skipped
+        // without deriving it (VRAMTrackingSet::Unchanged, melonDS patch 0012), and an empty derived set has nothing
+        // to make coherent or copy. Deriving one set never changes another's state except through the dirty bits
+        // it clears, and the sets are still derived in the same order, so this is exact.)
         const bool all = !Banana2DFast;
-        if (all || AnyBits(bgDirty))
+        if (all || !GPU.VRAMDirty_BBG.Unchanged(GPU))
         {
-            GPU.MakeVRAMFlat_BBGCoherent(bgDirty);
-            if (CopyTo) CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_BBG);
+            auto bgDirty = GPU.VRAMDirty_BBG.DeriveState(GPU.VRAMMap_BBG, GPU);
+            if (all || AnyBits(bgDirty))
+            {
+                GPU.MakeVRAMFlat_BBGCoherent(bgDirty);
+                if (CopyTo) CopyDirty(bgDirty, BGVRAM, GPU.VRAMFlat_BBG);
+            }
         }
-        if (all || AnyBits(bgExtPalDirty))
+        if (all || !GPU.VRAMDirty_BBGExtPal.Unchanged(GPU))
         {
-            regs.BGExtChanged |= GPU.MakeVRAMFlat_BBGExtPalCoherent(bgExtPalDirty);
-            if (CopyTo) CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_BBGExtPal);
+            auto bgExtPalDirty = GPU.VRAMDirty_BBGExtPal.DeriveState(GPU.VRAMMap_BBGExtPal, GPU);
+            if (all || AnyBits(bgExtPalDirty))
+            {
+                regs.BGExtChanged |= GPU.MakeVRAMFlat_BBGExtPalCoherent(bgExtPalDirty);
+                if (CopyTo) CopyDirty(bgExtPalDirty, BGExtMem, GPU.VRAMFlat_BBGExtPal);
+            }
         }
-        if (all || AnyBits(objExtPalDirty))
+        if (all || !GPU.VRAMDirty_BOBJExtPal.Unchanged(GPU))
         {
-            regs.OBJExtChanged |= GPU.MakeVRAMFlat_BOBJExtPalCoherent(objExtPalDirty);
-            if (CopyTo) CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_BOBJExtPal);
+            auto objExtPalDirty = GPU.VRAMDirty_BOBJExtPal.DeriveState(&GPU.VRAMMap_BOBJExtPal, GPU);
+            if (all || AnyBits(objExtPalDirty))
+            {
+                regs.OBJExtChanged |= GPU.MakeVRAMFlat_BOBJExtPalCoherent(objExtPalDirty);
+                if (CopyTo) CopyDirty(objExtPalDirty, OBJExtMem, GPU.VRAMFlat_BOBJExtPal);
+            }
         }
     }
 

@@ -1,0 +1,94 @@
+From 92790017c87d45dd712f755780734aac1f4983d8 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Mon, 12 Oct 2026 00:49:55 +0000
+Subject: [PATCH] GPU: VRAMTrackingSet::Unchanged, DeriveState's early return
+ as a test of its own
+
+Patch 0010 made VRAMTrackingSet::DeriveState return an empty set at once when nothing was remapped since its
+last call (VRAMMapGen) and the banks mapped there have no dirty bit. A caller still paid for building and
+returning the 128-byte empty set and for scanning it. Unchanged() is that same test, exposed: when it holds,
+DeriveState would return nothing and clear nothing, so a caller can skip the call and the work on its result
+(the BananaDS 2D engine does, six times per scanline). DeriveState itself now uses it; nothing else changes.
+---
+ src/GPU.cpp | 39 ++++++++++++++++++++++++++-------------
+ src/GPU.h   |  3 +++
+ 2 files changed, 29 insertions(+), 13 deletions(-)
+
+diff --git a/src/GPU.cpp b/src/GPU.cpp
+index 991bfad..935ba47 100644
+--- a/src/GPU.cpp
++++ b/src/GPU.cpp
+@@ -1399,23 +1399,30 @@ void GPU::SetVCount(u16 val, u16 mask) noexcept
+     VCountOverride = true;
+ }
+ 
++// nothing remapped since the last DeriveState and no dirty bit in the banks mapped here: DeriveState's walk would
++// return nothing and clear nothing
+ template <u32 Size, u32 MappingGranularity>
+-NonStupidBitField<Size/VRAMDirtyGranularity> VRAMTrackingSet<Size, MappingGranularity>::DeriveState(const u32* currentMappings, GPU& gpu)
++bool VRAMTrackingSet<Size, MappingGranularity>::Unchanged(const GPU& gpu) const
+ {
+-    // nothing remapped since the last call and no dirty bit in the banks mapped here: the walk below would
+-    // return nothing and clear nothing
+-    if ((MemFastParts & memfast_VRAMTrack) && LastMapGen == gpu.VRAMMapGen)
++    if (!(MemFastParts & memfast_VRAMTrack) || LastMapGen != gpu.VRAMMapGen)
++        return false;
++    for (u32 banks = LastBanks; banks != 0; banks &= banks - 1)
+     {
+-        bool clean = true;
+-        for (u32 banks = LastBanks; banks != 0 && clean; banks &= banks - 1)
+-        {
+-            const NonStupidBitField<128*1024/VRAMDirtyGranularity>& dirty = gpu.VRAMDirty[__builtin_ctz(banks)];
+-            for (u32 w = 0; w < sizeof(dirty.Data) / sizeof(dirty.Data[0]); w++)
+-                clean &= dirty.Data[w] == 0;
+-        }
+-        if (clean)
+-            return NonStupidBitField<Size/VRAMDirtyGranularity>();
++        const NonStupidBitField<128*1024/VRAMDirtyGranularity>& dirty = gpu.VRAMDirty[__builtin_ctz(banks)];
++        u64 any = 0;
++        for (u32 w = 0; w < sizeof(dirty.Data) / sizeof(dirty.Data[0]); w++)
++            any |= dirty.Data[w];
++        if (any)
++            return false;
+     }
++    return true;
++}
++
++template <u32 Size, u32 MappingGranularity>
++NonStupidBitField<Size/VRAMDirtyGranularity> VRAMTrackingSet<Size, MappingGranularity>::DeriveState(const u32* currentMappings, GPU& gpu)
++{
++    if (Unchanged(gpu))
++        return NonStupidBitField<Size/VRAMDirtyGranularity>();
+ 
+     NonStupidBitField<Size/VRAMDirtyGranularity> result;
+     u16 banksToBeZeroed = 0;
+@@ -1487,6 +1494,12 @@ template NonStupidBitField<512*1024/VRAMDirtyGranularity> VRAMTrackingSet<512*10
+ template NonStupidBitField<128*1024/VRAMDirtyGranularity> VRAMTrackingSet<128*1024, 16*1024>::DeriveState(const u32*, GPU& gpu);
+ template NonStupidBitField<256*1024/VRAMDirtyGranularity> VRAMTrackingSet<256*1024, 16*1024>::DeriveState(const u32*, GPU& gpu);
+ template NonStupidBitField<512*1024/VRAMDirtyGranularity> VRAMTrackingSet<512*1024, 16*1024>::DeriveState(const u32*, GPU& gpu);
++template bool VRAMTrackingSet<32*1024, 8*1024>::Unchanged(const GPU&) const;
++template bool VRAMTrackingSet<8*1024, 8*1024>::Unchanged(const GPU&) const;
++template bool VRAMTrackingSet<512*1024, 128*1024>::Unchanged(const GPU&) const;
++template bool VRAMTrackingSet<128*1024, 16*1024>::Unchanged(const GPU&) const;
++template bool VRAMTrackingSet<256*1024, 16*1024>::Unchanged(const GPU&) const;
++template bool VRAMTrackingSet<512*1024, 16*1024>::Unchanged(const GPU&) const;
+ 
+ 
+ 
+diff --git a/src/GPU.h b/src/GPU.h
+index 97e711b..4db36ff 100644
+--- a/src/GPU.h
++++ b/src/GPU.h
+@@ -56,6 +56,9 @@ struct VRAMTrackingSet
+         LastMapGen = ~0ULL;
+     }
+     NonStupidBitField<Size/VRAMDirtyGranularity> DeriveState(const u32* currentMappings, GPU& gpu);
++    // (BananaDS) true when DeriveState would return an empty set and change nothing (its memfast_VRAMTrack
++    // shortcut), so a caller can skip the call and the work on its empty result
++    bool Unchanged(const GPU& gpu) const;
+ };
+ 
+ class Renderer;
+-- 
+2.43.0
+
