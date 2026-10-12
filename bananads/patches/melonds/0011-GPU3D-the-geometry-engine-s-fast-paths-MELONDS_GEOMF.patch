@@ -1,4 +1,4 @@
-From 1639f6c0f24cec6ec9fd45116d26972750773cf3 Mon Sep 17 00:00:00 2001
+From c0b6e71eed471d8a1f5bd36f59d9f158ca089a2a Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Sun, 11 Oct 2026 22:23:54 +0000
 Subject: [PATCH] GPU3D: the geometry engine's fast paths (MELONDS_GEOMFAST)
@@ -1270,7 +1270,7 @@ index 3272a34..45bd50c 100644
      if (!RenderingEnabled && addr >= 0x04000320 && addr < 0x04000400) return;
      if (!GeometryEnabled  && addr >= 0x04000400 && addr < 0x04000700) return;
 diff --git a/src/GPU3D.h b/src/GPU3D.h
-index 73eff2f..9247c6a 100644
+index 73eff2f..e86f964 100644
 --- a/src/GPU3D.h
 +++ b/src/GPU3D.h
 @@ -133,6 +133,54 @@ private:
@@ -1294,7 +1294,7 @@ index 73eff2f..9247c6a 100644
 +    void CheckFIFODMAFast() noexcept;
 +    void CheckFIFODMAPlain() noexcept;
 +    void CheckFIFOIRQFast() noexcept;
-+    template<bool Fast> void AddCyclesT(s32 num) noexcept
++    template<bool Fast> [[gnu::always_inline]] void AddCyclesT(s32 num) noexcept
 +    {
 +        if constexpr (!Fast) { AddCycles(num); return; }
 +        // AddCycles, inline
@@ -1333,7 +1333,7 @@ index 73eff2f..9247c6a 100644
      CmdFIFOEntry CmdFIFORead() noexcept;
      void FinishWork(s32 cycles) noexcept;
 -    void VertexPipelineSubmitCmd() noexcept
-+    template<bool Fast = false> void VertexPipelineSubmitCmd() noexcept
++    template<bool Fast = false> [[gnu::always_inline]] void VertexPipelineSubmitCmd() noexcept
      {
          // vertex commands 0x24, 0x25, 0x26, 0x27, 0x28
          if (!(VertexSlotsFree & 0x1)) NextVertexSlot();
@@ -1343,7 +1343,7 @@ index 73eff2f..9247c6a 100644
      }
  
 -    void VertexPipelineCmdDelayed6() noexcept
-+    template<bool Fast = false> void VertexPipelineCmdDelayed6() noexcept
++    template<bool Fast = false> [[gnu::always_inline]] void VertexPipelineCmdDelayed6() noexcept
      {
          // commands 0x20, 0x30, 0x31, 0x72 that can run 6 cycles after a vertex
 -        if (VertexPipeline > 2) AddCycles((VertexPipeline - 2) + 1);
@@ -1354,7 +1354,7 @@ index 73eff2f..9247c6a 100644
      }
  
 -    void VertexPipelineCmdDelayed8() noexcept
-+    template<bool Fast = false> void VertexPipelineCmdDelayed8() noexcept
++    template<bool Fast = false> [[gnu::always_inline]] void VertexPipelineCmdDelayed8() noexcept
      {
          // commands 0x29, 0x2A, 0x2B, 0x33, 0x34, 0x41, 0x60, 0x71 that can run 8 cycles after a vertex
 -        if (VertexPipeline > 0) AddCycles(VertexPipeline + 1);
@@ -1365,7 +1365,7 @@ index 73eff2f..9247c6a 100644
      }
  
 -    void VertexPipelineCmdDelayed4() noexcept
-+    template<bool Fast = false> void VertexPipelineCmdDelayed4() noexcept
++    template<bool Fast = false> [[gnu::always_inline]] void VertexPipelineCmdDelayed4() noexcept
      {
          // all other commands can run 4 cycles after a vertex
          // no need to do much here since that is the minimum
