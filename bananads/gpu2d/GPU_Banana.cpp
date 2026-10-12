@@ -334,7 +334,8 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
     if (line < 192)
     {
         line3d = Rend3D->GetLine(line);
-        if (GPU.GPU2D_A.DispCnt & (1<<3))
+        // (only read when BG0 is the 3D layer and enabled; render.2d_fast skips the 1 KB copy otherwise)
+        if ((GPU.GPU2D_A.DispCnt & (1<<3)) && (!Banana2DFast || (GPU.GPU2D_A.LayerEnable & 1)))
             memcpy(job.Line3D, line3d, sizeof(job.Line3D));
 
         static_cast<BananaRenderer2D&>(*Rend2D_A).PrepareScanline(job.Regs[0]);

@@ -1423,6 +1423,12 @@ void BananaRenderer2D::RebuildSpriteTable()
 
 void BananaRenderer2D::DrawSprites(u32 line)
 {
+    if (Banana2DFast)
+    {
+        PrepareSprites(R);
+        DrawSpritesFrom(line, R);
+        return;
+    }
     Banana2DRegs regs;
     PrepareSprites(regs);
     DrawSpritesFrom(line, regs);
@@ -2568,6 +2574,13 @@ void BananaRenderer2D::EffectsPass(u32* dst)
 
 void BananaRenderer2D::DrawScanline(u32 line)
 {
+    if (Banana2DFast)
+    {
+        // (render.2d_fast: the snapshot goes straight into R, no second copy)
+        PrepareScanline(R);
+        DrawScanlineFrom(line, R, Parent.Output3D);
+        return;
+    }
     Banana2DRegs regs;
     PrepareScanline(regs);
     DrawScanlineFrom(line, regs, Parent.Output3D);
@@ -2667,7 +2680,7 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
 
 void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d)
 {
-    R = regs;
+    if (&regs != &R) R = regs;
     Line3D = line3d;
     u32* dst = Parent.Output2D[GPU2D.Num];
 
