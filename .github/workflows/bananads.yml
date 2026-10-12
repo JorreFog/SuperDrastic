@@ -36,6 +36,7 @@ jobs:
           test -s smoke/frame600.ppm
       - name: Frames drawn straight into the frontend's buffers (frontend=kms's path) are the same as copied ones
         run: |
+          python3 bananads/tests/ds2dtest/build.py
           for rom in stressrom/out/dsstress-L5.nds bananads/tests/ds2dtest/ds2dtest.nds; do
             for d in off on; do
               rm -rf direct-$d; mkdir -p direct-$d
