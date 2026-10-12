@@ -439,6 +439,10 @@ const uint32_t* Emu::bottom() const {
     return (const uint32_t*)b;
 }
 
+void Emu::set_audio_rate(double hz) {
+    if (nds_) nds_->SPU.SetOutputSampleRate(hz);
+}
+
 int Emu::audio(int16_t* stereo, int max_frames) {
     int n = nds_->SPU.ReadOutput(stereo, max_frames);
     if (n > 0) mic_.note_output(stereo, n * 2);  // the echo gate wants to know what the speakers play

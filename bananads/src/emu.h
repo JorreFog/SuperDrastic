@@ -41,6 +41,7 @@ public:
     bool draw_into(uint32_t* top, uint32_t* bottom);
 
     int audio(int16_t* stereo, int max_frames);  // what the SPU made since the last call
+    void set_audio_rate(double hz);              // the SPU's output rate (48000: the DS's speed; kms.pace=display)
 
     bool save_state(int slot);  // slot 0 = the quit/resume state
     bool load_state(int slot);

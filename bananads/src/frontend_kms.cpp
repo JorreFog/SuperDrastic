@@ -875,7 +875,13 @@ int run_kms(Emu& emu, const Config& cfg) {
 
     std::thread emu_thread([&] {
         pthread_setname_np(pthread_self(), "bds-emu");
-        Pacer pace(feed);
+        // kms.pace: display (the default) runs the DS at the panels' refresh (60.002 Hz on the RG DS, 0.3% faster than
+        // its 59.826) so every refresh shows a new frame, with the SPU's output rate lowered as much so the sound
+        // keeps 48000 samples a second; ds runs it at its own rate, and a frame shows twice every ~6 s
+        const bool pace_display = cfg.str("kms.pace", "display") != "ds" && dp.period_us > 15000 && dp.period_us < 18000;
+        const std::chrono::nanoseconds period(pace_display ? (long long)(dp.period_us * 1000.0) : 16715180LL);
+        if (pace_display) emu.set_audio_rate(48000.0 * dp.period_us * 1000.0 / 16715180.0);
+        Pacer pace(feed, period);
         int touched = -1;
         while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
             if (pause_req.load(std::memory_order_acquire)) {  // the menu: at a frame's end, until it closes

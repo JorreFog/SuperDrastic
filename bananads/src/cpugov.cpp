@@ -7,8 +7,8 @@
 // is, not on a prediction: every 250 ms it reads the frames the emulator fell behind the DS's schedule (GovFeed::late,
 // counted by the frontend's emulator thread: each whole frame once, stalls left out) and the frames emulated. Any
 // late frame, or under 58.5 emulated frames a second over the last second while the game runs: one step up at once
-// (two for three late frames or more), and the clock it was at is banned for 30 s (doubling per further strike, up
-// to 10 min), remembered per game and scale in <cpugov.dir>/<rom>.<1x|2x>. Clean (no late frame, full speed) for
+// (two for three late frames or more), and the clock it was at is banned for 2 min (doubling per further strike, up
+// to 30 min), remembered per game and scale in <cpugov.dir>/<rom>.<1x|2x>. Clean (no late frame, full speed) for
 // DOWN_AFTER windows in a row: one step down, unless that clock is banned. Two minutes clean at a clock or lower
 // forgive it one strike. A savestate boosts to the top clock while it is written (cpugov_boost).
 //
@@ -47,7 +47,9 @@ static std::string pol_dir = "/sys/devices/system/cpu/cpufreq/policy0/";  // cpu
 static std::string pol(const char* f) { return pol_dir + f; }
 static int window_ms = 250;  // cpugov.window_ms (the tests')
 static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5;
-static const int BAD_FOR_S = 30, BAD_MAX_S = 600, FORGIVE_MS = 120000, MAX_STRIKES = 6, FPS_WINDOWS = 4, DOWN_AFTER = 8;
+// (a probe of a clock that then drops a frame shows: a ban of 2 min, doubling to 30, and 10 s clean before the next
+// step down keep it from hunting; at 30 s / 8 windows HeartGold on the RG DS went down and back up every ~30 s)
+static const int BAD_FOR_S = 120, BAD_MAX_S = 1800, FORGIVE_MS = 120000, MAX_STRIKES = 6, FPS_WINDOWS = 4, DOWN_AFTER = 40;
 static const int MAXT = 64, NF = 24;
 
 static int freqs[NF], nf, cur, fmin_, fmax_, hwmax_, before_ = -1;
