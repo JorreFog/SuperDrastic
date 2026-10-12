@@ -92,6 +92,20 @@ static NOINLINE u32 l_halt(void)
     }
     return n != 0;
 }
+/* 9. geometry commands by single stores into the GX FIFO and command ports, polling GXSTAT */
+static NOINLINE u32 l_gx(u32 seed)
+{
+    u32 n = 0;
+    for (u32 i = 0; i < 64; i++) {
+        R32(0x04000440) = 0;                            /* MTX_MODE */
+        R32(0x04000454) = 0;                            /* MTX_IDENTITY */
+        R32(0x04000400) = 0x15;                         /* FIFO: packed MTX_IDENTITY */
+        R32(0x04000400) = 0;
+        while ((R32(0x04000600) & (1u << 27)) && n < 100000) n++;   /* GXSTAT busy */
+        n += R32(0x04000600) & 0x1FF;
+    }
+    return (n != 0) + (seed & 0);
+}
 /* 8. ARM loops: conditional execution, flags kept across a store */
 ARM u32 l_armcond(u32 seed)
 {
@@ -112,7 +126,7 @@ static void draw(const u32 *v, int n)
 static u32 code[256];
 int main(void)
 {
-    R32(0x04000304) = 0x8003;
+    R32(0x04000304) = 0x820F;                      /* POWCNT1: LCDs, 2D A, 3D render and geometry, top screen */
     R8(0x04000240) = 0x80;                          /* VRAM A: LCDC */
     R8(0x04000244) = 0x80;                          /* VRAM E: LCDC (0x06880000) */
     R32(0x04000000) = 0x00020000;
@@ -142,6 +156,7 @@ int main(void)
         sums[6] += l_ime();
         sums[7] += l_halt();
         sums[8] += l_pollirq();
+        sums[2] += l_gx(pass);
         { u32 s0 = R16(0x04000180) >> 8 & 0xF; R16(0x04000180) = (u16)((pass & 0xF) << 8);   /* IPCSYNC to the ARM7 */
           sums[8] ^= s0 + R32(0x02300000) * 0 + R32(0x02300008) + R32(0x0230000C); }
         sums[9] = irq_counts[0]; sums[10] = irq_counts[1]; sums[11] = irq_counts[2];
