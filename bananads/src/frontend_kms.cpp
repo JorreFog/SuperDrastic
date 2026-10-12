@@ -61,6 +61,7 @@
 #include "gengis_renderer.h"
 #endif
 #include "menu.h"
+#include "ra.h"
 
 using melonDS::Platform::Log;
 using melonDS::Platform::LogLevel;
@@ -495,6 +496,15 @@ struct Display {
         return true;
     }
     uint32_t* map(int panel, int s) { return (uint32_t*)buf[panel][s].map; }
+    // the finished picture in slot s of a panel, for drawing over it (the achievements' pop-ups): where it starts,
+    // its pitch in pixels and its size (the DS screen's at render.scale, or as the CPU scaled it into the panel)
+    uint32_t* picture(int panel, int s, int* pitch, int* w, int* h) {
+        Buf& b = buf[panel][s];
+        *pitch = (int)(b.pitch / 4);
+        if (hw) { *w = fw; *h = fh; return (uint32_t*)b.map; }
+        *w = fw * k; *h = fh * k;
+        return (uint32_t*)(b.map + (size_t)oy * b.pitch) + ox;
+    }
     // or the finished frame is copied in
     void write(int s, const uint32_t* top, const uint32_t* bot) {
         const uint32_t* src[2] = {top, bot};
@@ -853,6 +863,7 @@ static void mh_quit(void* c) { ((MenuHost*)c)->quit = true; }
 static void mh_restart(void* c) {
     cpugov_boost(2000);
     ((MenuHost*)c)->emu->restart();
+    ra_reset();
 }
 static void mh_blow(void* c, int ms) { ((MenuHost*)c)->emu->mic().blow(ms); }
 static int mh_mic_meter(void* c, float* level, float* floor_, float* bar) {
@@ -1082,6 +1093,14 @@ int run_kms(Emu& emu, const Config& cfg) {
         bmenu_init(&h);
         bmenu_session_start();
     }
+    {  // RetroAchievements (ra.c): the account from BANANADS_RA_USER/PASSWORD, melonDS's memory read directly
+        ra_host rh{};
+        rh.ctx = &emu;
+        rh.main_ram = [](void* c) { return ((Emu*)c)->main_ram(); };
+        rh.dtcm = [](void* c) { return ((Emu*)c)->dtcm(); };
+        rh.log = [](void*, const char* line) { Log(LogLevel::Info, "%s", line); };
+        ra_init(&rh, emu.rom_path().c_str());
+    }
 
     std::thread emu_thread([&] {
         pthread_setname_np(pthread_self(), "bds-emu");
@@ -1121,6 +1140,12 @@ int run_kms(Emu& emu, const Config& cfg) {
             if (dp.direct) emu.draw_into(dp.map(0, s), dp.map(1, s));
             emu.run_frame();
             if (!dp.direct) dp.write(s, emu.top(), emu.bottom());
+            ra_frame();  // RetroAchievements: this frame's memory, then any pop-up over the top screen
+            {
+                int pitch, w, h;
+                uint32_t* top = dp.picture(0, s, &pitch, &w, &h);
+                bmenu_overlay(top, pitch, w, h);
+            }
             dp.publish(s, depth);
             pace.wait();  // (and the governor's signal: the frames it fell behind)
         }

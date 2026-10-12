@@ -245,6 +245,17 @@ if(DRM_FOUND AND BANANADS_KMS)
     target_sources(bananads PRIVATE src/frontend_kms.cpp src/cpugov.cpp src/menu.c src/shader.c)
     target_link_libraries(bananads PRIVATE PkgConfig::DRM)
     target_compile_definitions(bananads PRIVATE BANANADS_KMS=1)
+    # RetroAchievements (src/ra.c): SuperDrastic's rcheevos (../src/third_party/rcheevos, the same repository), a
+    # library of its own so its C keeps its own warnings; libcurl is dlopen()ed at run time
+    set(RC ${CMAKE_CURRENT_SOURCE_DIR}/../src/third_party/rcheevos)
+    file(GLOB RC_SRCS ${RC}/src/rc_client.c ${RC}/src/rc_compat.c ${RC}/src/rc_util.c ${RC}/src/rc_version.c
+        ${RC}/src/rcheevos/*.c ${RC}/src/rapi/*.c ${RC}/src/rhash/*.c)
+    add_library(rcheevos STATIC ${RC_SRCS})
+    target_include_directories(rcheevos PUBLIC ${RC}/include)
+    target_compile_definitions(rcheevos PUBLIC RC_DISABLE_LUA RC_CLIENT_SUPPORTS_HASH)
+    set_target_properties(rcheevos PROPERTIES C_VISIBILITY_PRESET hidden)
+    target_sources(bananads PRIVATE src/ra.c)
+    target_link_libraries(bananads PRIVATE rcheevos ${CMAKE_DL_LIBS})
 endif()
 if(BANANADS_ALSA)
     pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)

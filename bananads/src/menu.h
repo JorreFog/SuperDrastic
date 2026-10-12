@@ -57,6 +57,9 @@ void bmenu_init(const bmenu_host* host);  // once, before the first bmenu_run
 // question; returns 0 if it couldn't open (no fonts, no panel buffers)
 int bmenu_run(int start);
 void bmenu_session_start(void);  // the game started: "this session" counts from here
+// a pop-up over the game's top screen (an achievement unlocked...): the frontend calls this with each finished top
+// frame (XRGB8888, pitch in pixels), on the emulator's thread; it draws the current pop-up, if any, into it
+void bmenu_overlay(uint32_t* px, int pitch, int w, int h);
 
 #ifdef __cplusplus
 }

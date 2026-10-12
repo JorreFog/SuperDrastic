@@ -32,6 +32,7 @@
 #define STBI_NO_STDIO_WRITE
 #include "third_party/stb_image.h"
 #include "menu.h"
+#include "ra.h"
 
 static bmenu_host H;
 static void mlog(const char *fmt, ...) {
@@ -445,6 +446,15 @@ static void make_rows(void) {
     for (int i = 0; i < n && nrows < 8; i++) rows[nrows++] = ROW_OPT + i;
 }
 
+static int fonts_ready(void) {   /* the menu's and the pop-ups' fonts, loaded once */
+    const char *const med[] = { getenv("BANANADS_MENU_FONT"), "/usr/share/banana/rnds/fonts/PixelifySans-Medium.ttf",
+        "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
+    const char *const reg[] = { "/usr/share/banana/rnds/fonts/PixelifySans-Regular.ttf",
+        "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
+    return font_load(&F_MED, med, 5) && font_load(&F_REG, reg, 4);
+}
 static int setup(void) {
     if (inited) return inited > 0;
     inited = -1;
@@ -455,13 +465,7 @@ static int setup(void) {
         if (!(CV[i].px = malloc((size_t)pw[i] * ph[i] * 4))) return 0;
     }
     if (!(bgtop = malloc((size_t)pw[0] * ph[0] * 4))) return 0;
-    const char *const med[] = { getenv("BANANADS_MENU_FONT"), "/usr/share/banana/rnds/fonts/PixelifySans-Medium.ttf",
-        "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
-    const char *const reg[] = { "/usr/share/banana/rnds/fonts/PixelifySans-Regular.ttf",
-        "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
-    if (!font_load(&F_MED, med, 5) || !font_load(&F_REG, reg, 4)) { mlog("[menu] no font\n"); return 0; }
+    if (!fonts_ready()) { mlog("[menu] no font\n"); return 0; }
     const char *snd[SND_N] = { "scroll.wav", "select.wav", "back.wav" };
     for (int k = 0; k < SND_N; k++) {
         char p[300];
@@ -521,12 +525,17 @@ static void hatch(canvas *c, int x0, int y0, int x1, int y1, uint32_t a, uint32_
     int k = S(6) > 1 ? S(6) : 2;
     for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) blendpx(c, x, y, ((x + y) / k) & 1 ? a : b, 1.0f);
 }
-/* RetroAchievements: not in BananaDS yet, so the card is laid out without them */
+/* RetroAchievements (ra.c): the progress and the latest unlocks with their badges; without a game that has
+ * achievements the card is laid out without them */
 #define NREC 3
-typedef struct { char title[96], desc[200], badge[600]; unsigned points; long long when; } ra_recent_t;
 static ra_recent_t REC[NREC]; static int nrec, ra_has; static unsigned ra_un, ra_tot;
 static uint8_t *rec_img[NREC]; static int rec_w[NREC], rec_h[NREC];
-static void load_recent(void) { ra_has = 0; nrec = 0; }
+static void load_recent(void) {
+    for (int i = 0; i < NREC; i++) { if (rec_img[i]) stbi_image_free(rec_img[i]); rec_img[i] = 0; }
+    ra_has = ra_progress(&ra_un, &ra_tot) && ra_tot;
+    nrec = ra_has ? ra_recent(REC, NREC) : 0;
+    for (int i = 0; i < nrec; i++) { int ch; rec_img[i] = stbi_load(REC[i].badge, &rec_w[i], &rec_h[i], &ch, 4); }
+}
 /* an RGBA image (straight alpha) scaled bilinearly into a size x size square with rounded corners */
 static void draw_img(canvas *c, const uint8_t *img, int iw, int ih, int x0, int y0, int size, float rad) {
     for (int y = 0; y < size; y++)
@@ -1053,4 +1062,84 @@ int bmenu_run(int start) {
     if (bri_changed) want(-1, bri_raw);
     mlog("[menu] closed\n");
     return 1;
+}
+
+/* ---------- pop-ups over the game (ra.c's: a game loaded, an achievement unlocked...) ----------
+ * The frontend calls bmenu_overlay with the top screen's finished frame, on the emulator's thread. A pop-up is drawn
+ * once, over black and over white, which gives each pixel its colour and its coverage; every frame after that only
+ * blends that picture over the game (a ~560x84 box at 640 wide: no glyphs rasterised per frame). */
+static uint32_t *ov_rgb; static uint8_t *ov_a;
+static int ov_w, ov_h, ov_x, ov_y, ov_for_w, ov_for_h, ov_on;
+static long long ov_until;
+static char ov_l1[128], ov_l2[160], ov_badge[600]; static uint32_t ov_accent;
+static void ov_draw(canvas *c, const uint8_t *img, int iw, int ih) {
+    int pad = S(12), bs = c->h - 2 * pad;
+    box(c, 0, 0, c->w, c->h, S(10), S(2) < 1 ? 1 : S(2), C_BORDER, C_PANEL);
+    int tx = pad + S(4);
+    if (img) {
+        box(c, pad, pad, pad + bs, pad + bs, S(6), S(2) < 1 ? 1 : S(2), C_LIGHT, C_DARK);
+        draw_img(c, img, iw, ih, pad + S(2), pad + S(2), bs - 2 * S(2), S(4));
+        tx = pad + bs + S(14);
+    }
+    float tw = (float)(c->w - tx - pad);
+    text(c, &F_MED, ov_l1, (float)tx, (float)S(14), (float)S(16), ov_accent, tw, 0);
+    text(c, &F_REG, ov_l2, (float)tx, (float)S(42), (float)S(20), C_LIGHT, tw, 0);
+}
+static int ov_build(int w, int h) {
+    if (!fonts_ready()) return 0;
+    canvas probe = { 0, w, h, w / 640.0f }, *c = &probe;
+    int bw = S(560), bh = S(84);
+    if (bw > w) bw = w;
+    uint32_t *black = malloc((size_t)bw * bh * 4), *white = malloc((size_t)bw * bh * 4);
+    free(ov_rgb); free(ov_a);
+    ov_rgb = malloc((size_t)bw * bh * 4); ov_a = malloc((size_t)bw * bh);
+    if (!black || !white || !ov_rgb || !ov_a) { free(black); free(white); return 0; }
+    int iw = 0, ih = 0, ch;
+    uint8_t *img = *ov_badge ? stbi_load(ov_badge, &iw, &ih, &ch, 4) : 0;
+    for (int i = 0; i < bw * bh; i++) { black[i] = 0; white[i] = 0xffffff; }
+    canvas cb = { black, bw, bh, c->s }, cw = { white, bw, bh, c->s };
+    ov_draw(&cb, img, iw, ih);
+    ov_draw(&cw, img, iw, ih);
+    if (img) stbi_image_free(img);
+    for (int i = 0; i < bw * bh; i++) {   /* over black: colour x coverage; over white: that plus (1 - coverage) */
+        uint32_t b = black[i], k = white[i];
+        int a = 255 - (int)(((k >> 8) & 255) - ((b >> 8) & 255));
+        if (a < 0) a = 0; if (a > 255) a = 255;
+        ov_a[i] = (uint8_t)a;
+        uint32_t r = 0, g = 0, bl = 0;
+        if (a) { r = ((b >> 16) & 255) * 255 / a; g = ((b >> 8) & 255) * 255 / a; bl = (b & 255) * 255 / a; }
+        ov_rgb[i] = (r > 255 ? 255 : r) << 16 | (g > 255 ? 255 : g) << 8 | (bl > 255 ? 255 : bl);
+    }
+    free(black); free(white);
+    ov_w = bw; ov_h = bh; ov_x = (w - bw) / 2; ov_y = h - bh - S(14);
+    if (ov_y < 0) ov_y = 0;
+    ov_for_w = w; ov_for_h = h;
+    return 1;
+}
+void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
+    long long t = now_ms();
+    if (ov_on && t >= ov_until) ov_on = 0;
+    if (!ov_on) {
+        int ms;
+        if (!ra_popup_take(ov_l1, sizeof ov_l1, ov_l2, sizeof ov_l2, ov_badge, sizeof ov_badge, &ov_accent, &ms)) return;
+        if (!ov_build(w, h)) return;
+        ov_on = 1; ov_until = t + ms;
+    } else if (w != ov_for_w || h != ov_for_h) {
+        if (!ov_build(w, h)) { ov_on = 0; return; }
+    }
+    for (int y = 0; y < ov_h; y++) {
+        uint32_t *d = px + (size_t)(ov_y + y) * pitch + ov_x;
+        const uint32_t *s = ov_rgb + (size_t)y * ov_w;
+        const uint8_t *a = ov_a + (size_t)y * ov_w;
+        for (int x = 0; x < ov_w; x++) {
+            int k = a[x];
+            if (!k) continue;
+            if (k == 255) { d[x] = s[x]; continue; }
+            uint32_t o = d[x], n = s[x];
+            uint32_t r = (((n >> 16) & 255) * k + ((o >> 16) & 255) * (255 - k)) / 255;
+            uint32_t g = (((n >> 8) & 255) * k + ((o >> 8) & 255) * (255 - k)) / 255;
+            uint32_t b = ((n & 255) * k + (o & 255) * (255 - k)) / 255;
+            d[x] = r << 16 | g << 8 | b;
+        }
+    }
 }
