@@ -139,7 +139,7 @@ struct Panel {
 enum SlotState { FREE, WRITING, QUEUED, COMMITTED, SCANOUT };
 
 struct Display {
-    static const int NB = 6;  // writing, up to 3 queued, committed, on screen
+    static const int NB = 7;  // writing, up to 3 queued, drawn ahead through the shader, committed, on screen
     int fd = -1;
     Panel p[2];               // [0] = top, [1] = bottom
     int W = 0, H = 0;         // the panels' mode
@@ -546,38 +546,30 @@ struct Display {
     }
 
     // ---- the presenter's side ----
-    // with no flip pending, the oldest waiting frame goes to both panels in one commit
-    void commit_next() {
-        int s;
+    // The oldest waiting frame goes to both panels in one commit when no flip is pending. With a shader, the next
+    // frame is drawn through it ahead, while the last commit's flip is still pending, and committed the moment that
+    // flip completes. Drawn only after the flip (13.6 ms a frame for both of the RG DS Plus's 1024x768 panels with
+    // Dot (MiZai, RG DS+)), the commit missed the next refresh every other frame: 40 frames shown a second of 60.
+    int ready = -1;                                // a frame already drawn through the shader: its slot, or -1
+    const Buf* ready_out[2] = {nullptr, nullptr};  // ...and the shader's output for each panel
+    void shader_settings() {  // a change asked for in the in-game menu, and the program made at its first frame
+        std::string want;
+        bool asked = false;
         {
             Lock l(mu);
-            if (pending || queue.empty()) return;
-            // the oldest frame, taken off the queue so the emulator can't recycle it while the shader draws it (outside
-            // the lock: the emulator's thread never waits for the GPU)
-            s = queue.front();
-            queue.pop_front();
-            state[s] = COMMITTED;
+            if (shader_req_set) { want = shader_req; asked = true; shader_req_set = false; }
         }
-        const Buf* out[2] = {&buf[0][s], &buf[1][s]};
-        {
-            std::string want;
-            bool asked = false;
-            {
-                Lock l(mu);
-                if (shader_req_set) { want = shader_req; asked = true; shader_req_set = false; }
-            }
-            if (asked) {
-                if (want == "none") {
-                    if (shader_on) gpu_floor(false);
-                    shader_on = false;
-                    shader_name.clear();
-                } else if (want != shader_name || !shader_on) {
-                    shader_name = want;
-                    shader_tried = false;  // made again below, with the new program
-                }
+        if (asked) {
+            if (want == "none") {
+                if (shader_on) gpu_floor(false);
+                shader_on = false;
+                shader_name.clear();
+            } else if (want != shader_name || !shader_on) {
+                shader_name = want;
+                shader_tried = false;  // made again below, with the new program
             }
         }
-        if (!shader_name.empty() && !shader_tried) {  // GL is made on this thread, at its first frame
+        if (!shader_name.empty() && !shader_tried) {  // GL is made on this thread
             shader_tried = true;
             shader_on = shader_init(fd, shader_name.c_str()) != 0;
             for (int i = 0; i < 2 && shader_on; i++)
@@ -585,6 +577,41 @@ struct Display {
             if (shader_on && gpu_dir.empty()) gpu_floor(true);
             Log(LogLevel::Info, "[kms] shader %s: %s\n", shader_name.c_str(), shader_on ? "on (panel-sized, 1:1)" : "unavailable");
         }
+    }
+    // slot s onto both panels, unless a flip is still pending; false when it wasn't committed
+    bool commit(int s, const Buf* const out[2]) {
+        Lock l(mu);
+        if (pending) return false;
+        drmModeAtomicReq* r = drmModeAtomicAlloc();
+        for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
+        int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
+        drmModeAtomicFree(r);
+        if (ret) {
+            if (errno != EBUSY) Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
+            return false;
+        }
+        committed = s;
+        pending = 2;
+        return true;
+    }
+    void commit_next() {
+        shader_settings();
+        if (ready >= 0) {  // drawn ahead: on screen as soon as the flip allows (tried again at the next wake-up)
+            if (!commit(ready, ready_out)) return;
+            ready = -1;
+        }
+        int s;
+        {
+            Lock l(mu);
+            // without a shader a frame is only taken when it can be committed at once; with one, it is drawn ahead
+            if (queue.empty() || (pending && !shader_on)) return;
+            // the oldest frame, taken off the queue so the emulator can't recycle it while the shader draws it (outside
+            // the lock: the emulator's thread never waits for the GPU)
+            s = queue.front();
+            queue.pop_front();
+            state[s] = COMMITTED;
+        }
+        const Buf* out[2] = {&buf[0][s], &buf[1][s]};
         if (shader_on) {
             const long long t0 = now_us();
             for (int i = 0; i < 2; i++) {
@@ -596,21 +623,18 @@ struct Display {
             shader_us += dt;
             shader_n++;
             if (dt > shader_max_us) shader_max_us = dt;
-            snext = (snext + 1) % 3;  // (one on screen, one committed, one drawn)
-        }
-        Lock l(mu);
-        drmModeAtomicReq* r = drmModeAtomicAlloc();
-        for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
-        int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
-        drmModeAtomicFree(r);
-        if (ret) {
-            if (errno != EBUSY) Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
-            state[s] = QUEUED;  // back at the head of the queue: tried again at the next wake-up
-            queue.push_front(s);
+            snext = (snext + 1) % 3;  // (one on screen, one committed, one drawn ahead)
+            ready = s;
+            ready_out[0] = out[0];
+            ready_out[1] = out[1];
+            if (commit(s, out)) ready = -1;  // the flip had already come
             return;
         }
-        committed = s;
-        pending = 2;
+        if (!commit(s, out)) {
+            Lock l(mu);
+            state[s] = QUEUED;  // back at the head of the queue: tried again at the next wake-up
+            queue.push_front(s);
+        }
     }
     // with a shader, the GPU's lowest clock raised (its on-demand governor ramps too slowly for a pass every
     // refresh: frames missed their vblank), and put back at the end
