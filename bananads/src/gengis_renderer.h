@@ -34,6 +34,12 @@ public:
     void RestartFrame() override {}
     melonDS::u32* GetLine(int line) override;  // at 2x: quarter 0 of the line
     int Scale() const { return Scale_; }
+    // the game's DISP3DCNT bits the picture may use (render.edge_marking, render.fog): the others are cleared
+    // before the rasterizer sees them
+    static void SetEffects(bool edge_marking, bool fog) {
+        DispMask = ~0u & ~(edge_marking ? 0u : 1u << 5) & ~(fog ? 0u : 1u << 7);
+    }
+    static melonDS::u32 DispMask;
     // at 2x, DS line `line`'s four 256-pixel lines: quarter q is 2x row 2 * line + (q >> 1), its even pixels (q & 1
     // clear) or odd ones, with the X scroll applied
     const melonDS::u32* GetQuarter(int line, int q);

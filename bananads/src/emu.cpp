@@ -320,6 +320,9 @@ bool Emu::load_rom(const std::string& path) {
     if (cfg_.str("render.renderer", "gengis") == "gengis") {
         const int threads = (int)cfg_.num("render.gengis_threads", 3);
         const bool defer = cfg_.flag("render.gengis_defer", false);
+        // render.edge_marking, render.fog: off leaves the effect out even where the game turns it on (outlines
+        // round 3D models; distance fog)
+        GengisRenderer3D::SetEffects(cfg_.flag("render.edge_marking", true), cfg_.flag("render.fog", true));
 #ifdef BANANADS_2D
         if (banana2d) {
             nds_->SetRenderer(std::make_unique<GengisBananaRenderer>(*nds_, threads, defer, scale));

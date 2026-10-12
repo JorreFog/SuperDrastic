@@ -151,6 +151,8 @@ const gx_texture* GengisRenderer3D::GetTexture(uint32_t texparam, uint32_t texpa
 
 // ---- melonDS's polygons as the rasterizer's ----
 
+melonDS::u32 GengisRenderer3D::DispMask = ~0u;
+
 void GengisRenderer3D::Convert() {
     const u32 d3 = GPU3D.RenderDispCnt;
     Polys.clear();
@@ -168,8 +170,19 @@ void GengisRenderer3D::Convert() {
         if (fmt && (d3 & 1)) flags |= GXF_TEXTURED;
         if (p->WBuffer) flags |= GXF_WBUFFER;
         bool flat = true, constdepth = true, affine = true;
+        // the walker starts at vertex 0, which must be the top one. melonDS's VTop is the top at 1x; at 2x two
+        // vertices on one 1x line can be a 2x line apart, and starting at the lower one walked no edge for the
+        // lines between: the spans there kept another polygon's x (a thin quad's line drawn from x 9 to 273,
+        // HeartGold's wind turbine). So at 2x the first vertex from VTop with the least 2x y (VTop itself when it is
+        // still the top: the same order as before)
+        unsigned top = p->VTop;
+        if (Scale_ == 2)
+            for (unsigned k = 1; k < n; k++) {
+                const unsigned vi = (p->VTop + k) % n;
+                if (p->Vertices[vi]->HiresPosition[1] >> 3 < p->Vertices[top]->HiresPosition[1] >> 3) top = vi;
+            }
         for (unsigned k = 0; k < n; k++) {
-            const unsigned vi = (p->VTop + k) % n;
+            const unsigned vi = (top + k) % n;
             const Vertex* v = p->Vertices[vi];
             uint8_t* r = g.vtx[k];
             const int32_t w = p->WBuffer ? p->FinalZ[vi] : p->FinalW[vi];
@@ -214,7 +227,7 @@ void GengisRenderer3D::Convert() {
     Frame.polys = Polys.data();
     Frame.npolys = (unsigned)Polys.size();
 
-    Frame.d3 = d3;
+    Frame.d3 = d3 & DispMask;	// edge marking (bit 5), fog (bit 7): render.edge_marking, render.fog
     Frame.aref = GPU3D.RenderAlphaRef;
     const u32 a1 = GPU3D.RenderClearAttr1, a2 = GPU3D.RenderClearAttr2;
     Frame.clear_color = gx_expand555(a1 & 0x7FFF) | ((a1 >> 16) & 0x1F) << 24 | ((a1 >> 15) & 1) << 31;
