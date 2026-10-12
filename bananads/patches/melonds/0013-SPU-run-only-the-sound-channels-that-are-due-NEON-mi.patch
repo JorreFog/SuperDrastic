@@ -1,4 +1,4 @@
-From e87d5206234111dde8299f5337810d0a81312519 Mon Sep 17 00:00:00 2001
+From 4b07c6218280c035f763e6413eb4910ff5e53110 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 22:57:24 +0000
 Subject: [PATCH] SPU: run only the sound channels that are due, NEON mixer
@@ -18,15 +18,15 @@ straight to GPU3D::Write32 (as FastGXDMA), and between main RAM addresses straig
 check; the ARM9's main RAM -> fixed destination timing is UnitTimings9_32's MRAM burst table lookup, chosen once
 per run instead of per unit.
 ---
- src/DMA.cpp |  66 +++++++++++-
- src/DMA.h   |   5 +
+ src/DMA.cpp | 169 ++++++++++++++++++++++++++-
+ src/DMA.h   |   6 +
  src/NDS.h   |   2 +
- src/SPU.cpp | 292 +++++++++++++++++++++++++++++++++++++++++++++++++---
- src/SPU.h   |  34 +++++-
- 5 files changed, 384 insertions(+), 15 deletions(-)
+ src/SPU.cpp | 321 ++++++++++++++++++++++++++++++++++++++++++++++++++--
+ src/SPU.h   |  36 +++++-
+ 5 files changed, 518 insertions(+), 16 deletions(-)
 
 diff --git a/src/DMA.cpp b/src/DMA.cpp
-index caf5032..3e49ef7 100644
+index caf5032..7d5b9b5 100644
 --- a/src/DMA.cpp
 +++ b/src/DMA.cpp
 @@ -23,6 +23,7 @@
@@ -37,38 +37,161 @@ index caf5032..3e49ef7 100644
  #include "Platform.h"
  
  namespace melonDS
-@@ -583,6 +584,60 @@ void DMA::Run9()
+@@ -552,6 +553,35 @@ u32 DMA::UnitTimings7_32(bool burststart)
+     }
+ }
+ 
++// FastDMA: ARM9Write16/32 on a DS for main RAM, palette, VRAM and OAM, without the call and the dispatch: the same
++// JIT check and store, the same power checks and GPU calls; VRAM through the page table (GPU::WriteVRAMDirect: one
++// bank at the page, no compiled code in VRAM), else ARM9Write's own path
++template<typename T>
++inline void DMA::FastWrite9(u32 addr, T val)
++{
++    addr &= ~(u32)(sizeof(T) - 1);
++    switch (addr >> 24)
++    {
++    case 0x02:
++        NDS.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(addr);
++        *(T*)&NDS.MainRAM[addr & NDS.MainRAMMask] = val;
++        return;
++    case 0x05:
++        if (!(NDS.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))) return;
++        NDS.GPU.WritePalette<T>(addr, val);
++        return;
++    case 0x06:
++        if (NDS.GPU.WriteVRAMDirect<T>(addr, val)) return;
++        break;
++    case 0x07:
++        if (!(NDS.PowerControl9 & ((addr & 0x400) ? (1<<9) : (1<<1)))) return;
++        NDS.GPU.WriteOAM<T>(addr, val);
++        return;
++    }
++    if (sizeof(T) == 4) NDS.ARM9Write32(addr, val);
++    else NDS.ARM9Write16(addr, val);
++}
++
+ void DMA::Run9()
+ {
+     if (NDS.ARM9Timestamp >= NDS.ARM9Target) return;
+@@ -562,7 +592,28 @@ void DMA::Run9()
+     bool burststart = (Running == 2);
+     Running = 1;
+ 
+-    if (!(Cnt & (1<<26)))
++    if (!(Cnt & (1<<26)) && FastDMA && NDS.ConsoleType == 0)
++    {
++        // FastDMA: the same units and timing, main RAM read directly and the write without ARM9Write16's dispatch
++        u8* const ram = NDS.MainRAM;
++        const u32 mask = NDS.MainRAMMask;
++        while (IterCount > 0 && !Stall)
++        {
++            NDS.ARM9Timestamp += (UnitTimings9_16(burststart) << NDS.ARM9ClockShift);
++            burststart = false;
++
++            const u32 src = CurSrcAddr;
++            FastWrite9<u16>(CurDstAddr, ((src >> 24) == 0x02) ? *(u16*)&ram[(src & ~1) & mask] : NDS.ARM9Read16(src));
++
++            CurSrcAddr += SrcAddrInc<<1;
++            CurDstAddr += DstAddrInc<<1;
++            IterCount--;
++            RemCount--;
++
++            if (NDS.ARM9Timestamp >= NDS.ARM9Target) break;
++        }
++    }
++    else if (!(Cnt & (1<<26)))
+     {
+         while (IterCount > 0 && !Stall)
+         {
+@@ -583,6 +634,111 @@ void DMA::Run9()
      {
          // FastGXDMA: what ARM9Write32(0x04000400, ARM9Read32(main RAM)) does on a DS, without the dispatch
          const bool fastgx = NDS.FastGXDMA && NDS.ConsoleType == 0;
 +        if (FastDMA && NDS.ConsoleType == 0)
 +        {
-+            // UnitTimings9_32's case for a source in main RAM (0x02xxxxxx is all Mem9_MainRAM on a DS) going up and
-+            // a fixed destination outside it: the next entry of an MRAM read burst table chosen by the destination
-+            // region alone, so that choice is made once here. Anything else asks UnitTimings9_32.
-+            const u32 dst_id = CurDstAddr >> 14;
-+            const u32 dst_rgn = NDS.ARM9Regions[dst_id];
-+            const bool mramread = DstAddrInc == 0 && SrcAddrInc > 0 && dst_rgn != Mem9_MainRAM;
-+            const std::array<u8, 256>& mramtab =
-+                (dst_rgn == Mem9_GBAROM) ? DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][7] == 8 ? 2 : 3]
-+                                         : DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][6] == 2 ? 0 : 1];
++            // UnitTimings9_32's case for a source in main RAM (0x02xxxxxx is all Mem9_MainRAM on a DS): 18 to main
++            // RAM, else going up the next entry of an MRAM read burst table chosen by the destination's region and
++            // timings alone, so that choice is made once per 16 KB destination page. Anything else asks
++            // UnitTimings9_32.
++            u32 tab_id = ~0u;
++            bool dstmain = false;
++            const std::array<u8, 256>* mramtab = nullptr;
 +            const int clockshift = NDS.ARM9ClockShift;
 +            u8* const ram = NDS.MainRAM;
 +            const u32 mask = NDS.MainRAMMask;
 +
++            if (DstAddrInc == 0)
++            {
++                // a fixed destination (the GX FIFO's DMA): its page's choice made once, before the loop
++                const u32 dst_id = CurDstAddr >> 14;
++                const u32 dst_rgn = NDS.ARM9Regions[dst_id];
++                const bool mramread = SrcAddrInc > 0 && dst_rgn != Mem9_MainRAM;
++                const std::array<u8, 256>& tab = (dst_rgn == Mem9_GBAROM)
++                    ? DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][7] == 8 ? 2 : 3]
++                    : DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][6] == 2 ? 0 : 1];
++                const u32 dst = CurDstAddr;
++                while (IterCount > 0 && !Stall)
++                {
++                    const u32 src = CurSrcAddr;
++                    const bool srcram = (src >> 24) == 0x02;
++                    u32 t;
++                    if (mramread && srcram)
++                    {
++                        if (burststart || MRAMBurstTable[MRAMBurstCount] == 0)
++                        {
++                            MRAMBurstCount = 0;
++                            MRAMBurstTable = tab;
++                        }
++                        t = MRAMBurstTable[MRAMBurstCount++];
++                    }
++                    else
++                        t = UnitTimings9_32(burststart);
++                    NDS.ARM9Timestamp += t << clockshift;
++                    burststart = false;
++
++                    if (srcram && dst == 0x04000400)
++                        NDS.GPU.GPU3D.Write32(0x04000400, *(u32*)&ram[(src & ~3) & mask]);
++                    else
++                        FastWrite9<u32>(dst, srcram ? *(u32*)&ram[(src & ~3) & mask] : NDS.ARM9Read32(src));
++
++                    CurSrcAddr += SrcAddrInc<<2;
++                    IterCount--;
++                    RemCount--;
++
++                    if (NDS.ARM9Timestamp >= NDS.ARM9Target) break;
++                }
++            }
++            else
 +            while (IterCount > 0 && !Stall)
 +            {
 +                const u32 src = CurSrcAddr, dst = CurDstAddr;
 +                const bool srcram = (src >> 24) == 0x02;
 +                u32 t;
-+                if (mramread && srcram)
++                if (srcram)
 +                {
-+                    if (burststart || MRAMBurstTable[MRAMBurstCount] == 0)
++                    const u32 dst_id = dst >> 14;
++                    if (dst_id != tab_id)
 +                    {
-+                        MRAMBurstCount = 0;
-+                        MRAMBurstTable = mramtab;
++                        tab_id = dst_id;
++                        const u32 dst_rgn = NDS.ARM9Regions[dst_id];
++                        dstmain = dst_rgn == Mem9_MainRAM;
++                        mramtab = (dst_rgn == Mem9_GBAROM)
++                            ? &DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][7] == 8 ? 2 : 3]
++                            : &DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][6] == 2 ? 0 : 1];
 +                    }
-+                    t = MRAMBurstTable[MRAMBurstCount++];
++                    if (dstmain)
++                        t = 18;
++                    else if (SrcAddrInc > 0)
++                    {
++                        if (burststart || MRAMBurstTable[MRAMBurstCount] == 0)
++                        {
++                            MRAMBurstCount = 0;
++                            MRAMBurstTable = *mramtab;
++                        }
++                        t = MRAMBurstTable[MRAMBurstCount++];
++                    }
++                    else
++                        t = UnitTimings9_32(burststart);
 +                }
 +                else
 +                    t = UnitTimings9_32(burststart);
@@ -77,14 +200,8 @@ index caf5032..3e49ef7 100644
 +
 +                if (srcram && dst == 0x04000400)
 +                    NDS.GPU.GPU3D.Write32(0x04000400, *(u32*)&ram[(src & ~3) & mask]);
-+                else if (srcram && (dst >> 24) == 0x02)
-+                {
-+                    // ARM9Write32's main RAM case: the JIT's check, then the store
-+                    NDS.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(dst & ~3);
-+                    *(u32*)&ram[(dst & ~3) & mask] = *(u32*)&ram[(src & ~3) & mask];
-+                }
 +                else
-+                    NDS.ARM9Write32(dst, NDS.ARM9Read32(src));
++                    FastWrite9<u32>(dst, srcram ? *(u32*)&ram[(src & ~3) & mask] : NDS.ARM9Read32(src));
 +
 +                CurSrcAddr += SrcAddrInc<<2;
 +                CurDstAddr += DstAddrInc<<2;
@@ -98,7 +215,7 @@ index caf5032..3e49ef7 100644
          while (IterCount > 0 && !Stall)
          {
              NDS.ARM9Timestamp += (UnitTimings9_32(burststart) << NDS.ARM9ClockShift);
-@@ -662,12 +717,21 @@ void DMA::Run7()
+@@ -662,12 +818,21 @@ void DMA::Run7()
      }
      else
      {
@@ -122,10 +239,18 @@ index caf5032..3e49ef7 100644
              CurSrcAddr += SrcAddrInc<<2;
              CurDstAddr += DstAddrInc<<2;
 diff --git a/src/DMA.h b/src/DMA.h
-index 352f426..6a71c26 100644
+index 352f426..e0157ac 100644
 --- a/src/DMA.h
 +++ b/src/DMA.h
-@@ -77,6 +77,11 @@ public:
+@@ -47,6 +47,7 @@ public:
+ 
+     void Run();
+     void Run9();
++    template<typename T> void FastWrite9(u32 addr, T val);
+     void Run7();
+ 
+     bool IsInMode(u32 mode) const noexcept
+@@ -77,6 +78,11 @@ public:
      u32 DstAddr {};
      u32 Cnt {};
  
@@ -151,7 +276,7 @@ index 4539a1e..0828204 100644
      u32 IME[2];
      u32 IE[2];
 diff --git a/src/SPU.cpp b/src/SPU.cpp
-index d797043..ea289b8 100644
+index d797043..0ab477c 100644
 --- a/src/SPU.cpp
 +++ b/src/SPU.cpp
 @@ -25,6 +25,10 @@
@@ -165,30 +290,41 @@ index d797043..ea289b8 100644
  
  #include "blip-buf/blip_buf.h"
  
-@@ -254,6 +258,7 @@ void SPU::Reset()
+@@ -254,6 +258,8 @@ void SPU::Reset()
  
      Capture[0].Reset();
      Capture[1].Reset();
 +    FastDirty = true;
++    FastTailValid = false;
  
      NDS.ScheduleEvent(Event_SPU, false, 1024, 0, 0);
  }
-@@ -276,6 +281,10 @@ void SPU::DoSavestate(Savestate* file)
+@@ -276,6 +282,11 @@ void SPU::DoSavestate(Savestate* file)
  {
      file->Section("SPU.");
  
 +    // FastMix: the skipped Mixes' cycles go into the channels' timers before they're saved (and a load starts over)
 +    SyncFastTimers(FastCount);
 +    FastDirty = true;
++    FastTailValid = false;
 +
      file->Var16(&Cnt);
      file->Var8(&MasterVolume);
      file->Var16(&Bias);
-@@ -312,13 +321,44 @@ void SPU::SetSampleRate(AudioSampleRate rate)
+@@ -297,6 +308,7 @@ void SPU::DoSavestate(Savestate* file)
+ void SPU::SetPowerCnt(u32 val)
+ {
+     Mute = !(val & (1<<0));
++    FastTailValid = false;
+ }
+ 
+ 
+@@ -312,32 +324,69 @@ void SPU::SetSampleRate(AudioSampleRate rate)
      }
  
      memset(OutputLastSamples, 0, sizeof(OutputLastSamples));
 +    FastDirty = true;
++    FastTailValid = false;
  }
  
  
@@ -218,6 +354,7 @@ index d797043..ea289b8 100644
 +    for (SPUChannel& channel : Channels)
 +        channel.FastLazy = false;
 +    FastDirty = true;
++    FastTailValid = false;
 +    FastMix = enable;
 +    for (SPUChannel& channel : Channels)
 +    {
@@ -229,7 +366,30 @@ index d797043..ea289b8 100644
  }
  
  void SPU::SetBias(u16 bias)
-@@ -362,6 +402,7 @@ SPUChannel::SPUChannel(u32 num, melonDS::NDS& nds, AudioInterpolation interpolat
+ {
+     Bias = bias;
++    FastTailValid = false;
+ }
+ 
+ void SPU::SetApplyBias(bool enable)
+ {
+     ApplyBias = enable;
++    FastTailValid = false;
+ }
+ 
+ void SPU::SetDegrade10Bit(bool enable)
+ {
+     Degrade10Bit = enable;
++    FastTailValid = false;
+ }
+ 
+ void SPU::SetDegrade10Bit(AudioBitDepth depth)
+ {
++    FastTailValid = false;
+     switch (depth)
+     {
+     case AudioBitDepth::Auto:
+@@ -362,6 +411,7 @@ SPUChannel::SPUChannel(u32 num, melonDS::NDS& nds, AudioInterpolation interpolat
  void SPUChannel::Reset()
  {
      KeyOn = false;
@@ -237,7 +397,7 @@ index d797043..ea289b8 100644
  
      SetCnt(0);
      SrcAddr = 0;
-@@ -402,6 +443,8 @@ void SPUChannel::DoSavestate(Savestate* file)
+@@ -402,6 +452,8 @@ void SPUChannel::DoSavestate(Savestate* file)
      file->Var32((u32*)&ADPCMValLoop);
      file->Var32((u32*)&ADPCMIndexLoop);
      file->Var8(&ADPCMCurByte);
@@ -246,7 +406,7 @@ index d797043..ea289b8 100644
  
      file->Var32(&FIFOReadPos);
      file->Var32(&FIFOWritePos);
-@@ -425,8 +468,21 @@ void SPUChannel::FIFO_BufferData()
+@@ -425,8 +477,21 @@ void SPUChannel::FIFO_BufferData()
      if ((FIFOReadOffset + 16) > totallen)
          burstlen = totallen - FIFOReadOffset;
  
@@ -269,7 +429,7 @@ index d797043..ea289b8 100644
      {
          for (u32 i = 0; i < burstlen; i += 4)
          {
-@@ -493,7 +549,7 @@ void SPUChannel::Start()
+@@ -493,7 +558,7 @@ void SPUChannel::Start()
      }
  }
  
@@ -278,7 +438,7 @@ index d797043..ea289b8 100644
  {
      Pos++;
      if (Pos < 0) return;
-@@ -516,7 +572,7 @@ void SPUChannel::NextSample_PCM8()
+@@ -516,7 +581,7 @@ void SPUChannel::NextSample_PCM8()
      CurSample = val << 8;
  }
  
@@ -287,7 +447,7 @@ index d797043..ea289b8 100644
  {
      Pos++;
      if (Pos < 0) return;
-@@ -539,7 +595,7 @@ void SPUChannel::NextSample_PCM16()
+@@ -539,7 +604,7 @@ void SPUChannel::NextSample_PCM16()
      CurSample = val;
  }
  
@@ -296,7 +456,7 @@ index d797043..ea289b8 100644
  {
      Pos++;
      if (Pos < 8)
-@@ -614,13 +670,13 @@ void SPUChannel::NextSample_ADPCM()
+@@ -614,13 +679,13 @@ void SPUChannel::NextSample_ADPCM()
      CurSample = ADPCMVal;
  }
  
@@ -312,7 +472,7 @@ index d797043..ea289b8 100644
  {
      if (NoiseVal & 0x1)
      {
-@@ -774,7 +830,15 @@ void SPUCaptureUnit::FIFO_FlushData()
+@@ -774,7 +839,15 @@ void SPUCaptureUnit::FIFO_FlushData()
  {
      for (u32 i = 0; i < 4; i++)
      {
@@ -329,7 +489,7 @@ index d797043..ea289b8 100644
          // Calls the NDS or DSi version, depending on the class
  
          FIFOReadPos++;
-@@ -856,20 +920,208 @@ void SPUCaptureUnit::Run(u32 cycles, s32 sample)
+@@ -856,20 +929,211 @@ void SPUCaptureUnit::Run(u32 cycles, s32 sample)
  }
  
  
@@ -372,7 +532,7 @@ index d797043..ea289b8 100644
 +    return val;
 +}
 +
-+void SPU::MixChannelsFast(u32 spucycles, s32& left, s32& right, s32& ch1, s32& ch3)
++bool SPU::MixChannelsFast(u32 spucycles, s32& left, s32& right, s32& ch1, s32& ch3)
 +{
 +    const u32 mix = ++FastCount;
 +    if (spucycles != FastCycles)
@@ -387,7 +547,7 @@ index d797043..ea289b8 100644
 +    if (!FastDirty && (s32)(mix - FastNextDue) < 0)
 +    {
 +        left = FastLeft; right = FastRight; ch1 = FastCh1; ch3 = FastCh3;
-+        return;
++        return true;
 +    }
 +
 +    // Run the channels that are due (all of them after a register write); the others keep their output. Running a
@@ -513,7 +673,9 @@ index d797043..ea289b8 100644
 +    left = sl - l1 - l3;
 +    right = sr - r1 - r3;
 +#endif
++    const bool same = left == FastLeft && right == FastRight && ch1 == FastCh1 && ch3 == FastCh3;
 +    FastLeft = left; FastRight = right; FastCh1 = ch1; FastCh3 = ch3;
++    return same;
 +}
 +
  void SPU::Mix(u32 spucycles)
@@ -523,9 +685,10 @@ index d797043..ea289b8 100644
 +    s32 ch1 = 0, ch3 = 0;
  
 -    if (Cnt & (1<<15))
++    bool same = false;
 +    if ((Cnt & (1<<15)) && FastMix)
 +    {
-+        MixChannelsFast(spucycles, left, right, ch1, ch3);
++        same = MixChannelsFast(spucycles, left, right, ch1, ch3);
 +    }
 +    else if (Cnt & (1<<15))
      {
@@ -541,7 +704,7 @@ index d797043..ea289b8 100644
  
          // TODO: addition from capture registers
          Channels[0].PanOutput(ch0, left, right);
-@@ -886,11 +1138,19 @@ void SPU::Mix(u32 spucycles)
+@@ -886,11 +1150,19 @@ void SPU::Mix(u32 spucycles)
              s32 channel = chan->DoRun(spucycles);
              chan->PanOutput(channel, left, right);
          }
@@ -562,7 +725,7 @@ index d797043..ea289b8 100644
          {
              s32 val = left;
  
-@@ -901,7 +1161,12 @@ void SPU::Mix(u32 spucycles)
+@@ -901,7 +1173,12 @@ void SPU::Mix(u32 spucycles)
              Capture[0].Run(spucycles, val);
          }
  
@@ -576,32 +739,56 @@ index d797043..ea289b8 100644
          {
              s32 val = right;
  
-@@ -1276,6 +1541,7 @@ u32 SPU::Read32(u32 addr)
+@@ -967,6 +1244,20 @@ void SPU::Mix(u32 spucycles)
+         }
+     }
+ 
++    // FastMix: the mixers and channels 1 and 3 give what they gave last Mix, and nothing else the output depends on
++    // (SOUNDCNT, the pans, master volume, bias, mute, 10-bit) has changed since that Mix computed its output in
++    // full: the output is OutputLastSamples again, so there is nothing for blip_add_delta. The rest runs as below.
++    if (same && FastTailValid && NDS.ConsoleType == 0)
++    {
++        NDS.Mic.Advance(spucycles << 1);
++        BlipTimer += spucycles;
++        if (BlipTimer >= 512 * 128)
++            BufferAudio();
++        NDS.ScheduleEvent(Event_SPU, true, MixInterval, 0, MixInterval >> 1);
++        return;
++    }
++    FastTailValid = FastMix;
++
+     leftoutput = ((s64)leftoutput * MasterVolume) >> 7;
+     rightoutput = ((s64)rightoutput * MasterVolume) >> 7;
+ 
+@@ -1276,6 +1567,8 @@ u32 SPU::Read32(u32 addr)
  
  void SPU::Write8(u32 addr, u8 val)
  {
 +    FastDirty = true; // FastMix: a channel or SOUNDCNT may have changed
++    FastTailValid = false;
      if (addr < 0x04000500)
      {
          SPUChannel* chan = &Channels[(addr >> 4) & 0xF];
-@@ -1317,6 +1583,7 @@ void SPU::Write8(u32 addr, u8 val)
+@@ -1317,6 +1610,8 @@ void SPU::Write8(u32 addr, u8 val)
  
  void SPU::Write16(u32 addr, u16 val)
  {
 +    FastDirty = true; // FastMix: a channel or SOUNDCNT may have changed
++    FastTailValid = false;
      if (addr < 0x04000500)
      {
          SPUChannel* chan = &Channels[(addr >> 4) & 0xF];
-@@ -1366,6 +1633,7 @@ void SPU::Write16(u32 addr, u16 val)
+@@ -1366,6 +1661,8 @@ void SPU::Write16(u32 addr, u16 val)
  
  void SPU::Write32(u32 addr, u32 val)
  {
 +    FastDirty = true; // FastMix: a channel or SOUNDCNT may have changed
++    FastTailValid = false;
      if (addr < 0x04000500)
      {
          SPUChannel* chan = &Channels[(addr >> 4) & 0xF];
 diff --git a/src/SPU.h b/src/SPU.h
-index 34af364..ad653e2 100644
+index 34af364..de524d8 100644
 --- a/src/SPU.h
 +++ b/src/SPU.h
 @@ -98,6 +98,14 @@ public:
@@ -658,7 +845,7 @@ index 34af364..ad653e2 100644
      void BufferAudio();
  
      void TrimOutput();
-@@ -289,6 +304,21 @@ private:
+@@ -289,6 +304,23 @@ private:
      bool Degrade10Bit = false;
      bool Mute;
  
@@ -675,7 +862,9 @@ index 34af364..ad653e2 100644
 +    alignas(16) s32 ChanL[16] {};
 +    alignas(16) s32 ChanR[16] {};
 +    s32 ChanOut[16] {};
-+    void MixChannelsFast(u32 spucycles, s32& left, s32& right, s32& ch1, s32& ch3);
++    bool MixChannelsFast(u32 spucycles, s32& left, s32& right, s32& ch1, s32& ch3);
++    // FastMix: the last Mix computed its output in full, and nothing it reads has been written since
++    bool FastTailValid = false;
 +
      std::array<SPUChannel, 16> Channels;
      std::array<SPUCaptureUnit, 2> Capture;

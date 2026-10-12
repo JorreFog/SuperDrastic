@@ -4,7 +4,8 @@
 The ARM7 (snd7.c) plays all 16 channels: PCM8, PCM16, IMA-ADPCM, PSG and noise, looping and one-shot, with
 volume envelopes, pans, dividers and hold, keying notes on and off, and both capture units write the mixers' output
 to main RAM at 0x02300000. The ARM9 (snd9.c) draws checksums of the captured audio on the top screen, so pictures
-(and bananads-difftest's RAM compare) show any difference in the mixing; headless.audio_dump shows the output.
+(and bananads-difftest's RAM compare) show any difference in the mixing; headless.audio_dump shows the output. The
+ARM9 also copies by DMA (32- and 16-bit) between main RAM, VRAM, the palettes and OAM every frame.
 """
 import os, struct, subprocess, sys
 H = os.path.dirname(os.path.abspath(__file__))
