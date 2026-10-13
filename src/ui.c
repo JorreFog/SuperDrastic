@@ -33,6 +33,7 @@ void dsflip_log(const char *fmt, ...);
 static const char *font_paths[] = {
     0,                                                  /* DSFLIP_FONT, if set */
     "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf",
+    "/usr/share/banana/rnds/fonts/PixelifySans-Medium.ttf",   /* BananaOS's copy of the theme's fonts */
     "/storage/.config/emulationstation/themes/dii-ess-aye/assets/fonts/dsi_font.otf",
     "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",   /* other firmwares' usual fonts */
@@ -308,6 +309,7 @@ static int ui_start(void) {                           /* with mx held */
     if (!font_ok) { dsflip_log("[ui] no font: pop-ups off\n"); return 0; }
     font_reg = font;                                 /* Pixelify Sans Regular for second lines, when the theme has it */
     {   FILE *f = fopen(REG_FONT, "rb");
+        if (!f) f = fopen("/usr/share/banana/rnds/fonts/PixelifySans-Regular.ttf", "rb");   /* BananaOS */
         if (f) {
             fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
             unsigned char *d = n > 0 ? malloc((size_t)n) : 0;
