@@ -1056,6 +1056,10 @@ int bmenu_run(int start) {
         if (open_ && held_dir && now_ms() >= rep_next) { nav(rep_dx, rep_dy); rep_next = now_ms() + 110; }
         { static long long mt; if (scr == SC_MIC && now_ms() - mt >= 33) { mt = now_ms(); dirty_bot = 1; } }   /* the meter moves */
         if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT) dirty_top = 1; }   /* the clock */
+        /* RetroAchievements finishes its login and the game's lookup 10-15 s after a start: a menu opened before that
+         * had no achievements on its top screen until it was opened again. Looked at twice a second while open. */
+        { static long long rt; if (now_ms() - rt >= 500) { rt = now_ms(); unsigned u = 0, t = 0; int has = ra_progress(&u, &t) && t;
+            if (has != ra_has || (has && u != ra_un)) { load_recent(); dirty_top = 1; } } }
         if (open_) redraw();
         usleep(8000);
     }
@@ -1065,7 +1069,8 @@ int bmenu_run(int start) {
 }
 
 /* ---------- pop-ups over the game: ROCKNIXDS's (SuperDrastic's ui.c), in BananaOS's colours ----------
- * The frontend calls bmenu_overlay with the top screen's finished frame, on the emulator's thread. As in ROCKNIXDS a
+ * The frontend calls bmenu_overlay with the top panel's finished picture (over the shader's output when there is one), on
+ * the presenter's thread. As in ROCKNIXDS a
  * strip 72 rows tall at 640 wide runs along the top of the top screen and slides in and out: an achievement's card
  * across it (its badge in a light frame, or a tile in the accent colour with a star or an "i"; the first line in the
  * accent colour, the second in light text), or the volume / brightness pill in its middle (a speaker or a sun, the

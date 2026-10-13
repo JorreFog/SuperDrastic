@@ -578,6 +578,13 @@ struct Display {
             Log(LogLevel::Info, "[kms] shader %s: %s\n", shader_name.c_str(), shader_on ? "on (panel-sized, 1:1)" : "unavailable");
         }
     }
+    // the achievements' pop-ups and the volume pill (menu.c's bmenu_overlay) over the top panel's picture as it goes
+    // to the screen: over the shader's output when there is one (drawn into the DS frame before the shader, they went
+    // through it with the game: the grid over them, the DS's colours, scaled with the picture), else over the frame.
+    // The shader's pass has finished here (shader_draw's glFinish with the second panel).
+    void overlay(const Buf* b) {
+        if (b && b->map) bmenu_overlay((uint32_t*)b->map, (int)(b->pitch / 4), (int)b->w, (int)b->h);
+    }
     // slot s onto both panels, unless a flip is still pending; false when it wasn't committed
     bool commit(int s, const Buf* const out[2]) {
         Lock l(mu);
@@ -624,12 +631,14 @@ struct Display {
             shader_n++;
             if (dt > shader_max_us) shader_max_us = dt;
             snext = (snext + 1) % 3;  // (one on screen, one committed, one drawn ahead)
+            overlay(out[0]);
             ready = s;
             ready_out[0] = out[0];
             ready_out[1] = out[1];
             if (commit(s, out)) ready = -1;  // the flip had already come
             return;
         }
+        overlay(out[0]);
         if (!commit(s, out)) {
             Lock l(mu);
             state[s] = QUEUED;  // back at the head of the queue: tried again at the next wake-up
@@ -1164,12 +1173,7 @@ int run_kms(Emu& emu, const Config& cfg) {
             if (dp.direct) emu.draw_into(dp.map(0, s), dp.map(1, s));
             emu.run_frame();
             if (!dp.direct) dp.write(s, emu.top(), emu.bottom());
-            ra_frame();  // RetroAchievements: this frame's memory, then any pop-up over the top screen
-            {
-                int pitch, w, h;
-                uint32_t* top = dp.picture(0, s, &pitch, &w, &h);
-                bmenu_overlay(top, pitch, w, h);
-            }
+            ra_frame();  // RetroAchievements: this frame's memory (its pop-ups are drawn by the presenter)
             dp.publish(s, depth);
             pace.wait();  // (and the governor's signal: the frames it fell behind)
         }
