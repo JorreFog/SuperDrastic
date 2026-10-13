@@ -285,6 +285,23 @@ static void* unlock_thread(void* a) { /* the badge is normally cached already; f
     return 0;
 }
 
+/* the game's progress for the frontend's library ("<unlocked> <total>" in $BANANA_RA_PROGRESS, BananaLinux's
+ * docs/EMULATORS.md): written when the game loads and after each unlock */
+static void write_progress(void) {
+    const char* p = getenv("BANANA_RA_PROGRESS");
+    if (!p || !*p || !rc) return;
+    rc_client_user_game_summary_t s;
+    rc_client_get_user_game_summary(rc, &s);
+    if (!s.num_core_achievements) return;
+    char tmp[512];
+    snprintf(tmp, sizeof tmp, "%s.new", p);
+    FILE* f = fopen(tmp, "w");
+    if (!f) return;
+    fprintf(f, "%u %u\n", s.num_unlocked_achievements, s.num_core_achievements);
+    fclose(f);
+    rename(tmp, p);
+}
+
 /* ---------- events, login, game load ---------- */
 static void on_event(const rc_client_event_t* e, rc_client_t* c) {
     (void)c;
@@ -295,6 +312,7 @@ static void on_event(const rc_client_event_t* e, rc_client_t* c) {
             break;
         }
         ralog("[ra] unlocked: %s (%u)\n", e->achievement->title, e->achievement->points);
+        write_progress();
         unlock_msg* m = calloc(1, sizeof *m);
         if (!m) break;
         snprintf(m->l1, sizeof m->l1, "Achievement unlocked \xc2\xb7 %u points", e->achievement->points);
@@ -338,6 +356,7 @@ static void on_load(int result, const char* err, rc_client_t* c, void* u) {
     else snprintf(l2, sizeof l2, "No achievements for this game yet");
     ralog("[ra] game %u '%s': %s\n", g->id, g->title, l2);
     game_loaded = 1;
+    write_progress();
     load_msg* m = calloc(1, sizeof *m);
     if (!m) {
         popup_push(g->title, l2, 0, 0x6ab0ff, 5000);
