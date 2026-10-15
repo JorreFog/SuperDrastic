@@ -57,6 +57,23 @@ static volatile uint32_t head, tail;     /* frames written by the pump / read by
 static volatile int paused = 1, primed;
 static volatile int st_under, st_over, st_lmin = RING, st_lmax, st_pump, st_sdl;
 static volatile double st_ppm;
+/* DraStic's own sample ring (r2.5.2.2, reverse-engineered from audio_callback/audio_sync): 65536 int16 samples at
+ * userdata, then at +0x40000 a block with the read index (+0x8), the write index (+0xc), the rate (+0x10) and the
+ * buffer size in bytes (+0x18, 4096). audio_sync lets the next frame be emulated once fewer than 3/4 of that size
+ * (1536 frames, 35 ms) are left, so DraStic keeps only ~35-51 ms of sound ahead of us. When its callback is asked
+ * for more than the ring holds, it copies what there is and fills the rest with zeros: a gap in the sound, audible
+ * as a click (as crackle when it happens in every few frames), which neither the ring below nor PipeWire sees.
+ * dr: that block, or 0 when DraStic's audio isn't laid out like this (another build: nothing is read). */
+static volatile uint32_t *dr;
+static volatile int st_dshort, st_dshort_fr, st_dmin = 1 << 30;
+volatile int audio_runouts;              /* times DraStic's sound ran out (cpugov.c: a step down that did this is undone) */
+static int drastic_avail(void) { return dr ? (int)((dr[3] - dr[2]) & 0xffff) / (fb / 2) : 1 << 30; }   /* frames */
+/* how far DraStic's sound is ahead of the pump (us); a large number when that isn't known or nothing is drained.
+ * dsflip.c's frame queue lets a held DraStic go before this runs short (DSFLIP_QUEUE_WAIT). */
+int audio_drastic_lead_us(void) {
+    if (!dr || paused || freq <= 0) return 1 << 30;
+    return (int)((long long)drastic_avail() * 1000000 / freq);
+}
 static volatile long long st_drained, st_pumped, st_t0;   /* frames per log window, for measured rates */
 static unsigned char silence_byte;
 /* speaker output level per pump chunk (last 32 chunks = ~186 ms), for the mic's echo gate */
@@ -201,6 +218,11 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
         if (paused && ui_pos < 0) {       /* DraStic paused audio: its callback isn't called, like with SDL */
             struct timespec d = { 0, 5000000 }; nanosleep(&d, 0);
             next = mono_ns(); continue;
+        }
+        if (!paused && !mute && dr) {    /* DraStic's lead: a chunk it hasn't made yet comes back with zeros at its end */
+            int av = drastic_avail();
+            if (av < st_dmin) st_dmin = av;
+            if (av < chunk) { st_dshort++; st_dshort_fr += chunk - av; audio_runouts++; }
         }
         if (paused) memset(tmp, 0, (size_t)chunk * fb);   /* the menu's sounds over silence (16-bit samples) */
         else { dcb(dud, tmp, chunk * fb); if (mute) memset(tmp, 0, (size_t)chunk * fb); }
@@ -405,6 +427,21 @@ int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, in
     if (t && atoi(t) >= chunk) target = atoi(t);
     dcb = want->callback; dud = want->userdata;
     fb = 2 * want->channels; freq = want->freq; silence_byte = 0;
+    if (dud) {                           /* DraStic's ring block (see dr): its buffer size and rate where expected */
+        volatile uint32_t *b = (volatile uint32_t *)((char *)dud + 0x40000);
+        if (b[6] == 4096 && (int)b[4] == freq) dr = b;
+        /* DSFLIP_AUDIO_AHEAD=<ms>: how much sound DraStic keeps made ahead of us (its own 35 ms when unset or 0).
+         * audio_sync reads the buffer size at +0x18 at every frame and lets the next one be emulated below 3/4 of it
+         * (in 16-bit samples); its callback doesn't use it. More ahead = more room for a heavy frame or a held present
+         * before its sound runs out, for that much more delay between picture and sound. */
+        const char *ah = getenv("DSFLIP_AUDIO_AHEAD");
+        int ms = ah ? atoi(ah) : 0;
+        if (dr && ms > 35 && ms <= 150) {
+            long long frames = (long long)ms * freq / 1000;
+            dr[6] = (uint32_t)(frames * (fb / 2) * 4 / 3);
+            dsflip_log("[audio] DraStic keeps %d ms of sound ahead (its own: 35 ms)\n", ms);
+        }
+    }
     ring = calloc(RING, fb);
     int use_alsa = audio_out_alsa() && alsa_open() == 0;
     if (!use_alsa) {                     /* drain via SDL's device (our callback) */
@@ -420,6 +457,7 @@ int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, in
     dsflip_log("[audio] pump: %d Hz, DraStic's callback every %d samples (%.2f ms), ring target %d (%.1f ms), output %s\n",
                freq, chunk, chunk * 1000.0 / freq, target, target * 1000.0 / freq, use_alsa ? "ALSA default" : "SDL");
     if (use_alsa && out_rate) dsflip_log("[audio] the device runs at %d Hz: resampled here (%d/%d, %d taps)\n", out_rate, rs_L, rs_M, RS_TAPS);
+    if (!dr) dsflip_log("[audio] DraStic's sample ring not found (another DraStic build?): its gaps aren't counted, and a full frame queue can't see them coming\n");
     if (use_alsa && lock_in) dsflip_log("[audio] locked to the display: DraStic's %d Hz taken as %.1f Hz (%.4f frames a second)\n", freq, lock_in,
                                         (out_rate ? (double)out_rate * rs_M / rs_L : lrint(lock_in)) / freq * DS_FPS);
     return 0;
@@ -433,6 +471,9 @@ void audio_pump_log(void) {
     long long now = mono_ns(); double el = st_t0 ? (now - st_t0) / 1e9 : 0;
     dsflip_log("[audio] pump %.1f Hz, drain %.1f Hz, ring %d..%d, underruns %d, overflows %d, xruns %d, trim %+.0f ppm\n",
                el > 0 ? st_pumped / el : 0, el > 0 ? st_drained / el : 0, st_lmin, st_lmax, st_under, st_over, st_xrun, st_ppm);
+    if (dr) dsflip_log("[audio] DraStic's sound: at least %d frames ahead, ran out %d times (%d frames of zeros)\n",
+                       st_dmin == 1 << 30 ? -1 : st_dmin, st_dshort, st_dshort_fr);
+    st_dshort = st_dshort_fr = 0; st_dmin = 1 << 30;
     st_pump = st_sdl = st_under = st_over = st_xrun = st_lmax = 0; st_lmin = RING; st_drained = st_pumped = 0; st_t0 = now;
 }
 
