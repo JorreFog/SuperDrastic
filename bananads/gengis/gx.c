@@ -157,11 +157,17 @@ static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin
         walk_chain(span, &vptr[0], 1, ys0, ye, 0);
         walk_chain(span + GX_SPS, &vptr[count], -1, ys0, ye, 0);
     }
+    /* the spans with the right edge's pixel (walk_spans' adjust), edge marking on or off: the DS fills a span up to
+     * and including its right edge's pixel, except a vertical right edge's (melonDS's RenderPolygonScanline: xend
+     * inclusive, a vertical right edge pushed 1 pixel left). DraStic adjusts only with edge marking on, and without
+     * it a polygon stopped a pixel short of the DS's: where two polygons' shared edge is a fraction of a pixel apart
+     * (HeartGold's map blocks, each drawn with its own matrix) the background showed through between them, a dashed
+     * black line down the ground, on about every other line at 2x */
     if (marks) {
         walk_spans(span, lines + top_clip + bot_clip, 1);
         sp = span + 4 * top_clip;
         walk_markers(sp, (uint32_t)lines, (uint32_t)(bot_clip << 1 | top_clip));
-    } else walk_spans(span, lines, 0);
+    } else walk_spans(span, lines, 1);
     const unsigned line0 = (unsigned)((int)y_first - lb);
     if (line0 + (unsigned)lines > GX_CL) return;     /* (cannot happen: the walk is within the window) */
     uint8_t *rec = (uint8_t *)p->rec;
