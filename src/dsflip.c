@@ -159,6 +159,7 @@ int shader_fence(void);
 int shader_imports(void);
 void audio_pump_log(void);
 void audio_mic_start(void);
+int audio_drastic_lead_us(void);
 extern int shader_copy_mode;
 int shader_draw_mem(int panel, const void *px, int sw, int shh, int sp, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 static const char *shader_nm;
@@ -358,6 +359,20 @@ static int queue_depth = 1;             /* DSFLIP_QUEUE: 0 = mailbox, 1..QMAX fr
 static int queue_wait_us;               /* DSFLIP_QUEUE_WAIT=<ms>: hold DraStic's present this long at most while the
                                            queue is full, instead of dropping its oldest frame (0: off) */
 static int st_qwait_n; static long long st_qwait_us, st_qwait_max;   /* presents held, total and longest hold */
+/* DSFLIP_QUEUE_AUDIO_FLOOR=<ms>: a held DraStic is let go while its sound is still this far ahead of the audio pump
+ * (unset: its next frame's time, see audio_floor_us; a fixed 25 ms dropped 8-16 frames a minute in light games that
+ * never ran out: Dragon Quest Monsters Joker, Pokemon Platinum, Black 2). DraStic keeps only ~35-51 ms of sound ahead (audio.c: dr), and after the hold it still has a frame to emulate
+ * (up to ~20 ms at the power profiles' lower clocks) before the next frame's sound exists: a full 20 ms hold ran its
+ * sound out and its callback filled the gap with zeros, a click. Mario Kart DS racing on an RG DS Plus (battery
+ * profile): 18-33 such gaps a minute, as crackle; none with the hold off, still 26 with the CPU at 1992 MHz. */
+static int queue_audio_floor_us;        /* 0: adaptive, the recent heaviest frame's main-thread time + 4 ms, 8-25 ms */
+static volatile long long frame_recent_ns;   /* DraStic's heaviest recent frame (main thread CPU), decaying */
+static int audio_floor_us(void) {
+    if (queue_audio_floor_us) return queue_audio_floor_us;
+    long long f = frame_recent_ns / 1000 + 4000;
+    return f < 8000 ? 8000 : f > 25000 ? 25000 : (int)f;
+}
+static int st_qcut;                     /* holds cut short for DraStic's sound */
 /* a held present is let go by a commit, so it arrives at the latch point: counting it in the phase average made the
  * latch move away from its own releases, the held frames follow, and so on (arrival spread R -> 0, latch pinned at
  * an edge, holds running into the limit and dropping after all: measured in 2 of 3 launches). Held frames don't
@@ -774,10 +789,10 @@ static void *presenter(void *a) {
                 for (int k = 0; k <= queue_depth + 1 && k <= QMAX + 1; k++) m += snprintf(w + m, sizeof w - m, " %d:%d", k, st_wait[k]);
                 if (n) LOG("[queue] depth %d, frames waiting after a commit%s, avg %.2f (%.1f ms added)",
                            queue_depth, w, sum / n, sum / n * period / 1000.0);
-                if (n && queue_wait_us) LOG(" | DraStic held %d times, %.1f ms in total, longest %.1f ms",
-                                            st_qwait_n, st_qwait_us / 1000.0, st_qwait_max / 1000.0);
+                if (n && queue_wait_us) LOG(" | DraStic held %d times, %.1f ms in total, longest %.1f ms, let go early %d times for its sound",
+                                            st_qwait_n, st_qwait_us / 1000.0, st_qwait_max / 1000.0, st_qcut);
                 if (n) LOG("\n");
-                memset(st_wait, 0, sizeof st_wait); st_qwait_n = 0; st_qwait_us = st_qwait_max = 0;
+                memset(st_wait, 0, sizeof st_wait); st_qwait_n = st_qcut = 0; st_qwait_us = st_qwait_max = 0;
             }
             st_late = 0; st_miss = 0; st10 = t;
             unlock(&mu);
@@ -1227,8 +1242,11 @@ __attribute__((constructor)) static void init(void) {
     if (tfd < 0) pacing_latch = 0;                                   /* no timer: never wait for a latch */
     { const char *lm = getenv("DSFLIP_LATCH_MARGIN"); if (lm && atoi(lm) > 0) latch_margin = margin_base = atoi(lm); }
     { const char *qw = getenv("DSFLIP_QUEUE_WAIT"); if (qw && *qw) queue_wait_us = atoi(qw) * 1000; if (queue_wait_us < 0) queue_wait_us = 0; }
-    if (queue_depth && queue_wait_us) LOG("[dsflip] pacing: %s, %d-frame queue, a full queue holds DraStic up to %d ms\n",
-                                          pacing_latch ? "latch (adaptive)" : "immediate", queue_depth, queue_wait_us / 1000);
+    { const char *af = getenv("DSFLIP_QUEUE_AUDIO_FLOOR"); if (af && *af) queue_audio_floor_us = atoi(af) * 1000; }
+    if (queue_depth && queue_wait_us) LOG("[dsflip] pacing: %s, %d-frame queue, a full queue holds DraStic up to %d ms "
+                                          "(while its sound is %s ahead)\n",
+                                          pacing_latch ? "latch (adaptive)" : "immediate", queue_depth, queue_wait_us / 1000,
+                                          queue_audio_floor_us ? "DSFLIP_QUEUE_AUDIO_FLOOR ms" : "its next frame's time + 4 ms");
     else if (queue_depth) LOG("[dsflip] pacing: %s, %d-frame queue\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_depth);
     else LOG("[dsflip] pacing: %s, mailbox\n", pacing_latch ? "latch (adaptive)" : "immediate");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
@@ -1459,6 +1477,9 @@ void SDL_RenderPresent(void *rn) {
             long long now = now_us(); if (!t0) t0 = now;
             if (now - t0 >= queue_wait_us) break;
             long long dl = t0 + queue_wait_us;
+            long long left = (long long)audio_drastic_lead_us() - audio_floor_us();   /* until its sound runs short */
+            if (left <= 0) { st_qcut++; break; }
+            if (now + left < dl) dl = now + left;
             struct timespec ts = { dl / 1000000, (dl % 1000000) * 1000 };
             pthread_cond_timedwait(&qcond, &mtx[0], &ts);
         }
@@ -1470,6 +1491,7 @@ void SDL_RenderPresent(void *rn) {
         static long long last; struct timespec ct; clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct);
         long long c = ct.tv_sec * 1000000000LL + ct.tv_nsec, w = last ? c - last : 0; last = c;
         if (w > dsflip_frame_work_max) dsflip_frame_work_max = w;
+        { long long r = frame_recent_ns - frame_recent_ns / 64; frame_recent_ns = w > r ? w : r; }   /* ~1 s half-life */
     }
     lock(&mu);
     st_present++; dsflip_presents++;

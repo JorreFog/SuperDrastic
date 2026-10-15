@@ -48,6 +48,7 @@
 // instead of per change.
 #define _GNU_SOURCE
 #include <dirent.h>
+#include <limits.h>
 #include <pthread.h>
 #include <sys/stat.h>
 #include <stdio.h>
@@ -60,6 +61,7 @@ void dsflip_log(const char *fmt, ...);
 extern volatile int dsflip_presents;        /* dsflip.c: SDL_RenderPresent calls, monotonic */
 extern volatile long long dsflip_frame_work_max;   /* dsflip.c: heaviest frame's main-thread CPU ns since taken */
 extern volatile int dsflip_queue_drops;     /* dsflip.c: frames dropped because DraStic fell behind and caught up */
+extern volatile int audio_runouts;          /* audio.c: times DraStic's sound ran out (a click: it was late) */
 extern volatile int dsflip_screen_w;        /* dsflip.c: DraStic's screen width, 256 (1x) or 512 (2x); 0 until it has one */
 
 #define POL "/sys/devices/system/cpu/cpufreq/policy0/"
@@ -71,6 +73,7 @@ extern volatile int dsflip_screen_w;        /* dsflip.c: DraStic's screen width,
 #define BAD_FOR_S 30                         /* a clock that dropped a frame isn't tried again for this long, doubled
                                                for each further time it drops one (up to BAD_MAX_S) */
 #define BAD_MAX_S 600
+#define DOWN_CHECK_MS 5000                   /* a step down is undone when DraStic's sound runs out this soon after */
 #define FORGIVE_MS 120000                    /* this long at a clock or lower without a drop forgives it one strike */
 #define MAX_STRIKES 6                        /* more wouldn't ban it longer (30 s << 5 is past BAD_MAX_S already) */
 #define BLAME_PEAK 0.80                      /* a drop is held against the clock only after a frame this heavy (last 1 s)... */
@@ -157,7 +160,7 @@ static void mem_load(int w) {
         while (fscanf(f, "%d %d", &khz, &k) == 2) {
             int i = idx(khz); if (i < 0 || k <= 0) continue;
             strikes[i] = k < MAX_STRIKES ? k : MAX_STRIKES;
-            bad_until[i] = now_ns + ban_ns(strikes[i] - 1);
+            if (bad_until[i] < now_ns + ban_ns(strikes[i] - 1)) bad_until[i] = now_ns + ban_ns(strikes[i] - 1);   /* (a session ban stays) */
             if (m < sizeof said) m += snprintf(said + m, sizeof said - m, ", %d MHz %d (not for %llds)", khz / 1000,
                                                 strikes[i], ban_ns(strikes[i] - 1) / 1000000000LL);
         }
@@ -185,7 +188,8 @@ static void *gov_thread(void *a) {
     (void)a;
     int tids[MAXT]; long long last[MAXT]; int nt = 0;
     struct timespec w = { 0, WINDOW_MS * 1000000L };
-    int drops_prev = dsflip_queue_drops;
+    int drops_prev = dsflip_queue_drops, runouts_prev = audio_runouts;
+    long long down_t = 0; int down_from = 0;            /* the last step down: when, and from which clock */
     long long t_prev = 0, fps_t[FPS_WINDOWS] = { 0 }; int fps_p[FPS_WINDOWS] = { 0 }, fi = 0, low = 0, rescan = 0;
     double peaks[FPS_WINDOWS] = { 0 };                  /* the heaviest frame of each of the last windows (1 s) */
     int w_cand = 0, w_stable = 0;                        /* DraStic's screen width, and for how many windows */
@@ -231,7 +235,7 @@ static void *gov_thread(void *a) {
                 for (int k = 0; k < FPS_WINDOWS; k++) { fps_t[k] = 0; peaks[k] = 0; }   /* the stall isn't this clock's */
             }
             __atomic_exchange_n(&dsflip_frame_work_max, 0, __ATOMIC_RELAXED);
-            drops_prev = dsflip_queue_drops; low = 0;
+            drops_prev = dsflip_queue_drops; runouts_prev = audio_runouts; low = 0; down_t = 0;
             continue;
         }
         /* the memory for the resolution DraStic settled on (it starts at 1x and switches to 2x a moment later; the
@@ -245,6 +249,19 @@ static void *gov_thread(void *a) {
         /* a late frame makes DraStic catch up in the next window, so the drop can land a window after it */
         peaks[fi] = peak; double peak1s = 0; for (int k = 0; k < FPS_WINDOWS; k++) if (peaks[k] > peak1s) peak1s = peaks[k];
         int drops = dsflip_queue_drops, dropped = drops - drops_prev; drops_prev = drops;
+        /* a step down that ran DraStic's sound out, or dropped a frame, within DOWN_CHECK_MS is undone at once, and
+         * that clock isn't tried again this session: each such try was a burst of clicks (Mario Kart DS racing,
+         * 1416 -> 1104 MHz "light" by the busiest thread, then 57.7 fps and 3-9 gaps in the sound; a drop alone was
+         * a "light" drop, banned for 30 s, so the see-saw went on every 30-120 s: 6 times in 3 minutes) */
+        int ro = audio_runouts, ranout = ro - runouts_prev; runouts_prev = ro;
+        if (down_t && t - down_t > DOWN_CHECK_MS * 1000000LL) down_t = 0;
+        if (down_t && (ranout > 0 || (dropped > 0 && umax >= IDLE_BUSY)) && down_from > cur) {
+            int c = idx(cur);
+            if (c >= 0) { bad_until[c] = LLONG_MAX; strikes[c]++; mem_save(); }
+            set_clock(down_from, ranout ? "sound ran out after a step down: not tried again this session" : "dropped after a step down: not tried again this session", umax, fps);
+            down_t = 0; low = 0;
+            continue;
+        }
         double need = cur * umax / TARGET, needp = cur * peak / PEAK_TARGET;
         /* below full speed with real work going on (all of DraStic's threads count: see "slow" below) */
         int behind = fps < 58.5 && fps > 5 && (umax > 0.5 || usum > 1.0);
@@ -291,7 +308,7 @@ static void *gov_thread(void *a) {
         if (why && want > cur) { set_clock(want, why, umax, fps); low = 0; }
         else if (fits < cur && fps >= 59 && usum < 1.2 * cur / (double)step_down(cur) && (!mem_on || mem_w)) {   /* never while below full speed, nor
                  when all of DraStic's threads together would exceed 1.2 cores at the lower clock */
-            if (++low >= DOWN_AFTER) { set_clock(step_down(cur), "light", umax, fps); low = 0; } }
+            if (++low >= DOWN_AFTER) { int from = cur; set_clock(step_down(cur), "light", umax, fps); low = 0; if (cur < from) { down_t = t; down_from = from; } } }
         else low = 0;
         if (verbose) dsflip_log("[cpugov] window: busiest %.0f%% peak frame %.0f%% fps %.1f drops %d at %d MHz, fits %d\n",
                                 umax * 100, peak * 100, fps, dropped, cur / 1000, want / 1000);
