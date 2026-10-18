@@ -204,6 +204,15 @@ static uint8_t* map_rom(const std::string& path, size_t& file_len, size_t& map_l
     return (uint8_t*)base;
 }
 
+// Mapped only from the system's own card (/data's filesystem): a ROM on a card that can be pulled out while the game
+// runs (the RG DS Plus's second slot) is read into memory, or the next page it needs would kill the emulator (SIGBUS).
+// Where there is no /data (not BananaOS), every ROM is mapped.
+static bool mappable(const std::string& path) {
+    struct stat data{}, rom{};
+    if (stat("/data", &data) != 0) return true;
+    return stat(path.c_str(), &rom) == 0 && rom.st_dev == data.st_dev;
+}
+
 bool rom_unmap(uint8_t* p) {
     std::lock_guard<std::mutex> l(g_maps_mu);
     for (size_t i = 0; i < g_maps.size(); i++)
@@ -218,12 +227,12 @@ bool rom_unmap(uint8_t* p) {
 bool Emu::load_rom(const std::string& path) {
     std::unique_ptr<u8[]> romdata;
     size_t romlen = 0, file_len = 0;
-    if (cfg_.flag("rom.map", true))
+    if (cfg_.flag("rom.map", true) && mappable(path))
         if (uint8_t* m = map_rom(path, file_len, romlen)) {
             romdata.reset(m);  // (melonDS's ~CartCommon gives it back through Platform::ROMRelease: rom_unmap)
             Log(LogLevel::Info, "[emu] ROM mapped (%zu MB), read in the background\n", file_len >> 20);
         }
-    if (!romdata) {  // rom.map=off, or the mapping failed: read into memory, straight into the buffer melonDS keeps
+    if (!romdata) {  // rom.map=off, a removable card, or the mapping failed: read into memory, straight into the buffer
         std::ifstream f(path, std::ios::binary | std::ios::ate);
         const std::streamoff n = f ? (std::streamoff)f.tellg() : -1;
         if (n >= 0x200) {
