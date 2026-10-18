@@ -68,6 +68,9 @@ public:
     // the emulator's thread waits only for the frame before's jobs (the buffers the next frame writes); whoever reads
     // a frame's pictures waits for its fence first (FrameFence after run_frame; GetFramebuffers waits by itself).
     void SetLazyFrames(bool on) { Drain2D(); LazyFrames = on; }
+    // render.2d_kick: wake the 2D thread every this many jobs (1-NumJobs; it is also woken at VBlank, at the swap
+    // and before any wait for it, so the pictures don't depend on it)
+    void SetKickBatch(u32 jobs) { KickBatch = jobs < 1 ? 1 : jobs > NumJobs ? NumJobs : jobs; }
     bool FrameFence(u32& fence) const { fence = FenceCur; return LazyFrames && Thread2D; }
     void WaitFence(u32 fence) const;  // any thread: until the 2D thread has drawn the jobs before `fence`
 
@@ -138,7 +141,9 @@ private:
     // a whole frame's jobs (192 lines and 191 sprite lines): the emulator's thread doesn't wait for a 2D thread that
     // lags within the frame, which catches up in VBlank (drained at the frame's end, SwapBuffers)
     static constexpr u32 NumJobs = 512;
-    static constexpr u32 KickBatch = 16;  // jobs handed over before the thread is woken (fewer wakeups)
+    // jobs handed over before the thread is woken (render.2d_kick): each wake of a sleeping 2D thread is a futex
+    // call on the emulator's thread (pthread_cond_signal, 0.9% of it in Mario Kart DS's race start at 16)
+    u32 KickBatch = 16;
 
     Job& NewJob();
     void Submit();
