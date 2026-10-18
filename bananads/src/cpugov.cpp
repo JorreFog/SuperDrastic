@@ -54,7 +54,7 @@ static bool use_repeats = true;  // cpugov.repeats
 // (the queue evens out one late frame), but a step down made each heavy frame miss its refresh. 0: no check
 static double tail_limit = 1.4;
 static long tail_from = 0;  // frames before this one are the previous clock's  // cpugov.window_ms (the tests')
-static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5;
+static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5, REPEAT_BUSY = 0.5;
 // (a probe of a clock that then drops a frame shows: a ban of 2 min, doubling to 30, and 10 s clean before the next
 // step down keep it from hunting; at 30 s / 8 windows HeartGold on the RG DS went down and back up every ~30 s)
 static const int BAD_FOR_S = 120, BAD_MAX_S = 1800, FORGIVE_MS = 120000, MAX_STRIKES = 6, FPS_WINDOWS = 4, DOWN_AFTER = 40;
@@ -271,7 +271,9 @@ static void gov_loop() {
         // cpugov.repeats (on): a refresh that went without a new frame counts as a late frame (what the player sees);
         // on the RG DS Plus the clock steps it took cost GS:DD's town 1.3% missed refreshes at 1416 MHz, 0.07% at 1992,
         // while the schedule's late count saw almost none of them
-        const long rep_now = feed_->repeats, missed = use_repeats ? rep_now - rep_prev : 0;
+        // (only while the busiest thread is at least half busy: a refresh missed in a light game is a stall, a load or a
+        // scene change, not the clock; one sent Pokémon Platinum's intro back to 1800 MHz with its busiest thread at 14%)
+        const long rep_now = feed_->repeats, missed = use_repeats && umax >= REPEAT_BUSY ? rep_now - rep_prev : 0;
         rep_prev = rep_now;
         const long late_now = feed_->late, late = late_now - late_prev + missed;
         late_prev = late_now;
