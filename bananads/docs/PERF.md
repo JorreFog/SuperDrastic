@@ -470,7 +470,8 @@ chain then goes on into the exit's next block. Otherwise it changes nothing and 
 
 - qemu-count (main thread, instructions a frame): cpubench Thumb 4,896k -> 4,696k (-4.1%: the slice loop 962k ->
   352k, ARM_Dispatch/ARM_Ret 192k -> 45k, SliceChain9 +510k); membench 6,032k -> 6,022k (its ARM9 halts most of the
-  frame, which 0031 is for).
+  frame, which 0031 is for); cpubench with a busy ARM7 5,381k -> 5,463k (+1.5%: every call bails, the ARM7 being
+  behind and running).
 - Checked: `evidence/jit/exact-suite.sh` off vs on, FAILS=0 (pictures of 17 ROMs, the dmasnd audio dump, difftest
   `--every` main RAM on 9, `bananads-tests`); pictures and audio dump of sndbench, ds2dtest, geomtest, bigcode and
   L1; `core.slice=auto` (ipcrom, cpubench busy ARM7, dmasnd) and `render.scale=2` (cpubench, L5); difftest on ipcrom.
