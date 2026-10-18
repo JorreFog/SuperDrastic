@@ -69,6 +69,7 @@ using melonDS::Platform::LogLevel;
 namespace bananads {
 
 static std::atomic<bool> g_quit{false};
+static std::atomic<int> g_ff{0};  // fast-forward: 0 off, else the speed (99: as fast as it goes)
 static int g_wake = -1;  // eventfd: a signal or a new frame wakes the presenter
 
 static void wake() {
@@ -961,6 +962,8 @@ struct MenuOpts {
     std::vector<std::string> shaders;  // "none" first, then the shader folder's
     int shader = 0;
     bool edge = true, fog = true;
+    bool fps = false;  // kms.fps: the FPS counter
+    int ff_speed = 2;  // kms.ff_speed: fast-forward's speed when the hotkey turns it on (2, 3 or 99, Max)
 };
 static MenuOpts g_opts;
 static void opts_init(const Config& cfg, Display& dp) {
@@ -980,15 +983,35 @@ static void opts_init(const Config& cfg, Display& dp) {
     for (size_t i = 0; i < o.shaders.size(); i++) if (o.shaders[i] == dp.shader_name) o.shader = (int)i;
     o.edge = cfg.flag("render.edge_marking", true);
     o.fog = cfg.flag("render.fog", true);
+    o.fps = cfg.flag("kms.fps", false);
+    const long ff = cfg.num("kms.ff_speed", 2);
+    o.ff_speed = ff == 3 ? 3 : ff > 3 ? 99 : 2;
 }
-static int mh_opt_count(void*) { return 3; }
-static const char* mh_opt_label(void*, int i) { return i == 0 ? "Shader" : i == 1 ? "Edge marking" : "Fog"; }
-static int mh_opt_values(void*, int i) { return i == 0 ? (int)g_opts.shaders.size() : 2; }
+static const int ff_speeds[4] = {0, 2, 3, 99};  // the menu's Fast-forward values: Off, 2x, 3x, Max
+static void save_opt(const char* key, const std::string& v) {
+    const char* data = getenv("BANANADS_DATA");
+    set_kv(std::string(data && *data ? data : "/data/bananads") + "/bananads.conf", key, v, " = ");
+}
+// F + X: fast-forward on at the speed last chosen in the menu, or off
+static void ff_toggle() { g_ff = g_ff.load() ? 0 : g_opts.ff_speed; }
+static int mh_opt_count(void*) { return 5; }
+static const char* mh_opt_label(void*, int i) {
+    static const char* const l[5] = {"Shader", "Edge marking", "Fog", "FPS counter", "Fast-forward"};
+    return i >= 0 && i < 5 ? l[i] : "?";
+}
+static int mh_opt_values(void*, int i) { return i == 0 ? (int)g_opts.shaders.size() : i == 4 ? 4 : 2; }
 static const char* mh_opt_value_name(void*, int i, int v) {
     if (i == 0) return v >= 0 && v < (int)g_opts.shaders.size() ? shader_label(g_opts.shaders[v]) : "?";
+    if (i == 4) return v == 1 ? "2x" : v == 2 ? "3x" : v == 3 ? "Max" : "Off";
     return v ? "On" : "Off";
 }
-static int mh_opt_get(void*, int i) { return i == 0 ? g_opts.shader : i == 1 ? g_opts.edge : g_opts.fog; }
+static int mh_opt_get(void*, int i) {
+    if (i == 4) {
+        const int f = g_ff.load();
+        return f == 2 ? 1 : f == 3 ? 2 : f ? 3 : 0;
+    }
+    return i == 0 ? g_opts.shader : i == 1 ? g_opts.edge : i == 2 ? g_opts.fog : g_opts.fps;
+}
 static void mh_opt_set(void* c, int i, int v) {
     MenuHost* h = (MenuHost*)c;
     if (i == 0) {
@@ -1001,6 +1024,16 @@ static void mh_opt_set(void* c, int i, int v) {
         }
         // the same choice as Settings > Nintendo DS > Shader (both emulators read it from there)
         set_kv("/data/banana/superdrastic.conf", "DSFLIP_SHADER", g_opts.shaders[v], "=");
+    } else if (i == 3) {
+        g_opts.fps = v != 0;
+        save_opt("kms.fps", v ? "on" : "off");
+    } else if (i == 4) {
+        if (v < 0 || v > 3) return;
+        g_ff = ff_speeds[v];  // (on for this game only; the speed is kept for the hotkey)
+        if (v) {
+            g_opts.ff_speed = ff_speeds[v];
+            save_opt("kms.ff_speed", v == 3 ? "max" : std::to_string(ff_speeds[v]));
+        }
     } else {
         (i == 1 ? g_opts.edge : g_opts.fog) = v != 0;
 #ifdef BANANADS_GENGIS
@@ -1144,7 +1177,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         const std::chrono::nanoseconds period(pace_display ? (long long)(dp.period_us * 1000.0) : 16715180LL);
         if (pace_display) emu.set_audio_rate(48000.0 * dp.period_us * 1000.0 / 16715180.0);
         Pacer pace(feed, period);
-        int touched = -1;
+        int touched = -1, ff = 0;
         while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
             if (pause_req.load(std::memory_order_acquire)) {  // the menu: at a frame's end, until it closes
                 std::unique_lock<std::mutex> l(pm);
@@ -1161,6 +1194,11 @@ int run_kms(Emu& emu, const Config& cfg) {
             if (int s = in_load.exchange(0)) {
                 cpugov_boost(3000);
                 emu.load_state(s);
+            }
+            if (const int f = g_ff.load(std::memory_order_relaxed); f != ff) {
+                ff = f;
+                pace.set_speed(ff ? ff : 1);  // (Max: 99 times as often, i.e. no wait at all in practice)
+                Log(LogLevel::Info, "[kms] fast-forward %s\n", ff ? (ff == 99 ? "max" : ff == 2 ? "2x" : "3x") : "off");
             }
             emu.set_keys(in_keys.load(std::memory_order_relaxed));
             const int t = in_touch.load(std::memory_order_relaxed);
@@ -1235,6 +1273,9 @@ int run_kms(Emu& emu, const Config& cfg) {
     std::vector<pollfd> pfd;
     long shown_mark = 0, made_mark = 0, drop_mark = 0, rep_mark = 0;
     long long since = now_us();
+    long fps_mark = 0;
+    long long fps_since = since;
+    bmenu_fps(-1, 0);
     while (run.load()) {
         pfd.clear();
         pfd.push_back({dp.fd, POLLIN, 0});
@@ -1304,6 +1345,7 @@ int run_kms(Emu& emu, const Config& cfg) {
                         if (b == KeyStart) g_quit = true;
                         else if (b == KeyR) in_save = 1;
                         else if (b == KeyL) in_load = 1;
+                        else if (b == KeyX) ff_toggle();
                         continue;
                     }
                     keys = x.value ? keys | b : keys & ~b;
@@ -1316,6 +1358,16 @@ int run_kms(Emu& emu, const Config& cfg) {
             open_menu((int)menu_test - 1);
         }
         if (g_quit) break;
+
+        // the FPS counter (kms.fps, or the menu's; always while fast-forwarding): the frames emulated a second, twice
+        // a second
+        if (const long long t = now_us(); t - fps_since >= 500000) {
+            const long m = dp.made.load();
+            if (g_opts.fps || g_ff.load()) bmenu_fps((int)((m - fps_mark) * 10000000LL / (t - fps_since)), g_ff.load());
+            else bmenu_fps(-1, 0);
+            fps_mark = m;
+            fps_since = t;
+        }
 
         // kms.stats: every this many frames shown, the refresh rate of new frames, the frames emulated per second,
         // the refreshes that showed no new frame and the frames never shown

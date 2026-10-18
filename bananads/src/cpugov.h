@@ -26,10 +26,11 @@ class Pacer {
 public:
     explicit Pacer(GovFeed& feed, std::chrono::nanoseconds period = std::chrono::nanoseconds(16715180));  // 59.8261 Hz
     void wait();  // after each frame: counts it, then sleeps until the next one is due
+    void set_speed(int times);  // fast-forward: the frames due this many times as often (1: the normal rate)
 
 private:
     GovFeed& feed_;
-    std::chrono::nanoseconds period_;
+    std::chrono::nanoseconds base_, period_;
     std::chrono::steady_clock::time_point due_;
     long behind_ = 0;  // whole frames behind after the last frame
 };

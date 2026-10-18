@@ -315,7 +315,13 @@ static void gov_loop() {
 }
 
 Pacer::Pacer(GovFeed& feed, std::chrono::nanoseconds period)
-    : feed_(feed), period_(period), due_(std::chrono::steady_clock::now()) {}
+    : feed_(feed), base_(period), period_(period), due_(std::chrono::steady_clock::now()) {}
+
+void Pacer::set_speed(int times) {
+    period_ = base_ / std::max(1, times);
+    due_ = std::chrono::steady_clock::now();  // from now at the new rate: nothing owed from the old one
+    behind_ = 0;
+}
 
 void Pacer::wait() {
     due_ += period_;

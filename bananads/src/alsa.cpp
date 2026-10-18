@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <pthread.h>
 #include <sched.h>
+#include <sys/stat.h>
 
 #include <atomic>
 #include <mutex>
@@ -54,6 +55,17 @@ static snd_pcm_t* open_pcm(const std::string& dev, snd_pcm_stream_t dir, unsigne
     return pcm;
 }
 
+// The headphone jack (BananaOS #13): bananad renames a new /run/banana/asound.conf in when earphones go in or out,
+// but alsa-lib read its configuration once, at the first open. When the file changes (another inode, or a newer
+// time), the output is closed, the configuration dropped and "default" opened again: the sound follows the jack.
+static const char* const JACK_CONF = "/run/banana/asound.conf";
+static bool conf_id(struct stat& st) { return stat(JACK_CONF, &st) == 0; }
+static bool conf_changed(const struct stat& was, bool had, struct stat& now) {
+    const bool has = conf_id(now);
+    if (has != had) return true;
+    return has && (now.st_ino != was.st_ino || now.st_mtim.tv_sec != was.st_mtim.tv_sec ||
+                   now.st_mtim.tv_nsec != was.st_mtim.tv_nsec);
+}
 static void out_thread(Alsa* a) {
     pthread_setname_np(pthread_self(), "bds-audio");
     if (a->rt) {
@@ -62,12 +74,33 @@ static void out_thread(Alsa* a) {
         if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0)
             Log(LogLevel::Info, "[alsa] no real-time priority for the sound thread\n");
     }
+    struct stat conf{};
+    bool had_conf = conf_id(conf);
     snd_pcm_t* pcm = open_pcm(a->out_dev, SND_PCM_STREAM_PLAYBACK, 2, 48000, a->latency_us);
     if (!pcm) return;
     const int chunk = 256;  // SuperDrastic's pump chunk
     std::vector<int16_t> buf(chunk * 2);
     int16_t last[2] = {0, 0};
+    int since_check = 0;
     while (a->run) {
+        if (++since_check >= 47) {  // ~250 ms of 256-frame chunks at 48 kHz
+            since_check = 0;
+            struct stat now{};
+            if (conf_changed(conf, had_conf, now)) {
+                conf = now;
+                had_conf = conf_id(now);
+                snd_pcm_drop(pcm);
+                snd_pcm_close(pcm);
+                {
+                    std::lock_guard<std::mutex> l(g_open_mu);
+                    snd_config_update_free_global();
+                }
+                pcm = open_pcm(a->out_dev, SND_PCM_STREAM_PLAYBACK, 2, 48000, a->latency_us);
+                Log(LogLevel::Info, "[alsa] %s changed: %s opened again%s\n", JACK_CONF, a->out_dev.c_str(),
+                    pcm ? "" : " (failed: no sound)");
+                if (!pcm) return;
+            }
+        }
         int got = a->emu->audio(buf.data(), chunk);
         if (got > 0) {
             last[0] = buf[(got - 1) * 2];

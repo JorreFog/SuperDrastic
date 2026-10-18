@@ -766,7 +766,7 @@ static void draw_bottom(void) {
         }
     } else if (s == SC_SET) {
         draw_header(c, "Quick settings", "changes apply at once", 1);
-        int y = gy0, rh = nrows > 3 ? S(48) : S(54), gap = nrows > 3 ? S(6) : S(10);
+        int y = gy0, rh = nrows > 6 ? S(38) : nrows > 3 ? S(48) : S(54), gap = nrows > 6 ? S(5) : nrows > 3 ? S(6) : S(10);
         for (int r = 0; r < nrows; r++) {
             int sel = r == sel_set, id = rows[r];
             R_ROW[r] = (rect){ gx0, y, gx1, y + rh }; R_BAR[r] = (rect){ 0, 0, 0, 0 };
@@ -1087,6 +1087,8 @@ static ovpic OP, OV;                                   /* the pop-up's card, the
 static int op_on, ov_on, ov_kind, ov_pct = -1, ov_built_pct = -2, ov_built_kind = -1, ov_for_w;
 static long long op_from, op_until, ov_from, ov_until, osd_mt, osd_check;
 static char op_l1[128], op_l2[160], op_badge[600]; static uint32_t op_accent;
+static ovpic OF;                                       /* the FPS counter */
+static int of_val = -1, of_ff, of_built = -2, of_built_ff = -1, of_for_w;
 
 /* draw f twice (over black and over white) into a w x h picture with coverage */
 static int ov_make(ovpic *o, int w, int h, int x, int y, float sc, void (*f)(canvas *)) {
@@ -1155,6 +1157,17 @@ static void ov_draw_level(canvas *c) {   /* the pill's own picture: c is exactly
         fill(c, sx, cy - S(8), ex, cy + S(8), i < (ov_pct + 5) / 10 ? C_CYAN : C_LINE, 1.0f);
     }
 }
+static void ov_draw_fps(canvas *c) {   /* the counter's own picture: c is exactly its card */
+    ov_card(c, 0, 0, c->w, c->h);
+    char t[24]; snprintf(t, sizeof t, "%d.%d FPS", of_val / 10, of_val % 10);
+    ov_text(c, &F_MED, t, (float)S(12), (float)S(23), (float)S(17), C_CYAN, (float)(c->w - S(20)));
+    if (of_ff) {
+        char f[16]; if (of_ff == 99) snprintf(f, sizeof f, ">> Max"); else snprintf(f, sizeof f, ">> %dx", of_ff);
+        float fw = text_w(&F_MED, f, (float)S(17), 16);
+        ov_text(c, &F_MED, f, (float)(c->w - S(12)) - fw, (float)S(23), (float)S(17), C_LIGHT, fw + 2);
+    }
+}
+void bmenu_fps(int fps_x10, int ff) { of_val = fps_x10; of_ff = ff; }
 /* the keys' level, from bananad (a file written in the last 2 s, newer than the last one seen) */
 static void ov_osd(long long t) {
     if (t < osd_check) return;
@@ -1210,6 +1223,14 @@ void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
     int strip = (int)lroundf(72 * sc);
     if (strip > h) strip = h;
     if (!fonts_ready()) return;
+    if (of_val >= 0) {   /* the FPS counter, under the pop-ups and the pill */
+        if (of_val != of_built || of_ff != of_built_ff || w != of_for_w) {
+            canvas probe = { 0, w, strip, sc }, *c = &probe;
+            if (!ov_make(&OF, of_ff ? S(210) : S(118), S(34), S(6), S(6), sc, ov_draw_fps)) of_val = -1;
+            of_built = of_val; of_built_ff = of_ff; of_for_w = w;
+        }
+        if (of_val >= 0) ov_blit(&OF, px, pitch, h, 0);
+    }
     if (w != ov_for_w) { ov_for_w = w; ov_built_pct = -2; if (op_on && !ov_make(&OP, w, strip, 0, 0, sc, ov_draw_popup)) op_on = 0; }
     ov_osd(t);
     if (ov_on && t >= ov_until) ov_on = 0;
