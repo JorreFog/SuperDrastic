@@ -1283,12 +1283,14 @@ int run_kms(Emu& emu, const Config& cfg) {
                 touched = t;
             }
             const int s = dp.take();
+            const auto work0 = std::chrono::steady_clock::now();  // (cpugov.tail: the frame's work, to its publish)
             if (dp.direct) emu.draw_into(dp.map(0, s), dp.map(1, s));
             emu.run_frame();
             if (!dp.direct) dp.write(s, emu.top(), emu.bottom());
             ra_frame();  // RetroAchievements: this frame's memory (its pop-ups are drawn by the presenter)
             uint32_t fence = 0;
             const bool fenced = emu.frame_fence(fence);
+            feed.frame_time(std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - work0).count());
             dp.publish(s, depth, fenced, fence);
             pace.wait();  // (and the governor's signal: the frames it fell behind)
         }
@@ -1375,6 +1377,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         if (pfd[0].revents & POLLIN) drmHandleEvent(dp.fd, &ev);
         dp.commit_next();
         feed.frames = dp.made.load();
+        feed.repeats = dp.repeats;  // (cpugov.repeats; flipped() counts them on this thread)
 
         for (size_t i = 2; i < pfd.size(); i++) {
             if (!(pfd[i].revents & POLLIN)) continue;
