@@ -1,0 +1,79 @@
+# BananaDS as the RG DS runs it: built with the handhelds' own toolchain and flags (Buildroot 2026.02.3's Bootlin
+# aarch64 glibc stable 2025.08-1: GCC 14.3.0, glibc 2.41; -O2 -g0 -D_FORTIFY_SOURCE=1, -mcpu=cortex-a55, no PIE, no
+# stack protector, LTO: bananads/cmake/bootlin-a55.cmake), so a branch's binary can be A/B'd on the device without
+# building it there. KMS and ALSA are off (the toolchain's sysroot has no libdrm or alsa-lib): the headless frontend
+# only (tools/device/hgquick.sh, threads.sh, hgprofile.sh); the core, the JIT and the renderers are the device's code.
+# The artifact holds bananads stripped as Buildroot strips it and the unstripped one (bananads.debug: names for
+# --set prof.syms=..., docs/PERF.md "Measuring"), plus bananads-difftest. No releases, no tags.
+name: bananads-device
+on:
+  push:
+    branches: ['claude/bananads-perf-**', 'bananads-perf/**']
+    paths: ['bananads/**', '.github/workflows/bananads-device.yml']
+  workflow_dispatch:
+    inputs:
+      cmake_options:
+        description: 'extra cmake -D options (e.g. -DBANANADS_ALIGN=32:16:16)'
+        required: false
+        default: ''
+
+jobs:
+  aarch64-device:
+    runs-on: ubuntu-24.04
+    env:
+      BOOTLIN: aarch64--glibc--stable-2025.08-1
+      BOOTLIN_SHA256: dfb47eee874eef9e8a7fc042eee4e0a183f444b6bcde6a82fef8f009918389c9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build python3 clang lld qemu-user
+      - name: The Bootlin toolchain (cached)
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/${{ env.BOOTLIN }}
+          key: bootlin-${{ env.BOOTLIN }}
+      - name: Download the toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSLo t.tar.xz https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/$BOOTLIN.tar.xz
+          echo "$BOOTLIN_SHA256  t.tar.xz" | sha256sum -c -
+          tar -xf t.tar.xz && rm t.tar.xz
+      - name: Build (bananads, bananads-difftest, bananads-tests)
+        run: |
+          export BANANADS_BOOTLIN="$RUNNER_TEMP/$BOOTLIN"
+          PKG_CONFIG_LIBDIR=/nonexistent cmake -S bananads -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$PWD/bananads/cmake/bootlin-a55.cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=ON -DBUILD_TESTING=OFF \
+            -DBANANADS_JIT=melonds -DBANANADS_SDL=OFF -DBANANADS_ALSA=OFF -DBANANADS_KMS=OFF -DBANANADS_LAN=OFF \
+            -DBANANADS_CPU=cortex-a55 -DBANANADS_LTO=ON ${{ github.event.inputs.cmake_options }}
+          cmake --build build -j"$(nproc)" --target bananads bananads-difftest bananads-tests
+      - name: Tests and a smoke run (qemu, the toolchain's sysroot)
+        run: |
+          S="$RUNNER_TEMP/$BOOTLIN/aarch64-buildroot-linux-gnu/sysroot"
+          qemu-aarch64 -L "$S" build/bananads-tests
+          python3 stressrom/build.py
+          mkdir -p smoke
+          qemu-aarch64 -L "$S" build/bananads --frontend headless --set headless.frames=300 --set save.dir=smoke \
+            --set wifi.dns=off --set resume.on_start=off --set prof.hz=1000 --set prof.from=100 \
+            stressrom/out/dsstress-L5.nds 2>&1 | tee smoke/log.txt
+          grep -q '300 frames' smoke/log.txt
+          grep -q '\[prof\] ## top' smoke/log.txt
+      - name: Package (stripped as Buildroot strips, and unstripped)
+        run: |
+          T="$RUNNER_TEMP/$BOOTLIN"
+          mkdir -p out
+          cp build/bananads out/bananads.debug
+          "$T/bin/aarch64-linux-strip" --remove-section=.comment --remove-section=.note -o out/bananads build/bananads
+          "$T/bin/aarch64-linux-strip" --remove-section=.comment --remove-section=.note -o out/bananads-difftest build/bananads-difftest
+          { echo "branch: $GITHUB_REF_NAME"; echo "commit: $GITHUB_SHA"; echo "cmake options: ${{ github.event.inputs.cmake_options }}";
+            echo "toolchain: $BOOTLIN ($("$T/bin/aarch64-linux-gcc" --version | head -1))"; } > out/BUILD.txt
+          (cd out && sha256sum bananads bananads.debug bananads-difftest > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bananads-aarch64-${{ github.sha }}
+          path: out/
+          retention-days: 30
