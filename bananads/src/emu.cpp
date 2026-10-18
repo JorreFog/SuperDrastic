@@ -391,9 +391,10 @@ bool Emu::load_rom(const std::string& path) {
     }
 
     // jit.flagstub=on|off: off sets MELONDS_JIT_NOFLAGSTUB=1, on unsets it (melonDS patch 0042: an exit's stub puts the
-    // pending guest flags in RCPSR instead of three instructions in every block; default on)
+    // pending guest flags in RCPSR instead of three instructions in every block). Default off: no check sees a
+    // mistake in ExitCheckPCF's flags (the test ROMs nor Mario Kart DS's race start, docs/PERF.md)
     {
-        const std::string v = cfg_.str("jit.flagstub", "");
+        const std::string v = cfg_.str("jit.flagstub", "off");
         if (v == "on") unsetenv("MELONDS_JIT_NOFLAGSTUB");
         else if (v == "off") setenv("MELONDS_JIT_NOFLAGSTUB", "1", 1);
     }
