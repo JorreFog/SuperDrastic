@@ -1,0 +1,296 @@
+From 0448fe38c9074ed6f342f98b1b49cc27844de36b Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 19:10:15 +0000
+Subject: [PATCH] GPU3D: the JIT's STMs into the GX FIFO in one call, the
+ packed commands decoded in registers
+
+HeartGold's emulator thread spent 5.7% in SlowBlockTransfer9 (the device profile of 2026-10-12): games send display
+lists to the GX FIFO (0x04000400-0x0400043F) with LDM/STM pairs (NitroSDK's GX_SendFifo*, MI_CpuSend32). Each STM
+went through SlowBlockTransfer9's general checks, then GPU3D::WriteToGXFIFO -> WriteToGXFIFOBody per word: a call
+and a 4-register-pair frame per word, the packed command's state (NumCommands, CurCommand, ParamCount, TotalParams)
+loaded and stored per word, and CmdFIFOWriteFast's FIFO count, write position and GXSTAT per entry.
+
+Now (render.gx_batch, MELONDS_GXBATCH=0 turns it off; default on):
+- SlowBlockTransfer9 checks for an STM into the GX FIFO first, with the same conditions as its block path (the GX
+  route and memfast IO on, clear of the TCMs, all words in 0x04000400-0x0400043F; not with MELONDS_IOSTATS), and
+  hands the words to GPU3D::WriteGXFIFOWords; everything else goes on to the unchanged body (a tail call).
+- GPU3D::WriteGXFIFOWordsBody is WriteToGXFIFOBody's loop over n words with the decoding state in registers and,
+  with GeomFast, CmdFIFOWriteFast's work with the FIFO's count and write position in registers, GXSTAT's bits and
+  the push/pop and test counts gathered and set at the end (nothing reads them in between: the geometry engine runs
+  no command in the call; GXFIFOStall reads only CPUStop and the DMAs' Executing). A full FIFO still goes to the
+  stall queue and GXFIFOStall, word by word as before.
+- DMA's GX block path (0020, WriteGXFIFOBlock) uses the same loop, stopping after the word that stalls.
+
+Exact: the JIT charges an STM's cycles in its code, and the words reach the FIFO, the pipe and the stall queue in
+the same order with the same GXSTAT. tests/gxstm (new) sends NNS-style packed display lists by STMIA bursts of 1-8
+words, STMDB, Thumb STMIA, STRs, immediate and GX-FIFO DMA: main RAM identical every frame off vs on; two sabotaged
+builds (all-NOP headers dropped; one word of 7-word STMs dropped) caught at frames 2 and 1. qemu-count, gxstm: the
+GX FIFO path 327.8k -> 239.8k instructions/frame.
+---
+ src/ARMJIT.cpp     |  27 +++++++++++
+ src/FIFO.h         |   6 +++
+ src/GPU3D.cpp      | 118 +++++++++++++++++++++++++++++++++++++++++++++
+ src/GPU3D.h        |   7 +++
+ src/NDS_IOFast.cpp |  13 ++++-
+ src/NDS_IOFast.h   |   1 +
+ 6 files changed, 170 insertions(+), 2 deletions(-)
+
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 8b6a68f..1ab0413 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -585,8 +585,35 @@ void SlowWrite7(u32 addr, u32 val)
+     SlowWrite7Impl<T, ConsoleType>(addr, val);
+ }
+ 
++template <bool Write, int ConsoleType>
++[[gnu::noinline]] static void SlowBlockTransfer9Body(u32 addr, u64* data, u32 num, ARMv5* cpu);
++
+ template <bool Write, int ConsoleType>
+ void SlowBlockTransfer9(u32 addr, u64* data, u32 num, ARMv5* cpu)
++{
++    if (ConsoleType == 0 && Write)
++    {
++        // render.gx_batch: an STM into the GX FIFO, checked first and handed to the geometry engine in one call
++        // (the block path below with the same checks: the GX route on, clear of the TCMs, all of it in
++        // 0x04000400-0x0400043F; GeometryEnabled can't change in between); not with the IO statistics on
++        const u32 flags = SlowPathFlags;
++        const u32 a = addr & ~0x3u;
++        constexpr u32 need = slow_GXBatch | slow_MemIO | iofast_GX;
++        if ((flags & (need | slow_FullPath)) == need && a - 0x04000400 < 0x40 && num
++            && a + (num - 1) * 4 < 0x04000440 && a >= cpu->ITCMSize && (~cpu->DTCMMask) >= 0x3FF
++            && (a & cpu->DTCMMask) != cpu->DTCMBase)
++        {
++            GPU3D& gpu3d = cpu->NDS.GPU.GPU3D;
++            if (gpu3d.GeometryEnabled)
++                gpu3d.WriteGXFIFOWords(data, num);
++            return;
++        }
++    }
++    SlowBlockTransfer9Body<Write, ConsoleType>(addr, data, num, cpu);
++}
++
++template <bool Write, int ConsoleType>
++[[gnu::noinline]] static void SlowBlockTransfer9Body(u32 addr, u64* data, u32 num, ARMv5* cpu)
+ {
+     addr &= ~0x3;
+     MELONDS_IOSTAT(Write ? iostat_Block9Write : iostat_Block9Read, addr, 4, num);
+diff --git a/src/FIFO.h b/src/FIFO.h
+index acccc13..a0decac 100644
+--- a/src/FIFO.h
++++ b/src/FIFO.h
+@@ -96,6 +96,12 @@ public:
+ 
+     bool CanFit(u32 num) const { return ((NumOccupied + num) <= NumEntries); }
+ 
++    // BananaDS (GPU3D::WriteGXFIFOWordsBody, render.gx_batch): a caller appending in a loop of its own keeps the
++    // write position and the count in registers, and sets them back here
++    T* EntryData() { return Entries; }
++    u32 WriteIndex() const { return WritePos; }
++    void SetWriteState(u32 num, u32 wpos) { NumOccupied = num; WritePos = wpos; }
++
+ private:
+     T Entries[NumEntries] = {0};
+     u32 NumOccupied = 0;
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index 729d538..96d7d8e 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -149,6 +149,8 @@ GPU3D::GPU3D(melonDS::GPU& gpu) noexcept :
+     // read once, here: a difftest has two NDS objects, each created with its own setting
+     const char* e = getenv("MELONDS_GEOMFAST");
+     GeomFast = !(e && e[0] == '0');
++    const char* b = getenv("MELONDS_GXBATCH");
++    GXBatch = !(b && b[0] == '0');
+ }
+ 
+ void Vertex::DoSavestate(Savestate* file) noexcept
+@@ -3213,9 +3215,125 @@ void GPU3D::Write16(u32 addr, u16 val) noexcept
+     Log(LogLevel::Debug, "unknown GPU3D write16 %08X %04X\n", addr, val);
+ }
+ 
++// render.gx_batch: WriteToGXFIFOBody for each of n words (load(i) gives word i), the decoding state in registers
++// (nothing CmdFIFOWrite and GXFIFOStall do reads or writes it); with Stop, returns after the word that leaves the
++// system stalled (WriteGXFIFOBlock's check), else n. With Fast, CmdFIFOWriteFast's work with the FIFO's count and
++// write position in registers too, and GXSTAT's bits and the push/pop and test counts gathered and set at the end:
++// nothing reads them in between (only commands write the FIFO, and the geometry engine runs none in this call;
++// GXFIFOStall reads only CPUStop and the DMAs' Executing).
++template<bool Fast, bool Stop, typename Load>
++inline __attribute__((always_inline)) u32 GPU3D::WriteGXFIFOWordsBody(Load load, u32 n) noexcept
++{
++    u32 numCommands = NumCommands, curCommand = CurCommand, paramCount = ParamCount, totalParams = TotalParams;
++    CmdFIFOEntry* const fifo = CmdFIFO.EntryData();
++    u32 fifoN = CmdFIFO.Level(), fifoW = CmdFIFO.WriteIndex();
++    u32 gxor = 0, pushpop = 0, tests = 0;
++    u32 i = 0;
++    while (i < n)
++    {
++        const u32 val = load(i);
++        i++;
++        if (numCommands == 0)
++        {
++            numCommands = 4;
++            curCommand = val;
++            paramCount = 0;
++            totalParams = CmdNumParams[curCommand & 0xFF];
++
++            if (totalParams > 0) goto next;
++        }
++        else
++            paramCount++;
++
++        for (;;)
++        {
++            if ((curCommand & 0xFF) || (numCommands == 4 && curCommand == 0))
++            {
++                CmdFIFOEntry entry;
++                entry.Command = curCommand & 0xFF;
++                entry.Param = val;
++                if constexpr (Fast)
++                {
++                    // CmdFIFOWriteFast
++                    bool written = true;
++                    if (fifoN == 0 && !CmdPIPE.IsFull())
++                        CmdPIPE.Write(entry);
++                    else if (fifoN >= 256)
++                    {
++                        CmdStallQueue.Write(entry);
++                        NDS.GXFIFOStall();
++                        written = false;
++                    }
++                    else
++                    {
++                        fifo[fifoW] = entry;
++                        fifoW = (fifoW + 1) & 255;
++                        fifoN++;
++                    }
++                    if (written)
++                    {
++                        gxor |= 1u << 27;
++                        const u32 c = entry.Command;
++                        if (c == 0x11 || c == 0x12)
++                        {
++                            gxor |= 1u << 14;
++                            pushpop++;
++                        }
++                        else if (c == 0x70 || c == 0x71 || c == 0x72)
++                        {
++                            gxor |= 1u;
++                            tests++;
++                        }
++                    }
++                }
++                else
++                    CmdFIFOWrite(entry);
++            }
++
++            if (paramCount >= totalParams)
++            {
++                curCommand >>= 8;
++                numCommands--;
++                if (numCommands == 0) break;
++
++                paramCount = 0;
++                totalParams = CmdNumParams[curCommand & 0xFF];
++            }
++            if (paramCount < totalParams)
++                break;
++        }
++    next:
++        if constexpr (Stop)
++        {
++            if (NDS.CPUStop & CPUStop_GXStall)
++                break;
++        }
++    }
++    NumCommands = numCommands;
++    CurCommand = curCommand;
++    ParamCount = paramCount;
++    TotalParams = totalParams;
++    if constexpr (Fast)
++    {
++        CmdFIFO.SetWriteState(fifoN, fifoW);
++        GXStat |= gxor;
++        NumPushPopCommands += pushpop;
++        NumTestCommands += tests;
++    }
++    return i;
++}
++
++__attribute__((no_stack_protector)) void GPU3D::WriteGXFIFOWords(const u64* data, u32 n) noexcept
++{
++    if (GeomFast) WriteGXFIFOWordsBody<true, false>([data](u32 i) { return (u32)data[i]; }, n);
++    else          WriteGXFIFOWordsBody<false, false>([data](u32 i) { return (u32)data[i]; }, n);
++}
++
+ __attribute__((no_stack_protector)) u32 GPU3D::WriteGXFIFOBlock(const u8* ram, u32 mask, u32 src, u32 n) noexcept
+ {
+     // (the DMA runs only while the system isn't stalled, so the first stall is this block's)
++    if (GXBatch && GeometryEnabled)
++        return WriteGXFIFOWordsBody<true, true>([ram, mask, src](u32 i) { return *(const u32*)&ram[(src + (i << 2)) & mask]; }, n);
+     for (u32 i = 0; i < n; i++)
+     {
+         if (GeometryEnabled)
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index 9b45721..8811629 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -371,6 +371,13 @@ public:
+     // DMA's block path (DMA::Run9, MELONDS_DMABLOCK): what Write32(0x04000400, word) does with GeomFast for each of n
+     // words of main RAM from src, stopping after the word that stalls the system (a full FIFO); the words written
+     u32 WriteGXFIFOBlock(const u8* ram, u32 mask, u32 src, u32 n) noexcept;
++    // BananaDS (render.gx_batch, MELONDS_GXBATCH=0 turns it off; exact): what WriteToGXFIFO does for each of n
++    // words, in one call with the packed commands' decoding state (NumCommands, CurCommand, ParamCount, TotalParams)
++    // in registers; for the JIT's STMs into the GX FIFO (SlowBlockTransfer9). Call it only while GeometryEnabled.
++    void WriteGXFIFOWords(const u64* data, u32 n) noexcept;
++    template<bool Fast, bool Stop, typename Load> u32 WriteGXFIFOWordsBody(Load load, u32 n) noexcept;
++    // MELONDS_GXBATCH for WriteGXFIFOBlock (DMA's block path), set from the environment as the GPU3D is created
++    bool GXBatch = true;
+     // whether one of the ARM9's DMAs may wait for the GX FIFO (GeomFast's CheckFIFODMAFast skips them otherwise)
+     bool GXFIFODMAMaybe = true;
+     // whether the ARM9's IRQ line was brought up to date by CheckFIFOIRQFast since the last reset or state load
+diff --git a/src/NDS_IOFast.cpp b/src/NDS_IOFast.cpp
+index cc74418..aa0d72e 100644
+--- a/src/NDS_IOFast.cpp
++++ b/src/NDS_IOFast.cpp
+@@ -57,14 +57,23 @@ static u32 ReadMemFastEnv()
+ }
+ 
+ u32 MemFastParts = ReadMemFastEnv();
+-u32 SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !(MemFastParts & 3)) ? (u32)slow_FullPath : 0);
++
++static u32 ReadGXBatchEnv()
++{
++    const char* e = getenv("MELONDS_GXBATCH");
++    return (e && e[0] == '0') ? 0 : (u32)slow_GXBatch;
++}
++
++u32 SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ReadGXBatchEnv()
++    | ((IOStatsOn || !(MemFastParts & 3)) ? (u32)slow_FullPath : 0);
+ 
+ void IOFastInit() noexcept
+ {
+     IOFastRoutes = ReadIOFastEnv();
+     IOFastOn = IOFastRoutes != 0;
+     MemFastParts = ReadMemFastEnv();
+-    SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ((IOStatsOn || !(MemFastParts & 3)) ? (u32)slow_FullPath : 0);
++    SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ReadGXBatchEnv()
++        | ((IOStatsOn || !(MemFastParts & 3)) ? (u32)slow_FullPath : 0);
+ }
+ 
+ namespace
+diff --git a/src/NDS_IOFast.h b/src/NDS_IOFast.h
+index 03d9da0..4e9daae 100644
+--- a/src/NDS_IOFast.h
++++ b/src/NDS_IOFast.h
+@@ -88,6 +88,7 @@ enum
+     slow_IORead = iofast_IORead,
+     slow_MemVRAM = memfast_VRAM << 4,
+     slow_MemIO = memfast_IO << 4,
++    slow_GXBatch = 1u << 8,     // render.gx_batch (MELONDS_GXBATCH, default on): STMs into the GX FIFO in one call
+     slow_FullPath = 1u << 31,
+ };
+ extern __attribute__((visibility("hidden"))) u32 SlowPathFlags;
+-- 
+2.43.0
+

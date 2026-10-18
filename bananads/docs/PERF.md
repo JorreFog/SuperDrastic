@@ -478,6 +478,28 @@ sprites and OBJ mosaic, skipping unchanged lines in 2D; the mix's per-sample tai
    - Two known exits for a conditional branch at a block's end (it uses `DynExit` now).
 7. **Audio** (3.8%) and **DMA** (2.4%). *Started: `fast_spu` and `fast_gxdma`, above.*
 
+## The GX FIFO from the emulator thread (2026-10-18, second speed session, agent memio; untested on device)
+
+HeartGold's emulator thread is the one at 99%; its 2026-10-12 profile had `SlowBlockTransfer9` (STMs into the GX
+FIFO) at 5.7% and 3D geometry at 13%. NitroSDK sends commands with LDM/STM pairs into 0x04000400
+(`GX_SendFifo*`: a header STR, then STMs of 3-8 words) and NNS G3D's display lists by DMA or by the CPU. Each change
+has a toggle whose `off` is the code before it; checks are toggle off against on with everything else default.
+`tests/gxstm/` (new) sends NNS-style packed display lists (1-4 commands per header, packed NOPs, all-NOP headers,
+matrix loads and multiplies, push/pop/store/restore, every vertex format, POS/VEC/BOX tests) by ARM STMIA bursts of
+1-8 words, STMDB, Thumb STMIA, single STRs, immediate DMA and GX-FIFO DMA, logs GXSTAT, RAM_COUNT, the clip matrix
+and the tests' results to main RAM, and draws them; about 2,300 STM words, 400 STR words and the DMAs' words a frame.
+
+- **0021, `render.gx_batch`**: `SlowBlockTransfer9` tests for an STM into the GX FIFO first (the same conditions as
+  its block path) and hands the words to `GPU3D::WriteGXFIFOWords`: `WriteToGXFIFOBody`'s decoding over n words with
+  NumCommands/CurCommand/ParamCount/TotalParams in registers, and `CmdFIFOWriteFast`'s FIFO count, write position,
+  GXSTAT bits and push/pop/test counts in registers, set once at the end (nothing reads them in between). 0020's DMA
+  block path uses the same loop. Before, each word was a call into `WriteToGXFIFOBody` with a 4-pair frame and the
+  state loaded and stored. qemu-count on gxstm: the GX FIFO path (`SlowBlockTransfer9*`, `WriteToGXFIFO*`,
+  `SlowWrite9`'s GX route, `DMA::Run9`) 327.8k -> 239.8k instructions a frame.
+  Checks: exact-suite (pictures, difftest main RAM every frame, bananads-tests) FAILS=0; gxstm difftest `--every`
+  300 frames identical; sabotaged builds (all-NOP headers dropped; one word of 7-word STMs dropped) caught at
+  frames 2 and 1.
+
 ## BananaJIT
 
 BananaJIT (jit/, `-DBANANADS_JIT=banana`) is parked. Its block-timing mode reached about 44 fps in this scene,
