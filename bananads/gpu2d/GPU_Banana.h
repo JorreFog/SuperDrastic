@@ -63,6 +63,13 @@ public:
     void DrawSprites(u32 line) override;
     void VBlank() override;
     void SwapBuffers() override;
+    void Start3DRendering() override;
+    // render.2d_lazy: the 2D thread finishes a frame's lines while the emulator runs the next frame. At a frame's end
+    // the emulator's thread waits only for the frame before's jobs (the buffers the next frame writes); whoever reads
+    // a frame's pictures waits for its fence first (FrameFence after run_frame; GetFramebuffers waits by itself).
+    void SetLazyFrames(bool on) { Drain2D(); LazyFrames = on; }
+    bool FrameFence(u32& fence) const { fence = FenceCur; return LazyFrames && Thread2D; }
+    void WaitFence(u32 fence) const;  // any thread: until the 2D thread has drawn the jobs before `fence`
 
     void SetThreaded2D(bool on);
     bool IsThreaded2D() const { return Thread2D; }
@@ -153,6 +160,8 @@ private:
     std::unique_ptr<Job[]> Jobs;
     std::atomic<u32> Head{0};   // jobs handed over (written by the emulator's thread)
     std::atomic<u32> Tail{0};   // jobs drawn (written by the 2D thread)
+    bool LazyFrames = false;
+    u32 FenceCur = 0, FencePrev = 0;  // Head at the last two frames' ends (render.2d_lazy)
     u32 Kicked = 0;             // Head at the last wakeup
     std::mutex M;
     std::condition_variable Wake;

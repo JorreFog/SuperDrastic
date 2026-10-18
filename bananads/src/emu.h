@@ -45,6 +45,12 @@ public:
     // with rows packed, only ever written; top() and bottom() then return them once the frame is finished. Set
     // between frames. False when the renderer can't (only the Banana 2D engine's can); null, null: back to its own.
     bool draw_into(uint32_t* top, uint32_t* bottom);
+    // render.2d_lazy (the Banana 2D engine on its thread): the last run_frame()'s pictures may be finished by the 2D
+    // thread after it returns. frame_fence() right after run_frame(), then wait_frame(fence) (any thread) before
+    // reading the pictures drawn into draw_into's buffers; false: nothing to wait for
+    bool set_lazy_2d(bool on);
+    bool frame_fence(uint32_t& fence) const;
+    void wait_frame(uint32_t fence) const;
 
     int audio(int16_t* stereo, int max_frames);  // what the SPU made since the last call
     void set_audio_rate(double hz);              // the SPU's output rate (48000: the DS's speed; kms.pace=display)

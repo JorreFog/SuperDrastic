@@ -96,6 +96,8 @@ int run_headless(Emu& emu, const Config& cfg) {
             return 1;
         }
     }
+    // render.2d_lazy (on): the 2D thread may finish a frame during the next one; top()/bottom() wait for it
+    if (cfg.flag("render.2d_lazy", true)) emu.set_lazy_2d(true);
     double worst_w = 1e9, worst_f = 0;
     long worst_at = 0;
     for (; done < frames && !emu.stopped(); done++) {

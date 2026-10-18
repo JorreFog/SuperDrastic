@@ -61,6 +61,8 @@ void BananaRenderer::SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows)
 
 bool BananaRenderer::GetFramebuffers(void** top, void** bottom)
 {
+    if (LazyFrames)
+        WaitFence(FenceCur);  // (render.2d_lazy: the front frame's last lines may still be being drawn)
     if (Front[0])
     {
         *top = Front[0];
@@ -789,6 +791,21 @@ bool BananaRenderer::Drain2D()
     return true;
 }
 
+void BananaRenderer::WaitFence(u32 fence) const
+{
+    while ((s32)(Tail.load(std::memory_order_acquire) - fence) < 0)
+        std::this_thread::yield();
+}
+
+// the next frame's 3D: Gengis draws it into the rows the frame before last showed (render.3d_share), which that
+// frame's jobs may still read with render.2d_lazy
+void BananaRenderer::Start3DRendering()
+{
+    if (LazyFrames)
+        WaitFence(FenceCur);
+    SoftRenderer::Start3DRendering();
+}
+
 void BananaRenderer::VBlank()
 {
     // the frame's last lines: drawn while the emulator runs VBlank
@@ -798,7 +815,21 @@ void BananaRenderer::VBlank()
 
 void BananaRenderer::SwapBuffers()
 {
-    Drain2D();  // the frame's lines are all in the back buffer (or SetOutput's)
+    if (LazyFrames && Thread2D && !AInPlace)
+    {
+        // render.2d_lazy: this frame's last jobs handed over, and only the frame before waited for (the buffers the
+        // next frame's lines go into: the other back buffer, or a scanout slot the frontend frees after its fence)
+        if (Head.load(std::memory_order_relaxed) != Kicked)
+            Kick();
+        FencePrev = FenceCur;
+        FenceCur = Head.load(std::memory_order_relaxed);
+        WaitFence(FencePrev);
+    }
+    else
+    {
+        Drain2D();  // the frame's lines are all in the back buffer (or SetOutput's)
+        FencePrev = FenceCur = Head.load(std::memory_order_relaxed);
+    }
     Front[0] = Out[0];
     Front[1] = Out[1];
     SoftRenderer::SwapBuffers();

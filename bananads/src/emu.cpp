@@ -533,6 +533,16 @@ void Emu::cpu_regs(int cpu, uint32_t r[17]) const {
     r[16] = a.CPSR;
 }
 
+bool Emu::set_lazy_2d(bool on) {
+    if (!banana_) return false;
+    banana_->SetLazyFrames(on);
+    return true;
+}
+bool Emu::frame_fence(uint32_t& fence) const { return banana_ && banana_->FrameFence(fence); }
+void Emu::wait_frame(uint32_t fence) const {
+    if (banana_) banana_->WaitFence(fence);
+}
+
 bool Emu::draw_into(uint32_t* top, uint32_t* bottom) {
 #ifdef BANANADS_2D
     if (!banana_) return false;

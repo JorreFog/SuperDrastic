@@ -49,6 +49,7 @@
 #include <cstring>
 #include <condition_variable>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -154,6 +155,11 @@ struct Display {
     Buf mbuf[2][2];           // the in-game menu's pictures: panel-sized, two a panel (one drawn while one shows)
     int mnext[2] = {0, 0};
     SlotState state[NB] = {};
+    // render.2d_lazy: a slot's frame is finished once the 2D thread passes its fence (Emu::frame_fence), which the
+    // presenter waits for before it reads or shows the slot (wait2d); the emulator's thread goes on meanwhile
+    bool has_fence[NB] = {};
+    uint32_t fence[NB] = {};
+    std::function<void(uint32_t)> wait2d;
     std::deque<int> queue;    // frames waiting, oldest first
     // kms.shader: each frame drawn through a fragment shader (SuperDrastic's) into panel-sized buffers, shown 1:1
     std::string shader_name;
@@ -533,9 +539,11 @@ struct Display {
             }
         }
     }
-    void publish(int s, int depth) {
+    void publish(int s, int depth, bool fenced = false, uint32_t f = 0) {
         {
             Lock l(mu);
+            has_fence[s] = fenced;
+            fence[s] = f;
             state[s] = QUEUED;
             queue.push_back(s);
             made++;
@@ -638,6 +646,7 @@ struct Display {
             queue.pop_front();
             state[s] = COMMITTED;
         }
+        if (has_fence[s] && wait2d) wait2d(fence[s]);  // render.2d_lazy: its last lines drawn
         if (shot.exchange(false)) take_shot(buf[0][s], buf[1][s]);
         const Buf* out[2] = {&buf[0][s], &buf[1][s]};
         if (shader_on) {
@@ -1119,6 +1128,10 @@ int run_kms(Emu& emu, const Config& cfg) {
         if (sh != "none" && sh != "bilinear" && !sh.empty()) dp.shader_name = sh;
     }
     dp.direct = dp.packed() && emu.draw_into(dp.map(0, 1), dp.map(1, 1));  // (each frame is given its own slot)
+    // render.2d_lazy (on): drawing straight into the slots, the 2D thread may finish a frame while the emulator runs the
+    // next one; the presenter waits for it instead (Display::wait2d)
+    if (dp.direct && cfg.flag("render.2d_lazy", true) && emu.set_lazy_2d(true))
+        dp.wait2d = [&emu](uint32_t f) { emu.wait_frame(f); };
     Log(LogLevel::Info, "[kms] %s top, %s bottom, %dx%d at %.3f Hz; %dx%d frames %s, scaled by %s\n",
         dp.p[0].name.c_str(), dp.p[1].name.c_str(), dp.W, dp.H, 1e6 / dp.period_us, dp.fw, dp.fh,
         dp.direct ? "drawn straight into the scanout buffers" : "copied into the scanout buffers",
@@ -1274,7 +1287,9 @@ int run_kms(Emu& emu, const Config& cfg) {
             emu.run_frame();
             if (!dp.direct) dp.write(s, emu.top(), emu.bottom());
             ra_frame();  // RetroAchievements: this frame's memory (its pop-ups are drawn by the presenter)
-            dp.publish(s, depth);
+            uint32_t fence = 0;
+            const bool fenced = emu.frame_fence(fence);
+            dp.publish(s, depth, fenced, fence);
             pace.wait();  // (and the governor's signal: the frames it fell behind)
         }
         run = false;
