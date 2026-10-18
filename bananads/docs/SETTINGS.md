@@ -62,6 +62,9 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `audio.out_device` | `default` | the ALSA output device |
 | `audio.latency_us` | `30000` | ALSA's buffer |
 | `audio.realtime` | `on` | the sound thread at SCHED_FIFO 10, when allowed |
+| `audio.servo` | `on` | the rate servo: when the game runs below full speed, the sound is stretched smoothly (it slows and lowers with the game) instead of crackling; only the sound changes, never the emulation |
+| `audio.servo_target` | `768` | the backlog of game sound (in 48 kHz frames) the servo holds: more absorbs longer dips, adds latency |
+| `audio.stats` | `off` | a log line every 10 s: short chunks (the crackle), the servo's stretch range, the backlog |
 | `sdl.scale` | `2` | the window's size |
 | `sdl.present` | `queue` | `queue`: the emulator runs on a thread of its own at the DS's rate and the window shows its finished frames in order, one per vsync, each about one vsync after it is done (a steady picture when frames alternate between slower and faster than a vsync, as HeartGold's do at 1104 MHz; one frame more latency). `direct`: each frame shown as soon as it is done, on the emulator's thread (a frame slower than a vsync misses it) |
 | `sdl.stats` | `0` | with `sdl.present=queue`, every this many vsyncs log the vsync rate, the emulated frames per second, the vsyncs that showed no new frame and the frames never shown |
