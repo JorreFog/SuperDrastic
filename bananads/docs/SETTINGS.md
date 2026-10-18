@@ -96,6 +96,12 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `headless.input` | none | scripted presses: `<frame>:<keys>[:<frames held>]`, comma-separated, keys joined by `+` (`a b select start right left up down r l x y`), held 6 frames by default: `600:start,900:a:10` |
 | `log.file` | none | a copy of the log (stderr always gets it) |
 | `log.level` | `1` | 0 debug, 1 info, 2 warnings, 3 errors |
+| `prof.hz` | `0` | a sampling profiler of the emulator's thread (`src/prof.cpp`), for a handheld without `perf`: `N` samples a second of that thread's CPU time (a `CLOCK_THREAD_CPUTIME_ID` timer signalling that thread alone; the kernel checks it at its tick, so it gets at most `CONFIG_HZ`, and the report says what it got). At the end a report: the share in JIT-generated code, by module, the top functions, the same by C++ class, and with `MELONDS_JIT_PERFMAP=1` the hottest JIT blocks (`mj9_`/`mj7_<guest address>`) and stubs. The emulation doesn't see it: the same frames, RAM and sound. `0`: off |
+| `prof.from`, `prof.frames` | `0`, `0` | the first frame sampled (e.g. `headless.measure_from`'s), and how many (`0`: up to the quit; the report is made then) |
+| `prof.out` | the log | the report's file |
+| `prof.syms` | the binary itself | the file to take function names from: the unstripped build of this same binary (Buildroot strips the one on the device; the report warns when the file is another build's). Without names the report gives `bananads+0x<offset>` |
+| `prof.raw` | none | also every sampled address with its count and the modules' ranges, to resolve offline (`addr2line -f -C -e <unstripped binary> <address>`) |
+| `prof.top`, `prof.samples` | `40`, `262144` | the functions listed; the samples kept (8 bytes each, allocated when sampling starts; later ones are counted as dropped) |
 
 ## The handheld's buttons (`frontend=kms`)
 

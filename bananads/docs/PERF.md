@@ -513,4 +513,16 @@ environment variable), so it can be A/B'd on the device, and say what to measure
 - Test ROMs that need no game: `stressrom/` (3D), `bananads/tests/ds2dtest/` (2D), `bananads/tests/iorom/` (the JIT's
   slow paths), `bananads/tools/ipcrom/` (IPC) and `bananads/tools/dmasnd/` (DMA, sound, capture). `python3 build.py` in
   each, needs clang and ld.lld.
+- **A profile without perf** (BananaOS has none): `--set prof.hz=1000 --set prof.from=1500` samples the emulator's
+  thread from frame 1500 and reports at the quit (SETTINGS.md `prof.*`; `tools/device/hgprofile.sh` runs it on
+  HeartGold). A timer on that thread's own CPU clock (`timer_create(CLOCK_THREAD_CPUTIME_ID)` with
+  `SIGEV_THREAD_ID`) sends it `SIGPROF`; the handler stores the interrupted PC in a preallocated array (`SA_RESTART`,
+  errno kept), nothing else, so the emulation is exact by construction (checked: the exactness suite with it on,
+  FAILS=0). At the end the PCs are resolved: the binary's own `.symtab` (or `prof.syms`, the unstripped twin:
+  Buildroot strips the device's binary; keep `output/build/bananads-<version>/bananads/buildroot-build/bananads` or the CI's
+  unstripped artifact), `dladdr` for the libraries, and anything outside a module's code is JIT-generated code
+  (named per block with `MELONDS_JIT_PERFMAP=1`). The kernel checks thread CPU timers at its tick, so the rate is
+  at most `CONFIG_HZ` (~250 a second: a 1200-frame HeartGold run at 1104 MHz gives ~4000 samples, ±0.5% on a 10%
+  symbol). With LTO, `NDS::RunFrame`'s slice loop is inlined into its caller: in headless runs it shows as
+  `main::{lambda()#1}` (the scheduler/RunFrame share of earlier profiles).
 - Keep runs short, and ask the user before long benchmarks.

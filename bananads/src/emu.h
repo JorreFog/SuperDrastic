@@ -10,6 +10,7 @@
 #include "ARCodeFile.h"
 #include "config.h"
 #include "mic.h"
+#include "prof.h"
 
 namespace melonDS { class NDS; class Net; class BananaRenderer; }
 
@@ -108,6 +109,8 @@ private:
     uint64_t save_dirty_us_ = 0;  // when the game last wrote its save; 0 = written out
     long slice_stats_ = 0;        // core.slice_stats: log the slice's statistics every this many frames
     long slice_frames_ = 0;
+    std::unique_ptr<Profiler> prof_;  // prof.hz: the emulator's thread sampled (prof.cpp), off by default
+    long frames_run_ = 0;
 };
 
 }  // namespace bananads
