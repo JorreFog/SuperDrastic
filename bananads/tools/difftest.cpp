@@ -11,6 +11,10 @@
 //     --dump ADDR:LEN       print run A's bytes there at the end (to see what a test ROM wrote)
 //     --input SPEC          scripted presses for both runs, as headless.input ("<frame>:<keys>[:<held>]",...)
 //     --from N              with --every, compare from frame N on (hashing all of main RAM each frame is slow)
+//     --regs                hash both CPUs' registers with main RAM (catches timing that main RAM doesn't show yet)
+//     --timing              hash the geometry engine's timing state too (its cycle count and timestamp, GXSTAT, the
+//                           FIFO's and pipe's levels, the ARM9's timestamp): a timing change that main RAM doesn't
+//                           show (a game that waits for VBlank absorbs it) shows here
 //     --fresh-save          delete the ROM's save (<save.dir>/<ROM name>.sav) before each run (a game that saves
 //                           during the run, e.g. Mario Kart DS's first start, would else start run B from run A's)
 //
@@ -25,6 +29,9 @@
 #include <vector>
 
 #include "Platform.h"
+#include "NDS.h"
+#include "GPU.h"
+#include "GPU3D.h"
 #include "config.h"
 #include "emu.h"
 
@@ -49,6 +56,8 @@ struct Opts {
     std::string input;
     long from = 0;
     bool fresh = false;
+    bool regs = false;
+    bool timing = false;
 };
 
 // headless.input's format (src/video_headless.cpp): "<frame>:<keys>[:<frames held>]" separated by commas, keys joined
@@ -127,6 +136,20 @@ static long run(const Opts& o, const std::vector<std::string>& sets, long stop, 
             uint32_t off = o.len ? (o.addr & (emu.main_ram_size() - 1)) : 0;
             uint32_t n = o.len ? o.len : emu.main_ram_size();
             uint64_t h = fnv(ram + off, n);
+            if (o.regs) {
+                uint32_t r[2][17];
+                emu.cpu_regs(0, r[0]);
+                emu.cpu_regs(1, r[1]);
+                h ^= fnv((const uint8_t*)r, sizeof(r)) * 31;
+            }
+            if (o.timing) {
+                const melonDS::NDS& nds = *emu.nds();
+                const melonDS::GPU3D& g = nds.GPU.GPU3D;
+                const uint64_t t[6] = {(uint64_t)(int64_t)g.CycleCount, g.Timestamp, g.GXStat,
+                                       g.CmdFIFO.Level() | ((uint64_t)g.CmdPIPE.Level() << 32), nds.ARM9Timestamp,
+                                       g.NumPolygons | ((uint64_t)g.NumVertices << 32)};
+                h ^= fnv((const uint8_t*)t, sizeof(t)) * 131;
+            }
             if (hashes) hashes->push_back(h);
             if (ref && (size_t)f < ref->size() && (*ref)[o.every ? f : 0] != h) {
                 f++;
@@ -183,6 +206,8 @@ int main(int argc, char** argv) {
         else if (s == "--input" && i + 1 < argc) o.input = argv[++i];
         else if (s == "--from" && i + 1 < argc) o.from = strtol(argv[++i], nullptr, 0);
         else if (s == "--fresh-save") o.fresh = true;
+        else if (s == "--regs") o.regs = true;
+        else if (s == "--timing") o.timing = true;
         else if (s == "--region" && i + 1 < argc) {
             std::string r = argv[++i];
             size_t c = r.find(':');
@@ -204,7 +229,7 @@ int main(int argc, char** argv) {
         } else if (s[0] != '-') o.rom = s;
         else {
             fprintf(stderr, "usage: bananads-difftest [--frames N] [--region ADDR:LEN] [--every] [--from N] "
-                            "[--input SPEC] [--fresh-save] [--a K=V]... [--b K=V]... rom.nds\n");
+                            "[--input SPEC] [--fresh-save] [--regs] [--timing] [--a K=V]... [--b K=V]... rom.nds\n");
             return 2;
         }
     }
