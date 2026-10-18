@@ -499,6 +499,23 @@ and the tests' results to main RAM, and draws them; about 2,300 STM words, 400 S
   Checks: exact-suite (pictures, difftest main RAM every frame, bananads-tests) FAILS=0; gxstm difftest `--every`
   300 frames identical; sabotaged builds (all-NOP headers dropped; one word of 7-word STMs dropped) caught at
   frames 2 and 1.
+- **0022, `render.gx_str`**: single STRs to the GX FIFO port (NitroSDK's header word before each `GX_SendFifo*`,
+  `MI_CpuSend32`'s word loop): `SlowWrite9` tests for the port before its region switch and calls `WriteToGXFIFO`
+  itself (no `GXWrite9Route` call), and `WriteToGXFIFO`/`WriteGXFIFOPortFast` (the JIT's slow path and its
+  static-address call) put a parameter word before its command's last straight into the FIFO with
+  `CmdFIFOWriteFast`, which is all `WriteToGXFIFOBody` does for it, without the body's frame and decoding loop.
+  qemu-count: gxstm's ~400 FIFO-port STRs a frame, `SlowWrite9` + `GXWrite9Route` + `WriteToGXFIFO*` 53.0k ->
+  46.0k instructions a frame; dsstress L5's ~2,730 command-port STRs a frame, `SlowWrite9<u32>` + `GXWrite9Route` +
+  `GPU3D::Write32` 258.7k -> 216.5k (-16%, ~95 -> ~79 instructions a store).
+  Checks: exact-suite FAILS=0; gxstm difftest `--every` identical; a sabotaged build (ParamCount not counted for
+  3-parameter commands) caught at frame 1.
+- Both together, off vs on: every 10th frame of 300 identical on gxstm, geomtest, membench and dsstress L10, each
+  with the soft renderer at 1x, Gengis at 2x (2 threads, the 2D thread on) and a savestate save+reload at frame
+  150; difftest `--every` identical on gxstm, geomtest, dsstress L5 and iorom L5. A build from pristine melonDS with
+  0001-0022 applied by CMake is byte-identical to the development build.
+- Expected on HeartGold (the hand-over, BananaLinux `perf/bananads/session2/memio.md`): 0021 +1 to +2.5% if the
+  2026-10-12 profile's 5.7% for these STMs still holds; 0022 0 to +0.5%. For the next batch: HeartGold's
+  `MELONDS_IOSTATS` and a `prof.hz` profile (`prof.raw` + addr2line splits the inlined `GPU3D::Run`).
 
 ## BananaJIT
 
