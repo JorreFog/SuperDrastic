@@ -8,6 +8,8 @@
 #include <pthread.h>
 #include <sched.h>
 #include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <mutex>
@@ -71,6 +73,12 @@ static bool conf_changed(const struct stat& was, bool had, struct stat& now) {
     return has && (now.st_ino != was.st_ino || now.st_mtim.tv_sec != was.st_mtim.tv_sec ||
                    now.st_mtim.tv_nsec != was.st_mtim.tv_nsec);
 }
+static int64_t mono_us() {
+    timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (int64_t)t.tv_sec * 1000000 + t.tv_nsec / 1000;
+}
+
 static void out_thread(Alsa* a) {
     pthread_setname_np(pthread_self(), "bds-audio");
     if (a->rt) {
@@ -97,7 +105,9 @@ static void out_thread(Alsa* a) {
     // changes: the skew is the resampler's, the emulation never sees it.
     double skew = 1.0, integ = 0.0, sent = 1.0;
     int hist[6] = {0}, hn = 0, dry = 0;
-    long st_chunks = 0, st_short = 0, st_held = 0;
+    int64_t last_tick_us = 0, last_got_us = 0;
+    long st_frames = 0, st_pulls = 0;
+    long st_short = 0, st_held = 0;
     double st_min = 1.0, st_max = 1.0, st_sum = 0.0, st_back = 0.0;
     while (a->run) {
         if (++since_check >= 47) {  // ~250 ms of 256-frame chunks at 48 kHz
@@ -120,11 +130,16 @@ static void out_thread(Alsa* a) {
         }
         const int backlog = a->servo || a->stats ? a->emu->audio_backlog() : 0;
         int got = a->emu->audio(buf.data(), chunk);
+        bool hold = true;
         if (a->servo) {
-            dry = got > 0 ? 0 : dry + 1;
-            const bool hold = dry > 8 || a->mute.load(std::memory_order_relaxed);
-            hist[hn++ % 6] = backlog;
-            if (!hold && hn >= 6) {
+            const int64_t now = mono_us();
+            dry = got > 0 ? 0 : (now - last_got_us > 40000 ? 9 : dry);
+            if (got > 0) last_got_us = now;
+            hold = dry > 8 || a->mute.load(std::memory_order_relaxed);
+            // (sampled every 5 ms, a chunk's time: partial writes below make pulls more frequent while it's short)
+            const bool tick = now - last_tick_us >= 5333;
+            if (tick) { last_tick_us = now; hist[hn++ % 6] = backlog; }
+            if (tick && !hold && hn >= 6) {
                 double avg = 0;
                 for (int v : hist) avg += v;
                 avg /= 6;
@@ -138,31 +153,45 @@ static void out_thread(Alsa* a) {
                 }
             }
         }
-        if (a->stats) {
-            st_chunks++;
-            if (got < chunk) { st_short++; st_held += chunk - got; }
-            st_min = std::min(st_min, skew); st_max = std::max(st_max, skew); st_sum += skew; st_back += backlog;
-            if (st_chunks == 1875) {  // 10 s
-                Log(LogLevel::Info, "[alsa] 10 s: %ld short chunks (%.2f s held), skew %.3f-%.3f avg %.3f, backlog avg %.0f\n",
-                    st_short, st_held / 48000.0, st_min, st_max, st_sum / st_chunks, st_back / st_chunks);
-                st_chunks = st_short = st_held = 0;
-                st_min = st_max = skew; st_sum = st_back = 0;
-            }
-        }
         if (got > 0) {
             last[0] = buf[(got - 1) * 2];
             last[1] = buf[(got - 1) * 2 + 1];
         }
         // ALSA's writei blocks until there is room, which is what paces this loop. Short of samples, hold the
-        // last one instead of a click.
-        for (int i = got; i < chunk; i++) {
+        // last one instead of a click. With the servo, while the game runs and ALSA still has more than ~10 ms
+        // queued, a short chunk goes out as it is (nothing held) and the loop asks again a moment later: the
+        // queue rides out the gap between two of the game's frames.
+        int n = chunk;
+        if (a->servo && !hold && got < chunk) {
+            snd_pcm_sframes_t q = 0;
+            if (snd_pcm_delay(pcm, &q) == 0 && q - (chunk - got) >= 512) {
+                n = got;
+                if (n == 0) {
+                    usleep(1000);
+                    continue;
+                }
+            }
+        }
+        for (int i = got; i < n; i++) {
             buf[i * 2] = last[0];
             buf[i * 2 + 1] = last[1];
+        }
+        if (a->stats) {
+            st_pulls++;
+            if (got < n) { st_short++; st_held += n - got; }
+            st_frames += n;
+            st_min = std::min(st_min, skew); st_max = std::max(st_max, skew); st_sum += skew; st_back += backlog;
+            if (st_frames >= 480000) {  // 10 s
+                Log(LogLevel::Info, "[alsa] 10 s: %ld short chunks (%.2f s held), skew %.3f-%.3f avg %.3f, backlog avg %.0f\n",
+                    st_short, st_held / 48000.0, st_min, st_max, st_sum / st_pulls, st_back / st_pulls);
+                st_frames = st_pulls = st_short = st_held = 0;
+                st_min = st_max = skew; st_sum = st_back = 0;
+            }
         }
         // muted (fast-forward): faded over ~5 ms each way, so neither end clicks
         const float target = a->mute.load(std::memory_order_relaxed) ? 0.f : 1.f;
         if (gain != target || target == 0.f)
-            for (int i = 0; i < chunk; i++) {
+            for (int i = 0; i < n; i++) {
                 gain = target > gain ? std::min(target, gain + 1.f / 240) : std::max(target, gain - 1.f / 240);
                 buf[i * 2] = (int16_t)(buf[i * 2] * gain);
                 buf[i * 2 + 1] = (int16_t)(buf[i * 2 + 1] * gain);
@@ -171,12 +200,12 @@ static void out_thread(Alsa* a) {
             std::lock_guard<std::mutex> l(a->ui_mu);
             if (a->ui_id >= 0) {
                 const std::vector<int16_t>& s = a->ui[a->ui_id];
-                for (int i = 0; i < chunk * 2 && a->ui_pos < s.size(); i++, a->ui_pos++)
+                for (int i = 0; i < n * 2 && a->ui_pos < s.size(); i++, a->ui_pos++)
                     buf[i] = (int16_t)std::clamp((int)buf[i] + s[a->ui_pos], -32768, 32767);
                 if (a->ui_pos >= s.size()) a->ui_id = -1;
             }
         }
-        snd_pcm_sframes_t w = snd_pcm_writei(pcm, buf.data(), chunk);
+        snd_pcm_sframes_t w = snd_pcm_writei(pcm, buf.data(), n);
         if (w < 0) snd_pcm_recover(pcm, (int)w, 1);
     }
     snd_pcm_drop(pcm);
