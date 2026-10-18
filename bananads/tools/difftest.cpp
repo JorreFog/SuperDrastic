@@ -9,6 +9,10 @@
 //     --every               compare after every frame and stop at the first that differs (default: only at the end)
 //     --a K=V / --b K=V     settings for run A / run B (default A: jit=off, B: jit=on)
 //     --dump ADDR:LEN       print run A's bytes there at the end (to see what a test ROM wrote)
+//     --input SPEC          scripted presses for both runs, as headless.input ("<frame>:<keys>[:<held>]",...)
+//     --from N              with --every, compare from frame N on (hashing all of main RAM each frame is slow)
+//     --fresh-save          delete the ROM's save (<save.dir>/<ROM name>.sav) before each run (a game that saves
+//                           during the run, e.g. Mario Kart DS's first start, would else start run B from run A's)
 //
 // The two back-ends aren't cycle-exact with each other (melonDS's JIT counts cycles per block), so a game can
 // drift apart in timing without a bug. Test ROMs that compute, write a result block and halt are the reliable
@@ -17,6 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include "Platform.h"
@@ -41,7 +46,40 @@ struct Opts {
     bool every = false;
     uint32_t dump_addr = 0, dump_len = 0;
     std::vector<std::string> a{"jit=off"}, b{"jit=on"};
+    std::string input;
+    long from = 0;
+    bool fresh = false;
 };
+
+// headless.input's format (src/video_headless.cpp): "<frame>:<keys>[:<frames held>]" separated by commas, keys joined
+// by '+', held 6 frames unless given
+struct Press { long at, len; uint32_t keys; };
+static std::vector<Press> parse_input(const std::string& spec) {
+    static const char* names[12] = {"a", "b", "select", "start", "right", "left", "up", "down", "r", "l", "x", "y"};
+    std::vector<Press> out;
+    size_t i = 0;
+    while (i < spec.size()) {
+        size_t e = spec.find(',', i);
+        std::string item = spec.substr(i, e == std::string::npos ? std::string::npos : e - i);
+        i = e == std::string::npos ? spec.size() : e + 1;
+        size_t c1 = item.find(':');
+        if (c1 == std::string::npos) continue;
+        size_t c2 = item.find(':', c1 + 1);
+        Press p{atol(item.c_str()), c2 == std::string::npos ? 6 : atol(item.c_str() + c2 + 1), 0};
+        std::string keys = item.substr(c1 + 1, c2 == std::string::npos ? std::string::npos : c2 - c1 - 1);
+        size_t k = 0;
+        while (k <= keys.size()) {
+            size_t plus = keys.find('+', k);
+            std::string name = keys.substr(k, plus == std::string::npos ? std::string::npos : plus - k);
+            for (int b = 0; b < 12; b++)
+                if (name == names[b]) p.keys |= 1u << b;
+            if (plus == std::string::npos) break;
+            k = plus + 1;
+        }
+        out.push_back(p);
+    }
+    return out;
+}
 
 static uint64_t fnv(const uint8_t* p, size_t n) {
     uint64_t h = 1469598103934665603ull;
@@ -62,14 +100,29 @@ static Config base_config(const std::vector<std::string>& sets) {
 // Runs to `stop` frames (or the first frame whose hash differs from `ref`, with --every) and snapshots it.
 static long run(const Opts& o, const std::vector<std::string>& sets, long stop, std::vector<uint64_t>* hashes,
                 const std::vector<uint64_t>* ref, Snapshot* snap) {
-    Emu emu(base_config(sets));
+    const Config cfg = base_config(sets);
+    if (o.fresh) {
+        std::string name = o.rom.substr(o.rom.find_last_of('/') + 1);
+        if (name.size() > 4 && name.compare(name.size() - 4, 4, ".nds") == 0) name.resize(name.size() - 4);
+        unlink((cfg.str("save.dir", "/tmp/bananads-difftest") + "/" + name + ".sav").c_str());
+    }
+    Emu emu(cfg);
     if (!emu.load_rom(o.rom)) exit(2);
+    const std::vector<Press> input = parse_input(o.input);
     long f = 0;
     for (; f < stop; f++) {
+        if (!input.empty()) {
+            uint32_t keys = 0;
+            for (const Press& p : input)
+                if (f >= p.at && f < p.at + p.len) keys |= p.keys;
+            emu.set_keys(keys);
+        }
         emu.run_frame();
         int16_t snd[4096 * 2];
         while (emu.audio(snd, 4096) > 0) {}
-        if (o.every || f == stop - 1) {
+        if (o.every && f < o.from && f != stop - 1) {
+            if (hashes) hashes->push_back(0);
+        } else if (o.every || f == stop - 1) {
             const uint8_t* ram = emu.main_ram();
             uint32_t off = o.len ? (o.addr & (emu.main_ram_size() - 1)) : 0;
             uint32_t n = o.len ? o.len : emu.main_ram_size();
@@ -127,6 +180,9 @@ int main(int argc, char** argv) {
         std::string s = argv[i];
         if (s == "--frames" && i + 1 < argc) o.frames = strtol(argv[++i], nullptr, 0);
         else if (s == "--every") o.every = true;
+        else if (s == "--input" && i + 1 < argc) o.input = argv[++i];
+        else if (s == "--from" && i + 1 < argc) o.from = strtol(argv[++i], nullptr, 0);
+        else if (s == "--fresh-save") o.fresh = true;
         else if (s == "--region" && i + 1 < argc) {
             std::string r = argv[++i];
             size_t c = r.find(':');
@@ -147,8 +203,8 @@ int main(int argc, char** argv) {
             o.b.push_back(argv[++i]);
         } else if (s[0] != '-') o.rom = s;
         else {
-            fprintf(stderr, "usage: bananads-difftest [--frames N] [--region ADDR:LEN] [--every] "
-                            "[--a K=V]... [--b K=V]... rom.nds\n");
+            fprintf(stderr, "usage: bananads-difftest [--frames N] [--region ADDR:LEN] [--every] [--from N] "
+                            "[--input SPEC] [--fresh-save] [--a K=V]... [--b K=V]... rom.nds\n");
             return 2;
         }
     }
