@@ -107,6 +107,12 @@ option(BANANADS_CORE_NOINTERPOSE "Build melonDS's core with -fno-semantic-interp
 if(BANANADS_CORE_NOINTERPOSE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(core PRIVATE -fno-semantic-interposition)
 endif()
+# The geometry engine's command-stream counters (patches/melonds/0051): built in only with this option, then printed
+# every <n> frames on stderr with MELONDS_GEOMSTATS=<n>. A measuring build: off, the code isn't there at all.
+option(BANANADS_GEOMSTATS "Build melonDS's GPU3D with the MELONDS_GEOMSTATS counters" OFF)
+if(BANANADS_GEOMSTATS)
+    target_compile_definitions(core PRIVATE MELONDS_GEOMSTATS=1)
+endif()
 
 # BananaJIT: our own code generator in melonDS's JIT framework, in place of melonDS's ARMJIT_A64 compiler.
 # melonDS picks its compiler in src/ARMJIT_Compiler.h; one guarded line there lets BANANADS_JIT pick ours

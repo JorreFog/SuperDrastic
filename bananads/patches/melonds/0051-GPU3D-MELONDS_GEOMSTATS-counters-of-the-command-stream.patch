@@ -1,0 +1,136 @@
+From 880519bee5f99bb1496f7723e1ed7be450269982 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 18 Oct 2026 20:23:35 +0000
+Subject: [PATCH] GPU3D: MELONDS_GEOMSTATS, counters of the geometry engine's
+ command stream (a build option)
+
+---
+ src/GPU3D.cpp | 62 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/GPU3D.h   | 17 ++++++++++++++
+ 2 files changed, 79 insertions(+)
+
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index b6629b2..6352821 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -2705,13 +2705,28 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+ 
+     // GeomBatch: the stall queue stays empty while the commands run (only the CPU's writes fill it)
+     FIFOChecksDeferred = GeomBatch && CmdStallQueue.IsEmpty();
++#if MELONDS_GEOMSTATS
++    const u64 statentries = GeomStats.Entries, statpolygons = NumPolygons;
++    const u32 statqueued = CmdPIPE.Level() + CmdFIFO.Level();
++    if (GeomStatsEvery)
++        GeomStats.Runs++, GeomStats.StallRuns += !CmdStallQueue.IsEmpty();
++#endif
+     while (CycleCount <= 0 && !CmdPIPE.IsEmpty())
+     {
+         GXStat &= ~(((u32)(NumPushPopCommands == 0) << 14) | (u32)(NumTestCommands == 0));
+ 
++#if MELONDS_GEOMSTATS
++        if (GeomStatsEvery)
++            GeomStatsEntry();
++#endif
+         ExecuteCommandBody<true>();
+     }
+     FIFOChecksDeferred = false;
++#if MELONDS_GEOMSTATS
++    if (GeomStats.Entries != statentries)
++        GeomStats.WorkRuns++, GeomStats.Queued += statqueued;
++    GeomStats.Polygons += NumPolygons - statpolygons;
++#endif
+     if (FIFOChecksDue)
+     {
+         FIFOChecksDue = false;
+@@ -2742,6 +2757,49 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+     }
+ }
+ 
++#if MELONDS_GEOMSTATS
++u32 GPU3D::GeomStatsEnv() noexcept
++{
++    const char* e = getenv("MELONDS_GEOMSTATS");
++    const long v = e ? strtol(e, nullptr, 0) : 0;
++    return v > 0 ? (u32)v : 0;
++}
++
++__attribute__((noinline)) void GPU3D::GeomStatsEntry() noexcept
++{
++    // the entry RunFast's loop is about to run: a command when it is a command's only or last parameter
++    const CmdFIFOEntry e = CmdPIPE.Peek();
++    const u32 n = CmdNumParams[e.Command];
++    GeomStats.Entries++;
++    if (n > 1 && ExecParamCount + 1 < n)
++        return;
++    const u8 c = e.Command;
++    const int kind = (c >= 0x10 && c <= 0x1C) ? 0 : c == 0x20 ? 1 : c == 0x21 ? 2 : c == 0x22 ? 3 :
++        (c >= 0x23 && c <= 0x28) ? 4 : ((c >= 0x29 && c <= 0x2B) || (c >= 0x30 && c <= 0x34)) ? 5 :
++        (c == 0x40 || c == 0x41) ? 6 : 7;
++    GeomStats.Cmds[kind]++;
++    if (c == 0x21)
++        GeomStats.Lights[__builtin_popcount(CurPolygonAttr & 0xF)]++;
++}
++
++void GPU3D::GeomStatsFrame() noexcept
++{
++    GeomStatsCounters& g = GeomStats;
++    if (++g.Frames < GeomStatsEvery)
++        return;
++    const double f = g.Frames;
++    fprintf(stderr, "melonDS geom stats, per frame over %u frames: Run calls %.0f (with work %.0f, stalled %.0f), "
++        "FIFO entries %.0f (%.2f per working call; %.2f queued at its start), polygons %.0f\n", g.Frames, g.Runs / f,
++        g.WorkRuns / f, g.StallRuns / f, g.Entries / f, g.WorkRuns ? (double)g.Entries / g.WorkRuns : 0.0,
++        g.WorkRuns ? (double)g.Queued / g.WorkRuns : 0.0, g.Polygons / f);
++    fprintf(stderr, "  commands: matrix %.0f, colour %.0f, normal %.0f (enabled lights 0/1/2/3/4: %.0f/%.0f/%.0f/%.0f/%.0f), "
++        "texcoord %.0f, vertex %.0f, attr/material %.0f, begin/end %.0f, other %.0f\n", g.Cmds[0] / f, g.Cmds[1] / f,
++        g.Cmds[2] / f, g.Lights[0] / f, g.Lights[1] / f, g.Lights[2] / f, g.Lights[3] / f, g.Lights[4] / f,
++        g.Cmds[3] / f, g.Cmds[4] / f, g.Cmds[5] / f, g.Cmds[6] / f, g.Cmds[7] / f);
++    g = GeomStatsCounters {};
++}
++#endif
++
+ bool GPU3D::GeomBatchEnv() noexcept
+ {
+     // read as the GPU3D is created: a difftest has two NDS objects, each created with its own setting
+@@ -2830,6 +2888,10 @@ bool YSort(Polygon* a, Polygon* b)
+ 
+ void GPU3D::VBlank() noexcept
+ {
++#if MELONDS_GEOMSTATS
++    if (GeomStatsEvery)
++        GeomStatsFrame();
++#endif
+     if (GeometryEnabled)
+     {
+         if (RenderingEnabled)
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index b66a2da..e06ba90 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -384,6 +384,23 @@ public:
+     // while RunFast defers them, and whether one of the checks was due
+     bool FIFOChecksDeferred = false;
+     bool FIFOChecksDue = false;
++#if MELONDS_GEOMSTATS
++    // BananaDS (built with MELONDS_GEOMSTATS, CMake BANANADS_GEOMSTATS; run with MELONDS_GEOMSTATS=<frames>; counters
++    // only, emulation unchanged): with GeomFast, what the geometry engine's command stream is made of, printed to
++    // stderr every <frames> frames as per-frame averages (Run calls and those with work, FIFO entries per working
++    // call, commands by kind, normals by enabled lights, polygons). A build option: a run-time switch in RunFast's
++    // loop costs a load and a branch per FIFO entry, and two copies of the loop change what GCC inlines
++    static u32 GeomStatsEnv() noexcept;
++    u32 GeomStatsEvery = GeomStatsEnv();
++    struct GeomStatsCounters
++    {
++        u64 Runs, WorkRuns, StallRuns, Entries, Queued, Polygons;
++        u64 Cmds[8], Lights[5];
++        u32 Frames;
++    } GeomStats {};
++    void GeomStatsEntry() noexcept;
++    void GeomStatsFrame() noexcept;
++#endif
+ };
+ 
+ class Renderer3D
+-- 
+2.43.0
+

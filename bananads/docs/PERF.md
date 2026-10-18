@@ -492,13 +492,18 @@ dsstress L5 (CPU-paced lit quad strips): ~2,850 entries and ~710 vertices a fram
 (~135 per entry, lighting included), polygon setup 195k (~550 per quad), vertex 69k, clipping 48k, the FIFO
 writes 122k. memio's gxstm (NNS-style draws by STM/DMA): ~2,700 entries, `Run` 292k (~103 per entry). No single
 hot spot is left: the loop head and pipe read ~20, the pipe refill with the DMA and IRQ checks ~25-40 every
-other entry, a parameter's store and its cycle ~25, a command's cycle accounting ~25. A count of the
-stream shows why batching inside `Run` gains little: the stream is CPU-paced, `Run` is called ~1,000 times a frame
+other entry, a parameter's store and its cycle ~25, a command's cycle accounting ~25. `MELONDS_GEOMSTATS`
+shows why batching inside `Run` gains little: the stream is CPU-paced, `Run` is called ~1,000 times a frame
 with 2.7 (L5) to 5.3 (gxstm) entries each, and its entry and finish (FinishWork, GXSTAT bits) cost ~90
 instructions per call, a fifth of `Run` on L5.
 
 - **0050 (`render.geom_batch`):** the DMA and IRQ checks once per `Run`. qemu: `Run` -3.7% (L5), -7% (gxstm),
   geomtest -5.6%; geometry -2..-4%.
+- **`MELONDS_GEOMSTATS=<frames>` (0051, CMake `-DBANANADS_GEOMSTATS=ON`):** counters, emulation unchanged: Run
+  calls (with work, stalled), entries per working call, commands by kind, normals by enabled lights, polygons,
+  every <frames> frames on stderr. A build option (the default build is byte-identical to 0050's: a run-time
+  switch cost a branch per entry and changed GCC's inlining, +3% `Run`). For HeartGold on the device, to decide
+  what geometry work is worth doing next.
 - Tried and dropped: a command's middle parameters (a matrix's 2nd-15th) in a short loop with their cycles added
   at once (exact): gxstm `Run` -0.1%: the parameters arrive a few per `Run` call (0.6 per batch).
 
