@@ -1,0 +1,90 @@
+From b8eeb916d174d99814d12a18c2ec61ad176f6d9e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 18 Oct 2026 19:50:45 +0000
+Subject: [PATCH] GPU3D: the GX FIFO's DMA and IRQ checks once per run of the
+ geometry engine (MELONDS_GEOMBATCH)
+
+---
+ src/GPU3D.cpp | 25 +++++++++++++++++++++++--
+ src/GPU3D.h   |  9 +++++++++
+ 2 files changed, 32 insertions(+), 2 deletions(-)
+
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index 729d538..b6629b2 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -2044,8 +2044,13 @@ inline __attribute__((always_inline)) GPU3D::CmdFIFOEntry GPU3D::CmdFIFOReadFast
+                 NDS.GXFIFOUnstall();
+         }
+ 
+-        CheckFIFODMAFast();
+-        CheckFIFOIRQFast();
++        if (FIFOChecksDeferred) [[likely]]
++            FIFOChecksDue = true;
++        else
++        {
++            CheckFIFODMAFast();
++            CheckFIFOIRQFast();
++        }
+     }
+ 
+     return ret;
+@@ -2698,12 +2703,21 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+     CycleCount -= cycles;
+     Timestamp = now;
+ 
++    // GeomBatch: the stall queue stays empty while the commands run (only the CPU's writes fill it)
++    FIFOChecksDeferred = GeomBatch && CmdStallQueue.IsEmpty();
+     while (CycleCount <= 0 && !CmdPIPE.IsEmpty())
+     {
+         GXStat &= ~(((u32)(NumPushPopCommands == 0) << 14) | (u32)(NumTestCommands == 0));
+ 
+         ExecuteCommandBody<true>();
+     }
++    FIFOChecksDeferred = false;
++    if (FIFOChecksDue)
++    {
++        FIFOChecksDue = false;
++        CheckFIFODMAFast();
++        CheckFIFOIRQFast();
++    }
+ 
+     if (CycleCount <= 0 && CmdPIPE.IsEmpty())
+     {
+@@ -2728,6 +2742,13 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+     }
+ }
+ 
++bool GPU3D::GeomBatchEnv() noexcept
++{
++    // read as the GPU3D is created: a difftest has two NDS objects, each created with its own setting
++    const char* e = getenv("MELONDS_GEOMBATCH");
++    return !(e && e[0] == '0');
++}
++
+ void GPU3D::Run() noexcept
+ {
+     if (GeomFast)
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index 9b45721..b66a2da 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -375,6 +375,15 @@ public:
+     bool GXFIFODMAMaybe = true;
+     // whether the ARM9's IRQ line was brought up to date by CheckFIFOIRQFast since the last reset or state load
+     bool GXIRQSynced = false;
++    // BananaDS (render.geom_batch, MELONDS_GEOMBATCH=0 turns it off; exact): with GeomFast and an empty stall queue,
++    // RunFast does the GX FIFO's DMA and IRQ checks once, after its commands, instead of after every refill of the
++    // pipe (nothing a command does reads IF or the DMAs, the FIFO's level only falls while the stall queue is empty,
++    // and both checks' results depend on that level and on state no command changes, so the last check decides)
++    static bool GeomBatchEnv() noexcept;
++    bool GeomBatch = GeomBatchEnv();
++    // while RunFast defers them, and whether one of the checks was due
++    bool FIFOChecksDeferred = false;
++    bool FIFOChecksDue = false;
+ };
+ 
+ class Renderer3D
+-- 
+2.43.0
+
