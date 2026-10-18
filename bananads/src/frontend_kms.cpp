@@ -720,6 +720,7 @@ static void on_flip(int, unsigned, unsigned, unsigned, unsigned, void* ud) { ((D
 struct InputDev {
     int fd = -1;
     bool touch = false, pointer = false;
+    int stick = 0;          // the left stick's half range (ABS_X/ABS_Y on a pad, not a touchscreen): 0 none
     int minx = 0, maxx = 0, miny = 0, maxy = 0, x = 0, y = 0;
     bool down = false, was = false;
 };
@@ -780,7 +781,15 @@ static std::vector<InputDev> open_inputs(const std::string& touch_name) {
             dv.miny = ay.minimum;
             dv.maxy = ay.maximum;
         } else {
-            bool any = bit(abs, ABS_HAT0X);
+            // the left stick (a pad's ABS_X/ABS_Y) plays the d-pad; the volume keys are only looked at so F + volume
+            // (bananad's brightness) isn't taken for F alone, which opens the menu
+            bool any = bit(abs, ABS_HAT0X) || bit(keys, KEY_VOLUMEUP);
+            if (bit(abs, ABS_X) && bit(abs, ABS_Y)) {
+                input_absinfo ax{};
+                ioctl(fd, EVIOCGABS(ABS_X), &ax);
+                dv.stick = (ax.maximum - ax.minimum) / 2;
+                any = any || dv.stick > 0;
+            }
             for (int c = KEY_ESC; c < KEY_MAX && !any; c++)
                 if (bit(keys, c) && (pad_bit(c) || is_hotkey(c))) any = true;
             if (!any) {
@@ -1290,6 +1299,8 @@ int run_kms(Emu& emu, const Config& cfg) {
     uint32_t keys = 0;
     bool ff_held = false;  // fast-forward from R2 held down (off again when it's let go)
     bool hot = false, menu_down = false;
+    bool hot_used = false;      // a button went down while F was held (F + something, not F alone)
+    uint32_t stick_keys = 0;    // the d-pad directions the left stick holds
     // the menu: the game paused at its next frame, the flips in flight done, then the menu until it closes; the
     // game's frame back on both panels, no button left held for the game, the game running again
     const long menu_test = cfg.num("kms.menu_test", 0);  // (tests: the menu opens 3 s in, on page menu_test - 1)
@@ -1380,11 +1391,21 @@ int run_kms(Emu& emu, const Config& cfg) {
                         }
                         continue;
                     }
+                    if (x.type == EV_ABS && d.stick > 0 && (x.code == ABS_X || x.code == ABS_Y)) {
+                        // the left stick as the d-pad: past 60% of its throw (its own bits: the d-pad keeps its own)
+                        const int t = d.stick * 3 / 5;
+                        if (x.code == ABS_X)
+                            stick_keys = (stick_keys & ~(KeyLeft | KeyRight)) | (x.value < -t ? KeyLeft : x.value > t ? KeyRight : 0);
+                        else
+                            stick_keys = (stick_keys & ~(KeyUp | KeyDown)) | (x.value < -t ? KeyUp : x.value > t ? KeyDown : 0);
+                        continue;
+                    }
                     if (x.type == EV_ABS && x.code == ABS_HAT0X)
                         keys = (keys & ~(KeyLeft | KeyRight)) | (x.value < 0 ? KeyLeft : x.value > 0 ? KeyRight : 0);
                     else if (x.type == EV_ABS && x.code == ABS_HAT0Y)
                         keys = (keys & ~(KeyUp | KeyDown)) | (x.value < 0 ? KeyUp : x.value > 0 ? KeyDown : 0);
                     if (x.type != EV_KEY || x.value == 2) continue;
+                    if (hot && x.value && !is_hotkey(x.code)) hot_used = true;  // F + something: not F alone
                     if (menu_on && is_menu_button(x.code)) {  // (opens on release: nothing of it reaches the game)
                         if (x.value) menu_down = true;
                         else if (menu_down) {
@@ -1408,7 +1429,13 @@ int run_kms(Emu& emu, const Config& cfg) {
                         continue;
                     }
                     if (is_hotkey(x.code)) {
-                        hot = x.value != 0;
+                        // F pressed and let go on its own opens the menu, as SuperDrastic's does; F + a button is a
+                        // hotkey and opens nothing
+                        if (x.value) { hot = true; hot_used = false; }
+                        else {
+                            hot = false;
+                            if (!hot_used && menu_on) open_menu(0);
+                        }
                         continue;
                     }
                     if (x.code == KEY_ESC && x.value) g_quit = true;
@@ -1424,7 +1451,7 @@ int run_kms(Emu& emu, const Config& cfg) {
                 }
             }
         }
-        in_keys = hot ? 0 : keys;  // while F is held the game sees no buttons
+        in_keys = hot ? 0 : keys | stick_keys;  // while F is held the game sees no buttons
         if (menu_test > 0 && !menu_tested && now_us() - t_start > 3000000) {
             menu_tested = true;
             open_menu((int)menu_test - 1);
