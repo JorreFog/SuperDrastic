@@ -1177,10 +1177,12 @@ int run_kms(Emu& emu, const Config& cfg) {
         h.cheat_get = mh_cheat_get;
         h.cheat_set = mh_cheat_set;
         bmenu_init(&h);
-        // cheats.dir (<BANANADS_DATA>/cheats): the games' .mch files; cheats.retroarch_dir: RetroArch's DS database
+        // cheats.dir (<BANANADS_DATA>/cheats): the games' .mch files; then RetroArch .cht files from cheats.retroarch_dir
+        // (the card's RetroArch folder) and cheats.system_dir (the collection that comes with BananaOS)
         const char* data = getenv("BANANADS_DATA");
         g_cheats.load(emu.game(), cfg.str("cheats.dir", std::string(data && *data ? data : "/data/bananads") + "/cheats"),
-                      cfg.str("cheats.retroarch_dir", "/data/retroarch/retroarch/cheats/Nintendo - Nintendo DS"));
+                      {cfg.str("cheats.retroarch_dir", "/data/retroarch/retroarch/cheats/Nintendo - Nintendo DS"),
+                       cfg.str("cheats.system_dir", "/usr/share/libretro/cheats/Nintendo - Nintendo DS")});
         g_cheat_emu = &emu;
         if (g_cheats.enabled()) emu.set_cheats(g_cheats.list());
         bmenu_session_start();

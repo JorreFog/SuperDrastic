@@ -99,7 +99,7 @@ static std::string find_cht(const std::string& game, const std::string& ra_dir) 
     return best_rank < 99 ? ra_dir + "/" + best : "";
 }
 
-void Cheats::load(const std::string& game, const std::string& dir, const std::string& ra_dir) {
+void Cheats::load(const std::string& game, const std::string& dir, const std::vector<std::string>& cht_dirs) {
     codes_.clear();
     source_.clear();
     mch_ = dir + "/" + game + ".mch";
@@ -110,8 +110,9 @@ void Cheats::load(const std::string& game, const std::string& dir, const std::st
             source_ = mch_;
         } else Log(LogLevel::Warn, "[cheats] %s couldn't be read (melonDS's format?)\n", mch_.c_str());
     }
-    if (source_.empty()) {
-        const std::string cht = find_cht(game, ra_dir);
+    for (const auto& d : cht_dirs) {  // (the card's first: a file of the user's wins over the installed one)
+        if (!source_.empty()) break;
+        const std::string cht = find_cht(game, d);
         if (!cht.empty()) {
             codes_ = read_cht(cht);
             source_ = cht;
