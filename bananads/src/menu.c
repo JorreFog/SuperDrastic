@@ -1231,6 +1231,23 @@ static void ov_draw_fps(canvas *c) {   /* the counter's own picture: c is exactl
     }
 }
 void bmenu_fps(int fps_x10, int ff) { of_val = fps_x10; of_ff = ff; }
+static pthread_mutex_t own_mu = PTHREAD_MUTEX_INITIALIZER;   /* the frontend's pop-up, waiting for its turn */
+static char own_l1[128], own_l2[160]; static int own_ms;
+void bmenu_popup(const char *line1, const char *line2, int ms) {
+    pthread_mutex_lock(&own_mu);
+    snprintf(own_l1, sizeof own_l1, "%s", line1); snprintf(own_l2, sizeof own_l2, "%s", line2); own_ms = ms;
+    pthread_mutex_unlock(&own_mu);
+}
+static int own_take(void) {   /* the frontend's pop-up into the pop-up card's lines, if one is waiting */
+    int ms = 0;
+    pthread_mutex_lock(&own_mu);
+    if (own_ms > 0) {
+        snprintf(op_l1, sizeof op_l1, "%s", own_l1); snprintf(op_l2, sizeof op_l2, "%s", own_l2);
+        op_badge[0] = 0; op_accent = C_CYAN; ms = own_ms; own_ms = 0;
+    }
+    pthread_mutex_unlock(&own_mu);
+    return ms;
+}
 /* the keys' level, from bananad (a file written in the last 2 s, newer than the last one seen) */
 static void ov_osd(long long t) {
     if (t < osd_check) return;
@@ -1298,6 +1315,10 @@ void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
     ov_osd(t);
     if (ov_on && t >= ov_until) ov_on = 0;
     if (op_on && t >= op_until) op_on = 0;
+    if (!op_on) {
+        int ms = own_take();
+        if (ms > 0 && ov_make(&OP, w, strip, 0, 0, sc, ov_draw_popup)) { op_on = 1; op_from = t; op_until = t + ms; }
+    }
     if (!op_on) {
         int ms;
         if (ra_popup_take(op_l1, sizeof op_l1, op_l2, sizeof op_l2, op_badge, sizeof op_badge, &op_accent, &ms) &&

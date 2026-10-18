@@ -26,6 +26,7 @@ static std::mutex g_open_mu;
 struct Alsa {
     Emu* emu;
     std::atomic<bool> run{true};
+    std::atomic<bool> mute{false};  // alsa_mute: the game's sound faded to silence (the menu's sounds still play)
     std::thread out, in;
     std::string out_dev, in_dev;
     unsigned latency_us;
@@ -82,6 +83,7 @@ static void out_thread(Alsa* a) {
     std::vector<int16_t> buf(chunk * 2);
     int16_t last[2] = {0, 0};
     int since_check = 0;
+    float gain = 1.f;
     while (a->run) {
         if (++since_check >= 47) {  // ~250 ms of 256-frame chunks at 48 kHz
             since_check = 0;
@@ -112,6 +114,14 @@ static void out_thread(Alsa* a) {
             buf[i * 2] = last[0];
             buf[i * 2 + 1] = last[1];
         }
+        // muted (fast-forward): faded over ~5 ms each way, so neither end clicks
+        const float target = a->mute.load(std::memory_order_relaxed) ? 0.f : 1.f;
+        if (gain != target || target == 0.f)
+            for (int i = 0; i < chunk; i++) {
+                gain = target > gain ? std::min(target, gain + 1.f / 240) : std::max(target, gain - 1.f / 240);
+                buf[i * 2] = (int16_t)(buf[i * 2] * gain);
+                buf[i * 2 + 1] = (int16_t)(buf[i * 2 + 1] * gain);
+            }
         {
             std::lock_guard<std::mutex> l(a->ui_mu);
             if (a->ui_id >= 0) {
@@ -169,6 +179,11 @@ Alsa* alsa_start(Emu& emu, const Config& cfg) {
     a->out = std::thread(out_thread, a);
     if (cfg.str("mic.source", "device") == "device") a->in = std::thread(in_thread, a);
     return a;
+}
+
+void alsa_mute(Alsa* a, bool on) {
+    if (!a || a->mute.exchange(on) == on) return;
+    Log(LogLevel::Info, "[alsa] game sound %s\n", on ? "faded out (fast-forward)" : "back");
 }
 
 void alsa_stop(Alsa* a) {

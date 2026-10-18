@@ -69,6 +69,8 @@ void bmenu_overlay(uint32_t* px, int pitch, int w, int h);
 // the FPS counter in the top panel's corner (drawn by bmenu_overlay): the frames emulated a second x 10, -1 hidden; and
 // the fast-forward speed beside it (0: off, 99: as fast as it goes)
 void bmenu_fps(int fps_x10, int ff);
+// a pop-up of the frontend's own (a screenshot saved...): shown like an achievement's, for ms; any thread
+void bmenu_popup(const char* line1, const char* line2, int ms);
 
 #ifdef __cplusplus
 }

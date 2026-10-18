@@ -61,6 +61,7 @@
 #include "gengis_renderer.h"
 #endif
 #include "cheats.h"
+#include "screenshot.h"
 #include "menu.h"
 #include "ra.h"
 
@@ -603,6 +604,23 @@ struct Display {
         pending = 2;
         return true;
     }
+    // F + L2: the frame as it goes to the panels (its 3D in: right after the emulator's frame it may not be yet), before
+    // the shader, to a PNG on a thread of its own (screenshot.h)
+    std::atomic<bool> shot{false};
+    std::string shot_dir, shot_game;
+    void take_shot(const Buf& t, const Buf& b) {
+        if (!t.map || !b.map || t.w != b.w || t.h != b.h) return;
+        std::vector<uint32_t> px[2];
+        const Buf* in[2] = {&t, &b};
+        for (int i = 0; i < 2; i++) {
+            px[i].resize((size_t)t.w * t.h);
+            for (uint32_t y = 0; y < t.h; y++) memcpy(&px[i][(size_t)y * t.w], in[i]->map + (size_t)y * in[i]->pitch, t.w * 4);
+        }
+        screenshot_save(shot_dir, shot_game, std::move(px[0]), std::move(px[1]), (int)t.w, (int)t.h, [](bool ok, const std::string& name) {
+            Log(LogLevel::Info, "[shot] %s: %s\n", ok ? "saved" : "couldn't save", name.c_str());
+            bmenu_popup(ok ? "Screenshot saved" : "Screenshot not saved", ok ? name.c_str() : "the card may be full", 2500);
+        });
+    }
     void commit_next() {
         shader_settings();
         if (ready >= 0) {  // drawn ahead: on screen as soon as the flip allows (tried again at the next wake-up)
@@ -620,6 +638,7 @@ struct Display {
             queue.pop_front();
             state[s] = COMMITTED;
         }
+        if (shot.exchange(false)) take_shot(buf[0][s], buf[1][s]);
         const Buf* out[2] = {&buf[0][s], &buf[1][s]};
         if (shader_on) {
             const long long t0 = now_us();
@@ -1114,6 +1133,8 @@ int run_kms(Emu& emu, const Config& cfg) {
 #ifdef BANANADS_ALSA
     Alsa* snd = alsa_start(emu, cfg);
 #endif
+    dp.shot_dir = cfg.str("screenshot.dir", "/data/screenshots");  // F + L2's PNGs (RetroArch's go there too)
+    dp.shot_game = emu.game();
     GovFeed feed;
     feed.scale = emu.scale();
     cpugov_start(cfg, &feed);
@@ -1206,6 +1227,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         if (pace_display) emu.set_audio_rate(48000.0 * dp.period_us * 1000.0 / 16715180.0);
         Pacer pace(feed, period);
         int touched = -1, ff = 0;
+        const bool ff_mute = cfg.flag("kms.ff_mute", true);
         while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
             if (pause_req.load(std::memory_order_acquire)) {  // the menu: at a frame's end, until it closes
                 std::unique_lock<std::mutex> l(pm);
@@ -1226,6 +1248,9 @@ int run_kms(Emu& emu, const Config& cfg) {
             if (const int f = g_ff.load(std::memory_order_relaxed); f != ff) {
                 ff = f;
                 pace.set_speed(ff ? ff : 1);  // (Max: 99 times as often, i.e. no wait at all in practice)
+#ifdef BANANADS_ALSA
+                alsa_mute(snd, ff && ff_mute);  // kms.ff_mute (on): no chopped sound while fast-forwarding
+#endif
                 Log(LogLevel::Info, "[kms] fast-forward %s\n", ff ? (ff == 99 ? "max" : ff == 2 ? "2x" : "3x") : "off");
             }
             emu.set_keys(in_keys.load(std::memory_order_relaxed));
@@ -1263,6 +1288,7 @@ int run_kms(Emu& emu, const Config& cfg) {
     ev.version = 3;
     ev.page_flip_handler2 = on_flip;  // one event per CRTC: a frame is on screen once both panels' have come
     uint32_t keys = 0;
+    bool ff_held = false;  // fast-forward from R2 held down (off again when it's let go)
     bool hot = false, menu_down = false;
     // the menu: the game paused at its next frame, the flips in flight done, then the menu until it closes; the
     // game's frame back on both panels, no button left held for the game, the game running again
@@ -1292,6 +1318,10 @@ int run_kms(Emu& emu, const Config& cfg) {
         in_keys = 0;
         in_touch = -1;
         if (mh.quit) g_quit = true;
+        if (ff_held) {  // (R2's release went to the menu)
+            ff_held = false;
+            g_ff = 0;
+        }
         {
             std::lock_guard<std::mutex> l(pm);
             pause_req = false;
@@ -1360,6 +1390,20 @@ int run_kms(Emu& emu, const Config& cfg) {
                         else if (menu_down) {
                             menu_down = false;
                             open_menu(0);
+                        }
+                        continue;
+                    }
+                    if (x.code == BTN_TL2) {  // F + L2: a screenshot (L2 alone: nothing, the DS has none)
+                        if (hot && x.value) dp.shot = true;
+                        continue;
+                    }
+                    if (x.code == BTN_TR2) {  // R2 held: fast-forward while it's down, at the F + X toggle's speed
+                        if (x.value && !g_ff.load()) {
+                            g_ff = g_opts.ff_speed;
+                            ff_held = true;
+                        } else if (!x.value && ff_held) {
+                            g_ff = 0;
+                            ff_held = false;
                         }
                         continue;
                     }

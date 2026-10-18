@@ -29,6 +29,7 @@ Alsa* alsa_start(Emu& emu, const Config& cfg);
 void alsa_ui_load(Alsa* a, int id, const int16_t* pcm, int frames, int rate, int channels);
 void alsa_ui_play(Alsa* a, int id);
 void alsa_stop(Alsa* a);
+void alsa_mute(Alsa* a, bool on);  // the game's sound faded out (fast-forward: sped-up sound is chopped noise), or back
 #endif
 
 }  // namespace bananads
