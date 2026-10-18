@@ -4,7 +4,13 @@
    to full 32-bit range), then reads CLIPMTX_RESULT and VECMTX_RESULT, runs POS_TEST, VEC_TEST and BOX_TEST, draws
    random triangles and triangle strips (lit, partly outside the view volume) and reads RAM_COUNT; every result goes
    to a log in main RAM at 0x02200000 (and into a checksum). Frames alternate Z- and W-buffering. Written for this
-   test. */
+   test.
+   The FIFO IRQ phase (session 3, geomlazy): GXSTAT's FIFO IRQ ("less than half" and "empty") enabled in IE (IME on,
+   the CPU's IRQs masked, so IF is polled rather than taken), the FIFO filled by the CPU's writes and by a GX FIFO DMA
+   (mode 7) that ends, IF acknowledged while the FIFO is full enough, then IF polled until the geometry engine sets
+   it: the poll count, timer 0 (33 MHz) and the FIFO level at that point are logged, so an IRQ set a run late (or
+   never: the polls stop at a limit) changes the log. Random lengths, so the last entries drain in every phase of
+   the engine's runs. */
 typedef unsigned int u32; typedef unsigned short u16; typedef int s32; typedef short s16;
 #define R32(a) (*(volatile u32 *)(a))
 #define R16(a) (*(volatile u16 *)(a))
@@ -31,6 +37,8 @@ static void put(u32 v)
     LOG[1] = (LOG[1] ^ v) * 16777619u + i;
 }
 static void gx(u32 reg, u32 v) { R32(0x04000400 + reg) = v; }
+#define IF_GXFIFO (1u << 21)
+#define IFREG 0x04000214
 static void wait_idle(void) { while (R32(GXSTAT) & (1u << 27)) ; }
 static void wait_test(void) { while (R32(GXSTAT) & 1u) ; }
 
@@ -113,6 +121,67 @@ static void draw(void)
     put(R32(0x04000604));                                                    /* RAM_COUNT */
 }
 
+/* the GX FIFO DMA's display list: BOX_TESTs, each a packed word and 3 parameters (~103 cycles for 3 entries: the
+   engine is slower than the DMA and the CPU, so the FIFO fills) */
+static u32 dlist[4 * 170];
+static __attribute__((target("arm"), noinline)) void dcache_flush(void)
+{
+    /* clean and invalidate the ARM946's 4 KB data cache by segment and index (so the DMA reads the list from RAM) */
+    for (u32 seg = 0; seg < 4; seg++)
+        for (u32 idx = 0; idx < 0x400; idx += 32)
+            __asm__ volatile("mcr p15, 0, %0, c7, c14, 2" :: "r"((seg << 30) | idx));
+    __asm__ volatile("mcr p15, 0, %0, c7, c10, 4" :: "r"(0));   /* drain the write buffer */
+}
+static void timer_restart(void) { R16(0x04000102) = 0; R16(0x04000100) = 0; R16(0x04000102) = 0x80; }
+/* poll IF until the FIFO IRQ's bit is set (or a limit), then log the polls, timer 0 and the FIFO level */
+static void wait_fifo_irq(void)
+{
+    u32 c = 0;
+    while (!(R32(IFREG) & IF_GXFIFO) && c < 20000) c++;
+    put(c); put(R16(0x04000100)); put((R32(GXSTAT) >> 16) & 0x1FF);
+}
+static void fifo_irq_phase(void)
+{
+    put(0x1F1F0000);                                                        /* the phase's marker in the log */
+    R32(0x04000210) |= IF_GXFIFO;                                           /* IE */
+    R32(0x04000208) = 1;                                                    /* IME (CPSR.I masks them) */
+    for (int t = 0; t < 4; t++) {
+        /* the CPU's writes: random BOX_TESTs (past a full FIFO: the CPU stalls) and a random tail of 1-entry
+           commands, then until "empty" */
+        R32(GXSTAT) = 2u << 30;
+        u32 n = 8 + (rnd() & 127), tail = rnd() & 7;
+        for (u32 k = 0; k < n; k++) { gx(0x1C0, rnd()); gx(0x1C0, rnd()); gx(0x1C0, rnd()); }
+        for (u32 k = 0; k < tail; k++) gx(0x40, 3);
+        R32(IFREG) = IF_GXFIFO;                                             /* acknowledge (set again if empty) */
+        timer_restart();
+        wait_fifo_irq();
+        /* a GX FIFO DMA of a random length: "less than half" after it filled the FIFO past half, then "empty" */
+        u32 cmds = 40 + (rnd() & 127);
+        dcache_flush();
+        R32(GXSTAT) = 1u << 30;
+        R32(0x040000D4) = (u32)dlist; R32(0x040000D8) = 0x04000400;
+        R32(0x040000DC) = (4 * cmds) | (2u << 21) | (1u << 26) | (7u << 27) | (1u << 31);
+        u32 c = 0;
+        while (((R32(GXSTAT) >> 16) & 0x1FF) < 128 && (R32(0x040000DC) & (1u << 31)) && c < 20000) c++;
+        put(c);
+        R32(IFREG) = IF_GXFIFO;
+        timer_restart();
+        wait_fifo_irq();
+        R32(GXSTAT) = 2u << 30;
+        R32(IFREG) = IF_GXFIFO;
+        wait_fifo_irq();
+        c = 0;
+        while ((R32(0x040000DC) & (1u << 31)) && c < 20000) c++;
+        put(c);
+        put(R32(IFREG) & IF_GXFIFO);
+    }
+    R32(GXSTAT) = 0;
+    R32(0x04000208) = 0;
+    R32(0x04000210) &= ~IF_GXFIFO;
+    R32(IFREG) = IF_GXFIFO;
+    wait_idle();
+}
+
 int main(void)
 {
     R32(0x04000304) = 0x820F;
@@ -125,11 +194,16 @@ int main(void)
     for (int k = 0; k < 16; k++) gx(0x58, (u32)proj[k]);
     gx(0x40, 2); gx(0x54, 0);
     LOG[0] = 0; LOG[1] = 0; LOG[2] = 0;
+    for (int k = 0; k < 170; k++) {
+        dlist[4 * k] = 0x70;                                                /* BOX_TEST */
+        for (int j = 0; j < 3; j++) dlist[4 * k + 1 + j] = rnd();
+    }
     for (u32 frame = 0;; frame++) {
         for (int r = 0; r < 24; r++) { matrix_round(); if ((r & 3) == 3) read_results(); }
         gx(0x40, 0); gx(0x54, 0);                                           /* back to a sane projection */
         for (int k = 0; k < 16; k++) gx(0x58, (u32)proj[k]);
         box_tests();
+        fifo_irq_phase();                                                   /* its BOX_TESTs with box_tests' matrices */
         draw();
         gx(0x140, (frame & 1) << 1);                                        /* SWAP_BUFFERS: Z / W-buffering */
         LOG[0] = frame;
