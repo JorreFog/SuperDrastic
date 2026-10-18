@@ -478,6 +478,37 @@ sprites and OBJ mosaic, skipping unchanged lines in 2D; the mix's per-sample tai
    - Two known exits for a conditional branch at a block's end (it uses `DynExit` now).
 7. **Audio** (3.8%) and **DMA** (2.4%). *Started: `fast_spu` and `fast_gxdma`, above.*
 
+## The JIT's code footprint (2026-10-18, second speed session, agent jitcode; untested on device)
+
+The JIT's generated code is 32% of the emulator thread in HeartGold (device profile, 2026-10-12). 0007 cut ~40% of
+its *instructions* on cpubench and nothing showed on the device; on a game-sized code footprint (tests/bigcode) the
+JIT's code runs at ~0.25 instructions per cycle (rgds-sim, first session): instruction fetch, not instruction count,
+is the likely limit in games. These changes make the blocks smaller without changing what they do. The measure is
+static and deterministic: the bytes of the blocks (`MELONDS_JIT_PERFMAP=1`, the `mj9_`/`mj7_` symbols of the
+code dump; the far region, `mj9f_`/`mj7f_`, holds cold paths), tests/bigcode-thumb, first 60 frames (3863
+blocks), device build (`build-a64-device.sh`), counted with the first session's `census.py`:
+
+| Build | Block bytes | Bytes/block | Instructions in blocks |
+|---|---|---|---|
+| base (0001-0020) | 1,170,716 | 303 | 292,679 |
+| + 0040 `jit.entry_x26` | 1,124,360 (-4.0%) | 291 | 281,090 |
+| + 0041 `jit.dyncold` | 1,096,536 (-6.3%) | 284 | 274,134 |
+| + 0042 `jit.flagstub` | 1,060,344 (-9.4%) | 274 | 265,086 |
+
+Expected device gain (an estimate, by reasoning only): the first session's rgds-sim run of 0024 (= 0040) on bigcode
+gave ~0.4% less main-thread time per 1% less JIT code (4% -> -1.7%; JIT code 60% of that thread). If HeartGold's
+JIT code (32% of its thread) is fetch-bound like bigcode's, 1% fewer block bytes is ~0.2% of the emulator thread:
+0040 ~+0.8% fps, 0041 ~+0.5%, 0042 ~+0.6%, all three ~+2%. If HeartGold's hot code fits the A55's 32 KB L1I, ~0.
+The device decides.
+
+- **0040, `jit.entry_x26`** (`MELONDS_JIT_NOENTRYX26=1` off): the first session's 0024 (perf/jit), renumbered.
+  ARM_Dispatch takes the CPU's fast memory base as a third argument and sets x26, so blocks lose 0007's FASTENTRY
+  prologue (`mov/movk/movk x26`, 12 bytes each, 4.0% of the blocks' bytes) and a dispatch runs three instructions
+  fewer. Everything else entering a block (a linked slot, DynExit, a self loop, the fault handler's restore) comes
+  from the same CPU's code, where x26 already holds the base.
+
+Checks: exact-suite.sh, toggle off against on, device build: FAILS=0.
+
 ## BananaJIT
 
 BananaJIT (jit/, `-DBANANADS_JIT=banana`) is parked. Its block-timing mode reached about 44 fps in this scene,

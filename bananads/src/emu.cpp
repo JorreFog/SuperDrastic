@@ -365,6 +365,14 @@ bool Emu::load_rom(const std::string& path) {
         else if (codegen == "old") setenv("MELONDS_JIT_OLDCODEGEN", "1", 1);
     }
 
+    // jit.entry_x26=on|off: off sets MELONDS_JIT_NOENTRYX26=1, on unsets it (melonDS patch 0040: ARM_Dispatch sets the
+    // fast memory base in x26, so blocks have no entry prologue; read as the JIT compiler is created; default on)
+    {
+        const std::string v = cfg_.str("jit.entry_x26", "");
+        if (v == "on") unsetenv("MELONDS_JIT_NOENTRYX26");
+        else if (v == "off") setenv("MELONDS_JIT_NOENTRYX26", "1", 1);
+    }
+
     // jit.vramfast=on|off, jit.iodirect=on|off and render.vramtrack_skip=on|off set bits 1, 2 and 4 of
     // MELONDS_MEMFAST (melonDS patch 0010, read at the JIT's reset; default all on, exact): VRAM with one bank at
     // the 16 KB straight to the bank, OAM and palette straight to the GPU; the divider, square root,
