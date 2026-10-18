@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 07:35:00 +0000
+Subject: [PATCH] ARMJIT: a write invalidates only the blocks in its 16 bytes
+
+InvalidateByAddr's inner `u32 mask` hid the written 16 bytes' mask: `AddressMasks()[j] & mask` was the block's
+mask with itself, always true, so any write in a 512-byte page dropped every block in it. Golden Sun: Dark
+Dawn writes next to its ITCM code every frame: 847k -> 356k block compiles in 60 s of walking.
+NOT for 0.4.0: frames identical over 60 s, but the audio diverges after 0.75 s (block boundaries change);
+needs a correctness check first.
+---
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -1453,21 +1453,21 @@
+         JitBlock* block = range->Blocks[i];
+ 
+         bool invalidated = false;
+-        u32 mask = 0;
++        u32 blockMask = 0;  // (was a second `mask`, which hid the written 16 bytes': every block of the 512 went)
+         for (int j = 0; j < block->NumAddresses; j++)
+         {
+             if (block->AddressRanges()[j] == (localAddr & ~0x1FF))
+             {
+-                mask = block->AddressMasks()[j];
+-                invalidated = block->AddressMasks()[j] & mask;
+-                assert(mask);
++                blockMask = block->AddressMasks()[j];
++                invalidated = blockMask & mask;
++                assert(blockMask);
+                 break;
+             }
+         }
+-        assert(mask);
++        assert(blockMask);
+         if (!invalidated)
+         {
+-            range->Code |= mask;
++            range->Code |= blockMask;
+             i++;
+             continue;
+         }
