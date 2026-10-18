@@ -294,6 +294,30 @@ struct Pmu {
     }
 };
 
+// The areas of the device profile in docs/PERF.md (2026-10-12: JIT code, memory/IO slow paths, 3D geometry,
+// scheduler/RunFrame, JIT dispatch and exits, SPU), by name: a heuristic, the top symbols are the facts
+const char* area_of(const std::string& name, const std::string& mod) {
+    auto has = [&](const char* k) { return name.find(k) != std::string::npos; };
+    if (mod == "[JIT code]") return name.compare(0, 9, "[JIT stub") == 0 ? "JIT dispatch and exits" : "JIT code";
+    if (has("ARM_Dispatch") || has("ARM_Ret") || has("JumpTo") || has("LookUpBlock") || has("LinkBlock"))
+        return "JIT dispatch and exits";
+    if (has("ARMJIT") || has("JitBlock") || has("InvalidateBy") || has("CheckAndInvalidate")) return "JIT compiler and invalidation";
+    if (has("Slow") || has("ARM9Read") || has("ARM9Write") || has("ARM7Read") || has("ARM7Write") || has("IORead") ||
+        has("IOWrite") || has("IOFast") || has("BusRead") || has("BusWrite") || has("GPU3D_Write") || has("GPU3D_Read"))
+        return "memory/IO slow paths";
+    if (has("GPU3D") || has("ClipAgainstPlane") || has("melonDS::Polygon") || has("Vertex")) return "3D geometry";
+    if (has("rast_") || has("gx_") || has("Gengis") || has("line_px")) return "3D rendering (Gengis on this thread)";
+    if (has("SPU")) return "SPU";
+    if (has("DMA")) return "DMA";
+    if (has("GPU2D") || has("Banana") || has("GPU::") || has("VRAM") || has("WritePalette") || has("WriteOAM")) return "2D and video";
+    if (has("RunFrame") || has("RunSystem") || has("Schedule") || has("RunTimers") || has("main::") || has("run_frame") ||
+        has("NDS::") || has("RTC") || has("Timer")) return "scheduler, RunFrame and events";
+    if (has("yield") || has("pthread_") || has("futex") || has("lll_") || has("nanosleep") || has("syscall"))
+        return "waits and wake-ups (yield, futex)";
+    if (has("mem") || has("str")) return "libc memory/string";
+    return "other";
+}
+
 class ProfilerImpl final : public Profiler {
 public:
     explicit ProfilerImpl(const Config& cfg)
@@ -569,6 +593,12 @@ private:
                 add("%6.2f%% %6.2f%% %7" PRIu64 "  %-12.12s %.300s\n", pct(v[i].second), cum, v[i].second,
                     by_sym[v[i].first].mod.c_str(), v[i].first.c_str());
             }
+        }
+        {
+            std::map<std::string, uint64_t> by_area;
+            for (const auto& [k, c] : by_sym) by_area[area_of(k, c.mod)] += c.n;
+            r += "\n## by area (docs/PERF.md's device profile's areas, by name: a heuristic)\n";
+            for (const auto& [k, c] : ranked(by_area)) add("%6.2f%% %7" PRIu64 "  %s\n", pct(c), c, k.c_str());
         }
         r += "\n## by scope (C++ class or namespace; a C function is its own)\n";
         {
