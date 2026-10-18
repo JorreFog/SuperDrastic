@@ -511,8 +511,16 @@ The device decides.
   and then 20 bytes of the miss's way (another target than last time, or the first time). Those go to the far
   region after the exit's learn path, a `b` to them stays: 16 bytes less per such exit (1739 of 3863 blocks on
   bigcode-thumb, 2.4% of the bytes). A miss runs one `b` more.
+- **0042, `jit.flagstub`** (`MELONDS_JIT_NOFLAGSTUB=1` off): with LAZYFLAGS the guest's flags stay in NZCV and
+  every exit put them in RCPSR (`mrs x17,nzcv; and w27,w27,#0x0fffffff; orr w27,w27,w17`) before its
+  `bl ExitCheck(PC)` (3016 of 3863 blocks on bigcode-thumb, 3.1% of the bytes). Two new stub entries do it
+  instead: ExitCheckPCF (the three, falling into ExitCheckPC with the CPSR store) and ExitCheckF (the three and a
+  `b` to ExitCheck with the CPSR store). Only for a BL'd exit (a known target, not a self loop) with CPSRDirty, so
+  the stub's CPSR store is the one the block would have chosen. The same instructions run (+1 `b` on ExitCheckF).
 
-Checks: exact-suite.sh, toggle off against on, device build: FAILS=0.
+Checks: `evidence/jit/exact-suite.sh` (pictures every 50 frames to 300 on 17 ROMs incl. jitloops, irqmask, iorom;
+dmasnd's audio; `bananads-difftest --every` main RAM on 9 ROMs; `bananads-tests`), each toggle off against on,
+device build: FAILS=0 for each. Sabotage: 0041 with one cycle added on the miss way: FAILS=12.
 
 ## BananaJIT
 

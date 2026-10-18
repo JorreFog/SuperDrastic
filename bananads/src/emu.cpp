@@ -381,6 +381,14 @@ bool Emu::load_rom(const std::string& path) {
         else if (v == "off") setenv("MELONDS_JIT_NODYNCOLD", "1", 1);
     }
 
+    // jit.flagstub=on|off: off sets MELONDS_JIT_NOFLAGSTUB=1, on unsets it (melonDS patch 0042: an exit's stub puts the
+    // pending guest flags in RCPSR instead of three instructions in every block; default on)
+    {
+        const std::string v = cfg_.str("jit.flagstub", "");
+        if (v == "on") unsetenv("MELONDS_JIT_NOFLAGSTUB");
+        else if (v == "off") setenv("MELONDS_JIT_NOFLAGSTUB", "1", 1);
+    }
+
     // jit.vramfast=on|off, jit.iodirect=on|off and render.vramtrack_skip=on|off set bits 1, 2 and 4 of
     // MELONDS_MEMFAST (melonDS patch 0010, read at the JIT's reset; default all on, exact): VRAM with one bank at
     // the 16 KB straight to the bank, OAM and palette straight to the GPU; the divider, square root,
