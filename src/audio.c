@@ -41,6 +41,7 @@
 #include <pthread.h>
 #include <dlfcn.h>
 #include <math.h>
+#include <sys/stat.h>
 
 void dsflip_log(const char *fmt, ...);
 
@@ -263,6 +264,7 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
 
 /* ---- ALSA writer (libasound dlopen()ed) ---- */
 static void *pcm;
+static int pcm_rate; static unsigned pcm_latency;   /* how the playback stream was opened (alsa_open), for reopening it */
 static int (*a_open)(void **, const char *, int, int);
 static int (*a_set_params)(void *, int, int, unsigned, unsigned, int, unsigned);
 static long (*a_writei)(void *, const void *, unsigned long);
@@ -270,6 +272,7 @@ static long (*a_readi)(void *, void *, unsigned long);
 static int (*a_recover)(void *, int, int);
 static const char *(*a_strerror)(int);
 static int (*a_close)(void *);
+static int (*a_cfgfree)(void);            /* snd_config_update_free_global: forget the configuration read so far */
 static volatile int st_xrun;
 /* Opening and configuring PCMs is serialized: the output and the mic used to be opened at the same moment from two
  * threads (DraStic's, in SDL_OpenAudio, and the mic's), and PipeWire's ALSA plugin sets itself up on each open
@@ -285,6 +288,7 @@ static void alsa_load(void) {
     *(void **)&a_writei = dlsym(h, "snd_pcm_writei"); *(void **)&a_recover = dlsym(h, "snd_pcm_recover");
     *(void **)&a_strerror = dlsym(h, "snd_strerror");
     *(void **)&a_readi = dlsym(h, "snd_pcm_readi"); *(void **)&a_close = dlsym(h, "snd_pcm_close");
+    *(void **)&a_cfgfree = dlsym(h, "snd_config_update_free_global");
     alsa_ok = a_open && a_set_params && a_writei && a_readi && a_recover;
 }
 static int alsa_syms(void) { pthread_once(&alsa_once, alsa_load); return alsa_ok ? 0 : -1; }
@@ -380,7 +384,18 @@ static int alsa_open(void) {
     if (out_rate && rs_init(out_rate / (lock_in ? lock_in : (double)freq))) {   /* no table for it: the sound server resamples */
         out_rate = 0; open_rate = lock_in ? (int)lrint(lock_in) : freq;
     }
-    return alsa_pcm(&pcm, 0 /* SND_PCM_STREAM_PLAYBACK */, fb / 2, open_rate, l ? (unsigned)atoi(l) : 30000, "audio") < 0 ? -1 : 0;
+    pcm_rate = open_rate; pcm_latency = l ? (unsigned)atoi(l) : 30000;
+    return alsa_pcm(&pcm, 0 /* SND_PCM_STREAM_PLAYBACK */, fb / 2, pcm_rate, pcm_latency, "audio") < 0 ? -1 : 0;
+}
+/* Where sound plays can change while a game runs: on BananaOS, bananad replaces /run/banana/asound.conf (the
+ * default device: the speakers, or the headphones while they're in) when the jack changes. alsa-lib reads its
+ * configuration once per process, so the stream stays where it was opened unless it's closed, the configuration
+ * forgotten and the stream opened again. DSFLIP_ALSA_ROUTE=<file> names another file; no such file: never. */
+static long long route_id(void) {
+    const char *f = getenv("DSFLIP_ALSA_ROUTE");
+    struct stat st;
+    if (stat(f && *f ? f : "/run/banana/asound.conf", &st)) return 0;
+    return (long long)st.st_ino * 1000003LL + st.st_mtim.tv_sec * 1000000000LL + st.st_mtim.tv_nsec;
 }
 static void *writer(void *a) {           /* blocking writes pace this thread at the device's true rate */
     (void)a;
@@ -392,8 +407,26 @@ static void *writer(void *a) {           /* blocking writes pace this thread at 
     int16_t *out = out_rate ? malloc(((size_t)chunk * rs_L / rs_M + 2) * ch * sizeof *out) : 0;
     unsigned char *buf = (unsigned char *)(in + (RS_TAPS - 1) * ch);
     int phase = 0;
+    long long route = route_id(), route_at = mono_ns();
     for (;;) {
         sdl_cb(0, buf, chunk * fb);      /* the same ring drain (silence while priming or on underrun) */
+        long long now = mono_ns();
+        if (now - route_at > 250000000LL) {      /* the jack changed: the stream moves to where sound plays now */
+            route_at = now;
+            long long r2 = route_id();
+            if (r2 != route && a_cfgfree) {
+                if (pcm && a_close) a_close(pcm);
+                pcm = 0;
+                a_cfgfree();
+                if (alsa_pcm(&pcm, 0, ch, pcm_rate, pcm_latency, "audio") < 0) pcm = 0;   /* tried again in 250 ms */
+                else { route = r2; dsflip_log("[audio] sound moved: the default device changed (headphone jack)\n"); }
+            }
+        }
+        if (!pcm) {                      /* no device for now: keep the pace without one */
+            struct timespec d = { 0, (long)((long long)chunk * 1000000000LL / (pcm_rate > 0 ? pcm_rate : 48000)) };
+            nanosleep(&d, 0);
+            continue;
+        }
         long r;
         if (out) {
             int n = resample(in, chunk, ch, out, &phase);
