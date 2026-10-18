@@ -444,6 +444,9 @@ bool Emu::load_rom(const std::string& path) {
     // core.fast_mix: the SPU runs only the channels whose output can change, sums with NEON, and sound DMA/capture
     // access main RAM directly (patches/melonds/0013; exact, default on)
     nds_->SPU.SetFastMix(cfg_.flag("core.fast_mix", true));
+    // core.fast_samples: with core.fast_mix, a due PCM16/ADPCM channel's samples taken with its state in registers and
+    // ADPCM's step from tables (patches/melonds/0070; exact)
+    nds_->SPU.SetFastSamples(cfg_.flag("core.fast_samples", true));
     // core.fast_dma: 32-bit DMA from main RAM to the GX FIFO or within main RAM without the bus dispatch, and the
     // ARM9's MRAM burst timing looked up inline (patches/melonds/0013; exact, default on)
     nds_->SetFastDMA(cfg_.flag("core.fast_dma", true));

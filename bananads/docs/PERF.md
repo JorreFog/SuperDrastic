@@ -499,6 +499,35 @@ runs the slice that reaches the event as before. Nothing runs in between, so not
   Run `MELONDS_HALTSKIP_STATS=1` with hgquick's settings first: skips per frame x ~16 slices each is what it removes.
   `EXTRA="--set core.halt_skip=off" hgquick.sh <bin>` against plain.
 
+## Mario Kart DS's race start: the emulator thread's costs beside the geometry (2026-10-18, third session, `mkside`)
+
+Mario Kart DS at 2x drops to 52-57 fps through every race's intro and countdown on the RG DS Plus at 1992 MHz; the
+emulator's thread is 93.5% busy (BananaLinux `perf/bananads/session3/`). Its device profile, beside the geometry
+engine (31%) and the JIT's code (29%): the frame loop `main::{lambda()#1}` 8.0% (with LTO it is `run_headless` with
+`RunFrame`, `RunSlicesJIT`, `RunEventsDue`, `ExecuteJITInline` and `HaltInterrupted` inlined: the slice loop and the
+scheduler, read from a `-g1` build's line table, which has the same code), the SPU 7.7% (its event 3.7%,
+`RunValid<2>` 3.0%, `RunValid<1>` 0.5%, `blip_add_delta` 0.7%), `DMA::Run9` 5.3%, `pthread_cond_signal` 0.9%.
+Counted in the scene (headless, `mk-scene.sh` in the hand-over, frames 1680-2100, per frame): 547 Mixes running
+~10.4 channels each (4.6k ADPCM calls taking 6.1k samples, 1.1k PCM16 calls), 3.8 of them after a sound register
+write; events LCD 526, SPU 547, RTC 548, Div 162, Sqrt 85; DMA3 in GX FIFO mode 70 starts and 31.6k words, the only
+other DMA 4 immediate DMA3 starts and 906 words (so `DMA::Run9` is the geometry's). None of this is measured on the
+device; qemu counts only show that a path got cheaper.
+
+### A due channel's samples with its state in registers (patch 0070, `core.fast_samples`, default `on`)
+
+- `RunValid<type>` keeps nothing of the channel in registers across the FIFO's stores and its refill call: ~110
+  instructions a call for ~1.3 samples. `RunSamples<1/2>` are leaves with the state in locals that take the plain
+  samples and hand any other (start, header, end, loop, a FIFO refill due) with the rest of the Mix's samples to
+  `RunValid` (a tail call), so those stay melonDS's code; ADPCM's step comes from two tables built from melonDS's.
+- qemu, MK frames 1680-2100: `RunValid<1>` + `RunValid<2>` 570k -> 435k instructions a frame (-24%).
+- Checked: `mk-scene.sh` frames 1500-2100 and its audio dump identical off/on and to the base build; main RAM every
+  frame 1500-2100 identical (`bananads-difftest --every --from 1500 --input <the scene's>`, off vs on);
+  `exact-suite.sh` off vs on plus sndbench (all formats, looping and one-shot ADPCM) pictures, audio and difftest,
+  dmasnd and ipcrom difftests: FAILS=0. A sabotaged build (ADPCM's loop-start state not saved) changes MK's audio
+  dump (caught by cmp).
+- Expected on the device: these two functions are 3.5% of the thread in MK's race start; a quarter of that is
+  ~+0.8%. `EXTRA="--set core.fast_samples=off"` against plain.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser
