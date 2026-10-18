@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 09:20:00 +0000
+Subject: [PATCH] ARMJIT: hot self-modifying code stays in small blocks
+
+A 16-byte granule whose writes have dropped compiled blocks 32 times is hot: blocks don't follow a branch
+into it and stop before sequential flow enters it, and a block starting in it follows no branch and ends
+where the granule does. Golden Sun: Dark Dawn toggles one ITCM instruction (0x01FFA610: a branch over a
+routine, or the routine's first instruction) ~27 times a frame, and every block that had inlined it went:
+356k -> 112k block compiles in 60 s of walking (on top of patch 0016), the same frames.
+MELONDS_JIT_HOTSMC=0 turns it off.
+---
+--- a/src/ARMJIT.h
++++ b/src/ARMJIT.h
+@@ -105,6 +105,11 @@
+     std::unordered_map<u32, JitBlock*> JitBlocks7 {};
+ 
+     std::unordered_map<u32, JitBlock*> RestoreCandidates {};
++    // hot self-modifying code (patch 0017): 16-byte granules a write keeps dropping compiled blocks in; blocks stop
++    // short of them, and a block starting in one stays in it, so each write recompiles only a few instructions
++    std::unordered_map<u32, u32> SmcDrops {};
++    std::vector<u32> HotSmc {};
++    bool IsHotSmc(u32 localAddr) const noexcept;
+ 
+ 
+     AddressRange CodeIndexITCM[ITCMPhysicalSize / 512] {};
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -1034,6 +1034,16 @@
+     SetJITArgs(JITArgs{static_cast<unsigned>(MaxBlockSize), LiteralOptimizations, BranchOptimizations, enabled});
+ }
+ 
++static const bool HotSmcOn = [] { const char* e = getenv("MELONDS_JIT_HOTSMC"); return !(e && e[0] == '0'); }();
++
++bool ARMJIT::IsHotSmc(u32 localAddr) const noexcept
++{
++    if (!localAddr) return false;
++    for (u32 g : HotSmc)
++        if (g == (localAddr & ~15u)) return true;
++    return false;
++}
++
+ void ARMJIT::CompileBlock(ARM* cpu) noexcept
+ {
+     bool thumb = cpu->CPSR & 0x20;
+@@ -1097,6 +1107,9 @@
+     JIT_DEBUGPRINT("start block %x %08x (%x)\n", blockAddr, cpu->CPSR, localAddr);
+ 
+     u32 lastSegmentStart = blockAddr;
++    // (patch 0017) a block starting in hot self-modifying code follows no branch and ends where its granule does
++    const u32 startLocal = LocaliseCodeAddress(cpu->Num, blockAddr);
++    const bool startHot = !HotSmc.empty() && IsHotSmc(startLocal);
+     u32 lr;
+     bool hasLink = false;
+ 
+@@ -1282,7 +1295,8 @@
+                         JIT_DEBUGPRINT("found %s idle loop %d in block %08x\n", thumb ? "thumb" : "arm", cpu->Num, blockAddr);
+                     }
+                 }
+-                else if (hasBranched && !isBackJump && i + 1 < MaxBlockSize)
++                else if (hasBranched && !isBackJump && i + 1 < MaxBlockSize && !startHot
++                    && (HotSmc.empty() || !IsHotSmc(LocaliseCodeAddress(cpu->Num, target))))
+                 {
+                     if (link)
+                     {
+@@ -1310,7 +1324,8 @@
+                 }
+             }
+ 
+-            if (!hasBranched && cond < 0xE && i + 1 < MaxBlockSize)
++            if (!hasBranched && cond < 0xE && i + 1 < MaxBlockSize && !startHot
++                && (HotSmc.empty() || !IsHotSmc(LocaliseCodeAddress(cpu->Num, instrs[i].Addr + (thumb ? 2 : 4)))))
+             {
+                 JIT_DEBUGPRINT("block lengthened by untaken branch\n");
+                 instrs[i].Info.EndBlock = false;
+@@ -1324,6 +1339,15 @@
+         bool secondaryFlagReadCond = !canCompile || (instrs[i - 1].BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken));
+         if (instrs[i - 1].Info.ReadFlags != 0 || secondaryFlagReadCond)
+             FloodFillSetFlags(instrs, i - 2, !secondaryFlagReadCond ? instrs[i - 1].Info.ReadFlags : 0xF);
++        // (patch 0017) sequential flow into hot self-modifying code ends the block here (never right after a followed
++        // branch: those were kept from following into it above); one starting in it ends where its granule does
++        if (!HotSmc.empty() && !instrs[i - 1].Info.EndBlock
++            && !(instrs[i - 1].BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken)))
++        {
++            const u32 nextLocal = LocaliseCodeAddress(cpu->Num, nextInstrAddr[0]);
++            if (startHot ? (nextLocal & ~15u) != (startLocal & ~15u) : IsHotSmc(nextLocal))
++                break;
++        }
+     } while(!instrs[i - 1].Info.EndBlock && i < MaxBlockSize && !cpu->Halted && (!cpu->IRQ || (cpu->CPSR & 0x80)));
+ 
+     if (numLiterals)
+@@ -1474,6 +1498,11 @@
+             continue;
+         }
+         range->Blocks.Remove(i);
++        if (HotSmcOn && HotSmc.size() < 16)
++        {
++            u32& n = SmcDrops[localAddr & ~15u];
++            if (++n == 32) HotSmc.push_back(localAddr & ~15u);
++        }
+ 
+         if (range->Blocks.Length == 0
+             && !PageContainsCode(&region[(localAddr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
+@@ -1613,6 +1642,7 @@
+ 
+ void ARMJIT::ResetBlockCache() noexcept
+ {
++    // (the hot granules stay: they're the game's habit, not the cache's)
+     Log(LogLevel::Debug, "Resetting JIT block cache...\n");
+ 
+     // could be replace through a function which only resets

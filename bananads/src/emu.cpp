@@ -334,6 +334,13 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_JIT_INVAL16", "1", 1);
         else if (v == "off") setenv("MELONDS_JIT_INVAL16", "0", 1);
     }
+    // jit.hotsmc=on|off sets MELONDS_JIT_HOTSMC (melonDS patch 0017: blocks stay out of code the game keeps rewriting,
+    // so a rewrite recompiles a few instructions, not every block that had followed a branch into them); unset, on
+    {
+        const std::string v = cfg_.str("jit.hotsmc", "");
+        if (v == "on") setenv("MELONDS_JIT_HOTSMC", "1", 1);
+        else if (v == "off") setenv("MELONDS_JIT_HOTSMC", "0", 1);
+    }
     // jit.codegen=new|old sets MELONDS_JIT_OLDCODEGEN (melonDS patch 0007: the AArch64 JIT's code generation
     // improvements, each also off by its own MELONDS_JIT_NO* variable), read as the JIT compiler is created; unset,
     // the environment decides (default new). For A/B runs, bananads-difftest --a jit.codegen=old --b jit.codegen=new.
