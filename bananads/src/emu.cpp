@@ -487,6 +487,9 @@ bool Emu::load_rom(const std::string& path) {
     // (on by default at 2x, where unit A composites four times: HeartGold at 1104 MHz 39.8 -> 49.6 fps)
     if (banana2d) banana_ = &static_cast<BananaRenderer&>(nds_->GetRenderer());
     if (banana2d && cfg_.flag("render.2d_thread", scale_ == 2)) banana_->SetThreaded2D(true);
+    // render.2d_kick: how many jobs (a frame has 383: 192 lines, 191 sprite lines) go to the 2D thread before it is
+    // woken; a wake of the sleeping thread is a futex call on the emulator's thread (16 was the old fixed batch)
+    if (banana2d) banana_->SetKickBatch((u32)cfg_.num("render.2d_kick", 64));
 #endif
 
     set_clock();

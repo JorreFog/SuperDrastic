@@ -528,6 +528,20 @@ device; qemu counts only show that a path got cheaper.
 - Expected on the device: these two functions are 3.5% of the thread in MK's race start; a quarter of that is
   ~+0.8%. `EXTRA="--set core.fast_samples=off"` against plain.
 
+### The 2D thread woken every 64 jobs, not 16 (`render.2d_kick`, default `64`; no melonDS patch)
+
+- `pthread_cond_signal` is 0.9% of the emulator's thread in MK's race start: `BananaRenderer::Kick`'s
+  `notify_one`, a futex wake whenever the 2D thread (30% busy) has caught up and sleeps, every 16 of a frame's 383
+  jobs. Counted in the scene under qemu (2100 frames): 27.9k kicks found the thread asleep at 16, 8.2k at 64.
+- The 2D thread draws the same jobs in the same order whenever it is woken, and the emulator's thread wakes it
+  before every wait for it (VBlank, the swap, a full ring or log, display capture), so the pictures can't depend
+  on the batch.
+- Checked: `mk-scene.sh` frames and audio identical at 16 and 64 and to the base; `exact-suite.sh` with
+  `render.2d_thread=on` on both sides, 16 vs 64, plus ds2dtest and geomtest pictures: FAILS=0.
+- Expected on the device: ~24 -> ~6 wakes a frame, so most of the 0.9%: ~+0.6%. The 2D thread finishes a frame's
+  last 32 lines after VBlank instead of the last 8 (~1 ms of its work): with `render.2d_lazy` the next swap waits
+  for it, so watch `kms.stats` for repeats. `EXTRA="--set render.2d_kick=16"` against plain.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser
