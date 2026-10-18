@@ -211,12 +211,13 @@ add_executable(bananads
     src/main.cpp
     src/config.cpp
     src/emu.cpp
+    src/prof.cpp
     src/platform.cpp
     src/mic.cpp
     src/wifi.cpp
     src/video_headless.cpp)
 target_include_directories(bananads PRIVATE src)
-target_link_libraries(bananads PRIVATE core bananads-net pthread)
+target_link_libraries(bananads PRIVATE core bananads-net pthread ${CMAKE_DL_LIBS})
 if(BANANADS_2D)
     target_link_libraries(bananads PRIVATE banana2d)
 endif()
@@ -266,15 +267,15 @@ endif()
 
 # Host tests: no ROM needed (tests/tests.cpp).
 enable_testing()
-add_executable(bananads-tests tests/tests.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
+add_executable(bananads-tests tests/tests.cpp src/config.cpp src/emu.cpp src/prof.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
 target_include_directories(bananads-tests PRIVATE src)
-target_link_libraries(bananads-tests PRIVATE core bananads-net pthread)
+target_link_libraries(bananads-tests PRIVATE core bananads-net pthread ${CMAKE_DL_LIBS})
 add_test(NAME host COMMAND bananads-tests)
 
 # The CPU governor against a simulated game on a made-up cpufreq folder (tests/cpugov_test.cpp, ~25 s).
-add_executable(bananads-cpugov-test tests/cpugov_test.cpp src/cpugov.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
+add_executable(bananads-cpugov-test tests/cpugov_test.cpp src/cpugov.cpp src/config.cpp src/emu.cpp src/prof.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
 target_include_directories(bananads-cpugov-test PRIVATE src)
-target_link_libraries(bananads-cpugov-test PRIVATE core bananads-net pthread)
+target_link_libraries(bananads-cpugov-test PRIVATE core bananads-net pthread ${CMAKE_DL_LIBS})
 add_test(NAME cpugov COMMAND bananads-cpugov-test ${CMAKE_CURRENT_BINARY_DIR}/cpugov-test HeartGold.nds)
 
 # BananaJIT's encoder against LLVM's assembler (runs on any host: it only encodes).
@@ -283,9 +284,9 @@ target_include_directories(bananads-jit-encodings PRIVATE jit)
 add_test(NAME jit-encodings COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/jit_encodings.sh $<TARGET_FILE:bananads-jit-encodings>)
 
 # The differential harness for CPU back-ends (tools/difftest.cpp, docs/JIT.md).
-add_executable(bananads-difftest tools/difftest.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
+add_executable(bananads-difftest tools/difftest.cpp src/config.cpp src/emu.cpp src/prof.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
 target_include_directories(bananads-difftest PRIVATE src)
-target_link_libraries(bananads-difftest PRIVATE core bananads-net pthread)
+target_link_libraries(bananads-difftest PRIVATE core bananads-net pthread ${CMAKE_DL_LIBS})
 if(BANANADS_2D)
     target_link_libraries(bananads-difftest PRIVATE banana2d)
 endif()

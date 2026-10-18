@@ -93,6 +93,7 @@ Emu::Emu(const Config& cfg) : cfg_(cfg) {
 }
 
 Emu::~Emu() {
+    if (prof_) prof_->finish();  // (its report: the emulator's thread is done by now)
     flush_save(true);
     if (nds_) nds_->Stop();
     if (net_) net_->UnregisterInstance(0);
@@ -479,6 +480,7 @@ bool Emu::load_rom(const std::string& path) {
         Log(LogLevel::Warn, "[emu] render.scale=2 needs render.renderer=gengis and render.2d=banana: rendering at 1x\n");
 
     nds_->Start();
+    prof_ = Profiler::create(cfg_);
     Log(LogLevel::Info, "[emu] %s started (JIT %s, MAC %02x:%02x:%02x:%02x:%02x:%02x)\n", game_.c_str(),
         cfg_.flag("jit", true) ? "on" : "off", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     return true;
@@ -517,6 +519,8 @@ void Emu::run_frame() {
         skew_cur_ = sk;
         nds_->SPU.SetOutputSkew(sk);
     }
+    if (prof_) prof_->frame(frames_run_);  // prof.hz: on the emulator's thread, whichever runs the frames
+    frames_run_++;
     nds_->RunFrame();
     flush_save(false);
     if (slice_stats_ > 0 && ++slice_frames_ % slice_stats_ == 0) {
