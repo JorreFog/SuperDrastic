@@ -27,14 +27,17 @@ struct GovFeed {
         nframe_ms.store(n + 1, std::memory_order_release);
     }
     std::atomic<bool> rebase{false};  // the clock changed: the lag from before is the old clock's, and already counted
+    std::atomic<bool> catching{false};  // the pacer is catching frames up (busy by design: not a sign of the limit)
     int scale = 1;
 };
 
 // The emulator thread's pacing at the DS's rate, which also counts GovFeed::late: each whole frame the emulator falls
 // further behind the schedule while it runs (one or two in one frame; more at once is a stall, a stop or a
-// savestate's write, not the clock). Too far behind (or back from a stop) it starts again from now rather than run
-// to catch up; so it does after the governor changes the clock (GovFeed::rebase), or the backlog the old clock left
-// would be counted against the new one.
+// savestate's write, not the clock). Up to CATCH_UP frames behind it runs the frames it owes back to back, so the
+// emulated time (and the sound, which can only be as fast as it) gets back in step and the sound buffer refills;
+// further behind (or back from a stop) it starts again from now. After the governor changes the clock
+// (GovFeed::rebase) it still catches up, but the lag from before isn't counted against the new clock: until it has
+// caught up, only falling two frames further behind than it was counts.
 class Pacer {
 public:
     explicit Pacer(GovFeed& feed, std::chrono::nanoseconds period = std::chrono::nanoseconds(16715180));  // 59.8261 Hz
@@ -46,6 +49,9 @@ private:
     std::chrono::nanoseconds base_, period_;
     std::chrono::steady_clock::time_point due_;
     long behind_ = 0;  // whole frames behind after the last frame
+    long peak_ = 0;          // catching up after a clock change: the most it has been behind since
+    bool catching_ = false;
+    static const int CATCH_UP = 8;  // 134 ms: a clock's step up after a late frame, with the sound buffer's 60 ms
 };
 
 void cpugov_start(const Config& cfg, GovFeed* feed);

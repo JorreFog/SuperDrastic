@@ -271,7 +271,7 @@ target_include_directories(bananads-tests PRIVATE src)
 target_link_libraries(bananads-tests PRIVATE core bananads-net pthread)
 add_test(NAME host COMMAND bananads-tests)
 
-# The CPU governor against a simulated game on a made-up cpufreq folder (tests/cpugov_test.cpp, ~25 s).
+# The CPU governor against a simulated game on a made-up cpufreq folder (tests/cpugov_test.cpp, ~90 s).
 add_executable(bananads-cpugov-test tests/cpugov_test.cpp src/cpugov.cpp src/config.cpp src/emu.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
 target_include_directories(bananads-cpugov-test PRIVATE src)
 target_link_libraries(bananads-cpugov-test PRIVATE core bananads-net pthread)

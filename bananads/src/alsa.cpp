@@ -110,15 +110,17 @@ static void out_thread(Alsa* a) {
     // frame moved it by several percent). With audio.stretch (on) there are two calmer loops instead:
     //  - the resampler's rate, within +-0.5% (inaudible), slowly holds the backlog at its target: the drift between
     //    the game's clock and ALSA's, and nothing faster;
-    //  - the tempo of a time stretch (src/stretch.cpp, pitch kept) is 1 while the game keeps up. Only when the
-    //    backlog runs low does it follow the game's speed, measured from the samples the SPU made over 200 ms, and it
-    //    goes back to 1 once the game is at full speed again. A slow game sounds slower, not lower, and a full-speed
-    //    one plays untouched.
+    //  - the tempo of a time stretch (src/stretch.cpp, pitch kept) is 1 while the game keeps up. The buffer (60 ms
+    //    by default) rides out a short stall untouched while the frontend's pacer catches the frames up (src/cpugov.h).
+    //    Only when it is nearly empty does the tempo follow the game's speed, measured from the samples the SPU made
+    //    over 200 ms, back to 1 once the game is at full speed and the buffer half full again: a game too slow even at
+    //    the top clock sounds slower, not lower.
     double skew = 1.0, integ = 0.0, sent = 1.0, tempo = 1.0, rate = 1.0, speed = 1.0;
     const double skew_min = 0.75, integ_min = skew_min - 1.0;
     int64_t win_us = 0;
     long win_made = 0;
     int win_spu = 0;
+    bool primed = false;  // the buffer filled to its target once since the sound started (or came back from a pause)
     Stretch st;
     std::vector<int16_t> fresh(4096 * 2);
     FILE* dump_in = a->dump.empty() ? nullptr : fopen((a->dump + ".in.raw").c_str(), "wb");
@@ -152,13 +154,18 @@ static void out_thread(Alsa* a) {
         const int spu_backlog = backlog;
         int got, pulled;
         if (a->stretch) {
-            // only what the stretch needs comes out of the SPU, whose buffer holds the rest (and caps it)
-            const int want = Stretch::kLookahead + chunk + Stretch::kHop - st.pending();
+            // everything the SPU made comes out (its ring holds only ~43 ms, less than the buffer's target), up to
+            // four targets queued (one while muted: fast-forward comes back at the usual latency); beyond that the
+            // SPU's ring drops the oldest
+            const int keep = a->mute.load(std::memory_order_relaxed) ? 1 : 4;
+            const int want = keep * a->servo_target + Stretch::kLookahead - st.pending();
             pulled = want > 0 ? a->emu->audio(fresh.data(), std::min(want, (int)fresh.size() / 2)) : 0;
             if (pulled > 0) st.push(fresh.data(), pulled);
             if (dump_in && pulled > 0) fwrite(fresh.data(), 4, pulled, dump_in);
             backlog += st.pending() - Stretch::kLookahead;
-            got = st.pull(buf.data(), chunk, tempo);
+            // at the start and after a pause: silence until the buffer is full, then it plays
+            if (!primed && a->servo && backlog >= a->servo_target) primed = true;
+            got = primed || !a->servo ? st.pull(buf.data(), chunk, tempo) : 0;
         } else {
             got = pulled = a->emu->audio(buf.data(), chunk);
             if (dump_in && got > 0) fwrite(buf.data(), 4, got, dump_in);
@@ -169,6 +176,7 @@ static void out_thread(Alsa* a) {
             dry = pulled > 0 || got > 0 ? 0 : (now - last_got_us > 40000 ? 9 : dry);
             if (pulled > 0 || got > 0) last_got_us = now;
             hold = dry > 8 || a->mute.load(std::memory_order_relaxed);
+            if (dry > 8) primed = false;
             // (sampled every 5 ms, a chunk's time: partial writes below make pulls more frequent while it's short)
             const bool tick = now - last_tick_us >= 5333;
             if (tick) { last_tick_us = now; hist[hn++ % 6] = backlog; }
@@ -185,7 +193,7 @@ static void out_thread(Alsa* a) {
                     win_us = now, win_made = 0, win_spu = spu_backlog;
                 }
             }
-            if (tick && !hold && hn >= 6 && a->stretch) {
+            if (tick && !hold && hn >= 6 && a->stretch && primed) {
                 double avg = 0;
                 for (int v : hist) avg += v;
                 avg /= 6;
@@ -193,7 +201,7 @@ static void out_thread(Alsa* a) {
                 integ = std::clamp(integ + 0.00002 * err, -0.005, 0.005);
                 rate = std::clamp(1.0 + integ + 0.002 * err, 0.995, 1.005);
                 double want = 1.0;
-                if ((tempo < 1.0 || avg < 0.5 * a->servo_target) && !(speed >= 0.985 && err > -0.2))
+                if ((tempo < 1.0 || avg < 0.25 * a->servo_target) && !(speed >= 0.985 && err > -0.5))
                     want = std::clamp(speed * (1.0 + 0.25 * err), 0.6, 1.0);
                 tempo += std::clamp(want - tempo, -0.0015, 0.0015);
                 if (want == 1.0 && tempo > 0.998) tempo = 1.0;
@@ -324,7 +332,8 @@ Alsa* alsa_start(Emu& emu, const Config& cfg) {
     a->rt = cfg.flag("audio.realtime", true);
     a->servo = cfg.flag("audio.servo", true);
     a->stretch = a->servo && cfg.flag("audio.stretch", true);
-    a->servo_target = std::max(256, (int)cfg.num("audio.servo_target", 768));
+    // 60 ms with the stretch (a short stall plays through untouched), 16 ms for the old servo
+    a->servo_target = std::max(256, (int)cfg.num("audio.servo_target", a->stretch ? 2880 : 768));
     a->stats = cfg.flag("audio.stats", false);
     a->dump = cfg.str("audio.dump", "");
     a->out = std::thread(out_thread, a);
