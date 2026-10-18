@@ -364,6 +364,15 @@ bool Emu::load_rom(const std::string& path) {
         else if (codegen == "old") setenv("MELONDS_JIT_OLDCODEGEN", "1", 1);
     }
 
+    // jit.slice_chain=on|off sets MELONDS_JIT_SLICECHAIN (melonDS patch 0030: when the ARM9's slice ends inside a
+    // block chain and the slice loop would only keep time, the exit stub does that and the chain goes on; exact),
+    // read as the JIT compiler is created; unset, the environment decides (default on; off with jit.codegen=old)
+    {
+        const std::string v = cfg_.str("jit.slice_chain", "");
+        if (v == "on") setenv("MELONDS_JIT_SLICECHAIN", "1", 1);
+        else if (v == "off") setenv("MELONDS_JIT_SLICECHAIN", "0", 1);
+    }
+
     // jit.vramfast=on|off, jit.iodirect=on|off and render.vramtrack_skip=on|off set bits 1, 2 and 4 of
     // MELONDS_MEMFAST (melonDS patch 0010, read at the JIT's reset; default all on, exact): VRAM with one bank at
     // the 16 KB straight to the bank, OAM and palette straight to the GPU; the divider, square root,

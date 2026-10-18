@@ -448,6 +448,37 @@ Later rounds the same night (all exact, same toggles; qemu-count unless said):
 Left, by agent: the geometry's FIFO ring buffer (savestates hold both FIFOs) and its vertex copies; rotscale
 sprites and OBJ mosaic, skipping unchanged lines in 2D; the mix's per-sample tail and batched ARM9 DMA for VRAM.
 
+## The slice loop on the emulator's thread (2026-10-18, second session; none measured on a device)
+
+HeartGold at 2x on the RG DS Plus is bound by the emulator's thread (99% busy); its older profile has the scheduler
+(`RunFrame`, the slice loop) at 10% and the JIT's dispatch and exit stubs at 7%. Melon's slice is 64 system cycles,
+~8.7k slices a frame, and a longer slice changes timing (DEAD-ENDS). These changes keep every slice end where it
+was and make the slices that only keep time cheaper. Each is exact and has a toggle; qemu counts below only show
+that the path got cheaper.
+
+### The ARM9's slice ends inside its block chain (patch 0030, `jit.slice_chain`, default `on`)
+
+When an ARM9 exit stub (ExitCheck, ExitCheckPC, DynExit, DynExitA, a self loop's inline check) found Timestamp >=
+Target, the chain went back through `ARM_Ret` (12 registers restored, a mispredicted return) to `RunSlicesJIT`'s
+iteration, then the loop's block lookup and `ARM_Dispatch` (12 registers saved, an indirect branch into the block).
+With the ARM7 halted, as it is most of a game's frame, that iteration only keeps time. Now the stub calls
+`NDS::SliceChain9`, which makes the loop's own checks (no event or timer due by the ARM9's time, no GX stall, DMA or
+sleep, the geometry engine idle, the ARM7 ahead or halted with no IRQ pending, Running) and, if they hold, does the
+iteration's bookkeeping (GPU3D's time, the ARM7's time and target, SysTimestamp) and `NextTarget`'s ARM9Target; the
+chain then goes on into the exit's next block. Otherwise it changes nothing and the stub returns to the loop.
+`MELONDS_JIT_SLICECHAIN=0` or `jit.codegen=old` turn it off.
+
+- qemu-count (main thread, instructions a frame): cpubench Thumb 4,896k -> 4,696k (-4.1%: the slice loop 962k ->
+  352k, ARM_Dispatch/ARM_Ret 192k -> 45k, SliceChain9 +510k); membench 6,032k -> 6,022k (its ARM9 halts most of the
+  frame, which 0031 is for).
+- Checked: `evidence/jit/exact-suite.sh` off vs on, FAILS=0 (pictures of 17 ROMs, the dmasnd audio dump, difftest
+  `--every` main RAM on 9, `bananads-tests`); pictures and audio dump of sndbench, ds2dtest, geomtest, bigcode and
+  L1; `core.slice=auto` (ipcrom, cpubench busy ARM7, dmasnd) and `render.scale=2` (cpubench, L5); difftest on ipcrom.
+  A sabotaged build (the ARM7's pending IRQ ignored) is caught by ipcrom's difftest (main RAM differs).
+- Expected on the device: what it removes is a share of "scheduler 10%" and "dispatch and exit stubs 7%" for the
+  slices where the ARM9 runs and the ARM7 waits; the call it adds is ~60 instructions of loads and compares.
+  `EXTRA="--set jit.slice_chain=off" hgquick.sh <bin>` against plain.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser
