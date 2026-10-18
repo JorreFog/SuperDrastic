@@ -70,39 +70,44 @@ int main(int argc, char** argv) {
     if (!logfile.empty()) g_log = fopen(logfile.c_str(), "w");
     Log(LogLevel::Info, "BananaDS %s, %s\n", BANANADS_VERSION, rom.c_str());
 
-    Emu emu(cfg);
-    if (!emu.load_rom(rom)) return 1;
-    if (cfg.flag("resume.on_start", true) && emu.load_state(0))
-        Log(LogLevel::Info, "[resume] resumed where the last session quit\n");
+    // the emulator in a scope of its own: its destructor stops the console, which logs, so it has to be gone before the
+    // log file is closed (it wrote into the closed FILE: heap corruption at quit, a crash in about one quit of three)
+    const int rc = [&]() -> int {
+        Emu emu(cfg);
+        if (!emu.load_rom(rom)) return 1;
+        if (cfg.flag("resume.on_start", true) && emu.load_state(0))
+            Log(LogLevel::Info, "[resume] resumed where the last session quit\n");
 
-    // the default: a window where there is a display server, the panels where there isn't (a handheld's console)
-    const bool display = getenv("WAYLAND_DISPLAY") || getenv("DISPLAY");
-    std::string def = "headless";
+        // the default: a window where there is a display server, the panels where there isn't (a handheld's console)
+        const bool display = getenv("WAYLAND_DISPLAY") || getenv("DISPLAY");
+        std::string def = "headless";
 #ifdef BANANADS_KMS
-    def = "kms";
+        def = "kms";
 #endif
 #ifdef BANANADS_SDL
-    if (display || def == "headless") def = "sdl";
+        if (display || def == "headless") def = "sdl";
 #endif
-    std::string fe = cfg.str("frontend", def);
-    int rc;
-    if (fe == "headless") {
-        rc = run_headless(emu, cfg);
-    }
+        std::string fe = cfg.str("frontend", def);
+        int code;
+        if (fe == "headless") {
+            code = run_headless(emu, cfg);
+        }
 #ifdef BANANADS_SDL
-    else if (fe == "sdl") {
-        rc = run_sdl(emu, cfg);
-    }
+        else if (fe == "sdl") {
+            code = run_sdl(emu, cfg);
+        }
 #endif
 #ifdef BANANADS_KMS
-    else if (fe == "kms") {
-        rc = run_kms(emu, cfg);
-    }
+        else if (fe == "kms") {
+            code = run_kms(emu, cfg);
+        }
 #endif
-    else {
-        Log(LogLevel::Error, "frontend \"%s\" isn't in this build\n", fe.c_str());
-        rc = 2;
-    }
+        else {
+            Log(LogLevel::Error, "frontend \"%s\" isn't in this build\n", fe.c_str());
+            code = 2;
+        }
+        return code;
+    }();
     if (g_log) fclose(g_log);
     return rc;
 }

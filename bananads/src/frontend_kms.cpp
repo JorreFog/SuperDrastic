@@ -1530,6 +1530,7 @@ int run_kms(Emu& emu, const Config& cfg) {
 #endif
     for (auto& d : devs) ::close(d.fd);
     if (qos >= 0) ::close(qos);
+    emu.set_lazy_2d(false);  // render.2d_lazy: the last frame's lines drawn before its buffers go
     emu.draw_into(nullptr, nullptr);  // (the buffers go with the device)
     dp.close();
     ::close(g_wake);

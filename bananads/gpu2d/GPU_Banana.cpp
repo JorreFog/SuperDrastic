@@ -79,6 +79,10 @@ bool BananaRenderer::GetFramebuffers(void** top, void** bottom)
 
 void BananaRenderer::SetOutput(u32* top, u32* bottom)
 {
+    // the frontend's buffers going away (null): with render.2d_lazy the 2D thread may still be drawing the last
+    // frame into them, so it finishes first (a quit without the resume state's drain wrote into unmapped memory)
+    if (!top)
+        Drain2D();
     Out[0] = top;
     Out[1] = bottom;
     if (!top)
