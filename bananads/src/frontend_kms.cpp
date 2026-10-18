@@ -60,6 +60,7 @@
 #ifdef BANANADS_GENGIS
 #include "gengis_renderer.h"
 #endif
+#include "cheats.h"
 #include "menu.h"
 #include "ra.h"
 
@@ -994,23 +995,26 @@ static void save_opt(const char* key, const std::string& v) {
 }
 // F + X: fast-forward on at the speed last chosen in the menu, or off
 static void ff_toggle() { g_ff = g_ff.load() ? 0 : g_opts.ff_speed; }
-static int mh_opt_count(void*) { return 5; }
+// the rows: Shader, 3D effects (edge marking and fog, one row since the Cheats row came), FPS counter, Fast-forward
+static int mh_opt_count(void*) { return 4; }
 static const char* mh_opt_label(void*, int i) {
-    static const char* const l[5] = {"Shader", "Edge marking", "Fog", "FPS counter", "Fast-forward"};
-    return i >= 0 && i < 5 ? l[i] : "?";
+    static const char* const l[4] = {"Shader", "3D effects", "FPS counter", "Fast-forward"};
+    return i >= 0 && i < 4 ? l[i] : "?";
 }
-static int mh_opt_values(void*, int i) { return i == 0 ? (int)g_opts.shaders.size() : i == 4 ? 4 : 2; }
+static int mh_opt_values(void*, int i) { return i == 0 ? (int)g_opts.shaders.size() : i == 2 ? 2 : 4; }
 static const char* mh_opt_value_name(void*, int i, int v) {
     if (i == 0) return v >= 0 && v < (int)g_opts.shaders.size() ? shader_label(g_opts.shaders[v]) : "?";
-    if (i == 4) return v == 1 ? "2x" : v == 2 ? "3x" : v == 3 ? "Max" : "Off";
+    if (i == 1) return v == 0 ? "Edge + fog" : v == 1 ? "Edge only" : v == 2 ? "Fog only" : "Off";
+    if (i == 3) return v == 1 ? "2x" : v == 2 ? "3x" : v == 3 ? "Max" : "Off";
     return v ? "On" : "Off";
 }
 static int mh_opt_get(void*, int i) {
-    if (i == 4) {
+    if (i == 3) {
         const int f = g_ff.load();
         return f == 2 ? 1 : f == 3 ? 2 : f ? 3 : 0;
     }
-    return i == 0 ? g_opts.shader : i == 1 ? g_opts.edge : i == 2 ? g_opts.fog : g_opts.fps;
+    if (i == 1) return g_opts.edge ? (g_opts.fog ? 0 : 1) : (g_opts.fog ? 2 : 3);
+    return i == 0 ? g_opts.shader : g_opts.fps;
 }
 static void mh_opt_set(void* c, int i, int v) {
     MenuHost* h = (MenuHost*)c;
@@ -1024,25 +1028,37 @@ static void mh_opt_set(void* c, int i, int v) {
         }
         // the same choice as Settings > Nintendo DS > Shader (both emulators read it from there)
         set_kv("/data/banana/superdrastic.conf", "DSFLIP_SHADER", g_opts.shaders[v], "=");
-    } else if (i == 3) {
+    } else if (i == 2) {
         g_opts.fps = v != 0;
         save_opt("kms.fps", v ? "on" : "off");
-    } else if (i == 4) {
+    } else if (i == 3) {
         if (v < 0 || v > 3) return;
         g_ff = ff_speeds[v];  // (on for this game only; the speed is kept for the hotkey)
         if (v) {
             g_opts.ff_speed = ff_speeds[v];
             save_opt("kms.ff_speed", v == 3 ? "max" : std::to_string(ff_speeds[v]));
         }
-    } else {
-        (i == 1 ? g_opts.edge : g_opts.fog) = v != 0;
+    } else if (i == 1) {
+        if (v < 0 || v > 3) return;
+        g_opts.edge = v == 0 || v == 1;
+        g_opts.fog = v == 0 || v == 2;
 #ifdef BANANADS_GENGIS
         GengisRenderer3D::SetEffects(g_opts.edge, g_opts.fog);
 #endif
-        const char* data = getenv("BANANADS_DATA");
-        set_kv(std::string(data && *data ? data : "/data/bananads") + "/bananads.conf", i == 1 ? "render.edge_marking" : "render.fog",
-               v ? "on" : "off", " = ");
+        save_opt("render.edge_marking", g_opts.edge ? "on" : "off");
+        save_opt("render.fog", g_opts.fog ? "on" : "off");
     }
+}
+// the game's cheats (cheats.h): the menu changes them while the game is paused, then melonDS gets the new list
+static Cheats g_cheats;
+static Emu* g_cheat_emu;
+static int mh_cheat_count(void*) { return g_cheats.count(); }
+static const char* mh_cheat_name(void*, int i) { return i >= 0 && i < g_cheats.count() ? g_cheats.name(i).c_str() : ""; }
+static int mh_cheat_get(void*, int i) { return i >= 0 && i < g_cheats.count() && g_cheats.on(i); }
+static void mh_cheat_set(void*, int i, int on) {
+    g_cheats.set(i, on != 0);
+    if (g_cheat_emu) g_cheat_emu->set_cheats(g_cheats.list());
+    Log(LogLevel::Info, "[cheats] %s: %s\n", mh_cheat_name(nullptr, i), on ? "on" : "off");
 }
 static void mh_log(void*, const char* line) { Log(LogLevel::Info, "%s", line); }
 
@@ -1156,7 +1172,17 @@ int run_kms(Emu& emu, const Config& cfg) {
         h.opt_value_name = mh_opt_value_name;
         h.opt_get = mh_opt_get;
         h.opt_set = mh_opt_set;
+        h.cheat_count = mh_cheat_count;
+        h.cheat_name = mh_cheat_name;
+        h.cheat_get = mh_cheat_get;
+        h.cheat_set = mh_cheat_set;
         bmenu_init(&h);
+        // cheats.dir (<BANANADS_DATA>/cheats): the games' .mch files; cheats.retroarch_dir: RetroArch's DS database
+        const char* data = getenv("BANANADS_DATA");
+        g_cheats.load(emu.game(), cfg.str("cheats.dir", std::string(data && *data ? data : "/data/bananads") + "/cheats"),
+                      cfg.str("cheats.retroarch_dir", "/data/retroarch/retroarch/cheats/Nintendo - Nintendo DS"));
+        g_cheat_emu = &emu;
+        if (g_cheats.enabled()) emu.set_cheats(g_cheats.list());
         bmenu_session_start();
     }
     {  // RetroAchievements (ra.c): the account from BANANADS_RA_USER/PASSWORD, melonDS's memory read directly

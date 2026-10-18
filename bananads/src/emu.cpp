@@ -401,6 +401,7 @@ void Emu::run_frame() {
     }
 }
 
+void Emu::set_cheats(std::vector<melonDS::ARCode> codes) { nds_->AREngine.Cheats = std::move(codes); }
 void Emu::set_keys(uint32_t pressed) { nds_->SetKeyMask(~pressed & 0xFFF); }
 void Emu::set_lid(bool closed) { nds_->SetLidClosed(closed); }
 void Emu::touch(int x, int y) {

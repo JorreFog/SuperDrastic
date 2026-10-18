@@ -50,6 +50,12 @@ typedef struct {
     const char* (*opt_value_name)(void* ctx, int i, int v);
     int (*opt_get)(void* ctx, int i);
     void (*opt_set)(void* ctx, int i, int v);
+    // the game's cheats (Quick settings > Cheats): how many, each one's name, on or off; cheat_set turns one on or
+    // off and keeps it for the next time. cheat_count unset: no Cheats row
+    int (*cheat_count)(void* ctx);
+    const char* (*cheat_name)(void* ctx, int i);
+    int (*cheat_get)(void* ctx, int i);
+    void (*cheat_set)(void* ctx, int i, int on);
 } bmenu_host;
 
 void bmenu_init(const bmenu_host* host);  // once, before the first bmenu_run

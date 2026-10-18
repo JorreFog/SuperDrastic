@@ -4,7 +4,9 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "ARCodeFile.h"
 #include "config.h"
 #include "mic.h"
 
@@ -54,6 +56,8 @@ public:
     const uint8_t* main_ram() const;      // 4 MB
     const uint8_t* dtcm() const;          // the ARM9's 16 KB data TCM (RetroAchievements reads it)
     const std::string& rom_path() const { return rom_path_; }
+    const std::string& game() const { return game_; }
+    void set_cheats(std::vector<melonDS::ARCode> codes);  // the Action Replay codes melonDS runs each frame (cheats.h)
     uint32_t main_ram_size() const;
     void cpu_regs(int cpu, uint32_t r[17]) const;  // cpu 0 = ARM9, 1 = ARM7; r[16] = CPSR
     const Config& cfg() const { return cfg_; }

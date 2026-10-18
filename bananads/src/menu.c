@@ -429,7 +429,7 @@ static void load_wav(int id, const char *path) {
 static void play(int id) { if (snd_ok[id] && H.sound_play) H.sound_play(H.ctx, id); }
 
 /* ---------- state ---------- */
-enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_RESTART };
+enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_RESTART, SC_CHEAT };
 static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_top, dirty_bot;
 static char busy_msg[96];
 
@@ -438,10 +438,13 @@ static canvas CV[2];
 static int pw[2], ph[2];
 
 /* rows of Quick settings that exist on this setup */
-enum { ROW_VOL, ROW_BRI, ROW_MIC, ROW_OPT = 100 };   /* ROW_OPT + i: the emulator's option i (bmenu_host's opt_*) */
+enum { ROW_VOL, ROW_BRI, ROW_MIC, ROW_CHEAT, ROW_OPT = 100 };   /* ROW_OPT + i: the emulator's option i (bmenu_host's opt_*) */
 static int rows[8], nrows;
+#define CHEAT_ROWS 7                            /* the Cheats page's rows on screen at once */
+static int sel_cheat, top_cheat;
 static void make_rows(void) {
     nrows = 0; rows[nrows++] = ROW_VOL; rows[nrows++] = ROW_BRI; rows[nrows++] = ROW_MIC;
+    if (H.cheat_count) rows[nrows++] = ROW_CHEAT;
     int n = H.opt_count ? H.opt_count(H.ctx) : 0;
     for (int i = 0; i < n && nrows < 8; i++) rows[nrows++] = ROW_OPT + i;
 }
@@ -774,7 +777,7 @@ static void draw_bottom(void) {
             const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_BRI ? IC_SUN : id == ROW_MIC ? IC_MIC : IC_SLIDERS;
             int k = S(2) < 2 ? 2 : S(2);
             bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? C_ONSEL : C_LIGHT);
-            const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : id == ROW_MIC ? "Microphone" : H.opt_label(H.ctx, id - ROW_OPT);
+            const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : id == ROW_MIC ? "Microphone" : id == ROW_CHEAT ? "Cheats" : H.opt_label(H.ctx, id - ROW_OPT);
             text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
             char v[32] = "";
             if (id == ROW_VOL || id == ROW_BRI) {
@@ -783,6 +786,11 @@ static void draw_bottom(void) {
                 R_BAR[r] = (rect){ bx - S(8), y, bx + S(150), y + rh };
                 snprintf(v, sizeof v, "%d%%", val);
             } else if (id == ROW_MIC) snprintf(v, sizeof v, "Test / blow");
+            else if (id == ROW_CHEAT) {
+                int n = H.cheat_count(H.ctx), on = 0;
+                for (int i = 0; i < n; i++) on += H.cheat_get(H.ctx, i) != 0;
+                if (n) snprintf(v, sizeof v, "%d of %d on", on, n); else snprintf(v, sizeof v, "None found");
+            }
             else snprintf(v, sizeof v, "< %s >", H.opt_value_name(H.ctx, id - ROW_OPT, H.opt_get(H.ctx, id - ROW_OPT)));
             text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
             y += rh + gap;
@@ -792,9 +800,49 @@ static void draw_bottom(void) {
         case ROW_VOL: help = "Left / right to change, or tap the bar"; break;
         case ROW_BRI: help = "Left / right to change, both screens"; break;
         case ROW_MIC: help = "A live meter of the mic, and a blow for games that ask for one"; break;
+        case ROW_CHEAT: help = "Action Replay codes for this game: A to see them"; break;
         default: help = "Left / right to change: it applies at once, and stays for the next game"; break;
         }
         text(c, &F_REG, help, gx0 + S(4), y + S(6), S(16), C_GREY, gx1 - gx0, 0);
+    }
+    else if (s == SC_CHEAT) {
+        int n = H.cheat_count(H.ctx), on = 0;
+        for (int i = 0; i < n; i++) on += H.cheat_get(H.ctx, i) != 0;
+        char sub[48]; if (n) snprintf(sub, sizeof sub, "%d of %d on", on, n); else sub[0] = 0;
+        draw_header(c, "Cheats", sub, 1);
+        if (!n) {
+            const char *l[] = { "No cheats for this game yet.", "",
+                "In RetroArch: Online Updater > Update Cheats", "(BananaDS finds the game's file there),",
+                "or put a melonDS .mch file in", "/data/bananads/cheats/ named after the game." };
+            for (int i = 0; i < 6; i++)
+                text(c, i ? &F_REG : &F_MED, l[i], gx0 + S(8), gy0 + S(16) + i * S(30), i ? S(17) : S(21), i ? C_BODY : C_LIGHT, gx1 - gx0 - S(16), 0);
+        } else {
+            int rh = S(38), gap = S(5), vis = CHEAT_ROWS;
+            if (sel_cheat >= n) sel_cheat = n - 1;
+            if (sel_cheat < top_cheat) top_cheat = sel_cheat;
+            if (sel_cheat >= top_cheat + vis) top_cheat = sel_cheat - vis + 1;
+            int y = gy0;
+            for (int r = 0; r < vis; r++) {
+                int i = top_cheat + r;
+                R_ROW[r] = (rect){ 0, 0, 0, 0 };
+                if (i >= n) break;
+                int sel = i == sel_cheat, o = H.cheat_get(H.ctx, i) != 0;
+                R_ROW[r] = (rect){ gx0, y, gx1, y + rh };
+                box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
+                int pw = S(58), px1 = gx1 - S(12), py0 = y + S(8), py1 = y + rh - S(8);
+                rrect(c, px1 - pw, py0, px1, py1, (float)S(6), o ? (sel ? C_ONSEL : C_CYAN) : C_LINE, 1.0f);
+                text(c, &F_MED, o ? "On" : "Off", px1 - pw / 2.0f, py0 + S(2), S(17), o ? (sel ? C_CYAN : C_DARK) : C_LIGHT, 0, 1);
+                text(c, &F_REG, H.cheat_name(H.ctx, i), gx0 + S(16), y + (rh - S(18)) / 2.0f - S(1), S(18),
+                     sel ? C_ONSEL : C_LIGHT, gx1 - gx0 - pw - S(44), 0);
+                y += rh + gap;
+            }
+            if (n > vis) {   /* where in the list: a thin bar at the right edge */
+                int ty0 = gy0, ty1 = gy0 + vis * (rh + gap) - gap, th = (ty1 - ty0) * vis / n; if (th < S(12)) th = S(12);
+                int t0 = ty0 + (int)((long long)(ty1 - ty0 - th) * top_cheat / (n - vis));
+                fill(c, gx1 + S(6), t0, gx1 + S(10), t0 + th, C_GREY, 1.0f);
+            }
+            text(c, &F_REG, "Up / down to pick, L / R a page; some games need a restart for a code to work", gx0 + S(4), y + S(4), S(15), C_GREY, gx1 - gx0, 0);
+        }
     }
     else if (s == SC_MIC) {
         draw_header(c, "Microphone", "", 1);
@@ -844,7 +892,8 @@ static void draw_bottom(void) {
     int fy = c->h - S(56);
     const char *bl = s == SC_MAIN ? "Resume" : "Back", *al = "Select", *mid = "";
     if (s == SC_SAVE) al = "Save"; else if (s == SC_LOAD) al = "Load";
-    else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : "OK";
+    else if (s == SC_SET) al = rows[sel_set] == ROW_MIC || rows[sel_set] == ROW_CHEAT ? "Open" : "OK";
+    else if (s == SC_CHEAT) al = H.cheat_count(H.ctx) ? (H.cheat_get(H.ctx, sel_cheat) ? "Turn off" : "Turn on") : "Back";
     else if (s == SC_MIC) al = "Blow for 3 s";
     if (s == SC_MAIN) mid = "D-pad or tap";
     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
@@ -904,6 +953,7 @@ static void do_load(int n) {
     if (!ok) mlog("[menu] %s couldn't be loaded\n", n < 0 ? "the undo slot" : "the slot");
     play(SND_SELECT); close_menu();
 }
+static void back(void);
 static void activate(void) {
     switch (scr) {
     case SC_MAIN:
@@ -927,7 +977,12 @@ static void activate(void) {
     case SC_LOAD: if (SL[sel_slot].used) do_load(sel_slot); else play(SND_BACK); break;
     case SC_SET:
         if (rows[sel_set] == ROW_MIC) { scr = SC_MIC; play(SND_SELECT); dirty_bot = 1; }
+        else if (rows[sel_set] == ROW_CHEAT) { scr = SC_CHEAT; sel_cheat = top_cheat = 0; play(SND_SELECT); dirty_bot = 1; }
         else play(SND_SELECT);
+        break;
+    case SC_CHEAT:
+        if (!H.cheat_count(H.ctx)) { back(); break; }
+        H.cheat_set(H.ctx, sel_cheat, !H.cheat_get(H.ctx, sel_cheat)); play(SND_SELECT); dirty_bot = 1;
         break;
     case SC_MIC:
         /* the game has to run to hear it: back to the game, with a pop-up for as long as it blows */
@@ -949,7 +1004,7 @@ static void back(void) {
     case SC_MAIN: close_menu(); break;
     case SC_OVERWRITE: scr = SC_SAVE; dirty_bot = 1; break;
     case SC_QUIT: case SC_RESTART: scr = SC_MAIN; dirty_bot = 1; break;
-    case SC_MIC: scr = SC_SET; dirty_bot = 1; break;
+    case SC_MIC: case SC_CHEAT: scr = SC_SET; dirty_bot = 1; break;
     default: scr = SC_MAIN; dirty_top = dirty_bot = 1; break;
     }
 }
@@ -978,6 +1033,10 @@ static void nav(int dx, int dy) {
     } else if (scr == SC_SET) {
         if (dy) { int n = sel_set + dy; if (n >= 0 && n < nrows) { sel_set = n; moved = 1; } }
         if (dx) { adjust(dx); return; }
+    } else if (scr == SC_CHEAT) {
+        int n = H.cheat_count(H.ctx), m = sel_cheat + dy + dx * CHEAT_ROWS;
+        if (m < 0) m = 0; if (m > n - 1) m = n - 1;
+        if (n && m != sel_cheat) { sel_cheat = m; moved = 1; }
     }
     if (moved) { play(SND_MOVE); dirty_bot = 1; }
 }
@@ -1007,10 +1066,13 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
                 if (id == ROW_VOL) { vol = v; want(vol, -1); } else { bri = v < 5 ? 5 : v; backlight(bri); bri_changed = 1; }
                 play(SND_MOVE); dirty_bot = 1;
             } else if (id == ROW_MIC) activate();
+            else if (id == ROW_CHEAT) activate();
             else if (id >= ROW_OPT) { sel_set = r; adjust(1); }
             else play(SND_MOVE);
             return;
         }
+    } else if (scr == SC_CHEAT) {
+        for (int r = 0; r < CHEAT_ROWS; r++) if (in_rect(R_ROW[r], px, py)) { sel_cheat = top_cheat + r; activate(); return; }
     }
 }
 
@@ -1030,6 +1092,7 @@ static void handle(const bmenu_ev *e) {
     else if (b == BM_UP) dir_press(0, -1); else if (b == BM_DOWN) dir_press(0, 1);
     else if (b == BM_LEFT) dir_press(-1, 0); else if (b == BM_RIGHT) dir_press(1, 0);
     else if (b == BM_L && scr == SC_SET) adjust(-1); else if (b == BM_R && scr == SC_SET) adjust(1);
+    else if (b == BM_L && scr == SC_CHEAT) nav(-1, 0); else if (b == BM_R && scr == SC_CHEAT) nav(1, 0);
 }
 
 void bmenu_init(const bmenu_host *h) { H = *h; }
