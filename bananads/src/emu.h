@@ -76,6 +76,7 @@ public:
     void set_cheats(std::vector<melonDS::ARCode> codes);  // the Action Replay codes melonDS runs each frame (cheats.h)
     uint32_t main_ram_size() const;
     void cpu_regs(int cpu, uint32_t r[17]) const;  // cpu 0 = ARM9, 1 = ARM7; r[16] = CPSR
+    const melonDS::NDS* nds() const { return nds_.get(); }  // (bananads-difftest's --timing reads its state)
     const Config& cfg() const { return cfg_; }
 
     // Platform callbacks (platform.cpp) reach the emulator through these.
