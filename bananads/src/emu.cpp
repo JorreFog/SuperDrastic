@@ -466,11 +466,12 @@ bool Emu::load_rom(const std::string& path) {
         nds_->GetRenderer().SetRenderSettings(rs);
     }
 #ifdef BANANADS_2D
-    // render.2d_thread: on draws the Banana 2D engine's lines on a thread of its own (gpu2d/GPU_Banana.h), the same
-    // pictures (the default at render.scale=2); off (the default at 1x) draws them on the emulator's thread
-    // (on by default at 2x, where unit A composites four times: HeartGold at 1104 MHz 39.8 -> 49.6 fps)
+    // render.2d_thread: on (the default) draws the Banana 2D engine's lines on a thread of its own
+    // (gpu2d/GPU_Banana.h), the same pictures; off draws them on the emulator's thread. HeartGold, RG DS Plus at
+    // 1104 MHz: 2x 39.8 -> 49.6 fps; 1x +21% (the emulator's thread is the one at 99%). Until 2026-10-18 it was off
+    // at render.scale=1
     if (banana2d) banana_ = &static_cast<BananaRenderer&>(nds_->GetRenderer());
-    if (banana2d && cfg_.flag("render.2d_thread", scale_ == 2)) banana_->SetThreaded2D(true);
+    if (banana2d && cfg_.flag("render.2d_thread", true)) banana_->SetThreaded2D(true);
 #endif
 
     set_clock();

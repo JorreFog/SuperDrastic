@@ -82,7 +82,7 @@ into `--set` arguments. Also needed:
 - `SIGSTOP`/`SIGCONT` around sleep must not upset the audio or frame pacing ("a vblank that took seconds isn't an
   error");
 - Settings > Nintendo DS's choices mapped: `drastic.cfg` `hires_3d` → `render.scale`, the renderer → `render.renderer`.
-  `render.scale=2` already turns on `render.2d_thread` and `core.slice=auto` by default.
+  `render.2d_thread` is on by default at both scales (since 2026-10-18; it was on only at `render.scale=2`).
 
 ### A4. Sound
 `src/alsa.cpp` (`BANANADS_ALSA`, on by default) already fits: ALSA `default` (bananad points it at `plughw` of the

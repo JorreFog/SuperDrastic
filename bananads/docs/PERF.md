@@ -186,7 +186,7 @@ divider/sqrt with restarts) are the test ROMs; `build.py` in each.
 - Next: if HeartGold's near-IPC share is high, hook only the polling reads (IPCSYNC/FIFOCNT), not FIFO sends;
   inline `RunSystem`'s early-out into `RunFrame`; keep the next due time for `RunTimers` and `GPU3D::Run` too.
 
-### 2D off the main thread: `render.2d_thread=on` (default `off`)
+### 2D off the main thread: `render.2d_thread=on` (default `on` since 2026-10-18; it was `on` only at 2x)
 
 The Banana 2D engine's `DrawScanline`/`DrawSprites` are split: `Prepare*` runs on the emulation thread at the
 line's time (a snapshot of both units' registers into `Banana2DRegs`, the line's side effects on the GPU, the
@@ -210,6 +210,11 @@ state and loads it straight back, for the savestate joins.
   times a frame (`KickBatch` of 16 jobs, untuned). Expected: up to 15% of main-thread time back, less about 0.3%
   per line of snapshot work.
 - Next: capture's inputs to the worker too; tune the batch.
+- The default at 1x too since 2026-10-18 (it was on only at 2x): the RG DS Plus measured HeartGold's overworld at
+  1x, 1104 MHz, +21% fps with it on (the emulator's thread is the one at 99%, the 2D thread then takes ~23%).
+  Rechecked at 1x: the exactness suite (17 ROMs' pictures and audio, difftest main RAM on 9, bananads-tests) off
+  against on, and the base binary's default against the new one on dsstress L5/L10, ds2dtest, membench and geomtest
+  (also with a savestate reload and `headless.direct`). `render.2d_thread=off` is the old 1x.
 
 ### IO: direct routes for the JIT's slow paths, and IO statistics (patch 0005; `jit.iofast`, default `on`)
 
