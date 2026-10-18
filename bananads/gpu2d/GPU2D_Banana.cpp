@@ -2477,10 +2477,13 @@ void BananaRenderer2D::EffectsPassNeon(u32* dst)
         }
         if (vmaxvq_u32(useB5))
         {
+            // an opaque 3D pixel (alpha 31: eva 32) blends to itself, which out already is for these lanes (no other
+            // effect touches a 3D pixel over a 2nd target): the blend only for translucent ones, and not at all when
+            // all four are opaque, as most of a 3D scene is (Golden Sun: Dark Dawn's field: the 2D thread's busiest loop)
             uint32x4_t eva = vaddq_u32(vandq_u32(f1, m1f), one);
-            uint32x4_t b5 = VBlendN(val1, val2, eva, vsubq_u32(thirtytwo, eva), 5);
-            b5 = vbslq_u32(vceqq_u32(eva, thirtytwo), val1, b5);
-            out = vbslq_u32(useB5, b5, out);
+            useB5 = vbicq_u32(useB5, vceqq_u32(eva, thirtytwo));
+            if (vmaxvq_u32(useB5))
+                out = vbslq_u32(useB5, VBlendN(val1, val2, eva, vsubq_u32(thirtytwo, eva), 5), out);
         }
         if (effect >= 2 && vmaxvq_u32(useBright))
             out = vbslq_u32(useBright, VBright<effect == 2>(val1, evy), out);
