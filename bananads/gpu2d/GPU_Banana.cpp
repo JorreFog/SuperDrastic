@@ -461,10 +461,14 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
     line3d = nullptr;
     if (line < 192)
     {
-        // render.3d_wait2d: with the 3D frame's own rows and unit A on the 2D thread, the emulator's thread doesn't
-        // wait for them (GetLine would): the 2D thread does, before it composites the line
-        const bool rows = Quarter && Banana3DShare && Banana3DWait2D && QuarterRow && !AInPlace && QuarterRows &&
-            QuarterRows(QuarterCtx);
+        // render.3d_share: the job points at the 3D frame's own rows (at 2x the four quarters, at 1x the line:
+        // Gengis keeps two frames') instead of a copy, when they are final as they are (QuarterRows: no X scroll, no
+        // aborted frame). render.3d_wait2d: with unit A on the 2D thread, the emulator's thread doesn't wait for the
+        // line's bin (GetLine would): the 2D thread does, before it composites the line
+        const int nq = Quarter ? 4 : 1;
+        const QuarterFn quarter = Quarter ? Quarter : Share1x;
+        const bool share = quarter && Banana3DShare && QuarterRows && QuarterRows(QuarterCtx);
+        const bool rows = share && Banana3DWait2D && QuarterRow && !AInPlace;
         if (!rows)
             line3d = Rend3D->GetLine(line);
         for (int q = 0; q < 4; q++) job.Q3D[q] = job.Line3D[q];
@@ -473,14 +477,14 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
         {
             if (rows)
             {
-                for (int q = 0; q < 4; q++) job.Q3D[q] = QuarterRow(QuarterCtx, line, q);
+                for (int q = 0; q < nq; q++) job.Q3D[q] = QuarterRow(QuarterCtx, line, q);
                 job.WaitRows = true;
                 job.RowsGen = RowsGen(QuarterCtx);
             }
-            else if (Quarter && Banana3DShare && QuarterRows && QuarterRows(QuarterCtx))
+            else if (share)
             {
-                // render.3d_share: the 3D frame's own rows, not a 4 KB copy
-                for (int q = 0; q < 4; q++) job.Q3D[q] = Quarter(QuarterCtx, line, q);
+                // the 3D frame's own rows (drawn: GetQuarter waits for their bin), not a 4 KB (1 KB) copy
+                for (int q = 0; q < nq; q++) job.Q3D[q] = quarter(QuarterCtx, line, q);
             }
             else if (Quarter)
                 for (int q = 0; q < 4; q++)

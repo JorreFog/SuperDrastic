@@ -79,6 +79,9 @@ public:
     typedef const u32* (*QuarterFn)(void* ctx, u32 line, int q);
     typedef bool (*QuarterRowsFn)(void* ctx);  // true: the quarters are the 3D frame's own rows (render.3d_share)
     void SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows = nullptr);
+    // render.3d_share at 1x: the 3D renderer's line (q 0), the frame's own row when `rows` says so (Gengis keeps two
+    // frames' rows), so a job points at it instead of copying it; with SetHiresRows, render.3d_wait2d as at 2x
+    void SetShare1x(QuarterFn fn, void* ctx, QuarterRowsFn rows) { Drain2D(); Share1x = fn; QuarterCtx = ctx; QuarterRows = rows; }
     // render.3d_wait2d: a quarter's row without waiting, the render drawing it, and a wait for it (the 2D thread's)
     typedef unsigned (*RowsGenFn)(void* ctx);
     typedef void (*WaitRowsFn)(void* ctx, u32 line, unsigned gen);
@@ -105,6 +108,7 @@ private:
     void EmitB(u32* dst, u32 dispcnt, u16 brightness);
     void Fill(u32* dst, u32 val);
     QuarterFn Quarter = nullptr;
+    QuarterFn Share1x = nullptr;   // 1x: the 3D line as a 2x quarter function (q 0 only)
     QuarterRowsFn QuarterRows = nullptr;
     QuarterFn QuarterRow = nullptr;
     RowsGenFn RowsGen = nullptr;

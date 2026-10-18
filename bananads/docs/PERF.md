@@ -215,6 +215,11 @@ state and loads it straight back, for the savestate joins.
   Rechecked at 1x: the exactness suite (17 ROMs' pictures and audio, difftest main RAM on 9, bananads-tests) off
   against on, and the base binary's default against the new one on dsstress L5/L10, ds2dtest, membench and geomtest
   (also with a savestate reload and `headless.direct`). `render.2d_thread=off` is the old 1x.
+- With it at 1x, `render.3d_share` and `render.3d_wait2d` apply at 1x too (2026-10-18, from the first session's
+  perf/render dc3f96a): a 3D line's job points at Gengis's row instead of a 1 KB copy on the emulator's thread, and
+  the 2D thread, not the emulator's, waits for the line's bin. On the device the first session's series made 1x
+  with the 2D thread +26% (against +21% on the base); this is the part of it on the emulator's thread.
+  `render.3d_share=off` is the old 1x path; `render.3d_wait2d=off` keeps the wait on the emulator's thread.
 
 ### IO: direct routes for the JIT's slow paths, and IO statistics (patch 0005; `jit.iofast`, default `on`)
 

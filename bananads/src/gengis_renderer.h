@@ -117,10 +117,9 @@ inline void SetHires(melonDS::SoftRenderer*, GengisRenderer3D*, int) {}
 inline void Drain2D(melonDS::BananaRenderer* r) { r->Drain2D(); }
 inline void Resync2D(melonDS::BananaRenderer* r) { r->Resync2D(); }
 inline void SetHires(melonDS::BananaRenderer* r, GengisRenderer3D* g, int scale) {
-    if (scale == 2) {
-        r->SetHires(&GengisRenderer3D::QuarterFn, g, &GengisRenderer3D::QuarterRowsFn);
-        r->SetHiresRows(&GengisRenderer3D::QuarterRowFn, &GengisRenderer3D::RowsGenFn, &GengisRenderer3D::WaitRowsFn);
-    }
+    if (scale == 2) r->SetHires(&GengisRenderer3D::QuarterFn, g, &GengisRenderer3D::QuarterRowsFn);
+    else r->SetShare1x(&GengisRenderer3D::QuarterFn, g, &GengisRenderer3D::QuarterRowsFn);  // (render.3d_share at 1x)
+    r->SetHiresRows(&GengisRenderer3D::QuarterRowFn, &GengisRenderer3D::RowsGenFn, &GengisRenderer3D::WaitRowsFn);
 }
 #endif
 
