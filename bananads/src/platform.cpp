@@ -102,6 +102,8 @@ u64 FileLength(FileHandle* f) {
 
 // --- the log ---
 
+bool ROMRelease(u8* rom) { return bananads::rom_unmap(rom); }
+
 void Log(LogLevel level, const char* fmt, ...) {
     if ((int)level < bananads::g_log_level) return;
     char buf[2048];

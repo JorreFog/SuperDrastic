@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 05:35:00 +0000
+Subject: [PATCH] NDSCart: a ROM the frontend mapped is released by the frontend
+
+BananaDS maps a ROM file instead of reading it into new[]'d memory (a 256 MB
+ROM on a 1 GB handheld); ~CartCommon asks the frontend (Platform::ROMRelease)
+before the unique_ptr would delete[] it.
+---
+--- a/src/Platform.h
++++ b/src/Platform.h
+@@ -249,6 +249,10 @@
+ 
+ void Log(LogLevel level, const char* fmt, ...);
+ 
++/// A cartridge's ROM buffer is about to be freed: true when the frontend gave melonDS that buffer some other way than
++/// new[] (BananaDS maps the ROM file) and has released it itself, false to let melonDS delete[] it.
++bool ROMRelease(u8* rom);
++
+ struct Thread;
+ Thread* Thread_Create(std::function<void()> func);
+ void Thread_Free(Thread* thread);
+--- a/src/NDSCart.cpp
++++ b/src/NDSCart.cpp
+@@ -411,6 +411,8 @@
+     if (!ValidateROM(cartromsize, header))
+     {
+         Log(LogLevel::Error, "NDSCart: ROM header verification failed\n");
++        if (Platform::ROMRelease(cartrom.get()))  // (a ROM the frontend mapped: not delete[]'d)
++            (void)cartrom.release();
+         return nullptr;
+     }
+ 
+--- a/src/NDSCart/CartCommon.cpp
++++ b/src/NDSCart/CartCommon.cpp
+@@ -56,7 +56,12 @@
+     DSiBase = Header.DSiRegionStart << 19;
+ }
+ 
+-CartCommon::~CartCommon() = default;
++CartCommon::~CartCommon()
++{
++    // a ROM the frontend mapped instead of allocating: it unmaps it, the unique_ptr must not delete[] it
++    if (ROM && Platform::ROMRelease(ROM.get()))
++        (void)ROM.release();
++}
+ 
+ u32 CartCommon::Checksum() const
+ {

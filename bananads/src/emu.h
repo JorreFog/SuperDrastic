@@ -13,6 +13,10 @@
 namespace melonDS { class NDS; class Net; class BananaRenderer; }
 
 namespace bananads {
+bool rom_unmap(uint8_t* rom);  // a ROM Emu::load_rom mapped: unmapped, true (melonDS's Platform::ROMRelease)
+}
+
+namespace bananads {
 
 // DS buttons as melonDS's key mask wants them (bit set = pressed; Emu inverts).
 enum Key : uint32_t {

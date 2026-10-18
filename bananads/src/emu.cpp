@@ -11,6 +11,14 @@
 #include <ctime>
 #include <fstream>
 #include <new>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <pthread.h>
+#include <thread>
+#include <mutex>
+#include <unistd.h>
 #include <vector>
 
 #include "Args.h"
@@ -149,12 +157,73 @@ void Emu::restart() {
     Log(LogLevel::Info, "[emu] %s restarted\n", game_.c_str());
 }
 
-bool Emu::load_rom(const std::string& path) {
-    // Straight into the buffer melonDS keeps: a second copy of a 256 MB ROM (Golden Sun: Dark Dawn) was half the
-    // RG DS Plus's memory at once, and starved the system while the game started (BananaOS 0.4.0 #11)
-    std::unique_ptr<u8[]> romdata;
-    size_t romlen = 0;
+// ---- the ROM, mapped (BananaOS 0.4.0 #11) ----
+// A ROM read into memory is all anonymous RAM: 256 MB for Golden Sun: Dark Dawn on a 981 MB handheld without swap,
+// which the kernel's OOM killer ended. Mapped from its file (MAP_PRIVATE: a page the game writes becomes the game's
+// own), a ROM page is page cache the kernel can drop and read again; the mapping is padded to a power of two with
+// zero pages, as melonDS pads a ROM (so it keeps this buffer instead of copying it). A thread at the lowest priority
+// reads the file once, so the game seldom waits on the card for a page.
+static std::mutex g_maps_mu;
+static std::vector<std::pair<uint8_t*, size_t>> g_maps;  // each mapping: where, how long
+
+static uint8_t* map_rom(const std::string& path, size_t& file_len, size_t& map_len) {
+    int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return nullptr;
+    struct stat st{};
+    if (fstat(fd, &st) != 0 || st.st_size < 0x200 || st.st_size > (off_t)512 * 1024 * 1024) {
+        close(fd);
+        return nullptr;
+    }
+    file_len = (size_t)st.st_size;
+    map_len = 0x1000;
+    while (map_len < file_len) map_len <<= 1;
+    void* base = mmap(nullptr, map_len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (base == MAP_FAILED) {
+        close(fd);
+        return nullptr;
+    }
+    if (mmap(base, file_len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0) == MAP_FAILED) {
+        munmap(base, map_len);
+        close(fd);
+        return nullptr;
+    }
+    close(fd);
     {
+        std::lock_guard<std::mutex> l(g_maps_mu);
+        g_maps.emplace_back((uint8_t*)base, map_len);
+    }
+    std::thread([path] {  // the file into the page cache, not into this process: the mapping's pages come cheap
+        pthread_setname_np(pthread_self(), "bds-romread");
+        setpriority(PRIO_PROCESS, 0, 19);
+        int f = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        if (f < 0) return;
+        std::vector<char> buf(1 << 20);
+        while (read(f, buf.data(), buf.size()) > 0) {}
+        close(f);
+    }).detach();
+    return (uint8_t*)base;
+}
+
+bool rom_unmap(uint8_t* p) {
+    std::lock_guard<std::mutex> l(g_maps_mu);
+    for (size_t i = 0; i < g_maps.size(); i++)
+        if (g_maps[i].first == p) {
+            munmap(p, g_maps[i].second);
+            g_maps.erase(g_maps.begin() + i);
+            return true;
+        }
+    return false;
+}
+
+bool Emu::load_rom(const std::string& path) {
+    std::unique_ptr<u8[]> romdata;
+    size_t romlen = 0, file_len = 0;
+    if (cfg_.flag("rom.map", true))
+        if (uint8_t* m = map_rom(path, file_len, romlen)) {
+            romdata.reset(m);  // (melonDS's ~CartCommon gives it back through Platform::ROMRelease: rom_unmap)
+            Log(LogLevel::Info, "[emu] ROM mapped (%zu MB), read in the background\n", file_len >> 20);
+        }
+    if (!romdata) {  // rom.map=off, or the mapping failed: read into memory, straight into the buffer melonDS keeps
         std::ifstream f(path, std::ios::binary | std::ios::ate);
         const std::streamoff n = f ? (std::streamoff)f.tellg() : -1;
         if (n >= 0x200) {
@@ -191,6 +260,7 @@ bool Emu::load_rom(const std::string& path) {
 
     auto cart = NDSCart::ParseROM(std::move(romdata), (u32)romlen, this, std::move(cart_args));
     if (!cart) {
+        if (romdata && rom_unmap(romdata.get())) (void)romdata.release();  // (rejected before melonDS took it)
         Log(LogLevel::Error, "[emu] %s isn't a DS ROM melonDS can load\n", path.c_str());
         return false;
     }
