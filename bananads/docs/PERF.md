@@ -523,8 +523,12 @@ vertices 0.78M.
 - **0061 (`render.geom_fifo`):** `Run`'s loop reads the pipe and the FIFO as one queue (no moves between the rings
   every other entry, GXSTAT's push/pop and test bits cleared only after a push/pop or test command): geometry and
   the GX DMA 7.38M -> 7.14M. GCC now keeps the lighting out of line (`CalculateLightingBody`, 0.64M).
-- Together: the emulator's thread 15.78M -> 13.33M instructions a frame (without the Gengis bins and 2D lines it
-  draws itself, which vary with thread timing under qemu: 0.3-0.9M), geometry and the GX DMA 9.64M -> 7.14M.
+- **0062 (`render.gx_dmafast` too):** the block's burst timing loop with ARM9Target and the table in registers
+  (~13 -> ~10 instructions a word): `DMA::Run9` 1.86M -> 1.77M. Timing only, so main RAM can't check it: the full
+  savestates at frames 1850 and 2000 are byte-identical to mkbase's, and a sabotage (a burst's first unit timed as
+  sequential) changes the savestate.
+- Together: the emulator's thread 15.78M -> 13.25M instructions a frame (-16%; without the Gengis bins and 2D lines
+  it draws itself, which vary with thread timing under qemu: 0.3-0.9M), geometry and the GX DMA 9.64M -> 7.05M.
 
 Lazy geometry (running the engine only when something observes it) was checked against this stream and not built:
 `Run`'s per-call cost is ~2,180 calls x ~90 instructions, ~1% of the thread, and in this scene nearly every slice end

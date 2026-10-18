@@ -1,0 +1,70 @@
+From 3c176fcb8e468aa05dbf874b865206c02b091865 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 18 Oct 2026 23:13:48 +0000
+Subject: [PATCH] DMA: the GX FIFO block's burst timing with the target and
+ table in registers
+
+The GX FIFO port's block path (patch 0020) times its units in a loop that chose the burst table through a pointer
+test and loaded ARM9Target again for every unit (~13 host instructions a word). With GXDMAFast
+(render.gx_dmafast, patch 0060's toggle) the first unit is timed as before (a new burst at the DMA's start or where
+MRAMBurstTable ends) and the rest read the table chosen then until its 0, where the burst table starts anew, with
+ARM9Target held in a register: the same units, times and table state.
+---
+ src/DMA.cpp | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/src/DMA.cpp b/src/DMA.cpp
+index 6161127..db96834 100644
+--- a/src/DMA.cpp
++++ b/src/DMA.cpp
+@@ -675,11 +675,47 @@ void DMA::Run9()
+                     {
+                         const u32 s0 = src & ~3u;
+                         const u32 n = std::min({IterCount, (0x03000000 - s0) >> 2, 512u});
++                        const bool gxfast = NDS.GPU.GPU3D.GXDMAFast;
+                         auto timed = [&](u32 limit, u64& ts, u32& cnt, const std::array<u8, 256>*& cur) -> u32
+                         {
+                             ts = NDS.ARM9Timestamp;
+                             cnt = MRAMBurstCount;
+                             cur = nullptr;
++                            if (gxfast) [[likely]]
++                            {
++                                // render.gx_dmafast (patch 0062): the loop below with ARM9Target in a register and
++                                // the table it reads in a pointer: after the first unit (which starts a new burst
++                                // at the DMA's start or where MRAMBurstTable ends) each unit reads the same table
++                                // until its 0, where the burst table starts anew
++                                if (limit == 0) return 0;
++                                const u64 target = NDS.ARM9Target;
++                                const u8* tb = MRAMBurstTable.data();
++                                if (burststart || tb[cnt] == 0)
++                                {
++                                    cnt = 0;
++                                    cur = &tab;
++                                    tb = tab.data();
++                                }
++                                ts += (u64)tb[cnt++] << clockshift;
++                                u32 k = 1;
++                                if (ts >= target) return k;
++                                while (k < limit)
++                                {
++                                    u32 t = tb[cnt];
++                                    if (t == 0) [[unlikely]]
++                                    {
++                                        cnt = 0;
++                                        cur = &tab;
++                                        tb = tab.data();
++                                        t = tb[0];
++                                    }
++                                    cnt++;
++                                    ts += (u64)t << clockshift;
++                                    k++;
++                                    if (ts >= target) break;
++                                }
++                                return k;
++                            }
+                             bool bs = burststart;
+                             u32 k = 0;
+                             while (k < limit)
+-- 
+2.43.0
+
