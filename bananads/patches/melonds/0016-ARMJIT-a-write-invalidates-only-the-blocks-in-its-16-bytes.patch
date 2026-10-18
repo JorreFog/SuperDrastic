@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 08:30:00 +0000
+Subject: [PATCH] ARMJIT: a write invalidates only the blocks in its 16 bytes
+
+InvalidateByAddr's inner `u32 mask` hid the written 16 bytes' mask: `AddressMasks()[j] & mask` was the
+block's mask with itself, always true, so any write in a 512-byte page dropped every block in it. Golden
+Sun: Dark Dawn writes beside its ITCM code every frame: 847k -> 356k block compiles in 60 s of walking.
+A block's masks cover all its instructions and inlined literals, and every code write passes its own
+address, so a surviving block can't be stale. MELONDS_JIT_INVAL16=0 restores the old behaviour.
+---
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -1453,21 +1453,23 @@
+         JitBlock* block = range->Blocks[i];
+ 
+         bool invalidated = false;
+-        u32 mask = 0;
++        u32 blockMask = 0;  // (was a second `mask`, which hid the written 16 bytes': every block of the 512 went)
++        // MELONDS_JIT_INVAL16=0: the old behaviour, every block of the 512 bytes (for A/B runs)
++        static const bool inval16 = [] { const char* e = getenv("MELONDS_JIT_INVAL16"); return !(e && e[0] == '0'); }();
+         for (int j = 0; j < block->NumAddresses; j++)
+         {
+             if (block->AddressRanges()[j] == (localAddr & ~0x1FF))
+             {
+-                mask = block->AddressMasks()[j];
+-                invalidated = block->AddressMasks()[j] & mask;
+-                assert(mask);
++                blockMask = block->AddressMasks()[j];
++                invalidated = !inval16 || (blockMask & mask);
++                assert(blockMask);
+                 break;
+             }
+         }
+-        assert(mask);
++        assert(blockMask);
+         if (!invalidated)
+         {
+-            range->Code |= mask;
++            range->Code |= blockMask;
+             i++;
+             continue;
+         }
