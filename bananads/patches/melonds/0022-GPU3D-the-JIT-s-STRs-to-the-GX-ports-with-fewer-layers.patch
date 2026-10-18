@@ -1,4 +1,4 @@
-From 30a8ff47adc28070a7b0563b87640eacd81ad67b Mon Sep 17 00:00:00 2001
+From b4c73a6ead693aea4688ccd4729f2d257896ee6d Mon Sep 17 00:00:00 2001
 From: BananaDS <bananads@localhost>
 Date: Sun, 18 Oct 2026 19:31:35 +0000
 Subject: [PATCH] GPU3D: the JIT's STRs to the GX ports with fewer layers; a
@@ -12,17 +12,19 @@ WriteGXFIFOPortFast -> WriteToGXFIFOBody): a 4-pair frame, the decoding loop, th
   memfast IO on) before QuickWrite9 (which does nothing for IO) and does GXWrite9Route's work without its call
   (WriteToGXFIFO for the FIFO port, GPU3D::Write32 for the command ports, as before).
 - WriteToGXFIFO and WriteGXFIFOPortFast, with GeomFast: for the most common word, a parameter before its command's
-  last (11 of a 4x3 matrix's 12, the first of VTX_16's two), WriteToGXFIFOBody only does ParamCount++ and
-  CmdFIFOWriteFast(entry) and leaves its loop; they now do just that for it and hand every other word to the body.
+  last (11 of a 4x3 matrix's 12, the first of VTX_16's two) while the FIFO isn't full, WriteToGXFIFOBody only does
+  ParamCount++ and CmdFIFOWriteFast's pipe or FIFO write (the entry, GXSTAT's busy bit, the test/push-pop count)
+  and leaves its loop; they now do just that for it (WriteGXParamQuick, with no call: no stack frame) and hand
+  every other word to the body (WriteToGXFIFOBody<false> moved into WriteToGXFIFOPlain, out of line).
 Exact by construction (the same statements for those cases). tests/gxstm: main RAM identical every frame off vs on;
-a sabotaged build (ParamCount not counted for 3-parameter commands) is caught.
+sabotaged builds (ParamCount not counted for 3-parameter commands; BOX_TEST's parameters not counted as a test) are caught.
 ---
- src/ARMJIT.cpp     | 15 +++++++++++++++
- src/GPU3D.cpp      | 33 +++++++++++++++++++++++++++++++--
- src/GPU3D.h        |  4 ++++
+ src/ARMJIT.cpp     | 15 +++++++++++++
+ src/GPU3D.cpp      | 53 ++++++++++++++++++++++++++++++++++++++++++++--
+ src/GPU3D.h        |  6 ++++++
  src/NDS_IOFast.cpp |  3 ++-
  src/NDS_IOFast.h   |  1 +
- 5 files changed, 53 insertions(+), 3 deletions(-)
+ 5 files changed, 75 insertions(+), 3 deletions(-)
 
 diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
 index 1ab0413..075ac47 100644
@@ -51,7 +53,7 @@ index 1ab0413..075ac47 100644
                  return;
              if ((a >> 24) == 0x04 && (flags & slow_MemIO))
 diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
-index 96d7d8e..0a736c5 100644
+index 96d7d8e..1384854 100644
 --- a/src/GPU3D.cpp
 +++ b/src/GPU3D.cpp
 @@ -151,6 +151,8 @@ GPU3D::GPU3D(melonDS::GPU& gpu) noexcept :
@@ -63,57 +65,88 @@ index 96d7d8e..0a736c5 100644
  }
  
  void Vertex::DoSavestate(Savestate* file) noexcept
-@@ -2897,8 +2899,23 @@ void GPU3D::SetRenderXPos(u16 xpos, u16 mask) noexcept
+@@ -2895,10 +2897,53 @@ void GPU3D::SetRenderXPos(u16 xpos, u16 mask) noexcept
+ }
  
+ 
++// render.gx_str: WriteToGXFIFOBody<true> for a word that is a parameter before its command's last, unless the FIFO
++// is full: the body does ParamCount++ and CmdFIFOWriteFast, which writes the pipe (the FIFO empty, the pipe not
++// full) or the FIFO, and its loop ends as ParamCount stays below TotalParams. Here with no call (so no stack frame);
++// false: nothing done (a full FIFO stalls the system: the body does that).
++inline __attribute__((always_inline)) bool GPU3D::WriteGXParamQuick(u32 val) noexcept
++{
++    const u32 level = CmdFIFO.Level();
++    if (NumCommands == 0 || ParamCount + 1 >= TotalParams || level >= 256)
++        return false;
++    ParamCount++;
++    CmdFIFOEntry entry;
++    entry.Command = CurCommand & 0xFF;
++    entry.Param = val;
++    if (level == 0 && !CmdPIPE.IsFull())
++        CmdPIPE.Write(entry);
++    else
++        CmdFIFO.Write(entry);
++    GXStat |= (1<<27);
++    if (entry.Command == 0x11 || entry.Command == 0x12)
++    {
++        GXStat |= (1<<14);
++        NumPushPopCommands++;
++    }
++    else if (entry.Command == 0x70 || entry.Command == 0x71 || entry.Command == 0x72)
++    {
++        GXStat |= (1<<0);
++        NumTestCommands++;
++    }
++    return true;
++}
++
  void GPU3D::WriteToGXFIFO(u32 val) noexcept
  {
 -    if (GeomFast) WriteToGXFIFOBody<true>(val);
 -    else          WriteToGXFIFOBody<false>(val);
 +    if (GeomFast)
 +    {
-+        // render.gx_str: a parameter before its command's last (WriteToGXFIFOBody: ParamCount goes up, the entry is
-+        // written, and the loop ends as ParamCount stays below TotalParams)
-+        if (GXStr && NumCommands != 0 && ParamCount + 1 < TotalParams)
-+        {
-+            ParamCount++;
-+            CmdFIFOEntry entry;
-+            entry.Command = CurCommand & 0xFF;
-+            entry.Param = val;
-+            CmdFIFOWriteFast(entry);
++        if (GXStr && WriteGXParamQuick(val))
 +            return;
-+        }
 +        WriteToGXFIFOBody<true>(val);
 +    }
 +    else
-+        WriteToGXFIFOBody<false>(val);
++        WriteToGXFIFOPlain(val);
++}
++
++// (kept out of WriteToGXFIFO, so that render.gx_str's case there needs no stack frame)
++__attribute__((noinline)) void GPU3D::WriteToGXFIFOPlain(u32 val) noexcept
++{
++    WriteToGXFIFOBody<false>(val);
  }
  
  template<bool Fast>
-@@ -3348,7 +3365,19 @@ __attribute__((noinline, no_stack_protector)) void GPU3D::WriteGXFIFOPortFast(u3
+@@ -3348,7 +3393,11 @@ __attribute__((noinline, no_stack_protector)) void GPU3D::WriteGXFIFOPortFast(u3
  {
      // Write32's GX FIFO port (its checks reach WriteToGXFIFO, or drop the word while the geometry engine is off)
      if (GeometryEnabled)
 +    {
-+        // render.gx_str, as in WriteToGXFIFO
-+        if (GXStr && NumCommands != 0 && ParamCount + 1 < TotalParams)
-+        {
-+            ParamCount++;
-+            CmdFIFOEntry entry;
-+            entry.Command = CurCommand & 0xFF;
-+            entry.Param = val;
-+            CmdFIFOWriteFast(entry);
++        if (GXStr && WriteGXParamQuick(val))    // render.gx_str
 +            return;
-+        }
          WriteToGXFIFOBody<true>(val);
 +    }
  }
  
  __attribute__((no_stack_protector)) void GPU3D::Write32(u32 addr, u32 val) noexcept
 diff --git a/src/GPU3D.h b/src/GPU3D.h
-index 8811629..372ba5b 100644
+index 8811629..2547515 100644
 --- a/src/GPU3D.h
 +++ b/src/GPU3D.h
-@@ -378,6 +378,10 @@ public:
+@@ -143,6 +143,8 @@ private:
+     template<bool Fast> void SubmitVertexBody() noexcept;
+     template<bool Fast> void SubmitPolygonBody() noexcept;
+     template<bool Fast> void WriteToGXFIFOBody(u32 val) noexcept;
++    bool WriteGXParamQuick(u32 val) noexcept;
++    void WriteToGXFIFOPlain(u32 val) noexcept;
+     template<bool Fast> void CalculateLightingBody() noexcept;
+     void UpdateClipMatrixFast() noexcept;
+     void CmdFIFOWriteFast(CmdFIFOEntry entry) noexcept;
+@@ -378,6 +380,10 @@ public:
      template<bool Fast, bool Stop, typename Load> u32 WriteGXFIFOWordsBody(Load load, u32 n) noexcept;
      // MELONDS_GXBATCH for WriteGXFIFOBlock (DMA's block path), set from the environment as the GPU3D is created
      bool GXBatch = true;

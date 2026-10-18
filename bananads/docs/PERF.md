@@ -499,16 +499,17 @@ and the tests' results to main RAM, and draws them; about 2,300 STM words, 400 S
   Checks: exact-suite (pictures, difftest main RAM every frame, bananads-tests) FAILS=0; gxstm difftest `--every`
   300 frames identical; sabotaged builds (all-NOP headers dropped; one word of 7-word STMs dropped) caught at
   frames 2 and 1.
-- **0022, `render.gx_str`**: single STRs to the GX FIFO port (NitroSDK's header word before each `GX_SendFifo*`,
-  `MI_CpuSend32`'s word loop): `SlowWrite9` tests for the port before its region switch and calls `WriteToGXFIFO`
-  itself (no `GXWrite9Route` call), and `WriteToGXFIFO`/`WriteGXFIFOPortFast` (the JIT's slow path and its
-  static-address call) put a parameter word before its command's last straight into the FIFO with
-  `CmdFIFOWriteFast`, which is all `WriteToGXFIFOBody` does for it, without the body's frame and decoding loop.
-  qemu-count: gxstm's ~400 FIFO-port STRs a frame, `SlowWrite9` + `GXWrite9Route` + `WriteToGXFIFO*` 53.0k ->
-  46.0k instructions a frame; dsstress L5's ~2,730 command-port STRs a frame, `SlowWrite9<u32>` + `GXWrite9Route` +
+- **0022, `render.gx_str`**: single STRs to the GX ports (NitroSDK's header word before each `GX_SendFifo*`,
+  `MI_CpuSend32`'s word loop, the immediate `G3_*` command-port writes): `SlowWrite9` tests for 0x04000400-0x5FF
+  before its region switch and does `GXWrite9Route`'s work without its call; `WriteToGXFIFO`/`WriteGXFIFOPortFast`
+  (the JIT's slow path and its static-address call) put a FIFO-port word that is a parameter before its command's
+  last, while the FIFO has entries and room, straight into the FIFO (`WriteGXParamQuick`: what `WriteToGXFIFOBody`
+  and `CmdFIFOWriteFast` do for it, with no call and so no stack frame).
+  qemu-count: gxstm's ~400 FIFO-port STRs a frame, `SlowWrite9` + `GXWrite9Route` + `WriteToGXFIFO*` 50.5k ->
+  43.5k instructions a frame; dsstress L5's ~2,730 command-port STRs a frame, `SlowWrite9<u32>` + `GXWrite9Route` +
   `GPU3D::Write32` 258.7k -> 216.5k (-16%, ~95 -> ~79 instructions a store).
-  Checks: exact-suite FAILS=0; gxstm difftest `--every` identical; a sabotaged build (ParamCount not counted for
-  3-parameter commands) caught at frame 1.
+  Checks: exact-suite FAILS=0; gxstm difftest `--every` identical; sabotaged builds (ParamCount not counted for
+  3-parameter commands; BOX_TEST's parameters not counted as a test) caught at frames 1 and 3.
 - Both together, off vs on: every 10th frame of 300 identical on gxstm, geomtest, membench and dsstress L10, each
   with the soft renderer at 1x, Gengis at 2x (2 threads, the 2D thread on) and a savestate save+reload at frame
   150; difftest `--every` identical on gxstm, geomtest, dsstress L5 and iorom L5. A build from pristine melonDS with
