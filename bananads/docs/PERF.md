@@ -506,6 +506,11 @@ The device decides.
   prologue (`mov/movk/movk x26`, 12 bytes each, 4.0% of the blocks' bytes) and a dispatch runs three instructions
   fewer. Everything else entering a block (a linked slot, DynExit, a self loop, the fault handler's restore) comes
   from the same CPU's code, where x26 already holds the base.
+- **0041, `jit.dyncold`** (`MELONDS_JIT_NODYNCOLD=1` off): a return through a register (`bx lr`, `pop {pc}`;
+  0007's DYNCACHE) ends its block with the hit's way (`ldr w1,<key>; cmp w4,w1; b.ne; bl ExitCheck; b <slot>`)
+  and then 20 bytes of the miss's way (another target than last time, or the first time). Those go to the far
+  region after the exit's learn path, a `b` to them stays: 16 bytes less per such exit (1739 of 3863 blocks on
+  bigcode-thumb, 2.4% of the bytes). A miss runs one `b` more.
 
 Checks: exact-suite.sh, toggle off against on, device build: FAILS=0.
 
