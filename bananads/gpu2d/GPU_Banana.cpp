@@ -453,15 +453,27 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
     // the position used for drawing operations is based on VCOUNT
     line = GPU.VCount;
     job.Line = line;
+    job.WaitRows = false;
     line3d = nullptr;
     if (line < 192)
     {
-        line3d = Rend3D->GetLine(line);
+        // render.3d_wait2d: with the 3D frame's own rows and unit A on the 2D thread, the emulator's thread doesn't
+        // wait for them (GetLine would): the 2D thread does, before it composites the line
+        const bool rows = Quarter && Banana3DShare && Banana3DWait2D && QuarterRow && !AInPlace && QuarterRows &&
+            QuarterRows(QuarterCtx);
+        if (!rows)
+            line3d = Rend3D->GetLine(line);
         for (int q = 0; q < 4; q++) job.Q3D[q] = job.Line3D[q];
         // (only read when BG0 is the 3D layer and enabled; render.2d_fast skips the 1 KB copy otherwise)
         if ((GPU.GPU2D_A.DispCnt & (1<<3)) && (!Banana2DFast || (GPU.GPU2D_A.LayerEnable & 1)))
         {
-            if (Quarter && Banana3DShare && QuarterRows && QuarterRows(QuarterCtx))
+            if (rows)
+            {
+                for (int q = 0; q < 4; q++) job.Q3D[q] = QuarterRow(QuarterCtx, line, q);
+                job.WaitRows = true;
+                job.RowsGen = RowsGen(QuarterCtx);
+            }
+            else if (Quarter && Banana3DShare && QuarterRows && QuarterRows(QuarterCtx))
             {
                 // render.3d_share: the 3D frame's own rows, not a 4 KB copy
                 for (int q = 0; q < 4; q++) job.Q3D[q] = Quarter(QuarterCtx, line, q);
@@ -579,6 +591,7 @@ void BananaRenderer::Execute(Job& job)
 
     if (job.Line < 192)
     {
+        if (doA && job.WaitRows) WaitRows(QuarterCtx, job.Line, job.RowsGen);
         if (doA) a.DrawScanlineFrom(job.Line, job.Regs[0], job.Q3D[0], Quarter ? job.Q3D : nullptr);
         b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0]);
 

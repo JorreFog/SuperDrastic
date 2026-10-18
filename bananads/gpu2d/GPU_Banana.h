@@ -79,6 +79,10 @@ public:
     typedef const u32* (*QuarterFn)(void* ctx, u32 line, int q);
     typedef bool (*QuarterRowsFn)(void* ctx);  // true: the quarters are the 3D frame's own rows (render.3d_share)
     void SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows = nullptr);
+    // render.3d_wait2d: a quarter's row without waiting, the render drawing it, and a wait for it (the 2D thread's)
+    typedef unsigned (*RowsGenFn)(void* ctx);
+    typedef void (*WaitRowsFn)(void* ctx, u32 line, unsigned gen);
+    void SetHiresRows(QuarterFn row, RowsGenFn gen, WaitRowsFn wait) { Drain2D(); QuarterRow = row; RowsGen = gen; WaitRows = wait; }
     int Scale() const { return Quarter ? 2 : 1; }
     bool GetFramebuffers(void** top, void** bottom) override;
     // The frontend's own buffers for the next frame (frontend=kms: the scanout buffers themselves, so nothing is
@@ -102,6 +106,9 @@ private:
     void Fill(u32* dst, u32 val);
     QuarterFn Quarter = nullptr;
     QuarterRowsFn QuarterRows = nullptr;
+    QuarterFn QuarterRow = nullptr;
+    RowsGenFn RowsGen = nullptr;
+    WaitRowsFn WaitRows = nullptr;
     // render.3d_share: jobs point at the 3D frame's rows instead of copying them (4 KB a line at 2x): the rows stay
     // through the next frame's rendering (QuarterRowsFn), and the 2D thread is drained at every frame's end
     void* QuarterCtx = nullptr;
@@ -123,6 +130,8 @@ private:
         Banana2DRegs Regs[2];
         alignas(16) u32 Line3D[4][256];  // the 3D layer's line, when unit A's DISPCNT enables 3D (2x: its quarters)
         const u32* Q3D[4];               // where the drawing reads them: Line3D's, or the 3D frame's rows (render.3d_share)
+        bool WaitRows;                   // render.3d_wait2d: the 2D thread waits for the rows of render RowsGen first
+        unsigned RowsGen;
         alignas(16) u16 Display[256];
         u64 LogEnd;                 // the copy log up to here is applied before the job is drawn
     };

@@ -421,6 +421,8 @@ bool Emu::load_rom(const std::string& path) {
     melonDS::Banana2DFast = cfg_.flag("render.2d_fast", true);
     // render.3d_share: at 2x the 2D thread reads Gengis's rows of the 3D frame instead of a 4 KB copy a line (on)
     melonDS::Banana3DShare = cfg_.flag("render.3d_share", true);
+    // render.3d_wait2d: with render.3d_share, the 2D thread waits for the 3D rows, not the emulator's thread (on)
+    melonDS::Banana3DWait2D = cfg_.flag("render.3d_wait2d", true);
 #else
     const bool banana2d = false;
 #endif
@@ -434,6 +436,7 @@ bool Emu::load_rom(const std::string& path) {
     if (cfg_.str("render.renderer", "gengis") == "gengis") {
         const int threads = (int)cfg_.num("render.gengis_threads", 3);
         const bool defer = cfg_.flag("render.gengis_defer", false);
+        GengisRenderer3D::Help = (int)cfg_.num("render.gengis_help", 1);
         // render.edge_marking, render.fog: off leaves the effect out even where the game turns it on (outlines
         // round 3D models; distance fog)
         GengisRenderer3D::SetEffects(cfg_.flag("render.edge_marking", true), cfg_.flag("render.fog", true));

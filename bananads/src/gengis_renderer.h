@@ -40,6 +40,12 @@ public:
         DispMask = ~0u & ~(edge_marking ? 0u : 1u << 5) & ~(fog ? 0u : 1u << 7);
     }
     static melonDS::u32 DispMask;
+    // render.gengis_help: when the emulator's thread needs a bin that isn't drawn yet, it draws one itself: 2 always,
+    // 1 (the default) only once a render thread has converted the frame (its polygons and textures, the long part,
+    // kept off the emulator's thread), 0 never (it waits); with no render threads it always does
+    static int Help;
+    unsigned long EmuBins = 0, EmuConverts = 0;  // drawn and converted on the emulator's thread (logged at the end)
+    std::atomic<unsigned long> AllBins{0};
     // at 2x, DS line `line`'s four 256-pixel lines: quarter q is 2x row 2 * line + (q >> 1), its even pixels (q & 1
     // clear) or odd ones, with the X scroll applied
     const melonDS::u32* GetQuarter(int line, int q);
@@ -51,6 +57,19 @@ public:
     // buffers), i.e. until the frame after next starts at line 215, long after this frame's end
     bool QuarterRows() const { return !GPU3D.AbortFrame && !GPU3D.RenderXPos; }
     static bool QuarterRowsFn(void* self) { return static_cast<GengisRenderer3D*>(self)->QuarterRows(); }
+    // render.3d_wait2d: GetQuarter's row without waiting for its bin (when QuarterRows holds), the render that will
+    // draw it, and a wait for that render's bin of a line, for the 2D thread (the bin drawn by then, or a later
+    // render's: those go into the other buffer). The emulator's thread then waits for the frame only at VBlank.
+    const melonDS::u32* QuarterRow(int line, int q) const {
+        if (line >= GX_H) line = GX_H - 1;
+        return Scale_ == 2 ? Out + (2 * line + (q >> 1)) * 2 * GX_W + (q & 1) * GX_W : Out + line * GX_W;
+    }
+    void WaitRows(int line, unsigned gen);
+    static const melonDS::u32* QuarterRowFn(void* self, melonDS::u32 line, int q) {
+        return static_cast<GengisRenderer3D*>(self)->QuarterRow((int)line, q);
+    }
+    static unsigned RowsGenFn(void* self) { return static_cast<GengisRenderer3D*>(self)->Frame.gen; }
+    static void WaitRowsFn(void* self, melonDS::u32 line, unsigned gen) { static_cast<GengisRenderer3D*>(self)->WaitRows((int)line, gen); }
 
 private:
     struct Texture {
@@ -62,7 +81,7 @@ private:
     const gx_texture* GetTexture(uint32_t texparam, uint32_t texpal);
     void Decode(Texture& tx, uint32_t texparam, uint32_t texpal);
     void Convert();
-    bool RenderOne();     // claim and render a bin of the frame; false when none is left
+    bool RenderOne(bool emu = false);  // claim and render a bin of the frame; false when none is left
     void WaitBin(unsigned bin);
     void WaitAll();
     void Worker();
@@ -98,7 +117,10 @@ inline void SetHires(melonDS::SoftRenderer*, GengisRenderer3D*, int) {}
 inline void Drain2D(melonDS::BananaRenderer* r) { r->Drain2D(); }
 inline void Resync2D(melonDS::BananaRenderer* r) { r->Resync2D(); }
 inline void SetHires(melonDS::BananaRenderer* r, GengisRenderer3D* g, int scale) {
-    if (scale == 2) r->SetHires(&GengisRenderer3D::QuarterFn, g, &GengisRenderer3D::QuarterRowsFn);
+    if (scale == 2) {
+        r->SetHires(&GengisRenderer3D::QuarterFn, g, &GengisRenderer3D::QuarterRowsFn);
+        r->SetHiresRows(&GengisRenderer3D::QuarterRowFn, &GengisRenderer3D::RowsGenFn, &GengisRenderer3D::WaitRowsFn);
+    }
 }
 #endif
 

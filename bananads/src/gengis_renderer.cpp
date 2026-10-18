@@ -26,6 +26,8 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
 
 GengisRenderer3D::~GengisRenderer3D() {
     WaitAll();
+    Platform::Log(Platform::LogLevel::Info, "[gengis] the emulator's thread drew %lu of %lu bins and converted %lu frames\n",
+                  EmuBins, AllBins.load(), EmuConverts);
     {
         std::lock_guard<std::mutex> l(M);
         Quit = true;
@@ -259,13 +261,16 @@ void GengisRenderer3D::Convert() {
 
 // ---- the bins and the threads ----
 
-bool GengisRenderer3D::RenderOne() {
+int GengisRenderer3D::Help = 1;
+
+bool GengisRenderer3D::RenderOne(bool emu) {
     const unsigned b = Next.fetch_add(1, std::memory_order_acq_rel);
     if (b >= GX_NBINS) return false;
     // the frame's polygons and textures, converted by the first thread to claim a bin of it (melonDS's state stays
     // until VBlank, where Finish3DRendering waits for the frame first)
     int expect = 0;
     if (Converted.compare_exchange_strong(expect, 1, std::memory_order_acq_rel)) {
+        if (emu) EmuConverts++;
         Convert();
         gx_begin_frame(&Frame);
         Converted.store(2, std::memory_order_release);
@@ -274,6 +279,8 @@ bool GengisRenderer3D::RenderOne() {
     }
     if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 4);
     else gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);
+    if (emu) EmuBins++;
+    AllBins.fetch_add(1, std::memory_order_relaxed);
     Done[b].store(Frame.gen, std::memory_order_release);
     { std::lock_guard<std::mutex> l(M); }  // (a waiter between its test and its wait sees the notify)
     BinDone.notify_all();
@@ -295,10 +302,23 @@ void GengisRenderer3D::Worker() {
 
 void GengisRenderer3D::WaitBin(unsigned bin) {
     while (Done[bin].load(std::memory_order_acquire) != Frame.gen) {
-        if (RenderOne()) continue;  // the emulator's thread renders a bin itself rather than wait
+        // the emulator's thread renders a bin itself rather than wait (render.gengis_help)
+        const bool help = Threads.empty() || Help == 2 || (Help == 1 && Converted.load(std::memory_order_acquire) == 2);
+        if (help && RenderOne(true)) continue;
         std::unique_lock<std::mutex> l(M);
         BinDone.wait_for(l, std::chrono::milliseconds(1),
                          [&] { return Done[bin].load(std::memory_order_acquire) == Frame.gen; });
+    }
+}
+
+void GengisRenderer3D::WaitRows(int line, unsigned gen) {
+    if (line >= GX_H) line = GX_H - 1;
+    const unsigned bin = (unsigned)line / GX_BL;
+    auto drawn = [&] { return (int)(Done[bin].load(std::memory_order_acquire) - gen) >= 0; };
+    while (!drawn()) {
+        if (Converted.load(std::memory_order_acquire) == 2 && RenderOne()) continue;  // (the 2D thread may help)
+        std::unique_lock<std::mutex> l(M);
+        BinDone.wait_for(l, std::chrono::milliseconds(1), drawn);
     }
 }
 
@@ -316,6 +336,10 @@ void GengisRenderer3D::RenderFrame() {
     if (textureChanged || texPalChanged) Textures.clear();
     Out = Out == OutBuf[0] ? OutBuf[1] : OutBuf[0];  // (the workers see it through Next's store under M)
     Frame.gen = ++Gen;
+    if (Gen % 3600 == 0) {  // (render.gengis_help's effect, in the game's log, a line a minute or so)
+        Platform::Log(Platform::LogLevel::Info, "[gengis] %lu frames: the emulator's thread drew %lu of %lu bins and converted %lu frames\n",
+                      (unsigned long)Gen, EmuBins, AllBins.load(), EmuConverts);
+    }
     Converted.store(0, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> l(M);
