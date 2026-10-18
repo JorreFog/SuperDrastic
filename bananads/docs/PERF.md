@@ -505,11 +505,22 @@ environment variable), so it can be A/B'd on the device, and say what to measure
 - `tools/device/quick.sh <bananads> <difftest>` is the correctness pass. It compares the stress ROMs' pictures
   with JIT on and off, and runs the diff ROMs' results through difftest. Its kit lives on the handheld in
   `/storage/bananads-device`; docs/DEVICE-TEST.md has it.
-- `tools/device/hgquick.sh <bin>...` is the short HeartGold run (600 measured frames at 1992 MHz).
-  - `EXTRA="--set ..."` passes settings.
-  - It uses `walk.txt`, whose `left` presses are mangled into no-ops (`1500eft:90`). The scene walks right for
-    90 frames every 180. It stays as it is because every number above used it; `walk-lr.txt` is the corrected one.
-  - The ROM and save aren't in the repo.
+- `tools/device/hgquick.sh <bin>...` is the short HeartGold run (600 measured frames, frames 1500-2100 of the
+  overworld walk; `CLK=` pins the clock, default 1992000, and 1104000 is the one for A/Bs).
+  - `EXTRA="--set ..."` passes settings (after the script's own, so they win).
+  - Each run proves it measured the scene (`tools/device/hgcommon.sh`): the walk's keys are checked, the save is
+    copied as `<ROM name>.sav` (what BananaDS loads) and the log must say it was loaded, and frame 1500's picture
+    (with `rtc.fixed`, so the same every run) must have the md5 in `HG_HASH_1X`/`HG_HASH_2X`; unset, the run prints
+    it and keeps the picture to look at once. A run that fails says INVALID instead of its fps, and fps outside
+    `[FPS_LO, FPS_HI]` (35 to CLK/10000) is flagged SUSPECT. On 2026-10-18 a run "made" 420 fps from the new-game
+    tutorial (no save) with a walk that never walked left.
+  - `walk.txt` had its `left` presses mangled into no-ops (`1500eft:90`, a zsh `:l`); it is fixed (the same as
+    `walk-lr.txt`, the scripts' default). Numbers taken before 2026-10-18 walked right only.
+  - The ROM and save aren't in the repo: `$KIT` (`/data/bananads-dev`) holds `hg.nds` and `hg.sav`.
+- `tools/device/threads.sh <bin> [--set ...]`: each thread's CPU % over 8 s of the same scene at 1104 MHz
+  (`/proc/<pid>/task/*/stat`, with the threads' names): the thread at ~100% is the one to work on.
+- `tools/device/hgprofile.sh <bin> [--set ...]`: `prof.hz` (below) on frames 1500-2700 of the same scene at 1104 MHz,
+  names from `<bin>.debug` (the unstripped build), the report written to `$KIT/prof-<date>.txt`.
 - Frame-exact checks use `--set rtc.fixed=YYYY-MM-DD_HH:MM:SS` with `headless.dump_dir`/`headless.dump_every`,
   then `cmp`.
 - Test ROMs that need no game: `stressrom/` (3D), `bananads/tests/ds2dtest/` (2D), `bananads/tests/iorom/` (the JIT's

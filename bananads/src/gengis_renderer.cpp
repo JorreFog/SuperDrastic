@@ -2,6 +2,7 @@
 #include "gengis_renderer.h"
 
 #include <chrono>
+#include <pthread.h>
 #include <cstring>
 
 #include "GPU.h"
@@ -288,6 +289,7 @@ bool GengisRenderer3D::RenderOne(bool emu) {
 }
 
 void GengisRenderer3D::Worker() {
+    pthread_setname_np(pthread_self(), "bds-gengis");  // (for threads.sh and top -H on the handheld)
     unsigned seen = 0;
     for (;;) {
         {

@@ -1,13 +1,20 @@
 #!/bin/sh
-# on the handheld: hgquick.sh <bin>... : HeartGold, 600 frames measured after loading (1500-2100), 1992 MHz
-CPU=/sys/devices/system/cpu/cpufreq/policy0
-G=$(cat $CPU/scaling_governor); MN=$(cat $CPU/scaling_min_freq); MX=$(cat $CPU/scaling_max_freq)
-restore() { echo $MN > $CPU/scaling_min_freq; echo $MX > $CPU/scaling_max_freq; echo $MN > $CPU/scaling_min_freq; echo $G > $CPU/scaling_governor; }
-trap restore EXIT; trap 'exit 130' INT TERM
-echo performance > $CPU/scaling_governor; echo 1992000 > $CPU/scaling_max_freq; echo 1992000 > $CPU/scaling_min_freq
+# on the handheld: [CLK=<kHz>] [EXTRA="--set ..."] hgquick.sh <bin>... : HeartGold's overworld, the fps of frames
+# 1500-2100 (600 frames, the player walking left and right), each binary in turn, the clock pinned (CLK, default
+# 1992000; 1104000 is the one that matters for A/Bs). A run that can't show it measured the scene (the save loaded,
+# frame 1500's picture: hgcommon.sh) prints INVALID instead of its fps, and the script exits 1.
+. "$(dirname "$0")/hgcommon.sh"
+pin_clock ${CLK:-1992000}
+rc=0
 for B in "$@"; do
-  rm -rf /tmp/hgb; mkdir -p /tmp/hgb; cp /storage/bananads-dev/hg.sav /tmp/hgb/hg.sav
-  $B --frontend headless --set save.dir=/tmp/hgb --set state.dir=/tmp/hgb --set resume.on_start=off --set resume.on_quit=off \
-    --set wifi.dns=off --set headless.frames=2100 --set headless.measure_from=1500 --set render.gengis_threads=2 \
-    --set headless.input=$(cat /storage/bananads-dev/walk.txt) ${EXTRA:-} /storage/bananads-dev/hg.nds 2>&1 | grep "frames 1500" | sed "s|^|$(basename $B): |"
+  fresh
+  $B $COMMON --set headless.frames=2100 --set headless.measure_from=$FROM ${EXTRA:-} "$ROM" > "$W/log" 2>&1
+  fps=$(grep "frames $FROM-2100" "$W/log" | grep -o '[0-9.]* fps' | head -1)
+  if why=$(scene "$W/log"); then
+    echo "$(basename $B): frames $FROM-2100 at ${CLK:-1992000} kHz: ${fps:-no fps line} ${EXTRA:+($EXTRA) }[scene $why]"
+    bounds "${fps% fps}"
+  else
+    echo "$(basename $B): INVALID: $why (fps line: ${fps:-none}; the log: $W/log)"; rc=1
+  fi
 done
+exit $rc
