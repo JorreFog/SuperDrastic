@@ -1,0 +1,228 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 11:15:00 +0000
+Subject: [PATCH] ARMJIT: hot ranges keep an index of their blocks' masks
+
+A write into a range with a hot self-modifying granule (patch 0017) scanned every block of the 512 bytes
+(~67 in Golden Sun: Dark Dawn's ITCM, each a cache miss) to find the few that hold the written 16 bytes.
+Such ranges now keep their blocks with their masks side by side, kept exactly in step with the range's
+block list; the per-block teardown is InvalidateBlock, shared by both paths. Frames and audio identical
+with MELONDS_JIT_HOTIDX=0 (the old scan).
+---
+--- a/src/ARMJIT.h
++++ b/src/ARMJIT.h
+@@ -110,6 +110,11 @@
+     std::unordered_map<u32, u32> SmcDrops {};
+     std::vector<u32> HotSmc {};
+     bool IsHotSmc(u32 localAddr) const noexcept;
++    // (patch 0018) the hot granules' 512-byte ranges: each one's blocks with their masks there, side by side, so a
++    // write scans these instead of every block's own memory (the blocks of a range are kept here exactly as in it)
++    std::unordered_map<AddressRange*, std::vector<std::pair<JitBlock*, u32>>> HotRangeIdx {};
++    void InvalidateBlock(JitBlock* block, AddressRange* range, AddressRange* region, u32 localAddr) noexcept;
++    void IndexRange(AddressRange* range, u32 rangeAddr) noexcept;
+ 
+ 
+     AddressRange CodeIndexITCM[ITCMPhysicalSize / 512] {};
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -1037,6 +1037,9 @@
+ // (read at the first use: BananaDS sets the variable from its settings after the program has started)
+ static bool HotSmcOn() { static const bool on = [] { const char* e = getenv("MELONDS_JIT_HOTSMC"); return !(e && e[0] == '0'); }(); return on; }
+ 
++// MELONDS_JIT_HOTIDX=0: no index, every write scans its range's blocks as before (read at the first use)
++static bool HotIdxOn() { static const bool on = [] { const char* e = getenv("MELONDS_JIT_HOTIDX"); return !(e && e[0] == '0'); }(); return on; }
++
+ bool ARMJIT::IsHotSmc(u32 localAddr) const noexcept
+ {
+     if (!localAddr) return false;
+@@ -1452,6 +1455,9 @@
+         AddressRange* range = &region[(addressRanges[j] & 0x7FFFFFF) / 512];
+         range->Code |= addressMasks[j];
+         range->Blocks.Add(block);
++        if (!HotRangeIdx.empty())  // (patch 0018) an indexed range keeps its index exact
++            if (auto ix = HotRangeIdx.find(range); ix != HotRangeIdx.end())
++                ix->second.emplace_back(block, addressMasks[j]);
+     }
+ 
+     if (cpu->Num == 0)
+@@ -1472,6 +1478,25 @@
+     AddressRange* range = &region[(localAddr & 0x7FFFFFF) / 512];
+     u32 mask = 1 << ((localAddr & 0x1FF) / 16);
+ 
++    // (patch 0018) a hot range: its index says which blocks hold the written 16 bytes, without touching the others
++    if (!HotRangeIdx.empty())
++        if (auto ix = HotRangeIdx.find(range); ix != HotRangeIdx.end())
++        {
++            auto& v = ix->second;
++            u32 code = 0;
++            for (size_t q = 0; q < v.size();)
++            {
++                if (!(v[q].second & mask)) { code |= v[q].second; q++; continue; }
++                JitBlock* block = v[q].first;
++                v.erase(v.begin() + q);
++                bool removed = range->Blocks.RemoveByValue(block);
++                assert(removed);
++                InvalidateBlock(block, range, region, localAddr);
++            }
++            range->Code = code;
++            return;
++        }
++
+     range->Code = 0;
+     for (int i = 0; i < range->Blocks.Length;)
+     {
+@@ -1499,72 +1524,96 @@
+             continue;
+         }
+         range->Blocks.Remove(i);
+-        if (HotSmcOn() && HotSmc.size() < 16)
+-        {
+-            u32& n = SmcDrops[localAddr & ~15u];
+-            if (++n == 32) HotSmc.push_back(localAddr & ~15u);
+-        }
++        InvalidateBlock(block, range, region, localAddr);
++    }
++    // (patch 0018) a granule that just became hot: its range is indexed from now on
++    if (HotIdxOn() && !HotSmc.empty() && IsHotSmc(localAddr) && !HotRangeIdx.count(range))
++        IndexRange(range, localAddr & ~0x1FFu);
++}
+ 
+-        if (range->Blocks.Length == 0
+-            && !PageContainsCode(&region[(localAddr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
+-        {
+-            Memory.SetCodeProtection(localAddr >> 27, localAddr & 0x7FFFFFF, false);
+-        }
++void ARMJIT::InvalidateBlock(JitBlock* block, AddressRange* range, AddressRange* region, u32 localAddr) noexcept
++{
++    if (HotSmcOn() && HotSmc.size() < 16)
++    {
++        u32& n = SmcDrops[localAddr & ~15u];
++        if (++n == 32) HotSmc.push_back(localAddr & ~15u);
++    }
++
++    if (range->Blocks.Length == 0
++        && !PageContainsCode(&region[(localAddr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
++    {
++        Memory.SetCodeProtection(localAddr >> 27, localAddr & 0x7FFFFFF, false);
++    }
+ 
+-        bool literalInvalidation = false;
+-        for (int j = 0; j < block->NumLiterals; j++)
++    bool literalInvalidation = false;
++    for (int j = 0; j < block->NumLiterals; j++)
++    {
++        u32 addr = block->Literals()[j];
++        if (addr == localAddr)
+         {
+-            u32 addr = block->Literals()[j];
+-            if (addr == localAddr)
++            if (InvalidLiterals.Find(localAddr) == -1)
+             {
+-                if (InvalidLiterals.Find(localAddr) == -1)
+-                {
+-                    InvalidLiterals.Add(localAddr);
+-                    JIT_DEBUGPRINT("found invalid literal %d\n", InvalidLiterals.Length);
+-                }
+-                literalInvalidation = true;
+-                break;
++                InvalidLiterals.Add(localAddr);
++                JIT_DEBUGPRINT("found invalid literal %d\n", InvalidLiterals.Length);
+             }
++            literalInvalidation = true;
++            break;
+         }
+-        for (int j = 0; j < block->NumAddresses; j++)
++    }
++    for (int j = 0; j < block->NumAddresses; j++)
++    {
++        u32 addr = block->AddressRanges()[j];
++        if ((addr / 512) != (localAddr / 512))
+         {
+-            u32 addr = block->AddressRanges()[j];
+-            if ((addr / 512) != (localAddr / 512))
+-            {
+-                AddressRange* otherRegion = CodeMemRegions[addr >> 27];
+-                AddressRange* otherRange = &otherRegion[(addr & 0x7FFFFFF) / 512];
+-                assert(otherRange != range);
++            AddressRange* otherRegion = CodeMemRegions[addr >> 27];
++            AddressRange* otherRange = &otherRegion[(addr & 0x7FFFFFF) / 512];
++            assert(otherRange != range);
+ 
+-                bool removed = otherRange->Blocks.RemoveByValue(block);
+-                assert(removed);
++            bool removed = otherRange->Blocks.RemoveByValue(block);
++            assert(removed);
++            if (!HotRangeIdx.empty())
++                if (auto ix = HotRangeIdx.find(otherRange); ix != HotRangeIdx.end())
++                    for (size_t q = 0; q < ix->second.size(); q++)
++                        if (ix->second[q].first == block) { ix->second.erase(ix->second.begin() + q); break; }
+ 
+-                if (otherRange->Blocks.Length == 0)
+-                {
+-                    if (!PageContainsCode(&otherRegion[(addr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
+-                        Memory.SetCodeProtection(addr >> 27, addr & 0x7FFFFFF, false);
++            if (otherRange->Blocks.Length == 0)
++            {
++                if (!PageContainsCode(&otherRegion[(addr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
++                    Memory.SetCodeProtection(addr >> 27, addr & 0x7FFFFFF, false);
+ 
+-                    otherRange->Code = 0;
+-                }
++                otherRange->Code = 0;
+             }
+         }
++    }
+ 
+ #if defined(__aarch64__)
+-        JITCompiler.UnlinkBlock(block->EntryPoint);
++    JITCompiler.UnlinkBlock(block->EntryPoint);
+ #endif
+-        FastBlockLookupRegions[block->StartAddrLocal >> 27][(block->StartAddrLocal & 0x7FFFFFF) / 2] = (u64)UINT32_MAX << 32;
+-        if (block->Num == 0)
+-            JitBlocks9.erase(block->StartAddr);
+-        else
+-            JitBlocks7.erase(block->StartAddr);
++    FastBlockLookupRegions[block->StartAddrLocal >> 27][(block->StartAddrLocal & 0x7FFFFFF) / 2] = (u64)UINT32_MAX << 32;
++    if (block->Num == 0)
++        JitBlocks9.erase(block->StartAddr);
++    else
++        JitBlocks7.erase(block->StartAddr);
+ 
+-        if (!literalInvalidation)
+-        {
+-            RetireJitBlock(block);
+-        }
+-        else
+-        {
+-            delete block;
+-        }
++    if (!literalInvalidation)
++    {
++        RetireJitBlock(block);
++    }
++    else
++    {
++        delete block;
++    }
++}
++
++void ARMJIT::IndexRange(AddressRange* range, u32 rangeAddr) noexcept
++{
++    auto& v = HotRangeIdx[range];
++    v.clear();
++    for (int i = 0; i < range->Blocks.Length; i++)
++    {
++        JitBlock* block = range->Blocks[i];
++        for (int j = 0; j < block->NumAddresses; j++)
++            if (block->AddressRanges()[j] == rangeAddr) { v.emplace_back(block, block->AddressMasks()[j]); break; }
+     }
+ }
+ 
+@@ -1643,6 +1692,7 @@
+ 
+ void ARMJIT::ResetBlockCache() noexcept
+ {
++    HotRangeIdx.clear();  // (patch 0018: the ranges are emptied below)
+     // (the hot granules stay: they're the game's habit, not the cache's)
+     Log(LogLevel::Debug, "Resetting JIT block cache...\n");
+ 
