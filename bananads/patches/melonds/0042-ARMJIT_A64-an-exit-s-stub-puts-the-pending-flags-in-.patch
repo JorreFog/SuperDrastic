@@ -1,0 +1,123 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 20:00:02 +0000
+Subject: [PATCH 42/42] ARMJIT_A64: an exit's stub puts the pending flags in
+ RCPSR (MELONDS_JIT_NOFLAGSTUB)
+
+
+With LAZYFLAGS (0007) a flag-setting instruction leaves the guest's NZCV in the host's flags; every exit then
+puts them in RCPSR (mrs x17,nzcv; and w27,w27,#0x0fffffff; orr w27,w27,w17) before its bl ExitCheck(PC). On
+tests/bigcode-thumb 3016 of 3863 blocks end so (36 KB, 3.1% of the blocks' bytes). Two new stub entries,
+ExitCheckPCF (those three instructions falling into ExitCheckPC with the CPSR store) and ExitCheckF (the three
+and a B to ExitCheck with the CPSR store), do it once for all blocks: 12 bytes less per such exit, the same
+instructions run (plus one B on ExitCheckF). Only for an exit that is a BL to ExitCheck/ExitCheckPC (a known
+target, not a self loop) with CPSRDirty (so the stub's CPSR store is the one the block chose anyway); a
+dynamic exit compares first and keeps the flush. MELONDS_JIT_NOFLAGSTUB=1 keeps the old code (byte for byte,
+stubs included).
+---
+  src/ARMJIT_A64/ARMJIT_Compiler.cpp | 32 ++++++++++++++++++++++++++++----
+  src/ARMJIT_A64/ARMJIT_Compiler.h   |  7 +++++++
+  2 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 4a6fc2fe418b6e4dda9445322c137ffbb3fd488c..9aa266fcedeecf2cae25007a77f8bbff5a58e7b1 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -303,6 +303,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         LoopNoLazy = LoopNoSigned || getenv("MELONDS_JIT_NOLOOPLAZY");
+         LoopNoXfer = getenv("MELONDS_JIT_NOLOOPXFER");
+         OptLazyFlags = OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
++        OptFlagStub = OptExitStub && OptLazyFlags && !getenv("MELONDS_JIT_NOFLAGSTUB");
+         FlagsWatch = OptLazyFlags;
+         OptFoldExit = OptCondExit && !getenv("MELONDS_JIT_NOFOLDEXIT") && !getenv("MELONDS_JIT_NOLINK");
+         // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
+@@ -822,13 +823,16 @@ void Compiler::Comp_Exit(bool known, u32 knownR15, bool thumbAfter, bool storeR1
+     // start), only on the ways out, from x1 (the check overwrites NZCV)
+     ExitLazyLoop = selfLoop && LoopMode && OptLazyFlags && !LoopNoLazy && !LoopFlagsEarlyRead && LoopFlagsWritten == 0xF;
+     ExitFlagsPending = pending && ExitLazyLoop;
+-    if (ExitFlagsPending)
+-        PendingFlags = false;   // (the loop's check leaves NZCV as it is)
++    // FLAGSTUB: an exit that is a BL to ExitCheck/ExitCheckPC (a known target, not a self loop) has its stub put
++    // the pending flags in RCPSR (ExitCheckF/ExitCheckPCF, the same three instructions as FlushFlags, first)
++    ExitFlagsInStub = pending && OptFlagStub && LinkBlocks && known && !selfLoop && CPSRDirty;
++    if (ExitFlagsPending || ExitFlagsInStub)
++        PendingFlags = false;   // (the loop's check leaves NZCV as it is; FLAGSTUB: the stub reads NZCV first)
+     else
+         FlushFlags();
+     Comp_ExitTo(known, knownR15, thumbAfter, storeR15);
+     PendingFlags = pending;
+-    ExitFlagsPending = ExitLazyLoop = false;
++    ExitFlagsPending = ExitLazyLoop = ExitFlagsInStub = false;
+     FlagsEpoch = epoch;
+ }
+ 
+@@ -1020,7 +1024,10 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+     {
+         // the checks (ExitCheck), then the slot: a B to its link path in the far region, until ARM_Dispatch links
+         // it. With storeR15, ExitCheckPC first stores the R15 in the word after the slot.
+-        BL(storeR15 ? ExitCheckPC[Num][c] : ExitCheck[Num][c]);
++        if (ExitFlagsInStub)
++            BL(storeR15 ? ExitCheckPCF[Num] : ExitCheckF[Num]);   // (c is 1: CPSRDirty, Comp_Exit)
++        else
++            BL(storeR15 ? ExitCheckPC[Num][c] : ExitCheck[Num][c]);
+     }
+     u8* slot = GetWriteableRWPtr();
+     u8* slotRX = (u8*)GetRXPtr();
+@@ -1157,6 +1164,14 @@ void Compiler::Gen_ExitStubs(int num)
+     {
+         for (int c = 1; c >= 0; c--)
+         {
++            if (c && OptFlagStub)
++            {
++                // ExitCheckPCF (FLAGSTUB): the pending flags into RCPSR (FlushFlags' three), on into ExitCheckPC
++                ExitCheckPCF[num] = GetRXPtr();
++                MRS(X17, FIELD_NZCV);
++                ANDI2R(RCPSR, RCPSR, 0x0FFFFFFF);
++                ORR(RCPSR, RCPSR, W17);
++            }
+             // ExitCheckPC: R15 from the word after the exit's slot (x30 points to the slot), then ExitCheck
+             ExitCheckPC[num][c] = GetRXPtr();
+             LDR(INDEX_UNSIGNED, W0, X30, 4);
+@@ -1187,6 +1202,15 @@ void Compiler::Gen_ExitStubs(int num)
+             callChain();
+             RET();
+         }
++        if (OptFlagStub)
++        {
++            // ExitCheckF (FLAGSTUB): the same three, then ExitCheck with the CPSR store
++            ExitCheckF[num] = GetRXPtr();
++            MRS(X17, FIELD_NZCV);
++            ANDI2R(RCPSR, RCPSR, 0x0FFFFFFF);
++            ORR(RCPSR, RCPSR, W17);
++            B(ExitCheck[num][1]);
++        }
+     }
+ 
+     // DynExit (a B from an exit whose target is only known at run time, in R15 and the CPSR's T bit): the same
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index 3440294e27afd7e910e0588b6d63cb0f5060a90b..d5d746a3ba27d99c084d2d846fffe81df664ffc8 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -248,6 +248,11 @@ public:
+     // whose block left RCPSR as it is in memory) don't
+     void* ExitCheck[2][2] = {};
+     void* ExitCheckPC[2][2] = {};
++    // FLAGSTUB (patch 0042): the same with the pending flags (PendingFlags) put in RCPSR first, as FlushFlags would,
++    // then on into ExitCheckPC/ExitCheck with the CPSR store
++    void* ExitCheckF[2] = {};
++    void* ExitCheckPCF[2] = {};
++    bool ExitFlagsInStub = false; // (Comp_Exit to Comp_ExitTo: the exit's stub puts the pending flags in RCPSR)
+     void* DynExit[2][2] = {};
+     u32* DynExitBase[2][2] = {};
+     void* DynExitA[2][2] = {};    // (OptDynAddr: DynExit with the next block's address in W4, from a JumpTo function)
+@@ -256,6 +261,8 @@ public:
+                                   // looks the block up from it (DynExitA)
+     bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
+     bool OptDynCache = true;      // NODYNCACHE: such an exit keeps the last target it went to (its key: address | T)
++    bool OptFlagStub = true;      // NOFLAGSTUB (patch 0042): an exit through ExitCheck/ExitCheckPC with flags pending leaves
++                                  // putting them in RCPSR to the stub (ExitCheckF/ExitCheckPCF): 12 bytes less per exit
+     bool OptDynCold = true;       // NODYNCOLD (patch 0041): that exit's miss way (another target, the first time) in the
+                                   // far region: 16 bytes less in the block
+                                   // in a word after a link slot it links to that block, like a known exit's
+-- 
+2.43.0
