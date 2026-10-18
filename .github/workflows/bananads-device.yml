@@ -28,7 +28,7 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake ninja-build python3 clang lld qemu-user
+          sudo apt-get install -y --no-install-recommends cmake ninja-build python3 clang lld llvm qemu-user
       - name: The Bootlin toolchain (cached)
         id: cache
         uses: actions/cache@v4
