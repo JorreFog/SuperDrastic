@@ -10,6 +10,7 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <new>
 #include <vector>
 
 #include "Args.h"
@@ -149,8 +150,21 @@ void Emu::restart() {
 }
 
 bool Emu::load_rom(const std::string& path) {
-    std::vector<uint8_t> rom;
-    if (!read_file(path, rom) || rom.size() < 0x200) {
+    // Straight into the buffer melonDS keeps: a second copy of a 256 MB ROM (Golden Sun: Dark Dawn) was half the
+    // RG DS Plus's memory at once, and starved the system while the game started (BananaOS 0.4.0 #11)
+    std::unique_ptr<u8[]> romdata;
+    size_t romlen = 0;
+    {
+        std::ifstream f(path, std::ios::binary | std::ios::ate);
+        const std::streamoff n = f ? (std::streamoff)f.tellg() : -1;
+        if (n >= 0x200) {
+            romlen = (size_t)n;
+            romdata = std::unique_ptr<u8[]>(new (std::nothrow) u8[romlen]);  // (not zeroed: every byte is read)
+            f.seekg(0);
+            if (!romdata || !f.read((char*)romdata.get(), n)) romdata.reset();
+        }
+    }
+    if (!romdata) {
         Log(LogLevel::Error, "[emu] can't read the ROM %s\n", path.c_str());
         return false;
     }
@@ -175,9 +189,7 @@ bool Emu::load_rom(const std::string& path) {
         Log(LogLevel::Info, "[emu] save %s (%zu bytes)\n", save_path_.c_str(), sav.size());
     }
 
-    auto romdata = std::make_unique<u8[]>(rom.size());
-    memcpy(romdata.get(), rom.data(), rom.size());
-    auto cart = NDSCart::ParseROM(std::move(romdata), (u32)rom.size(), this, std::move(cart_args));
+    auto cart = NDSCart::ParseROM(std::move(romdata), (u32)romlen, this, std::move(cart_args));
     if (!cart) {
         Log(LogLevel::Error, "[emu] %s isn't a DS ROM melonDS can load\n", path.c_str());
         return false;
