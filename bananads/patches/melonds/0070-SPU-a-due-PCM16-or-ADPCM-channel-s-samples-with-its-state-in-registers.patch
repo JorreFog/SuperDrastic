@@ -1,0 +1,181 @@
+From 2c83664d8d6b43d77a1477c1d8be48b2a963c7d1 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 21:39:11 +0000
+Subject: [PATCH] SPU: a due PCM16 or ADPCM channel's samples with its state in
+ registers (FastSamples)
+
+With FastMix, RunValid<type> takes a due channel's samples with the original NextSample_* inlined (flatten), and
+the compiler keeps nothing of the channel in registers across the FIFO's stores and the refill call: every sample
+loads and stores Pos, Timer, the ADPCM value, index and byte, the FIFO's read position and level, and every call
+saves ten registers (~110 instructions a call). Mario Kart DS's race start runs ~10 channels in every Mix (547 a
+frame): ~4.6k ADPCM calls taking ~6.1k samples and ~1.1k PCM16 calls a frame. RunValid<2> is 3.0% of the
+emulator's thread on the RG DS Plus there, RunValid<1> 0.5%.
+
+RunSamples<1> and <2> are leaf functions with the state in locals: they take only the plain samples (PCM16 past
+its start and before its end; ADPCM past its header and before its end, the index in the table, no FIFO refill
+due after the read) and write the state back once. At the first other sample they write it back and hand that
+sample and the rest to RunValid (a tail call), the original code, so the header, the loop, the end and the
+refills are melonDS's own. ADPCM's step is the same u16 sum from a table built from ADPCMTable (ADPCMDiff[index]
+[nibble & 7], at most 61436: no wrap) with the same one-sided clamps, and the next index the same clamp from a
+table (ADPCMNext). SPU::SetFastSamples, off by default. Under qemu, MK frames 1680-2100: RunValid<1>+<2> 570k ->
+435k instructions a frame.
+---
+ src/SPU.cpp | 111 +++++++++++++++++++++++++++++++++++++++++++++++++++-
+ src/SPU.h   |   5 +++
+ 2 files changed, 114 insertions(+), 2 deletions(-)
+
+diff --git a/src/SPU.cpp b/src/SPU.cpp
+index 0ab477c..ea028dd 100644
+--- a/src/SPU.cpp
++++ b/src/SPU.cpp
+@@ -939,6 +939,113 @@ void SPUCaptureUnit::Run(u32 cycles, s32 sample)
+ // returned before running the timer (FastValid stays false: such a channel runs every Mix). Channels that are off
+ // add 0, as Run's first check does. The sums are integer adds (NEON), so their order doesn't matter; channels 1
+ // and 3 are left out of the mixers as Mix does (SOUNDCNT bits 12 and 13).
++// FastSamples: RunValid<1> and RunValid<2> with the channel's state in locals. RunValid can't keep the channel in
++// registers across the FIFO's stores and calls, so it loads and stores Pos, Timer, the ADPCM state and the FIFO's
++// position for every sample and saves ten registers per call. RunSamples is a leaf: it takes only the plain
++// samples (PCM16 past its start and before its end; ADPCM past its header and before its end, the index in the
++// table, no FIFO refill due after the read), and at the first other one writes the state back and hands that
++// sample and the rest to RunValid (a tail call), which is the original code. ADPCM's step is the same u16 sum from
++// a table (ADPCMDiff[index][nibble & 7], at most 61436: no wrap) with the same one-sided clamps, the next index the
++// same clamp from a table (ADPCMNext). In MK's race start ~10 channels take ~1.3 samples each in every Mix.
++static u16 ADPCMDiff[89][8];
++static u8 ADPCMNext[89][8];
++static const bool ADPCMTablesBuilt = [] {
++    for (int i = 0; i < 89; i++)
++        for (int n = 0; n < 8; n++)
++        {
++            u16 val = SPUChannel::ADPCMTable[i];
++            u16 diff = val >> 3;
++            if (n & 0x1) diff += (val >> 2);
++            if (n & 0x2) diff += (val >> 1);
++            if (n & 0x4) diff += val;
++            ADPCMDiff[i][n] = diff;
++            int next = i + SPUChannel::ADPCMIndexTable[n];
++            ADPCMNext[i][n] = next < 0 ? 0 : next > 88 ? 88 : next;
++        }
++    return true;
++}();
++
++template<u32 type> static s32 RunValid(SPUChannel& chan, u32 timer);
++
++template<u32 type>
++[[gnu::noinline]] static s32 RunSamples(SPUChannel& chan, u32 timer)
++{
++    static_assert(type == 1 || type == 2);
++    u32 t = timer;
++    const u32 reload = chan.TimerReload;
++    const u32 total = chan.LoopPos + chan.Length;
++    s32 pos = chan.Pos;
++    s32 cs = chan.CurSample;
++    s32 v = chan.ADPCMVal, idx = chan.ADPCMIndex;
++    u32 cur = chan.ADPCMCurByte;
++    u32 rp = chan.FIFOReadPos, level = chan.FIFOLevel;
++    const u8* const fifo = (const u8*)chan.FIFO;
++    while (t >> 16)
++    {
++        const s32 np = pos + 1;
++        // anything but the plain case, a FIFO refill included: the state written back, and RunValid (the original
++        // sample loop) takes this sample and the rest (a tail call: this function stays a leaf, no frame)
++        const bool read = type == 1 || !(np & 0x1);
++        const u32 size = type == 1 ? 2 : 1;
++        if ((type == 1 ? (np < 0 || (u32)(np << 1) >= total)
++                       : (np < 8 || (u32)(np >> 1) >= total || (u32)idx > 88)) ||
++            (read && level - size <= 16)) [[unlikely]]
++        {
++            chan.Pos = pos; chan.CurSample = (s16)cs;
++            if (type == 2) { chan.ADPCMVal = v; chan.ADPCMIndex = idx; chan.ADPCMCurByte = (u8)cur; }
++            chan.FIFOReadPos = rp; chan.FIFOLevel = level;
++            return RunValid<type>(chan, t);
++        }
++        t = reload + (t - 0x10000);
++        pos = np;
++        if (type == 1)
++        {
++            cs = *(const s16*)&fifo[rp];
++            rp = (rp + 2) & 0x1F;
++            level -= 2;
++        }
++        else
++        {
++            if (read)
++            {
++                cur = fifo[rp];
++                rp = (rp + 1) & 0x1F;
++                level -= 1;
++            }
++            else
++                cur >>= 4;
++            const u32 n = cur & 0x7;
++            const s32 diff = ADPCMDiff[idx][n];
++            if (cur & 0x8)
++            {
++                v -= diff;
++                if (v < -0x7FFF) v = -0x7FFF;
++            }
++            else
++            {
++                v += diff;
++                if (v > 0x7FFF) v = 0x7FFF;
++            }
++            idx = ADPCMNext[idx][n];
++            if ((u32)np == (chan.LoopPos << 1))
++            {
++                chan.ADPCMValLoop = v;
++                chan.ADPCMIndexLoop = idx;
++            }
++            cs = v;
++        }
++    }
++    chan.Timer = t;
++    chan.Pos = pos; chan.CurSample = (s16)cs;
++    if (type == 2) { chan.ADPCMVal = v; chan.ADPCMIndex = idx; chan.ADPCMCurByte = (u8)cur; }
++    chan.FIFOReadPos = rp; chan.FIFOLevel = level;
++
++    s32 val = (s32)(s16)cs;
++    val <<= chan.VolumeShift;
++    val *= chan.Volume;
++    return val;
++}
++
+ // FastMix: Run<type> for a channel known to be on, keyed already (KeyOn false), long enough and not interpolated
+ // (FastValid), whose timer overflows in this Mix (timer: Timer plus this Mix's cycles): its sample loop and output,
+ // without Run's checks, with the NextSample and FIFO reads inline (flatten: one call per sample, nothing below it).
+@@ -1042,8 +1149,8 @@ bool SPU::MixChannelsFast(u32 spucycles, s32& left, s32& right, s32& ch1, s32& c
+                 switch ((chan.Cnt >> 29) & 0x3)
+                 {
+                 case 0: val = RunValid<0>(chan, timer); break;
+-                case 1: val = RunValid<1>(chan, timer); break;
+-                case 2: val = RunValid<2>(chan, timer); break;
++                case 1: val = FastSamples ? RunSamples<1>(chan, timer) : RunValid<1>(chan, timer); break;
++                case 2: val = FastSamples ? RunSamples<2>(chan, timer) : RunValid<2>(chan, timer); break;
+                 default: val = (i >= 14) ? RunValid<4>(chan, timer) : RunValid<3>(chan, timer); break;
+                 }
+                 chan.FastValid = chan.Cnt >> 31;
+diff --git a/src/SPU.h b/src/SPU.h
+index de524d8..10740ba 100644
+--- a/src/SPU.h
++++ b/src/SPU.h
+@@ -260,6 +260,10 @@ public:
+     // the mixers sum with NEON, sound DMA and capture access main RAM directly. Off by default.
+     void SetFastMix(bool enable);
+     bool GetFastMix() const { return FastMix; }
++    // FastSamples (BananaDS, exact; with FastMix): a due PCM16 or ADPCM channel's samples are taken with its state in
++    // registers and ADPCM's step from tables (RunSamples); the FIFO refills, the start, the loop and the end take
++    // the original NextSample_*. Off by default.
++    void SetFastSamples(bool enable) { FastSamples = enable; }
+     void BufferAudio();
+ 
+     void TrimOutput();
+@@ -305,6 +309,7 @@ private:
+     bool Mute;
+ 
+     bool FastMix = false;
++    bool FastSamples = false;
+     // FastMix's skipping: Mix number FastCount; the first Mix at which a channel's timer overflows (FastNextDue);
+     // set by any SPU register write or state change (FastDirty): the next Mix runs the channels
+     bool FastDirty = true;
+-- 
+2.43.0
+
