@@ -78,6 +78,8 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `kms.stats` | `0` | every this many frames shown, log the rate of new frames on the panels, the frames emulated per second, the refreshes that showed no new frame and the frames dropped |
 | `cpugov` | `on` | with `frontend=kms`: the lowest CPU clock that keeps the game at full speed, set through `scaling_max_freq` under the `performance` governor and put back on exit (src/cpugov.cpp says how it decides: one step up whenever the emulator falls a frame behind the DS's schedule at the clock it's at, and one step down after 2 s without, never onto a clock that was late recently); off when the governor isn't `performance` |
 | `cpugov.min_khz`, `cpugov.max_khz` | `1104000`, the hardware's top | its bounds |
+| `cpugov.repeats` | `on` | a refresh the panels showed without a new frame counts as a late frame: the clock goes up (and the lower one is banned) for the stutter the player sees, which a frame on time for the DS's schedule can still cause. Only while the busiest thread is at least half busy (a light game's missed refresh is a load, not the clock) |
+| `cpugov.tail` | `1.4` | a step down only while the slowest frames (the 99th percentile of the last ~10 s), scaled to the lower clock, would take under this many frames (16.67 ms); a game that alternates heavy and light frames otherwise steps down until each heavy one misses its refresh. `0`: no check |
 | `cpugov.max_soft` | `off` | `on`: past `cpugov.max_khz` while the game can't keep up |
 | `cpugov.memory` | `on` | remember per game (and scale) the clocks that were late, in `cpugov.dir` |
 | `cpugov.dir` | `$BANANADS_DATA/cpugov` | |

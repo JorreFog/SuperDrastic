@@ -35,6 +35,7 @@
 #include <ctime>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "Platform.h"
 
@@ -45,8 +46,15 @@ namespace bananads {
 
 static std::string pol_dir = "/sys/devices/system/cpu/cpufreq/policy0/";  // cpugov.sysfs (the tests' own)
 static std::string pol(const char* f) { return pol_dir + f; }
-static int window_ms = 250;  // cpugov.window_ms (the tests')
-static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5;
+static int window_ms = 250;
+static bool use_repeats = true;  // cpugov.repeats
+// cpugov.tail (1.4): a step down only while the 99th percentile of the emulator's frame times since the last change
+// (at most the last ~10 s), scaled to the lower clock, stays under this many frames (16.67 ms). Golden Sun: Dark
+// Dawn's town alternates 26-29 ms and 11 ms frames on the RG DS Plus at 1992 MHz: the panels show every frame there
+// (the queue evens out one late frame), but a step down made each heavy frame miss its refresh. 0: no check
+static double tail_limit = 1.4;
+static long tail_from = 0;  // frames before this one are the previous clock's  // cpugov.window_ms (the tests')
+static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5, REPEAT_BUSY = 0.5;
 // (a probe of a clock that then drops a frame shows: a ban of 2 min, doubling to 30, and 10 s clean before the next
 // step down keep it from hunting; at 30 s / 8 windows HeartGold on the RG DS went down and back up every ~30 s)
 static const int BAD_FOR_S = 120, BAD_MAX_S = 1800, FORGIVE_MS = 120000, MAX_STRIKES = 6, FPS_WINDOWS = 4, DOWN_AFTER = 40;
@@ -178,7 +186,7 @@ static void gov_loop() {
     int tids[MAXT];
     long long last[MAXT];
     int nt = 0;
-    long late_prev = feed_->late;
+    long late_prev = feed_->late, rep_prev = feed_->repeats;
     long long t_prev = 0, fps_t[FPS_WINDOWS] = {0};
     long fps_p[FPS_WINDOWS] = {0};
     // the frame rate over the last FPS_WINDOWS windows (a second: over one window, a frame more or less is 4 fps),
@@ -256,10 +264,18 @@ static void gov_loop() {
                 restart_fps();
             }
             late_prev = feed_->late;
+            rep_prev = feed_->repeats;
             low = 0;
             continue;
         }
-        const long late_now = feed_->late, late = late_now - late_prev;
+        // cpugov.repeats (on): a refresh that went without a new frame counts as a late frame (what the player sees);
+        // on the RG DS Plus the clock steps it took cost GS:DD's town 1.3% missed refreshes at 1416 MHz, 0.07% at 1992,
+        // while the schedule's late count saw almost none of them
+        // (only while the busiest thread is at least half busy: a refresh missed in a light game is a stall, a load or a
+        // scene change, not the clock; one sent Pokémon Platinum's intro back to 1800 MHz with its busiest thread at 14%)
+        const long rep_now = feed_->repeats, missed = use_repeats && umax >= REPEAT_BUSY ? rep_now - rep_prev : 0;
+        rep_prev = rep_now;
+        const long late_now = feed_->late, late = late_now - late_prev + missed;
         late_prev = late_now;
         const bool running = umax >= IDLE_BUSY;
         const bool slow = fps >= 0 && fps < SLOW_FPS && fps > 5 && (umax > 0.5 || usum > 1.0);
@@ -299,13 +315,31 @@ static void gov_loop() {
             low = 0;
         } else if (!late && (fps < 0 || fps >= 59)) {  // clean: the next clock down once it has been for DOWN_AFTER windows
             if (++low >= DOWN_AFTER) {
-                set_clock(step_down(cur), "clean", late, umax, fps);
+                const int lower = step_down(cur);
+                // the heavy frames' tail at the lower clock (frame time scales with the clock; memory-bound work less)
+                double p99 = 0;
+                const long n = (long)feed_->nframe_ms.load(std::memory_order_acquire), from = std::max(tail_from, n - 600L);
+                if (n - from >= 60) {
+                    std::vector<float> v;
+                    for (long i = std::max(from, n - (long)GovFeed::NFT); i < n; i++) v.push_back(feed_->frame_ms[i % GovFeed::NFT]);
+                    const size_t k = v.size() * 99 / 100;
+                    std::nth_element(v.begin(), v.begin() + k, v.end());
+                    p99 = v[k];
+                }
+                const double at_lower = lower < cur ? p99 * cur / lower : 0;
+                if (lower < cur && tail_limit > 0 && at_lower > tail_limit * 16.67) {
+                    if (verbose)
+                        Log(LogLevel::Info, "[cpugov] staying at %d MHz: the slowest frames (p99 %.1f ms) would take %.1f ms at %d MHz\n",
+                            cur / 1000, p99, at_lower, lower / 1000);
+                } else
+                    set_clock(lower, "clean", late, umax, fps);
                 low = 0;
             }
         } else
             low = 0;
         if (cur != was) {  // what comes next is the new clock's: the backlog and the frame rate start again
             feed_->rebase = true;
+            tail_from = (long)feed_->nframe_ms.load(std::memory_order_acquire);
             restart_fps();
         }
         if (verbose)
@@ -349,6 +383,8 @@ void cpugov_start(const Config& cfg, GovFeed* feed) {
     pol_dir = cfg.str("cpugov.sysfs", pol_dir);
     window_ms = std::max(10, (int)cfg.num("cpugov.window_ms", 250));
     mem_on = cfg.flag("cpugov.memory", true);
+    use_repeats = cfg.flag("cpugov.repeats", true);
+    tail_limit = atof(cfg.str("cpugov.tail", "1.4").c_str());
     std::string gov = rd_str(pol("scaling_governor").c_str());
     if (gov != "performance") {
         Log(LogLevel::Info, "[cpugov] off: the governor is %s, not performance\n", gov.empty() ? "unknown" : gov.c_str());

@@ -13,6 +13,19 @@ namespace bananads {
 // scale (the memory is per 1x/2x).
 struct GovFeed {
     std::atomic<long> frames{0}, late{0};
+    // refreshes the panels showed no new frame for (the KMS presenter's count): a frame can be on time for the DS's
+    // schedule and still miss its refresh, e.g. Golden Sun: Dark Dawn's 26-29 ms town frames after 11 ms ones
+    std::atomic<long> repeats{0};
+    // the emulator's work per frame (ms, run to publish), the last NFT frames: the governor steps down only while
+    // the slowest of them would still fit at the lower clock (cpugov.tail)
+    static const int NFT = 1024;
+    float frame_ms[NFT] = {};
+    std::atomic<unsigned> nframe_ms{0};
+    void frame_time(float ms) {
+        const unsigned n = nframe_ms.load(std::memory_order_relaxed);
+        frame_ms[n % NFT] = ms;
+        nframe_ms.store(n + 1, std::memory_order_release);
+    }
     std::atomic<bool> rebase{false};  // the clock changed: the lag from before is the old clock's, and already counted
     int scale = 1;
 };
