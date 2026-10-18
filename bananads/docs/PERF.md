@@ -502,6 +502,25 @@ instructions per call, a fifth of `Run` on L5.
 - Tried and dropped: a command's middle parameters (a matrix's 2nd-15th) in a short loop with their cycles added
   at once (exact): gxstm `Run` -0.1%: the parameters arrive a few per `Run` call (0.6 per batch).
 
+## Mario Kart DS's race start: the GX FIFO DMA and the command loop (2026-10-18, third speed session, agent geomlazy; untested on device)
+
+The device profile of Mario Kart DS's race intro and countdown (BananaLinux `perf/bananads/session3/`) has 3D
+geometry at 31% of the emulator's thread. The stream, counted on the scene (frames 1700-2150, per frame): ~28,900
+FIFO entries and ~1,330 polygons; ~31,700 words sent by the GX FIFO DMA (mode 7, through `core.dma_block`'s block
+path) in ~1,260 `DMA::Run9` calls; ~2,180 `GPU3D::Run` calls with 13.4 entries each; the FIFO holding ~62 entries
+(under half, so the DMA restarts at every burst's end); GXSTAT's FIFO IRQ in mode 2 (empty), its IF bit toggling
+~270 times a frame (not in IE); GXSTAT read 7 times; RAM_COUNT, the matrices and the tests never. Commands: texcoord
+7,500, VTX_16 3,770, normal 4,600 (about one light each), the other vertex formats 4,800, begin/end 900 each.
+
+qemu, device build, the emulator's thread over frames 1650-2150 (mkbase: 16.2M instructions a frame): `Run` 3.79M
+(131 per entry), `WriteToGXFIFOBody` 2.08M (66 per word), `DMA::Run9` 1.51M (47 per word), polygon setup 1.14M,
+vertices 0.78M.
+
+- **0050 (`render.geom_batch`, session 2's, cherry-picked):** here the FIFO is under half all the time, so every
+  refill of the pipe ran the four DMAs' checks and the IRQ check: `Run` 3.79M -> 3.09M.
+- **0060 (`render.gx_dmafast`):** the DMA's block unpacked with its state in registers: `WriteToGXFIFOBody` +
+  `DMA::Run9` 3.58M -> 1.86M + 0.15M (the CPU's own GX writes).
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an

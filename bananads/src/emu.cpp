@@ -393,6 +393,14 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_GEOMBATCH", "1", 1);
         else if (v == "off") setenv("MELONDS_GEOMBATCH", "0", 1);
     }
+    // render.gx_dmafast=on|off sets MELONDS_GXDMAFAST (melonDS patch 0060: the GX FIFO DMA's block path unpacks its
+    // words into the FIFO with the command state and the FIFO's level in registers; exact; read as the NDS is created;
+    // default on). Unset, the environment decides; a difftest sets it on both --a and --b.
+    {
+        const std::string v = cfg_.str("render.gx_dmafast", "");
+        if (v == "on") setenv("MELONDS_GXDMAFAST", "1", 1);
+        else if (v == "off") setenv("MELONDS_GXDMAFAST", "0", 1);
+    }
 
     // render.geom_fast=on|off sets MELONDS_GEOMFAST (melonDS patch 0011: the 3D geometry engine's fast paths, exact;
     // read as the NDS is created; default on). Unset, the environment decides; as with jit.iofast, a difftest sets it
