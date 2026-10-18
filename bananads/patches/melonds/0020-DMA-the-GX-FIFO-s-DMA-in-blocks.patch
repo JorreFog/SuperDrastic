@@ -1,0 +1,120 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 11:25:00 +0000
+Subject: [PATCH] DMA: the GX FIFO's DMA in blocks
+
+Golden Sun: Dark Dawn feeds the geometry engine by immediate DMA from main RAM to the GX FIFO port, ~15-20k words
+in the frames that draw 3D. FastDMA's fixed-destination loop called GPU3D::Write32 for each word (its port checks,
+a call that isn't inlined, then the decoding). Now the units are timed as before up to the count's end or the one
+that reaches ARM9Target, the words go to GPU3D::WriteGXFIFOBlock (GeomFast's port body in a loop) up to the one
+that stalls the system on a full FIFO, and the timing is taken up to that word (the FIFO fills only as the DMA
+writes, so where it stalls doesn't depend on the time; the DMA runs only while the system isn't stalled).
+Exact: the oracle's frames and audio identical with MELONDS_DMABLOCK=0. GS house area headless at 1992 MHz:
+76.9/77.3 -> 78.8/77.6 fps. MELONDS_GXBLOCK=0 turns it off alone.
+---
+diff --git a/src/DMA.cpp b/src/DMA.cpp
+index d95f402..6161127 100644
+--- a/src/DMA.cpp
++++ b/src/DMA.cpp
+@@ -660,10 +660,60 @@ void DMA::Run9()
+                     ? DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][7] == 8 ? 2 : 3]
+                     : DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][6] == 2 ? 0 : 1];
+                 const u32 dst = CurDstAddr;
++                static const bool gxon = [] { const char* v = getenv("MELONDS_GXBLOCK"); return !v || *v != '0'; }();
++                const bool gxblock = vramblock && gxon && dst == 0x04000400 && mramread && SrcAddrInc > 0 && NDS.GPU.GPU3D.GeomFast;
+                 while (IterCount > 0 && !Stall)
+                 {
+                     const u32 src = CurSrcAddr;
+                     const bool srcram = (src >> 24) == 0x02;
++                    // the block path (MELONDS_DMABLOCK, and MELONDS_GXBLOCK=0 turns this one off alone): main RAM going up into the GX FIFO port (the geometry engine's
++                    // fast paths): the units up to the count's end or the one whose timing reaches ARM9Target timed as
++                    // below, then the words written in one go up to the one that stalls the system on a full FIFO,
++                    // whose unit counts and ends the DMA's turn, as below (the FIFO fills only as the DMA writes, so
++                    // where it stalls doesn't depend on the time); the timing then taken up to that word
++                    if (gxblock && srcram)
++                    {
++                        const u32 s0 = src & ~3u;
++                        const u32 n = std::min({IterCount, (0x03000000 - s0) >> 2, 512u});
++                        auto timed = [&](u32 limit, u64& ts, u32& cnt, const std::array<u8, 256>*& cur) -> u32
++                        {
++                            ts = NDS.ARM9Timestamp;
++                            cnt = MRAMBurstCount;
++                            cur = nullptr;
++                            bool bs = burststart;
++                            u32 k = 0;
++                            while (k < limit)
++                            {
++                                const u8* tb = cur ? cur->data() : MRAMBurstTable.data();
++                                if (bs || tb[cnt] == 0)
++                                {
++                                    cnt = 0;
++                                    cur = &tab;
++                                    tb = cur->data();
++                                }
++                                ts += (u64)tb[cnt++] << clockshift;
++                                bs = false;
++                                k++;
++                                if (ts >= NDS.ARM9Target) break;
++                            }
++                            return k;
++                        };
++                        u64 ts;
++                        u32 cnt;
++                        const std::array<u8, 256>* cur;
++                        const u32 k = timed(n, ts, cnt, cur);
++                        const u32 j = NDS.GPU.GPU3D.WriteGXFIFOBlock(ram, mask, s0, k);
++                        if (j < k) timed(j, ts, cnt, cur);
++                        if (cur) MRAMBurstTable = *cur;
++                        MRAMBurstCount = cnt;
++                        NDS.ARM9Timestamp = ts;
++                        burststart = false;
++                        CurSrcAddr += j << 2;
++                        IterCount -= j;
++                        RemCount -= j;
++                        if (ts >= NDS.ARM9Target) break;
++                        continue;
++                    }
+                     u32 t;
+                     if (mramread && srcram)
+                     {
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index d033845..729d538 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -3213,6 +3213,19 @@ void GPU3D::Write16(u32 addr, u16 val) noexcept
+     Log(LogLevel::Debug, "unknown GPU3D write16 %08X %04X\n", addr, val);
+ }
+ 
++__attribute__((no_stack_protector)) u32 GPU3D::WriteGXFIFOBlock(const u8* ram, u32 mask, u32 src, u32 n) noexcept
++{
++    // (the DMA runs only while the system isn't stalled, so the first stall is this block's)
++    for (u32 i = 0; i < n; i++)
++    {
++        if (GeometryEnabled)
++            WriteToGXFIFOBody<true>(*(const u32*)&ram[(src + (i << 2)) & mask]);
++        if (NDS.CPUStop & CPUStop_GXStall)
++            return i + 1;
++    }
++    return n;
++}
++
+ __attribute__((noinline, no_stack_protector)) void GPU3D::WriteGXFIFOPortFast(u32 val) noexcept
+ {
+     // Write32's GX FIFO port (its checks reach WriteToGXFIFO, or drop the word while the geometry engine is off)
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index e86f964..9b45721 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -368,6 +368,9 @@ public:
+     // BananaDS: the geometry engine's fast paths (render.geom_fast, MELONDS_GEOMFAST=0 turns them off; exact), set
+     // from the environment as the GPU3D is created
+     bool GeomFast = true;
++    // DMA's block path (DMA::Run9, MELONDS_DMABLOCK): what Write32(0x04000400, word) does with GeomFast for each of n
++    // words of main RAM from src, stopping after the word that stalls the system (a full FIFO); the words written
++    u32 WriteGXFIFOBlock(const u8* ram, u32 mask, u32 src, u32 n) noexcept;
+     // whether one of the ARM9's DMAs may wait for the GX FIFO (GeomFast's CheckFIFODMAFast skips them otherwise)
+     bool GXFIFODMAMaybe = true;
+     // whether the ARM9's IRQ line was brought up to date by CheckFIFOIRQFast since the last reset or state load
+-- 
+2.55.0
+
