@@ -156,7 +156,9 @@ SEND, RECV) and WRAMCNT writes; other IO addresses cost nothing, and `NextTarget
 select (its comment says what is safe and what isn't). Patch 0004: `fast_gxdma` sends main-RAM → 0x04000400 DMA
 words straight to `GPU3D::Write32`; `fast_spu` makes `Mix` skip channels that are off. Patch 0006: `fast_sched`
 keeps the next event's time (`SchedNext`) instead of walking the event list twice every slice. All three are
-exact, and default off only by the toggle rule: after the device A/B they can become the default.
+exact, and default off only by the toggle rule: after the device A/B they can become the default (2026-10-18 defaults
+audit: `fast_gxdma` and `fast_spu` were overtaken by patch 0013's `core.fast_dma` and `core.fast_mix`, on by default,
+which take those cases on paths of their own: with them on, these two never run, so turning them on gains nothing.)
 `tools/ipcrom/` (FIFO, main-RAM mailbox and IPCSYNC round trips with a halting ARM7, plus the divider) and
 `tools/dmasnd/` (GX FIFO and immediate DMA, all 16 sound channels with both capture units writing to RAM,
 divider/sqrt with restarts) are the test ROMs; `build.py` in each.
