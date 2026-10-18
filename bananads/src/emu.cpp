@@ -473,6 +473,9 @@ bool Emu::load_rom(const std::string& path) {
     // at render.scale=1
     if (banana2d) banana_ = &static_cast<BananaRenderer&>(nds_->GetRenderer());
     if (banana2d && cfg_.flag("render.2d_thread", true)) banana_->SetThreaded2D(true);
+    // render.2d_fence_wait: the waits for the 2D thread spin on sched_yield (spin, the default, as before) or block on
+    // a condition variable (block): a device A/B first (does "99% busy" include spinning?)
+    if (banana2d) banana_->SetFenceWaitBlocking(cfg_.str("render.2d_fence_wait", "spin") == "block");
 #endif
 
     set_clock();

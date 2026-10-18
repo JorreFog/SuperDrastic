@@ -222,6 +222,10 @@ state and loads it straight back, for the savestate joins.
   the 2D thread, not the emulator's, waits for the line's bin. On the device the first session's series made 1x
   with the 2D thread +26% (against +21% on the base); this is the part of it on the emulator's thread.
   `render.3d_share=off` is the old 1x path; `render.3d_wait2d=off` keeps the wait on the emulator's thread.
+- `render.2d_fence_wait` (2026-10-18, from the first session's perf/render 8677fad; default `spin`, the old way):
+  the waits for the 2D thread spin on `sched_yield`, which `/proc` counts as busy; `block` waits on a condition
+  variable the 2D thread signals. Device A/B: `threads.sh` and `hgquick.sh` with `--set render.2d_fence_wait=block`,
+  `kms.stats` in play; `hgprofile.sh`'s `# waiting:` line says how much of the emulator's thread spins.
 
 ### IO: direct routes for the JIT's slow paths, and IO statistics (patch 0005; `jit.iofast`, default `on`)
 

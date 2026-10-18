@@ -95,6 +95,12 @@ public:
     void SetOutput(u32* top, u32* bottom);
 
     bool Drain2D();   // wait until the 2D thread has drawn every line handed to it (false: it already had)
+    // render.2d_fence_wait: the waits for the 2D thread (a frame's fence, a drain, a full ring or log) block on a
+    // condition variable the 2D thread signals after a job while someone waits (block), or spin on
+    // sched_yield as before (spin, the default until the device has A/B'd it). A spin from the KMS presenter, at
+    // SCHED_FIFO, keeps its core from every other thread until the 2D thread catches up; blocking gives the core to
+    // the thread being waited for
+    void SetFenceWaitBlocking(bool on) { FenceBlock = on; }
     void Resync2D();  // after GPU::ResetVRAMCache (a savestate): the copies are made again from GPU's memory
 
 private:
@@ -181,6 +187,13 @@ private:
     bool KickPending = false, Quit = false;
     std::thread Worker;
     u64 StatJobs = 0, StatInPlace = 0, StatLogBytes = 0, StatWaits = 0;
+    // the blocking waits (render.2d_fence_wait): a waiter sets FenceWaiting, then re-tests under FenceM and waits
+    // (timed, as a safety net); the 2D thread, after it publishes a job, notifies under FenceM when the flag is set
+    template<class Pred> void WaitForWorker(Pred pred) const;
+    bool FenceBlock = false;  // (render.2d_fence_wait=spin, the default)
+    mutable std::mutex FenceM;
+    mutable std::condition_variable FenceCv;
+    mutable std::atomic<bool> FenceWaiting{false};
 };
 
 }

@@ -719,8 +719,7 @@ void BananaRenderer::LogReserve(u64 bytes)
         return;
     StatWaits++;
     Kick();
-    while (LogWrite + bytes - LogRead.load(std::memory_order_acquire) > LogSize)
-        std::this_thread::yield();
+    WaitForWorker([&] { return LogWrite + bytes - LogRead.load(std::memory_order_acquire) <= LogSize; });
 }
 
 // the 2D thread, before it draws a job
@@ -763,7 +762,14 @@ void BananaRenderer::WorkerLoop()
         }
         Execute(Jobs[tail % NumJobs]);
         tail++;
-        Tail.store(tail, std::memory_order_release);
+        Tail.store(tail, std::memory_order_seq_cst);
+        if (FenceWaiting.load(std::memory_order_seq_cst))
+        {
+            // (render.2d_fence_wait: a waiter; the flag is cleared here and set again by a waiter that still waits)
+            FenceWaiting.store(false, std::memory_order_relaxed);
+            { std::lock_guard<std::mutex> l(FenceM); }
+            FenceCv.notify_all();
+        }
     }
 }
 
@@ -784,8 +790,7 @@ BananaRenderer::Job& BananaRenderer::NewJob()
     {
         StatWaits++;
         Kick();
-        while (head - Tail.load(std::memory_order_acquire) >= NumJobs)
-            std::this_thread::yield();
+        WaitForWorker([&] { return head - Tail.load(std::memory_order_acquire) < NumJobs; });
     }
     return Jobs[head % NumJobs];
 }
@@ -799,6 +804,28 @@ void BananaRenderer::Submit()
         Kick();
 }
 
+// a wait for the 2D thread (render.2d_fence_wait). Blocking: the flag is set with sequential consistency before the
+// condition is tested again, and the 2D thread publishes Tail the same way before it reads the flag, so either the
+// re-test sees the new Tail or the 2D thread sees the flag and notifies under the mutex; the timed wait is a safety
+// net only. Spinning (the default): as before
+template<class Pred> void BananaRenderer::WaitForWorker(Pred pred) const
+{
+    if (!FenceBlock)
+    {
+        while (!pred())
+            std::this_thread::yield();
+        return;
+    }
+    while (!pred())
+    {
+        FenceWaiting.store(true, std::memory_order_seq_cst);
+        std::unique_lock<std::mutex> l(FenceM);
+        if (pred())
+            break;
+        FenceCv.wait_for(l, std::chrono::milliseconds(1));
+    }
+}
+
 bool BananaRenderer::Drain2D()
 {
     if (!Thread2D)
@@ -807,15 +834,13 @@ bool BananaRenderer::Drain2D()
     if (Tail.load(std::memory_order_acquire) == head)
         return false;
     Kick();
-    while (Tail.load(std::memory_order_acquire) != head)
-        std::this_thread::yield();
+    WaitForWorker([&] { return Tail.load(std::memory_order_acquire) == head; });
     return true;
 }
 
 void BananaRenderer::WaitFence(u32 fence) const
 {
-    while ((s32)(Tail.load(std::memory_order_acquire) - fence) < 0)
-        std::this_thread::yield();
+    WaitForWorker([&] { return (s32)(Tail.load(std::memory_order_acquire) - fence) >= 0; });
 }
 
 // the next frame's 3D: Gengis draws it into the rows the frame before last showed (render.3d_share), which that
