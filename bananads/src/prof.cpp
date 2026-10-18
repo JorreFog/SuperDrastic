@@ -1,12 +1,17 @@
 // prof.hz: a sampling profiler of the emulator's thread (prof.h). Settings (docs/SETTINGS.md):
-//   prof.hz       samples per second of the thread's CPU time (0: off, the default). The kernel checks thread CPU
-//                 timers at its tick, so the rate it reaches is at most CONFIG_HZ (the report says what it got)
+//   prof.hz       samples per second of the thread's CPU time (0: off, the default)
+//   prof.source   auto (task-clock, else timer), task-clock (a perf event: any rate), cycles (the cycle counter, per
+//                 1e9 cycles), timer (a POSIX CPU-time timer: checked at the kernel's tick, so at most CONFIG_HZ)
 //   prof.from     the first frame sampled (e.g. headless.measure_from's); prof.frames: how many (0: to the end)
 //   prof.out      the report's file (default: the log); prof.raw: every sampled address with its count and the
 //                 modules' ranges, for resolving offline (addr2line -f -C -e <unstripped binary>)
 //   prof.syms     the binary to read function symbols from (default /proc/self/exe): the unstripped build of this
 //                 same binary, since Buildroot strips what goes onto the device
 //   prof.top      the symbols listed (40); prof.samples: the sample array (262144 PCs, 2 MB)
+//   prof.pmu      on (the default with prof.hz): the CPU's own counters over the same frames, on the same thread
+//                 (perf_event_open, as perf stat would: cycles, instructions, branch misses, L1I/L1D misses, iTLB
+//                 misses), a line in the report; the kernel needs CONFIG_PERF_EVENTS and the core's PMU in its
+//                 device tree, else the report says why not
 #include "prof.h"
 
 #include <algorithm>
@@ -29,6 +34,8 @@
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <elf.h>
+#include <linux/perf_event.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <link.h>
 #include <pthread.h>
@@ -234,12 +241,67 @@ std::string scope_of(const std::string& fn) {
     return cut == std::string::npos ? s : s.substr(0, cut);
 }
 
+// prof.pmu: counting events on one thread, each on its own (no group: a PMU short of counters multiplexes them, and
+// the counts are scaled by the time each was on)
+struct Pmu {
+    struct Ev { const char* name; uint32_t type; uint64_t config; int fd = -1; };
+    std::vector<Ev> evs;
+    std::string why;  // why not, when none opened
+    static uint64_t cache(uint64_t id, uint64_t op, uint64_t res) { return id | (op << 8) | (res << 16); }
+    void open(long tid) {
+        evs = {{"cycles", PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES},
+               {"instructions", PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS},
+               {"branch-misses", PERF_TYPE_HARDWARE, PERF_COUNT_HW_BRANCH_MISSES},
+               {"L1I-misses", PERF_TYPE_HW_CACHE, cache(PERF_COUNT_HW_CACHE_L1I, PERF_COUNT_HW_CACHE_OP_READ, PERF_COUNT_HW_CACHE_RESULT_MISS)},
+               {"L1D-misses", PERF_TYPE_HW_CACHE, cache(PERF_COUNT_HW_CACHE_L1D, PERF_COUNT_HW_CACHE_OP_READ, PERF_COUNT_HW_CACHE_RESULT_MISS)},
+               {"iTLB-misses", PERF_TYPE_HW_CACHE, cache(PERF_COUNT_HW_CACHE_ITLB, PERF_COUNT_HW_CACHE_OP_READ, PERF_COUNT_HW_CACHE_RESULT_MISS)}};
+        int opened = 0;
+        for (Ev& e : evs) {
+            for (int user_only = 0; user_only < 2 && e.fd < 0; user_only++) {
+                perf_event_attr a{};
+                a.size = sizeof(a);
+                a.type = e.type;
+                a.config = e.config;
+                a.disabled = 1;
+                a.exclude_hv = 1;
+                a.exclude_kernel = user_only;  // (kernel too when allowed: the emulator's thread's system calls count)
+                a.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
+                e.fd = (int)syscall(SYS_perf_event_open, &a, (pid_t)tid, -1, -1, PERF_FLAG_FD_CLOEXEC);
+                if (e.fd < 0 && why.empty()) why = std::string("perf_event_open: ") + strerror(errno);
+            }
+            if (e.fd >= 0) opened++;
+        }
+        if (opened) why.clear();
+        for (Ev& e : evs)
+            if (e.fd >= 0) ioctl(e.fd, PERF_EVENT_IOC_ENABLE, 0);
+    }
+    // the counts (scaled when multiplexed), -1 for an event that didn't open; the fds closed
+    std::vector<double> close_all() {
+        std::vector<double> v;
+        for (Ev& e : evs) {
+            double c = -1;
+            if (e.fd >= 0) {
+                ioctl(e.fd, PERF_EVENT_IOC_DISABLE, 0);
+                uint64_t r[3] = {0, 0, 0};
+                if (read(e.fd, r, sizeof(r)) == (ssize_t)sizeof(r) && r[2] > 0)
+                    c = (double)r[0] * ((double)r[1] / (double)r[2]);
+                ::close(e.fd);
+                e.fd = -1;
+            }
+            v.push_back(c);
+        }
+        return v;
+    }
+};
+
 class ProfilerImpl final : public Profiler {
 public:
     explicit ProfilerImpl(const Config& cfg)
         : hz_(cfg.num("prof.hz", 0)), from_(cfg.num("prof.from", 0)), frames_(cfg.num("prof.frames", 0)),
           top_(cfg.num("prof.top", 40)), cap_(cfg.num("prof.samples", 262144)), out_(cfg.str("prof.out", "")),
-          raw_(cfg.str("prof.raw", "")), syms_(cfg.str("prof.syms", "")) {}
+          raw_(cfg.str("prof.raw", "")), syms_(cfg.str("prof.syms", "")), pmu_on_(cfg.flag("prof.pmu", true)) {
+        source_ = cfg.str("prof.source", "auto");
+    }
     ~ProfilerImpl() override { finish(); }
 
     void frame(long n) override {
@@ -282,34 +344,91 @@ private:
         sigemptyset(&sa.sa_mask);
         sigaction(SIGPROF, &sa, nullptr);
         tid_ = (long)syscall(SYS_gettid);
-        sigevent sev{};
-        sev.sigev_notify = SIGEV_THREAD_ID;
-        sev.sigev_signo = SIGPROF;
-        sev.sigev_notify_thread_id = (pid_t)tid_;
-        if (timer_create(CLOCK_THREAD_CPUTIME_ID, &sev, &timer_) != 0) {
-            Log(LogLevel::Error, "[prof] timer_create: %s\n", strerror(errno));
-            return;
-        }
-        const long ns = 1000000000L / std::clamp(hz_, 1L, 100000L);
-        itimerspec its{};
-        its.it_interval.tv_sec = ns / 1000000000L;
-        its.it_interval.tv_nsec = ns % 1000000000L;
-        its.it_value = its.it_interval;
         cpu0_ = cpu_last_ = now_s(CLOCK_THREAD_CPUTIME_ID);
         wall0_ = wall_last_ = now_s(CLOCK_MONOTONIC);
         first_frame_ = last_frame_ = n;
-        if (timer_settime(timer_, 0, &its, nullptr) != 0) {
-            Log(LogLevel::Error, "[prof] timer_settime: %s\n", strerror(errno));
-            timer_delete(timer_);
-            return;
+        if (pmu_on_) pmu_.open(tid_);
+        const long hz = std::clamp(hz_, 1L, 20000L);
+        // prof.source: a perf event of the thread's own (task-clock: a high-resolution timer on its CPU time, not
+        // held to the kernel's tick; cycles: the core's cycle counter) whose overflows signal it, else (auto) or
+        // with timer: a POSIX CPU-time timer, which the kernel checks at its tick (CONFIG_HZ: 250 on the RG DS)
+        if (source_ != "timer") {
+            if (start_event(hz)) {
+                state_ = Running;
+            } else if (source_ != "auto") {
+                Log(LogLevel::Error, "[prof] prof.source=%s: %s\n", source_.c_str(), why_.c_str());
+                return;
+            }
         }
-        state_ = Running;
-        Log(LogLevel::Info, "[prof] sampling the emulator's thread (tid %ld) at %ld Hz of its CPU time from frame %ld\n",
-            tid_, hz_, n);
+        if (state_ != Running) {
+            sigevent sev{};
+            sev.sigev_notify = SIGEV_THREAD_ID;
+            sev.sigev_signo = SIGPROF;
+            sev.sigev_notify_thread_id = (pid_t)tid_;
+            if (timer_create(CLOCK_THREAD_CPUTIME_ID, &sev, &timer_) != 0) {
+                Log(LogLevel::Error, "[prof] timer_create: %s\n", strerror(errno));
+                return;
+            }
+            const long ns = 1000000000L / hz;
+            itimerspec its{};
+            its.it_interval.tv_sec = ns / 1000000000L;
+            its.it_interval.tv_nsec = ns % 1000000000L;
+            its.it_value = its.it_interval;
+            if (timer_settime(timer_, 0, &its, nullptr) != 0) {
+                Log(LogLevel::Error, "[prof] timer_settime: %s\n", strerror(errno));
+                timer_delete(timer_);
+                return;
+            }
+            used_ = "a CPU-time timer (the kernel's tick caps the rate)";
+            if (!why_.empty()) used_ += std::string("; no perf event: ") + why_;
+            timer_on_ = true;
+            state_ = Running;
+        }
+        Log(LogLevel::Info, "[prof] sampling the emulator's thread (tid %ld) at %ld Hz from frame %ld: %s\n", tid_, hz_,
+            n, used_.c_str());
+    }
+
+    bool start_event(long hz) {
+        const bool cycles = source_ == "cycles";
+        perf_event_attr a{};
+        a.size = sizeof(a);
+        a.type = cycles ? PERF_TYPE_HARDWARE : PERF_TYPE_SOFTWARE;
+        a.config = cycles ? (uint64_t)PERF_COUNT_HW_CPU_CYCLES : (uint64_t)PERF_COUNT_SW_TASK_CLOCK;
+        a.sample_period = (uint64_t)(1000000000L / hz);  // task-clock counts ns; cycles: as if at 1 GHz
+        a.wakeup_events = 1;
+        a.disabled = 1;
+        a.exclude_hv = 1;
+        for (int user_only = 0; user_only < 2 && ev_fd_ < 0; user_only++) {
+            a.exclude_kernel = user_only;
+            ev_fd_ = (int)syscall(SYS_perf_event_open, &a, (pid_t)tid_, -1, -1, PERF_FLAG_FD_CLOEXEC);
+        }
+        if (ev_fd_ < 0) {
+            why_ = std::string("perf_event_open: ") + strerror(errno);
+            return false;
+        }
+        // its overflows as SIGPROF to this thread alone
+        f_owner_ex owner{F_OWNER_TID, (pid_t)tid_};
+        if (fcntl(ev_fd_, F_SETFL, O_ASYNC) != 0 || fcntl(ev_fd_, F_SETSIG, SIGPROF) != 0 ||
+            fcntl(ev_fd_, F_SETOWN_EX, &owner) != 0 || ioctl(ev_fd_, PERF_EVENT_IOC_RESET, 0) != 0 ||
+            ioctl(ev_fd_, PERF_EVENT_IOC_ENABLE, 0) != 0) {
+            why_ = std::string("the perf event's signal: ") + strerror(errno);
+            ::close(ev_fd_);
+            ev_fd_ = -1;
+            return false;
+        }
+        used_ = cycles ? "the cycle counter's overflows (prof.hz per 1e9 cycles)" : "the task-clock perf event";
+        return true;
     }
 
     void stop() {
-        timer_delete(timer_);
+        if (ev_fd_ >= 0) {
+            ioctl(ev_fd_, PERF_EVENT_IOC_DISABLE, 0);
+            ::close(ev_fd_);
+            ev_fd_ = -1;
+        }
+        if (timer_on_) timer_delete(timer_);
+        timer_on_ = false;
+        counts_ = pmu_.close_all();
         signal(SIGPROF, SIG_IGN);  // one still pending goes nowhere (its default would end the process)
         state_ = Done;
     }
@@ -405,16 +524,32 @@ private:
             r += line;
         };
         auto pct = [&](uint64_t c) { return n ? 100.0 * (double)c / (double)n : 0.0; };
-        add("# BananaDS prof: the emulator's thread (tid %ld), prof.hz=%ld of its CPU time, frames %ld-%ld\n", tid_,
-            hz_, first_frame_, last_frame_);
+        add("# BananaDS prof: the emulator's thread (tid %ld), prof.hz=%ld, frames %ld-%ld, from %s\n", tid_, hz_,
+            first_frame_, last_frame_, used_.c_str());
         add("# %u samples (%.0f a second of its CPU time; %" PRIu64 " dropped, %" PRIu64
-            " timer overruns: the kernel's tick caps the rate); %.2f s CPU in %.2f s (%.0f%% busy), %.1f fps\n",
+            " timer overruns); %.2f s CPU in %.2f s (%.0f%% busy), %.1f fps\n",
             n, cpu > 0 ? n / cpu : 0.0, g_dropped.load(), g_overruns.load(), cpu, wall,
             wall > 0 ? 100.0 * cpu / wall : 0.0, wall > 0 ? nframes / wall : 0.0);
         add("# symbols: %s %s (%zu functions)%s%s\n", spath.c_str(), elf.table, elf.syms.size(),
             symnote.empty() ? "" : "; ", symnote.c_str());
         add("# JIT code: %.1f%% of the samples%s\n", pct(jit),
             jitmap.empty() ? " (MELONDS_JIT_PERFMAP=1 names its blocks and stubs)" : "");
+        if (pmu_on_) {
+            r += "# pmu:";
+            if (!pmu_.why.empty()) r += " none (" + pmu_.why + "; the kernel needs CONFIG_PERF_EVENTS and the core's PMU)";
+            const double fr = nframes > 0 ? (double)nframes : 1.0;
+            double cyc = -1, ins = -1;
+            for (size_t i = 0; pmu_.why.empty() && i < counts_.size(); i++) {
+                const double c = counts_[i];
+                if (c < 0) { add(" %s n/a;", pmu_.evs[i].name); continue; }
+                if (i == 0) cyc = c;
+                if (i == 1) ins = c;
+                if (i < 2) add(" %s %.0fk/frame;", pmu_.evs[i].name, c / fr / 1000.0);
+                else add(" %s %.0f/frame (%.2f per 1000 instructions);", pmu_.evs[i].name, c / fr, ins > 0 ? c * 1000.0 / ins : 0.0);
+            }
+            if (cyc > 0 && ins > 0) add(" IPC %.2f; %.0f MHz while running", ins / cyc, cpu > 0 ? cyc / cpu / 1e6 : 0.0);
+            r += "\n";
+        }
         auto ranked = [](const auto& m) {
             std::vector<std::pair<std::string, uint64_t>> v;
             for (const auto& [k, c] : m) v.push_back({k, c});
@@ -489,8 +624,14 @@ private:
 
     long hz_, from_, frames_, top_, cap_;
     std::string out_, raw_, syms_;
+    bool pmu_on_;
+    Pmu pmu_;
+    std::vector<double> counts_;
     State state_ = Idle;
     timer_t timer_{};
+    bool timer_on_ = false;
+    int ev_fd_ = -1;
+    std::string source_, used_, why_;
     long tid_ = 0;
     long first_frame_ = 0, last_frame_ = 0;
     double cpu0_ = 0, cpu_last_ = 0, wall0_ = 0, wall_last_ = 0;
