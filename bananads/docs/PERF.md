@@ -520,7 +520,57 @@ The device decides.
 
 Checks: `evidence/jit/exact-suite.sh` (pictures every 50 frames to 300 on 17 ROMs incl. jitloops, irqmask, iorom;
 dmasnd's audio; `bananads-difftest --every` main RAM on 9 ROMs; `bananads-tests`), each toggle off against on,
-device build: FAILS=0 for each. Sabotage: 0041 with one cycle added on the miss way: FAILS=12.
+device build: FAILS=0 for each. Sabotage: 0041 with one cycle added on the miss way: FAILS=12. 0042: two
+sabotages (no CPSR store in ExitCheckF; ExitCheckPCF without its AND) were *not* caught: the test ROMs' flags at
+those exits are dead. 0042 is exact by construction, but its check is weak (see Mario Kart DS below).
+
+### Mario Kart DS's race start (2026-10-18, third speed session, agent mkjit; untested on device)
+
+The three on Mario Kart DS (USA), Figure-8 Circuit's race start from a fresh save (session 3's `mk-scene.sh`:
+2100 frames, the countdown at 1780-1965), device build under qemu. The device profile of this scene has the JIT's
+code at 29.1% of the emulator's thread, IPC 0.49, 9.9 L1I and 4.15 iTLB misses per 1000 instructions.
+
+| Build (all of the scene's blocks, census of the perf map) | Block bytes | Bytes/block | Instructions |
+|---|---|---|---|
+| all three off | 4,371,356 | 303 | 1,092,839 |
+| + 0040 `jit.entry_x26` | 4,198,376 (-4.0%) | 291 | 1,049,594 |
+| + 0041 `jit.dyncold` | 4,093,128 (-6.4%) | 284 | 1,023,282 |
+| + 0042 `jit.flagstub` | 3,934,836 (-10.0%) | 273 | 983,709 |
+
+14,415 blocks in each build (the same code compiled). The far region grows by 131,568 bytes (0041's miss ways).
+The blocks call 0042's stubs at 13,191 exits: ExitCheckF at 5,920 (ARM9 5,276, ARM7 644), ExitCheckPCF at 7,271
+(ARM9 6,398, ARM7 873).
+
+Exactness, each toggle off against on (the other two on): the scene's eight pictures (1500-2100) and its audio
+identical to the base build's, and to every cumulative combination above; `bananads-difftest --every --from 1600`
+(main RAM every frame from 1600 to 2100): the same for each.
+
+Sabotages of 0042 (MELONDS_JIT_SABFS=n in a sabotage build), on the scene's pictures, audio and main RAM:
+
+| Sabotage | Caught |
+|---|---|
+| ExitCheckF without its AND (old flags OR'd with the new) | yes (pictures from 1500 on) |
+| both stubs without their AND | yes |
+| both stubs' flags inverted; both without the ORR (flags not stored) | yes |
+| the blocks BL the plain stubs (flags never put in the CPSR) | yes |
+| ExitCheckF into the c=0 ExitCheck (no CPSR store) | **no** (jitcode's first) |
+| ExitCheckPCF without its AND | **no** (jitcode's second) |
+| ExitCheckPCF's flags inverted; ExitCheckPCF without the ORR | **no** |
+| (the old code: every exit to the c=0 stubs, no CPSR store) | yes |
+
+So in this scene the flags at ExitCheckF's exits are live and checked, and those at ExitCheckPCF's 7,271 exits (the
+exits whose R15 the stub stores from the slot's literal) are all dead: no check of ours sees a mistake there. **So
+`jit.flagstub` is off by default** (BananaDS's setting; the patch's own default is unchanged): an uncaught toggle
+is not turned on. A test whose flags live across an exit after a non-branch last instruction would be the check
+it needs.
+
+Expected gain on the race start (with 0042 off: -6.4% of the bytes; with it on -10.0%): only instruction fetch can
+change (the instructions run are the same but 0040's three per dispatch and 0041's one B per miss), so at most the
+JIT code's share of the fetch stalls times the bytes saved. The PMU's 145.6k L1I misses a frame at ~10-12 cycles
+(an L2 hit) are ~5-6% of the frame's 29.95M cycles, its 61k iTLB misses ~1-2% more; the JIT's code (29.1% of the
+time) holding half to all of them and 6-10% fewer of its lines missing gives **+0.2-0.7% of the emulator thread**,
+within the device's run-to-run noise. Only `perf stat -e L1-icache-load-misses` on the device would show the
+mechanism.
 
 ## BananaJIT
 
