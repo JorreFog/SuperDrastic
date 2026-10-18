@@ -1531,6 +1531,7 @@ int run_kms(Emu& emu, const Config& cfg) {
 #ifdef BANANADS_ALSA
     alsa_stop(snd);
 #endif
+    if (!screenshot_wait(3000)) Log(LogLevel::Warn, "[shot] still being written at quit\n");
     for (auto& d : devs) ::close(d.fd);
     if (qos >= 0) ::close(qos);
     emu.set_lazy_2d(false);  // render.2d_lazy: the last frame's lines drawn before its buffers go

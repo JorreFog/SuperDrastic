@@ -1,5 +1,7 @@
 // The screenshot hotkey's PNG (screenshot.h).
 #include "screenshot.h"
+#include <atomic>
+#include <unistd.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <cstdio>
@@ -10,8 +12,11 @@
 
 namespace bananads {
 
+static std::atomic<int> g_pending{0};  // screenshots being written (screenshot_wait)
+
 void screenshot_save(const std::string& dir, const std::string& game, std::vector<uint32_t> top,
                      std::vector<uint32_t> bottom, int w, int h, std::function<void(bool, const std::string&)> done) {
+    g_pending.fetch_add(1);
     std::thread([=, top = std::move(top), bottom = std::move(bottom)] {
         setpriority(PRIO_PROCESS, 0, 10);  // (the game's threads first)
         std::vector<uint8_t> rgb((size_t)w * h * 2 * 3);
@@ -35,7 +40,13 @@ void screenshot_save(const std::string& dir, const std::string& game, std::vecto
         const bool ok = stbi_write_png(tmp.c_str(), w, h * 2, 3, rgb.data(), w * 3) != 0 && rename(tmp.c_str(), path.c_str()) == 0;
         if (!ok) remove(tmp.c_str());
         done(ok, name);
+        g_pending.fetch_sub(1);
     }).detach();
+}
+
+bool screenshot_wait(int ms) {
+    for (int i = 0; i < ms / 10 && g_pending.load() > 0; i++) usleep(10000);
+    return g_pending.load() == 0;
 }
 
 }  // namespace bananads
