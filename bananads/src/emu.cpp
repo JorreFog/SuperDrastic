@@ -513,6 +513,10 @@ void Emu::run_frame() {
 #ifdef BANANADS_LAN
     if (local_) MPInterface::Get().Process();
 #endif
+    if (const double sk = skew_req_.load(std::memory_order_relaxed); sk != skew_cur_) {
+        skew_cur_ = sk;
+        nds_->SPU.SetOutputSkew(sk);
+    }
     nds_->RunFrame();
     flush_save(false);
     if (slice_stats_ > 0 && ++slice_frames_ % slice_stats_ == 0) {
@@ -595,6 +599,8 @@ const uint32_t* Emu::bottom() const {
 void Emu::set_audio_rate(double hz) {
     if (nds_) nds_->SPU.SetOutputSampleRate(hz);
 }
+
+int Emu::audio_backlog() const { return nds_->SPU.GetOutputSize(); }
 
 int Emu::audio(int16_t* stereo, int max_frames) {
     int n = nds_->SPU.ReadOutput(stereo, max_frames);

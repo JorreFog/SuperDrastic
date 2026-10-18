@@ -1,6 +1,7 @@
 // One emulated DS: melonDS's NDS plus what BananaDS adds around it (saves next to the game's name in the save
 // folder, the microphone, Wi-Fi, savestates with a picture for the in-game menu).
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -54,6 +55,10 @@ public:
 
     int audio(int16_t* stereo, int max_frames);  // what the SPU made since the last call
     void set_audio_rate(double hz);              // the SPU's output rate (48000: the DS's speed; kms.pace=display)
+    int audio_backlog() const;                   // what the SPU made and audio() hasn't read yet, in stereo frames
+    // the sound's speed against the game's (audio.servo): below 1 stretches it (more samples per emulated second);
+    // any thread may ask, the emulator's thread applies it between frames (never inside the SPU's mix)
+    void set_audio_skew(double s) { skew_req_.store(s, std::memory_order_relaxed); }
 
     bool save_state(int slot);  // slot 0 = the quit/resume state
     bool load_state(int slot);
@@ -87,6 +92,8 @@ private:
     void setup_slice();
     void set_clock();
 
+    std::atomic<double> skew_req_{1.0};
+    double skew_cur_ = 1.0;
     Config cfg_;
     std::unique_ptr<melonDS::NDS> nds_;
     std::unique_ptr<melonDS::Net> net_;
