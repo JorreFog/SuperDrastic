@@ -371,12 +371,19 @@ static int resample(const int16_t *x, int nin, int ch, int16_t *out, int *np) {
  * "repeat": 0.13-0.24 a second in HeartGold, walking; seen as a hitch when the picture scrolls). Here the stream is
  * taken for what it must be for refresh-rate frames, 44100 * refresh / 59.8261 Hz, and resampled from that to the
  * device's rate: the writer then drains the ring that much faster, the pump's rate trim follows it, and DraStic runs
- * 0.3% fast (pitch +5 cents). A fixed ratio: as exact as the refresh rate given (the log's [pace] period). */
+ * 0.3% fast (pitch +5 cents). A fixed ratio: as exact as the refresh rate given (the log's [pace] period).
+ * But where the presenter's frame queue paces DraStic (BananaOS: latch pacing, 2-frame queue), it already runs at the
+ * refresh rate and makes 44100 samples a second there, a 60th of that per frame, not 44100 * refresh / 59.8261: taken
+ * at that, the stream was drained 127 Hz faster than DraStic made it, and its callback filled the missing end of 40-66
+ * chunks every 10 s with zeros (Mario Kart DS racing on an RG DS Plus: clicks; 0 with 44100 * refresh / 60, and still
+ * no repeated frames). DSFLIP_AUDIO_LOCK_PER=60 (BananaOS) takes it that way; unset: the DS's rate, as above. */
 #define DS_FPS 59.8260982880808
 static int alsa_open(void) {
     const char *l = getenv("DSFLIP_ALSA_LATENCY"), *r = getenv("DSFLIP_AUDIO_DEVICE_RATE"), *k = getenv("DSFLIP_AUDIO_LOCK");
     double hz = k ? strtod(k, 0) : 0;
-    lock_in = hz > 50 && hz < 70 ? freq * hz / DS_FPS : 0;
+    const char *per = getenv("DSFLIP_AUDIO_LOCK_PER");
+    double per_fps = per && strtod(per, 0) > 50 && strtod(per, 0) < 70 ? strtod(per, 0) : DS_FPS;
+    lock_in = hz > 50 && hz < 70 ? freq * hz / per_fps : 0;
     out_rate = r ? atoi(r) : 0;
     if (out_rate < 8000 || out_rate > 192000) out_rate = lock_in ? freq : 0;
     if (out_rate == freq && !lock_in) out_rate = 0;
