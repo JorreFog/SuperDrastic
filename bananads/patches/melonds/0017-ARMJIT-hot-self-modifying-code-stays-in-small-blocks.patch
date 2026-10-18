@@ -26,11 +26,12 @@ MELONDS_JIT_HOTSMC=0 turns it off.
      AddressRange CodeIndexITCM[ITCMPhysicalSize / 512] {};
 --- a/src/ARMJIT.cpp
 +++ b/src/ARMJIT.cpp
-@@ -1034,6 +1034,16 @@
+@@ -1034,6 +1034,17 @@
      SetJITArgs(JITArgs{static_cast<unsigned>(MaxBlockSize), LiteralOptimizations, BranchOptimizations, enabled});
  }
  
-+static const bool HotSmcOn = [] { const char* e = getenv("MELONDS_JIT_HOTSMC"); return !(e && e[0] == '0'); }();
++// (read at the first use: BananaDS sets the variable from its settings after the program has started)
++static bool HotSmcOn() { static const bool on = [] { const char* e = getenv("MELONDS_JIT_HOTSMC"); return !(e && e[0] == '0'); }(); return on; }
 +
 +bool ARMJIT::IsHotSmc(u32 localAddr) const noexcept
 +{
@@ -43,7 +44,7 @@ MELONDS_JIT_HOTSMC=0 turns it off.
  void ARMJIT::CompileBlock(ARM* cpu) noexcept
  {
      bool thumb = cpu->CPSR & 0x20;
-@@ -1097,6 +1107,9 @@
+@@ -1097,6 +1108,9 @@
      JIT_DEBUGPRINT("start block %x %08x (%x)\n", blockAddr, cpu->CPSR, localAddr);
  
      u32 lastSegmentStart = blockAddr;
@@ -53,7 +54,7 @@ MELONDS_JIT_HOTSMC=0 turns it off.
      u32 lr;
      bool hasLink = false;
  
-@@ -1282,7 +1295,8 @@
+@@ -1282,7 +1296,8 @@
                          JIT_DEBUGPRINT("found %s idle loop %d in block %08x\n", thumb ? "thumb" : "arm", cpu->Num, blockAddr);
                      }
                  }
@@ -63,7 +64,7 @@ MELONDS_JIT_HOTSMC=0 turns it off.
                  {
                      if (link)
                      {
-@@ -1310,7 +1324,8 @@
+@@ -1310,7 +1325,8 @@
                  }
              }
  
@@ -73,7 +74,7 @@ MELONDS_JIT_HOTSMC=0 turns it off.
              {
                  JIT_DEBUGPRINT("block lengthened by untaken branch\n");
                  instrs[i].Info.EndBlock = false;
-@@ -1324,6 +1339,15 @@
+@@ -1324,6 +1340,15 @@
          bool secondaryFlagReadCond = !canCompile || (instrs[i - 1].BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken));
          if (instrs[i - 1].Info.ReadFlags != 0 || secondaryFlagReadCond)
              FloodFillSetFlags(instrs, i - 2, !secondaryFlagReadCond ? instrs[i - 1].Info.ReadFlags : 0xF);
@@ -89,11 +90,11 @@ MELONDS_JIT_HOTSMC=0 turns it off.
      } while(!instrs[i - 1].Info.EndBlock && i < MaxBlockSize && !cpu->Halted && (!cpu->IRQ || (cpu->CPSR & 0x80)));
  
      if (numLiterals)
-@@ -1474,6 +1498,11 @@
+@@ -1474,6 +1499,11 @@
              continue;
          }
          range->Blocks.Remove(i);
-+        if (HotSmcOn && HotSmc.size() < 16)
++        if (HotSmcOn() && HotSmc.size() < 16)
 +        {
 +            u32& n = SmcDrops[localAddr & ~15u];
 +            if (++n == 32) HotSmc.push_back(localAddr & ~15u);
@@ -101,7 +102,7 @@ MELONDS_JIT_HOTSMC=0 turns it off.
  
          if (range->Blocks.Length == 0
              && !PageContainsCode(&region[(localAddr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
-@@ -1613,6 +1642,7 @@
+@@ -1613,6 +1643,7 @@
  
  void ARMJIT::ResetBlockCache() noexcept
  {
