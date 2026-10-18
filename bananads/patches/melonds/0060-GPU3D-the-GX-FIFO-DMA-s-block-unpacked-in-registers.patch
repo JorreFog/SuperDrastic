@@ -1,0 +1,169 @@
+From ccb6aed42e4ccdf57766c6707271c23659b88564 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 18 Oct 2026 21:33:03 +0000
+Subject: [PATCH] GPU3D: the GX FIFO DMA's block unpacked with its state in
+ registers
+
+WriteGXFIFOBlock (patch 0020's block path of a main-RAM DMA into the GX FIFO port) did WriteToGXFIFOBody<true>
+for each word, a call with the command state and the FIFO's level and position loaded and stored through the
+GPU3D each time (~66 host instructions a word, plus ~28 around the call in DMA::Run9). With GXDMAFast
+(render.gx_dmafast, MELONDS_GXDMAFAST=0 turns it off) the block keeps the command word's state, the FIFO's level
+and its write position in registers, writes each entry as one 64-bit store, and sets GXSTAT's busy, push/pop and
+test bits and adds to the push/pop and test counts once at the block's end (only set or added to here, and nothing
+reads them until the block is done). An entry that would go to an empty FIFO (the pipe may take it) or a full one
+(the stall queue) takes CmdFIFOWriteFast with the state put back first, and the block still ends after the word
+that stalls the system. Same entries, same order, same FIFO and pipe contents: exact.
+
+Mario Kart DS's race start (frames 1650-2150) sends ~31,700 words a frame this way.
+---
+ src/FIFO.h    |  6 ++++
+ src/GPU3D.cpp | 96 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/GPU3D.h   |  6 ++++
+ 3 files changed, 108 insertions(+)
+
+diff --git a/src/FIFO.h b/src/FIFO.h
+index acccc13..526be26 100644
+--- a/src/FIFO.h
++++ b/src/FIFO.h
+@@ -96,6 +96,12 @@ public:
+ 
+     bool CanFit(u32 num) const { return ((NumOccupied + num) <= NumEntries); }
+ 
++    // BananaDS (GPU3D's GX FIFO block writer, render.gx_dmafast): the ring itself, for a writer that keeps the level
++    // and the write position in registers and puts them back with RawSetWrite
++    T* RawEntries() { return Entries; }
++    u32 RawWritePos() const { return WritePos; }
++    void RawSetWrite(u32 occupied, u32 writepos) { NumOccupied = occupied; WritePos = writepos; }
++
+ private:
+     T Entries[NumEntries] = {0};
+     u32 NumOccupied = 0;
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index b6629b2..ed4581a 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -3234,8 +3234,104 @@ void GPU3D::Write16(u32 addr, u16 val) noexcept
+     Log(LogLevel::Debug, "unknown GPU3D write16 %08X %04X\n", addr, val);
+ }
+ 
++bool GPU3D::GXDMAFastEnv() noexcept
++{
++    // read as the GPU3D is created (a difftest's two NDS objects each with its own setting)
++    const char* e = getenv("MELONDS_GXDMAFAST");
++    return !(e && e[0] == '0');
++}
++
+ __attribute__((no_stack_protector)) u32 GPU3D::WriteGXFIFOBlock(const u8* ram, u32 mask, u32 src, u32 n) noexcept
+ {
++    if (GXDMAFast && GeometryEnabled && !(NDS.CPUStop & CPUStop_GXStall)) [[likely]]
++    {
++        // WriteToGXFIFOBody<true> for each word, with its state in registers: the command word's state, and the
++        // FIFO's level and write position while an entry goes to a FIFO that is neither empty nor full (into an
++        // empty FIFO an entry may go to the pipe, into a full one to the stall queue: CmdFIFOWriteFast does those,
++        // with the state put back first). GXSTAT's bits and the push/pop and test counts are only set or added to
++        // here, and nothing reads them until the block is done, so they are set once at the end.
++        u32 numcmds = NumCommands, cur = CurCommand, pc = ParamCount, tp = TotalParams;
++        u32 lvl = CmdFIFO.Level(), wpos = CmdFIFO.RawWritePos();
++        CmdFIFOEntry* const ents = CmdFIFO.RawEntries();
++        u32 stat = 0, pushpop = 0, tests = 0;
++        bool stalled = false;
++        auto put = [&](u32 c, u32 val) __attribute__((always_inline))
++        {
++            if (lvl - 1u < 255u) [[likely]]
++            {
++                // CmdFIFOWriteFast's FIFO write (the FIFO is neither empty nor full)
++                ents[wpos]._contents = ((u64)c << 32) | val;
++                wpos = (wpos + 1) & 0xFF;
++                lvl++;
++                stat |= (1 << 27);
++                if (c - 0x11u < 2u) [[unlikely]]      { stat |= (1 << 14); pushpop++; }
++                else if (c - 0x70u < 3u) [[unlikely]] { stat |= (1 << 0);  tests++; }
++            }
++            else
++            {
++                CmdFIFO.RawSetWrite(lvl, wpos);
++                CmdFIFOEntry entry;
++                entry._contents = ((u64)c << 32) | val;
++                CmdFIFOWriteFast(entry);
++                lvl = CmdFIFO.Level();
++                wpos = CmdFIFO.RawWritePos();
++                stalled |= !!(NDS.CPUStop & CPUStop_GXStall);
++            }
++        };
++        // WriteToGXFIFOBody's loop once the current command has all its parameters: the packed word's next
++        // commands, those without parameters put now (with this word as their parameter, as there), up to one
++        // that waits for parameters or the packed word's end
++        auto next = [&](u32 val) __attribute__((always_inline))
++        {
++            for (;;)
++            {
++                cur >>= 8;
++                if (--numcmds == 0) return;
++                pc = 0;
++                tp = CmdNumParams[cur & 0xFF];
++                if (tp > 0) return;
++                if (cur & 0xFF) put(cur & 0xFF, val);
++            }
++        };
++        u32 i = 0;
++        for (; i < n; i++)
++        {
++            const u32 val = *(const u32*)&ram[(src + (i << 2)) & mask];
++            if (numcmds != 0) [[likely]]
++            {
++                // a parameter of the current command (which has some, so it isn't 0)
++                put(cur & 0xFF, val);
++                if (++pc >= tp)
++                    next(val);
++            }
++            else
++            {
++                // a packed command word
++                numcmds = 4;
++                cur = val;
++                pc = 0;
++                tp = CmdNumParams[cur & 0xFF];
++                if (tp == 0)
++                {
++                    if ((cur & 0xFF) || cur == 0) put(cur & 0xFF, val);
++                    next(val);
++                }
++            }
++
++            if (stalled) [[unlikely]]
++            {
++                i++;
++                break;
++            }
++        }
++        NumCommands = numcmds; CurCommand = cur; ParamCount = pc; TotalParams = tp;
++        CmdFIFO.RawSetWrite(lvl, wpos);
++        GXStat |= stat;
++        NumPushPopCommands += pushpop;
++        NumTestCommands += tests;
++        return i;
++    }
++
+     // (the DMA runs only while the system isn't stalled, so the first stall is this block's)
+     for (u32 i = 0; i < n; i++)
+     {
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index b66a2da..90fa6d0 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -381,6 +381,12 @@ public:
+     // and both checks' results depend on that level and on state no command changes, so the last check decides)
+     static bool GeomBatchEnv() noexcept;
+     bool GeomBatch = GeomBatchEnv();
++    // BananaDS (render.gx_dmafast, MELONDS_GXDMAFAST=0 turns it off; exact): WriteGXFIFOBlock (the GX FIFO DMA's
++    // block path) unpacks its words with the command state, the FIFO's level and write position in registers, and
++    // sets GXSTAT's bits and the push/pop and test counts once per block; a word whose entries would reach an empty
++    // or full FIFO takes WriteToGXFIFOBody's own path for those entries
++    static bool GXDMAFastEnv() noexcept;
++    bool GXDMAFast = GXDMAFastEnv();
+     // while RunFast defers them, and whether one of the checks was due
+     bool FIFOChecksDeferred = false;
+     bool FIFOChecksDue = false;
+-- 
+2.43.0
+
