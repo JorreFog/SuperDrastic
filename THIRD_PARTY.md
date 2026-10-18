@@ -6,6 +6,7 @@ SuperDrastic's own code is MIT licensed (see `LICENSE`). These parts keep their 
 |---|---|---|
 | [rcheevos](https://github.com/RetroAchievements/rcheevos) (RetroAchievements), v12.5.0 with rc_client_do_frame split in two (see its VERSION) | `src/third_party/rcheevos` | MIT (`src/third_party/rcheevos/LICENSE`) |
 | [stb_image, stb_truetype, stb_vorbis](https://github.com/nothings/stb) | `src/third_party/stb` | public domain or MIT (the end of each file) |
+| [stb_image, stb_image_write (v1.16), stb_truetype](https://github.com/nothings/stb) | `bananads/src/third_party` | public domain or MIT (the end of each file) |
 | AMD FidelityFX Super Resolution 1.0 (EASU), in `ds-fsr` | `shaders/ds-fsr.frag` | MIT, Copyright (c) 2021 Advanced Micro Devices, Inc. (notice in the file) |
 
 **DraStic** is not part of SuperDrastic and is not included: it is Exophase's closed-source emulator, which your
