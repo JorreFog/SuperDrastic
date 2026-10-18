@@ -1,0 +1,158 @@
+From fc8f33601fe05818ecec80d604f0d1e90e0ec380 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 23:15:49 +0000
+Subject: [PATCH] NDS: a CPU's PC leaving its code region swaps back to the
+ region it last left (RegionPair)
+
+The slice loop's block lookup (ExecuteJITInline) sets the code region up again with ARMJIT::SetupExecutableRegion
+(ClassifyAddress, GetMirrorLocation: ~100 instructions) whenever the PC leaves the current one. Games do that all
+the time: the ARM9 calls between ITCM and main RAM, the ARM7 goes through its BIOS for IRQs and SWIs and back to
+its WRAM. In Mario Kart DS's race start it happens ~1500 times a frame for the ARM9 and ~370 for the ARM7, and the
+region setup functions are ~1.1% of the emulator's thread on the RG DS Plus.
+
+Each CPU now keeps the region its PC last left (FastBlockLookupAlt, AltStart, AltSize) when that region's setup
+is a pure function of the address and of state checked at the swap: ITCM and main RAM for the ARM9 (ClassifyAddress9
+puts an address there by ITCMSize and the DTCM's base and mask, the checks it makes before its 0x02 case), and on
+a DS the BIOS (below 0x4000), main RAM (0x02) and the WRAM at 0x038 for the ARM7. For all of these
+GetMirrorLocation's memoryOffset is 0 (the lookup is the region's own array) and the mirror's size is fixed, so an
+address inside the kept mirror that ClassifyAddress would put in the same region gets the same lookup, start and
+size as SetupExecutableRegion would set up: the current and the kept region are swapped. Anything else goes to
+SetupExecutableRegion as before. NDS::SetRegionPair, off by default. Under qemu, MK frames 1680-2100: the region
+setup functions 205k -> 122k instructions a frame (79% of the ARM9's and 40% of the ARM7's setups become swaps).
+---
+ src/ARM.cpp |  3 +++
+ src/ARM.h   |  4 ++++
+ src/NDS.cpp | 57 ++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ src/NDS.h   | 12 +++++++++++
+ 4 files changed, 75 insertions(+), 1 deletion(-)
+
+diff --git a/src/ARM.cpp b/src/ARM.cpp
+index 3937a99..934e22a 100644
+--- a/src/ARM.cpp
++++ b/src/ARM.cpp
+@@ -190,6 +190,9 @@ void ARM::Reset()
+     FastBlockLookup = NULL;
+     FastBlockLookupStart = 0;
+     FastBlockLookupSize = 0;
++    FastBlockLookupAlt = NULL;
++    FastBlockLookupAltStart = 0;
++    FastBlockLookupAltSize = 0;
+ #endif
+ 
+ #ifdef GDBSTUB_ENABLED
+diff --git a/src/ARM.h b/src/ARM.h
+index 88f970b..94115b6 100644
+--- a/src/ARM.h
++++ b/src/ARM.h
+@@ -188,6 +188,10 @@ public:
+ #ifdef JIT_ENABLED
+     u32 FastBlockLookupStart, FastBlockLookupSize;
+     u64* FastBlockLookup;
++    // RegionPair (BananaDS): the code region the PC last left, when NDS.cpp's SwapCodeRegion keeps it;
++    // AltSize 0: none
++    u32 FastBlockLookupAltStart, FastBlockLookupAltSize;
++    u64* FastBlockLookupAlt;
+ #endif
+ 
+     static const u32 ConditionTable[16];
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 56f60c9..0197522 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -1221,6 +1221,60 @@ template <u32 num, typename CPU>
+     return false;
+ }
+ 
++// RegionPair (exact): a CPU's PC leaves its code region all the time: the ARM9 calls between ITCM and main RAM,
++// the ARM7 goes through its BIOS for IRQs and SWIs and back to its WRAM. Each time ARMJIT::SetupExecutableRegion
++// (ClassifyAddress, GetMirrorLocation: ~100 instructions) sets one of the same few regions up again (MK's race
++// start: ~1500 a frame for the ARM9, ~370 for the ARM7). The region the PC last left is kept when its setup is a
++// pure function of the address and of state checked here: ITCM and main RAM for the ARM9 (ClassifyAddress9 puts
++// an address there by ITCMSize and the DTCM's base and mask, the checks it makes before its 0x02 case), and on a
++// DS the BIOS (below 0x4000), main RAM (0x02) and the WRAM at 0x038 for the ARM7. For all of them
++// GetMirrorLocation's memoryOffset is 0 (the lookup is the region's own array) and the mirror's size is fixed, so
++// an address inside the kept mirror that ClassifyAddress would put in the same region gets the same lookup, start
++// and size: the two are swapped. Anything else is set up by SetupExecutableRegion as before (and the other callers
++// of SetupExecutableRegion, ARM.cpp's Execute for a CPU that wakes up, don't use the pair).
++template <u32 num, typename CPU>
++[[gnu::noinline]] static bool SwapCodeRegion(NDS& nds, CPU& cpu, u32 instrAddr)
++{
++    u64* const* const regions = nds.JIT.FastBlockLookupRegions;
++    u64* const mram = regions[ARMJIT_Memory::memregion_MainRAM];
++    u64* const first = regions[num == 0 ? ARMJIT_Memory::memregion_ITCM : ARMJIT_Memory::memregion_BIOS7];
++    if constexpr (num == 1)
++    {
++        if (nds.ConsoleType != 0)
++            return false;
++    }
++    u64* const cur = cpu.FastBlockLookup;
++    bool keep = cpu.FastBlockLookupSize && (cur == first || cur == mram);
++    if constexpr (num == 1)
++        keep = keep || (cpu.FastBlockLookupSize && cur == regions[ARMJIT_Memory::memregion_WRAM7]);
++    u64* const alt = cpu.FastBlockLookupAlt;
++    const u32 altStart = cpu.FastBlockLookupAltStart, altSize = cpu.FastBlockLookupAltSize;
++    bool swap = false;
++    if (altSize && instrAddr - altStart < altSize)
++    {
++        if constexpr (num == 0)
++            swap = alt == first ? instrAddr < cpu.ITCMSize
++                : (instrAddr >= cpu.ITCMSize && (instrAddr & cpu.DTCMMask) != cpu.DTCMBase);
++        else
++            swap = alt == first ? instrAddr < 0x4000
++                : alt == mram ? (instrAddr & 0xFF000000) == 0x02000000
++                : (instrAddr & 0xFF800000) == 0x03800000;
++    }
++    if (keep)
++    {
++        cpu.FastBlockLookupAlt = cur;
++        cpu.FastBlockLookupAltStart = cpu.FastBlockLookupStart;
++        cpu.FastBlockLookupAltSize = cpu.FastBlockLookupSize;
++    }
++    if (swap)
++    {
++        cpu.FastBlockLookup = alt;
++        cpu.FastBlockLookupStart = altStart;
++        cpu.FastBlockLookupSize = altSize;
++    }
++    return swap;
++}
++
+ // ARMv5/ARMv4::Execute<JIT>'s block loop and its end, for a CPU that isn't halted (FastLoop)
+ template <u32 num, typename CPU>
+ [[gnu::always_inline]] static inline void ExecuteJITInline(NDS& nds, CPU& cpu, u64& timestamp, u64& target, u8* const rxBase)
+@@ -1236,7 +1290,8 @@ template <u32 num, typename CPU>
+         u32 offset = instrAddr - cpu.FastBlockLookupStart;
+         if (offset >= cpu.FastBlockLookupSize) [[unlikely]]
+         {
+-            if (!SetupExecutableRegionFor<num>(nds, cpu, instrAddr))
++            if (!(nds.RegionPair && SwapCodeRegion<num>(nds, cpu, instrAddr)) &&
++                !SetupExecutableRegionFor<num>(nds, cpu, instrAddr))
+             {
+                 timestamp = target;
+                 return;
+diff --git a/src/NDS.h b/src/NDS.h
+index 8eff7b3..8a09fa3 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -312,6 +312,18 @@ public: // TODO: Encapsulate the rest of these members
+     // HaltSkip (exact, BananaDS; RunSlicesJIT): while both CPUs are halted with nothing to wake them, the slice loop
+     // takes the times straight to the last slice end before the next event or timer, instead of slice by slice
+     void SetHaltSkip(bool on) noexcept { HaltSkip = on; }
++    // RegionPair (exact, BananaDS; ExecuteJITInline): a CPU's PC leaving its code region checks the region it last
++    // left (ARM9: ITCM or main RAM; ARM7 on a DS: BIOS, main RAM or WRAM) before ARMJIT::SetupExecutableRegion.
++    // Off by default.
++    void SetRegionPair(bool on) noexcept
++    {
++        RegionPair = on;
++#ifdef JIT_ENABLED
++        ARM9.FastBlockLookupAltSize = 0;
++        ARM7.FastBlockLookupAltSize = 0;
++#endif
++    }
++    bool RegionPair = false;
+     u64 HaltSkipped = 0; // (how many times it did)
+     u32 SliceChainStep() noexcept;
+     // FastDMA (BananaDS, DMA.h): main RAM -> GX FIFO / main RAM transfers without the bus dispatch; exact
+-- 
+2.43.0
+

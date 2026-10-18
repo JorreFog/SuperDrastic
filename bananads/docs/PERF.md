@@ -542,6 +542,36 @@ device; qemu counts only show that a path got cheaper.
   last 32 lines after VBlank instead of the last 8 (~1 ms of its work): with `render.2d_lazy` the next swap waits
   for it, so watch `kms.stats` for repeats. `EXTRA="--set render.2d_kick=16"` against plain.
 
+### A CPU leaving its code region swaps back to the one it left (patch 0071, `jit.region_pair`, default `on`)
+
+- The slice loop's block lookup sets the code region up again (`SetupExecutableRegion`: `ClassifyAddress`,
+  `GetMirrorLocation`) whenever the PC leaves it: in MK's race start ~1500 times a frame for the ARM9 (ITCM <->
+  main RAM calls) and ~370 for the ARM7 (BIOS <-> WRAM for IRQs and SWIs). Those functions are ~1.1% of the
+  emulator's thread on the device. Each CPU now keeps the region it left when that region's setup is a pure
+  function of the address and of state the swap checks (ARM9: ITCM, main RAM; ARM7 on a DS: BIOS, main RAM, the
+  WRAM at 0x038), and swaps back to it: 79% of the ARM9's and 40% of the ARM7's setups become swaps.
+- qemu, MK frames 1680-2100: the setup functions 205k -> 122k instructions a frame.
+- Checked: `mk-scene.sh` frames and audio identical off/on and to the base; main RAM, both CPUs' registers and
+  GPU3D's timing state every frame 1500-2100 identical off vs on (`bananads-difftest --regs --timing`);
+  `exact-suite.sh` off vs on: FAILS=0. A sabotage (the kept mirror's start off by a word) hangs MK at boot. Note:
+  a region with the wrong size or lookup only costs speed (the lookup entries are tagged with the block's address,
+  so a wrong region misses and compiles or sets up as before): a sabotage giving the wrong size passed every check,
+  which is the design working, not a hole.
+- Expected on the device: ~40% of ~1.1%: ~+0.4%. `EXTRA="--set jit.region_pair=off"` against plain.
+
+### Session 2's slice loop commits on MK (patches 0030 `jit.slice_chain`, 0031 `core.halt_skip`, cherry-picked)
+
+- In MK's race start both CPUs are halted for much of the frame (537 halt skips a frame, frames 1680-2100). qemu:
+  the frame loop (`run_headless` with the slice loop inlined) 1151k -> 858k instructions a frame with both on,
+  `SliceChain9` +158k, JIT code and stubs -66k: about -200k a frame (halt_skip -150k alone; slice_chain about
+  even in instructions, but it removes `ARM_Ret`/`ARM_Dispatch` round trips with their mispredicted returns).
+- Checked on MK: frames and audio identical with each off and both on; main RAM every frame 1500-2100 identical
+  for each off vs on; with every change of this section on, the full savestate at frames 1850 and 2000 is
+  byte-identical to the base build's (`headless.reload_at`, the GX DMA lesson of this session's geometry work:
+  RAM and registers at frame ends can hide timing).
+- Expected on the device: the frame loop is 8.0% of the thread; a quarter less: +1.5-2.5%.
+  `EXTRA="--set core.halt_skip=off --set jit.slice_chain=off"` against plain.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser

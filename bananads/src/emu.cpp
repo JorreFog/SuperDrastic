@@ -460,6 +460,9 @@ bool Emu::load_rom(const std::string& path) {
     // core.halt_skip: with both CPUs halted and nothing to wake them, the slice loop takes the times straight to the
     // next event or timer instead of slice by slice (melonDS patch 0031; exact, default on; with core.fast_loop)
     nds_->SetHaltSkip(cfg_.flag("core.halt_skip", true));
+    // jit.region_pair: a CPU's PC leaving its code region checks the region it last left (ARM9: ITCM or main RAM; ARM7:
+    // BIOS, main RAM or WRAM) before setting one up again (melonDS patch 0071; exact, default on; with core.fast_loop)
+    nds_->SetRegionPair(cfg_.flag("jit.region_pair", true));
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;
