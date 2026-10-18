@@ -70,7 +70,8 @@ public:
     // even pixels or, q & 1, its odd ones). Unit A composites each line that shows the 3D layer four times, and the
     // framebuffers become 512x384 (GetFramebuffers); everything else is drawn at 1x and doubled.
     typedef const u32* (*QuarterFn)(void* ctx, u32 line, int q);
-    void SetHires(QuarterFn fn, void* ctx);
+    typedef bool (*QuarterRowsFn)(void* ctx);  // true: the quarters are the 3D frame's own rows (render.3d_share)
+    void SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows = nullptr);
     int Scale() const { return Quarter ? 2 : 1; }
     bool GetFramebuffers(void** top, void** bottom) override;
     // The frontend's own buffers for the next frame (frontend=kms: the scanout buffers themselves, so nothing is
@@ -93,6 +94,9 @@ private:
     void EmitB(u32* dst, u32 dispcnt, u16 brightness);
     void Fill(u32* dst, u32 val);
     QuarterFn Quarter = nullptr;
+    QuarterRowsFn QuarterRows = nullptr;
+    // render.3d_share: jobs point at the 3D frame's rows instead of copying them (4 KB a line at 2x): the rows stay
+    // through the next frame's rendering (QuarterRowsFn), and the 2D thread is drained at every frame's end
     void* QuarterCtx = nullptr;
     std::unique_ptr<u32[]> HiFB[2][2];
     u32* Out[2] = {};    // SetOutput's: the frame being drawn goes here
@@ -111,10 +115,13 @@ private:
         u16 BrightnessA, BrightnessB;
         Banana2DRegs Regs[2];
         alignas(16) u32 Line3D[4][256];  // the 3D layer's line, when unit A's DISPCNT enables 3D (2x: its quarters)
+        const u32* Q3D[4];               // where the drawing reads them: Line3D's, or the 3D frame's rows (render.3d_share)
         alignas(16) u16 Display[256];
         u64 LogEnd;                 // the copy log up to here is applied before the job is drawn
     };
-    static constexpr u32 NumJobs = 128;
+    // a whole frame's jobs (192 lines and 191 sprite lines): the emulator's thread doesn't wait for a 2D thread that
+    // lags within the frame, which catches up in VBlank (drained at the frame's end, SwapBuffers)
+    static constexpr u32 NumJobs = 512;
     static constexpr u32 KickBatch = 16;  // jobs handed over before the thread is woken (fewer wakeups)
 
     Job& NewJob();

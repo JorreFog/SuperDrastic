@@ -46,6 +46,11 @@ public:
     static const melonDS::u32* QuarterFn(void* self, melonDS::u32 line, int q) {
         return static_cast<GengisRenderer3D*>(self)->GetQuarter((int)line, q);
     }
+    // GetQuarter's lines are the frame's own rows (no X scroll, no aborted frame: else a scratch line, rewritten by
+    // the next call): final once it has waited for their bin, and unchanged through the next frame's rendering (two
+    // buffers), i.e. until the frame after next starts at line 215, long after this frame's end
+    bool QuarterRows() const { return !GPU3D.AbortFrame && !GPU3D.RenderXPos; }
+    static bool QuarterRowsFn(void* self) { return static_cast<GengisRenderer3D*>(self)->QuarterRows(); }
 
 private:
     struct Texture {
@@ -66,7 +71,10 @@ private:
     std::vector<gx_poly> Polys;
     gx_frame Frame{};
     int Scale_;
-    alignas(64) uint32_t Out[GX_H * GX_W * 4];  // 1x: GX_H lines of GX_W; 2x: gx2_render_bin's rows
+    // two frames' rows, alternated by each frame rendered: a frame's stay as they are through the next frame's
+    // rendering, so the 2D thread can read them (QuarterRows) until the frame's end without a wait at the next start
+    alignas(64) uint32_t OutBuf[2][GX_H * GX_W * 4];  // 1x: GX_H lines of GX_W; 2x: gx2_render_bin's rows
+    uint32_t* Out = OutBuf[0];                         // the frame being rendered or shown
     alignas(16) uint32_t Scrolled[4][GX_W];
 
     // the frame's bins: claimed by the workers (and by the emulator's thread while it waits for one)
@@ -90,7 +98,7 @@ inline void SetHires(melonDS::SoftRenderer*, GengisRenderer3D*, int) {}
 inline void Drain2D(melonDS::BananaRenderer* r) { r->Drain2D(); }
 inline void Resync2D(melonDS::BananaRenderer* r) { r->Resync2D(); }
 inline void SetHires(melonDS::BananaRenderer* r, GengisRenderer3D* g, int scale) {
-    if (scale == 2) r->SetHires(&GengisRenderer3D::QuarterFn, g);
+    if (scale == 2) r->SetHires(&GengisRenderer3D::QuarterFn, g, &GengisRenderer3D::QuarterRowsFn);
 }
 #endif
 

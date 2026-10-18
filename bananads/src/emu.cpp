@@ -419,6 +419,8 @@ bool Emu::load_rom(const std::string& path) {
     const bool banana2d = cfg_.str("render.2d", "banana") == "banana";
     // render.2d_fast: the Banana 2D engine's NEON paths (on, the default) or the portable code (off); same pixels
     melonDS::Banana2DFast = cfg_.flag("render.2d_fast", true);
+    // render.3d_share: at 2x the 2D thread reads Gengis's rows of the 3D frame instead of a 4 KB copy a line (on)
+    melonDS::Banana3DShare = cfg_.flag("render.3d_share", true);
 #else
     const bool banana2d = false;
 #endif

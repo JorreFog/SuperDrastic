@@ -45,11 +45,12 @@ BananaRenderer::~BananaRenderer()
     StopWorker();
 }
 
-void BananaRenderer::SetHires(QuarterFn fn, void* ctx)
+void BananaRenderer::SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows)
 {
     Drain2D();
     Quarter = fn;
     QuarterCtx = ctx;
+    QuarterRows = rows;
     for (auto& b : HiFB)
         for (auto& f : b)
         {
@@ -411,8 +412,7 @@ void BananaRenderer::DrawScanline(u32 line)
         StatInPlace++;
         if (job.Line < 192)
         {
-            const u32* q[4] = { job.Line3D[0], job.Line3D[1], job.Line3D[2], job.Line3D[3] };
-            static_cast<BananaRenderer2D&>(*Rend2D_A).DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D[0], Quarter ? q : nullptr);
+            static_cast<BananaRenderer2D&>(*Rend2D_A).DrawScanlineFrom(job.Line, job.Regs[0], job.Q3D[0], Quarter ? job.Q3D : nullptr);
             if (job.ScreensEnabled)
                 EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
             else
@@ -455,10 +455,16 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
     if (line < 192)
     {
         line3d = Rend3D->GetLine(line);
+        for (int q = 0; q < 4; q++) job.Q3D[q] = job.Line3D[q];
         // (only read when BG0 is the 3D layer and enabled; render.2d_fast skips the 1 KB copy otherwise)
         if ((GPU.GPU2D_A.DispCnt & (1<<3)) && (!Banana2DFast || (GPU.GPU2D_A.LayerEnable & 1)))
         {
-            if (Quarter)
+            if (Quarter && Banana3DShare && QuarterRows && QuarterRows(QuarterCtx))
+            {
+                // render.3d_share: the 3D frame's own rows, not a 4 KB copy
+                for (int q = 0; q < 4; q++) job.Q3D[q] = Quarter(QuarterCtx, line, q);
+            }
+            else if (Quarter)
                 for (int q = 0; q < 4; q++)
                     memcpy(job.Line3D[q], Quarter(QuarterCtx, line, q), sizeof(job.Line3D[q]));
             else
@@ -571,9 +577,8 @@ void BananaRenderer::Execute(Job& job)
 
     if (job.Line < 192)
     {
-        const u32* q[4] = { job.Line3D[0], job.Line3D[1], job.Line3D[2], job.Line3D[3] };
-        if (doA) a.DrawScanlineFrom(job.Line, job.Regs[0], job.Line3D[0], Quarter ? q : nullptr);
-        b.DrawScanlineFrom(job.Line, job.Regs[1], job.Line3D[0]);
+        if (doA) a.DrawScanlineFrom(job.Line, job.Regs[0], job.Q3D[0], Quarter ? job.Q3D : nullptr);
+        b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0]);
 
         if (job.ScreensEnabled)
         {

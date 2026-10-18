@@ -34,6 +34,7 @@ namespace melonDS
 // render.2d_fast (default on): the NEON paths of the Banana 2D engine (output stage, 16-colour text BGs, direct-colour
 // bitmaps) and the sprite line's partial clears. Off: the portable code they replace. The same pixels either way.
 extern bool Banana2DFast;
+extern bool Banana3DShare;  // render.3d_share: 2D jobs point at Gengis's rows of the 3D frame (BananaRenderer)
 
 // The 2D unit's registers one scanline reads, as GPU2D holds them when the line is drawn (same names as GPU2D's).
 // A line is drawn from this copy, so it can be drawn later, on another thread (render.2d_thread).

@@ -16,7 +16,7 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     : Renderer3D(gpu3D), Scale_(scale == 2 ? 2 : 1) {
     gx_init();
     gx_defer = defer;
-    memset(Out, 0, sizeof Out);
+    memset(OutBuf, 0, sizeof OutBuf);
     for (auto& d : Done) d.store(0);
     if (threads < 0) threads = 0;
     for (int i = 0; i < threads; i++) Threads.emplace_back([this] { Worker(); });
@@ -37,7 +37,7 @@ GengisRenderer3D::~GengisRenderer3D() {
 void GengisRenderer3D::Reset() {
     WaitAll();
     Textures.clear();
-    memset(Out, 0, sizeof Out);
+    memset(OutBuf, 0, sizeof OutBuf);
 }
 
 // ---- textures: decoded once into the rasterizer's formats (u32 r6 | g6 << 8 | b6 << 16 | a5 << 24, or u8 indices
@@ -314,6 +314,7 @@ void GengisRenderer3D::RenderFrame() {
     const bool texPalChanged = GPU.MakeVRAMFlat_TexPalCoherent(texPalDirty);
     if (!(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical) return;  // the lines are the last frame's
     if (textureChanged || texPalChanged) Textures.clear();
+    Out = Out == OutBuf[0] ? OutBuf[1] : OutBuf[0];  // (the workers see it through Next's store under M)
     Frame.gen = ++Gen;
     Converted.store(0, std::memory_order_relaxed);
     {
