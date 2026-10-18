@@ -1,0 +1,116 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 09:35:00 +0000
+Subject: [PATCH] DMA: a block path for main RAM into a one-bank VRAM page
+
+FastDMA's 32-bit loop wrote VRAM a word at a time through FastWrite9 and WriteVRAMDirect. Golden Sun: Dark
+Dawn's HBLANK DMA moves 64 words into VRAM on every line (12k words a frame, ~60% of its DMA'd words). Going
+up from main RAM into a page with one bank and no display capture, the units are now timed from the same
+burst table up to the page's end, the count's end or the one that reaches ARM9Target (included, as before),
+then copied with their dirty bits set in one go. Exact: the oracle's frames and audio are byte-identical
+with MELONDS_DMABLOCK=0 (the old loop). RG DS Plus, GS field headless at 1992 MHz: 73.5/75.5 -> 76.1/76.9 fps.
+---
+diff --git a/src/DMA.cpp b/src/DMA.cpp
+index 7d5b9b5..d95f402 100644
+--- a/src/DMA.cpp
++++ b/src/DMA.cpp
+@@ -17,6 +17,8 @@
+ */
+ 
+ #include <stdio.h>
++#include <stdlib.h>
++#include <algorithm>
+ #include "NDS.h"
+ #include "DSi.h"
+ #include "DMA.h"
+@@ -646,6 +648,7 @@ void DMA::Run9()
+             const int clockshift = NDS.ARM9ClockShift;
+             u8* const ram = NDS.MainRAM;
+             const u32 mask = NDS.MainRAMMask;
++            static const bool vramblock = [] { const char* v = getenv("MELONDS_DMABLOCK"); return !v || *v != '0'; }();
+ 
+             if (DstAddrInc == 0)
+             {
+@@ -706,6 +709,53 @@ void DMA::Run9()
+                             ? &DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][7] == 8 ? 2 : 3]
+                             : &DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][6] == 2 ? 0 : 1];
+                     }
++                    // the block path (MELONDS_DMABLOCK, default on): main RAM going up into a VRAM page with one bank
++                    // and no display capture (GPU::VRAMDirect, which has no entries while VRAM holds compiled code),
++                    // e.g. a game's HBLANK DMA of a line into VRAM: the units up to the page's end, the count's end or
++                    // the one whose timing reaches ARM9Target (that one included, as below), each timed from the burst
++                    // table as below, then the words copied and their dirty bits set in one go
++                    if (vramblock && SrcAddrInc > 0 && DstAddrInc > 0 && (dst >> 24) == 0x06 && !dstmain)
++                    {
++                        u64* dirty;
++                        u32 bit;
++                        if (u8* mem = NDS.GPU.VRAMDirectPageFor(dst, dirty, bit))
++                        {
++                            const u32 d0 = dst & ~3u, s0 = src & ~3u;
++                            const u32 n = std::min({IterCount, (0x4000 - (d0 & 0x3FFF)) >> 2, (0x03000000 - s0) >> 2});
++                            const std::array<u8, 256>* cur = nullptr;  // a table chosen here (MRAMBurstTable's at the end)
++                            u32 cnt = MRAMBurstCount;
++                            u64 ts = NDS.ARM9Timestamp;
++                            const u64 target = NDS.ARM9Target;
++                            u32 k = 0;
++                            while (k < n)
++                            {
++                                const u8* tb = cur ? cur->data() : MRAMBurstTable.data();
++                                if (burststart || tb[cnt] == 0)
++                                {
++                                    cnt = 0;
++                                    cur = mramtab;
++                                    tb = cur->data();
++                                }
++                                ts += (u64)tb[cnt++] << clockshift;
++                                burststart = false;
++                                k++;
++                                if (ts >= target) break;
++                            }
++                            for (u32 i = 0; i < k; i++)
++                                *(u32*)&mem[(d0 + (i << 2)) & 0x3FFF] = *(u32*)&ram[(s0 + (i << 2)) & mask];
++                            const u32 g0 = (d0 >> 9) & 31, g1 = ((d0 + ((k - 1) << 2)) >> 9) & 31;
++                            *dirty |= ((2ULL << (g1 - g0)) - 1) << (bit + g0);
++                            if (cur) MRAMBurstTable = *cur;
++                            MRAMBurstCount = cnt;
++                            NDS.ARM9Timestamp = ts;
++                            CurSrcAddr += k << 2;
++                            CurDstAddr += k << 2;
++                            IterCount -= k;
++                            RemCount -= k;
++                            if (ts >= target) break;
++                            continue;
++                        }
++                    }
+                     if (dstmain)
+                         t = 18;
+                     else if (SrcAddrInc > 0)
+diff --git a/src/GPU.h b/src/GPU.h
+index 4db36ff..5648a48 100644
+--- a/src/GPU.h
++++ b/src/GPU.h
+@@ -260,6 +260,21 @@ public:
+             p.Mem = nullptr;
+     }
+ 
++    // DMA's block path (DMA::Run9): the page at addr when one bank alone is mapped there and it isn't a display
++    // capture's block (the table brought up to date first, as WriteVRAMDirect does), else null; its dirty word and
++    // first bit as in VRAMDirectPage
++    u8* VRAMDirectPageFor(u32 addr, u64*& dirty, u32& bit)
++    {
++        if (__builtin_expect(VRAMDirectStale, 0))
++            UpdateVRAMDirect();
++        const VRAMDirectPage& p = VRAMDirect[(addr >> 14) & 0x3FF];
++        if (!p.Mem || (*p.CaptureFlags & CaptureBlockIsCapture))
++            return nullptr;
++        dirty = p.DirtyWord;
++        bit = p.DirtyBit;
++        return p.Mem;
++    }
++
+     template<typename T>
+     bool WriteVRAMDirect(u32 addr, T val)
+     {
+-- 
+2.55.0
+

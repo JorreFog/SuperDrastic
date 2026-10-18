@@ -334,6 +334,13 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_JIT_INVAL16", "1", 1);
         else if (v == "off") setenv("MELONDS_JIT_INVAL16", "0", 1);
     }
+    // core.dma_block=on|off sets MELONDS_DMABLOCK (melonDS patch 0018: DMA from main RAM into a VRAM page with one
+    // bank copied in blocks, its timing unit by unit as before; exact; read at the first such DMA); unset, on
+    {
+        const std::string v = cfg_.str("core.dma_block", "");
+        if (v == "on") setenv("MELONDS_DMABLOCK", "1", 1);
+        else if (v == "off") setenv("MELONDS_DMABLOCK", "0", 1);
+    }
     // jit.hotsmc=on|off sets MELONDS_JIT_HOTSMC (melonDS patch 0017: blocks stay out of code the game keeps rewriting,
     // so a rewrite recompiles a few instructions, not every block that had followed a branch into them); unset, on
     {
