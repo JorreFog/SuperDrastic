@@ -108,6 +108,10 @@ int main(int argc, char** argv) {
         }
         return code;
     }();
-    if (g_log) fclose(g_log);
+    // (a log line after this, from anything still running at exit, goes nowhere rather than into the closed FILE)
+    if (FILE* f = g_log) {
+        g_log = nullptr;
+        fclose(f);
+    }
     return rc;
 }

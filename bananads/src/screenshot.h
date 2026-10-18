@@ -11,5 +11,8 @@ namespace bananads {
 // <dir>/<game>-<yymmdd>-<hhmmss>.png (RetroArch's naming); done(ok, the file's name) is called from that thread
 void screenshot_save(const std::string& dir, const std::string& game, std::vector<uint32_t> top,
                      std::vector<uint32_t> bottom, int w, int h, std::function<void(bool, const std::string&)> done);
+// at quit: waits (up to ms) for the screenshots still being written, so none is cut short (a .tmp left behind) and
+// none reports after the frontend and the log are gone; false if one was still going
+bool screenshot_wait(int ms);
 
 }  // namespace bananads
