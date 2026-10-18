@@ -534,13 +534,29 @@ void Emu::cpu_regs(int cpu, uint32_t r[17]) const {
 }
 
 bool Emu::set_lazy_2d(bool on) {
+#ifdef BANANADS_2D
     if (!banana_) return false;
     banana_->SetLazyFrames(on);
     return true;
+#else
+    (void)on;
+    return false;
+#endif
 }
-bool Emu::frame_fence(uint32_t& fence) const { return banana_ && banana_->FrameFence(fence); }
+bool Emu::frame_fence(uint32_t& fence) const {
+#ifdef BANANADS_2D
+    return banana_ && banana_->FrameFence(fence);
+#else
+    (void)fence;
+    return false;
+#endif
+}
 void Emu::wait_frame(uint32_t fence) const {
+#ifdef BANANADS_2D
     if (banana_) banana_->WaitFence(fence);
+#else
+    (void)fence;
+#endif
 }
 
 bool Emu::draw_into(uint32_t* top, uint32_t* bottom) {
