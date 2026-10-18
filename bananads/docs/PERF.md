@@ -520,7 +520,9 @@ The device decides.
 
 Checks: `evidence/jit/exact-suite.sh` (pictures every 50 frames to 300 on 17 ROMs incl. jitloops, irqmask, iorom;
 dmasnd's audio; `bananads-difftest --every` main RAM on 9 ROMs; `bananads-tests`), each toggle off against on,
-device build: FAILS=0 for each. Sabotage: 0041 with one cycle added on the miss way: FAILS=12.
+device build: FAILS=0 for each. Sabotage: 0041 with one cycle added on the miss way: FAILS=12. 0042: two
+sabotages (no CPSR store in ExitCheckF; ExitCheckPCF without its AND) were *not* caught: the test ROMs' flags at
+those exits are dead. 0042 is exact by construction, but its check is weak: compare `jit.flagstub=off` on the device.
 
 ## BananaJIT
 
