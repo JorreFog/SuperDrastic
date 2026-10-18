@@ -479,6 +479,26 @@ chain then goes on into the exit's next block. Otherwise it changes nothing and 
   slices where the ARM9 runs and the ARM7 waits; the call it adds is ~60 instructions of loads and compares.
   `EXTRA="--set jit.slice_chain=off" hgquick.sh <bin>` against plain.
 
+### Both CPUs halted: the times go to the next event in one step (patch 0031, `core.halt_skip`, default `on`)
+
+While a game waits for VBlank both CPUs are halted (the ARM9 in CP15's wait for interrupt, the ARM7 in HALTCNT),
+and every 64-cycle slice until the next event only set the CPUs', GPU3D's and the system's times to its end
+(~45 instructions a slice in `RunSlicesJIT`). Now, at the loop's top, with both halted, no IRQ pending for either,
+no DMA, GX stall or sleep and the geometry engine idle, the loop steps the slice ends as `NextTarget` would (same
+steps, same margin) up to the last one before the next event or timer and sets the times once; the next iteration
+runs the slice that reaches the event as before. Nothing runs in between, so nothing can see the skipped slices.
+`MELONDS_HALTSKIP_STATS=1` logs `[core] halt_skip: N skips in F frames` at exit (how often a game's both CPUs wait).
+
+- qemu-count: membench (both CPUs halt, as a game's) 6,032k -> 5,635k instructions a frame (-6.6%; the slice loop
+  920k -> 523k); ROMs whose ARM9 never halts (cpubench, the stress ROMs, sndbench, ds2dtest) don't skip, and pay
+  ~1 instruction a slice for the test (L1 +12k of 19.6M).
+- Checked: `exact-suite.sh` off vs on, FAILS=0; jitloops (IntrWait loops: 16.7k skips in 200 frames) and membench
+  (1.3k skips a frame) are the ROMs that exercise it. A sabotaged build (the pending-IRQ test dropped) is caught by
+  jitloops' difftest (main RAM differs from frame 5).
+- Expected on the device: the share of HeartGold's frame in which both CPUs wait, times the slice loop's cost there.
+  Run `MELONDS_HALTSKIP_STATS=1` with hgquick's settings first: skips per frame x ~16 slices each is what it removes.
+  `EXTRA="--set core.halt_skip=off" hgquick.sh <bin>` against plain.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser
