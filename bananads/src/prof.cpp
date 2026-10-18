@@ -556,6 +556,22 @@ private:
             wall > 0 ? 100.0 * cpu / wall : 0.0, wall > 0 ? nframes / wall : 0.0);
         add("# symbols: %s %s (%zu functions)%s%s\n", spath.c_str(), elf.table, elf.syms.size(),
             symnote.empty() ? "" : "; ", symnote.c_str());
+        {
+            // the waits: time "busy" in /proc that is waiting for another thread (by name; a wait loop the compiler
+            // inlined into its caller counts there, only its sched_yield calls here)
+            uint64_t yield = 0, block = 0, w2d = 0, w3d = 0;
+            for (const auto& [k, c] : by_sym) {
+                auto has = [&](const char* x) { return k.find(x) != std::string::npos; };
+                if (has("sched_yield") || has("this_thread::yield")) yield += c.n;
+                else if (has("futex") || has("pthread_cond_wait") || has("pthread_cond_timedwait") || has("pthread_cond_clockwait") ||
+                         has("lll_lock_wait") || has("pthread_mutex_lock") || has("__condvar")) block += c.n;
+                else if (has("WaitForWorker") || has("WaitFence") || has("Drain2D") || has("LogReserve") || has("wait_frame")) w2d += c.n;
+                else if (has("WaitBin") || has("WaitAll") || has("WaitRows")) w3d += c.n;
+            }
+            add("# waiting: %.1f%% of the samples (sched_yield %.1f%%, futex/condition-variable/mutex waits %.1f%%, the 2D thread's"
+                " wait functions %.1f%%, Gengis's bin waits %.1f%%): CPU time /proc counts as busy\n",
+                pct(yield + block + w2d + w3d), pct(yield), pct(block), pct(w2d), pct(w3d));
+        }
         add("# JIT code: %.1f%% of the samples%s\n", pct(jit),
             jitmap.empty() ? " (MELONDS_JIT_PERFMAP=1 names its blocks and stubs)" : "");
         if (pmu_on_) {
