@@ -59,11 +59,17 @@ const float GRID_COMPENSATE = 0.5;
 
 void main()
 {
-    // Largest integer scale that fits, and the centred image rectangle it implies.
+    // Largest integer scale that fits, and the centred image rectangle it implies. (Uniforms only: the compiler
+    // can evaluate these once per draw.)
     float s      = max(1.0, floor(min(u_output_size.x / DS_SIZE.x,
                                       u_output_size.y / DS_SIZE.y)));
     vec2  imgSize = DS_SIZE * s;
     vec2  origin  = floor((u_output_size - imgSize) * 0.5);
+    // sqrt(c*c*k) == c*sqrt(k) for c >= 0, and with an integer scale and a one-pixel line a pixel's grid coverage
+    // is 0 or 1: the colour times one of two numbers per scale, worked out in float32 from the knobs above (change them and these go stale)
+    // (Mali doesn't hoist uniform-only expressions: two square roots a pixel cost as much as the rest)
+    float k1 = s >= 4.0 ? 1.0595132112503052 : s >= 2.0 ? 1.1201415061950684 : 1.1870512962341309;
+    float k0 = s >= 4.0 ? 0.78575599193573   : s >= 2.0 ? 0.8307191133499146 : 0.8803408145904541;
 
     vec2 p     = floor(v_texcoord * u_output_size);   // this output pixel
     vec2 local = p - origin;                          // position inside the image
@@ -82,12 +88,6 @@ void main()
     vec2 f   = local - floor(local / s) * s;          // 0 .. s-1 within the DS-pixel cell
     vec2 ov  = max(vec2(0.0), min(f + 1.0, vec2(s)) - max(f, vec2(s - GRID_WIDTH_PX)));
     float coverage = ov.x + ov.y - ov.x * ov.y;       // union of row and column bands
-    float g = mix(1.0, GRID_LEVEL, coverage);
-
-    float meanAxis = min(GRID_WIDTH_PX / s, 1.0);
-    float meanCov  = meanAxis + meanAxis - meanAxis * meanAxis;
-    float bright   = mix(1.0, 1.0 / mix(1.0, GRID_LEVEL, meanCov), GRID_COMPENSATE);
-
-    vec3 lin = c.rgb * c.rgb * (g * bright);
-    gl_FragColor = vec4(sqrt(min(lin, vec3(1.0))), c.a);
+    float k = mix(k1, k0, coverage);
+    gl_FragColor = vec4(min(c.rgb * k, vec3(1.0)), c.a);
 }
