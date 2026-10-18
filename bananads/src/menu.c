@@ -880,8 +880,8 @@ static void draw_bottom(void) {
         #undef MAPV
         #undef QUIET
         char l1[200], l2[200], msg[240];
-        if (th > 0) snprintf(msg, sizeof msg, "The game hears a blow past the red line (sensitivity: %s).",
-                             th < 0.08f ? "high" : th < 0.22f ? "medium" : "low");
+        if (th > 0) snprintf(msg, sizeof msg, "The game hears a word or a blow past the red line (sensitivity: %s).",
+                             th < 0.035f ? "high" : th < 0.1f ? "medium" : "low");
         else snprintf(msg, sizeof msg, "The microphone's gate is off, so the game hears everything it picks up.");
         int n = wrap2(&F_REG, msg, S(16), x1 - x0 - S(44), l1, l2, sizeof l1);
         text(c, &F_REG, l1, x0 + S(22), my1 + S(26), S(16), C_BODY, x1 - x0 - S(44), 0);

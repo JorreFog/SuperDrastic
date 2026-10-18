@@ -21,7 +21,7 @@
 namespace bananads {
 
 struct MicTuning {
-    double threshold = 0.15;     // mic.threshold: above the floor, full scale = 1 (ES: high 0.03, medium 0.15, low 0.3)
+    double threshold = 0.05;     // mic.threshold: above the floor, full scale = 1 (Settings: high 0.02, medium 0.05, low 0.15)
     double gate_k = 3.0;         // mic.gate: 0 turns the echo gate off
     double coupling_max = 4.0;   // mic.coupling_max
     int hold_ms = 120;           // mic.hold_ms

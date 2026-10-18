@@ -55,7 +55,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `wifi.local_players` | `4` | how many can join a host |
 | `mic.source` | `device` | `device` (ALSA or SDL capture) or `none` (only the menu's Blow) |
 | `mic.device` | `default` | the ALSA capture device |
-| `mic.threshold` | `0.15` | how far above the room's noise a sound must be to reach the game (full scale 1). ROCKNIXDS's high / medium / low are 0.03 / 0.15 / 0.3. `0` turns the gate off |
+| `mic.threshold` | `0.05` | how far above the room's noise a sound must be to reach the game (full scale 1). Settings > Nintendo DS > Microphone: High 0.02, Medium 0.05, Low 0.15 (a blow, hardly a word). `0` turns the gate off |
 | `mic.gate` | `3` | the echo gate's factor over the learned speaker leak; `0` turns it off |
 | `mic.coupling_max` | `4` | the most leak it will learn |
 | `mic.hold_ms` | `120` | the shortest time the gate stays open |
