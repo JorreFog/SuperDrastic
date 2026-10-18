@@ -426,6 +426,9 @@ bool Emu::load_rom(const std::string& path) {
     // the JIT with the common cases inline, used with core.fast_sched (patch 0009; both exact, default on)
     nds_->SetFastTimers(cfg_.flag("core.fast_timers", true));
     nds_->SetFastLoop(cfg_.flag("core.fast_loop", true));
+    // core.halt_skip: with both CPUs halted and nothing to wake them, the slice loop takes the times straight to the
+    // next event or timer instead of slice by slice (melonDS patch 0031; exact, default on; with core.fast_loop)
+    nds_->SetHaltSkip(cfg_.flag("core.halt_skip", true));
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;
