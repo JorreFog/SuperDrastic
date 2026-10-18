@@ -109,9 +109,10 @@ if(BANANADS_CORE_NOINTERPOSE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 # The geometry engine's command-stream counters (patches/melonds/0051): built in only with this option, then printed
 # every <n> frames on stderr with MELONDS_GEOMSTATS=<n>. A measuring build: off, the code isn't there at all.
+# PUBLIC: the counters change GPU3D's layout, so every user of GPU3D.h must see the same definition.
 option(BANANADS_GEOMSTATS "Build melonDS's GPU3D with the MELONDS_GEOMSTATS counters" OFF)
 if(BANANADS_GEOMSTATS)
-    target_compile_definitions(core PRIVATE MELONDS_GEOMSTATS=1)
+    target_compile_definitions(core PUBLIC MELONDS_GEOMSTATS=1)
 endif()
 
 # BananaJIT: our own code generator in melonDS's JIT framework, in place of melonDS's ARMJIT_A64 compiler.
