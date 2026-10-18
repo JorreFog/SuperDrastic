@@ -1,10 +1,11 @@
 // prof.hz: a sampling profiler of the emulator's thread, for a handheld without perf (BananaOS). Off by default.
-// A timer on the thread's own CPU clock (timer_create(CLOCK_THREAD_CPUTIME_ID), SIGEV_THREAD_ID) sends it SIGPROF
+// A perf event on the thread's CPU time (task-clock; or, prof.source, its cycles or a CPU-time timer) sends it SIGPROF
 // prof.hz times a second of its CPU time; the handler only writes the interrupted PC into a preallocated array. At
 // the end (prof.frames sampled, or the game's quit) a report: the share in JIT-generated code, the shares by module,
 // the top symbols of the binary (its .symtab, or prof.syms's: the unstripped build of the same binary, since the
 // device's is stripped) and of the libraries (dladdr), the same by C++ class, and, with MELONDS_JIT_PERFMAP=1, the
-// hottest JIT blocks by guest address. The emulation never sees it: the same frames, RAM and sound.
+// hottest JIT blocks by guest address; prof.pmu adds the core's counters (IPC, cache misses). The emulation never sees
+// it: the same frames, RAM and sound.
 #pragma once
 #include <memory>
 
