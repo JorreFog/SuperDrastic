@@ -1,0 +1,88 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 18 Oct 2026 19:54:04 +0000
+Subject: [PATCH 41/42] ARMJIT_A64: a return's dynamic exit keeps its miss way
+ in the far region (MELONDS_JIT_NODYNCOLD)
+
+
+A return through a register (bx lr, pop {pc}, ldr pc: 0007's DYNCACHE) ends its block with
+ldr w1,<key>; cmp w4,w1; b.ne miss; bl ExitCheck; b <slot>; <key>, and then the miss's way
+(cmp w1,#2; b.eq learn; b DynExitA; learn: bl ExitCheck; b <learn path>): 20 bytes that run only when the
+return goes somewhere else than last time, or the first time. They now go to the far region, after the exit's
+learn path, through a B: 16 bytes less per such exit (tests/bigcode-thumb: 1739 sites in 3863 blocks, 2.4% of
+the blocks' bytes). The hit's way is unchanged; a miss runs one B more. MELONDS_JIT_NODYNCOLD=1 keeps the
+old code (byte for byte).
+---
+ src/ARMJIT_A64/ARMJIT_Compiler.cpp | 28 ++++++++++++++++++++++------
+ src/ARMJIT_A64/ARMJIT_Compiler.h   |  2 ++
+ 2 files changed, 24 insertions(+), 6 deletions(-)
+
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index ff98852..6341a5c 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -277,6 +277,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         OptExitStub = !old && !getenv("MELONDS_JIT_NOEXITSTUB");
+         OptDynAddr = OptExitStub && !getenv("MELONDS_JIT_NODYNADDR");
+         OptDynCache = OptDynAddr && !getenv("MELONDS_JIT_NODYNCACHE") && !getenv("MELONDS_JIT_NOLINK");
++        OptDynCold = OptDynCache && !getenv("MELONDS_JIT_NODYNCOLD");
+         OptExitPC = OptExitStub && !getenv("MELONDS_JIT_NOEXITPC") && !getenv("MELONDS_JIT_NOLINK");   // (ExitCheckPC)
+         OptSelfLoop = OptExitPC && !getenv("MELONDS_JIT_NOSELFLOOP");
+         OptNoPrologue = OptFastEntry && !getenv("MELONDS_JIT_NOENTRYX26");
+@@ -926,12 +927,22 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         Write32(2);   // (no key has bit 1 set without bit 0: a Thumb key has bit 0, an ARM one neither)
+         *litRW |= (u32)((keyRX - litRX) / 4) << 5;
+         SetJumpTarget(miss);
+-        CMP(W1, 2);
+-        FixupBranch learn = B(CC_EQ);
+-        B(DynExitA[Num][c]);
+-        SetJumpTarget(learn);
+-        BL(ExitCheck[Num][c]);
+-        B(learnPath);
++        // the miss's way (another target, or the first time): with DYNCOLD (patch 0041) in the far region after the
++        // learn path, through a B here: 4 bytes in the block instead of 20
++        auto missWay = [&]()
++        {
++            CMP(W1, 2);
++            FixupBranch learn = B(CC_EQ);
++            B(DynExitA[Num][c]);
++            SetJumpTarget(learn);
++            BL(ExitCheck[Num][c]);
++            B(learnPath);
++        };
++        FixupBranch toMissWay;
++        if (OptDynCold)
++            toMissWay = B();
++        else
++            missWay();
+         LinkSlots[(u32)(slotRX - GetRXBase())] = {*(u32*)slot, 0, Num, (u32)(keyRX - GetRXBase())};
+ 
+         // the learn path (the slot's until linked, and the first miss's): link the slot to the block the loop
+@@ -941,6 +952,11 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         MOVP2R(X17, &melonds_jit_link[0]);
+         STP(INDEX_SIGNED, X16, RCPU, X17, 0);
+         QuickTailCall(X16, ARM_Ret);
++        if (OptDynCold)
++        {
++            SetJumpTarget(toMissWay);   // (a B from the block to here: the emitter's distance is in its RW view)
++            missWay();
++        }
+         FlushIcacheSection(learnPath, (u8*)GetRXPtr());
+         SwapCodeRegion();
+         return;
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index a00f8cb..b1b52f7 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -256,6 +256,8 @@ public:
+                                   // looks the block up from it (DynExitA)
+     bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
+     bool OptDynCache = true;      // NODYNCACHE: such an exit keeps the last target it went to (its key: address | T)
++    bool OptDynCold = true;       // NODYNCOLD (patch 0041): that exit's miss way (another target, the first time) in the
++                                  // far region: 16 bytes less in the block
+                                   // in a word after a link slot it links to that block, like a known exit's
+     const void* StubsStart[4] = {};   // ExitCheck9, DynExit9, ExitCheck7, DynExit7 (for the perf map)
+     bool DynExitLiteral = false;  // DynExitBase is a u64 literal (OptExitStub), not four MOVZ/MOVK to fill in
+-- 
+2.43.0
+
