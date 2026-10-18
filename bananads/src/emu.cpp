@@ -341,6 +341,13 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_JIT_HOTSMC", "1", 1);
         else if (v == "off") setenv("MELONDS_JIT_HOTSMC", "0", 1);
     }
+    // jit.hotidx=on|off sets MELONDS_JIT_HOTIDX (melonDS patch 0019: ranges with hot self-modifying code keep an
+    // index of their blocks' masks, so a write there doesn't scan every block); unset, on
+    {
+        const std::string v = cfg_.str("jit.hotidx", "");
+        if (v == "on") setenv("MELONDS_JIT_HOTIDX", "1", 1);
+        else if (v == "off") setenv("MELONDS_JIT_HOTIDX", "0", 1);
+    }
     // jit.codegen=new|old sets MELONDS_JIT_OLDCODEGEN (melonDS patch 0007: the AArch64 JIT's code generation
     // improvements, each also off by its own MELONDS_JIT_NO* variable), read as the JIT compiler is created; unset,
     // the environment decides (default new). For A/B runs, bananads-difftest --a jit.codegen=old --b jit.codegen=new.
