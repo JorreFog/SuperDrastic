@@ -617,11 +617,12 @@ RTC 24k, `StartScanline` 29k). None of this is measured on the device; qemu coun
 - Checked: `mk-scene.sh` frames and audio identical to the base with `split` and `shared`, and 210 frames (every 10th)
   identical between them; `exact-suite.sh` with `render.2d_thread=on` on both sides, `shared` vs `split`, plus
   ds2dtest and geomtest pictures: FAILS=0. A sabotage (the 2D thread publishing Tail on the old line) hangs MK
-  before its first dump. Not caught: a ring bound 128 jobs too large (overwriting undrawn jobs) changed none of 210
-  frames (every 10th) nor the audio, on 4 host cores or pinned to one: under qemu the 2D thread rarely lags a whole
-  ring behind (2,557 waits for it in a 4-core run with the right bound, 103 with the sabotage, display capture's
-  included), and where it does the overwritten lines were alike. The full-ring and full-log paths rest on the
-  reasoning above, not on a check.
+  before its first dump. The full-ring path is rare under qemu (the 2D thread keeps up), so
+  `render.2d_test_delay=150` (tests only) slows the 2D thread until the ring fills every frame (~330k waits in the MK
+  scene): with it, `split` and `shared` give the same 210 MK frames (every 10th), the same audio and the same frames
+  as without the delay, and ds2dtest's 30 frames the same; a sabotage (the ring bound 128 jobs too large: undrawn
+  jobs overwritten) changes 28 of the 210 MK frames and 15 of ds2dtest's 30. Without the delay that sabotage
+  changed nothing.
 - Expected on the device: NewJob's and LogReserve's misses gone, Submit's store no longer fighting Tail's writes:
   ~+0.3..0.5% (half of Submit's 0.54% and a miss a job in the job preparation). `EXTRA="--set render.2d_ring=shared"`
   against plain; watch `kms.stats` as for `render.2d_kick`.

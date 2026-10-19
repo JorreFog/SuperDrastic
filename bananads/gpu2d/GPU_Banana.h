@@ -80,6 +80,9 @@ public:
     // the log looks full by the last values it read (TailSeen, LogReadSeen: the 2D thread only moves them on).
     // The same jobs in the same order, so the same pictures. Takes effect when the 2D thread starts.
     void SetSplitRing(bool on) { SplitRing = on; }
+    // render.2d_test_delay (tests only): the 2D thread sleeps this many microseconds after each job, so that it falls
+    // behind and the ring and the log fill (their full paths are rare otherwise). The same pictures, slower.
+    void SetTestDelay(u32 us) { TestDelayUs = us; }
     void SetThreaded2D(bool on);
     bool IsThreaded2D() const { return Thread2D; }
     // render.scale=2: the 3D renderer's four quarter lines of a DS line (quarter q: 2x row 2 * line + (q >> 1), its
@@ -187,6 +190,7 @@ private:
     std::atomic<u32>* TailP = &Tail;
     std::atomic<u64>* LogReadP = &LogRead;
     u32 TailSeen = 0;           // (split) Tail as the emulator's thread last read it
+    u32 TestDelayUs = 0;        // render.2d_test_delay
     u64 LogReadSeen = 0;        // (split) LogRead likewise
     struct alignas(64) ProducerLine { std::atomic<u32> Head{0}; };
     struct alignas(64) ConsumerLine { std::atomic<u32> Tail{0}; std::atomic<u64> LogRead{0}; };
