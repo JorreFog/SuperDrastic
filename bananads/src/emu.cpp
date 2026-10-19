@@ -461,6 +461,14 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_GXSTR", "1", 1);
         else if (v == "off") setenv("MELONDS_GXSTR", "0", 1);
     }
+    // render.geom_sort=on|off sets MELONDS_GEOMSORT (melonDS patch 0065: VBlank's polygon Y-sort as a stable counting
+    // sort for sets of 64 polygons or more, the order std::stable_sort gives; exact; read as the NDS is created;
+    // default on). Unset, the environment decides; a difftest sets it on both --a and --b.
+    {
+        const std::string v = cfg_.str("render.geom_sort", "");
+        if (v == "on") setenv("MELONDS_GEOMSORT", "1", 1);
+        else if (v == "off") setenv("MELONDS_GEOMSORT", "0", 1);
+    }
 
     // render.geom_fast=on|off sets MELONDS_GEOMFAST (melonDS patch 0011: the 3D geometry engine's fast paths, exact;
     // read as the NDS is created; default on). Unset, the environment decides; as with jit.iofast, a difftest sets it
