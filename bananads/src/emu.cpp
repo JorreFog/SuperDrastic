@@ -452,6 +452,15 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_GXBATCH", "1", 1);
         else if (v == "off") setenv("MELONDS_GXBATCH", "0", 1);
     }
+    // render.gx_str=on|off sets MELONDS_GXSTR (melonDS patch 0064, session 2's 0022: the JIT's STRs to the GX FIFO
+    // port and command ports with fewer layers, and a FIFO-port word that is one of its command's parameters before
+    // the last straight into the FIFO; exact; read at the JIT's reset and as the NDS is created; default on). Unset,
+    // the environment decides; a difftest sets it on both --a and --b.
+    {
+        const std::string v = cfg_.str("render.gx_str", "");
+        if (v == "on") setenv("MELONDS_GXSTR", "1", 1);
+        else if (v == "off") setenv("MELONDS_GXSTR", "0", 1);
+    }
 
     // render.geom_fast=on|off sets MELONDS_GEOMFAST (melonDS patch 0011: the 3D geometry engine's fast paths, exact;
     // read as the NDS is created; default on). Unset, the environment decides; as with jit.iofast, a difftest sets it
