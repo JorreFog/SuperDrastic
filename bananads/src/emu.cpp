@@ -566,6 +566,10 @@ bool Emu::load_rom(const std::string& path) {
     // jit.region_pair: a CPU's PC leaving its code region checks the region it last left (ARM9: ITCM or main RAM; ARM7:
     // BIOS, main RAM or WRAM) before setting one up again (melonDS patch 0071; exact, default on; with core.fast_loop)
     nds_->SetRegionPair(cfg_.flag("jit.region_pair", true));
+    // jit.region_trio (melonDS patch 0087, with jit.region_pair): two code regions kept for the swap back, not one,
+    // the ARM9's BIOS and the ARM7's shared WRAM among them (an IRQ's round main RAM -> BIOS -> ITCM and back, the
+    // ARM7's sound driver in shared WRAM). Exact. off: jit.region_pair's own way
+    nds_->SetRegionTrio(cfg_.flag("jit.region_trio", true));
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;

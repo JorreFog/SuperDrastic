@@ -807,6 +807,31 @@ user mode). **Expected +0.3..0.5% of the emulator thread** on the race start: ~7
 virtual) and a register flush/reload per MCR, ~1,000 a frame, at the thread's ~2 cycles an instruction and some
 more for the calls. Untested on device.
 
+### Two code regions kept for the swap back (patch 0087, `jit.region_trio`, default `on`)
+
+0071 (`jit.region_pair`) keeps the one code region a CPU last left. Counting `SetupExecutableRegion`'s calls by
+region on MK's race start (frames 1650-2150, an instrumented build) still gave ~640 setups a frame: the ARM9's
+ITCM 191, BIOS 147 and main RAM 103 (an IRQ goes main RAM -> the BIOS at 0xFFFF0018 -> the ITCM handler -> the BIOS
+-> main RAM: three regions, and the pair doesn't keep the BIOS), the ARM7's shared WRAM 118, BIOS 77 and WRAM 8
+(its sound driver runs at 0x037Fxxxx, shared WRAM, which the pair doesn't keep), each ~115 instructions
+(`ClassifyAddress`, `GetMirrorLocation`'s switch, `SetupExecutableRegion`). Many of them were in the slice after a
+CPU wakes up (`ARMv5/ARMv4::Execute<JIT>`, which didn't use the pair): the ARM9 halts for VBlank and the IRQ's
+round runs there. With 0087 two regions are kept (the last left and the one before), the ARM9's BIOS (a 4 KB
+mirror, memoryOffset 0, under the same ITCM/DTCM checks as main RAM) and the ARM7's shared WRAM can be kept, and
+`Execute<JIT>` swaps too. The shared WRAM's lookup, start and size are a function of `SWRAM_ARM7`'s Mem and Mask,
+so a kept one is swapped back only while Mem and Mask are those its lookup and size say. A swap gives exactly what
+`SetupExecutableRegion` would. Setups left: ~20 a frame (by its instruction count). qemu, MK 1650-2150: the region functions **-34k
+instructions a frame** (`SetupExecutableRegion` -27k, `GetMirrorLocation` -24k, `ClassifyAddress9/7` -11k, the
+setup calls -7k; the swap itself +34k: ~35 instructions a swap against the pair's ~24, ~1,650 ARM9 swaps a frame).
+
+Exact: MK's pictures and audio = base on and off; main RAM, registers and timing every frame 1500-2100 off vs on:
+SAME; savestates at 1850/2000 = the checkpoint's; `exact-suite.sh` off vs on: FAILS=0. Sabotage: a swapped-in
+BIOS/shared WRAM/WRAM region's start 4 bytes off hangs MK at boot. Not caught by any check here: a wrong shared
+WRAM Mem/Mask check (MK doesn't remap its shared WRAM in the scene). **Expected +0.2..0.4% of the emulator thread**:
+on the device `GetMirrorLocation` + `SetupExecutableRegion` + `ClassifyAddress9` were 1.07% on mkbase, 0071 took
+~40% of that; this takes nearly all of the rest (and `GetMirrorLocation`'s indirect branch), less the swap's own
+cost. Untested on device.
+
 ## BananaJIT
 
 BananaJIT (jit/, `-DBANANADS_JIT=banana`) is parked. Its block-timing mode reached about 44 fps in this scene,
