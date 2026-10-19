@@ -655,6 +655,10 @@ bool Emu::load_rom(const std::string& path) {
     // render.2d_kick: how many jobs (a frame has 383: 192 lines, 191 sprite lines) go to the 2D thread before it is
     // woken; a wake of the sleeping thread is a futex call on the emulator's thread (16 was the old fixed batch)
     if (banana2d) banana_->SetKickBatch((u32)cfg_.num("render.2d_kick", 64));
+    // render.2d_fence_wait: the waits for the 2D thread spin on sched_yield (spin, the old way) or block on a condition
+    // variable (block). Default block since 2026-10-19: on the RG DS Plus the four A55s are shared by five threads, and the
+    // emulator's thread spent ~5% of Mario Kart DS's race start spinning (a prof.hz profile on the panels)
+    if (banana2d) banana_->SetFenceWaitBlocking(cfg_.str("render.2d_fence_wait", "block") != "spin");
 #endif
 
     set_clock();

@@ -210,6 +210,10 @@ state and loads it straight back, for the savestate joins.
   times a frame (`KickBatch` of 16 jobs, untuned). Expected: up to 15% of main-thread time back, less about 0.3%
   per line of snapshot work.
 - Next: capture's inputs to the worker too; tune the batch.
+- `render.2d_fence_wait` (2026-10-18, from the first session's perf/render 8677fad; default `spin`, the old way):
+  the waits for the 2D thread spin on `sched_yield`, which `/proc` counts as busy; `block` waits on a condition
+  variable the 2D thread signals. Device A/B: `threads.sh` and `hgquick.sh` with `--set render.2d_fence_wait=block`,
+  `kms.stats` in play; `hgprofile.sh`'s `# waiting:` line says how much of the emulator's thread spins.
 
 ### IO: direct routes for the JIT's slow paths, and IO statistics (patch 0005; `jit.iofast`, default `on`)
 
