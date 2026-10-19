@@ -276,8 +276,13 @@ bool GengisRenderer3D::RenderOne(bool emu) {
         Convert();
         gx_begin_frame(&Frame);
         Converted.store(2, std::memory_order_release);
+        { std::lock_guard<std::mutex> l(M); }  // (a waiter between its test and its wait sees the notify)
+        ConvDone.notify_all();
     } else {
-        while (Converted.load(std::memory_order_acquire) != 2) std::this_thread::yield();
+        // another thread converts: wait on the condition variable instead of spinning (the four A55s are shared by
+        // five busy threads; a spinner here took the core the converter or the emulator's thread needed)
+        std::unique_lock<std::mutex> l(M);
+        ConvDone.wait(l, [&] { return Converted.load(std::memory_order_acquire) == 2; });
     }
     if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 4);
     else gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);

@@ -103,7 +103,7 @@ private:
     std::atomic<int> Converted{2};  // the frame's conversion: 0 to do, 1 being done, 2 done
     unsigned Gen = 0;
     std::mutex M;
-    std::condition_variable Wake, BinDone;
+    std::condition_variable Wake, BinDone, ConvDone;  // ConvDone: the frame's conversion finished (a waiter blocks, no spin)
     bool Quit = false;
     std::vector<std::thread> Threads;
 };
