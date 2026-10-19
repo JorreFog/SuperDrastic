@@ -934,6 +934,30 @@ Sabotage: (3) the full vertex's path clearing `ExecParams[1]` after use: the tra
 frame-end savestate don't: the next multi-parameter command overwrites it); (4) a box test's entries sent to the
 unknown-command path: geomtest's pictures differ (MK sends no box tests). Test ROMs and exact-suite.sh as 0080's.
 
+### The GX FIFO DMA's burst timing 4 units at a time (patch 0082, `render.gx_dmatime`, default `on`)
+
+`Run9GX` (0066) times each block unit by unit: the next burst table entry (a 0 ends the table and restarts it), the
+ARM9 timestamp advanced by it, a stop at the slice's target: ~9 instructions a word over ~31,700 words a frame
+(`DMA.cpp`'s loop lines 290k a frame of `Run9GX`'s 440k). With `render.gx_dmatime` it first takes 4 units at a time:
+one 32-bit read of the table at the current position, and the 4 are taken together when none of them is 0, none is
+64 or more (their sum by one multiply then has no carries), they are inside the table and within the call's limit,
+and their sum leaves the timestamp below the target (the entries are not negative, so no earlier unit would have
+stopped); otherwise, and for the rest, the unit loop as before. The unit loop would take the same 4 with no stop and
+no change of table, so the timestamp, the table position, the count and the table copy end the same. A randomized
+test of the two (4 million states: random tables with zeros and large entries, positions, limits, targets, clock
+shifts) gives the same result for every one. qemu, emu thread, MK 1650-2150: **`Run9GX` 451.0k -> 352.9k a frame;
+the thread 12,185.3k -> 12,083.4k without the Gengis bins (-102k, -0.8%)** (a call times ~25 words, so the last
+few still go unit by unit). Expected on the device: **-0.4..-0.8%** (a dependent chain of byte loads, adds and
+compare-branches per word becomes one per 4).
+
+Exact: MK's frames and audio equal to the base hashes on and off; main RAM every frame 1600-2100 with registers and
+geometry timing SAME off vs on; full savestates at 1850 and 2000 identical to the checkpoint's; mk2geom's `Run9`
+trace (every call's ARM9 timestamp, source, counts, burst table position and state hashed): the same hash over all
+676,042 calls off and on. Sabotage: (5) 4 units taken when their sum reaches the target exactly: the trace and its
+call count differ, and the randomized test; (6) a 0 in the 4th entry not seen: the randomized test (361,669 of 4
+million states differ), not MK (its table end never fell on a 4-unit read's last byte). Test ROMs and
+exact-suite.sh as 0080's.
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an

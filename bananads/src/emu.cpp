@@ -496,6 +496,14 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_GXDMARUN", "1", 1);
         else if (v == "off") setenv("MELONDS_GXDMARUN", "0", 1);
     }
+    // render.gx_dmatime=on|off sets MELONDS_GXDMATIME (melonDS patch 0082: render.gx_dmarun's burst timing takes 4
+    // units at a time while none of their table entries ends the table and their sum stays below the target; exact;
+    // read as the NDS is created; default on). Unset, the environment decides; a difftest sets it on both --a and --b.
+    {
+        const std::string v = cfg_.str("render.gx_dmatime", "");
+        if (v == "on") setenv("MELONDS_GXDMATIME", "1", 1);
+        else if (v == "off") setenv("MELONDS_GXDMATIME", "0", 1);
+    }
 
     // render.geom_fast=on|off sets MELONDS_GEOMFAST (melonDS patch 0011: the 3D geometry engine's fast paths, exact;
     // read as the NDS is created; default on). Unset, the environment decides; as with jit.iofast, a difftest sets it

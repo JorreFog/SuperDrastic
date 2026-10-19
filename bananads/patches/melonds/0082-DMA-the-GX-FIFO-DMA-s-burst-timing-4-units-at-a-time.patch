@@ -1,0 +1,92 @@
+From 4c2de3be3f65e9a652ba371e9826a8ccce7e5862 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 12:50:05 +0000
+Subject: [PATCH] DMA: the GX FIFO DMA's burst timing 4 units at a time
+ (render.gx_dmatime)
+
+---
+ src/DMA.cpp | 28 ++++++++++++++++++++++++++++
+ src/DMA.h   |  4 ++++
+ 2 files changed, 32 insertions(+)
+
+diff --git a/src/DMA.cpp b/src/DMA.cpp
+index be1c58f..a536448 100644
+--- a/src/DMA.cpp
++++ b/src/DMA.cpp
+@@ -18,9 +18,11 @@
+ 
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <string.h>
+ #include <algorithm>
+ #include "NDS.h"
+ #include "DSi.h"
++#include <string.h>
+ #include "DMA.h"
+ #include "GPU.h"
+ #include "GPU3D.h"
+@@ -596,6 +598,13 @@ static inline __attribute__((always_inline)) bool GXBlockOn() noexcept
+     return v;
+ }
+ 
++bool DMA::GXTimeEnv() noexcept
++{
++    // read as the DMA is created (a difftest's two NDS objects each with its own setting)
++    const char* e = getenv("MELONDS_GXDMATIME");
++    return !(e && e[0] == '0');
++}
++
+ bool DMA::GXRunEnv() noexcept
+ {
+     // read as the DMA is created (a difftest's two NDS objects each with its own setting)
+@@ -669,6 +678,7 @@ __attribute__((noinline)) void DMA::Run9GX() noexcept
+ 
+     const std::array<u8, 256>& tab = DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[0x04000400 >> 14][6] == 2 ? 0 : 1];
+     const int clockshift = NDS.ARM9ClockShift;
++    const bool gxtime = GXTime;
+     u8* const ram = NDS.MainRAM;
+     const u32 mask = NDS.MainRAMMask;
+     GPU3D& gpu3d = NDS.GPU.GPU3D;
+@@ -696,6 +706,24 @@ __attribute__((noinline)) void DMA::Run9GX() noexcept
+             ts += (u64)tb[cnt++] << clockshift;
+             u32 k = 1;
+             if (ts >= target) return k;
++            if (gxtime) [[likely]]
++            {
++                // render.gx_dmatime: the loop below 4 units at a time while it would take all 4 without a change of
++                // table or a stop: none of the 4 entries is the table's end (0), they are inside the table and within
++                // the limit, and their sum leaves the timestamp below the target (the entries are not negative, so
++                // no earlier one reaches it). Entries of 64 or more go to the loop (their sum would carry).
++                while (k + 4 <= limit && cnt + 4 <= 256)
++                {
++                    u32 w;
++                    memcpy(&w, tb + cnt, 4);
++                    if (((w - 0x01010101u) & ~w & 0x80808080u) | (w & 0xC0C0C0C0u)) break;
++                    const u64 ts4 = ts + ((u64)((w * 0x01010101u) >> 24) << clockshift);
++                    if (ts4 >= target) break;
++                    ts = ts4;
++                    cnt += 4;
++                    k += 4;
++                }
++            }
+             while (k < limit)
+             {
+                 u32 t = tb[cnt];
+diff --git a/src/DMA.h b/src/DMA.h
+index 2dcb384..9971bac 100644
+--- a/src/DMA.h
++++ b/src/DMA.h
+@@ -90,6 +90,10 @@ public:
+     // in Run9 would run for this call: Run9's per-call setup without the other cases' decisions and spills
+     static bool GXRunEnv() noexcept;
+     bool GXRun = GXRunEnv();
++    // BananaDS (render.gx_dmatime, MELONDS_GXDMATIME=0 turns it off; exact): Run9GX's burst timing takes 4 units at a
++    // time while none of the 4 table entries ends the table and their sum stays below the target, then unit by unit
++    static bool GXTimeEnv() noexcept;
++    bool GXTime = GXTimeEnv();
+ 
+ private:
+     melonDS::NDS& NDS;
+-- 
+2.43.0
+
