@@ -408,6 +408,15 @@ bool Emu::load_rom(const std::string& path) {
         else if (v == "off") setenv("MELONDS_JIT_HUGEPAGE", "0", 1);
     }
 
+    // jit.cp15nop=on|off: off sets MELONDS_JIT_NOCP15NOP=1, on unsets it (melonDS patch 0086: an ARM9 MCR to a CP15
+    // cache or write buffer operation, which CP15Write ignores, compiled to its cycles instead of the interpreter's
+    // call; user mode keeps the call). Exact; read as the JIT compiler is created
+    {
+        const std::string v = cfg_.str("jit.cp15nop", "");
+        if (v == "on") unsetenv("MELONDS_JIT_NOCP15NOP");
+        else if (v == "off") setenv("MELONDS_JIT_NOCP15NOP", "1", 1);
+    }
+
     // jit.vramfast=on|off, jit.iodirect=on|off and render.vramtrack_skip=on|off set bits 1, 2 and 4 of
     // MELONDS_MEMFAST (melonDS patch 0010, read at the JIT's reset; default all on, exact): VRAM with one bank at
     // the 16 KB straight to the bank, OAM and palette straight to the GPU; the divider, square root,
