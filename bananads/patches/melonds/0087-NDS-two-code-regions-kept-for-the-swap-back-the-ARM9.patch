@@ -1,0 +1,226 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Mon, 19 Oct 2026 12:48:24 +0000
+Subject: [PATCH] NDS: two code regions kept for the swap back, the ARM9's BIOS
+ and the ARM7's shared WRAM among them (RegionTrio)
+
+Patch 0071 (RegionPair) keeps the one code region a CPU's PC last left, so a round through two regions is all
+swaps. Mario Kart DS's race start still set regions up ~640 times a frame (qemu, frames 1650-2150): the ARM9's IRQs
+go main RAM -> its BIOS -> an ITCM handler -> the BIOS -> main RAM (ITCM 191, BIOS 147, main RAM 103 a frame), and
+the ARM7's sound driver runs in shared WRAM and goes through its BIOS (shared WRAM 118, BIOS 77, WRAM 8): three
+regions, and two the pair doesn't keep. Each setup is ClassifyAddress, GetMirrorLocation and SetupExecutableRegion,
+~115 instructions.
+
+With RegionTrio (NDS::SetRegionTrio, on by default; with RegionPair) two regions are kept, the last one left and
+the one before, and on a DS the ARM9's BIOS (a 4 KB mirror at 0xFFFF0000 with memoryOffset 0, put there by
+ClassifyAddress9 under the same ITCM and DTCM checks as main RAM) and the ARM7's shared WRAM can be kept too. The
+shared WRAM's lookup, start and size are a function of SWRAM_ARM7's Mem and Mask (memoryOffset = Mem - the shared
+WRAM's start, the mirror Mask + 1), so a kept one is swapped back only while Mem and Mask are those its lookup and
+size were set up with, for an address ClassifyAddress7 puts in the shared WRAM. A swap gives exactly the lookup,
+start and size SetupExecutableRegion would. ARMv5/ARMv4::Execute<JIT> (the slice after a CPU wakes up, where an IRQ's round often runs) swaps too. On a DSi, RegionPair's own way. Off: RegionPair's own way, and Execute<JIT> sets up as before.
+---
+ src/ARM.cpp |   5 +++
+ src/ARM.h   |   3 ++
+ src/NDS.cpp | 102 +++++++++++++++++++++++++++++++++++++++++++++++++++-
+ src/NDS.h   |  18 ++++++++++
+ 4 files changed, 127 insertions(+), 1 deletion(-)
+
+diff --git a/src/ARM.cpp b/src/ARM.cpp
+index eb6efc3..b52aaab 100644
+--- a/src/ARM.cpp
++++ b/src/ARM.cpp
+@@ -193,6 +193,9 @@ void ARM::Reset()
+     FastBlockLookupAlt = NULL;
+     FastBlockLookupAltStart = 0;
+     FastBlockLookupAltSize = 0;
++    FastBlockLookupAlt2 = NULL;
++    FastBlockLookupAlt2Start = 0;
++    FastBlockLookupAlt2Size = 0;
+ #endif
+ 
+ #ifdef GDBSTUB_ENABLED
+@@ -625,6 +628,7 @@ void ARMv5::Execute()
+             u32 instrAddr = R[15] - ((CPSR&0x20)?2:4);
+ 
+             if ((instrAddr < FastBlockLookupStart || instrAddr >= (FastBlockLookupStart + FastBlockLookupSize))
++                && !(NDS.RegionPair && NDS.RegionTrio && NDS.SwapCodeRegionTrio(0, instrAddr))   // (patch 0087)
+                 && !NDS.JIT.SetupExecutableRegion(0, instrAddr, FastBlockLookup, FastBlockLookupStart, FastBlockLookupSize))
+             {
+                 NDS.ARM9Timestamp = NDS.ARM9Target;
+@@ -765,6 +769,7 @@ void ARMv4::Execute()
+             u32 instrAddr = R[15] - ((CPSR&0x20)?2:4);
+ 
+             if ((instrAddr < FastBlockLookupStart || instrAddr >= (FastBlockLookupStart + FastBlockLookupSize))
++                && !(NDS.RegionPair && NDS.RegionTrio && NDS.SwapCodeRegionTrio(1, instrAddr))   // (patch 0087)
+                 && !NDS.JIT.SetupExecutableRegion(1, instrAddr, FastBlockLookup, FastBlockLookupStart, FastBlockLookupSize))
+             {
+                 NDS.ARM7Timestamp = NDS.ARM7Target;
+diff --git a/src/ARM.h b/src/ARM.h
+index 94115b6..3e17376 100644
+--- a/src/ARM.h
++++ b/src/ARM.h
+@@ -192,6 +192,9 @@ public:
+     // AltSize 0: none
+     u32 FastBlockLookupAltStart, FastBlockLookupAltSize;
+     u64* FastBlockLookupAlt;
++    // RegionTrio (BananaDS patch 0087): the region the PC left before that one (Alt2Size 0: none)
++    u32 FastBlockLookupAlt2Start, FastBlockLookupAlt2Size;
++    u64* FastBlockLookupAlt2;
+ #endif
+ 
+     static const u32 ConditionTable[16];
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 8ff577d..d362571 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -1275,6 +1275,105 @@ template <u32 num, typename CPU>
+     return swap;
+ }
+ 
++// RegionTrio (exact, patch 0087): SwapCodeRegion with two kept regions (Alt, the last one left, and Alt2, the one
++// before), so that a round through three regions is all swaps: the ARM9's IRQs go main RAM -> its BIOS -> an ITCM
++// handler -> the BIOS -> main RAM, the ARM7's sound driver shared WRAM <-> its BIOS. Kept: what SwapCodeRegion keeps,
++// plus on a DS the ARM9's BIOS (0xFFFF0000, a 4 KB mirror, memoryOffset 0: ClassifyAddress9 puts an address there
++// by the same ITCM and DTCM checks as main RAM) and the ARM7's shared WRAM. The shared WRAM's lookup, start and size
++// follow from SWRAM_ARM7's Mem and Mask (memoryOffset = Mem - the shared WRAM's start, mirror = Mask + 1): a kept
++// one is swapped back only while Mem and Mask are what its lookup and size say they were, for an address that
++// ClassifyAddress7 puts in the shared WRAM (0x03000000-0x037FFFFF, Mem set). So a swap gives the lookup, start and
++// size SetupExecutableRegion would.
++template <u32 num, typename CPU>
++[[gnu::noinline]] static bool SwapCodeRegion3(NDS& nds, CPU& cpu, u32 instrAddr)
++{
++    u64* const* const regions = nds.JIT.FastBlockLookupRegions;
++    if (nds.ConsoleType != 0)
++        return SwapCodeRegion<num>(nds, cpu, instrAddr);   // (as before: the DSi's regions aren't kept here)
++    u64* const mram = regions[ARMJIT_Memory::memregion_MainRAM];
++    u64* const first = regions[num == 0 ? ARMJIT_Memory::memregion_ITCM : ARMJIT_Memory::memregion_BIOS7];
++    u64* const third = regions[num == 0 ? ARMJIT_Memory::memregion_BIOS9 : ARMJIT_Memory::memregion_WRAM7];
++    u64* const swram = regions[ARMJIT_Memory::memregion_SharedWRAM];
++    // the ARM7's shared WRAM: a lookup inside its array (the mapping's memoryOffset / 2)
++    auto isSwram = [&](const u64* p) { return num == 1 && p >= swram && p < swram + SharedWRAMSize / 2; };
++    auto valid = [&](const u64* alt, u32 start, u32 size) -> bool
++    {
++        if constexpr (num == 0)
++            return alt == first ? instrAddr < cpu.ITCMSize
++                : (instrAddr >= cpu.ITCMSize && (instrAddr & cpu.DTCMMask) != cpu.DTCMBase);   // (main RAM, BIOS)
++        else
++        {
++            if (alt == first)
++                return instrAddr < 0x4000;
++            if (alt == mram)
++                return (instrAddr & 0xFF000000) == 0x02000000;
++            if (alt == third)
++                return (instrAddr & 0xFF800000) == 0x03800000;
++            return (instrAddr & 0xFF800000) == 0x03000000 && nds.SWRAM_ARM7.Mem
++                && nds.SWRAM_ARM7.Mem == nds.JIT.Memory.GetSharedWRAM() + 2 * (alt - swram)
++                && nds.SWRAM_ARM7.Mask + 1 == size;
++        }
++    };
++    // the kept region that holds the address, if any (a size of 0 fails the range check)
++    u64* const a1 = cpu.FastBlockLookupAlt;
++    const u32 a1Start = cpu.FastBlockLookupAltStart, a1Size = cpu.FastBlockLookupAltSize;
++    int hit = 0;
++    if (instrAddr - a1Start < a1Size && valid(a1, a1Start, a1Size))
++        hit = 1;
++    else if (instrAddr - cpu.FastBlockLookupAlt2Start < cpu.FastBlockLookupAlt2Size
++        && valid(cpu.FastBlockLookupAlt2, cpu.FastBlockLookupAlt2Start, cpu.FastBlockLookupAlt2Size))
++        hit = 2;
++    u64* const cur = cpu.FastBlockLookup;
++    const u32 curStart = cpu.FastBlockLookupStart, curSize = cpu.FastBlockLookupSize;
++    const bool keep = curSize && (cur == first || cur == mram || cur == third || isSwram(cur));
++    // the kept list after: the region left (when kept) first, then the other kept one not swapped in
++    if (hit == 1)
++    {
++        cpu.FastBlockLookup = a1;
++        cpu.FastBlockLookupStart = a1Start;
++        cpu.FastBlockLookupSize = a1Size;
++        if (keep)
++        {
++            cpu.FastBlockLookupAlt = cur;
++            cpu.FastBlockLookupAltStart = curStart;
++            cpu.FastBlockLookupAltSize = curSize;
++        }
++        else
++        {
++            cpu.FastBlockLookupAlt = cpu.FastBlockLookupAlt2;
++            cpu.FastBlockLookupAltStart = cpu.FastBlockLookupAlt2Start;
++            cpu.FastBlockLookupAltSize = cpu.FastBlockLookupAlt2Size;
++            cpu.FastBlockLookupAlt2Size = 0;
++        }
++        return true;
++    }
++    if (hit == 2)
++    {
++        cpu.FastBlockLookup = cpu.FastBlockLookupAlt2;
++        cpu.FastBlockLookupStart = cpu.FastBlockLookupAlt2Start;
++        cpu.FastBlockLookupSize = cpu.FastBlockLookupAlt2Size;
++    }
++    if (keep)
++    {
++        cpu.FastBlockLookupAlt2 = a1;
++        cpu.FastBlockLookupAlt2Start = a1Start;
++        cpu.FastBlockLookupAlt2Size = a1Size;
++        cpu.FastBlockLookupAlt = cur;
++        cpu.FastBlockLookupAltStart = curStart;
++        cpu.FastBlockLookupAltSize = curSize;
++    }
++    else if (hit == 2)
++        cpu.FastBlockLookupAlt2Size = 0;
++    return hit != 0;
++}
++
++// (patch 0087) for ARMv5/ARMv4::Execute<JIT>, which runs a CPU's slice after it wakes up: an IRQ's round through
++// the BIOS and its handler often happens there
++bool NDS::SwapCodeRegionTrio(u32 num, u32 instrAddr) noexcept
++{
++    return num == 0 ? SwapCodeRegion3<0>(*this, ARM9, instrAddr) : SwapCodeRegion3<1>(*this, ARM7, instrAddr);
++}
++
+ // ARMv5/ARMv4::Execute<JIT>'s block loop and its end, for a CPU that isn't halted (FastLoop)
+ template <u32 num, typename CPU>
+ [[gnu::always_inline]] static inline void ExecuteJITInline(NDS& nds, CPU& cpu, u64& timestamp, u64& target, u8* const rxBase)
+@@ -1290,7 +1389,8 @@ template <u32 num, typename CPU>
+         u32 offset = instrAddr - cpu.FastBlockLookupStart;
+         if (offset >= cpu.FastBlockLookupSize) [[unlikely]]
+         {
+-            if (!(nds.RegionPair && SwapCodeRegion<num>(nds, cpu, instrAddr)) &&
++            if (!(nds.RegionPair && (nds.RegionTrio ? SwapCodeRegion3<num>(nds, cpu, instrAddr)
++                                                    : SwapCodeRegion<num>(nds, cpu, instrAddr))) &&
+                 !SetupExecutableRegionFor<num>(nds, cpu, instrAddr))
+             {
+                 timestamp = target;
+diff --git a/src/NDS.h b/src/NDS.h
+index 8a09fa3..1dc5f6c 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -321,9 +321,27 @@ public: // TODO: Encapsulate the rest of these members
+ #ifdef JIT_ENABLED
+         ARM9.FastBlockLookupAltSize = 0;
+         ARM7.FastBlockLookupAltSize = 0;
++        ARM9.FastBlockLookupAlt2Size = 0;
++        ARM7.FastBlockLookupAlt2Size = 0;
+ #endif
+     }
+     bool RegionPair = false;
++    // RegionTrio (exact, BananaDS patch 0087; with RegionPair): two regions the PC left are kept, not one, and the
++    // ARM9's BIOS and the ARM7's shared WRAM can be kept too (an IRQ takes the ARM9 from main RAM through its BIOS
++    // to an ITCM handler and back; the ARM7's sound driver runs in shared WRAM and goes through its BIOS). On by
++    // default; off is RegionPair's own way
++    void SetRegionTrio(bool on) noexcept
++    {
++        RegionTrio = on;
++#ifdef JIT_ENABLED
++        ARM9.FastBlockLookupAltSize = 0;
++        ARM7.FastBlockLookupAltSize = 0;
++        ARM9.FastBlockLookupAlt2Size = 0;
++        ARM7.FastBlockLookupAlt2Size = 0;
++#endif
++    }
++    bool RegionTrio = true;
++    bool SwapCodeRegionTrio(u32 num, u32 instrAddr) noexcept;
+     u64 HaltSkipped = 0; // (how many times it did)
+     u32 SliceChainStep() noexcept;
+     // FastDMA (BananaDS, DMA.h): main RAM -> GX FIFO / main RAM transfers without the bus dispatch; exact
+-- 
+2.43.0
+
