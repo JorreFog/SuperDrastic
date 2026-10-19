@@ -774,6 +774,16 @@ into the GX FIFO at 5.7% of the thread (session 2's estimate: +1..2.5% fps there
 ROM, added here) main RAM every frame and pictures off vs on; Mario Kart's frames, audio and savestates. Sabotage (an
 STM's push/pop commands not counted): gxstm's difftest DIFFERENT at frame 1 (Mario Kart doesn't catch it).
 
+### The JIT's STRs to the GX ports with fewer layers (patch 0064, `render.gx_str`, default `on`)
+
+Session 2's 0022 (memio), ported unchanged (its `GXStr` read as the GPU3D is created). MK's 2,076 STRs a frame to
+the FIFO port: `WriteToGXFIFOBody` 153.9k -> 103.1k, `GXWrite9Route` 23.6k -> 0, `WriteToGXFIFO` 7.9k -> 57.3k (the
+quick parameter path inline), `SlowWrite9` +9.4k: **-15.6k a frame (-0.12%)**; command words and last
+parameters still take the decoder. Expected on the device: ~-0.1%. Exact: tests/gxstm, geomtest, dsstress
+difftests and pictures; Mario Kart's frames, audio, main RAM every frame (with registers and the geometry timing
+state) and savestates at 1850/2000. Sabotage (a quick parameter into an empty FIFO put in the FIFO, not the pipe):
+Mario Kart's savestate at 1850 differs, gxstm hangs.
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an

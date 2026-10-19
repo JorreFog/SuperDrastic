@@ -1,0 +1,193 @@
+From 9280b15cdd30ab0146565dcbc2d2817f539feb27 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 09:59:00 +0000
+Subject: [PATCH] GPU3D: the JIT's STRs to the GX ports with fewer layers; a
+ parameter word with no call
+
+render.gx_str (MELONDS_GXSTR=0 turns it off; default on). Session 2's patch 0022 (memio), ported onto 0060-0071
+(renumbered 0064; its GXStr is read as the GPU3D is created, as 0060's GXDMAFast). The JIT's single STRs to the GX
+FIFO port (NitroSDK's header words before GX_SendFifo*'s STMs, MI_CpuSend32's word loop) went SlowWrite9 ->
+QuickWrite9's region switch -> GXWrite9Route -> WriteToGXFIFO -> WriteToGXFIFOBody (or, from the JIT's
+static-address call, Write32 -> WriteGXFIFOPortFast -> WriteToGXFIFOBody): a 4-pair frame, the decoding loop, the
+state loaded and stored.
+- SlowWrite9 checks for the GX FIFO port and the command ports (0x04000400-0x040005FF, 32-bit, the GX route and
+  memfast IO on) before its region switch, and calls WriteToGXFIFO or Write32 directly.
+- WriteToGXFIFO and WriteGXFIFOPortFast, with GeomFast: for the most common word, a parameter before its command's
+  last, ParamCount++ and CmdFIFOWriteFast's pipe or FIFO write inline (WriteGXParamQuick), with no call and no
+  frame; anything else (a command word, a command's last parameter, a full FIFO) takes WriteToGXFIFOBody.
+Exact by construction (the same statements for those cases).
+---
+ src/ARMJIT.cpp     | 15 ++++++++++++
+ src/GPU3D.cpp      | 58 ++++++++++++++++++++++++++++++++++++++++++++--
+ src/GPU3D.h        |  8 +++++++
+ src/NDS_IOFast.cpp |  3 ++-
+ src/NDS_IOFast.h   |  1 +
+ 5 files changed, 82 insertions(+), 3 deletions(-)
+
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 1ab0413..075ac47 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -539,6 +539,21 @@ void SlowWrite9(u32 addr, ARMv5* cpu, u32 val)
+         if (!(flags & slow_FullPath) && a >= cpu->ITCMSize && (a & cpu->DTCMMask) != cpu->DTCMBase)
+         {
+             melonDS::NDS& nds = cpu->NDS;
++            // render.gx_str: the GX FIFO port and the command ports first (GXWrite9Route, without its call;
++            // QuickWrite9 does nothing for IO)
++            constexpr u32 gxstr = slow_GXStr | slow_MemIO | iofast_GX;
++            if (sizeof(T) == 4 && (flags & gxstr) == gxstr && a - 0x04000400 < 0x200)
++            {
++                GPU3D& gpu3d = nds.GPU.GPU3D;
++                if (a < 0x04000440)
++                {
++                    if (gpu3d.GeometryEnabled)
++                        gpu3d.WriteToGXFIFO(val);
++                }
++                else
++                    gpu3d.Write32(a, val);
++                return;
++            }
+             if (QuickWrite9<T>(nds, a, val, flags))
+                 return;
+             if ((a >> 24) == 0x04 && (flags & slow_MemIO))
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index 3dd4f0f..70ca28a 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -2987,10 +2987,53 @@ void GPU3D::SetRenderXPos(u16 xpos, u16 mask) noexcept
+ }
+ 
+ 
++// render.gx_str: WriteToGXFIFOBody<true> for a word that is a parameter before its command's last, unless the FIFO
++// is full: the body does ParamCount++ and CmdFIFOWriteFast, which writes the pipe (the FIFO empty, the pipe not
++// full) or the FIFO, and its loop ends as ParamCount stays below TotalParams. Here with no call (so no stack frame);
++// false: nothing done (a full FIFO stalls the system: the body does that).
++inline __attribute__((always_inline)) bool GPU3D::WriteGXParamQuick(u32 val) noexcept
++{
++    const u32 level = CmdFIFO.Level();
++    if (NumCommands == 0 || ParamCount + 1 >= TotalParams || level >= 256)
++        return false;
++    ParamCount++;
++    CmdFIFOEntry entry;
++    entry.Command = CurCommand & 0xFF;
++    entry.Param = val;
++    if (level == 0 && !CmdPIPE.IsFull())
++        CmdPIPE.Write(entry);
++    else
++        CmdFIFO.Write(entry);
++    GXStat |= (1<<27);
++    if (entry.Command == 0x11 || entry.Command == 0x12)
++    {
++        GXStat |= (1<<14);
++        NumPushPopCommands++;
++    }
++    else if (entry.Command == 0x70 || entry.Command == 0x71 || entry.Command == 0x72)
++    {
++        GXStat |= (1<<0);
++        NumTestCommands++;
++    }
++    return true;
++}
++
+ void GPU3D::WriteToGXFIFO(u32 val) noexcept
+ {
+-    if (GeomFast) WriteToGXFIFOBody<true>(val);
+-    else          WriteToGXFIFOBody<false>(val);
++    if (GeomFast)
++    {
++        if (GXStr && WriteGXParamQuick(val))
++            return;
++        WriteToGXFIFOBody<true>(val);
++    }
++    else
++        WriteToGXFIFOPlain(val);
++}
++
++// (kept out of WriteToGXFIFO, so that render.gx_str's case there needs no stack frame)
++__attribute__((noinline)) void GPU3D::WriteToGXFIFOPlain(u32 val) noexcept
++{
++    WriteToGXFIFOBody<false>(val);
+ }
+ 
+ template<bool Fast>
+@@ -3314,6 +3357,13 @@ bool GPU3D::GXDMAFastEnv() noexcept
+     return !(e && e[0] == '0');
+ }
+ 
++bool GPU3D::GXStrEnv() noexcept
++{
++    // read as the GPU3D is created (a difftest's two NDS objects each with its own setting)
++    const char* e = getenv("MELONDS_GXSTR");
++    return !(e && e[0] == '0');
++}
++
+ template<bool Stop, typename Load>
+ inline __attribute__((always_inline)) u32 GPU3D::WriteGXFIFOWordsFast(Load load, u32 n) noexcept
+ {
+@@ -3437,7 +3487,11 @@ __attribute__((noinline, no_stack_protector)) void GPU3D::WriteGXFIFOPortFast(u3
+ {
+     // Write32's GX FIFO port (its checks reach WriteToGXFIFO, or drop the word while the geometry engine is off)
+     if (GeometryEnabled)
++    {
++        if (GXStr && WriteGXParamQuick(val))    // render.gx_str
++            return;
+         WriteToGXFIFOBody<true>(val);
++    }
+ }
+ 
+ __attribute__((no_stack_protector)) void GPU3D::Write32(u32 addr, u32 val) noexcept
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index ac86e0e..ef2db0c 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -145,6 +145,8 @@ private:
+     template<bool Fast> void SubmitVertexBody() noexcept;
+     template<bool Fast> void SubmitPolygonBody() noexcept;
+     template<bool Fast> void WriteToGXFIFOBody(u32 val) noexcept;
++    bool WriteGXParamQuick(u32 val) noexcept;
++    void WriteToGXFIFOPlain(u32 val) noexcept;
+     template<bool Fast> void CalculateLightingBody() noexcept;
+     void UpdateClipMatrixFast() noexcept;
+     void CmdFIFOWriteFast(CmdFIFOEntry entry) noexcept;
+@@ -382,6 +384,12 @@ public:
+     // after the word that leaves the system stalled (the DMA's check), else n. Not while the system is stalled with
+     // Stop (the DMA runs only while it isn't)
+     template<bool Stop, typename Load> u32 WriteGXFIFOWordsFast(Load load, u32 n) noexcept;
++    // BananaDS (render.gx_str, MELONDS_GXSTR=0 turns it off; exact): with GeomFast, a word for the GX FIFO port that
++    // is one of its command's parameters before the last goes straight to CmdFIFOWriteFast (WriteToGXFIFO and
++    // WriteGXFIFOPortFast, for the JIT's STRs), without WriteToGXFIFOBody's decoding loop and frame; set from the
++    // environment as the GPU3D is created
++    static bool GXStrEnv() noexcept;
++    bool GXStr = GXStrEnv();
+     // whether one of the ARM9's DMAs may wait for the GX FIFO (GeomFast's CheckFIFODMAFast skips them otherwise)
+     bool GXFIFODMAMaybe = true;
+     // whether the ARM9's IRQ line was brought up to date by CheckFIFOIRQFast since the last reset or state load
+diff --git a/src/NDS_IOFast.cpp b/src/NDS_IOFast.cpp
+index aa0d72e..78aa5a5 100644
+--- a/src/NDS_IOFast.cpp
++++ b/src/NDS_IOFast.cpp
+@@ -61,7 +61,8 @@ u32 MemFastParts = ReadMemFastEnv();
+ static u32 ReadGXBatchEnv()
+ {
+     const char* e = getenv("MELONDS_GXBATCH");
+-    return (e && e[0] == '0') ? 0 : (u32)slow_GXBatch;
++    const char* w = getenv("MELONDS_GXSTR");
++    return ((e && e[0] == '0') ? 0 : (u32)slow_GXBatch) | ((w && w[0] == '0') ? 0 : (u32)slow_GXStr);
+ }
+ 
+ u32 SlowPathFlags = IOFastRoutes | (MemFastParts << 4) | ReadGXBatchEnv()
+diff --git a/src/NDS_IOFast.h b/src/NDS_IOFast.h
+index 4e9daae..2fabc9c 100644
+--- a/src/NDS_IOFast.h
++++ b/src/NDS_IOFast.h
+@@ -89,6 +89,7 @@ enum
+     slow_MemVRAM = memfast_VRAM << 4,
+     slow_MemIO = memfast_IO << 4,
+     slow_GXBatch = 1u << 8,     // render.gx_batch (MELONDS_GXBATCH, default on): STMs into the GX FIFO in one call
++    slow_GXStr = 1u << 9,       // render.gx_str (MELONDS_GXSTR, default on): STRs to the GX FIFO port checked first
+     slow_FullPath = 1u << 31,
+ };
+ extern __attribute__((visibility("hidden"))) u32 SlowPathFlags;
+-- 
+2.43.0
+
