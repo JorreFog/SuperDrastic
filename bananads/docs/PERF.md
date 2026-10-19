@@ -832,6 +832,20 @@ on the device `GetMirrorLocation` + `SetupExecutableRegion` + `ClassifyAddress9`
 ~40% of that; this takes nearly all of the rest (and `GetMirrorLocation`'s indirect branch), less the swap's own
 cost. Untested on device.
 
+### The emitter's CountLeadingZeros by CLZ (patch 0088, `jit.fastclz`, default `on`)
+
+During the race start the JIT compiles ~4.5 new blocks a frame, ~0.2M instructions a frame of the emulator thread
+(qemu). `IsImmLogical` was 43k of it from only ~39 calls a frame (counted by caller in an instrumented build: nearly
+all from `ANDI2R`): Dolphin's portable `CountLeadingZeros`, called four times per check, is a bit-by-bit loop of up
+to 64 rounds, ~1,100 instructions a call. 0088 makes `CountLeadingZeros(value, 64)` `__builtin_clzll` (64 for zero),
+the same count. qemu, MK 1650-2150: **-38k instructions a frame** (`IsImmLogical` -40k, `CountLeadingZeros` +2k).
+Exact by construction, checked: MK's scene compiled with `MELONDS_JIT_PERFMAP=1` without ASLR (`setarch -R`), the
+code dump of every block and stub (5.7 MB) and the perf map byte-identical between `jit.fastclz` on and off;
+pictures and audio = base both ways. Sabotage (CLZ one too many for one value) emits different code and the run
+dies on an illegal instruction. **Expected +0.1..0.3%** of the emulator thread in the race start (the device
+profile's "JIT compiler" area is 1.2%; this was ~a fifth of the compiler's instructions, a predictable loop), only
+while new code is being compiled. Untested on device.
+
 ## BananaJIT
 
 BananaJIT (jit/, `-DBANANADS_JIT=banana`) is parked. Its block-timing mode reached about 44 fps in this scene,
