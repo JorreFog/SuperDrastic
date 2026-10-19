@@ -1,0 +1,271 @@
+From e717c0806f89a86a0a7d3cbb2315a9f66529ef6b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 12:34:21 +0000
+Subject: [PATCH] GPU3D: the command loop's dispatch in one switch on the
+ command, a full vertex with a path of its own (render.geom_switch)
+
+---
+ src/GPU3D.cpp | 175 +++++++++++++++++++++++++++++++++-----------------
+ src/GPU3D.h   |  10 ++-
+ 2 files changed, 124 insertions(+), 61 deletions(-)
+
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index efde265..110c92f 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -2071,7 +2071,7 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteCommandBody() noexcept
+     ExecuteEntryBody<Fast>(entry, countsChanged);
+ }
+ 
+-template<bool Fast>
++template<bool Fast, bool OneSwitch>
+ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry entry, bool& countsChanged) noexcept
+ {
+     // countsChanged is set when the command lowered the push/pop or the test count (GeomQueue's loop clears GXSTAT's
+@@ -2082,8 +2082,11 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry
+     // commands (presumably) run when all the needed parameters have been read
+     // which is where we add the remaining cycles if any
+ 
++    // OneSwitch (render.geom_switch): one switch on the command for all of them, the ones with more than one
++    // parameter going to their path from there (a full vertex's two entries with a path of their own), instead of
++    // the parameter count looked up first and a second switch on the command for a first or last parameter
+     u32 paramsRequiredCount = CmdNumParams[entry.Command];
+-    if (paramsRequiredCount <= 1)
++    if (OneSwitch || paramsRequiredCount <= 1)
+     {
+         // fast path for command which only have a single parameter
+ 
+@@ -2434,6 +2437,34 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry
+             VecTest(entry.Param);
+             break;
+ 
++        // the commands with more than one parameter (CmdNumParams): OneSwitch only, as a parameter count of 1 or less
++        // never brings them here otherwise
++        case 0x23: // full vertex: the multi-parameter path below, for its two entries
++            if constexpr (OneSwitch)
++            {
++                ExecParams[ExecParamCount] = entry.Param;
++                ExecParamCount++;
++                if (ExecParamCount == 1)
++                    VertexPipelineSubmitCmd<Fast>();
++                else
++                {
++                    AddCyclesT<Fast>(1);
++                    if (ExecParamCount >= 2)
++                    {
++                        ExecParamCount = 0;
++                        CurVertex[0] = ExecParams[0] & 0xFFFF;
++                        CurVertex[1] = ExecParams[0] >> 16;
++                        CurVertex[2] = ExecParams[1] & 0xFFFF;
++                        SubmitVertexBody<Fast>();
++                    }
++                }
++                break;
++            }
++            [[fallthrough]];
++        case 0x16: case 0x17: case 0x18: case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x34: case 0x70: case 0x71:
++            if constexpr (OneSwitch)
++                goto multi;
++            [[fallthrough]];
+         default:
+             VertexPipelineCmdDelayed4<Fast>();
+             //printf("!! UNKNOWN GX COMMAND %02X %08X\n", entry.Command, entry.Param);
+@@ -2442,6 +2473,7 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry
+     }
+     else
+     {
++    multi:
+         ExecParams[ExecParamCount] = entry.Param;
+         ExecParamCount++;
+ 
+@@ -2817,6 +2849,76 @@ static inline __attribute__((always_inline)) void PipeRefills(u32 p0, u32 f0, u3
+     m = f0 - f;
+ }
+ 
++// RunFast's GeomQueue loop; OneSwitch: render.geom_switch's command dispatch (ExecuteEntryBody)
++template<bool OneSwitch>
++inline __attribute__((always_inline)) void GPU3D::RunQueue() noexcept
++{
++    // GeomQueue: GeomFIFO's queue read run by run (the pipe's entries from its read position, then the
++    // FIFO's, each ring in at most two contiguous runs) with a pointer, and the pipe's refills worked out
++    // after the loop from the number of entries read (PipeRefills), instead of counted at every read;
++    // GXSTAT's push/pop and test bits cleared before a command only after one that lowered their counts
++    const u32 p0 = CmdPIPE.Level(), prpos0 = CmdPIPE.RawReadPos(), pwpos0 = CmdPIPE.RawWritePos();
++    const u32 f0 = CmdFIFO.Level(), frpos0 = CmdFIFO.RawReadPos();
++    const CmdFIFOEntry* const pipe = CmdPIPE.RawEntries();
++    const CmdFIFOEntry* const fifo = CmdFIFO.RawEntries();
++    const CmdFIFOEntry* runp[4] = {pipe, pipe, pipe, pipe};
++    u32 runn[4] = {0, 0, 0, 0};
++    u32 nruns = 0;
++    if (p0 != 0) // an empty pipe ends GeomFIFO's loop before its first read
++    {
++        const u32 a = std::min(p0, 4 - prpos0);
++        runp[nruns] = pipe + prpos0; runn[nruns++] = a;
++        if (p0 > a) { runp[nruns] = pipe; runn[nruns++] = p0 - a; }
++        if (f0 != 0)
++        {
++            const u32 b = std::min(f0, 256 - frpos0);
++            runp[nruns] = fifo + frpos0; runn[nruns++] = b;
++            if (f0 > b) { runp[nruns] = fifo; runn[nruns++] = f0 - b; }
++        }
++    }
++    u32 r = 0, done = 0;
++    const CmdFIFOEntry* ptr = runp[0];
++    const CmdFIFOEntry* end = ptr + runn[0];
++    bool clear = true;
++    while (CycleCount <= 0)
++    {
++        if (ptr == end) [[unlikely]]
++        {
++            done += runn[r];
++            if (++r >= nruns) break;
++            ptr = runp[r];
++            end = ptr + runn[r];
++        }
++        if (clear)
++        {
++            GXStat &= ~(((u32)(NumPushPopCommands == 0) << 14) | (u32)(NumTestCommands == 0));
++            clear = false;
++        }
++        const CmdFIFOEntry entry = *ptr++;
++        ExecuteEntryBody<true, OneSwitch>(entry, clear);
++    }
++    const u32 k = (r < nruns) ? done + (u32)(ptr - runp[r]) : done;
++    u32 p, f, m;
++    bool due;
++    PipeRefills(p0, f0, k, p, f, m, due);
++    CmdFIFOEntry* const pipew = CmdPIPE.RawEntries();
++    for (u32 j = m > 4 ? m - 4 : 0; j < m; j++)
++        pipew[(pwpos0 + j) & 3] = fifo[(frpos0 + j) & 0xFF];
++    CmdPIPE.RawSetState(p, (prpos0 + k) & 3, (pwpos0 + m) & 3);
++    CmdFIFO.RawSetState(f, (frpos0 + m) & 0xFF, CmdFIFO.RawWritePos());
++    if (due)
++    {
++        CheckFIFODMAFast();
++        CheckFIFOIRQFast();
++    }
++}
++
++// RunQueue without render.geom_switch, out of line so that the hot loop is the only inline copy of the commands' work
++__attribute__((noinline, no_stack_protector)) void GPU3D::RunQueueOld() noexcept
++{
++    RunQueue<false>();
++}
++
+ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+ {
+     // Run, with the commands' work inline
+@@ -2836,64 +2938,10 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+     {
+         if (GeomQueue) [[likely]]
+         {
+-            // GeomQueue: GeomFIFO's queue read run by run (the pipe's entries from its read position, then the
+-            // FIFO's, each ring in at most two contiguous runs) with a pointer, and the pipe's refills worked out
+-            // after the loop from the number of entries read (PipeRefills), instead of counted at every read;
+-            // GXSTAT's push/pop and test bits cleared before a command only after one that lowered their counts
+-            const u32 p0 = CmdPIPE.Level(), prpos0 = CmdPIPE.RawReadPos(), pwpos0 = CmdPIPE.RawWritePos();
+-            const u32 f0 = CmdFIFO.Level(), frpos0 = CmdFIFO.RawReadPos();
+-            const CmdFIFOEntry* const pipe = CmdPIPE.RawEntries();
+-            const CmdFIFOEntry* const fifo = CmdFIFO.RawEntries();
+-            const CmdFIFOEntry* runp[4] = {pipe, pipe, pipe, pipe};
+-            u32 runn[4] = {0, 0, 0, 0};
+-            u32 nruns = 0;
+-            if (p0 != 0) // an empty pipe ends GeomFIFO's loop before its first read
+-            {
+-                const u32 a = std::min(p0, 4 - prpos0);
+-                runp[nruns] = pipe + prpos0; runn[nruns++] = a;
+-                if (p0 > a) { runp[nruns] = pipe; runn[nruns++] = p0 - a; }
+-                if (f0 != 0)
+-                {
+-                    const u32 b = std::min(f0, 256 - frpos0);
+-                    runp[nruns] = fifo + frpos0; runn[nruns++] = b;
+-                    if (f0 > b) { runp[nruns] = fifo; runn[nruns++] = f0 - b; }
+-                }
+-            }
+-            u32 r = 0, done = 0;
+-            const CmdFIFOEntry* ptr = runp[0];
+-            const CmdFIFOEntry* end = ptr + runn[0];
+-            bool clear = true;
+-            while (CycleCount <= 0)
+-            {
+-                if (ptr == end) [[unlikely]]
+-                {
+-                    done += runn[r];
+-                    if (++r >= nruns) break;
+-                    ptr = runp[r];
+-                    end = ptr + runn[r];
+-                }
+-                if (clear)
+-                {
+-                    GXStat &= ~(((u32)(NumPushPopCommands == 0) << 14) | (u32)(NumTestCommands == 0));
+-                    clear = false;
+-                }
+-                const CmdFIFOEntry entry = *ptr++;
+-                ExecuteEntryBody<true>(entry, clear);
+-            }
+-            const u32 k = (r < nruns) ? done + (u32)(ptr - runp[r]) : done;
+-            u32 p, f, m;
+-            bool due;
+-            PipeRefills(p0, f0, k, p, f, m, due);
+-            CmdFIFOEntry* const pipew = CmdPIPE.RawEntries();
+-            for (u32 j = m > 4 ? m - 4 : 0; j < m; j++)
+-                pipew[(pwpos0 + j) & 3] = fifo[(frpos0 + j) & 0xFF];
+-            CmdPIPE.RawSetState(p, (prpos0 + k) & 3, (pwpos0 + m) & 3);
+-            CmdFIFO.RawSetState(f, (frpos0 + m) & 0xFF, CmdFIFO.RawWritePos());
+-            if (due)
+-            {
+-                CheckFIFODMAFast();
+-                CheckFIFOIRQFast();
+-            }
++            if (GeomSwitch) [[likely]]
++                RunQueue<true>();
++            else
++                RunQueueOld();
+         }
+         else
+             RunFastFIFO();
+@@ -2924,6 +2972,13 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+     }
+ }
+ 
++bool GPU3D::GeomSwitchEnv() noexcept
++{
++    // read as the GPU3D is created (a difftest's two NDS objects each with its own setting)
++    const char* e = getenv("MELONDS_GEOMSWITCH");
++    return !(e && e[0] == '0');
++}
++
+ bool GPU3D::GeomQueueEnv() noexcept
+ {
+     // read as the GPU3D is created (a difftest's two NDS objects each with its own setting)
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index c50f42b..8b1e02f 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -140,7 +140,9 @@ private:
+     void WriteGXFIFOPortFast(u32 val) noexcept;
+     void Write32Plain(u32 addr, u32 val) noexcept;
+     template<bool Fast> void ExecuteCommandBody() noexcept;
+-    template<bool Fast> void ExecuteEntryBody(CmdFIFOEntry entry, bool& countsChanged) noexcept;
++    template<bool Fast, bool OneSwitch = false> void ExecuteEntryBody(CmdFIFOEntry entry, bool& countsChanged) noexcept;
++    template<bool OneSwitch> void RunQueue() noexcept;
++    void RunQueueOld() noexcept;
+     void RunFastLoop() noexcept;
+     void RunFastFIFO() noexcept;
+     template<bool Fast> void SubmitVertexBody() noexcept;
+@@ -425,6 +427,12 @@ public:
+     // command only after one that lowered their counts (nothing else changes them while the commands run)
+     static bool GeomQueueEnv() noexcept;
+     bool GeomQueue = GeomQueueEnv();
++    // BananaDS (render.geom_switch, MELONDS_GEOMSWITCH=0 turns it off; exact): GeomQueue's loop dispatches every
++    // command with one switch on it (the same statements per command), the ones with more than one parameter going
++    // to their path from there and a full vertex's two entries with a path of their own, instead of looking up the
++    // parameter count first and switching on the command again for a first or last parameter
++    static bool GeomSwitchEnv() noexcept;
++    bool GeomSwitch = GeomSwitchEnv();
+     // while RunFast defers them, and whether one of the checks was due
+     bool FIFOChecksDeferred = false;
+     bool FIFOChecksDue = false;
+-- 
+2.43.0
+
