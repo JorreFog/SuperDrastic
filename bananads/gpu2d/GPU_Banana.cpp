@@ -25,6 +25,8 @@
 #include "NDS.h"
 #include "Platform.h"
 #include "GPU_Banana.h"
+
+#include <chrono>
 #include "GPU_ColorOp.h"
 #if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
 #include <arm_neon.h>
@@ -781,6 +783,8 @@ void BananaRenderer::WorkerLoop()
         Execute(Jobs[tail % NumJobs]);
         tail++;
         tailp->store(tail, std::memory_order_release);
+        if (TestDelayUs) [[unlikely]]
+            std::this_thread::sleep_for(std::chrono::microseconds(TestDelayUs));
     }
 }
 

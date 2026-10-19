@@ -581,6 +581,9 @@ bool Emu::load_rom(const std::string& path) {
     // Tail and the copy log's read position) on cache lines of their own, and the emulator's thread reads the 2D
     // thread's only when the ring or the log looks full (exact: the same jobs); shared is the old layout
     if (banana2d) banana_->SetSplitRing(cfg_.str("render.2d_ring", "split") != "shared");
+    // render.2d_test_delay (tests only, default 0): the 2D thread sleeps this many microseconds after each job, so that
+    // it falls behind and the job ring and the copy log fill: the checks then reach their full paths
+    if (banana2d) banana_->SetTestDelay((u32)cfg_.num("render.2d_test_delay", 0));
     if (banana2d && cfg_.flag("render.2d_thread", scale_ == 2)) banana_->SetThreaded2D(true);
     // render.2d_kick: how many jobs (a frame has 383: 192 lines, 191 sprite lines) go to the 2D thread before it is
     // woken; a wake of the sleeping thread is a futex call on the emulator's thread (16 was the old fixed batch)
