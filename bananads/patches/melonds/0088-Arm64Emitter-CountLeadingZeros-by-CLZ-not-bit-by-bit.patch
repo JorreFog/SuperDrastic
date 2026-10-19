@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Mon, 19 Oct 2026 13:39:31 +0000
+Subject: [PATCH] Arm64Emitter: CountLeadingZeros by CLZ, not bit by bit
+ (MELONDS_JIT_SOFTCLZ)
+
+IsImmLogical (the emitter's check for an AND/ORR/EOR immediate) counts leading zeros four times with Dolphin's
+portable loop, a bit at a time: up to 64 rounds each. In Mario Kart DS's race start the JIT compiles ~4.5 new
+blocks a frame and calls IsImmLogical only ~39 times a frame, but at ~1,100 instructions a call it was ~43k
+instructions a frame of the emulator's thread (qemu), a fifth of the compiler's time. CountLeadingZeros(value, 64)
+is now __builtin_clzll (64 for zero): the same count, so the same encodings and the same emitted code; only the
+compiler gets faster. MELONDS_JIT_SOFTCLZ=1 keeps the loop.
+---
+ src/dolphin/Arm64Emitter.cpp | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/src/dolphin/Arm64Emitter.cpp b/src/dolphin/Arm64Emitter.cpp
+index abb89a2..de39983 100644
+--- a/src/dolphin/Arm64Emitter.cpp
++++ b/src/dolphin/Arm64Emitter.cpp
+@@ -2,6 +2,7 @@
+ // Licensed under GPLv2+
+ // Refer to the license.txt file included.
+ 
++#include <cstdlib>
+ #include <algorithm>
+ #include <array>
+ #include <cinttypes>
+@@ -32,8 +33,20 @@ const int kWRegSizeInBits = 32;
+ const int kXRegSizeInBits = 64;
+ 
+ // The below few functions are taken from V8.
++// BananaDS patch 0088: MELONDS_JIT_SOFTCLZ=1 keeps the bit-by-bit loop below (up to 64 rounds, ~1,100 instructions
++// an IsImmLogical call in Mario Kart DS's race start); otherwise CLZ, which counts the same: the leading zeros of
++// the width's low bits, width for zero. Only the compiler's own speed changes: the code it emits is the same
++
+ int CountLeadingZeros(uint64_t value, int width)
+ {
++  // (read at the first call: the JIT's stubs, as the first compiler is created; one setting per process)
++  static const bool SoftCLZ = getenv("MELONDS_JIT_SOFTCLZ") && atoi(getenv("MELONDS_JIT_SOFTCLZ"));
++  if (!SoftCLZ)
++  {
++    // (every caller passes 64; another width takes the loop)
++    if (width == 64)
++      return value ? __builtin_clzll(value) : 64;
++  }
+   // TODO(jbramley): Optimize this for ARM64 hosts.
+   int count = 0;
+   uint64_t bit_test = 1ULL << (width - 1);
+-- 
+2.43.0
+
