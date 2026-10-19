@@ -1,0 +1,159 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Mon, 19 Oct 2026 12:21:28 +0000
+Subject: [PATCH] ARMJIT_A64: an ARM9 MCR that CP15Write ignores compiled to
+ its cycles (MELONDS_JIT_NOCP15NOP)
+
+The ARM9's MCRs to CP15's cache and write buffer operations (c7: clean/invalidate a data cache line, drain the
+write buffer, ...) went through the interpreter: R15, the instruction and CodeCycles stored, the cycles and the
+CPSR saved, every guest register flushed, A_MCR -> CP15Write (a switch that does nothing for them) ->
+AddCycles_CI(2) through a virtual call, then the cycles and the CPSR loaded and the registers reloaded as they
+are needed. NitroSDK's DC_FlushRange/DC_StoreRange/DC_InvalidateRange loops issue them per 32-byte line: in Mario
+Kart DS's race start ~1,000 a frame (c7,c10,4 and c7,c14,1 ~394 each, c7,c10,2 ~123, c7,c6,1 ~71).
+
+With OptCP15Nop (default on; MELONDS_JIT_NOCP15NOP=1 or the old code generation turns it off) an ARM9 MCR p15
+whose operation is c7's and not wait for interrupt or an instruction cache invalidation (those end the block and
+do something) is compiled: Comp_AddCycles_CI(2), the same cycles A_MCR adds, after a check of the mode bits.
+A_MCR takes the undefined instruction exception in user mode, so mode bits 0x?0 (user, or the invalid 0x00) go to
+the far region, which does what the interpreter's call did (the same stores, dirty registers stored but kept,
+A_MCR, then the cycles, the CPSR and every loaded register back from memory, and this instruction's own cycles
+taken back when they were counted in ConstantCycles). R13/R14 holding a literal keep the interpreter's call (an
+exception's banks change them). After it, as after the interpreter's call, R15 counts as stored and the known
+CodeRegion/CodeCycles as unknown. The source register isn't loaded. Exact by construction.
+---
+ src/ARMJIT_A64/ARMJIT_Compiler.cpp | 74 ++++++++++++++++++++++++++++++
+ src/ARMJIT_A64/ARMJIT_Compiler.h   |  5 ++
+ 2 files changed, 79 insertions(+)
+
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index ce43e9a..bbb211a 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -92,6 +92,67 @@ void UpdateModeTrampoline(ARM* arm, u32 oldmode, u32 newmode)
+     arm->UpdateMode(oldmode, newmode);
+ }
+ 
++bool Compiler::CP15NopWrite(u32 instr)
++{
++    // (patch 0086) a CP15 write that ARMv5::CP15Write does nothing for: the cache and write buffer operations (c7),
++    // but for wait for interrupt (0x704, 0x782) and the instruction cache's invalidations (0x750-0x752), which end
++    // the block (ARMInstrInfo) and do something. A_MCR reads neither op1 nor anything else of the instruction
++    if (((instr >> 8) & 0xF) != 15)
++        return false;
++    const u32 id = (((instr >> 16) & 0xF) << 8) | ((instr & 0xF) << 4) | ((instr >> 5) & 0x7);
++    return (id & 0xF00) == 0x700 && id != 0x704 && id != 0x782 && id != 0x750 && id != 0x751 && id != 0x752;
++}
++
++void Compiler::A_Comp_MCRNop()
++{
++    // (patch 0086, OptCP15Nop) A_MCR on the ARM9 for an operation CP15Write ignores: AddCycles_CI(2), unless the CPU
++    // is in user mode, where A_MCR takes the undefined instruction exception instead. Mode bits 0x?0 (user, or the
++    // invalid 0x00) go to the far region, which does what the interpreter's call did: the stores before it (R15,
++    // the instruction, CodeCycles, the cycles, the CPSR and the dirty registers: here without unloading them), A_MCR,
++    // then the cycles, the CPSR and every loaded register back from memory, and this instruction's cycles taken back
++    // when they are in ConstantCycles. No literal in R13/R14 (CompileBlock): an exception's banks change them
++    const bool constCycles = CurInstr.Cond() == 0xE;
++    const s32 cycles = CurInstr.CodeCycles + 2;   // (Comp_AddCycles_CI(2): ARM code, R15 & 2 is 0)
++
++    UBFX(W0, RCPSR, 0, 4);
++    FixupBranch privileged = CBNZ(W0);
++    SwapCodeRegion();
++    u8* farRX = (u8*)GetRXPtr();
++    SwapCodeRegion();
++    B(farRX);
++    SetJumpTarget(privileged);
++    Comp_AddCycles_CI(2);
++    u8* backRX = (u8*)GetRXPtr();
++
++    SwapCodeRegion();
++    if (CPSRDirty)
++        STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
++    SaveCycles();
++    for (int reg : BitSet16(RegCache.LoadedRegs & RegCache.DirtyRegs))
++        SaveReg(reg, RegCache.Mapping[reg]);
++    MOVI2R(W0, R15);
++    STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++    MOVI2R(W0, CurInstr.Instr);
++    STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CurInstr));
++    MOVI2R(W0, (s32)CurInstr.CodeCycles);
++    STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, CodeCycles));
++    MOV(X0, RCPU);
++    QuickCallFunction(X1, InterpretARM[CurInstr.Info.Kind]);
++    LoadCycles();
++    LDR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
++    for (int reg : BitSet16(RegCache.LoadedRegs))
++        LoadReg(reg, RegCache.Mapping[reg]);
++    if (constCycles)
++        SUB(RCycles, RCycles, cycles);
++    B(backRX);
++    FlushIcacheSection(farRX, (u8*)GetRXPtr());   // (the far region's code isn't in CompileBlock's flush)
++    SwapCodeRegion();
++
++    // as after the interpreter's call: the far region's call may have jumped (an exception)
++    R15Stored = true;
++    KnownCodeValid = false;
++}
++
+ void Compiler::A_Comp_MSR()
+ {
+     InvalidateHostFlags();
+@@ -306,6 +367,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         OptFlagStub = OptExitStub && OptLazyFlags && !getenv("MELONDS_JIT_NOFLAGSTUB");
+         FlagsWatch = OptLazyFlags;
+         OptFoldExit = OptCondExit && !getenv("MELONDS_JIT_NOFOLDEXIT") && !getenv("MELONDS_JIT_NOLINK");
++        OptCP15Nop = !old && !getenv("MELONDS_JIT_NOCP15NOP");
+         // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
+         for (int num = 0; num < 2; num++)
+         {
+@@ -1536,6 +1598,10 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         CompileFunc comp = Thumb
+             ? T_Comp[CurInstr.Info.Kind]
+             : A_Comp[CurInstr.Info.Kind];
++        // patch 0086: an ARM9 MCR that CP15Write ignores, compiled (the interpreter's call stays for user mode)
++        if (!comp && OptCP15Nop && Num == 0 && !Thumb && !LoopMode && CurInstr.Info.Kind == ARMInstrInfo::ak_MCR
++            && CurInstr.Cond() < 0xF && CP15NopWrite(CurInstr.Instr) && !RegCache.IsLiteral(13) && !RegCache.IsLiteral(14))
++            comp = &Compiler::A_Comp_MCRNop;
+ 
+         Exit = i == (instrsCount - 1) || (CurInstr.BranchFlags & branch_FollowCondNotTaken);
+ 
+@@ -1613,6 +1679,14 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+             RegCache.Prepare(Thumb, i);
+             instrs[i].Info.DstRegs = dst;
+         }
++        else if (comp == &Compiler::A_Comp_MCRNop)
++        {
++            // (its source register isn't read: only the far region's A_MCR could, from memory, the dirty ones stored)
++            const u16 src = instrs[i].Info.SrcRegs;
++            instrs[i].Info.SrcRegs = 0;
++            RegCache.Prepare(Thumb, i);
++            instrs[i].Info.SrcRegs = src;
++        }
+         else
+             RegCache.Prepare(Thumb, i);
+ 
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index 072b4e3..4dc24e6 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -162,6 +162,8 @@ public:
+     void A_Comp_BranchXchangeReg();
+ 
+     void A_Comp_MRS();
++    void A_Comp_MCRNop();
++    static bool CP15NopWrite(u32 instr);
+     void A_Comp_MSR();
+ 
+     void T_Comp_ShiftImm();
+@@ -305,6 +307,9 @@ public:
+     bool LoopMode = false;        // the block being compiled does (LoopBlock decides)
+     u8* LoopBodyRX = nullptr;     // ... where its loop goes back to: past the entry's loads
+     bool LoopBlock(FetchedInstr instrs[], int instrsCount);
++    bool OptCP15Nop = true;       // NOCP15NOP (patch 0086): an ARM9 MCR to a CP15 cache or write buffer operation that
++                                  // CP15Write ignores (clean/invalidate a data cache line, drain the write buffer...)
++                                  // compiled to its cycles, with the interpreter's call kept for user mode
+     bool OptFoldExit = true;      // NOFOLDEXIT: a conditional immediate branch ending a block takes its exits from
+                                   // each way directly (no join, no second condition check, one cycle add each)
+     bool FoldCondExit = false;    // the instruction being compiled is such a branch
+-- 
+2.43.0
+

@@ -779,6 +779,34 @@ emulator thread** (half of the iTLB misses in JIT code at ~5 cycles each if they
 walk; more if the data side's walks drop too). The log line `[jit] code memory at <addr>, 32768 kB, N kB on huge
 pages` says on the device whether the kernel gave them; `prof.pmu`'s iTLB line is the check of the mechanism.
 
+### An ARM9 MCR that CP15Write ignores, compiled to its cycles (patch 0086, `jit.cp15nop`, default `on`)
+
+NitroSDK's `DC_FlushRange`/`DC_StoreRange`/`DC_InvalidateRange` loops issue an `MCR p15` per 32-byte line, and MK's
+race start runs ~1,000 a frame (c7,c10,4 drain and c7,c14,1 clean+invalidate ~394 each, c7,c10,2 ~123, c7,c6,1
+~71: `MELONDS_JIT_PERFMAP` + the qemu counts at the A_MCR call sites). The JIT had no compiler for MCR, so each went
+through the interpreter's call: R15, the instruction and CodeCycles stored, the cycles and the CPSR saved, every
+guest register flushed, `A_MCR` -> `CP15Write` (a switch that does nothing for c7's operations here: melonDS
+doesn't emulate the caches) -> `AddCycles_CI(2)` through a virtual call, then the cycles and the CPSR reloaded
+and the registers loaded again. With 0086 an ARM9 `MCR p15` whose operation is c7's and not wait for interrupt
+(0x704/0x782) or an instruction cache invalidation (0x750-0x752, which end the block and do something) is compiled
+to `Comp_AddCycles_CI(2)`, the same cycles, after a two-instruction check of the mode bits: in user mode `A_MCR`
+takes the undefined instruction exception, so mode bits `0x?0` go to the far region, which does what the old call
+did (the same stores, `A_MCR`, every loaded register reloaded) and takes this instruction's cycles back when they
+were counted in `ConstantCycles`. R13/R14 holding known constants keep the old call. qemu, MK 1650-2150, the
+thread without Gengis: **12.590M -> 12.516M instructions a frame (-74k, -0.6%)**: `A_MCR` -32k, `CP15Write` -24k,
+`AddCycles_CI` -9k, the JIT code -9k.
+
+Exact: MK's 8 pictures and audio identical to the base with it on and off; main RAM, both CPUs' registers and the
+geometry engine's timing (with the ARM9's timestamp) every frame 1500-2100 off vs on (`bananads-difftest --regs
+--timing`): SAME; full savestates at 1850 and 2000 identical to the checkpoint's (`a57737e0...`, `f476c39e...`);
+`tests/cp15nop` (the MCRs in DC_FlushRange's loop with every register live, conditional ones, timer reads, then
+user-mode MCRs with R13/R14 known and not known, 1,000 times): main RAM and registers every frame off vs on,
+SAME. Sabotages: the fast path's cycles one short changes MK's audio and every picture from 1740 on, and
+`tests/cp15nop`; the far region's cycles not taken back changes `tests/cp15nop`'s timer (MK never runs an MCR in
+user mode). **Expected +0.3..0.5% of the emulator thread** on the race start: ~75 instructions, two calls (one
+virtual) and a register flush/reload per MCR, ~1,000 a frame, at the thread's ~2 cycles an instruction and some
+more for the calls. Untested on device.
+
 ## BananaJIT
 
 BananaJIT (jit/, `-DBANANADS_JIT=banana`) is parked. Its block-timing mode reached about 44 fps in this scene,
