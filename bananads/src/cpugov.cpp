@@ -55,9 +55,18 @@ static bool use_repeats = true;  // cpugov.repeats
 static double tail_limit = 1.4;
 static long tail_from = 0;  // frames before this one are the previous clock's  // cpugov.window_ms (the tests')
 static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5, REPEAT_BUSY = 0.5;
-// (a probe of a clock that then drops a frame shows: a ban of 2 min, doubling to 30, and 10 s clean before the next
-// step down keep it from hunting; at 30 s / 8 windows HeartGold on the RG DS went down and back up every ~30 s)
-static const int BAD_FOR_S = 120, BAD_MAX_S = 1800, FORGIVE_MS = 120000, MAX_STRIKES = 6, FPS_WINDOWS = 4, DOWN_AFTER = 40;
+// Ahead of a late frame: the busiest thread this busy for EDGE_WINDOWS windows in a row is a step up (and a ban of the
+// clock, without a strike). (No such check on the way down: scaled with the clock, HeartGold's 57% at 1992 MHz
+// predicts 103% at 1104, where it is 83%. A probe that fails costs a frame or two, which the pacer catches up and the
+// sound's buffer rides out, once per game: the bans above.)
+static const double EDGE_BUSY = 0.96;
+static const int EDGE_WINDOWS = 2;
+// (a probe of a clock that then drops a frame shows, and the player hears it: the sound falls behind with the game.
+// So a clock that was late stays banned for 30 min, doubling per strike up to a week, and the strikes are remembered
+// per game: a game probes its clocks once, not every few minutes. At a ban of 2 min doubling to 30, Pokémon Black 2
+// retried 1104 MHz in every session. 10 s clean before the next step down keep it from hunting; at 30 s / 8 windows
+// HeartGold on the RG DS went down and back up every ~30 s)
+static const int BAD_FOR_S = 1800, BAD_MAX_S = 7 * 86400, FORGIVE_MS = 120000, MAX_STRIKES = 6, FPS_WINDOWS = 4, DOWN_AFTER = 40;
 static const int MAXT = 64, NF = 24;
 
 static int freqs[NF], nf, cur, fmin_, fmax_, hwmax_, before_ = -1;
@@ -194,7 +203,7 @@ static void gov_loop() {
     auto restart_fps = [&] {
         for (int k = 0; k < FPS_WINDOWS; k++) fps_t[k] = 0;
     };
-    int fi = 0, low = 0, rescan = 0, boosted = 0;
+    int fi = 0, low = 0, rescan = 0, boosted = 0, edge = 0;
     {
         timespec n;
         clock_gettime(CLOCK_MONOTONIC, &n);
@@ -285,7 +294,13 @@ static void gov_loop() {
         if (late && !running)
             Log(LogLevel::Info, "[cpugov] %ld late frames ignored: the game isn't running (busiest thread %.0f%%)\n", late,
                 umax * 100);
-        else if (late || slow) {
+        else if (!late && !slow && running && cur < top &&
+                 (edge = umax >= EDGE_BUSY && !feed_->catching.load(std::memory_order_relaxed) ? edge + 1 : 0) >= EDGE_WINDOWS) {
+            why = "near the limit";
+            want = step_up(cur);
+            if (int c = idx(cur); c >= 0) bad_until[c] = t + ban_ns(0);
+            edge = 0;
+        } else if (late || slow) {
             why = late ? "late" : "slow";
             want = step_up(cur);
             if (late >= 3 || (fps >= 0 && fps < 50)) want = step_up(want);
@@ -360,17 +375,23 @@ void Pacer::set_speed(int times) {
 void Pacer::wait() {
     due_ += period_;
     const auto now = std::chrono::steady_clock::now();
-    if (feed_.rebase.exchange(false) && now > due_) {
-        due_ = now;
-        behind_ = 0;
-    }
     const long b = now > due_ ? (long)((now - due_) / period_) : 0;
-    if (b > behind_ && b - behind_ <= 2) feed_.late += b - behind_;
+    if (feed_.rebase.exchange(false)) catching_ = true, peak_ = b;  // (the old clock's lag: caught up, not counted)
+    if (catching_) {
+        if (due_ > now) catching_ = false;  // caught up: it has time to sleep again
+        else if (b >= peak_ + 2) {  // (one more is a heavy frame while behind; a clock too slow soon makes it two)
+            if (b - peak_ <= 3) feed_.late += b - peak_ - 1;
+            peak_ = b;
+        }
+    } else if (b > behind_ && b - behind_ <= 2)
+        feed_.late += b - behind_;
     behind_ = b;
+    feed_.catching.store(catching_ || b > 0, std::memory_order_relaxed);
     if (due_ > now) std::this_thread::sleep_until(due_);
-    else if (now - due_ > period_ * 4) {  // too far behind (or back from a stop): don't run to catch up
+    else if (now - due_ > period_ * CATCH_UP) {  // too far behind (or back from a stop): don't run to catch up
         due_ = now;
         behind_ = 0;
+        catching_ = false;
     }
 }
 

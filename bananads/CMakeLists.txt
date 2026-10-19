@@ -260,7 +260,7 @@ if(DRM_FOUND AND BANANADS_KMS)
 endif()
 if(BANANADS_ALSA)
     pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
-    target_sources(bananads PRIVATE src/alsa.cpp)
+    target_sources(bananads PRIVATE src/alsa.cpp src/stretch.cpp)
     target_link_libraries(bananads PRIVATE PkgConfig::ALSA)
     target_compile_definitions(bananads PRIVATE BANANADS_ALSA=1)
 endif()
@@ -272,11 +272,16 @@ target_include_directories(bananads-tests PRIVATE src)
 target_link_libraries(bananads-tests PRIVATE core bananads-net pthread ${CMAKE_DL_LIBS})
 add_test(NAME host COMMAND bananads-tests)
 
-# The CPU governor against a simulated game on a made-up cpufreq folder (tests/cpugov_test.cpp, ~25 s).
+# The CPU governor against a simulated game on a made-up cpufreq folder (tests/cpugov_test.cpp, ~90 s).
 add_executable(bananads-cpugov-test tests/cpugov_test.cpp src/cpugov.cpp src/config.cpp src/emu.cpp src/prof.cpp src/platform.cpp src/mic.cpp src/wifi.cpp)
 target_include_directories(bananads-cpugov-test PRIVATE src)
 target_link_libraries(bananads-cpugov-test PRIVATE core bananads-net pthread ${CMAKE_DL_LIBS})
 add_test(NAME cpugov COMMAND bananads-cpugov-test ${CMAKE_CURRENT_BINARY_DIR}/cpugov-test HeartGold.nds)
+
+# The sound thread's time stretch: pitch kept, length and joins checked on test tones (tests/stretch_test.cpp).
+add_executable(bananads-stretch-test tests/stretch_test.cpp src/stretch.cpp)
+target_include_directories(bananads-stretch-test PRIVATE src)
+add_test(NAME stretch COMMAND bananads-stretch-test)
 
 # BananaJIT's encoder against LLVM's assembler (runs on any host: it only encodes).
 add_executable(bananads-jit-encodings tests/jit_encodings.cpp)

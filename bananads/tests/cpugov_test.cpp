@@ -102,18 +102,18 @@ int main(int argc, char** argv) {
     put(pol + "cpuinfo_max_freq", "1992000");
     remove((dir + "/memory/" + argv[argc - 1] + ".2x").c_str());
 
-    // from the top clock down to 1104 MHz (four steps of a second each here) and no lower: the floor
-    Result r = session(dir, pol, 1104000, 6.5, 2);
+    // from the top clock down to 1104 MHz (four steps of 5 s each here: DOWN_AFTER windows) and no lower: the floor
+    Result r = session(dir, pol, 1104000, 26, 4);
     CHECK(r.khz == 1104000);
     CHECK(r.late == 0);
     // with 816 MHz allowed: it gets there, is late, goes back up and bans 816 MHz, remembered for the game
-    r = session(dir, pol, 816000, 10, 2);
+    r = session(dir, pol, 816000, 40, 4);
     CHECK(r.khz == 1104000);
     CHECK(r.late == 0);
     const std::string mem = get(dir + "/memory/" + argv[argc - 1] + ".2x");
     CHECK(mem.find("816000 ") == 0);
     // the next session: 816 MHz still banned from the start, so it settles at 1104 MHz without being late there
-    r = session(dir, pol, 816000, 6.5, 4.5);
+    r = session(dir, pol, 816000, 26, 8);
     CHECK(r.khz == 1104000);
     CHECK(r.late == 0);
 
