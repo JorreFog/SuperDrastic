@@ -1,0 +1,328 @@
+From c260d1e7ce5fc54d8d9c5df7fdfd5172473fe874 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 12:13:09 +0000
+Subject: [PATCH] GPU3D: RunFast's queue read run by run, the pipe's refills
+ worked out after the loop (render.geom_queue)
+
+---
+ src/GPU3D.cpp | 210 +++++++++++++++++++++++++++++++++++++++-----------
+ src/GPU3D.h   |   9 ++-
+ 2 files changed, 171 insertions(+), 48 deletions(-)
+
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index da1f099..efde265 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -2067,12 +2067,15 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteCommandBody() noexcept
+     CmdFIFOEntry entry;
+     if constexpr (Fast) entry = CmdFIFOReadFast();
+     else                entry = CmdFIFORead();
+-    ExecuteEntryBody<Fast>(entry);
++    bool countsChanged = false;
++    ExecuteEntryBody<Fast>(entry, countsChanged);
+ }
+ 
+ template<bool Fast>
+-inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry entry) noexcept
++inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry entry, bool& countsChanged) noexcept
+ {
++    // countsChanged is set when the command lowered the push/pop or the test count (GeomQueue's loop clears GXSTAT's
++    // bits for them before the next command only then)
+     //printf("FIFO: processing %02X %08X. Levels: FIFO=%d, PIPE=%d\n", entry.Command, entry.Param, CmdFIFO->Level(), CmdPIPE->Level());
+ 
+     // each FIFO entry takes 1 cycle to be processed
+@@ -2096,6 +2099,7 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry
+         case 0x11: // push matrix
+             VertexPipelineCmdDelayed4<Fast>();
+             NumPushPopCommands--;
++            countsChanged = true;
+             if (MatrixMode == 0)
+             {
+                 if (ProjMatrixStackPointer > 0) GXStat |= (1<<15);
+@@ -2127,6 +2131,7 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry
+         case 0x12: // pop matrix
+             VertexPipelineCmdDelayed4<Fast>();
+             NumPushPopCommands--;
++            countsChanged = true;
+             if (MatrixMode == 0)
+             {
+                 if (ProjMatrixStackPointer == 0) GXStat |= (1<<15);
+@@ -2425,6 +2430,7 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry
+         case 0x72: // vec test
+             VertexPipelineCmdDelayed6<Fast>();
+             NumTestCommands--;
++            countsChanged = true;
+             VecTest(entry.Param);
+             break;
+ 
+@@ -2654,6 +2660,7 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry
+ 
+                 case 0x71: // pos test
+                     NumTestCommands -= 2;
++                    countsChanged = true;
+                             CurVertex[0] = ExecParams[0] & 0xFFFF;
+                     CurVertex[1] = ExecParams[0] >> 16;
+                     CurVertex[2] = ExecParams[1] & 0xFFFF;
+@@ -2662,6 +2669,7 @@ inline __attribute__((always_inline)) void GPU3D::ExecuteEntryBody(CmdFIFOEntry
+ 
+                 case 0x70: // box test
+                     NumTestCommands -= 3;
++                    countsChanged = true;
+                             BoxTest(ExecParams);
+                     break;
+ 
+@@ -2721,6 +2729,94 @@ bool GPU3D::GeomFIFOEnv() noexcept
+     return !(e && e[0] == '0');
+ }
+ 
++// RunFast's GeomFIFO loop as it was before GeomQueue (render.geom_queue off), out of line so that the hot loop is the
++// only inline copy of the commands' work
++__attribute__((noinline, no_stack_protector)) void GPU3D::RunFastFIFO() noexcept
++{
++    // GeomFIFO: the pipe's entries, then the FIFO's, read as one queue. Nothing writes to either while the
++    // commands run (the stall queue is empty, and only the CPU's and the DMA's writes fill them), so the pipe's
++    // refills (CmdFIFOReadFast: after a read leaves it with 2 or fewer, up to 2 from the FIFO) are counts here:
++    // p and f are the levels, k entries read, m moved from the FIFO to the pipe. The pipe always holds the
++    // queue's oldest entries, so the k-th read is the pipe's k-th entry or, past its first p0, the FIFO's
++    // (k - p0)-th, which was moved before it is read. GeomBatch's deferred DMA and IRQ checks are done once at
++    // the end when a refill was due, as there.
++    const u32 p0 = CmdPIPE.Level(), prpos0 = CmdPIPE.RawReadPos(), pwpos0 = CmdPIPE.RawWritePos();
++    const u32 f0 = CmdFIFO.Level(), frpos0 = CmdFIFO.RawReadPos();
++    const CmdFIFOEntry* const pipe = CmdPIPE.RawEntries();
++    const CmdFIFOEntry* const fifo = CmdFIFO.RawEntries();
++    u32 p = p0, f = f0, k = 0, m = 0;
++    bool due = false;
++    // GXSTAT's push/pop and test bits are cleared before each command when their counts are 0; the counts
++    // change here only as a push/pop or a test command runs (only CmdFIFOWrite sets the bits), so the clear is
++    // done again only before the command after one of those
++    bool clear = true;
++    while (CycleCount <= 0 && p != 0)
++    {
++        if (clear)
++        {
++            GXStat &= ~(((u32)(NumPushPopCommands == 0) << 14) | (u32)(NumTestCommands == 0));
++            clear = false;
++        }
++        const CmdFIFOEntry entry = (k < p0) ? pipe[(prpos0 + k) & 3] : fifo[(frpos0 + (k - p0)) & 0xFF];
++        k++;
++        if (--p <= 2)
++        {
++            const u32 t = f < 2 ? f : 2;
++            p += t;
++            f -= t;
++            m += t;
++            due = true;
++        }
++        bool countsChanged = false;
++        ExecuteEntryBody<true>(entry, countsChanged);
++        const u32 c = entry.Command;
++        clear = (c - 0x11u < 2u) || (c - 0x70u < 3u);
++    }
++    // the rings' state as the reads and refills would have left it: the pipe read k times and written m times
++    // (the m moved entries, its slots keeping the last 4 of them), the FIFO read m times
++    CmdFIFOEntry* const pipew = CmdPIPE.RawEntries();
++    for (u32 j = m > 4 ? m - 4 : 0; j < m; j++)
++        pipew[(pwpos0 + j) & 3] = fifo[(frpos0 + j) & 0xFF];
++    CmdPIPE.RawSetState(p, (prpos0 + k) & 3, (pwpos0 + m) & 3);
++    CmdFIFO.RawSetState(f, (frpos0 + m) & 0xFF, CmdFIFO.RawWritePos());
++    if (due)
++    {
++        CheckFIFODMAFast();
++        CheckFIFOIRQFast();
++    }
++}
++
++// GeomQueue: the pipe's state after k reads of GeomFIFO's queue (the pipe's p0 entries, then the FIFO's f0), as its
++// loop leaves it: there a read that leaves the pipe with 2 or fewer moves up to 2 entries from the FIFO into it (a
++// "refill", due even when the FIFO is empty). p and f are the levels after, m the entries moved, due whether a
++// refill was due. Once the pipe holds 3 or more, or the FIFO is empty, the levels follow a pattern: while the FIFO
++// is not empty, each read takes the pipe 4 -> 3 or 3 -> 2 -> 4 (or 3 when the FIFO had 1), so the pipe holds 3
++// when (p - reads) is odd and 4 when even; past that it is what is left. Before (a pipe of 1 or 2 with a FIFO not
++// empty: not a state the rings' writers leave) the reads are stepped through one by one.
++static inline __attribute__((always_inline)) void PipeRefills(u32 p0, u32 f0, u32 k, u32& p, u32& f, u32& m, bool& due) noexcept
++{
++    p = p0; f = f0; due = false;
++    while (k != 0 && p < 3 && f != 0)
++    {
++        p--;
++        const u32 t = f < 2 ? f : 2;
++        p += t;
++        f -= t;
++        due = true;
++        k--;
++    }
++    if (k != 0)
++    {
++        // a read leaves 2 or fewer if it is from 3 or fewer: the first, or the second (from 4: then 3)
++        due = due || p <= 3 || k >= 2;
++        const u32 rem = p + f - k;
++        const u32 pp = ((p - k) & 1) ? 3 : 4;
++        p = rem < pp ? rem : pp;
++        f = rem - p;
++    }
++    m = f0 - f;
++}
++
+ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+ {
+     // Run, with the commands' work inline
+@@ -2738,56 +2834,69 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+ 
+     if (GeomFIFO && GeomBatch && CmdStallQueue.IsEmpty()) [[likely]]
+     {
+-        // GeomFIFO: the pipe's entries, then the FIFO's, read as one queue. Nothing writes to either while the
+-        // commands run (the stall queue is empty, and only the CPU's and the DMA's writes fill them), so the pipe's
+-        // refills (CmdFIFOReadFast: after a read leaves it with 2 or fewer, up to 2 from the FIFO) are counts here:
+-        // p and f are the levels, k entries read, m moved from the FIFO to the pipe. The pipe always holds the
+-        // queue's oldest entries, so the k-th read is the pipe's k-th entry or, past its first p0, the FIFO's
+-        // (k - p0)-th, which was moved before it is read. GeomBatch's deferred DMA and IRQ checks are done once at
+-        // the end when a refill was due, as there.
+-        const u32 p0 = CmdPIPE.Level(), prpos0 = CmdPIPE.RawReadPos(), pwpos0 = CmdPIPE.RawWritePos();
+-        const u32 f0 = CmdFIFO.Level(), frpos0 = CmdFIFO.RawReadPos();
+-        const CmdFIFOEntry* const pipe = CmdPIPE.RawEntries();
+-        const CmdFIFOEntry* const fifo = CmdFIFO.RawEntries();
+-        u32 p = p0, f = f0, k = 0, m = 0;
+-        bool due = false;
+-        // GXSTAT's push/pop and test bits are cleared before each command when their counts are 0; the counts
+-        // change here only as a push/pop or a test command runs (only CmdFIFOWrite sets the bits), so the clear is
+-        // done again only before the command after one of those
+-        bool clear = true;
+-        while (CycleCount <= 0 && p != 0)
+-        {
+-            if (clear)
++        if (GeomQueue) [[likely]]
++        {
++            // GeomQueue: GeomFIFO's queue read run by run (the pipe's entries from its read position, then the
++            // FIFO's, each ring in at most two contiguous runs) with a pointer, and the pipe's refills worked out
++            // after the loop from the number of entries read (PipeRefills), instead of counted at every read;
++            // GXSTAT's push/pop and test bits cleared before a command only after one that lowered their counts
++            const u32 p0 = CmdPIPE.Level(), prpos0 = CmdPIPE.RawReadPos(), pwpos0 = CmdPIPE.RawWritePos();
++            const u32 f0 = CmdFIFO.Level(), frpos0 = CmdFIFO.RawReadPos();
++            const CmdFIFOEntry* const pipe = CmdPIPE.RawEntries();
++            const CmdFIFOEntry* const fifo = CmdFIFO.RawEntries();
++            const CmdFIFOEntry* runp[4] = {pipe, pipe, pipe, pipe};
++            u32 runn[4] = {0, 0, 0, 0};
++            u32 nruns = 0;
++            if (p0 != 0) // an empty pipe ends GeomFIFO's loop before its first read
++            {
++                const u32 a = std::min(p0, 4 - prpos0);
++                runp[nruns] = pipe + prpos0; runn[nruns++] = a;
++                if (p0 > a) { runp[nruns] = pipe; runn[nruns++] = p0 - a; }
++                if (f0 != 0)
++                {
++                    const u32 b = std::min(f0, 256 - frpos0);
++                    runp[nruns] = fifo + frpos0; runn[nruns++] = b;
++                    if (f0 > b) { runp[nruns] = fifo; runn[nruns++] = f0 - b; }
++                }
++            }
++            u32 r = 0, done = 0;
++            const CmdFIFOEntry* ptr = runp[0];
++            const CmdFIFOEntry* end = ptr + runn[0];
++            bool clear = true;
++            while (CycleCount <= 0)
+             {
+-                GXStat &= ~(((u32)(NumPushPopCommands == 0) << 14) | (u32)(NumTestCommands == 0));
+-                clear = false;
++                if (ptr == end) [[unlikely]]
++                {
++                    done += runn[r];
++                    if (++r >= nruns) break;
++                    ptr = runp[r];
++                    end = ptr + runn[r];
++                }
++                if (clear)
++                {
++                    GXStat &= ~(((u32)(NumPushPopCommands == 0) << 14) | (u32)(NumTestCommands == 0));
++                    clear = false;
++                }
++                const CmdFIFOEntry entry = *ptr++;
++                ExecuteEntryBody<true>(entry, clear);
+             }
+-            const CmdFIFOEntry entry = (k < p0) ? pipe[(prpos0 + k) & 3] : fifo[(frpos0 + (k - p0)) & 0xFF];
+-            k++;
+-            if (--p <= 2)
++            const u32 k = (r < nruns) ? done + (u32)(ptr - runp[r]) : done;
++            u32 p, f, m;
++            bool due;
++            PipeRefills(p0, f0, k, p, f, m, due);
++            CmdFIFOEntry* const pipew = CmdPIPE.RawEntries();
++            for (u32 j = m > 4 ? m - 4 : 0; j < m; j++)
++                pipew[(pwpos0 + j) & 3] = fifo[(frpos0 + j) & 0xFF];
++            CmdPIPE.RawSetState(p, (prpos0 + k) & 3, (pwpos0 + m) & 3);
++            CmdFIFO.RawSetState(f, (frpos0 + m) & 0xFF, CmdFIFO.RawWritePos());
++            if (due)
+             {
+-                const u32 t = f < 2 ? f : 2;
+-                p += t;
+-                f -= t;
+-                m += t;
+-                due = true;
++                CheckFIFODMAFast();
++                CheckFIFOIRQFast();
+             }
+-            ExecuteEntryBody<true>(entry);
+-            const u32 c = entry.Command;
+-            clear = (c - 0x11u < 2u) || (c - 0x70u < 3u);
+-        }
+-        // the rings' state as the reads and refills would have left it: the pipe read k times and written m times
+-        // (the m moved entries, its slots keeping the last 4 of them), the FIFO read m times
+-        CmdFIFOEntry* const pipew = CmdPIPE.RawEntries();
+-        for (u32 j = m > 4 ? m - 4 : 0; j < m; j++)
+-            pipew[(pwpos0 + j) & 3] = fifo[(frpos0 + j) & 0xFF];
+-        CmdPIPE.RawSetState(p, (prpos0 + k) & 3, (pwpos0 + m) & 3);
+-        CmdFIFO.RawSetState(f, (frpos0 + m) & 0xFF, CmdFIFO.RawWritePos());
+-        if (due)
+-        {
+-            CheckFIFODMAFast();
+-            CheckFIFOIRQFast();
+         }
++        else
++            RunFastFIFO();
+     }
+     else
+         RunFastLoop();
+@@ -2815,6 +2924,13 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+     }
+ }
+ 
++bool GPU3D::GeomQueueEnv() noexcept
++{
++    // read as the GPU3D is created (a difftest's two NDS objects each with its own setting)
++    const char* e = getenv("MELONDS_GEOMQUEUE");
++    return !(e && e[0] == '0');
++}
++
+ bool GPU3D::GeomBatchEnv() noexcept
+ {
+     // read as the GPU3D is created: a difftest has two NDS objects, each created with its own setting
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index 189848a..c50f42b 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -140,8 +140,9 @@ private:
+     void WriteGXFIFOPortFast(u32 val) noexcept;
+     void Write32Plain(u32 addr, u32 val) noexcept;
+     template<bool Fast> void ExecuteCommandBody() noexcept;
+-    template<bool Fast> void ExecuteEntryBody(CmdFIFOEntry entry) noexcept;
++    template<bool Fast> void ExecuteEntryBody(CmdFIFOEntry entry, bool& countsChanged) noexcept;
+     void RunFastLoop() noexcept;
++    void RunFastFIFO() noexcept;
+     template<bool Fast> void SubmitVertexBody() noexcept;
+     template<bool Fast> void SubmitPolygonBody() noexcept;
+     template<bool Fast> void WriteToGXFIFOBody(u32 val) noexcept;
+@@ -418,6 +419,12 @@ public:
+     // the previous command could have changed their counts
+     static bool GeomFIFOEnv() noexcept;
+     bool GeomFIFO = GeomFIFOEnv();
++    // BananaDS (render.geom_queue, MELONDS_GEOMQUEUE=0 turns it off; exact): GeomFIFO's loop reads its queue run by
++    // run with a pointer and works out the pipe's refills from the number of entries read after the loop
++    // (PipeRefills), instead of counting them at every read; GXSTAT's push/pop and test bits are cleared before a
++    // command only after one that lowered their counts (nothing else changes them while the commands run)
++    static bool GeomQueueEnv() noexcept;
++    bool GeomQueue = GeomQueueEnv();
+     // while RunFast defers them, and whether one of the checks was due
+     bool FIFOChecksDeferred = false;
+     bool FIFOChecksDue = false;
+-- 
+2.43.0
+

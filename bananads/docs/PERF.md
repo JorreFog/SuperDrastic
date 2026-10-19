@@ -875,6 +875,43 @@ no block over 11%), vertices 0.78M (8,100 a frame, ~95 each, 40% the NEON transf
 ~140 each), `Run` 2.21M (~20 a FIFO entry plus the commands), `DMA::Run9` 1.77M (~37 a word, plus ~185 per call over
 ~1,240 calls before 0066).
 
+## Mario Kart DS's race start, phase 3: the geometry engine's own cost (2026-10-19, third speed session's third phase, agent mk3geom; untested on device)
+
+Where `GPU3D::Run`'s instructions went per FIFO entry (qemu per-TB counts of a `-g1` build of `3a743f3`, same code as
+the device build, mapped to source lines; MK 1650-2150, ~27,400 entries and ~2,180 calls a frame, `Run` 2.17M a
+frame): **the loop's own mechanics ~26 instructions an entry (~0.72M)** (the queue read with its pipe-or-FIFO select
+7.4, the pipe's refill counting 6.7, the loop test 4.2, GXSTAT's clear flag recomputed from the command 5), the
+command dispatch ~11 (parameter count lookup, then the switch), the cycle bookkeeping (`AddCyclesT`, the pipeline
+delays) ~14, the commands' own work the rest; ~145 instructions a call (setup, the rings' state, the DMA and IRQ
+checks).
+
+### The command loop's queue read run by run, the pipe's refills after the loop (patch 0080, `render.geom_queue`, default `on`)
+
+`render.geom_fifo`'s loop read entry k as `k < p0 ? pipe[...] : fifo[...]`, counted the pipe's refills at every
+read (a read leaving 2 or fewer moves up to 2 from the FIFO) and recomputed GXSTAT's clear flag from every command.
+Now it walks the queue with a pointer, run by run (the pipe's entries from its read position, then the FIFO's; each
+ring in at most two contiguous runs), works the refills out after the loop from the number of entries read
+(`PipeRefills`: once the pipe holds 3 or more, or the FIFO is empty, the pipe holds 3 when `p - reads` is odd and 4
+when even while the FIFO lasts, then what is left; a pipe of 1-2 with a FIFO not empty, a state no writer leaves,
+is stepped through), and the commands that lower the push/pop or test counts set the clear flag themselves
+(nothing else changes GXSTAT's bits 0 and 14 or the counts while the commands run). The old loop is `RunFastFIFO`
+(out of line). `PipeRefills` was checked against the old counting for every pipe level 0-4, FIFO level 0-256 and
+number of reads (135,439 cases, all equal). qemu, emu thread, MK 1650-2150: `Run` (with the old loop's function)
+2,204.3k -> 1,921.4k; **the thread 12,556.1k -> 12,261.0k instructions a frame without the Gengis bins (-295k,
+-2.3%)**. Per entry the loop is now ~8 instructions (the pointer test, the clear flag test, the 8-byte load).
+Expected on the device: **-1..-2%** of the emulator thread's cycles (`Run` was 13% of the cycles at 3.79M
+instructions; this removes 13% of what is left, simple ALU and a data-dependent select branch, L1-resident).
+
+Exact: MK's frames and audio equal to the base hashes on and off; main RAM every frame 1600-2100 with both CPUs'
+registers and the geometry timing state SAME off vs on; full savestates at 1850 and 2000 identical off, on and to
+the checkpoint's. A trace build (every `Run` call's ARM9 timestamp, `Timestamp`, `CycleCount`, GXSTAT, both rings'
+levels and positions, the pipe's four slots, the counts, the pipelines' state, the polygon and vertex counts and IF
+folded into a hash; not committed): the same hash over all 1,133,371 calls of the scene off and on. Sabotage, in the
+trace build: (1) no refill check due after a single read from a pipe of 3: the trace (and the call count) and the
+savestate at 1850 differ; (2) a pop matrix not setting the clear flag: the trace differs (frames, audio and the
+frame-end savestate don't: GXSTAT's bit 14 stays set until the next command, which MK never reads in between). Test
+ROMs (check.sh's 12 picture sets and 4 difftests, geomtest-irq with `--regs --timing`) and exact-suite.sh as 0063's.
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an
