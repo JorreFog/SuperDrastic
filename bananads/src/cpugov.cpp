@@ -334,15 +334,15 @@ static void gov_loop() {
                 }
             if (forgiven) mem_save();
             // the retry (2026-10-19): a banned clock just below the current one may be tried once more after FORGIVE_MS
-            // clean at the current clock, times one more than its strikes (2 min, then 4, 6...: a clock a game really
+            // clean at the current clock, times its strikes (2 min after the first, then 4, 6...: a clock a game really
             // can't run at is probed less and less often; one that was late only at a heavy moment, like Mario Kart
             // DS's countdown at 1800 MHz, is back after the race settles instead of 30 min later). A failed try strikes
             // and bans it again as any late frame does; a clean try forgives it as above
-            if (int lo = below(cur); lo >= 0 && bad_until[lo] > t && (retry_ms += dt / 1000000) >= FORGIVE_MS * (1 + strikes[lo])) {
+            if (int lo = below(cur); lo >= 0 && bad_until[lo] > t && (retry_ms += dt / 1000000) >= FORGIVE_MS * std::max(1, strikes[lo])) {
                 bad_until[lo] = 0;
                 retry_ms = 0;
                 Log(LogLevel::Info, "[cpugov] %d MHz may be tried again: %d s clean at %d MHz\n", freqs[lo] / 1000,
-                    FORGIVE_MS * (1 + strikes[lo]) / 1000, cur / 1000);
+                    FORGIVE_MS * std::max(1, strikes[lo]) / 1000, cur / 1000);
             }
         }
         const int was = cur;
