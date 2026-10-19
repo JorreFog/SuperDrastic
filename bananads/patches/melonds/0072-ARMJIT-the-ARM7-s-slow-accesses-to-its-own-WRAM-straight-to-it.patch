@@ -1,4 +1,4 @@
-From fd630edd2fab2a11ae781fe5fac33093adaf248a Mon Sep 17 00:00:00 2001
+From 54cc6c4a2834f170c4f5ecb9b198165a166f549b Mon Sep 17 00:00:00 2001
 From: BananaDS <bananads@localhost>
 Date: Mon, 19 Oct 2026 10:13:59 +0000
 Subject: [PATCH] ARMJIT: the ARM7's slow accesses to its own WRAM straight to
@@ -20,8 +20,8 @@ count the accesses as before (before the route). Under qemu, MK frames 1680-2100
 ---
  src/ARMJIT.cpp     | 41 +++++++++++++++++++++++++++++++++++++++--
  src/NDS_IOFast.cpp |  2 +-
- src/NDS_IOFast.h   |  4 ++++
- 3 files changed, 44 insertions(+), 3 deletions(-)
+ src/NDS_IOFast.h   |  5 +++++
+ 3 files changed, 45 insertions(+), 3 deletions(-)
 
 diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
 index 8b6a68f..3ee6da5 100644
@@ -103,7 +103,7 @@ index cc74418..2f23e3e 100644
  
  u32 MemFastParts = ReadMemFastEnv();
 diff --git a/src/NDS_IOFast.h b/src/NDS_IOFast.h
-index 03d9da0..325bafb 100644
+index 03d9da0..9db9a3e 100644
 --- a/src/NDS_IOFast.h
 +++ b/src/NDS_IOFast.h
 @@ -74,6 +74,9 @@ enum
@@ -116,14 +116,15 @@ index 03d9da0..325bafb 100644
  };
  
  extern bool IOStatsOn;
-@@ -88,6 +91,7 @@ enum
-     slow_IORead = iofast_IORead,
-     slow_MemVRAM = memfast_VRAM << 4,
-     slow_MemIO = memfast_IO << 4,
-+    slow_MemWRAM7 = memfast_WRAM7 << 4,
+@@ -91,6 +94,8 @@ enum
      slow_FullPath = 1u << 31,
  };
  extern __attribute__((visibility("hidden"))) u32 SlowPathFlags;
++// memfast_WRAM7's bit in SlowPathFlags (MemFastParts << 4: bit 7)
++enum { slow_MemWRAM7 = memfast_WRAM7 << 4 };
+ 
+ // counts one access of `size` bytes (or a block of `words` words) at addr; only called when IOStatsOn
+ void IOStatsCount(int kind, u32 addr, u32 size, u32 words) noexcept;
 -- 
 2.43.0
 
