@@ -630,6 +630,11 @@ void BananaRenderer::Execute(Job& job)
 // capture is on (SetAInPlace waits for the 2D thread first; its jobs then leave unit A alone).
 // The 2D thread sleeps on Wake when it has caught up; Kick wakes it every KickBatch jobs, at VBlank, and whenever
 // the emulator's thread is about to wait for it.
+// render.2d_ring=split (SetSplitRing): Head, Tail and LogRead are the ones on PLine and CLine (cache lines of their
+// own), and the emulator's thread keeps the last Tail and LogRead it read (TailSeen, LogReadSeen) and reads them
+// again only when the ring or the log looks full by those: they only grow, so a stale value only says "full" too
+// early, and the acquire that read it still orders the slots and the log space it freed. Shared: the members
+// next to Kicked and the mutex, read every time (the old code).
 
 void BananaRenderer::SetThreaded2D(bool on)
 {
@@ -644,10 +649,16 @@ void BananaRenderer::SetThreaded2D(bool on)
         Jobs = std::make_unique<Job[]>(NumJobs);
     if (!Log)
         Log = std::make_unique<u8[]>(LogSize);
-    Head.store(0, std::memory_order_relaxed);
-    Tail.store(0, std::memory_order_relaxed);
+    RingSplit = SplitRing;
+    HeadP = RingSplit ? &PLine.Head : &Head;
+    TailP = RingSplit ? &CLine.Tail : &Tail;
+    LogReadP = RingSplit ? &CLine.LogRead : &LogRead;
+    HeadP->store(0, std::memory_order_relaxed);
+    TailP->store(0, std::memory_order_relaxed);
+    TailSeen = 0;
     LogWrite = 0;
-    LogRead.store(0, std::memory_order_relaxed);
+    LogReadP->store(0, std::memory_order_relaxed);
+    LogReadSeen = 0;
     Kicked = 0;
     KickPending = false;
     Quit = false;
@@ -711,18 +722,26 @@ void BananaRenderer::LogCopy(void* dst, const void* src, u32 len)
 // being prepared are at most the engines' whole copies (a resync), well under LogSize, so this always ends.
 void BananaRenderer::LogReserve(u64 bytes)
 {
-    if (LogWrite + bytes - LogRead.load(std::memory_order_acquire) <= LogSize)
+    if (RingSplit)
+    {
+        if (LogWrite + bytes - LogReadSeen <= LogSize)
+            return;
+        LogReadSeen = LogReadP->load(std::memory_order_acquire);
+        if (LogWrite + bytes - LogReadSeen <= LogSize)
+            return;
+    }
+    else if (LogWrite + bytes - LogRead.load(std::memory_order_acquire) <= LogSize)
         return;
     StatWaits++;
     Kick();
-    while (LogWrite + bytes - LogRead.load(std::memory_order_acquire) > LogSize)
+    while (LogWrite + bytes - LogReadP->load(std::memory_order_acquire) > LogSize)
         std::this_thread::yield();
 }
 
 // the 2D thread, before it draws a job
 void BananaRenderer::ApplyLog(u64 end)
 {
-    u64 rd = LogRead.load(std::memory_order_relaxed);
+    u64 rd = LogReadP->load(std::memory_order_relaxed);
     if (rd == end)
         return;
     while (rd < end)
@@ -737,7 +756,7 @@ void BananaRenderer::ApplyLog(u64 end)
         memcpy(r.Dst, &Log[pos + sizeof(LogRecord)], r.Len);
         rd += sizeof(LogRecord) + ((r.Len + 15) & ~15ull);
     }
-    LogRead.store(rd, std::memory_order_release);
+    LogReadP->store(rd, std::memory_order_release);
 }
 
 void BananaRenderer::WorkerLoop()
@@ -745,10 +764,12 @@ void BananaRenderer::WorkerLoop()
 #ifdef __linux__
     pthread_setname_np(pthread_self(), "bananads-2d");  // for top -H and perf on the handheld
 #endif
-    u32 tail = Tail.load(std::memory_order_relaxed);
+    std::atomic<u32>* const headp = HeadP;
+    std::atomic<u32>* const tailp = TailP;
+    u32 tail = tailp->load(std::memory_order_relaxed);
     for (;;)
     {
-        if (tail == Head.load(std::memory_order_acquire))
+        if (tail == headp->load(std::memory_order_acquire))
         {
             std::unique_lock<std::mutex> l(M);
             Wake.wait(l, [this] { return Quit || KickPending; });
@@ -759,13 +780,13 @@ void BananaRenderer::WorkerLoop()
         }
         Execute(Jobs[tail % NumJobs]);
         tail++;
-        Tail.store(tail, std::memory_order_release);
+        tailp->store(tail, std::memory_order_release);
     }
 }
 
 void BananaRenderer::Kick()
 {
-    Kicked = Head.load(std::memory_order_relaxed);
+    Kicked = HeadP->load(std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> l(M);
         KickPending = true;
@@ -775,21 +796,28 @@ void BananaRenderer::Kick()
 
 BananaRenderer::Job& BananaRenderer::NewJob()
 {
-    u32 head = Head.load(std::memory_order_relaxed);
-    if (head - Tail.load(std::memory_order_acquire) >= NumJobs)
+    u32 head = HeadP->load(std::memory_order_relaxed);
+    if (RingSplit)
     {
-        StatWaits++;
-        Kick();
-        while (head - Tail.load(std::memory_order_acquire) >= NumJobs)
-            std::this_thread::yield();
+        if (head - TailSeen < NumJobs)
+            return Jobs[head % NumJobs];
+        TailSeen = TailP->load(std::memory_order_acquire);
+        if (head - TailSeen < NumJobs)
+            return Jobs[head % NumJobs];
     }
+    else if (head - Tail.load(std::memory_order_acquire) < NumJobs)
+        return Jobs[head % NumJobs];
+    StatWaits++;
+    Kick();
+    while (head - TailP->load(std::memory_order_acquire) >= NumJobs)
+        std::this_thread::yield();
     return Jobs[head % NumJobs];
 }
 
 void BananaRenderer::Submit()
 {
-    u32 head = Head.load(std::memory_order_relaxed) + 1;
-    Head.store(head, std::memory_order_release);
+    u32 head = HeadP->load(std::memory_order_relaxed) + 1;
+    HeadP->store(head, std::memory_order_release);
     StatJobs++;
     if (head - Kicked >= KickBatch)
         Kick();
@@ -799,18 +827,18 @@ bool BananaRenderer::Drain2D()
 {
     if (!Thread2D)
         return false;
-    u32 head = Head.load(std::memory_order_relaxed);
-    if (Tail.load(std::memory_order_acquire) == head)
+    u32 head = HeadP->load(std::memory_order_relaxed);
+    if (TailP->load(std::memory_order_acquire) == head)
         return false;
     Kick();
-    while (Tail.load(std::memory_order_acquire) != head)
+    while (TailP->load(std::memory_order_acquire) != head)
         std::this_thread::yield();
     return true;
 }
 
 void BananaRenderer::WaitFence(u32 fence) const
 {
-    while ((s32)(Tail.load(std::memory_order_acquire) - fence) < 0)
+    while ((s32)(TailP->load(std::memory_order_acquire) - fence) < 0)
         std::this_thread::yield();
 }
 
@@ -826,7 +854,7 @@ void BananaRenderer::Start3DRendering()
 void BananaRenderer::VBlank()
 {
     // the frame's last lines: drawn while the emulator runs VBlank
-    if (Thread2D && Head.load(std::memory_order_relaxed) != Kicked)
+    if (Thread2D && HeadP->load(std::memory_order_relaxed) != Kicked)
         Kick();
 }
 
@@ -836,16 +864,16 @@ void BananaRenderer::SwapBuffers()
     {
         // render.2d_lazy: this frame's last jobs handed over, and only the frame before waited for (the buffers the
         // next frame's lines go into: the other back buffer, or a scanout slot the frontend frees after its fence)
-        if (Head.load(std::memory_order_relaxed) != Kicked)
+        if (HeadP->load(std::memory_order_relaxed) != Kicked)
             Kick();
         FencePrev = FenceCur;
-        FenceCur = Head.load(std::memory_order_relaxed);
+        FenceCur = HeadP->load(std::memory_order_relaxed);
         WaitFence(FencePrev);
     }
     else
     {
         Drain2D();  // the frame's lines are all in the back buffer (or SetOutput's)
-        FencePrev = FenceCur = Head.load(std::memory_order_relaxed);
+        FencePrev = FenceCur = HeadP->load(std::memory_order_relaxed);
     }
     Front[0] = Out[0];
     Front[1] = Out[1];

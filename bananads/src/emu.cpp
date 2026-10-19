@@ -577,6 +577,10 @@ bool Emu::load_rom(const std::string& path) {
     // pictures (the default at render.scale=2); off (the default at 1x) draws them on the emulator's thread
     // (on by default at 2x, where unit A composites four times: HeartGold at 1104 MHz 39.8 -> 49.6 fps)
     if (banana2d) banana_ = &static_cast<BananaRenderer&>(nds_->GetRenderer());
+    // render.2d_ring: split (the default) puts the job ring's counters the two threads write for every job (Head;
+    // Tail and the copy log's read position) on cache lines of their own, and the emulator's thread reads the 2D
+    // thread's only when the ring or the log looks full (exact: the same jobs); shared is the old layout
+    if (banana2d) banana_->SetSplitRing(cfg_.str("render.2d_ring", "split") != "shared");
     if (banana2d && cfg_.flag("render.2d_thread", scale_ == 2)) banana_->SetThreaded2D(true);
     // render.2d_kick: how many jobs (a frame has 383: 192 lines, 191 sprite lines) go to the 2D thread before it is
     // woken; a wake of the sleeping thread is a futex call on the emulator's thread (16 was the old fixed batch)

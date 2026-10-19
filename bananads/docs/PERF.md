@@ -602,6 +602,30 @@ RTC 24k, `StartScanline` 29k). None of this is measured on the device; qemu coun
 - Expected on the device: ~1.2% of the thread is these paths, -60..70% of it: **+0.6..0.8%**.
   `EXTRA="--set jit.wram7fast=off"` against plain.
 
+### The 2D job ring's counters on cache lines of their own (`render.2d_ring`, default `split`; no melonDS patch)
+
+- On the device `BananaRenderer::Submit` is 0.54% of the thread for 383 jobs a frame: ~420 cycles a call for ~10
+  instructions, which only memory can cost. Head (written by the emulator's thread every job), Tail (written by the
+  2D thread every job), `Kicked`, `FenceCur` and the start of the mutex were on one cache line, so every job moved it
+  between the cores twice; `NewJob` also read Tail (acquire) every job and `LogReserve` the copy log's `LogRead`
+  for every copy, each a miss while the 2D thread writes them.
+- `split`: Head on a line of its own, Tail and `LogRead` on another; the emulator's thread keeps the last Tail and
+  `LogRead` it read (`TailSeen`, `LogReadSeen`) and reads them again only when the ring or the log looks full by
+  those. They only grow, so a stale value can only say "full" too early, and the acquire that read it orders the
+  slots and log space it freed as before. The 2D thread draws the same jobs in the same order.
+- qemu can't show this (it doesn't model caches): the instruction counts are unchanged.
+- Checked: `mk-scene.sh` frames and audio identical to the base with `split` and `shared`, and 210 frames (every 10th)
+  identical between them; `exact-suite.sh` with `render.2d_thread=on` on both sides, `shared` vs `split`, plus
+  ds2dtest and geomtest pictures: FAILS=0. A sabotage (the 2D thread publishing Tail on the old line) hangs MK
+  before its first dump. Not caught: a ring bound 128 jobs too large (overwriting undrawn jobs) changed none of 210
+  frames (every 10th) nor the audio, on 4 host cores or pinned to one: under qemu the 2D thread rarely lags a whole
+  ring behind (2,557 waits for it in a 4-core run with the right bound, 103 with the sabotage, display capture's
+  included), and where it does the overwritten lines were alike. The full-ring and full-log paths rest on the
+  reasoning above, not on a check.
+- Expected on the device: NewJob's and LogReserve's misses gone, Submit's store no longer fighting Tail's writes:
+  ~+0.3..0.5% (half of Submit's 0.54% and a miss a job in the job preparation). `EXTRA="--set render.2d_ring=shared"`
+  against plain; watch `kms.stats` as for `render.2d_kick`.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser
