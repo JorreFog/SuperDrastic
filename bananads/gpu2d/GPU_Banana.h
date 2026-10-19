@@ -74,6 +74,12 @@ public:
     bool FrameFence(u32& fence) const { fence = FenceCur; return LazyFrames && Thread2D; }
     void WaitFence(u32 fence) const;  // any thread: until the 2D thread has drawn the jobs before `fence`
 
+    // render.2d_ring=split: the counters the two threads write each job on cache lines of their own (Head on one,
+    // Tail and LogRead on another: shared, they sit on one line with Kicked and the mutex, and each job moves that
+    // line between the cores twice), and the emulator's thread reads Tail and LogRead again only when the ring or
+    // the log looks full by the last values it read (TailSeen, LogReadSeen: the 2D thread only moves them on).
+    // The same jobs in the same order, so the same pictures. Takes effect when the 2D thread starts.
+    void SetSplitRing(bool on) { SplitRing = on; }
     void SetThreaded2D(bool on);
     bool IsThreaded2D() const { return Thread2D; }
     // render.scale=2: the 3D renderer's four quarter lines of a DS line (quarter q: 2x row 2 * line + (q >> 1), its
@@ -174,6 +180,18 @@ private:
     std::unique_ptr<Job[]> Jobs;
     std::atomic<u32> Head{0};   // jobs handed over (written by the emulator's thread)
     std::atomic<u32> Tail{0};   // jobs drawn (written by the 2D thread)
+    // render.2d_ring (SetSplitRing): what the code uses, set as the 2D thread starts: Head, Tail and LogRead above
+    // (shared), or the two lines below (split)
+    bool SplitRing = false, RingSplit = false;
+    std::atomic<u32>* HeadP = &Head;
+    std::atomic<u32>* TailP = &Tail;
+    std::atomic<u64>* LogReadP = &LogRead;
+    u32 TailSeen = 0;           // (split) Tail as the emulator's thread last read it
+    u64 LogReadSeen = 0;        // (split) LogRead likewise
+    struct alignas(64) ProducerLine { std::atomic<u32> Head{0}; };
+    struct alignas(64) ConsumerLine { std::atomic<u32> Tail{0}; std::atomic<u64> LogRead{0}; };
+    ProducerLine PLine;
+    ConsumerLine CLine;
     bool LazyFrames = false;
     u32 FenceCur = 0, FencePrev = 0;  // Head at the last two frames' ends (render.2d_lazy)
     u32 Kicked = 0;             // Head at the last wakeup
