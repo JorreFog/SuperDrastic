@@ -795,11 +795,30 @@ device: -0.5..-0.8% of the thread (the profile has the sort at 0.9%; the merges'
 Exact: the sorted order is in the savestate, and Mario Kart's savestates at 1850 and 2000 are byte-identical to the
 checkpoint's; frames and audio too. Sabotage (the first pass unstable): the savestate at 1850 differs.
 
-Together (0063-0065): the emulator's thread 12.88M -> 12.78M instructions a frame (-0.8%). The geometry that is
+### The GX FIFO DMA's block path in a function of its own (patch 0066, `render.gx_dmarun`, default `on`)
+
+MK calls `DMA::Run9` ~1,240 times a frame for the GX FIFO DMA, each call ending at the slice's end after one block,
+and each paid ~185 instructions of `Run9`'s setup for all its cases. `Run9` now checks first for the one case where
+the whole call takes the GX block path with `render.gx_dmafast`'s timing (32-bit FastDMA from main RAM going up, to
+main RAM's end for all its remaining units, into the fixed 0x04000400, block paths and GeomFast on) and runs it in
+`Run9GX`, the same statements; everything else goes to the old body (`Run9Full`). `DMA::Run9` 1,772.8k ->
+`Run9GX` 439.0k + `WriteGXFIFOBlock` 1,135.7k (now out of line) + `Run9Full` 57.5k + the check 76.2k: **-64.4k a
+frame; the thread -69.7k (-0.55%)**. Expected on the device: -0.4..-0.6% (fewer instructions per call, and a
+340-instruction function instead of `Run9`'s ~1,500 between the JIT's blocks for the L1I).
+
+Exact: Mario Kart's frames, audio, main RAM every frame with registers and geometry timing, and full savestates at
+1850 and 2000 identical off vs on and to the checkpoint's. A trace build (every `Run9` call's ARM9 timestamp,
+source, counts, burst table position and state folded into a hash; not committed) gives the same hash over all
+676,042 calls of the scene off and on. Sabotage (one cycle more when a block starts at a burst's second unit): the
+trace, the savestate at 1850 and the audio differ. Two other sabotages (a DMA's first unit not started as a new
+burst; a burst restarting inside a block) left even the trace identical: MK's GX DMA never reaches those branches
+(they are the old code's statements, unchanged). Test ROMs and exact-suite.sh as 0063's.
+
+Together (0063-0066): the emulator's thread 12.88M -> 12.71M instructions a frame (-1.3%). The geometry that is
 left has no single hot spot by the per-TB counts: polygon setup 1.14M (3,300 calls a frame, ~340 instructions each,
 no block over 11%), vertices 0.78M (8,100 a frame, ~95 each, 40% the NEON transform), lighting 0.64M (4,600 normals,
 ~140 each), `Run` 2.21M (~20 a FIFO entry plus the commands), `DMA::Run9` 1.77M (~37 a word, plus ~185 per call over
-~1,240 calls: its setup per slice, a cost of the slice loop ending every burst).
+~1,240 calls before 0066).
 
 ## Measuring
 
