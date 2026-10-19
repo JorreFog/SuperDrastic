@@ -754,6 +754,26 @@ is an observation point (the GX FIFO DMA restarts whenever the FIFO is under hal
 when `Run` is called, so a deferred engine has to replay every call point with the FIFO as it was then). The
 observers and the reasoning: BananaLinux `perf/bananads/session3/geomlazy-evidence/observers.md`.
 
+## Mario Kart DS's race start after the checkpoint: the CPU's GX stores and the polygon sort (2026-10-19, third speed session's second phase, agent mk2geom; untested on device)
+
+qemu, device build, the emulator's thread over frames 1650-2150 of the scene (`mk-scene.sh`), from the checkpoint
+(8e98258: 12.88M instructions a frame without the Gengis bins it draws itself). Where the GX FIFO's words come from
+in this scene (`MELONDS_IOSTATS=1700`, frames 1700-1899, per frame): ~31,700 by the GX FIFO DMA, **2,076 by the
+ARM9's single STRs to 0x04000400** and 16 by STMs (2 of them). So the CPU's stores are ~6% of the words; the
+device profile's `WriteToGXFIFOBody<true>` (6.4%) was the DMA's per-word path, which 0060 replaced (2.08M -> 0.15M
+instructions a frame; the 0.15M left are the STRs).
+
+### The JIT's STMs into the GX FIFO in one call (patch 0063, `render.gx_batch`, default `on`)
+
+Session 2's 0021 (memio), ported: `SlowBlockTransfer9` hands an STM into the GX FIFO to
+`GPU3D::WriteGXFIFOWords`, which runs 0060's block loop (now `WriteGXFIFOWordsFast`, shared with the DMA's block;
+the words go on after one that stalls, as word by word). Session 2's own loop and its DMA hook are not needed (0060
+does the DMA). On MK it does nothing (2 GX STMs a frame) and costs the ~210 other STMs a frame (into the DTCM) ~16
+instructions each for the test: +3.4k a frame (+0.03%). It is for HeartGold, where the 2026-10-12 profile had STMs
+into the GX FIFO at 5.7% of the thread (session 2's estimate: +1..2.5% fps there). Exact: tests/gxstm (session 2's
+ROM, added here) main RAM every frame and pictures off vs on; Mario Kart's frames, audio and savestates. Sabotage (an
+STM's push/pop commands not counted): gxstm's difftest DIFFERENT at frame 1 (Mario Kart doesn't catch it).
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an
