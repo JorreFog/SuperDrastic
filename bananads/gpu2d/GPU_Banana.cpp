@@ -21,6 +21,7 @@
 #include <string.h>
 #ifdef __linux__
 #include <pthread.h>
+#include <sys/resource.h>
 #endif
 #include "NDS.h"
 #include "Platform.h"
@@ -764,6 +765,7 @@ void BananaRenderer::WorkerLoop()
 {
 #ifdef __linux__
     pthread_setname_np(pthread_self(), "bananads-2d");  // for top -H and perf on the handheld
+    if (Nice) setpriority(PRIO_PROCESS, 0, Nice);
 #endif
     std::atomic<u32>* const headp = HeadP;
     std::atomic<u32>* const tailp = TailP;

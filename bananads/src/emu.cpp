@@ -618,6 +618,7 @@ bool Emu::load_rom(const std::string& path) {
         const int threads = (int)cfg_.num("render.gengis_threads", 3);
         const bool defer = cfg_.flag("render.gengis_defer", false);
         GengisRenderer3D::Help = (int)cfg_.num("render.gengis_help", 1);
+        GengisRenderer3D::Nice = (int)cfg_.num("sched.gengis_nice", 0);
         // render.edge_marking, render.fog: off leaves the effect out even where the game turns it on (outlines
         // round 3D models; distance fog)
         GengisRenderer3D::SetEffects(cfg_.flag("render.edge_marking", true), cfg_.flag("render.fog", true));
@@ -655,6 +656,9 @@ bool Emu::load_rom(const std::string& path) {
     // render.2d_kick: how many jobs (a frame has 383: 192 lines, 191 sprite lines) go to the 2D thread before it is
     // woken; a wake of the sleeping thread is a futex call on the emulator's thread (16 was the old fixed batch)
     if (banana2d) banana_->SetKickBatch((u32)cfg_.num("render.2d_kick", 64));
+    // sched.2d_nice: the 2D thread's nice value (0: the default; negative puts it ahead of Gengis's workers when the cores
+    // are contended). sched.emu_nice/sched.emu_cpu (the emulator's thread) and sched.gengis_nice are set beside it
+    if (banana2d) banana_->SetNice((int)cfg_.num("sched.2d_nice", 0));
     // render.2d_fence_wait: the waits for the 2D thread spin on sched_yield (spin, the old way) or block on a condition
     // variable (block). Default block since 2026-10-19: on the RG DS Plus the four A55s are shared by five threads, and the
     // emulator's thread spent ~5% of Mario Kart DS's race start spinning (a prof.hz profile on the panels)

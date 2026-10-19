@@ -29,6 +29,8 @@
 #include <linux/input.h>
 #include <poll.h>
 #include <pthread.h>
+#include <sched.h>
+#include <sys/resource.h>
 #include <signal.h>
 #include <sys/eventfd.h>
 #include <sys/ioctl.h>
@@ -1241,6 +1243,18 @@ int run_kms(Emu& emu, const Config& cfg) {
 
     std::thread emu_thread([&] {
         pthread_setname_np(pthread_self(), "bds-emu");
+        // sched.emu_nice: this thread's nice value (negative = ahead of the 2D thread, Gengis's workers and the rest
+        // when the four cores are contended: it is the frame's critical path); sched.emu_cpu: pin it to one core.
+        // Both 0/off by default: device A/Bs first (BananaLinux perf/bananads/session3)
+        if (long n = cfg.num("sched.emu_nice", 0); n != 0) {
+            if (setpriority(PRIO_PROCESS, 0, (int)n)) Log(LogLevel::Warn, "[kms] sched.emu_nice %ld: %s\n", n, strerror(errno));
+            else Log(LogLevel::Info, "[kms] the emulator's thread at nice %ld\n", n);
+        }
+        if (long c = cfg.num("sched.emu_cpu", -1); c >= 0) {
+            cpu_set_t set; CPU_ZERO(&set); CPU_SET((int)c, &set);
+            if (sched_setaffinity(0, sizeof set, &set)) Log(LogLevel::Warn, "[kms] sched.emu_cpu %ld: %s\n", c, strerror(errno));
+            else Log(LogLevel::Info, "[kms] the emulator's thread pinned to cpu%ld\n", c);
+        }
         // kms.pace: display (the default) runs the DS at the panels' refresh (60.002 Hz on the RG DS, 0.3% faster than
         // its 59.826) so every refresh shows a new frame, with the SPU's output rate lowered as much so the sound
         // keeps 48000 samples a second; ds runs it at its own rate, and a frame shows twice every ~6 s

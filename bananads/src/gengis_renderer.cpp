@@ -1,4 +1,5 @@
 // Gengis Engine as melonDS's 3D renderer: see gengis_renderer.h.
+#include <sys/resource.h>
 #include "gengis_renderer.h"
 
 #include <chrono>
@@ -262,6 +263,7 @@ void GengisRenderer3D::Convert() {
 // ---- the bins and the threads ----
 
 int GengisRenderer3D::Help = 1;
+int GengisRenderer3D::Nice = 0;
 
 bool GengisRenderer3D::RenderOne(bool emu) {
     const unsigned b = Next.fetch_add(1, std::memory_order_acq_rel);
@@ -288,6 +290,7 @@ bool GengisRenderer3D::RenderOne(bool emu) {
 }
 
 void GengisRenderer3D::Worker() {
+    if (Nice) setpriority(PRIO_PROCESS, 0, Nice);
     unsigned seen = 0;
     for (;;) {
         {

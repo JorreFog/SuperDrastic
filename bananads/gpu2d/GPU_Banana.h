@@ -70,6 +70,7 @@ public:
     void SetLazyFrames(bool on) { Drain2D(); LazyFrames = on; }
     // render.2d_kick: wake the 2D thread every this many jobs (1-NumJobs; it is also woken at VBlank, at the swap
     // and before any wait for it, so the pictures don't depend on it)
+    void SetNice(int n) { Nice = n; }  // sched.2d_nice: the 2D thread's nice value (0: the default)
     void SetKickBatch(u32 jobs) { KickBatch = jobs < 1 ? 1 : jobs > NumJobs ? NumJobs : jobs; }
     bool FrameFence(u32& fence) const { fence = FenceCur; return LazyFrames && Thread2D; }
     void WaitFence(u32 fence) const;  // any thread: until the 2D thread has drawn the jobs before `fence`
@@ -159,6 +160,7 @@ private:
     // jobs handed over before the thread is woken (render.2d_kick): each wake of a sleeping 2D thread is a futex
     // call on the emulator's thread (pthread_cond_signal, 0.9% of it in Mario Kart DS's race start at 16)
     u32 KickBatch = 16;
+    int Nice = 0;
 
     Job& NewJob();
     void Submit();

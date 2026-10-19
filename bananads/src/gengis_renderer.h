@@ -44,6 +44,7 @@ public:
     // 1 (the default) only once a render thread has converted the frame (its polygons and textures, the long part,
     // kept off the emulator's thread), 0 never (it waits); with no render threads it always does
     static int Help;
+    static int Nice;  // sched.gengis_nice: the workers' nice value (0: the default)
     unsigned long EmuBins = 0, EmuConverts = 0;  // drawn and converted on the emulator's thread (logged at the end)
     std::atomic<unsigned long> AllBins{0};
     // at 2x, DS line `line`'s four 256-pixel lines: quarter q is 2x row 2 * line + (q >> 1), its even pixels (q & 1

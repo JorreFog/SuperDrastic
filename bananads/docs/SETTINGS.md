@@ -113,6 +113,10 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `cpugov.log` | `off` | a log line per 250 ms decision window |
 | `cpugov.sysfs`, `cpugov.window_ms` | the CPU's `cpufreq/policy0/`, `250` | for tests (tests/cpugov_test.cpp): another cpufreq folder, another window |
 | `power.cpu_latency_us` | `0` | with `frontend=kms`: hold the cores out of idle states that take longer than this to leave, for the game's lifetime (PM QoS through `/dev/cpu_dma_latency`; the RK3566/RK3568's `cpu-sleep` takes 220 us, and 100 here kept HeartGold at 2x ~1.5% faster). `0`: the kernel decides. Costs battery: measure before keeping it on |
+| `sched.emu_nice` | `0` | with `frontend=kms`: the emulator's thread's nice value. Negative puts it ahead of the 2D thread, Gengis's workers and everything else when the four cores are contended (the RG DS Plus runs five busy threads on four A55s; the emulator's thread is the frame's critical path). `0`: unchanged. A device A/B setting (2026-10-19) |
+| `sched.emu_cpu` | `-1` | with `frontend=kms`: pin the emulator's thread to this core (`0`-`3`); the other threads stay free to run anywhere. `-1`: not pinned |
+| `sched.2d_nice` | `0` | the 2D thread's (`bananads-2d`) nice value; `0`: unchanged |
+| `sched.gengis_nice` | `0` | Gengis's render threads' nice value; `0`: unchanged |
 | `headless.frames` | `600` | how many frames `headless` runs |
 | `headless.dump_dir`, `headless.dump_every` | none, `60` | write both screens as `frame<N>.ppm` every N frames |
 | `headless.direct` | `off` | `on`: every frame drawn straight into a ring of the frontend's buffers (`Emu::draw_into`), as `frontend=kms` draws into the scanout buffers; the pictures must be the same as without (the Banana 2D engine only) |
