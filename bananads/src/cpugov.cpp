@@ -72,6 +72,7 @@ static const int MAXT = 64, NF = 24;
 static int freqs[NF], nf, cur, fmin_, fmax_, hwmax_, before_ = -1;
 static long long bad_until[NF], now_ns;
 static int strikes[NF], proof_ms[NF];
+static int retry_ms;  // clean time at the current clock while the clock just below it is banned (the retry below)
 static bool verbose, soft_max, mem_on = true;
 static std::atomic<long long> boost_until{0};
 static std::atomic<bool> gov_on{false}, gov_run{false};
@@ -174,6 +175,14 @@ static void mem_load(int scale) {
     }
     Log(LogLevel::Info, "[cpugov] remembered strikes for %s%s\n", mem_path.c_str(), said.empty() ? ": none" : said.c_str());
 }
+// the index of the clock just below khz (-1: none)
+static int below(int khz) {
+    int best = -1;
+    for (int i = 0; i < nf; i++)
+        if (freqs[i] < khz && freqs[i] >= fmin_ && (best < 0 || freqs[i] > freqs[best])) best = i;
+    return best;
+}
+
 // one step down, unless that clock was late recently
 static int step_down(int khz) {
     int best = khz;
@@ -310,6 +319,7 @@ static void gov_loop() {
                 strikes[c]++;
                 for (int i = 0; i < nf; i++)
                     if (freqs[i] <= cur) proof_ms[i] = 0;
+                retry_ms = 0;
                 mem_save();
             }
         }
@@ -323,6 +333,17 @@ static void gov_loop() {
                     Log(LogLevel::Info, "[cpugov] %d MHz forgiven a strike (%d left)\n", freqs[i] / 1000, strikes[i]);
                 }
             if (forgiven) mem_save();
+            // the retry (2026-10-19): a banned clock just below the current one may be tried once more after FORGIVE_MS
+            // clean at the current clock, times one more than its strikes (2 min, then 4, 6...: a clock a game really
+            // can't run at is probed less and less often; one that was late only at a heavy moment, like Mario Kart
+            // DS's countdown at 1800 MHz, is back after the race settles instead of 30 min later). A failed try strikes
+            // and bans it again as any late frame does; a clean try forgives it as above
+            if (int lo = below(cur); lo >= 0 && bad_until[lo] > t && (retry_ms += dt / 1000000) >= FORGIVE_MS * (1 + strikes[lo])) {
+                bad_until[lo] = 0;
+                retry_ms = 0;
+                Log(LogLevel::Info, "[cpugov] %d MHz may be tried again: %d s clean at %d MHz\n", freqs[lo] / 1000,
+                    FORGIVE_MS * (1 + strikes[lo]) / 1000, cur / 1000);
+            }
         }
         const int was = cur;
         if (why) {
@@ -353,6 +374,7 @@ static void gov_loop() {
         } else
             low = 0;
         if (cur != was) {  // what comes next is the new clock's: the backlog and the frame rate start again
+            retry_ms = 0;
             feed_->rebase = true;
             tail_from = (long)feed_->nframe_ms.load(std::memory_order_acquire);
             restart_fps();
