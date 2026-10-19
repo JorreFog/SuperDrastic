@@ -404,17 +404,20 @@ bool Emu::load_rom(const std::string& path) {
     // the 16 KB straight to the bank, OAM and palette straight to the GPU; the divider, square root,
     // IPCSYNC/IPCFIFOCNT and IME/IE/IF straight to their state, other IO registers without the ARM9Read*/ARM7Read*
     // dispatch; VRAM tracking's per-line DeriveState returns at once when nothing was remapped and its banks have
-    // no dirty bit. Unset, the environment decides; as with jit.iofast, a difftest sets them on both --a and --b.
+    // no dirty bit. jit.wram7fast=on|off sets bit 8 (melonDS patch 0072): the ARM7's slow loads and stores to its
+    // own WRAM (0x03800000) straight to it, the JIT's check then the store, a block's region checked once. Unset,
+    // the environment decides; as with jit.iofast, a difftest sets them on both --a and --b.
     {
         const char* cur = getenv("MELONDS_MEMFAST");
-        unsigned long mask = cur ? strtoul(cur, nullptr, 0) & 7 : 7;
+        unsigned long mask = cur ? strtoul(cur, nullptr, 0) & 15 : 15;
         const unsigned long before = mask;
         const std::string vram = cfg_.str("jit.vramfast", ""), io = cfg_.str("jit.iodirect", "");
-        const std::string track = cfg_.str("render.vramtrack_skip", "");
+        const std::string track = cfg_.str("render.vramtrack_skip", ""), wram7 = cfg_.str("jit.wram7fast", "");
         if (vram == "on") mask |= 1; else if (vram == "off") mask &= ~1ul;
         if (io == "on") mask |= 2; else if (io == "off") mask &= ~2ul;
         if (track == "on") mask |= 4; else if (track == "off") mask &= ~4ul;
-        if (mask != before || (!cur && (!vram.empty() || !io.empty() || !track.empty())))
+        if (wram7 == "on") mask |= 8; else if (wram7 == "off") mask &= ~8ul;
+        if (mask != before || (!cur && (!vram.empty() || !io.empty() || !track.empty() || !wram7.empty())))
             setenv("MELONDS_MEMFAST", std::to_string(mask).c_str(), 1);
     }
 
