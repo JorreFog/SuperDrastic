@@ -1,0 +1,164 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Mon, 19 Oct 2026 12:16:57 +0000
+Subject: [PATCH] ARMJIT: the code memory on 2 MB huge pages
+ (MELONDS_JIT_HUGEPAGE)
+
+The JIT's code memory is a 32 MB slice of a static array, aligned to 16 KB, that Compiler::Reset fills
+with brk (so every page of it is touched anyway). With MELONDS_JIT_HUGEPAGE (default 1) the array is aligned
+to 2 MB and madvise(MADV_HUGEPAGE)'d before anything touches it, so a kernel with transparent huge pages in
+madvise mode (BananaLinux) maps it with 2 MB pages: the stubs, the blocks and the far region take a few TLB
+entries instead of one per 4 KB (the A55's L1 iTLB is small, and its 1024-entry L2 TLB is shared with the data
+side). Decided as the first JIT starts, with no slice in use. The JIT's first reset logs "[jit] code memory at
+<addr>, 32768 kB, N kB on huge pages" (from /proc/self/smaps). Nothing in the emulation changes;
+MELONDS_JIT_HUGEPAGE=0 is the old layout. (Session 1's jit patch 0021, never merged into BananaDS; renumbered
+0085 for session 3, unchanged.)
+---
+ src/ARMJIT_A64/ARMJIT_Compiler.cpp | 11 +++++++
+ src/ARMJIT_A64/ARMJIT_Compiler.h   |  1 +
+ src/ARMJIT_Global.cpp              | 51 ++++++++++++++++++++++++++++--
+ src/ARMJIT_Global.h                |  3 ++
+ 4 files changed, 64 insertions(+), 2 deletions(-)
+
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 9aa266f..ce43e9a 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -1792,6 +1792,17 @@ void Compiler::Reset()
+ 
+     for (int i = 0; i < (JitMemMainSize + JitMemSecondarySize) / 4; i++)
+         *(((u32*)GetRWPtr()) + i) = brk_0;
++
++#ifndef __SWITCH__
++    if (!CodeMemReported)
++    {
++        // (every page of the slice is touched now: how much of it the kernel gave huge pages, MELONDS_JIT_HUGEPAGE)
++        CodeMemReported = true;
++        Log(LogLevel::Info, "[jit] code memory at %p, %zu kB, %zu kB on huge pages\n", CodeMemBase,
++            ARMJIT_Global::CodeMemorySliceSize / 1024,
++            ARMJIT_Global::HugePageBytes(CodeMemBase, ARMJIT_Global::CodeMemorySliceSize) / 1024);
++    }
++#endif
+ }
+ 
+ void Compiler::Comp_AddCycles_C(bool forceNonConstant)
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index d5d746a..072b4e3 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -397,6 +397,7 @@ public:
+     void* JitRXStart;
+ #endif
+     void* CodeMemBase;
++    bool CodeMemReported = false;   // (patch 0021's log line, once)
+ 
+     void* ReadBanked, *WriteBanked;
+ 
+diff --git a/src/ARMJIT_Global.cpp b/src/ARMJIT_Global.cpp
+index e4aa42f..07953d4 100644
+--- a/src/ARMJIT_Global.cpp
++++ b/src/ARMJIT_Global.cpp
+@@ -10,6 +10,8 @@
+ 
+ #include <stdio.h>
+ #include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
+ 
+ #include <mutex>
+ 
+@@ -30,16 +32,51 @@ static constexpr size_t NumCodeMemSlices = 4;
+ static constexpr size_t CodeMemoryAlignedSize = NumCodeMemSlices * CodeMemorySliceSize;
+ 
+ // I haven't heard of pages larger than 16 KB
+-u8 CodeMemory[CodeMemoryAlignedSize + 16*1024];
++// (BananaDS patch 0021: 2 MB more, so that with HugeCodeMem the slices start on a 2 MB boundary and are whole
++// transparent huge pages; untouched, the extra costs no memory)
++static constexpr size_t HugePageSize = 2*1024*1024;
++u8 CodeMemory[CodeMemoryAlignedSize + HugePageSize];
+ 
+ u32 AvailableCodeMemSlices = (1 << NumCodeMemSlices) - 1;
+ 
++// MELONDS_JIT_HUGEPAGE (default 1; jit.hugepages): the code memory aligned to 2 MB and madvise(MADV_HUGEPAGE)'d
++// before anything touches it, so the kernel (THP "madvise" mode, as BananaLinux's) maps it with 2 MB pages: the
++// JIT's code then takes a few TLB entries instead of one per 4 KB. Decided when the first JIT starts (Init with
++// no slice in use), so the slices' addresses never change under a running JIT. Emulation doesn't change.
++static bool HugeCodeMem = false;
++
+ u8* GetAlignedCodeMemoryStart()
+ {
+-    return reinterpret_cast<u8*>((reinterpret_cast<intptr_t>(CodeMemory) + (16*1024-1)) & ~static_cast<intptr_t>(16*1024-1));
++    const intptr_t align = HugeCodeMem ? HugePageSize : 16*1024;
++    return reinterpret_cast<u8*>((reinterpret_cast<intptr_t>(CodeMemory) + (align-1)) & ~static_cast<intptr_t>(align-1));
+ }
+ #endif
+ 
++size_t HugePageBytes(const void* start, size_t size)
++{
++    // the AnonHugePages of the mappings over [start, start + size), from /proc/self/smaps (for the log line)
++    size_t total = 0;
++#if defined(__linux__)
++    FILE* f = fopen("/proc/self/smaps", "r");
++    if (!f)
++        return 0;
++    char line[256];
++    bool in = false;
++    const uintptr_t lo = (uintptr_t)start, hi = lo + size;
++    while (fgets(line, sizeof(line), f))
++    {
++        unsigned long a, b;
++        size_t kb;
++        if (sscanf(line, "%lx-%lx ", &a, &b) == 2 && strchr(line, '-') < strchr(line, ' '))
++            in = a < hi && b > lo;
++        else if (in && sscanf(line, "AnonHugePages: %zu kB", &kb) == 1)
++            total += kb * 1024;
++    }
++    fclose(f);
++#endif
++    return total;
++}
++
+ int RefCounter = 0;
+ 
+ void* AllocateCodeMem()
+@@ -99,6 +136,12 @@ void Init()
+     RefCounter++;
+     if (RefCounter == 1)
+     {
++        #if !defined(_WIN32) && !defined(APPLE_AARCH64) && !defined(__NetBSD__) && !defined(__OpenBSD__)
++        {
++            const char* v = getenv("MELONDS_JIT_HUGEPAGE");
++            HugeCodeMem = !v || atoi(v);
++        }
++        #endif
+         #ifdef _WIN32
+             DWORD dummy;
+             VirtualProtect(GetAlignedCodeMemoryStart(), CodeMemoryAlignedSize, PAGE_EXECUTE_READWRITE, &dummy);
+@@ -106,6 +149,10 @@ void Init()
+             // Apple aarch64 always uses dynamic allocation
+         #else
+             mprotect(GetAlignedCodeMemoryStart(), CodeMemoryAlignedSize, PROT_EXEC | PROT_READ | PROT_WRITE);
++            #ifdef MADV_HUGEPAGE
++            if (HugeCodeMem)
++                madvise(GetAlignedCodeMemoryStart(), CodeMemoryAlignedSize, MADV_HUGEPAGE);
++            #endif
+         #endif
+ 
+         ARMJIT_Memory::RegisterFaultHandler();
+diff --git a/src/ARMJIT_Global.h b/src/ARMJIT_Global.h
+index 6cc06b2..5dae4d4 100644
+--- a/src/ARMJIT_Global.h
++++ b/src/ARMJIT_Global.h
+@@ -37,6 +37,9 @@ void DeInit();
+ void* AllocateCodeMem();
+ void FreeCodeMem(void* codeMem);
+ 
++// (BananaDS patch 0021) bytes of [start, start + size) the kernel maps with transparent huge pages
++size_t HugePageBytes(const void* start, size_t size);
++
+ }
+ 
+ }
+-- 
+2.43.0
+

@@ -751,6 +751,34 @@ time) holding half to all of them and 6-10% fewer of its lines missing gives **+
 within the device's run-to-run noise. Only `perf stat -e L1-icache-load-misses` on the device would show the
 mechanism.
 
+## Mario Kart DS's race start: where the JIT code's time goes (2026-10-19, third speed session's third phase, agent mk3jit; untested on device)
+
+The device profile (mkbase, frames 1650-2149) puts 29.1% of the emulator thread's samples in JIT code. Under qemu
+(MK scene, frames 1650-2150, the mk2 head 3a743f3) the JIT code runs **1.54M of the thread's 13.27M instructions a
+frame (11.6%)**: its cycles per instruction on the A55 are about twice the thread's average (IPC ~0.2 against
+0.49), so the JIT's cost is mostly stalls, not instructions. Per block (`MELONDS_JIT_PERFMAP=1` + the qemu per-TB
+counts, 8,888 blocks ran in the window):
+- **the shared stubs are a third of it**: ExitCheck 163k + 37k (ARM9, ARM7), the ARM9's JumpTo 140k (~7,000 register
+  jumps a frame, 20 instructions each), DynExit 59k + 10k, the patched memory calls' save/restore 60k;
+- the hottest guest block (a word-copy loop at 0x0214d048, ~1,900 iterations a frame) is 71k, then a long tail:
+  the top 50 blocks are 55%;
+- the dynamic mix: ALU 30%, constants 13% (the exit check's timestamp address alone is three MOV/MOVKs at ~18k exit
+  checks a frame), loads/stores of CPU state 15%, flags 7%, cycles 5%, guest memory 4%.
+Outside the code: the JIT compiling the race's new code (~4.5 blocks a frame, ~214k instructions a frame), the
+interpreter's MCRs (~1,000 a frame) and the GX FIFO port's STRs through the patched memory stubs (~1,830 a frame).
+
+### The JIT's code memory on 2 MB huge pages (patch 0085, `jit.hugepages`, default `on`)
+
+Session 1's jit patch 0021, never merged into BananaDS, ported unchanged: the 32 MB code slice aligned to 2 MB and
+`madvise(MADV_HUGEPAGE)`'d before Reset's first touch (BananaLinux's kernel: THP `madvise`, 4 KB pages). MK's blocks
+are 4.4 MB (~1,100 4 KB pages, mkjit's census) spread over the slice and its far region; the profile has 61k L1
+iTLB misses a frame (4.15 per 1000 instructions) and the A55's 1024-entry L2 TLB is shared with the data side
+(main RAM's fastmem pages alone are 1,024). With huge pages the code takes a few L2 TLB entries. qemu can't see it
+(no TLB). Exact by construction: no emulated state moves, only the slice's address. **Expected +0.3..1.5% of the
+emulator thread** (half of the iTLB misses in JIT code at ~5 cycles each if they hit the L2 TLB, ~25 if they
+walk; more if the data side's walks drop too). The log line `[jit] code memory at <addr>, 32768 kB, N kB on huge
+pages` says on the device whether the kernel gave them; `prof.pmu`'s iTLB line is the check of the mechanism.
+
 ## BananaJIT
 
 BananaJIT (jit/, `-DBANANADS_JIT=banana`) is parked. Its block-timing mode reached about 44 fps in this scene,
