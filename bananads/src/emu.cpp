@@ -399,6 +399,15 @@ bool Emu::load_rom(const std::string& path) {
         else if (v == "off") setenv("MELONDS_JIT_NOFLAGSTUB", "1", 1);
     }
 
+    // jit.hugepages=on|off sets MELONDS_JIT_HUGEPAGE (melonDS patch 0085: the JIT's code memory aligned to 2 MB and
+    // madvise(MADV_HUGEPAGE)'d, for the A55's TLBs; decided as the first JIT starts; unset, on). Emulation doesn't
+    // change. The JIT's first reset logs "[jit] code memory at ..., N kB on huge pages"
+    {
+        const std::string v = cfg_.str("jit.hugepages", "");
+        if (v == "on") setenv("MELONDS_JIT_HUGEPAGE", "1", 1);
+        else if (v == "off") setenv("MELONDS_JIT_HUGEPAGE", "0", 1);
+    }
+
     // jit.vramfast=on|off, jit.iodirect=on|off and render.vramtrack_skip=on|off set bits 1, 2 and 4 of
     // MELONDS_MEMFAST (melonDS patch 0010, read at the JIT's reset; default all on, exact): VRAM with one bank at
     // the 16 KB straight to the bank, OAM and palette straight to the GPU; the divider, square root,
