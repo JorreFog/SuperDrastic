@@ -490,6 +490,14 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_GEOMSWITCH", "1", 1);
         else if (v == "off") setenv("MELONDS_GEOMSWITCH", "0", 1);
     }
+    // render.geom_thread=on|off sets MELONDS_GEOMTHREAD (melonDS patch 0083: a stored polygon's build on a worker
+    // thread, every timing decision kept on the emulator thread; drained at VBlank, savestates and reset; exact; read
+    // as the NDS is created; default on). Unset, the environment decides; a difftest sets it on both --a and --b.
+    {
+        const std::string v = cfg_.str("render.geom_thread", "");
+        if (v == "on") setenv("MELONDS_GEOMTHREAD", "1", 1);
+        else if (v == "off") setenv("MELONDS_GEOMTHREAD", "0", 1);
+    }
     // render.gx_batch=on|off sets MELONDS_GXBATCH (melonDS patch 0063, session 2's 0021: the JIT's STMs into the GX
     // FIFO hand their words to the geometry engine in one call, through 0060's loop; exact; read at the JIT's reset;
     // default on). Unset, the environment decides; a difftest sets it on both --a and --b.

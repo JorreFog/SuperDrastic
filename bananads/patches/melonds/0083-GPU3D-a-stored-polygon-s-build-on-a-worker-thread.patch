@@ -1,0 +1,584 @@
+From 93967a3a84e681f2b37345ea37d2c1b3337a1abb Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 13:45:40 +0000
+Subject: [PATCH] GPU3D: a stored polygon's build on a worker thread
+ (render.geom_thread)
+
+---
+ src/GPU3D.cpp | 418 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ src/GPU3D.h   |  47 +++++-
+ 2 files changed, 459 insertions(+), 6 deletions(-)
+
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index 110c92f..218ca8f 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -17,6 +17,8 @@
+ */
+ 
+ #include <stdio.h>
++#include <stdlib.h>
++#include <thread>
+ #include <string.h>
+ #include <algorithm>
+ #include "NDS.h"
+@@ -185,6 +187,8 @@ void GPU3D::ResetRenderingState() noexcept
+ 
+ void GPU3D::Reset() noexcept
+ {
++    GeomDrain();
++    GeomShadowValid = false;
+     CmdFIFO.Clear();
+     CmdPIPE.Clear();
+ 
+@@ -309,6 +313,8 @@ void GPU3D::Reset() noexcept
+ 
+ void GPU3D::DoSavestate(Savestate* file) noexcept
+ {
++    GeomDrain(); // render.geom_thread: the polygon and vertex RAM complete before they are saved or replaced
++    GeomShadowValid = false;
+     file->Section("GP3D");
+ 
+     CmdFIFO.DoSavestate(file);
+@@ -985,9 +991,38 @@ void GPU3D::SubmitPolygon() noexcept
+ }
+ 
+ template<bool Fast>
+-void GPU3D::SubmitPolygonBody() noexcept
++inline __attribute__((always_inline)) void GPU3D::SubmitPolygonBody() noexcept
+ {
+-    Vertex clippedvertices[10];
++    // render.geom_thread: its own instance, so that the polygon setup without it is the code it was
++    if constexpr (Fast)
++    {
++        if (GeomThread)
++        {
++            SubmitPolygonBodyT<true, true>();
++            return;
++        }
++    }
++    SubmitPolygonBodyT<Fast, false>();
++}
++
++template<bool Fast, bool Threaded>
++__attribute__((noinline)) void GPU3D::SubmitPolygonBodyT() noexcept
++{
++    // render.geom_thread: the clipped vertices and their reciprocals in the ring's next slot (GeomJob), so that a
++    // stored polygon is handed to the worker without a copy
++    GeomJob* job = nullptr;
++    Vertex localvertices[10];
++    u64 localwrecip[10];
++    Vertex* clippedvertices = localvertices;
++    u64* wrecip = localwrecip;
++    if constexpr (Threaded)
++    {
++        {
++            job = GeomSlot();
++            clippedvertices = job->V;
++            wrecip = job->WRecip;
++        }
++    }
+     Vertex* reusedvertices[2];
+     int clipstart = 0;
+     int lastpolyverts = 0;
+@@ -1082,7 +1117,21 @@ void GPU3D::SubmitPolygonBody() noexcept
+             lastpolyverts = 4;
+         }
+ 
+-        if (LastStripPolygon->NumVertices == lastpolyverts &&
++        if (Threaded)
++        {
++            // the previous polygon as the emulator thread handed it over (the worker may not have built it yet)
++            if (!GeomShadowValid) GeomSeedShadow();
++            if (GeomShadow.NumVertices == (u32)lastpolyverts &&
++                !GeomShadow.V[id0].Clipped && !GeomShadow.V[id1].Clipped)
++            {
++                reusedvertices[0] = &GeomShadow.V[id0];
++                reusedvertices[1] = &GeomShadow.V[id1];
++                job->Reuse[0] = GeomShadow.P[id0];
++                job->Reuse[1] = GeomShadow.P[id1];
++                clipstart = 2;
++            }
++        }
++        else if (LastStripPolygon->NumVertices == lastpolyverts &&
+             !LastStripPolygon->Vertices[id0]->Clipped &&
+             !LastStripPolygon->Vertices[id1]->Clipped)
+         {
+@@ -1191,9 +1240,8 @@ void GPU3D::SubmitPolygonBody() noexcept
+ 
+     // compute screen coordinates
+ 
+-    u64 wrecip[10];
+     if constexpr (Fast)
+-        memset(wrecip, 0, sizeof(wrecip));
++        memset(wrecip, 0, 10 * sizeof(u64));
+     for (int i = clipstart; i < nverts; i++)
+     {
+         Vertex* vtx = &clippedvertices[i];
+@@ -1334,6 +1382,49 @@ void GPU3D::SubmitPolygonBody() noexcept
+         else                   VertexSlotsFree = 0b1110;
+     }
+ 
++    if constexpr (Threaded)
++    {
++        {
++            // render.geom_thread: the rest is the worker's (GeomBuild); the polygon's place and the vertex count as
++            // the build leaves them, and the shadow of the polygon for the next one of a strip, are kept here
++            Vertex* const base = &CurVertexRAM[NumVertices];
++            job->Poly = &CurPolygonRAM[NumPolygons++];
++            job->Prev = LastStripPolygon;
++            job->VtxBase = base;
++            job->NVerts = nverts; job->ClipStart = clipstart; job->LastPolyVerts = lastpolyverts;
++            job->FacingView = facingview; job->PolyType = polytype;
++            job->Attr = CurPolygonAttr; job->TexParam = TexParam; job->TexPalette = TexPalette;
++            job->FlushAttributes = FlushAttributes; job->PolygonMode = PolygonMode;
++            job->NumConsecutivePolygons = NumConsecutivePolygons;
++            const bool copied2 = LastStripPolygon && clipstart > 0 && nverts != lastpolyverts;
++            const u32 nb = copied2 ? 2 : 0;
++            NumVertices += nb + (nverts - clipstart);
++            if (PolygonMode >= 2)
++            {
++                if (clipstart > 0)
++                {
++                    const Vertex s0 = *reusedvertices[0], s1 = *reusedvertices[1];
++                    Vertex* const p0 = copied2 ? &base[0] : job->Reuse[0];
++                    Vertex* const p1 = copied2 ? &base[1] : job->Reuse[1];
++                    GeomShadow.V[0] = s0; GeomShadow.V[1] = s1;
++                    GeomShadow.P[0] = p0; GeomShadow.P[1] = p1;
++                }
++                for (int i = clipstart; i < nverts && i < 4; i++)
++                {
++                    GeomShadow.V[i] = clippedvertices[i];
++                    GeomShadow.P[i] = &base[nb + (i - clipstart)];
++                }
++                GeomShadow.NumVertices = nverts;
++                GeomShadowValid = true;
++                LastStripPolygon = job->Poly;
++            }
++            else
++                LastStripPolygon = NULL;
++            GeomPublish();
++            return;
++        }
++    }
++
+     Polygon* poly = &CurPolygonRAM[NumPolygons++];
+     poly->NumVertices = 0;
+ 
+@@ -1514,6 +1605,200 @@ void GPU3D::SubmitPolygonBody() noexcept
+         LastStripPolygon = NULL;
+ }
+ 
++// render.geom_thread: the worker's part of SubmitPolygonBody<true>, from the polygon's build on: the same statements
++// on the job's copy of what the emulator thread decided (the clipped vertices, the shared ones' places, the state
++// the build reads), writing the polygon and its new vertices where the emulator thread counted them
++__attribute__((no_stack_protector)) void GPU3D::GeomBuild(const GeomJob& jb) noexcept
++{
++    constexpr bool Fast = true;
++    const int nverts = jb.NVerts, clipstart = jb.ClipStart, lastpolyverts = jb.LastPolyVerts;
++    Vertex* const reusedvertices[2] = {jb.Reuse[0], jb.Reuse[1]};
++    const Vertex* const clippedvertices = jb.V;
++    const u64* const wrecip = jb.WRecip;
++    const bool facingview = jb.FacingView;
++    const int polytype = jb.PolyType;
++    const u32 CurPolygonAttr = jb.Attr, TexParam = jb.TexParam, TexPalette = jb.TexPalette;
++    const u32 FlushAttributes = jb.FlushAttributes, PolygonMode = jb.PolygonMode;
++    const u32 NumConsecutivePolygons = jb.NumConsecutivePolygons;
++    Polygon* const prev = jb.Prev;
++    Vertex* const vram = jb.VtxBase;
++    u32 nv = 0;
++    Polygon* poly = jb.Poly;
++    poly->NumVertices = 0;
++
++    poly->Attr = CurPolygonAttr;
++    poly->TexParam = TexParam;
++    poly->TexPalette = TexPalette;
++
++    poly->Degenerate = false;
++    poly->Type = 0;
++
++    poly->FacingView = facingview;
++
++    u32 texfmt = (TexParam >> 26) & 0x7;
++    u32 polyalpha = (CurPolygonAttr >> 16) & 0x1F;
++    poly->Translucent = (texfmt == 1 || texfmt == 6) || (polyalpha > 0 && polyalpha < 31);
++
++    poly->IsShadowMask = ((CurPolygonAttr & 0x3F000030) == 0x00000030);
++    poly->IsShadow = ((CurPolygonAttr & 0x30) == 0x30) && !poly->IsShadowMask;
++
++    if (!poly->Translucent) NumOpaquePolygons++;
++
++    poly->Type = polytype;
++
++    if (prev && clipstart > 0)
++    {
++        if (nverts == lastpolyverts)
++        {
++            poly->Vertices[0] = reusedvertices[0];
++            poly->Vertices[1] = reusedvertices[1];
++        }
++        else
++        {
++            Vertex v0 = *reusedvertices[0];
++            Vertex v1 = *reusedvertices[1];
++
++            vram[nv] = v0;
++            poly->Vertices[0] = &vram[nv];
++            vram[nv+1] = v1;
++            poly->Vertices[1] = &vram[nv+1];
++            nv += 2;
++        }
++
++        poly->NumVertices += 2;
++    }
++
++    for (int i = clipstart; i < nverts; i++)
++    {
++        Vertex* vtx = &vram[nv];
++        *vtx = clippedvertices[i];
++        poly->Vertices[i] = vtx;
++
++        nv++;
++        poly->NumVertices++;
++
++        vtx->FinalColor[0] = vtx->Color[0] >> 12;
++        if (vtx->FinalColor[0]) vtx->FinalColor[0] = ((vtx->FinalColor[0] << 4) + 0xF);
++        vtx->FinalColor[1] = vtx->Color[1] >> 12;
++        if (vtx->FinalColor[1]) vtx->FinalColor[1] = ((vtx->FinalColor[1] << 4) + 0xF);
++        vtx->FinalColor[2] = vtx->Color[2] >> 12;
++        if (vtx->FinalColor[2]) vtx->FinalColor[2] = ((vtx->FinalColor[2] << 4) + 0xF);
++    }
++
++    // determine bounds of the polygon
++    // also determine the W shift and normalize W
++    // normalization works both ways
++    // (ie two W's that span 12 bits or less will be brought to 16 bits)
++
++    u32 vtop = 0, vbot = 0;
++    s32 ytop = 192, ybot = 0;
++    s32 xtop = 256, xbot = 0;
++    u32 wsize = 0;
++
++    for (int i = 0; i < nverts; i++)
++    {
++        Vertex* vtx = poly->Vertices[i];
++
++        if (vtx->FinalPosition[1] < ytop)
++        {
++            xtop = vtx->FinalPosition[0];
++            ytop = vtx->FinalPosition[1];
++            vtop = i;
++        }
++        if (vtx->FinalPosition[1] > ybot || (vtx->FinalPosition[1] == ybot && vtx->FinalPosition[0] > xbot))
++        {
++            xbot = vtx->FinalPosition[0];
++            ybot = vtx->FinalPosition[1];
++            vbot = i;
++        }
++
++        u32 w = (u32)vtx->Position[3];
++        if (w == 0) poly->Degenerate = true;
++
++        if constexpr (Fast)
++        {
++            // the loop below's result without the loop: W has 24 bits here, so wsize ends at the larger of itself
++            // and W's bit length rounded up to 4
++            const u32 wbits = (w ? (u32)(32 - __builtin_clz(w)) + 3 : 0) & ~3u;
++            if (wbits > wsize) wsize = wbits;
++        }
++        else
++        while ((w >> wsize) && (wsize < 32))
++            wsize += 4;
++    }
++
++    poly->VTop = vtop; poly->VBottom = vbot;
++    poly->YTop = ytop; poly->YBottom = ybot;
++    poly->XTop = xtop; poly->XBottom = xbot;
++
++    if (ybot > 192) poly->Degenerate = true;
++
++    poly->SortKey = (ybot << 8) | ytop;
++    if (poly->Translucent) poly->SortKey |= 0x10000;
++
++    poly->WBuffer = (FlushAttributes & 0x2);
++
++    // GeomFast: a strip's two shared vertices have the previous polygon's Z (Z-buffering in both: Z depends on the
++    // vertex's Position only), without its division
++    const bool reuseZ = Fast && clipstart > 0 && nverts == lastpolyverts && !(FlushAttributes & 0x2) &&
++        !prev->WBuffer;
++    const int reuseId[2] = {PolygonMode == 2 ? ((NumConsecutivePolygons & 1) ? 2 : 0) : 3,
++                            PolygonMode == 2 ? ((NumConsecutivePolygons & 1) ? 1 : 2) : 2};
++
++    for (int i = 0; i < nverts; i++)
++    {
++        Vertex* vtx = poly->Vertices[i];
++        s32 w, wshifted;
++
++        // W is normalized, such that all the polygon's W values fit within 16 bits
++        // the viewport transform for X/Y/Z uses the original W values, but
++        // when W-buffering is used, the normalized W is used
++        // W normalization is applied to separate polygons, even within strips
++
++        if (wsize < 16)
++        {
++            w = vtx->Position[3] << (16 - wsize);
++            wshifted = w >> (16 - wsize);
++        }
++        else
++        {
++            w = vtx->Position[3] >> (wsize - 16);
++            wshifted = w << (wsize - 16);
++        }
++
++        s32 z;
++        if (FlushAttributes & 0x2)
++            z = wshifted;
++        else if (reuseZ && i < 2)
++        {
++            poly->FinalZ[i] = prev->FinalZ[reuseId[i]];
++            poly->FinalW[i] = w;
++            continue;
++        }
++        else if (Fast && wrecip[i] && (u32)(vtx->Position[2] + (1 << 26)) < (2u << 26))
++        {
++            // GeomFast: the division by W through its reciprocal from the screen position (W in 2..0xFFFF here):
++            // |Z| * 0x4000 < 2^40 and the reciprocal's error < 2^16 keep umulh's quotient exact, truncated to zero
++            const s32 p2 = vtx->Position[2];
++            const u64 a = (u64)(p2 < 0 ? -(s64)p2 : (s64)p2) << 14;
++            const s64 q = (s64)(((unsigned __int128)a * wrecip[i]) >> 64);
++            z = (((p2 < 0) ? -q : q) + 0x3FFF) * 0x200;
++        }
++        else if (vtx->Position[3])
++            z = ((((s64)vtx->Position[2] * 0x4000) / vtx->Position[3]) + 0x3FFF) * 0x200;
++        else
++            z = 0x7FFE00;
++
++        // checkme (Z<0 shouldn't be possible, but Z>0xFFFFFF is possible)
++        if (z < 0) z = 0;
++        else if (z > 0xFFFFFF) z = 0xFFFFFF;
++
++        poly->FinalZ[i] = z;
++        poly->FinalW[i] = w;
++    }
++
++}
++
+ void GPU3D::SubmitVertex() noexcept
+ {
+     SubmitVertexBody<false>();
+@@ -2972,6 +3257,128 @@ __attribute__((no_stack_protector)) void GPU3D::RunFast() noexcept
+     }
+ }
+ 
++
++// render.geom_thread: the ring of polygon jobs (one producer: the emulator thread; one consumer: the worker)
++GeomJob* GPU3D::GeomSlot() noexcept
++{
++    if (!GeomRing) GeomStart();
++    const u32 h = GeomHead.load(std::memory_order_relaxed);
++    if (h - GeomTail.load(std::memory_order_acquire) >= GeomRingSize && GeomSab != 1) [[unlikely]]
++    {
++        // full: wake the worker and wait for a slot
++        while (h - GeomTail.load(std::memory_order_acquire) >= GeomRingSize)
++        {
++            GeomWake();
++            std::this_thread::yield();
++        }
++    }
++    return &GeomRing[h & (GeomRingSize - 1)];
++}
++
++void GPU3D::GeomPublish() noexcept
++{
++    const u32 h = GeomHead.load(std::memory_order_relaxed) + 1;
++    GeomHead.store(h, std::memory_order_seq_cst);
++    // a wake per batch: the worker sleeps only when it found the ring empty (after a spin)
++    if (((h & 31) == 0) && GeomSab != 1 && GeomSleeping.load(std::memory_order_seq_cst)) GeomWake();
++}
++
++void GPU3D::GeomWake() noexcept
++{
++    if (GeomSleeping.load(std::memory_order_seq_cst))
++    {
++        std::lock_guard<std::mutex> lk(GeomMutex);
++        GeomCond.notify_one();
++    }
++}
++
++void GPU3D::GeomDrain() noexcept
++{
++    if (!GeomRing || GeomSab == 2) return;
++    while (GeomTail.load(std::memory_order_acquire) != GeomHead.load(std::memory_order_relaxed))
++    {
++        GeomWake();
++        std::this_thread::yield();
++    }
++}
++
++void GPU3D::GeomSeedShadow() noexcept
++{
++    // after a reset or a state load (the ring is empty then): the previous polygon from the polygon RAM
++    GeomShadow.NumVertices = LastStripPolygon->NumVertices;
++    for (u32 i = 0; i < LastStripPolygon->NumVertices && i < 4; i++)
++    {
++        GeomShadow.V[i] = *LastStripPolygon->Vertices[i];
++        GeomShadow.P[i] = LastStripPolygon->Vertices[i];
++    }
++    GeomShadowValid = true;
++}
++
++void GPU3D::GeomStart() noexcept
++{
++    GeomRing.reset(new GeomJob[GeomRingSize]);
++    GeomHead.store(0); GeomTail.store(0); GeomQuit.store(false);
++    GeomWorker = std::thread([this] { GeomWorkerLoop(); });
++}
++
++void GPU3D::GeomWorkerLoop() noexcept
++{
++    u32 t = GeomTail.load(std::memory_order_relaxed);
++    for (;;)
++    {
++        if (t != GeomHead.load(std::memory_order_acquire))
++        {
++            GeomBuild(GeomRing[t & (GeomRingSize - 1)]);
++            GeomTail.store(++t, std::memory_order_release);
++            continue;
++        }
++        // a short spin, then sleep until woken
++        bool got = false;
++        for (int n = 0; n < 256 && !got; n++)
++        {
++#if defined(__aarch64__)
++            asm volatile("yield");
++#endif
++            got = t != GeomHead.load(std::memory_order_acquire);
++        }
++        if (got) continue;
++        std::unique_lock<std::mutex> lk(GeomMutex);
++        GeomSleeping.store(true, std::memory_order_seq_cst);
++        while (t == GeomHead.load(std::memory_order_seq_cst) && !GeomQuit.load())
++            GeomCond.wait(lk);
++        GeomSleeping.store(false, std::memory_order_relaxed);
++        if (GeomQuit.load() && t == GeomHead.load()) return;
++    }
++}
++
++GPU3D::~GPU3D() noexcept
++{
++    if (GeomWorker.joinable())
++    {
++        GeomDrain();
++        {
++            std::lock_guard<std::mutex> lk(GeomMutex);
++            GeomQuit.store(true);
++            GeomCond.notify_one();
++        }
++        GeomWorker.join();
++    }
++}
++
++bool GPU3D::GeomThreadEnv() noexcept
++{
++    // read as the GPU3D is created (a difftest's two NDS objects each with its own setting); default on
++    const char* e = getenv("MELONDS_GEOMTHREAD");
++    return !(e && e[0] == '0');
++}
++
++int GPU3D::GeomSabEnv() noexcept
++{
++    // the sabotage switch for the checks (MELONDS_GEOMSAB): 1 = no full check and no batch wake (the ring overflows), 2 = no drain
++    const char* e = getenv("MELONDS_GEOMSAB");
++    return e ? atoi(e) : 0;
++}
++
+ bool GPU3D::GeomSwitchEnv() noexcept
+ {
+     // read as the GPU3D is created (a difftest's two NDS objects each with its own setting)
+@@ -3100,6 +3507,7 @@ bool YSort(Polygon* a, Polygon* b)
+ 
+ void GPU3D::VBlank() noexcept
+ {
++    GeomDrain(); // render.geom_thread: the frame's polygons built before the flush's sort and swap
+     if (GeometryEnabled)
+     {
+         if (RenderingEnabled)
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index 8b1e02f..67a4d8a 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -21,6 +21,10 @@
+ 
+ #include <array>
+ #include <memory>
++#include <atomic>
++#include <condition_variable>
++#include <mutex>
++#include <thread>
+ 
+ #include "Savestate.h"
+ #include "FIFO.h"
+@@ -85,11 +89,26 @@ struct Polygon
+ class Renderer3D;
+ class NDS;
+ 
++// render.geom_thread: a stored polygon handed to the worker (GPU3D::GeomBuild): its clipped vertices (with their
++// screen positions) and reciprocals, its place, the shared vertices' places, and the state the build reads
++struct GeomJob
++{
++    Vertex V[10];
++    u64 WRecip[10];
++    Polygon* Poly;
++    Polygon* Prev;
++    Vertex* VtxBase;
++    Vertex* Reuse[2];
++    int NVerts, ClipStart, LastPolyVerts, PolyType;
++    u32 Attr, TexParam, TexPalette, FlushAttributes, PolygonMode, NumConsecutivePolygons;
++    bool FacingView;
++};
++
+ class GPU3D
+ {
+ public:
+     GPU3D(melonDS::GPU& gpu) noexcept;
+-    ~GPU3D() noexcept = default;
++    ~GPU3D() noexcept;
+     void Reset() noexcept;
+ 
+     void DoSavestate(Savestate* file) noexcept;
+@@ -433,6 +452,32 @@ public:
+     // parameter count first and switching on the command again for a first or last parameter
+     static bool GeomSwitchEnv() noexcept;
+     bool GeomSwitch = GeomSwitchEnv();
++    // BananaDS (render.geom_thread, MELONDS_GEOMTHREAD=0 turns it off; exact): with GeomFast a stored
++    // polygon's build (its fields, bounds, W and Z, and its new vertices' copy into vertex RAM) runs on a worker
++    // thread; every decision that sets timing or the counts (culling, clipping, zero-dot, RAM full, the strip's
++    // shared vertices) stays here. Drained at VBlank, savestates and reset.
++    static bool GeomThreadEnv() noexcept;
++    static int GeomSabEnv() noexcept;
++    bool GeomThread = GeomThreadEnv();
++    int GeomSab = GeomSabEnv();
++    static constexpr u32 GeomRingSize = 256;
++    std::unique_ptr<GeomJob[]> GeomRing;
++    std::atomic<u32> GeomHead {0}, GeomTail {0};
++    std::atomic<bool> GeomSleeping {false}, GeomQuit {false};
++    std::mutex GeomMutex;
++    std::condition_variable GeomCond;
++    std::thread GeomWorker;
++    struct { Vertex V[4]; Vertex* P[4]; u32 NumVertices; } GeomShadow {};
++    bool GeomShadowValid = false;
++    GeomJob* GeomSlot() noexcept;
++    void GeomPublish() noexcept;
++    void GeomWake() noexcept;
++    void GeomDrain() noexcept;
++    void GeomSeedShadow() noexcept;
++    void GeomStart() noexcept;
++    void GeomWorkerLoop() noexcept;
++    void GeomBuild(const GeomJob& jb) noexcept;
++    template<bool Fast, bool Threaded> void SubmitPolygonBodyT() noexcept;
+     // while RunFast defers them, and whether one of the checks was due
+     bool FIFOChecksDeferred = false;
+     bool FIFOChecksDue = false;
+-- 
+2.43.0
+

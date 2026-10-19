@@ -1053,6 +1053,40 @@ call count differ, and the randomized test; (6) a 0 in the 4th entry not seen: t
 million states differ), not MK (its table end never fell on a 4-unit read's last byte). Test ROMs and
 exact-suite.sh as 0080's.
 
+### A stored polygon's build on a worker thread (patch 0083, `render.geom_thread`, default `on`)
+
+Most of the geometry math sets timing: `SubmitPolygon` sets `PolygonPipeline` and the vertex slots from the
+polygon's culling, its vertex count after clipping, RAM full and the zero-dot test, and the next commands' cycles
+read them at once. That part stays on the emulator thread. Moving lighting would need the emulator thread to clip
+without colours and the worker to clip again, so it isn't in this patch. What moves is the build of a stored
+polygon (its fields, bounds, W and Z, and its new vertices' copy into vertex RAM with their final colours:
+`GeomBuild`, the same statements).
+
+The emulator thread clips straight into the ring's next slot (`GeomJob`: the clipped vertices with their screen
+positions, the reciprocals, the polygon's and the vertices' places, the shared vertices' places and the state the
+build reads). It counts `NumPolygons`/`NumVertices` as the build would, keeps a shadow of the last strip polygon's
+vertices for the next one's sharing test and clipping, and publishes the slot. The ring is single-producer and
+single-consumer, 256 jobs. The worker spins 256 times on an empty ring, then sleeps on a condition variable; it is
+woken every 32 jobs (if asleep), on a full ring and at a drain, so there is no signal per job.
+
+Drains: `VBlank` (before the sort and the RAM swap), `DoSavestate` (save and load; the shadow is then seeded from
+the polygon RAM), `Reset`, and the destructor. Nothing else on the emulator thread reads the polygon or vertex RAM.
+RAM_COUNT and RAM full come from the counts kept on the emulator thread. The polygon setup without the toggle is its
+own instance (`SubmitPolygonBodyT<true, false>`), unchanged.
+
+qemu, MK 1650-2150: the emulator thread's `SubmitPolygonBody` 1,133.3k -> 903.8k (-229k; the hand-off adds ~110k
+of the 424k moved: the job's header, the strip shadow, the slot); **the thread 12,042.9k -> 11,876.8k without the
+Gengis bins (-166k by the totals, -1.4..-1.9%)**. The worker runs ~507k a frame: the build 424k, its loop, spin and
+atomics 83k. Expected on the device: **-1..-2% of the emulator thread's cycles if a core is free, and possibly a loss
+if not**. The device decides: Gengis's bin threads and the 2D thread already share the four A55s. A/B with
+`--set render.geom_thread=off`.
+
+Exact: MK's frames and audio equal to the base hashes with it on (default) and off; main RAM every frame 1600-2100
+with registers and geometry timing SAME off vs on; full savestates at 1850 and 2000 identical on, off and to the
+checkpoint's; the `Run` trace (every call's timing state) gives the same hash over all 1,133,371 calls; test ROMs
+and exact-suite.sh as 0080's. Sabotage (`MELONDS_GEOMSAB`, read at creation): (1) no full-ring check and no batch
+wake, so the ring overflows: MK's scene fails (crash, no frames); (2) no drain: the scene fails (crash).
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an
