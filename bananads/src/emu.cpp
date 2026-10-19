@@ -492,11 +492,15 @@ bool Emu::load_rom(const std::string& path) {
     }
     // render.geom_thread=on|off sets MELONDS_GEOMTHREAD (melonDS patch 0083: a stored polygon's build on a worker
     // thread, every timing decision kept on the emulator thread; drained at VBlank, savestates and reset; exact; read
-    // as the NDS is created; default on). Unset, the environment decides; a difftest sets it on both --a and --b.
+    // as the NDS is created). Default OFF: on the RG DS Plus (four A55s shared by the emulator's thread, the 2D thread
+    // and three Gengis workers) the worker cost Mario Kart DS's race start ~35 frames and ~50 repeated refreshes a
+    // run on the panels (2026-10-19, perf/bananads/session3/DEVICE-RESULTS.md); it only pays with a core free.
+    // Unset, the environment decides (a difftest sets it on both --a and --b), else off.
     {
         const std::string v = cfg_.str("render.geom_thread", "");
         if (v == "on") setenv("MELONDS_GEOMTHREAD", "1", 1);
         else if (v == "off") setenv("MELONDS_GEOMTHREAD", "0", 1);
+        else setenv("MELONDS_GEOMTHREAD", "0", 0);
     }
     // render.gx_batch=on|off sets MELONDS_GXBATCH (melonDS patch 0063, session 2's 0021: the JIT's STMs into the GX
     // FIFO hand their words to the geometry engine in one call, through 0060's loop; exact; read at the JIT's reset;
