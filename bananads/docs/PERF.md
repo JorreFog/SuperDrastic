@@ -572,6 +572,36 @@ device; qemu counts only show that a path got cheaper.
 - Expected on the device: the frame loop is 8.0% of the thread; a quarter less: +1.5-2.5%.
   `EXTRA="--set core.halt_skip=off --set jit.slice_chain=off"` against plain.
 
+## Mario Kart DS's race start after the restart: beside the geometry (2026-10-19, third session's phase 2, `mk2cpu`)
+
+Counted in the scene from the checkpoint (8e98258: qemu, `mk-scene.sh`, frames 1680-2100, per frame, 13.56M
+instructions on the emulator's thread): the SPU ~1.1M (its event 582k, `RunSamples<2>` 341k, capture 72k,
+`blip_add_delta` 65k, already vectorised by GCC), the frame loop 801k (`run_headless` with the slice loop and
+`RunEventsDue` inlined: ~60 instructions a slice over ~5,500 ARM9 slices, ~75 an event over ~1,900 events), the
+ARM7's slow accesses to its WRAM 245k (`ARM7Write32` 141k), the event handlers small (`ScheduleEvent` 34k, Sqrt 32k,
+RTC 24k, `StartScanline` 29k). None of this is measured on the device; qemu counts only show that a path got cheaper.
+
+### The ARM7's slow accesses to its own WRAM straight to it (patch 0072, `jit.wram7fast`, default `on`)
+
+- MK's sound driver keeps its state in the ARM7's WRAM next to its code, so the JIT's stores there take the slow
+  path (a store into a page holding compiled code faults once and stays a call): per frame ~1,040 stores, ~450 STMs
+  (~2,000 words), ~170 loads and ~60 LDMs (~450 words) (`MELONDS_IOSTATS`, frames 1700-1899). Each word went
+  `SlowWrite7` -> `NDS::ARM7Write32` (a virtual call through `NDS::Current`, three register pairs saved, the
+  region switch) -> the code check -> the store. On the device `ARM7Write32` was 0.76% of the thread,
+  `SlowBlockTransfer7` 0.23%, `ARM7Read32` 0.24%.
+- Now, on the DS, `SlowRead7`/`SlowWrite7`/`SlowBlockTransfer7` do `ARM7Read*`/`ARM7Write*`'s case 0x03800000
+  themselves: the same `CheckAndInvalidate<1, memregion_WRAM7>` and the same store or load at
+  `addr & (ARM7WRAMSize - 1)`; a block whose first and last words are both at 0x038 goes word by word in the same
+  order with the code index loaded once. Anything else takes the old path.
+- qemu, MK frames 1680-2100: `ARM7Write32/16/8` and `ARM7Read32` -181k instructions a frame, `SlowWrite7` and
+  `SlowBlockTransfer7` +19k: **-162k (-1.2% of the thread's instructions)**.
+- Checked: `mk-scene.sh` frames and audio identical to the base with it on and off; MK's main RAM and both CPUs'
+  registers every frame 1500-2100 off vs on (`bananads-difftest --regs`); `exact-suite.sh` off vs on (sndbench,
+  dmasnd and ipcrom pictures, audio and difftests included); a sabotage (an STM's last word stored a word late)
+  changes MK's countdown frame.
+- Expected on the device: ~1.2% of the thread is these paths, -60..70% of it: **+0.6..0.8%**.
+  `EXTRA="--set jit.wram7fast=off"` against plain.
+
 ## Levers not pulled yet, largest first (1-3 above are pulled, unmeasured)
 
 1. **The scheduler slice.** *Pulled: `core.slice`, above.* 64 → 256 bus cycles gives +8.5% and 512 gives +10%. It's an accuracy trade: coarser
