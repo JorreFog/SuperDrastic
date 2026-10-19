@@ -912,6 +912,28 @@ savestate at 1850 differ; (2) a pop matrix not setting the clear flag: the trace
 frame-end savestate don't: GXSTAT's bit 14 stays set until the next command, which MK never reads in between). Test
 ROMs (check.sh's 12 picture sets and 4 difftests, geomtest-irq with `--regs --timing`) and exact-suite.sh as 0063's.
 
+### The command loop's dispatch in one switch (patch 0081, `render.geom_switch`, default `on`)
+
+`ExecuteEntryBody` looked up the command's parameter count (`CmdNumParams`) for every entry and switched on the
+command only for one with 1 or none; a command with more (MK: the full vertex 0x23, ~7,500 entries a frame, and the
+matrix loads) took the parameter path, which switches on the command again for its first and its last entry. With
+`render.geom_switch`, `RunQueue`'s loop (`ExecuteEntryBody<true, true>`) switches once on the command: the
+multi-parameter commands' cases go to their path (`goto multi`), and the full vertex's two entries have their own
+(the same statements: the parameter stored and counted, the vertex pipeline's delay for the first, one cycle and the
+vertex for the second). The loop without it is `RunQueueOld` (out of line). Per entry the dispatch is now 10
+instructions (the load, the command byte, the range check, the jump table) instead of 15, and a full vertex's
+entries skip the second switch. qemu, emu thread, MK 1650-2150: **`Run` 1,934.4k -> 1,822.3k a frame (-112k, -0.9% of
+the thread)** (the totals' difference is lost in the Gengis and 2D job noise qemu's thread timing adds). Expected on
+the device: **-0.5..-1%** (a dependent load and compare before every dispatch, and a second dispatch for 30% of the
+entries, gone).
+
+Exact: MK's frames and audio equal to the base hashes on and off; main RAM every frame 1600-2100 with registers and
+geometry timing SAME off vs on; full savestates at 1850 and 2000 identical to the checkpoint's; the trace build
+(0080's, with `ExecParams[0..3]` added to the hash) gives the same hash over all 1,133,371 calls off and on.
+Sabotage: (3) the full vertex's path clearing `ExecParams[1]` after use: the trace differs (frames, audio and the
+frame-end savestate don't: the next multi-parameter command overwrites it); (4) a box test's entries sent to the
+unknown-command path: geomtest's pictures differ (MK sends no box tests). Test ROMs and exact-suite.sh as 0080's.
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an
