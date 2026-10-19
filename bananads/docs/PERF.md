@@ -784,6 +784,23 @@ difftests and pictures; Mario Kart's frames, audio, main RAM every frame (with r
 state) and savestates at 1850/2000. Sabotage (a quick parameter into an empty FIFO put in the FIFO, not the pipe):
 Mario Kart's savestate at 1850 differs, gxstm hangs.
 
+### VBlank's polygon Y-sort as a counting sort (patch 0065, `render.geom_sort`, default `on`)
+
+MK's race start sorts ~1,330 polygons a frame with `std::stable_sort` (`__move_merge`, `__insertion_sort`,
+`__merge_adaptive`: 108.7k instructions a frame, comparisons whose branches can't be predicted, and a buffer
+allocated and freed every frame). A stable counting sort on the 17-bit `SortKey` in two passes (low 8 bits, then
+high 9) gives the same order: `YSortCounting` 39.5k, **-69.2k a frame (-0.54%)**. Session 1 dropped this patch
+because the test ROMs draw too few polygons (DEAD-ENDS.md); sets under 64 keep `std::stable_sort`. Expected on the
+device: -0.5..-0.8% of the thread (the profile has the sort at 0.9%; the merges' mispredicted branches go too).
+Exact: the sorted order is in the savestate, and Mario Kart's savestates at 1850 and 2000 are byte-identical to the
+checkpoint's; frames and audio too. Sabotage (the first pass unstable): the savestate at 1850 differs.
+
+Together (0063-0065): the emulator's thread 12.88M -> 12.78M instructions a frame (-0.8%). The geometry that is
+left has no single hot spot by the per-TB counts: polygon setup 1.14M (3,300 calls a frame, ~340 instructions each,
+no block over 11%), vertices 0.78M (8,100 a frame, ~95 each, 40% the NEON transform), lighting 0.64M (4,600 normals,
+~140 each), `Run` 2.21M (~20 a FIFO entry plus the commands), `DMA::Run9` 1.77M (~37 a word, plus ~185 per call over
+~1,240 calls: its setup per slice, a cost of the slice loop ending every burst).
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an
