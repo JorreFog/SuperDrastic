@@ -1,0 +1,266 @@
+From de3d9e9b4800cd14d1a08d3e8c34516e27089db2 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 11:02:48 +0000
+Subject: [PATCH] DMA: the GX FIFO DMA's block path in a function of its own
+ (render.gx_dmarun)
+
+Mario Kart DS's race start calls DMA::Run9 ~1,240 times a frame for the GX FIFO DMA (mode 7), each call ending at
+the slice's end after one block of ~25 words; each call paid ~185 host instructions of Run9's setup: the 16/32-bit
+and FastDMA branches, the destination's region and burst table, two static-init guards, the block's lambda state
+spilled around a function that also holds every other DMA case. With GXRun (render.gx_dmarun, MELONDS_GXDMARUN=0
+turns it off; default on), Run9 first checks for the one case where its whole call takes the GX block path with
+gx_dmafast's timing: a 32-bit FastDMA on a DS from main RAM going up, to main RAM's end for all its remaining units
+(so every unit's source is main RAM), into the fixed 0x04000400 whose page is neither main RAM nor the GBA slot,
+with the block paths (MELONDS_DMABLOCK, MELONDS_GXBLOCK), GeomFast and GXDMAFast on; that call goes to Run9GX, the
+same statements in the same order (the loop, the block's timing lambda, WriteGXFIFOBlock, the burst table and count,
+the end shared as Run9End). Every other call goes to the old body (Run9Full), unchanged but for the shared end and
+the two settings read through functions with the same first-use statics.
+---
+ src/DMA.cpp | 182 +++++++++++++++++++++++++++++++++++++++++++---------
+ src/DMA.h   |   8 +++
+ 2 files changed, 159 insertions(+), 31 deletions(-)
+
+diff --git a/src/DMA.cpp b/src/DMA.cpp
+index db96834..be1c58f 100644
+--- a/src/DMA.cpp
++++ b/src/DMA.cpp
+@@ -584,7 +584,155 @@ inline void DMA::FastWrite9(u32 addr, T val)
+     else NDS.ARM9Write16(addr, val);
+ }
+ 
++// the block paths' settings (MELONDS_DMABLOCK, MELONDS_GXBLOCK), read once at their first use
++static inline __attribute__((always_inline)) bool DMABlockOn() noexcept
++{
++    static const bool v = [] { const char* e = getenv("MELONDS_DMABLOCK"); return !e || *e != '0'; }();
++    return v;
++}
++static inline __attribute__((always_inline)) bool GXBlockOn() noexcept
++{
++    static const bool v = [] { const char* e = getenv("MELONDS_GXBLOCK"); return !e || *e != '0'; }();
++    return v;
++}
++
++bool DMA::GXRunEnv() noexcept
++{
++    // read as the DMA is created (a difftest's two NDS objects each with its own setting)
++    const char* e = getenv("MELONDS_GXDMARUN");
++    return !(e && e[0] == '0');
++}
++
+ void DMA::Run9()
++{
++    // render.gx_dmarun: the GX FIFO DMA's block path in a function of its own when Run9Full would take only that
++    // path for this call: a 32-bit FastDMA from main RAM going up (to the source's end of main RAM for all its
++    // remaining units: srcram holds for each of them) into the fixed 0x04000400, whose page is neither main RAM nor
++    // the GBA slot (Run9Full's mramread and its table choice), with the block paths and the geometry engine's and
++    // gx_dmafast's fast paths on
++    if (GXRun && (Cnt & (1<<26)) && DstAddrInc == 0 && CurDstAddr == 0x04000400 && SrcAddrInc > 0 && FastDMA
++        && NDS.ConsoleType == 0 && (CurSrcAddr >> 24) == 0x02
++        && (u64)(CurSrcAddr & ~3u) + ((u64)IterCount << 2) <= 0x03000000)
++    {
++        const u32 rgn = NDS.ARM9Regions[0x04000400 >> 14];
++        if (rgn != Mem9_MainRAM && rgn != Mem9_GBAROM && DMABlockOn() && GXBlockOn()
++            && NDS.GPU.GPU3D.GeomFast && NDS.GPU.GPU3D.GXDMAFast) [[likely]]
++            return Run9GX();
++    }
++    Run9Full();
++}
++
++// Run9Full's end, after its units
++inline __attribute__((always_inline)) void DMA::Run9End() noexcept
++{
++    Executing = false;
++    Stall = false;
++
++    if (RemCount)
++    {
++        if (IterCount == 0)
++        {
++            Running = 0;
++            NDS.ResumeCPU(0, 1<<Num);
++
++            if (StartMode == 0x07)
++                NDS.GPU.GPU3D.CheckFIFODMA();
++        }
++
++        return;
++    }
++
++    if (!(Cnt & (1<<25)))
++        Cnt &= ~(1<<31);
++
++    if (Cnt & (1<<30))
++        NDS.SetIRQ(0, IRQ_DMA0 + Num);
++
++    Running = 0;
++    InProgress = false;
++    NDS.ResumeCPU(0, 1<<Num);
++
++    if (StartMode == 0x05)
++        NDS.NDSCartSlots[0]->CheckDMA(0);
++}
++
++// render.gx_dmarun: Run9Full for the case Run9 checked (the 32-bit FastDMA branch, its fixed destination, every
++// unit through the GX block path with gx_dmafast's timing), the same statements in the same order
++__attribute__((noinline)) void DMA::Run9GX() noexcept
++{
++    if (NDS.ARM9Timestamp >= NDS.ARM9Target) return;
++
++    Executing = true;
++
++    bool burststart = (Running == 2);
++    Running = 1;
++
++    const std::array<u8, 256>& tab = DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[0x04000400 >> 14][6] == 2 ? 0 : 1];
++    const int clockshift = NDS.ARM9ClockShift;
++    u8* const ram = NDS.MainRAM;
++    const u32 mask = NDS.MainRAMMask;
++    GPU3D& gpu3d = NDS.GPU.GPU3D;
++    while (IterCount > 0 && !Stall)
++    {
++        const u32 s0 = CurSrcAddr & ~3u;
++        // std::min({IterCount, (0x03000000 - s0) >> 2, 512u}), as Run9Full (the second is never the least here)
++        u32 n = IterCount;
++        if (((0x03000000 - s0) >> 2) < n) n = (0x03000000 - s0) >> 2;
++        if (512u < n) n = 512u;
++        auto timed = [&](u32 limit, u64& ts, u32& cnt, const std::array<u8, 256>*& cur) __attribute__((always_inline)) -> u32
++        {
++            ts = NDS.ARM9Timestamp;
++            cnt = MRAMBurstCount;
++            cur = nullptr;
++            if (limit == 0) return 0;
++            const u64 target = NDS.ARM9Target;
++            const u8* tb = MRAMBurstTable.data();
++            if (burststart || tb[cnt] == 0)
++            {
++                cnt = 0;
++                cur = &tab;
++                tb = tab.data();
++            }
++            ts += (u64)tb[cnt++] << clockshift;
++            u32 k = 1;
++            if (ts >= target) return k;
++            while (k < limit)
++            {
++                u32 t = tb[cnt];
++                if (t == 0) [[unlikely]]
++                {
++                    cnt = 0;
++                    cur = &tab;
++                    tb = tab.data();
++                    t = tb[0];
++                }
++                cnt++;
++                ts += (u64)t << clockshift;
++                k++;
++                if (ts >= target) break;
++            }
++            return k;
++        };
++        u64 ts;
++        u32 cnt;
++        const std::array<u8, 256>* cur;
++        const u32 k = timed(n, ts, cnt, cur);
++        const u32 j = gpu3d.WriteGXFIFOBlock(ram, mask, s0, k);
++        if (j < k) timed(j, ts, cnt, cur);
++        if (cur) MRAMBurstTable = *cur;
++        MRAMBurstCount = cnt;
++        NDS.ARM9Timestamp = ts;
++        burststart = false;
++        CurSrcAddr += j << 2;
++        IterCount -= j;
++        RemCount -= j;
++        if (ts >= NDS.ARM9Target) break;
++    }
++
++    Run9End();
++}
++
++__attribute__((noinline)) void DMA::Run9Full()
+ {
+     if (NDS.ARM9Timestamp >= NDS.ARM9Target) return;
+ 
+@@ -648,7 +796,7 @@ void DMA::Run9()
+             const int clockshift = NDS.ARM9ClockShift;
+             u8* const ram = NDS.MainRAM;
+             const u32 mask = NDS.MainRAMMask;
+-            static const bool vramblock = [] { const char* v = getenv("MELONDS_DMABLOCK"); return !v || *v != '0'; }();
++            const bool vramblock = DMABlockOn();
+ 
+             if (DstAddrInc == 0)
+             {
+@@ -660,7 +808,7 @@ void DMA::Run9()
+                     ? DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][7] == 8 ? 2 : 3]
+                     : DMATiming::MRAMRead32Bursts[NDS.ARM9MemTimings[dst_id][6] == 2 ? 0 : 1];
+                 const u32 dst = CurDstAddr;
+-                static const bool gxon = [] { const char* v = getenv("MELONDS_GXBLOCK"); return !v || *v != '0'; }();
++                const bool gxon = GXBlockOn();
+                 const bool gxblock = vramblock && gxon && dst == 0x04000400 && mramread && SrcAddrInc > 0 && NDS.GPU.GPU3D.GeomFast;
+                 while (IterCount > 0 && !Stall)
+                 {
+@@ -894,35 +1042,7 @@ void DMA::Run9()
+         }
+     }
+ 
+-    Executing = false;
+-    Stall = false;
+-
+-    if (RemCount)
+-    {
+-        if (IterCount == 0)
+-        {
+-            Running = 0;
+-            NDS.ResumeCPU(0, 1<<Num);
+-
+-            if (StartMode == 0x07)
+-                NDS.GPU.GPU3D.CheckFIFODMA();
+-        }
+-
+-        return;
+-    }
+-
+-    if (!(Cnt & (1<<25)))
+-        Cnt &= ~(1<<31);
+-
+-    if (Cnt & (1<<30))
+-        NDS.SetIRQ(0, IRQ_DMA0 + Num);
+-
+-    Running = 0;
+-    InProgress = false;
+-    NDS.ResumeCPU(0, 1<<Num);
+-
+-    if (StartMode == 0x05)
+-        NDS.NDSCartSlots[0]->CheckDMA(0);
++    Run9End();
+ }
+ 
+ void DMA::Run7()
+diff --git a/src/DMA.h b/src/DMA.h
+index e0157ac..2dcb384 100644
+--- a/src/DMA.h
++++ b/src/DMA.h
+@@ -47,6 +47,9 @@ public:
+ 
+     void Run();
+     void Run9();
++    void Run9Full();
++    void Run9GX() noexcept;
++    void Run9End() noexcept;
+     template<typename T> void FastWrite9(u32 addr, T val);
+     void Run7();
+ 
+@@ -82,6 +85,11 @@ public:
+     // addresses, skip ARM9Read32/ARM9Write32's (ARM7Read32/ARM7Write32's) dispatch; the ARM9's main RAM -> fixed
+     // destination timing is the MRAM burst table lookup UnitTimings9_32 does, without its call and region lookups.
+     bool FastDMA = false;
++    // BananaDS (render.gx_dmarun, MELONDS_GXDMARUN=0 turns it off; exact): Run9 takes the GX FIFO DMA's block path
++    // (main RAM going up into 0x04000400, render.gx_dmafast) in a function of its own (Run9GX) when nothing else
++    // in Run9 would run for this call: Run9's per-call setup without the other cases' decisions and spills
++    static bool GXRunEnv() noexcept;
++    bool GXRun = GXRunEnv();
+ 
+ private:
+     melonDS::NDS& NDS;
+-- 
+2.43.0
+
