@@ -47,6 +47,7 @@ int dsflip_battery(int *charging);
 int dsflip_drastic_menu(void);
 extern volatile int dsflip_hold;
 void dsflip_mic_key(int down);
+int lid_home_pressed(void);   /* lid.c: HOME let go while the menu is open */
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
@@ -418,10 +419,10 @@ static int is_banana(void) {
 static int banana_volume(void) {
     /* (without this library: DraStic's children inherit LD_PRELOAD, and in them it printed its Gengis Engine line
      * into the output and amixer crashed: the menu read 50% and set nothing) */
-    FILE *p = popen("env -u LD_PRELOAD /usr/libexec/banana/volume get 2>/dev/null", "r"); if (!p) return 50;
+    FILE *p = popen("env -u LD_PRELOAD /usr/libexec/banana/volume get 2>/dev/null", "r"); if (!p) return -1;
     int v = -1; if (fscanf(p, "%d", &v) != 1) v = -1;
     pclose(p);
-    return v < 0 ? 50 : v > 100 ? 100 : v;
+    return v < 0 ? -1 : v > 100 ? 100 : v;   /* -1: no level (the refresh keeps what is shown) */
 }
 static const char *BLN[2] = { "backlight1", "backlight0" };   /* top, bottom */
 static int bl_read(const char *path) { FILE *f = fopen(path, "r"); int v = -1; if (f) { if (fscanf(f, "%d", &v) != 1) v = -1; fclose(f); } return v; }
@@ -989,7 +990,7 @@ static void activate(void) {
             play(SND_SELECT); dirty_top = dirty_bot = 1; break;
         }
         case 3: scr = SC_SET; sel_set = 0;
-                if (is_banana()) { vol = banana_volume(); bri = banana_brightness(); }
+                if (is_banana()) { vol = banana_volume(); if (vol < 0) vol = 50; bri = banana_brightness(); }
                 else { vol = cfg_int("audio.volume", 50); bri = cfg_int("display.brightness", 80); }
                 play(SND_SELECT); dirty_top = dirty_bot = 1; break;
         case 4: play(SND_SELECT); close_menu(); resume_press(btn_menu[0] >= 0 ? btn_menu[0] : btn_menu[1]); break;
@@ -1169,6 +1170,7 @@ static void menu_run(int start) {
             dsflip_log("[menu] exit hotkey: closing\n"); busy("Saving your spot"); dsflip_hold = 1; audio_mute(1); close_menu();
         }
         if (open_ && held_dir && now_ms() >= rep_next) { nav(rep_dx, rep_dy); rep_next = now_ms() + 110; }
+        if (lid_home_pressed() && scr != SC_BUSY) { play(SND_BACK); close_menu(); }   /* HOME again: closed (lid.c) */
         { static long long mt; if (scr == SC_MIC && now_ms() - mt >= 33) { mt = now_ms(); dirty_bot = 1; } }   /* the meter moves */
         if (is_banana()) {                                 /* the volume keys' level while the settings are open */
             static long long vt; if (scr == SC_SET && now_ms() - vt >= 500) { vt = now_ms(); want_ex(-1, -1, 1); }

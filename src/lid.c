@@ -46,8 +46,11 @@ static int hinge_control(void) {
 
 static void init(void) {
     inited = 1;
+    /* on by default on BananaLinux only (its bananad delays the lid's sleep so the game sees it, and HOME is free there);
+     * elsewhere (ROCKNIX: its own HOME handling) only with DSFLIP_LID=1 / DSFLIP_HOME=1 */
     const char *l = getenv("DSFLIP_LID"), *h = getenv("DSFLIP_HOME");
-    int want_lid = !(l && *l == '0'), want_home = !(h && *h == '0');
+    int banana = access("/run/banana/mixer", F_OK) == 0;
+    int want_lid = l ? *l != '0' : banana, want_home = h ? *h != '0' : banana;
     if (want_lid) hinge = hinge_control();
     DIR *d = opendir("/dev/input"); if (!d) return;
     struct dirent *e;
@@ -95,4 +98,15 @@ void lid_poll(void) {
             for (int i = 0; i < (int)(n / sizeof ev[0]); i++)
                 if (ev[i].type == EV_KEY && ev[i].code == BTN_Z && ev[i].value == 0) home = 1;   /* on release */
     if (home) { dsflip_log("[lid] HOME: the menu\n"); menu_home(); }
+}
+
+/* the menu's loop (menu.c): HOME pressed while the menu is open closes it, and isn't kept for after (it reopened
+ * the menu as soon as it closed); 1 when HOME was let go */
+int lid_home_pressed(void) {
+    if (home_fd < 0) return 0;
+    struct input_event ev[16]; ssize_t n; int home = 0;
+    while ((n = read(home_fd, ev, sizeof ev)) > 0)
+        for (int i = 0; i < (int)(n / sizeof ev[0]); i++)
+            if (ev[i].type == EV_KEY && ev[i].code == BTN_Z && ev[i].value == 0) home = 1;
+    return home;
 }
