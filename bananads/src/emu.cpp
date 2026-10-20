@@ -807,22 +807,73 @@ int Emu::audio(int16_t* stereo, int max_frames) {
     return n;
 }
 
-void Emu::write_save(const uint8_t* data, uint32_t len, uint32_t, uint32_t) {
-    // The game writes its save in many small pieces; it goes to disk a second after the last one.
-    if (len != save_len_) {
+void Emu::write_save(const uint8_t* data, uint32_t len, uint32_t off, uint32_t n) {
+    // The game writes its save in many small pieces; it goes to disk a second after the last one. Only the piece
+    // that changed is copied (#33): copying the whole save at every page cost Nintendogs' 256 KB save a 256 KB copy
+    // per page written, frames of the emulator's thread over a whole save
+    if (len != save_len_ || !save_copy_) {
         save_copy_ = std::make_unique<uint8_t[]>(len);
         save_len_ = len;
+        memcpy(save_copy_.get(), data, len);
+    } else if (n > 0 && off < len && n <= len - off) {
+        memcpy(save_copy_.get() + off, data + off, n);
+    } else {
+        memcpy(save_copy_.get(), data, len);
     }
-    memcpy(save_copy_.get(), data, len);
     save_dirty_us_ = now_us();
 }
 
+void Emu::save_writer() {
+    for (;;) {
+        std::vector<uint8_t> buf;
+        {
+            std::unique_lock<std::mutex> l(save_mu_);
+            save_cv_.wait(l, [this] { return save_have_ || save_stop_; });
+            if (!save_have_) return;  // stopping, and nothing left to write
+            buf.swap(save_pending_);
+            save_have_ = false;
+        }
+        const uint64_t t0 = now_us();
+        if (write_file_atomic(save_path_, buf.data(), buf.size()))
+            Log(LogLevel::Info, "[emu] saved %s (%.0f ms, beside the game)\n", save_path_.c_str(), (now_us() - t0) / 1000.0);
+        else
+            Log(LogLevel::Error, "[emu] couldn't write %s: %s\n", save_path_.c_str(), strerror(errno));
+    }
+}
+
+// a second after the game's last write to its save, the save handed to the writer's thread; now (at quit): the
+// writer finishes what it has, then the latest is written here
 void Emu::flush_save(bool now) {
-    if (!save_dirty_us_ || (!now && now_us() - save_dirty_us_ < 1000000)) return;
-    if (write_file_atomic(save_path_, save_copy_.get(), save_len_))
-        Log(LogLevel::Info, "[emu] saved %s\n", save_path_.c_str());
-    else
-        Log(LogLevel::Error, "[emu] couldn't write %s: %s\n", save_path_.c_str(), strerror(errno));
+    if (now) {
+        if (save_thr_.joinable()) {
+            {
+                std::lock_guard<std::mutex> l(save_mu_);
+                save_stop_ = true;
+            }
+            save_cv_.notify_one();
+            save_thr_.join();
+        }
+        if (!save_dirty_us_) return;
+        if (write_file_atomic(save_path_, save_copy_.get(), save_len_))
+            Log(LogLevel::Info, "[emu] saved %s\n", save_path_.c_str());
+        else
+            Log(LogLevel::Error, "[emu] couldn't write %s: %s\n", save_path_.c_str(), strerror(errno));
+        save_dirty_us_ = 0;
+        return;
+    }
+    if (!save_dirty_us_ || now_us() - save_dirty_us_ < 1000000) return;
+    {
+        std::lock_guard<std::mutex> l(save_mu_);
+        save_pending_.assign(save_copy_.get(), save_copy_.get() + save_len_);
+        save_have_ = true;
+    }
+    if (!save_thr_.joinable() && !save_stop_) {
+        save_thr_ = std::thread([this] {
+            pthread_setname_np(pthread_self(), "bds-save");
+            save_writer();
+        });
+    }
+    save_cv_.notify_one();
     save_dirty_us_ = 0;
 }
 

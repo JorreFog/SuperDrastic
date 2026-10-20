@@ -2,6 +2,9 @@
 // folder, the microphone, Wi-Fi, savestates with a picture for the in-game menu).
 #pragma once
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -113,6 +116,14 @@ private:
     std::unique_ptr<uint8_t[]> save_copy_;
     uint32_t save_len_ = 0;
     uint64_t save_dirty_us_ = 0;  // when the game last wrote its save; 0 = written out
+    // the save's writer (#33): the file is written and fsynced on a thread of its own, not the emulator's, where a
+    // slow SD card's fsync (tens to hundreds of ms) stopped the game each time it saved
+    std::thread save_thr_;
+    std::mutex save_mu_;
+    std::condition_variable save_cv_;
+    std::vector<uint8_t> save_pending_;
+    bool save_have_ = false, save_stop_ = false;
+    void save_writer();
     long slice_stats_ = 0;        // core.slice_stats: log the slice's statistics every this many frames
     long slice_frames_ = 0;
     std::unique_ptr<Profiler> prof_;  // prof.hz: the emulator's thread sampled (prof.cpp), off by default
