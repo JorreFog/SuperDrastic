@@ -246,6 +246,7 @@ void resume_frame(void) {
 
 /* ---- the in-game menu (menu.c) ---- */
 int resume_control_button(const char *name) { return control_button_any(name); }
+int resume_joy_id(void) { return joy_id >= 0 ? joy_id : 0; }
 int resume_on(void) { return resume_path[0] && btn_save >= 0; }
 int resume_quit_pending(void) { return want_save; }   /* the exit hotkey came while the menu was open */
 int resume_menu_busy(void) { return m_saving || m_loading || m_load_next[0] || saving; }

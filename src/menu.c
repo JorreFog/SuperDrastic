@@ -1170,7 +1170,11 @@ int menu_event(void *ev) {
         b_a = resume_control_button("A"); b_b = resume_control_button("B"); b_y = resume_control_button("Y");
         b_l = resume_control_button("L"); b_r = resume_control_button("R"); b_start = resume_control_button("START");
         b_up = resume_control_button("UP"); b_down = resume_control_button("DOWN"); b_left = resume_control_button("LEFT"); b_right = resume_control_button("RIGHT");
-        if (btn_menu[0] < 0 && btn_menu[1] < 0) enabled = 0;
+        /* a button DraStic has no control on any more (a setup gone wrong): the RG DS pad's own (retrogame_joypad's
+         * order: B A X Y L R L2 R2 Select Start F L3 R3 up down left right), so the menu still works from HOME */
+        if (b_a < 0) b_a = 1; if (b_b < 0) b_b = 0; if (b_y < 0) b_y = 3; if (b_l < 0) b_l = 4; if (b_r < 0) b_r = 5;
+        if (b_start < 0) b_start = 9; if (b_up < 0) b_up = 13; if (b_down < 0) b_down = 14; if (b_left < 0) b_left = 15; if (b_right < 0) b_right = 16;
+        /* (no menu button at all, a button setup gone wrong: HOME still opens it, lid.c) */
         dsflip_log("[menu] %s: menu buttons %d %d, A %d B %d Y %d, d-pad %d %d %d %d\n", enabled ? "on" : "off",
                    btn_menu[0], btn_menu[1], b_a, b_b, b_y, b_up, b_down, b_left, b_right);
     }
@@ -1187,6 +1191,13 @@ int menu_event(void *ev) {
     }
     if (pending && down) other = 1;
     return 0;
+}
+
+/* HOME (lid.c): the menu whatever DraStic's buttons are, unless DraStic's own menu or a save/load is up */
+void menu_home(void) {
+    if (enabled < 0) menu_event(0);
+    if (!enabled || open_ || dsflip_drastic_menu() || resume_menu_busy()) return;
+    menu_run(SC_MAIN);
 }
 
 /* every present (dsflip.c) */
