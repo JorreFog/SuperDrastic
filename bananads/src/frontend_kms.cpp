@@ -766,9 +766,11 @@ static std::vector<InputDev> open_inputs(const std::string& touch_name) {
         std::string path = std::string("/dev/input/") + e->d_name;
         int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0) continue;
-        unsigned long keys[KEY_MAX / (8 * sizeof(long)) + 1] = {}, abs[ABS_MAX / (8 * sizeof(long)) + 1] = {};
+        unsigned long keys[KEY_MAX / (8 * sizeof(long)) + 1] = {}, abs[ABS_MAX / (8 * sizeof(long)) + 1] = {},
+                      sw[SW_MAX / (8 * sizeof(long)) + 1] = {};
         ioctl(fd, EVIOCGBIT(EV_KEY, sizeof keys), keys);
         ioctl(fd, EVIOCGBIT(EV_ABS, sizeof abs), abs);
+        ioctl(fd, EVIOCGBIT(EV_SW, sizeof sw), sw);
         InputDev dv;
         dv.fd = fd;
         bool mt = bit(abs, ABS_MT_POSITION_X) && bit(abs, ABS_MT_POSITION_Y);
@@ -794,7 +796,8 @@ static std::vector<InputDev> open_inputs(const std::string& touch_name) {
         } else {
             // the left stick (a pad's ABS_X/ABS_Y) plays the d-pad; the volume keys are only looked at so F + volume
             // (bananad's brightness) isn't taken for F alone, which opens the menu
-            bool any = bit(abs, ABS_HAT0X) || bit(keys, KEY_VOLUMEUP);
+            // (and the lid's hall sensor, SW_LID: the DS's lid; HOME, BTN_Z on an adc-keys device of its own: the menu)
+            bool any = bit(abs, ABS_HAT0X) || bit(keys, KEY_VOLUMEUP) || bit(sw, SW_LID) || bit(keys, BTN_Z);
             if (bit(abs, ABS_X) && bit(abs, ABS_Y)) {
                 input_absinfo ax{};
                 ioctl(fd, EVIOCGABS(ABS_X), &ax);
@@ -1165,6 +1168,8 @@ int run_kms(Emu& emu, const Config& cfg) {
 
     // the presenter's (this thread's) requests for the emulator's thread, applied before its next frame
     std::atomic<uint32_t> in_keys{0};
+    std::atomic<bool> in_lid{false};  // the handheld's lid shut: the DS's too (the emulator's thread passes it on)
+    bool lid = false;
     std::atomic<int> in_touch{-1};  // y << 16 | x, -1 released
     std::atomic<int> in_save{0}, in_load{0};
     std::atomic<bool> run{true};
@@ -1290,6 +1295,11 @@ int run_kms(Emu& emu, const Config& cfg) {
                 Log(LogLevel::Info, "[kms] fast-forward %s\n", ff ? (ff == 99 ? "max" : ff == 2 ? "2x" : "3x") : "off");
             }
             emu.set_keys(in_keys.load(std::memory_order_relaxed));
+            if (const bool l = in_lid.load(std::memory_order_relaxed); l != lid) {
+                lid = l;
+                emu.set_lid(l);  // the game sees the DS close: most go to their sleep mode, some play a sound
+                Log(LogLevel::Info, "[kms] lid %s\n", l ? "shut: the DS's lid closes" : "open: the DS's lid opens");
+            }
             const int t = in_touch.load(std::memory_order_relaxed);
             if (t != touched) {
                 if (t < 0) emu.release_touch();
@@ -1436,7 +1446,16 @@ int run_kms(Emu& emu, const Config& cfg) {
                         keys = (keys & ~(KeyLeft | KeyRight)) | (x.value < 0 ? KeyLeft : x.value > 0 ? KeyRight : 0);
                     else if (x.type == EV_ABS && x.code == ABS_HAT0Y)
                         keys = (keys & ~(KeyUp | KeyDown)) | (x.value < 0 ? KeyUp : x.value > 0 ? KeyDown : 0);
+                    // the lid (a shut lid when the game started counts from the next close: its first event is the open)
+                    if (x.type == EV_SW && x.code == SW_LID) {
+                        in_lid = x.value != 0;
+                        continue;
+                    }
                     if (x.type != EV_KEY || x.value == 2) continue;
+                    if (x.code == BTN_Z) {  // HOME: the menu, on release (whatever F and L3 do)
+                        if (!x.value && menu_on) open_menu(0);
+                        continue;
+                    }
                     if (hot && x.value && !is_hotkey(x.code)) hot_used = true;  // F + something: not F alone
                     if (menu_on && is_menu_button(x.code)) {  // (opens on release: nothing of it reaches the game)
                         if (x.value) menu_down = true;
