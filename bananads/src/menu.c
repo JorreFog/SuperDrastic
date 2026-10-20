@@ -331,74 +331,82 @@ static void when_text(time_t t, char *out, size_t n) {
     else { char d[16]; strftime(d, sizeof d, "%b %e", &a); snprintf(out, n, "%s %s", d, hm); }
 }
 
-/* ---------- settings: volume and brightness, as BananaLinux keeps them: the mixer control bananad names in
- * /run/banana/mixer ("<card> <control>"; bananad stores the levels across reboots), the panels' backlights (both,
- * the value in /data/banana/backlight that bananad restores at boot) ---------- */
-static char mix_card[16] = "0", mix_ctl[64] = "Master";
-static void mixer_name(void) {
-    FILE *f = fopen("/run/banana/mixer", "r"); if (!f) return;
-    char a[16], b[64];
-    if (fscanf(f, "%15s %63[^\n]", a, b) == 2) { snprintf(mix_card, sizeof mix_card, "%s", a); snprintf(mix_ctl, sizeof mix_ctl, "%s", b); }
-    fclose(f);
+/* ---------- settings: volume and brightness, as BananaLinux keeps them ----------
+ * The volume through BananaLinux's own script (/usr/libexec/banana/volume get|set: the card and control bananad names,
+ * the RG DS Plus's amplifiers' table, the ear's curve, playback only), as the volume keys and Settings do; bananad is
+ * poked to store it. Before, amixer on the named control: the Plus's "PCM" doesn't exist (its amplifiers are "Left
+ * PCM"/"Right PCM", so nothing changed), and on the RG DS it set the microphone's level too and read another percent
+ * than the keys'. While the menu's settings are open the level is read again twice a second, so the keys show.
+ * The backlights: each panel its own (backlight1 the top, backlight0 the bottom); the row moves both by the same step,
+ * shows their middle, and "<top> <bottom>" in thousandths goes to /data/banana/backlight for bananad to restore at
+ * boot (before, the first backlight's raw value went there, which bananad read as thousandths). */
+static const char *BLN[2] = { "backlight1", "backlight0" };   /* top, bottom */
+static int bl_read(const char *path) { FILE *f = fopen(path, "r"); int v = -1; if (f) { if (fscanf(f, "%d", &v) != 1) v = -1; fclose(f); } return v; }
+static int bl_pm(int i) {            /* a panel's level now, thousandths of its maximum (-1: none) */
+    char p[96]; snprintf(p, sizeof p, "/sys/class/backlight/%s/max_brightness", BLN[i]); int mx = bl_read(p);
+    snprintf(p, sizeof p, "/sys/class/backlight/%s/brightness", BLN[i]); int v = bl_read(p);
+    return mx > 0 && v >= 0 ? v * 1000 / mx : -1;
+}
+static void bl_set_pm(int i, int pm) {
+    char p[96]; snprintf(p, sizeof p, "/sys/class/backlight/%s/max_brightness", BLN[i]); int mx = bl_read(p);
+    if (mx <= 0) return;
+    int v = mx * pm / 1000; if (v < 1) v = 1;
+    snprintf(p, sizeof p, "/sys/class/backlight/%s/brightness", BLN[i]);
+    FILE *f = fopen(p, "w"); if (f) { fprintf(f, "%d\n", v); fclose(f); }
 }
 static int volume_get(void) {
-    char cmd[160]; snprintf(cmd, sizeof cmd, "amixer -c %s sget '%s' 2>/dev/null", mix_card, mix_ctl);
-    FILE *p = popen(cmd, "r"); if (!p) return 50;
-    char line[256]; int v = -1;
-    while (fgets(line, sizeof line, p)) { char *b = strchr(line, '['); if (b && v < 0 && strchr(b, '%')) v = atoi(b + 1); }
+    FILE *p = popen("/usr/libexec/banana/volume get 2>/dev/null", "r"); if (!p) return 50;
+    int v = -1; if (fscanf(p, "%d", &v) != 1) v = -1;
     pclose(p);
-    return v < 0 ? 50 : v;
+    return v < 0 ? 50 : v > 100 ? 100 : v;
 }
-static int bl_max(const char *dir) {
-    char p[300]; snprintf(p, sizeof p, "%s/max_brightness", dir);
-    FILE *f = fopen(p, "r"); int mx = 0; if (f) { if (fscanf(f, "%d", &mx) != 1) mx = 0; fclose(f); }
-    return mx;
-}
+static int bl_base[2] = { -1, -1 }, bl_base_avg = 80;   /* the levels when the settings opened, and their middle in % */
 static int brightness_get(void) {
-    glob_t g; int pct = 80;
-    if (glob("/sys/class/backlight/*", 0, 0, &g)) return pct;
-    if (g.gl_pathc) {
-        char p[300]; snprintf(p, sizeof p, "%s/brightness", g.gl_pathv[0]);
-        FILE *f = fopen(p, "r"); int v = 0, mx = bl_max(g.gl_pathv[0]);
-        if (f) { if (fscanf(f, "%d", &v) != 1) v = 0; fclose(f); }
-        if (mx > 0) pct = (v * 100 + mx / 2) / mx;
-    }
-    globfree(&g);
-    return pct;
+    int n = 0, sum = 0;
+    for (int i = 0; i < 2; i++) { bl_base[i] = bl_pm(i); if (bl_base[i] > 0) { sum += bl_base[i]; n++; } }
+    bl_base_avg = n ? (sum / n + 5) / 10 : 80;
+    return bl_base_avg;
 }
-static int vol, bri, bri_changed, bri_raw;
+static int vol, bri, bri_changed;
+static long long vol_set_at;                               /* the menu's own change: no reading back for a moment */
 static pthread_mutex_t wm = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_t wc = PTHREAD_COND_INITIALIZER;
-static int w_vol = -1, w_bri = -1;
-static void *worker(void *a) {       /* amixer and the saved brightness: off the menu's thread */
+static int w_vol = -1, w_bri = -1, w_read = 0;
+static volatile int vol_read = -1;                         /* the level read by the worker, for the menu to show */
+static void *worker(void *a) {       /* the volume script and the saved brightness: off the menu's thread */
     (void)a;
     for (;;) {
         pthread_mutex_lock(&wm);
-        while (w_vol < 0 && w_bri < 0) pthread_cond_wait(&wc, &wm);
-        int v = w_vol, b = w_bri; w_vol = w_bri = -1;
+        while (w_vol < 0 && w_bri < 0 && !w_read) pthread_cond_wait(&wc, &wm);
+        int v = w_vol, b = w_bri, r = w_read; w_vol = w_bri = -1; w_read = 0;
         pthread_mutex_unlock(&wm);
-        char cmd[200];
-        if (v >= 0) { snprintf(cmd, sizeof cmd, "amixer -q -c %s sset '%s' %d%% >/dev/null 2>&1", mix_card, mix_ctl, v); if (system(cmd)) {} }
-        if (b >= 0) { FILE *f = fopen("/data/banana/backlight", "w"); if (f) { fprintf(f, "%d\n", b); fclose(f); } }
+        char cmd[96];
+        if (v >= 0) {
+            snprintf(cmd, sizeof cmd, "/usr/libexec/banana/volume set %d >/dev/null 2>&1", v); if (system(cmd)) {}
+            if (system("killall -HUP bananad >/dev/null 2>&1")) {}   /* it stores the level across reboots */
+        }
+        if (b >= 0) {
+            int t = bl_pm(0), u = bl_pm(1);
+            FILE *f = fopen("/data/banana/backlight", "w"); if (f) { fprintf(f, "%d %d\n", t > 0 ? t : u, u > 0 ? u : t); fclose(f); }
+        }
+        if (r && v < 0) vol_read = volume_get();
     }
     return 0;
 }
-static void want(int v, int b) {
+static void want_ex(int v, int b, int r) {
     static int started;
     pthread_mutex_lock(&wm);
     if (!started) { pthread_t t; if (!pthread_create(&t, 0, worker, 0)) { pthread_detach(t); pthread_setname_np(t, "bds-menu"); started = 1; } }
-    if (v >= 0) w_vol = v; if (b >= 0) w_bri = b;
+    if (v >= 0) w_vol = v; if (b >= 0) w_bri = b; if (r) w_read = 1;
     pthread_cond_signal(&wc); pthread_mutex_unlock(&wm);
 }
-static void backlight(int pct) {     /* at once, straight to both panels; the value is saved when the menu closes */
-    glob_t g;
-    if (glob("/sys/class/backlight/*/brightness", 0, 0, &g)) return;
-    for (size_t i = 0; i < g.gl_pathc; i++) {
-        char dir[300]; snprintf(dir, sizeof dir, "%.*s", (int)(strlen(g.gl_pathv[i]) - 11), g.gl_pathv[i]);
-        int mx = bl_max(dir); if (mx <= 0) continue;
-        FILE *f = fopen(g.gl_pathv[i], "w"); if (f) { fprintf(f, "%d\n", pct * mx / 100); fclose(f); }
-        if (i == 0) bri_raw = pct * mx / 100;
+static void want(int v, int b) { if (v >= 0) vol_set_at = now_ms(); want_ex(v, b, 0); }
+static void backlight(int pct) {     /* at once, both panels moved by the row's step from where they were; saved at close */
+    int d = (pct - bl_base_avg) * 10;
+    for (int i = 0; i < 2; i++) {
+        if (bl_base[i] <= 0) continue;
+        int v = bl_base[i] + d; v = v < 50 ? 50 : v > 1000 ? 1000 : v;
+        bl_set_pm(i, v);
     }
-    globfree(&g);
 }
 
 /* ---------- sounds: the theme's WAVs ---------- */
@@ -476,7 +484,6 @@ static int setup(void) {
         if (access(p, R_OK)) snprintf(p, sizeof p, "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/sounds/%s", snd[k]);
         load_wav(k, p);
     }
-    mixer_name();
     inited = 1;
     return 1;
 }
@@ -1118,6 +1125,8 @@ int bmenu_run(int start) {
         while (open_ && H.poll(H.ctx, &e)) handle(&e);
         if (open_ && held_dir && now_ms() >= rep_next) { nav(rep_dx, rep_dy); rep_next = now_ms() + 110; }
         { static long long mt; if (scr == SC_MIC && now_ms() - mt >= 33) { mt = now_ms(); dirty_bot = 1; } }   /* the meter moves */
+        { static long long vt; if (scr == SC_SET && now_ms() - vt >= 500) { vt = now_ms(); want_ex(-1, -1, 1); }   /* the volume keys' */
+          int r = vol_read; if (r >= 0) { vol_read = -1; if (scr == SC_SET && r != vol && now_ms() - vol_set_at > 1500) { vol = r; dirty_bot = 1; } } }
         if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT) dirty_top = 1; }   /* the clock */
         /* RetroAchievements finishes its login and the game's lookup 10-15 s after a start: a menu opened before that
          * had no achievements on its top screen until it was opened again. Looked at twice a second while open. */
@@ -1126,7 +1135,7 @@ int bmenu_run(int start) {
         if (open_) redraw();
         usleep(8000);
     }
-    if (bri_changed) want(-1, bri_raw);
+    if (bri_changed) want(-1, 1);
     mlog("[menu] closed\n");
     return 1;
 }
