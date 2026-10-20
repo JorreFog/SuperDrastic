@@ -483,6 +483,17 @@ static void want_ex(int v, int b, int r) {
     pthread_cond_signal(&wc); pthread_mutex_unlock(&wm);
 }
 static void want(int v, int b) { if (v >= 0) vol_set_at = now_ms(); want_ex(v, b, 0); }
+/* the brightness changed in this menu, saved now on BananaLinux (a small file, written on this thread: a Quit game
+ * killed DraStic before the worker got to it, and the next boot came back at the old level); ROCKNIX's script through
+ * the worker as before */
+static void bri_save_now(void) {
+    if (!bri_changed) return;
+    bri_changed = 0;
+    if (!is_banana()) { want(-1, bri); return; }
+    int t = bl_pm(0), u = bl_pm(1);
+    FILE *f = fopen("/data/banana/backlight", "w");
+    if (f) { fprintf(f, "%d %d\n", t > 0 ? t : u, u > 0 ? u : t); fflush(f); fsync(fileno(f)); fclose(f); }
+}
 static void backlight(int pct) {     /* at once, straight to the panels; the setting is saved when the menu closes */
     if (is_banana()) {               /* both moved by the row's step from where they were */
         int d = (pct - bl_base_avg) * 10;
@@ -1012,7 +1023,7 @@ static void activate(void) {
     case SC_QUIT:
         play(SND_SELECT);
         if (resume_on()) { busy("Saving your spot"); dsflip_hold = 1; audio_mute(1); }
-        close_menu(); resume_quit();
+        close_menu(); bri_save_now(); resume_quit();   /* (the brightness written before DraStic goes: no worker after) */
         break;
     }
 }
@@ -1180,7 +1191,7 @@ static void menu_run(int start) {
         if (open_) redraw();
         usleep(8000);
     }
-    if (bri_changed) want(-1, bri);
+    bri_save_now();
     if (mic_until) dsflip_mic_key(1);
     SDL_PauseAudio(0);
     audio_mic_quiet(0);
