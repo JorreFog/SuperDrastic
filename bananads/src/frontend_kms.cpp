@@ -1383,7 +1383,7 @@ int run_kms(Emu& emu, const Config& cfg) {
     std::vector<pollfd> pfd;
     long shown_mark = 0, made_mark = 0, drop_mark = 0, rep_mark = 0;
     long long since = now_us();
-    long fps_mark = 0;
+    long fps_mark = 0, swaps_mark = 0;
     long long fps_since = since;
     bmenu_fps(-1, 0);
     while (run.load()) {
@@ -1512,10 +1512,14 @@ int run_kms(Emu& emu, const Config& cfg) {
         // the FPS counter (kms.fps, or the menu's; always while fast-forwarding): the frames emulated a second, twice
         // a second
         if (const long long t = now_us(); t - fps_since >= 500000) {
-            const long m = dp.made.load();
-            if (g_opts.fps || g_ff.load()) bmenu_fps((int)((m - fps_mark) * 10000000LL / (t - fps_since)), g_ff.load());
-            else bmenu_fps(-1, 0);
+            const long m = dp.made.load(), g = emu.swaps3d();
+            if (g_opts.fps || g_ff.load()) {
+                bmenu_fps((int)((m - fps_mark) * 10000000LL / (t - fps_since)), g_ff.load());
+                // the game's own frames (#37): with no 3D in this half second, the emulator's rate is the game's
+                bmenu_fps_game(g > swaps_mark ? (int)((g - swaps_mark) * 10000000LL / (t - fps_since)) : -1);
+            } else bmenu_fps(-1, 0);
             fps_mark = m;
+            swaps_mark = g;
             fps_since = t;
         }
 

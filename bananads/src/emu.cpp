@@ -713,6 +713,10 @@ void Emu::run_frame() {
     if (prof_) prof_->frame(frames_run_);  // prof.hz: on the emulator's thread, whichever runs the frames
     frames_run_++;
     nds_->RunFrame();
+    if (const uint32_t b = nds_->GPU.GPU3D.CurRAMBank; b != bank3d_) {  // the 3D swapped at this VBlank
+        bank3d_ = b;
+        swaps3d_.fetch_add(1, std::memory_order_relaxed);
+    }
     flush_save(false);
     if (slice_stats_ > 0 && ++slice_frames_ % slice_stats_ == 0) {
         // the share of emulated time within core.slice_hold cycles of an IPC access (where the short slice runs)

@@ -1151,7 +1151,7 @@ static int op_on, ov_on, ov_kind, ov_pct = -1, ov_built_pct = -2, ov_built_kind 
 static long long op_from, op_until, ov_from, ov_until, osd_mt, osd_check;
 static char op_l1[128], op_l2[160], op_badge[600]; static uint32_t op_accent;
 static ovpic OF;                                       /* the FPS counter */
-static int of_val = -1, of_ff, of_built = -2, of_built_ff = -1, of_for_w;
+static int of_val = -1, of_ff, of_built = -2, of_built_ff = -1, of_for_w, of_game = -1, of_built_game = -2;
 
 /* draw f twice (over black and over white) into a w x h picture with coverage */
 static int ov_make(ovpic *o, int w, int h, int x, int y, float sc, void (*f)(canvas *)) {
@@ -1222,7 +1222,12 @@ static void ov_draw_level(canvas *c) {   /* the pill's own picture: c is exactly
 }
 static void ov_draw_fps(canvas *c) {   /* the counter's own picture: c is exactly its card */
     ov_card(c, 0, 0, c->w, c->h);
-    char t[24]; snprintf(t, sizeof t, "%d.%d FPS", of_val / 10, of_val % 10);
+    /* the game's own rate when it draws 3D and runs slower than the emulator (a heavy scene: the DS's frames come
+     * every other one); the emulator's, which is also the 2D games' */
+    char t[40];
+    if (of_game >= 0 && of_val - of_game >= 15)
+        snprintf(t, sizeof t, "%d.%d FPS  emu %d", of_game / 10, of_game % 10, (of_val + 5) / 10);
+    else snprintf(t, sizeof t, "%d.%d FPS", of_val / 10, of_val % 10);
     ov_text(c, &F_MED, t, (float)S(12), (float)S(23), (float)S(17), C_CYAN, (float)(c->w - S(20)));
     if (of_ff) {
         char f[16]; if (of_ff == 99) snprintf(f, sizeof f, ">> Max"); else snprintf(f, sizeof f, ">> %dx", of_ff);
@@ -1231,6 +1236,7 @@ static void ov_draw_fps(canvas *c) {   /* the counter's own picture: c is exactl
     }
 }
 void bmenu_fps(int fps_x10, int ff) { of_val = fps_x10; of_ff = ff; }
+void bmenu_fps_game(int fps_x10) { of_game = fps_x10; }
 static pthread_mutex_t own_mu = PTHREAD_MUTEX_INITIALIZER;   /* the frontend's pop-up, waiting for its turn */
 static char own_l1[128], own_l2[160]; static int own_ms;
 void bmenu_popup(const char *line1, const char *line2, int ms) {
@@ -1304,10 +1310,11 @@ void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
     if (strip > h) strip = h;
     if (!fonts_ready()) return;
     if (of_val >= 0) {   /* the FPS counter, under the pop-ups and the pill */
-        if (of_val != of_built || of_ff != of_built_ff || w != of_for_w) {
+        if (of_val != of_built || of_ff != of_built_ff || w != of_for_w || of_game != of_built_game) {
             canvas probe = { 0, w, strip, sc }, *c = &probe;
-            if (!ov_make(&OF, of_ff ? S(210) : S(118), S(34), S(6), S(6), sc, ov_draw_fps)) of_val = -1;
-            of_built = of_val; of_built_ff = of_ff; of_for_w = w;
+            int wide = of_game >= 0 && of_val - of_game >= 15;   /* "30.0 FPS  emu 60" */
+            if (!ov_make(&OF, of_ff ? S(210) + (wide ? S(70) : 0) : wide ? S(188) : S(118), S(34), S(6), S(6), sc, ov_draw_fps)) of_val = -1;
+            of_built = of_val; of_built_ff = of_ff; of_for_w = w; of_built_game = of_game;
         }
         if (of_val >= 0) ov_blit(&OF, px, pitch, h, 0);
     }

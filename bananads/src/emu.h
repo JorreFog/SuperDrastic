@@ -34,6 +34,9 @@ public:
 
     bool load_rom(const std::string& path);  // also loads its save; false with a logged reason
     void run_frame();                          // one DS frame (~1/59.83 s)
+    // the game's own frames: its 3D buffer swaps so far (a game that can't finish a frame in one DS frame swaps
+    // every other one or less, as on a DS, while the emulator still runs 60 DS frames a second); any thread
+    long swaps3d() const { return swaps3d_.load(std::memory_order_relaxed); }
     void set_keys(uint32_t pressed);
     void set_lid(bool closed);                 // closing the lid puts the game to sleep
     void touch(int x, int y);                  // bottom-screen pixels, 0..255 x 0..191
@@ -95,6 +98,8 @@ private:
     void set_clock();
 
     std::atomic<double> skew_req_{1.0};
+    std::atomic<long> swaps3d_{0};
+    uint32_t bank3d_ = 0;
     double skew_cur_ = 1.0;
     Config cfg_;
     std::unique_ptr<melonDS::NDS> nds_;
