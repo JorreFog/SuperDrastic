@@ -401,7 +401,7 @@ static int cfg_int(const char *key, int def) {
 static int vol, bri, bri_changed;
 /* BananaLinux (/run/banana/mixer, "<card> <control>"): amixer for the volume and the backlights themselves, the value
  * kept in /data/banana/backlight for bananad to restore at boot; ROCKNIX's volume and brightness scripts otherwise */
-static int banana_os = -1, bri_raw;
+static int banana_os = -1;
 static char mix_card[16] = "0", mix_ctl[64] = "Master";
 static int is_banana(void) {
     if (banana_os < 0) {
@@ -410,55 +410,84 @@ static int is_banana(void) {
     }
     return banana_os;
 }
+/* (0.4.2: the volume through BananaLinux's own script, as its keys and Settings set it: amixer on the named control
+ * found no "PCM" on the RG DS Plus, whose amplifiers are "Left PCM"/"Right PCM", and on the RG DS read another percent
+ * than the keys' and set the microphone's level too. The backlights each their own, backlight1 the top panel and
+ * backlight0 the bottom: the row moves both by its step and shows their middle, and "<top> <bottom>" in thousandths
+ * goes to /data/banana/backlight; before, the first panel's raw value went there, which bananad reads as thousandths) */
 static int banana_volume(void) {
-    char cmd[160]; snprintf(cmd, sizeof cmd, "amixer -c %s sget '%s' 2>/dev/null", mix_card, mix_ctl);
-    FILE *p = popen(cmd, "r"); if (!p) return 50;
-    char line[256]; int v = -1;
-    while (fgets(line, sizeof line, p)) { char *b = strchr(line, '['); if (b && v < 0 && strchr(b, '%')) v = atoi(b + 1); }
+    /* (without this library: DraStic's children inherit LD_PRELOAD, and in them it printed its Gengis Engine line
+     * into the output and amixer crashed: the menu read 50% and set nothing) */
+    FILE *p = popen("env -u LD_PRELOAD /usr/libexec/banana/volume get 2>/dev/null", "r"); if (!p) return 50;
+    int v = -1; if (fscanf(p, "%d", &v) != 1) v = -1;
     pclose(p);
-    return v < 0 ? 50 : v;
+    return v < 0 ? 50 : v > 100 ? 100 : v;
 }
+static const char *BLN[2] = { "backlight1", "backlight0" };   /* top, bottom */
+static int bl_read(const char *path) { FILE *f = fopen(path, "r"); int v = -1; if (f) { if (fscanf(f, "%d", &v) != 1) v = -1; fclose(f); } return v; }
+static int bl_pm(int i) {
+    char p[96]; snprintf(p, sizeof p, "/sys/class/backlight/%s/max_brightness", BLN[i]); int mx = bl_read(p);
+    snprintf(p, sizeof p, "/sys/class/backlight/%s/brightness", BLN[i]); int v = bl_read(p);
+    return mx > 0 && v >= 0 ? v * 1000 / mx : -1;
+}
+static void bl_set_pm(int i, int pm) {
+    char p[96]; snprintf(p, sizeof p, "/sys/class/backlight/%s/max_brightness", BLN[i]); int mx = bl_read(p);
+    if (mx <= 0) return;
+    int v = mx * pm / 1000; if (v < 1) v = 1;
+    snprintf(p, sizeof p, "/sys/class/backlight/%s/brightness", BLN[i]);
+    FILE *f = fopen(p, "w"); if (f) { fprintf(f, "%d\n", v); fclose(f); }
+}
+static int bl_base[2] = { -1, -1 }, bl_base_avg = 80;
 static int banana_brightness(void) {
-    glob_t g; int pct = 80;
-    if (glob("/sys/class/backlight/*", 0, 0, &g)) return pct;
-    if (g.gl_pathc) {
-        char a[300], b[300]; snprintf(a, sizeof a, "%s/brightness", g.gl_pathv[0]); snprintf(b, sizeof b, "%s/max_brightness", g.gl_pathv[0]);
-        int v = 0, mx = 0; FILE *f;
-        if ((f = fopen(a, "r"))) { if (fscanf(f, "%d", &v) != 1) v = 0; fclose(f); }
-        if ((f = fopen(b, "r"))) { if (fscanf(f, "%d", &mx) != 1) mx = 0; fclose(f); }
-        if (mx > 0) pct = (v * 100 + mx / 2) / mx;
-    }
-    globfree(&g);
-    return pct;
+    int n = 0, sum = 0;
+    for (int i = 0; i < 2; i++) { bl_base[i] = bl_pm(i); if (bl_base[i] > 0) { sum += bl_base[i]; n++; } }
+    bl_base_avg = n ? (sum / n + 5) / 10 : 80;
+    return bl_base_avg;
 }
+static long long vol_set_at;
+static volatile int vol_read = -1;
 static pthread_mutex_t wm = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_t wc = PTHREAD_COND_INITIALIZER;
-static int w_vol = -1, w_bri = -1;
+static int w_vol = -1, w_bri = -1, w_read;
 static void *worker(void *a) {       /* ROCKNIX's own scripts (pactl, the settings file): off DraStic's thread */
     (void)a;
     for (;;) {
         pthread_mutex_lock(&wm);
-        while (w_vol < 0 && w_bri < 0) pthread_cond_wait(&wc, &wm);
-        int v = w_vol, b = w_bri; w_vol = w_bri = -1;
+        while (w_vol < 0 && w_bri < 0 && !w_read) pthread_cond_wait(&wc, &wm);
+        int v = w_vol, b = w_bri, r = w_read; w_vol = w_bri = -1; w_read = 0;
         pthread_mutex_unlock(&wm);
         char cmd[200];
         if (is_banana()) {
-            if (v >= 0) { snprintf(cmd, sizeof cmd, "amixer -q -c %s sset '%s' %d%% >/dev/null 2>&1", mix_card, mix_ctl, v); if (system(cmd)) {} }
-            if (b >= 0) { FILE *f = fopen("/data/banana/backlight", "w"); if (f) { fprintf(f, "%d\n", bri_raw); fclose(f); } }
+            if (v >= 0) {
+                snprintf(cmd, sizeof cmd, "env -u LD_PRELOAD /usr/libexec/banana/volume set %d >/dev/null 2>&1", v); if (system(cmd)) {}
+                if (system("env -u LD_PRELOAD killall -HUP bananad >/dev/null 2>&1")) {}   /* it stores the level across reboots */
+            }
+            if (b >= 0) {
+                int t = bl_pm(0), u = bl_pm(1);
+                FILE *f = fopen("/data/banana/backlight", "w"); if (f) { fprintf(f, "%d %d\n", t > 0 ? t : u, u > 0 ? u : t); fclose(f); }
+            }
+            if (r && v < 0) vol_read = banana_volume();
             continue;
         }
+        if (r) continue;
         if (v >= 0) { snprintf(cmd, sizeof cmd, "volume %d >/dev/null 2>&1", v); if (system(cmd)) {} }
         if (b >= 0) { snprintf(cmd, sizeof cmd, "brightness set all %d >/dev/null 2>&1", b); if (system(cmd)) {} }
     }
     return 0;
 }
-static void want(int v, int b) {
+static void want_ex(int v, int b, int r) {
     static int started;
     pthread_mutex_lock(&wm);
     if (!started) { pthread_t t; if (!pthread_create(&t, 0, worker, 0)) { pthread_detach(t); pthread_setname_np(t, "dsf-menu"); started = 1; } }
-    if (v >= 0) w_vol = v; if (b >= 0) w_bri = b;
+    if (v >= 0) w_vol = v; if (b >= 0) w_bri = b; if (r) w_read = 1;
     pthread_cond_signal(&wc); pthread_mutex_unlock(&wm);
 }
+static void want(int v, int b) { if (v >= 0) vol_set_at = now_ms(); want_ex(v, b, 0); }
 static void backlight(int pct) {     /* at once, straight to the panels; the setting is saved when the menu closes */
+    if (is_banana()) {               /* both moved by the row's step from where they were */
+        int d = (pct - bl_base_avg) * 10;
+        for (int i = 0; i < 2; i++) { if (bl_base[i] <= 0) continue; int v = bl_base[i] + d; bl_set_pm(i, v < 50 ? 50 : v > 1000 ? 1000 : v); }
+        return;
+    }
     glob_t g;
     if (glob("/sys/class/backlight/*/brightness", 0, 0, &g)) return;
     for (size_t i = 0; i < g.gl_pathc; i++) {
@@ -466,7 +495,6 @@ static void backlight(int pct) {     /* at once, straight to the panels; the set
         FILE *f = fopen(mp, "r"); int mx = 0; if (f) { if (fscanf(f, "%d", &mx) != 1) mx = 0; fclose(f); }
         if (mx <= 0) continue;
         if ((f = fopen(g.gl_pathv[i], "w"))) { fprintf(f, "%d\n", pct * mx / 100); fclose(f); }
-        if (i == 0) bri_raw = pct * mx / 100;
     }
     globfree(&g);
 }
@@ -1142,6 +1170,10 @@ static void menu_run(int start) {
         }
         if (open_ && held_dir && now_ms() >= rep_next) { nav(rep_dx, rep_dy); rep_next = now_ms() + 110; }
         { static long long mt; if (scr == SC_MIC && now_ms() - mt >= 33) { mt = now_ms(); dirty_bot = 1; } }   /* the meter moves */
+        if (is_banana()) {                                 /* the volume keys' level while the settings are open */
+            static long long vt; if (scr == SC_SET && now_ms() - vt >= 500) { vt = now_ms(); want_ex(-1, -1, 1); }
+            int r = vol_read; if (r >= 0) { vol_read = -1; if (scr == SC_SET && r != vol && now_ms() - vol_set_at > 1500) { vol = r; dirty_bot = 1; } }
+        }
         if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT) dirty_top = 1; }   /* the clock */
         if (open_) redraw();
         usleep(8000);
