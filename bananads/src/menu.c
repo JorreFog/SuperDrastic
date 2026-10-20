@@ -354,11 +354,11 @@ static void bl_set_pm(int i, int pm) {
     snprintf(p, sizeof p, "/sys/class/backlight/%s/brightness", BLN[i]);
     FILE *f = fopen(p, "w"); if (f) { fprintf(f, "%d\n", v); fclose(f); }
 }
-static int volume_get(void) {
-    FILE *p = popen("/usr/libexec/banana/volume get 2>/dev/null", "r"); if (!p) return 50;
+static int volume_get(void) {         /* -1: the script gave no level (the refresh then keeps what is shown) */
+    FILE *p = popen("/usr/libexec/banana/volume get 2>/dev/null", "r"); if (!p) return -1;
     int v = -1; if (fscanf(p, "%d", &v) != 1) v = -1;
     pclose(p);
-    return v < 0 ? 50 : v > 100 ? 100 : v;
+    return v < 0 ? -1 : v > 100 ? 100 : v;
 }
 static int bl_base[2] = { -1, -1 }, bl_base_avg = 80;   /* the levels when the settings opened, and their middle in % */
 static int brightness_get(void) {
@@ -973,7 +973,7 @@ static void activate(void) {
             sel_slot = last_slot >= 0 ? last_slot : nb >= 0 ? nb : 0;
             play(SND_SELECT); dirty_top = dirty_bot = 1; break;
         }
-        case 3: scr = SC_SET; sel_set = 0; vol = volume_get(); bri = brightness_get();
+        case 3: scr = SC_SET; sel_set = 0; vol = volume_get(); if (vol < 0) vol = 50; bri = brightness_get();
                 play(SND_SELECT); dirty_top = dirty_bot = 1; break;
         case 4: scr = SC_RESTART; play(SND_SELECT); dirty_bot = 1; break;
         case 5: scr = SC_QUIT; play(SND_SELECT); dirty_bot = 1; break;

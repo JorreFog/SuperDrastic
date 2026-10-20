@@ -102,6 +102,7 @@ private:
 
     std::atomic<double> skew_req_{1.0};
     std::atomic<long> swaps3d_{0};
+    bool lid_closed_ = false;  // the lid as set_lid last had it (emulator thread)
     uint32_t bank3d_ = 0;
     double skew_cur_ = 1.0;
     Config cfg_;

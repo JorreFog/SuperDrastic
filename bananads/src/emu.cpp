@@ -731,7 +731,7 @@ void Emu::run_frame() {
 
 void Emu::set_cheats(std::vector<melonDS::ARCode> codes) { nds_->AREngine.Cheats = std::move(codes); }
 void Emu::set_keys(uint32_t pressed) { nds_->SetKeyMask(~pressed & 0xFFF); }
-void Emu::set_lid(bool closed) { nds_->SetLidClosed(closed); }
+void Emu::set_lid(bool closed) { lid_closed_ = closed; nds_->SetLidClosed(closed); }
 void Emu::touch(int x, int y) {
     nds_->TouchScreen((u16)std::clamp(x, 0, 255), (u16)std::clamp(y, 0, 191));
 }
@@ -916,6 +916,11 @@ bool Emu::load_state(int slot) {
         Log(LogLevel::Error, "[emu] %s couldn't be loaded\n", p.c_str());
         return false;
     }
+    // the lid as it is now: melonDS keeps it outside its savestates (KeyInput), and a state saved with the lid shut
+    // (asleep on the charger, then a resume save at shutdown) has the game in its sleep mode, waiting for the
+    // lid-open interrupt that nothing would send again. Open, this raises that interrupt; a game that isn't asleep
+    // has it off.
+    nds_->SetLidClosed(lid_closed_);
     Log(LogLevel::Info, "[emu] state loaded: %s\n", p.c_str());
     return true;
 }
