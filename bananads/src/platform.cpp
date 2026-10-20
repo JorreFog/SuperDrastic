@@ -7,6 +7,7 @@
 #include <semaphore.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstdarg>
@@ -231,15 +232,33 @@ void Camera_CaptureFrame(int, u32* frame, int width, int height, bool, void*) {
 
 // --- the microphone ---
 
+// (the log says when the game listens and the loudest it was given, every 5 s: "the mic doesn't work" reports)
+static int mic_peak, mic_reads;
+static std::chrono::steady_clock::time_point mic_since;
 void Mic_Start(void* userdata) {
-    if (userdata) Emu::from(userdata)->mic().set_active(true);
+    if (!userdata) return;
+    Emu::from(userdata)->mic().set_active(true);
+    Log(LogLevel::Info, "[mic] the game listens\n");
+    mic_peak = mic_reads = 0;
+    mic_since = std::chrono::steady_clock::now();
 }
 void Mic_Stop(void* userdata) {
-    if (userdata) Emu::from(userdata)->mic().set_active(false);
+    if (!userdata) return;
+    Emu::from(userdata)->mic().set_active(false);
+    Log(LogLevel::Info, "[mic] the game stopped listening\n");
 }
 int Mic_ReadInput(s16* data, int maxlength, void* userdata) {
     if (!userdata) return 0;
-    return Emu::from(userdata)->mic().read(data, maxlength);
+    const int n = Emu::from(userdata)->mic().read(data, maxlength);
+    for (int i = 0; i < n; i++) mic_peak = std::max(mic_peak, data[i] < 0 ? -(int)data[i] : (int)data[i]);
+    mic_reads += n;
+    const auto now = std::chrono::steady_clock::now();
+    if (now - mic_since >= std::chrono::seconds(5)) {
+        Log(LogLevel::Info, "[mic] 5 s: %d samples to the game, loudest %.3f\n", mic_reads, mic_peak / 32768.0);
+        mic_peak = mic_reads = 0;
+        mic_since = now;
+    }
+    return n;
 }
 
 // --- DSi AAC (DSP HLE): not needed for DS games ---
