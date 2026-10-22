@@ -243,7 +243,7 @@ elseif(BANANADS_KMS)
     pkg_check_modules(DRM REQUIRED IMPORTED_TARGET libdrm)
 endif()
 if(DRM_FOUND AND BANANADS_KMS)
-    target_sources(bananads PRIVATE src/frontend_kms.cpp src/cpugov.cpp src/menu.c src/shader.c src/cheats.cpp src/screenshot.cpp)
+    target_sources(bananads PRIVATE src/frontend_kms.cpp src/cpugov.cpp src/menu.c src/lang.c src/shader.c src/cheats.cpp src/screenshot.cpp)
     target_link_libraries(bananads PRIVATE PkgConfig::DRM)
     target_compile_definitions(bananads PRIVATE BANANADS_KMS=1)
     # RetroAchievements (src/ra.c): SuperDrastic's rcheevos (../src/third_party/rcheevos, the same repository), a
