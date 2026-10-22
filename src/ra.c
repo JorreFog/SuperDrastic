@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "rc_client.h"
+#include "lang.h"
 #include "rc_consoles.h"
 #include "rc_hash.h"
 
@@ -33,6 +34,14 @@
 #endif
 
 void dsflip_toast(const char *line1, const char *line2, uint32_t accent, int ms);
+
+/* A line naming EmulationStation (ES), where the settings are on ROCKNIX: on BananaOS they're in Settings. With a
+ * translation the ES line is looked up (the translator's, which says Settings) */
+static const char *es_line(const char *es, const char *banana) {
+    const char *t = getenv("DSFLIP_MENU_THEME");
+    return lang_active() || !(t && !strcmp(t, "banana")) ? es : banana;
+}
+
 void ui_popup(const char *l1, const char *l2, const char *badge_png, uint32_t accent, int ms);
 void ui_progress(const char *text, const char *badge_png);
 void dsflip_log(const char *fmt, ...);
@@ -408,13 +417,13 @@ static void on_login_token(int result, const char *err, rc_client_t *c, void *u)
     dsflip_log("[ra] token login failed (%s)%s\n", err ? err : "?", *pass ? ", trying the password" : "");
     unlink(TOKEN_FILE);
     if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
-    else dsflip_toast("RetroAchievements", "login expired: re-enter your password in ES", 0xff7a4a, 5000);
+    else dsflip_toast("RetroAchievements", es_line("login expired: re-enter your password in ES", "login expired: re-enter your password in Settings"), 0xff7a4a, 5000);
 }
 static void on_login_password(int result, const char *err, rc_client_t *c, void *u) {
     (void)c; (void)u;
     if (result != RC_OK) {
         dsflip_log("[ra] login failed: %s\n", err ? err : "?");
-        dsflip_toast("RetroAchievements login failed", err ? err : "check user/password in ES", 0xff7a4a, 5000);
+        dsflip_toast("RetroAchievements login failed", err ? err : es_line("check user/password in ES", "check user/password in Settings"), 0xff7a4a, 5000);
         return;
     }
     dsflip_log("[ra] logged in as %s\n", user);
@@ -641,7 +650,7 @@ static void ra_start(void) {
     }
     if (*tok && !strcasecmp(tu, user)) rc_client_begin_login_with_token(rc, user, tok, on_login_token, 0);
     else if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
-    else dsflip_toast("RetroAchievements", "no password set in ES", 0xff7a4a, 4000);
+    else dsflip_toast("RetroAchievements", es_line("no password set in ES", "no password set in Settings"), 0xff7a4a, 4000);
 }
 
 /* ---------- the frame's evaluation on its own thread ----------

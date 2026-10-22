@@ -20,6 +20,7 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
 #include "stb_truetype.h"
+#include "lang.h"
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
 #define STBI_ONLY_PNG
@@ -135,13 +136,29 @@ static int utf8_next(const char **s) {
     return cp;
 }
 
+/* A translation's characters the font lacks (Chinese) come from Fusion Pixel 12px, a pixel font: drawn at a whole
+ * multiple of its 12 px in the panel's pixels, at whole-pixel positions, so it stays sharp (lang.h) */
+static stbtt_fontinfo font_cjk;
+static int cjk_ok;
+static stbtt_fontinfo *glyph_font(int cp, float px, float *sc) {
+    if (cjk_ok && cp >= 0x80 && !stbtt_FindGlyphIndex(fnt, cp) && stbtt_FindGlyphIndex(&font_cjk, cp)) {
+        int k = (int)lroundf(px / 12.0f); if (k < 1) k = 1;
+        *sc = stbtt_ScaleForMappingEmToPixels(&font_cjk, 12.0f * k);
+        return &font_cjk;
+    }
+    *sc = stbtt_ScaleForPixelHeight(fnt, px);
+    return fnt;
+}
+
 static float text_width(const char *t, float px, int max_cp) {
-    float sc = stbtt_ScaleForPixelHeight(fnt, px), w = 0; int prev = 0, n = 0;
+    float w = 0; int prev = 0, n = 0; stbtt_fontinfo *pf = 0;
     for (const char *s = t; *s && n < max_cp; n++) {
-        int cp = utf8_next(&s), adv, lsb;
-        stbtt_GetCodepointHMetrics(fnt, cp, &adv, &lsb);
-        if (prev) w += stbtt_GetCodepointKernAdvance(fnt, prev, cp) * sc;
-        w += adv * sc; prev = cp;
+        int cp = utf8_next(&s), adv, lsb; float sc;
+        stbtt_fontinfo *g = glyph_font(cp, px, &sc);
+        if (g == &font_cjk) w = ceilf(w);   /* (whole pixels) */
+        stbtt_GetCodepointHMetrics(g, cp, &adv, &lsb);
+        if (prev && g == pf) w += stbtt_GetCodepointKernAdvance(g, prev, cp) * sc;
+        w += adv * sc; prev = cp; pf = g;
     }
     return w;
 }
@@ -155,24 +172,29 @@ static void draw_text(canvas *c, const char *t, float x, int y, float px, uint32
         while (keep > 0 && text_width(t, px, keep) + dw > maxw) keep--;
         dots = 1;
     }
-    float sc = stbtt_ScaleForPixelHeight(fnt, px);
-    int prev = 0; const char *s = t;
+    int prev = 0; const char *s = t; stbtt_fontinfo *pf = 0;
     for (int i = 0; i < keep + (dots ? 3 : 0); i++) {
         int cp = i < keep ? utf8_next(&s) : '.';
-        if (prev) x += stbtt_GetCodepointKernAdvance(fnt, prev, cp) * sc;
+        float sc; stbtt_fontinfo *gf = glyph_font(cp, px, &sc);
+        int cjk = gf == &font_cjk;
+        if (cjk) x = ceilf(x);
+        if (prev && gf == pf) x += stbtt_GetCodepointKernAdvance(gf, prev, cp) * sc;
         int adv, lsb, x0, y0, x1, y1;
-        stbtt_GetCodepointHMetrics(fnt, cp, &adv, &lsb);
-        float sub = x - floorf(x);
-        stbtt_GetCodepointBitmapBoxSubpixel(fnt, cp, sc, sc, sub, 0, &x0, &y0, &x1, &y1);
+        stbtt_GetCodepointHMetrics(gf, cp, &adv, &lsb);
+        float sub = cjk ? 0 : x - floorf(x);
+        stbtt_GetCodepointBitmapBoxSubpixel(gf, cp, sc, sc, sub, 0, &x0, &y0, &x1, &y1);
         int gw = x1 - x0, gh = y1 - y0;
         if (gw > 0 && gh > 0 && gw < 256 && gh < 256) {
             static unsigned char g[256 * 256];
-            stbtt_MakeCodepointBitmapSubpixel(fnt, g, gw, gh, gw, sc, sc, sub, 0, cp);
+            stbtt_MakeCodepointBitmapSubpixel(gf, g, gw, gh, gw, sc, sc, sub, 0, cp);
             for (int yy = 0; yy < gh; yy++)
-                for (int xx = 0; xx < gw; xx++)
-                    if (g[yy * gw + xx]) blend(c, (int)floorf(x) + x0 + xx, y + y0 + yy, rgb, g[yy * gw + xx] / 255.0f);
+                for (int xx = 0; xx < gw; xx++) {
+                    int v = g[yy * gw + xx];
+                    if (cjk) v = v >= 128 ? 255 : 0;   /* a pixel font: on or off */
+                    if (v) blend(c, (int)floorf(x) + x0 + xx, y + y0 + yy, rgb, v / 255.0f);
+                }
         }
-        x += adv * sc; prev = cp;
+        x += adv * sc; prev = cp; pf = gf;
     }
 }
 
@@ -307,6 +329,19 @@ static int ui_start(void) {                           /* with mx held */
         fclose(f);
     }
     if (!font_ok) { dsflip_log("[ui] no font: pop-ups off\n"); return 0; }
+    if (lang_init("superdrastic")) {   /* the language (BananaLinux's settings.conf), and the pixel font for it */
+        const char *const cjk[] = { getenv("DSFLIP_FONT_CJK"), "/usr/share/banana/rnds/fonts/fusion-pixel-12px-proportional-zh_hans.ttf" };
+        for (int i = 0; i < 2 && !cjk_ok; i++) {
+            FILE *f = cjk[i] ? fopen(cjk[i], "rb") : 0; if (!f) continue;
+            fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+            unsigned char *d = n > 0 ? malloc((size_t)n) : 0;
+            if (d && fread(d, 1, (size_t)n, f) == (size_t)n && stbtt_InitFont(&font_cjk, d, stbtt_GetFontOffsetForIndex(d, 0))) {
+                cjk_ok = 1; dsflip_log("[ui] font %s\n", cjk[i]);
+            } else free(d);
+            fclose(f);
+        }
+        dsflip_log("[ui] language %s, translated by %s\n", lang_name(), lang_by());
+    }
     font_reg = font;                                 /* Pixelify Sans Regular for second lines, when the theme has it */
     {   FILE *f = fopen(REG_FONT, "rb");
         if (!f) f = fopen("/usr/share/banana/rnds/fonts/PixelifySans-Regular.ttf", "rb");   /* BananaOS */
@@ -336,7 +371,8 @@ void ui_popup(const char *l1, const char *l2, const char *badge_png, uint32_t ac
     if (!ui_start()) { pthread_mutex_unlock(&mx); return; }
     if (qn == QMAX) { free(q[QMAX - 1].badge); qn--; }  /* keep the newest */
     popup *p = &q[qn++]; memset(p, 0, sizeof *p);
-    snprintf(p->l1, sizeof p->l1, "%s", l1 ? l1 : ""); snprintf(p->l2, sizeof p->l2, "%s", l2 ? l2 : "");
+    /* each line whole in the chosen language (an achievement's or a game's name stays as it is: no line for it) */
+    snprintf(p->l1, sizeof p->l1, "%s", l1 ? lang_tr(l1) : ""); snprintf(p->l2, sizeof p->l2, "%s", l2 ? lang_tr(l2) : "");
     /* the theme's accents: gold for achievements, cyan for news, red for trouble */
     accent &= 0xffffff;
     if (accent != 0xffd84a) {

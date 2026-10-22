@@ -38,6 +38,7 @@
 #define STBI_ONLY_PNG
 #define STBI_NO_STDIO_WRITE
 #include "stb_image.h"
+#include "lang.h"
 
 /* dsflip.c */
 int dsflip_menu_canvas(int i, uint32_t **px, int *pitch, int *w, int *h);
@@ -197,6 +198,9 @@ static const char *const DIG[10][7] = {
 /* ---------- text (stb_truetype) ---------- */
 typedef struct { stbtt_fontinfo f; unsigned char *data; int ok; float asc; } font;   /* asc: per pixel of size */
 static font F_MED, F_REG;
+/* A translation's characters that Pixelify lacks (Chinese) come from Fusion Pixel 12px, a pixel font: drawn at a whole
+ * multiple of its 12 px in the panel's pixels, at whole-pixel positions, so it stays sharp (lang.h) */
+static font F_CJK;
 static int font_load(font *F, const char *const *paths, int n) {
     for (int i = 0; i < n && !F->ok; i++) {
         if (!paths[i]) continue;
@@ -220,62 +224,93 @@ static int utf8_next(const char **s) {
     *s = (const char *)p;
     return cp;
 }
-static float text_w(font *F, const char *t, float px, int max_cp) {
+/* the font a character is drawn from, and its scale: F's, or the pixel font's at k x 12 px for one F lacks */
+static font *glyph_font(font *F, int cp, float px, float *sc) {
+    if (F_CJK.ok && cp >= 0x80 && !stbtt_FindGlyphIndex(&F->f, cp) && stbtt_FindGlyphIndex(&F_CJK.f, cp)) {
+        int k = (int)lroundf(px / 12.0f); if (k < 1) k = 1;
+        *sc = stbtt_ScaleForMappingEmToPixels(&F_CJK.f, 12.0f * k);
+        return &F_CJK;
+    }
+    *sc = stbtt_ScaleForPixelHeight(&F->f, px);
+    return F;
+}
+static float text_w_raw(font *F, const char *t, float px, int max_cp) {
     if (!F->ok) return 0;
-    float sc = stbtt_ScaleForPixelHeight(&F->f, px), w = 0; int prev = 0, n = 0;
+    float w = 0; int prev = 0, n = 0; font *pf = 0;
     for (const char *s = t; *s && n < max_cp; n++) {
-        int cp = utf8_next(&s), adv, lsb;
-        stbtt_GetCodepointHMetrics(&F->f, cp, &adv, &lsb);
-        if (prev) w += stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc;
-        w += adv * sc; prev = cp;
+        int cp = utf8_next(&s), adv, lsb; float sc;
+        font *g = glyph_font(F, cp, px, &sc);
+        if (g == &F_CJK) w = ceilf(w);   /* (whole pixels) */
+        stbtt_GetCodepointHMetrics(&g->f, cp, &adv, &lsb);
+        if (prev && g == pf) w += stbtt_GetCodepointKernAdvance(&g->f, prev, cp) * sc;
+        w += adv * sc; prev = cp; pf = g;
     }
     return w;
 }
-/* text whose box starts at y (top), aligned left (0), centred (1) or right (2) on x; cut with "..." past maxw */
-static void text(canvas *c, font *F, const char *t, float x, float y, float px, uint32_t rgb, float maxw, int align) {
+/* text whose box starts at y (top), aligned left (0), centred (1) or right (2) on x; cut with "..." past maxw. As
+ * given: text() and text_w() are the ones that translate */
+static void text_raw(canvas *c, font *F, const char *t, float x, float y, float px, uint32_t rgb, float maxw, int align) {
     if (!F->ok || !*t) return;
     int n = 0; for (const char *s = t; *s; n++) utf8_next(&s);
     int keep = n, dots3 = 0;
-    float w = text_w(F, t, px, n);
+    float w = text_w_raw(F, t, px, n);
     if (maxw > 0 && w > maxw) {
-        float dw = text_w(F, "...", px, 3);
-        while (keep > 0 && text_w(F, t, px, keep) + dw > maxw) keep--;
-        dots3 = 1; w = text_w(F, t, px, keep) + dw;
+        float dw = text_w_raw(F, "...", px, 3);
+        while (keep > 0 && text_w_raw(F, t, px, keep) + dw > maxw) keep--;
+        dots3 = 1; w = text_w_raw(F, t, px, keep) + dw;
     }
     if (align == 1) x -= w / 2; else if (align == 2) x -= w;
-    float sc = stbtt_ScaleForPixelHeight(&F->f, px), pen = x;
+    float pen = x;
     int base = (int)lroundf(y + F->asc * px);
     static unsigned char gb[256 * 256];
-    int prev = 0; const char *s = t;
+    int prev = 0; const char *s = t; font *pf = 0;
     for (int i = 0; i < keep + (dots3 ? 3 : 0); i++) {
         int cp = i < keep ? utf8_next(&s) : '.';
-        if (prev) pen += stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc;
-        int adv, lsb; stbtt_GetCodepointHMetrics(&F->f, cp, &adv, &lsb);
-        int x0, y0, x1, y1; float fx = pen - floorf(pen);
-        stbtt_GetCodepointBitmapBoxSubpixel(&F->f, cp, sc, sc, fx, 0, &x0, &y0, &x1, &y1);
+        float sc; font *g = glyph_font(F, cp, px, &sc);
+        int cjk = g == &F_CJK;
+        if (cjk) pen = ceilf(pen);
+        if (prev && g == pf) pen += stbtt_GetCodepointKernAdvance(&g->f, prev, cp) * sc;
+        int adv, lsb; stbtt_GetCodepointHMetrics(&g->f, cp, &adv, &lsb);
+        int x0, y0, x1, y1; float fx = cjk ? 0 : pen - floorf(pen);
+        stbtt_GetCodepointBitmapBoxSubpixel(&g->f, cp, sc, sc, fx, 0, &x0, &y0, &x1, &y1);
         int gw = x1 - x0, gh = y1 - y0;
         if (gw > 0 && gh > 0 && gw <= 256 && gh <= 256) {
-            stbtt_MakeCodepointBitmapSubpixel(&F->f, gb, gw, gh, gw, sc, sc, fx, 0, cp);
+            stbtt_MakeCodepointBitmapSubpixel(&g->f, gb, gw, gh, gw, sc, sc, fx, 0, cp);
             int ox = (int)floorf(pen) + x0, oy = base + y0;
             for (int yy = 0; yy < gh; yy++) for (int xx = 0; xx < gw; xx++) {
-                int v = gb[yy * gw + xx]; if (v) blendpx(c, ox + xx, oy + yy, rgb, v / 255.0f);
+                int v = gb[yy * gw + xx];
+                if (cjk) v = v >= 128 ? 255 : 0;   /* a pixel font: on or off */
+                if (v) blendpx(c, ox + xx, oy + yy, rgb, v / 255.0f);
             }
         }
-        pen += adv * sc; prev = cp;
+        pen += adv * sc; prev = cp; pf = g;
     }
 }
-/* split t into at most two lines that fit maxw (the second cut with "..." if needed); returns the line count */
-static int wrap2(font *F, const char *t, float px, float maxw, char *l1, char *l2, size_t n) {
+/* the menu's own words, in the chosen language (lang.h); a game's name, an achievement's, a cheat's: text_raw */
+static float text_w(font *F, const char *t, float px, int max_cp) { return text_w_raw(F, lang_tr(t), px, max_cp); }
+static void text(canvas *c, font *F, const char *t, float x, float y, float px, uint32_t rgb, float maxw, int align) {
+    text_raw(c, F, lang_tr(t), x, y, px, rgb, maxw, align);
+}
+/* split t into at most two lines that fit maxw (the second cut with "..." if needed); returns the line count. tr: t is
+ * the menu's own text (translated first: whole, never in pieces). A line breaks at a space, or between two Chinese
+ * characters (not before a closing mark nor after an opening one) */
+static int wrap2(font *F, const char *t, float px, float maxw, char *l1, char *l2, size_t n, int tr) {
+    if (tr) t = lang_tr(t);
     l1[0] = l2[0] = 0;
-    if (text_w(F, t, px, 1 << 20) <= maxw) { snprintf(l1, n, "%s", t); return 1; }
-    const char *best = 0;
-    for (const char *p = t; *p; p++) if (*p == ' ') {
-        char tmp[256]; size_t k = (size_t)(p - t); if (k >= sizeof tmp) break;
+    if (text_w_raw(F, t, px, 1 << 20) <= maxw) { snprintf(l1, n, "%s", t); lang_keep(l1); return 1; }
+    const char *best = 0; int skip = 0, prev = 0;
+    for (const char *p = t; *p;) {
+        const char *at = p; int cp = utf8_next(&p);
+        int brk = cp == ' ' ? 1 : lang_break_between(prev, cp) ? 2 : 0;
+        prev = cp;
+        if (!brk) continue;
+        char tmp[256]; size_t k = (size_t)(at - t); if (k >= sizeof tmp) break;
         memcpy(tmp, t, k); tmp[k] = 0;
-        if (text_w(F, tmp, px, 1 << 20) <= maxw) best = p; else break;
+        if (text_w_raw(F, tmp, px, 1 << 20) <= maxw) { best = at; skip = brk == 1; } else break;
     }
-    if (!best) { snprintf(l1, n, "%s", t); return 1; }
-    snprintf(l1, n, "%.*s", (int)(best - t), t); snprintf(l2, n, "%s", best + 1);
+    if (!best) { snprintf(l1, n, "%s", t); lang_keep(l1); return 1; }
+    snprintf(l1, n, "%.*s", (int)(best - t), t); snprintf(l2, n, "%s", best + skip);
+    lang_keep(l1); lang_keep(l2);   /* (pieces of a line looked up already: drawn as they are) */
     return 2;
 }
 
@@ -387,7 +422,7 @@ static void when_text(time_t t, char *out, size_t n) {
                        mktime(&(struct tm){ .tm_year = a.tm_year, .tm_mon = a.tm_mon, .tm_mday = a.tm_mday, .tm_isdst = -1 })) / 86400;
     if (days == 0) snprintf(out, n, "Today %s", hm);
     else if (days == 1) snprintf(out, n, "Yesterday %s", hm);
-    else { char d[16]; strftime(d, sizeof d, "%b %e", &a); snprintf(out, n, "%s %s", d, hm); }
+    else { char d[16]; strftime(d, sizeof d, lang_active() ? "%m/%d" : "%b %e", &a); snprintf(out, n, "%s %s", d, hm); }   /* (no month name in another language) */
 }
 
 /* ---------- settings: volume and brightness, as ROCKNIX keeps them ---------- */
@@ -576,6 +611,10 @@ static int setup(void) {
         "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
     if (!font_load(&F_MED, med, 8) || !font_load(&F_REG, reg, 7)) { dsflip_log("[menu] no font: DraStic's menu instead\n"); return 0; }
+    if (lang_init("superdrastic") && !F_CJK.ok) {   /* the language, and the pixel font for its characters */
+        const char *const cjk[] = { getenv("DSFLIP_FONT_CJK"), "/usr/share/banana/rnds/fonts/fusion-pixel-12px-proportional-zh_hans.ttf" };
+        font_load(&F_CJK, cjk, 2);
+    }
     const char *snd[SND_N] = { "scroll.wav", "select.wav", "back.wav" };
     for (int k = 0; k < SND_N; k++) {
         char p[300];
@@ -605,7 +644,7 @@ static void status_bar(canvas *c) {
     float x = S(22);
     if (pct >= 0) {
         char b[16]; snprintf(b, sizeof b, "%d%%", pct);
-        text(c, &F_MED, b, x, S(12), S(18), C_LIGHT, 0, 0);
+        text_raw(c, &F_MED, b, x, S(12), S(18), C_LIGHT, 0, 0);
         x += text_w(&F_MED, b, S(18), 99) + S(10);
         int bx = (int)x, by = S(15), bw = S(26), bh = S(14);           /* the battery, outlined, filled to its level */
         fill(c, bx, by, bx + bw, by + bh, pct <= 15 && !chg ? C_REDL : C_LIGHT, 1.0f);
@@ -616,7 +655,7 @@ static void status_bar(canvas *c) {
         if (chg) text(c, &F_MED, "+", bx + bw + S(8), S(12), S(18), C_LIGHT, 0, 0);
     }
     char tm[32]; time_t t = time(0); struct tm lt; localtime_r(&t, &lt); strftime(tm, sizeof tm, "%m/%d %H:%M", &lt);
-    text(c, &F_MED, tm, c->w - S(22), S(12), S(18), C_LIGHT, 0, 2);
+    text_raw(c, &F_MED, tm, c->w - S(22), S(12), S(18), C_LIGHT, 0, 2);
 }
 /* an RGB565 256x192 picture into a rectangle (nearest) */
 static void draw_pic(canvas *c, const uint16_t *pic, int x0, int y0, int w, int h) {
@@ -693,21 +732,22 @@ static void draw_top(void) {
     } else {
         /* PAUSED pill, the game, its genre */
         int cw = x1 - L - S(28);
-        float pwid = text_w(&F_MED, "PAUSED", S(14), 99) + S(18);
+        const char *paused = lang_active() ? "Paused" : "PAUSED";   /* (the translator's line is "Paused") */
+        float pwid = text_w(&F_MED, paused, S(14), 99) + S(18);
         rrect(c, L, S(68), L + (int)pwid, S(68) + S(24), S(4), C_LIGHT, 1.0f);
-        text(c, &F_MED, "PAUSED", L + S(9), S(71), S(14), C_DARK, 0, 0);
+        text(c, &F_MED, paused, L + S(9), S(71), S(14), C_DARK, 0, 0);
         int y = ra_has ? S(102) : S(126);           /* without achievements the rest sits lower, centred */
-        char l1[200], l2[200]; int n = wrap2(&F_MED, gtitle, S(28), cw, l1, l2, sizeof l1);
+        char l1[200], l2[200]; int n = wrap2(&F_MED, gtitle, S(28), cw, l1, l2, sizeof l1, 0);
         text(c, &F_MED, l1, L, y, S(28), C_LIGHT, cw, 0); y += S(34);
         if (n > 1) { text(c, &F_MED, l2, L, y, S(28), C_LIGHT, cw, 0); y += S(34); }
-        if (ggenre[0]) { text(c, &F_REG, ggenre, L, y, S(16), C_TEALTXT, cw, 0); y += S(26); }
+        if (ggenre[0]) { text_raw(c, &F_REG, ggenre, L, y, S(16), C_TEALTXT, cw, 0); y += S(26); }
         y += S(6);
         fill(c, L, y, x1 - S(28), y + S(2), C_TEALLN, 1.0f);
         y += S(14);
         /* this session, the last save */
         char v[48];
         fmt_dur(now_ms() - session_t0, v, sizeof v);
-        text(c, &F_MED, v, L, y, S(22), C_LIGHT, 0, 0);
+        text_raw(c, &F_MED, v, L, y, S(22), C_LIGHT, 0, 0);
         text(c, &F_REG, "THIS SESSION", L, y + S(28), S(13), C_TEALTXT, 0, 0);
         int nb = newest_slot(), cx = L + S(200);
         if (nb >= 0) {
@@ -724,7 +764,7 @@ static void draw_top(void) {
         if (ra_has) {
             text(c, &F_MED, "LATEST ACHIEVEMENTS", L, y, S(14), C_TEALTXT, 0, 0);
             snprintf(v, sizeof v, "%u / %u", ra_un, ra_tot);
-            text(c, &F_MED, v, x1 - S(28), y, S(14), C_TEALTXT, 0, 2);
+            text_raw(c, &F_MED, v, x1 - S(28), y, S(14), C_TEALTXT, 0, 2);
             int bx0 = L, bx1 = x1 - S(28), bb = y + S(22);
             fill(c, bx0, bb, bx1, bb + S(10), C_LIGHT, 1.0f);
             fill(c, bx0 + S(2), bb + S(2), bx1 - S(2), bb + S(8), C_DARK, 1.0f);
@@ -741,9 +781,9 @@ static void draw_top(void) {
                 int tx = L + bs + S(14), tw = x1 - S(28) - tx;
                 char w[48]; when_text((time_t)r->when, w, sizeof w);
                 float ww = text_w(&F_REG, w, S(13), 99);
-                text(c, &F_MED, r->title, tx, y + S(2), S(17), C_LIGHT, tw - ww - S(12), 0);
+                text_raw(c, &F_MED, r->title, tx, y + S(2), S(17), C_LIGHT, tw - ww - S(12), 0);
                 text(c, &F_REG, w, x1 - S(28), y + S(5), S(13), C_TEALTXT, 0, 2);
-                text(c, &F_REG, r->desc, tx, y + S(24), S(14), C_TEALTXT, tw, 0);
+                text_raw(c, &F_REG, r->desc, tx, y + S(24), S(14), C_TEALTXT, tw, 0);
             }
         }
     }
@@ -756,7 +796,7 @@ static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= 
 
 static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
     rrect(c, x, y, x + sz, y + sz, S(5), C_LIGHT, 1.0f);
-    text(c, &F_MED, k, x + sz / 2.0f, y + (sz - sz * 0.62f) / 2 - S(1), sz * 0.62f, C_DARK, 0, 1);
+    text_raw(c, &F_MED, k, x + sz / 2.0f, y + (sz - sz * 0.62f) / 2 - S(1), sz * 0.62f, C_DARK, 0, 1);
 }
 /* a footer/dialog pill: [key] label; returns its rect */
 static rect pill(canvas *c, int x, int y, int right, const char *k, const char *label, uint32_t border, uint32_t txt, uint32_t bg) {
@@ -791,7 +831,7 @@ static void dialog(canvas *c, const char *title, const char *body, const char *n
     int w = S(460), h = S(210), x0 = (c->w - w) / 2, y0 = S(120);
     box(c, x0, y0, x0 + w, y0 + h, S(14), S(3), C_LIGHT, C_DARK);
     text(c, &F_MED, title, x0 + S(26), y0 + S(22), S(24), C_LIGHT, w - S(52), 0);
-    char l1[200], l2[200]; int n = wrap2(&F_REG, body, S(17), w - S(52), l1, l2, sizeof l1);
+    char l1[200], l2[200]; int n = wrap2(&F_REG, body, S(17), w - S(52), l1, l2, sizeof l1, 1);
     text(c, &F_REG, l1, x0 + S(26), y0 + S(66), S(17), C_BODY, w - S(52), 0);
     if (n > 1) text(c, &F_REG, l2, x0 + S(26), y0 + S(90), S(17), C_BODY, w - S(52), 0);
     int by = y0 + h - S(60);
@@ -924,8 +964,9 @@ static void draw_bottom(void) {
         char l1[200], l2[200], msg[240];
         if (th > 0) snprintf(msg, sizeof msg, "The game hears a blow past the red line (sensitivity: %s).",
                              th < 0.08f ? "high" : th < 0.22f ? "medium" : "low");
-        else snprintf(msg, sizeof msg, "Microphone sensitivity is off in ES, so the game only gets the blow below.");
-        int n = wrap2(&F_REG, msg, S(16), x1 - x0 - S(44), l1, l2, sizeof l1);
+        else snprintf(msg, sizeof msg, "%s", lang_active() || !is_banana() ? "Microphone sensitivity is off in ES, so the game only gets the blow below."
+                      : "Microphone sensitivity is off in Settings, so the game only gets the blow below.");   /* (the translator's line is the ES one: it says Settings) */
+        int n = wrap2(&F_REG, msg, S(16), x1 - x0 - S(44), l1, l2, sizeof l1, 1);
         text(c, &F_REG, l1, x0 + S(22), my1 + S(26), S(16), C_BODY, x1 - x0 - S(44), 0);
         if (n > 1) text(c, &F_REG, l2, x0 + S(22), my1 + S(50), S(16), C_BODY, x1 - x0 - S(44), 0);
         text(c, &F_REG, "A: blow for 3 s, for when the real mic isn't picked up", gx0 + S(4), y1 + S(16), S(16), C_GREY, gx1 - gx0, 0);
@@ -937,6 +978,11 @@ static void draw_bottom(void) {
     else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : "OK";
     else if (s == SC_MIC) al = "Blow for 3 s";
     if (s == SC_MAIN) mid = "D-pad or tap";
+    /* the translator, where the menu's language shows (the file's translated-by: "简体中文 · Majirefy") */
+    char credit[160];
+    if (s == SC_SET && lang_active() && *lang_by()) {
+        snprintf(credit, sizeof credit, "%s · %s", lang_name(), lang_by()); lang_keep(credit); mid = credit;
+    }
     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
     R_FOOT_R = pill(c, c->w - S(20), fy, 1, "A", al, C_CYAN, C_CYAN, C_DARK);
     R_UNDO = (rect){ 0, 0, 0, 0 };
