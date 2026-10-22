@@ -850,6 +850,23 @@ dies on an illegal instruction. **Expected +0.1..0.3%** of the emulator thread i
 profile's "JIT compiler" area is 1.2%; this was ~a fifth of the compiler's instructions, a predictable loop), only
 while new code is being compiled. Untested on device.
 
+## A game's start and quit (2026-10-22, RG DS Plus, Mario Kart DS copy on the panels)
+
+Timed with `log.time=on` (each log line after the boot clock) and `[start]` marks, against the panels from outside
+(the first non-black frame on a plane). Before: the launch request -> the first picture ~995 ms, of which BananaDS
+from exec ~780; quit chord -> process gone ~1120 ms. The steps that went, all exact:
+- patch 0089: direct boot's 22 CP15 writes each rebuilt the protection unit's maps (~280 ms); now once. A hash of the
+  maps, MemTimings and the CP15 state after direct boot is the same either way.
+- patch 0090: the JIT's FastBlockLookup tables zeroed (~80 ms) before their 0xFF fill, the fill over the DSi's 64 MB
+  of main RAM lookup on a DS (~20 ms), and the 32 MB BRK fill of a code slice nothing has written (~40 ms).
+- cpugov_stop waited out the governor's window (0..250 ms); it wakes it now.
+- `audio.close_child`: the output's last close (~600 ms on the Plus: the aw88166 amplifiers' stop fails its status
+  check and loads their DSP firmware again over I2C, a kernel driver matter) left to a child process.
+After: first picture ~610 ms, quit ~240 ms. What remains of the start: the launchers ~60 ms, the JIT's lookup fill
+~30, CP15Reset + InitTimings ~40 (full timing rebuilds), the display + inputs + cheats ~95 (inputs ~30: one
+device's open; cheats ~30: the .cht folders scanned for a game with none), the first frame ~140 (the JIT compiling
+the game's start). Of the quit: Emu's teardown ~140 ms (a block cache reset and the unmapping).
+
 ## BananaJIT
 
 BananaJIT (jit/, `-DBANANADS_JIT=banana`) is parked. Its block-timing mode reached about 44 fps in this scene,

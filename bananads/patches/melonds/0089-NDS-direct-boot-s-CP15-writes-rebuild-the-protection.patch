@@ -1,0 +1,125 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Thu, 22 Oct 2026 12:00:00 +0000
+Subject: [PATCH] NDS: direct boot's CP15 writes rebuild the protection unit's maps once, not 22 times
+
+SetupDirectBoot's 22 CP15 writes each rebuilt the ARM9's protection-unit maps and memory timings from scratch
+(UpdatePURegions(true): two 1 MB memsets and UpdateRegionTimings over all 1M entries): ~280 ms of a game's start
+on an RG DS Plus, the biggest single step. ARMv5::PUBatch makes UpdatePURegion/UpdatePURegions return at once
+while it is set; SetupDirectBoot sets it around its writes and rebuilds once after them. The maps are a function
+of the final CP15 state (the last write that rebuilt them was already a full rebuild with every PU register at its
+final value), so they come out the same: a hash of PU_UserMap, PU_PrivMap, MemTimings and the CP15 state after
+direct boot is identical with and without the batch (Mario Kart DS, RG DS Plus).
+UpdateRegionTimings also writes each entry's four bytes in one store: through u8s, which may alias anything, the
+loop loaded the clock shift and the bus timings again for every byte. The same bytes (the same hash).
+---
+ src/ARM.h    |  4 ++++
+ src/CP15.cpp | 31 +++++++++++++++++--------------
+ src/NDS.cpp  |  4 ++++
+ 3 files changed, 25 insertions(+), 14 deletions(-)
+
+diff --git a/src/ARM.h b/src/ARM.h
+index 3e17376..b1e644d 100644
+--- a/src/ARM.h
++++ b/src/ARM.h
+@@ -319,6 +319,10 @@ public:
+ 
+     void UpdatePURegion(u32 n);
+     void UpdatePURegions(bool update_all);
++    // PUBatch: while set, the CP15 writes leave the protection unit's maps alone (UpdatePURegion/UpdatePURegions
++    // return at once); whoever sets it calls UpdatePURegions(true) after clearing it. For a run of CP15 writes with
++    // nothing emulated in between (NDS::SetupDirectBoot's 22: each rebuilt all of the maps, ~12 ms on an A55)
++    bool PUBatch = false;
+ 
+     u32 RandomLineIndex();
+ 
+diff --git a/src/CP15.cpp b/src/CP15.cpp
+index 9fa0281..4078125 100644
+--- a/src/CP15.cpp
++++ b/src/CP15.cpp
+@@ -151,6 +151,7 @@ void ARMv5::UpdateITCMSetting()
+ // (not to the region range/enabled status)
+ void ARMv5::UpdatePURegion(u32 n)
+ {
++    if (PUBatch) return;
+     if (!(CP15Control & (1<<0)))
+         return;
+ 
+@@ -262,6 +263,7 @@ void ARMv5::UpdatePURegion(u32 n)
+ 
+ void ARMv5::UpdatePURegions(bool update_all)
+ {
++    if (PUBatch) return;
+     if (!(CP15Control & (1<<0)))
+     {
+         // PU disabled
+@@ -297,32 +299,33 @@ void ARMv5::UpdatePURegions(bool update_all)
+ 
+ void ARMv5::UpdateRegionTimings(u32 addrstart, u32 addrend)
+ {
++    // (the same bytes as before, a 4-byte store per entry: written byte by byte through u8s, which may alias anything,
++    // every entry loaded the clock shift and the bus timings again; 1M entries for a whole rebuild took ~12 ms on an A55)
++    const u32 shift = NDS.ARM9ClockShift;
+     for (u32 i = addrstart; i < addrend; i++)
+     {
+-        u8 pu = PU_Map[i];
+-        u8* bustimings = NDS.ARM9MemTimings[i >> 2];
++        const u8 pu = PU_Map[i];
++        const u8* bustimings = NDS.ARM9MemTimings[i >> 2];
++        u8 t[4];
+ 
+         if (pu & 0x40)
+-        {
+-            MemTimings[i][0] = 0xFF;//kCodeCacheTiming;
+-        }
++            t[0] = 0xFF;//kCodeCacheTiming;
+         else
+-        {
+-            MemTimings[i][0] = bustimings[2] << NDS.ARM9ClockShift;
+-        }
++            t[0] = bustimings[2] << shift;
+ 
+         if (pu & 0x10)
+         {
+-            MemTimings[i][1] = kDataCacheTiming;
+-            MemTimings[i][2] = kDataCacheTiming;
+-            MemTimings[i][3] = 1;
++            t[1] = kDataCacheTiming;
++            t[2] = kDataCacheTiming;
++            t[3] = 1;
+         }
+         else
+         {
+-            MemTimings[i][1] = bustimings[0] << NDS.ARM9ClockShift;
+-            MemTimings[i][2] = bustimings[2] << NDS.ARM9ClockShift;
+-            MemTimings[i][3] = bustimings[3] << NDS.ARM9ClockShift;
++            t[1] = bustimings[0] << shift;
++            t[2] = bustimings[2] << shift;
++            t[3] = bustimings[3] << shift;
+         }
++        memcpy(MemTimings[i], t, 4);
+     }
+ }
+ 
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index d362571..5d231f8 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -378,6 +378,8 @@ void NDS::SetupDirectBoot()
+ 
+     SPI.GetFirmwareMem()->SetupDirectBoot();
+ 
++    // (the protection unit's maps once, after the last write: the same maps, which every write rebuilt before)
++    ARM9.PUBatch = true;
+     ARM9.CP15Write(0x100, 0x00052078);
+     ARM9.CP15Write(0x200, 0x00000042);
+     ARM9.CP15Write(0x201, 0x00000042);
+@@ -402,6 +404,8 @@ void NDS::SetupDirectBoot()
+     ARM9.CP15Write(0x671, 0x027FF017);
+     ARM9.CP15Write(0x910, 0x0300000A);
+     ARM9.CP15Write(0x911, 0x00000020);
++    ARM9.PUBatch = false;
++    ARM9.UpdatePURegions(true);
+ }
+ 
+ void NDS::SetupDirectBoot(const std::string& romname)

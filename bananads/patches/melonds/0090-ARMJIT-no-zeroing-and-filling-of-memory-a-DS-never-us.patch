@@ -1,0 +1,181 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Thu, 22 Oct 2026 12:00:00 +0000
+Subject: [PATCH] ARMJIT: no zeroing and filling of memory a DS never uses at start
+
+Three writes over memory at every game's start (~170 ms on an RG DS Plus), none of them changing what runs:
+- ARMJIT's FastBlockLookup* tables (~80 MB, FastBlockLookupMainRAM alone 64 MB, sized for the DSi's 16 MB of main
+  RAM) were zeroed by the constructor ({}), every page touched (~80 ms), and then filled with 0xFF ("no block") by
+  ResetBlockCache before any use. Now only the fill: no {} on them.
+- ResetBlockCache filled all 64 MB of FastBlockLookupMainRAM; a DS's local main RAM addresses are masked to 4 MB
+  (MainRAMMask 0x3FFFFF), so with ConsoleType 0 only that part is filled (the DSi's, as before).
+- Compiler::Reset filled the 32 MB code slice with BRK (~40 ms). A slice nothing has written yet is still zero (the
+  static CodeMemory array, or a new mapping), and zero is UDF #0, as much a trap: ARMJIT_Global::AllocateCodeMem
+  says whether the slice is fresh, and the first Reset of a fresh slice leaves it as it is (the constructor's stubs
+  are below the code base the fill starts at). A slice used before is filled as before. The [jit] log line then
+  counts the huge pages so far (those touched).
+---
+ src/ARMJIT.cpp                     |  8 +++++++-
+ src/ARMJIT.h                       | 28 +++++++++++++++-------------
+ src/ARMJIT_A64/ARMJIT_Compiler.cpp | 16 +++++++++++-----
+ src/ARMJIT_A64/ARMJIT_Compiler.h   |  1 +
+ src/ARMJIT_Global.cpp              |  6 +++++-
+ src/ARMJIT_Global.h                |  4 +++-
+ 6 files changed, 42 insertions(+), 21 deletions(-)
+
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 92b034f..065b495 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -1783,7 +1783,13 @@ void ARMJIT::ResetBlockCache() noexcept
+     for (int i = 0; i < ARMJIT_Memory::memregions_Count; i++)
+     {
+         if (FastBlockLookupRegions[i])
+-            memset(FastBlockLookupRegions[i], 0xFF, CodeRegionSizes[i] * sizeof(u64) / 2);
++        {
++            // a DS's main RAM is 4 MB (MainRAMMask 0x3FFFFF): its local addresses never reach the rest, which the
++            // DSi's 16 MB has (~48 MB of 0xFF less to write at each reset)
++            u32 size = CodeRegionSizes[i];
++            if (i == ARMJIT_Memory::memregion_MainRAM && NDS.ConsoleType == 0) size = 0x400000;
++            memset(FastBlockLookupRegions[i], 0xFF, size * sizeof(u64) / 2);
++        }
+     }
+     for (auto it = RestoreCandidates.begin(); it != RestoreCandidates.end(); it++)
+         delete it->second;
+diff --git a/src/ARMJIT.h b/src/ARMJIT.h
+index 1fff35a..fa7b773 100644
+--- a/src/ARMJIT.h
++++ b/src/ARMJIT.h
+@@ -131,19 +131,21 @@ public:
+     AddressRange CodeIndexNWRAM_B[NWRAMSize / 512] {};
+     AddressRange CodeIndexNWRAM_C[NWRAMSize / 512] {};
+ 
+-    u64 FastBlockLookupITCM[ITCMPhysicalSize / 2] {};
+-    u64 FastBlockLookupMainRAM[MainRAMMaxSize / 2] {};
+-    u64 FastBlockLookupSWRAM[SharedWRAMSize / 2] {};
+-    u64 FastBlockLookupVRAM[0x100000 / 2] {};
+-    u64 FastBlockLookupARM9BIOS[ARM9BIOSSize / 2] {};
+-    u64 FastBlockLookupARM7BIOS[ARM7BIOSSize / 2] {};
+-    u64 FastBlockLookupARM7WRAM[ARM7WRAMSize / 2] {};
+-    u64 FastBlockLookupARM7WVRAM[0x40000 / 2] {};
+-    u64 FastBlockLookupBIOS9DSi[0x10000 / 2] {};
+-    u64 FastBlockLookupBIOS7DSi[0x10000 / 2] {};
+-    u64 FastBlockLookupNWRAM_A[NWRAMSize / 2] {};
+-    u64 FastBlockLookupNWRAM_B[NWRAMSize / 2] {};
+-    u64 FastBlockLookupNWRAM_C[NWRAMSize / 2] {};
++    // (no {}: ResetBlockCache fills them with 0xFF, "no block", before any use; zeroed here first, their ~80 MB were
++    // touched page by page at every start, ~80 ms on an A55, though a DS uses a quarter of FastBlockLookupMainRAM)
++    u64 FastBlockLookupITCM[ITCMPhysicalSize / 2];
++    u64 FastBlockLookupMainRAM[MainRAMMaxSize / 2];
++    u64 FastBlockLookupSWRAM[SharedWRAMSize / 2];
++    u64 FastBlockLookupVRAM[0x100000 / 2];
++    u64 FastBlockLookupARM9BIOS[ARM9BIOSSize / 2];
++    u64 FastBlockLookupARM7BIOS[ARM7BIOSSize / 2];
++    u64 FastBlockLookupARM7WRAM[ARM7WRAMSize / 2];
++    u64 FastBlockLookupARM7WVRAM[0x40000 / 2];
++    u64 FastBlockLookupBIOS9DSi[0x10000 / 2];
++    u64 FastBlockLookupBIOS7DSi[0x10000 / 2];
++    u64 FastBlockLookupNWRAM_A[NWRAMSize / 2];
++    u64 FastBlockLookupNWRAM_B[NWRAMSize / 2];
++    u64 FastBlockLookupNWRAM_C[NWRAMSize / 2];
+ 
+     AddressRange* const CodeMemRegions[ARMJIT_Memory::memregions_Count] =
+     {
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index bbb211a..2c9e442 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -318,7 +318,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+ #else
+     ARMJIT_Global::Init();
+ 
+-    CodeMemBase = ARMJIT_Global::AllocateCodeMem();
++    CodeMemBase = ARMJIT_Global::AllocateCodeMem(&CodeMemFresh);
+     nds.JIT.JitEnableWrite();
+ 
+     SetCodeBase(reinterpret_cast<u8*>(CodeMemBase), reinterpret_cast<u8*>(CodeMemBase));
+@@ -1864,15 +1864,21 @@ void Compiler::Reset()
+ 
+     const u32 brk_0 = 0xD4200000;
+ 
+-    for (int i = 0; i < (JitMemMainSize + JitMemSecondarySize) / 4; i++)
+-        *(((u32*)GetRWPtr()) + i) = brk_0;
++    // (a fresh slice is all zero, UDF #0, a trap as the BRK is: written over only once it has held code. The 32 MB
++    // of stores cost ~40 ms at every game's start on an A55, and touched every page before the first block)
++    if (CodeMemFresh)
++        CodeMemFresh = false;
++    else
++        for (int i = 0; i < (JitMemMainSize + JitMemSecondarySize) / 4; i++)
++            *(((u32*)GetRWPtr()) + i) = brk_0;
+ 
+ #ifndef __SWITCH__
+     if (!CodeMemReported)
+     {
+-        // (every page of the slice is touched now: how much of it the kernel gave huge pages, MELONDS_JIT_HUGEPAGE)
++        // (how much of the slice the kernel gave huge pages so far, MELONDS_JIT_HUGEPAGE: all of it after a fill; a
++        // fresh slice, not filled, has none yet: its pages come as code is written)
+         CodeMemReported = true;
+-        Log(LogLevel::Info, "[jit] code memory at %p, %zu kB, %zu kB on huge pages\n", CodeMemBase,
++        Log(LogLevel::Info, "[jit] code memory at %p, %zu kB, %zu kB on huge pages so far\n", CodeMemBase,
+             ARMJIT_Global::CodeMemorySliceSize / 1024,
+             ARMJIT_Global::HugePageBytes(CodeMemBase, ARMJIT_Global::CodeMemorySliceSize) / 1024);
+     }
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index 4dc24e6..b271d40 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -403,6 +403,7 @@ public:
+ #endif
+     void* CodeMemBase;
+     bool CodeMemReported = false;   // (patch 0021's log line, once)
++    bool CodeMemFresh = false;      // the slice is still all zero: the first Reset needn't fill it with BRKs
+ 
+     void* ReadBanked, *WriteBanked;
+ 
+diff --git a/src/ARMJIT_Global.cpp b/src/ARMJIT_Global.cpp
+index 07953d4..e9527e8 100644
+--- a/src/ARMJIT_Global.cpp
++++ b/src/ARMJIT_Global.cpp
+@@ -38,6 +38,7 @@ static constexpr size_t HugePageSize = 2*1024*1024;
+ u8 CodeMemory[CodeMemoryAlignedSize + HugePageSize];
+ 
+ u32 AvailableCodeMemSlices = (1 << NumCodeMemSlices) - 1;
++u32 UsedCodeMemSlices = 0;  // (ever handed out: the others are still zero, as the static array starts)
+ 
+ // MELONDS_JIT_HUGEPAGE (default 1; jit.hugepages): the code memory aligned to 2 MB and madvise(MADV_HUGEPAGE)'d
+ // before anything touches it, so the kernel (THP "madvise" mode, as BananaLinux's) maps it with 2 MB pages: the
+@@ -79,15 +80,18 @@ size_t HugePageBytes(const void* start, size_t size)
+ 
+ int RefCounter = 0;
+ 
+-void* AllocateCodeMem()
++void* AllocateCodeMem(bool* fresh)
+ {
+     std::lock_guard guard(globalMutex);
++    if (fresh) *fresh = true;  // (a new mapping is zero)
+ 
+ #if !defined(APPLE_AARCH64) && !defined(__NetBSD__) && !defined(__OpenBSD__)
+     if (AvailableCodeMemSlices)
+     {
+         int slice = __builtin_ctz(AvailableCodeMemSlices);
+         AvailableCodeMemSlices &= ~(1 << slice);
++        if (fresh) *fresh = !(UsedCodeMemSlices & (1 << slice));
++        UsedCodeMemSlices |= 1 << slice;
+         //printf("allocating slice %d\n", slice);
+         return &GetAlignedCodeMemoryStart()[slice * CodeMemorySliceSize];
+     }
+diff --git a/src/ARMJIT_Global.h b/src/ARMJIT_Global.h
+index 5dae4d4..ca07605 100644
+--- a/src/ARMJIT_Global.h
++++ b/src/ARMJIT_Global.h
+@@ -34,7 +34,9 @@ static constexpr size_t CodeMemorySliceSize = 1024*1024*32;
+ void Init();
+ void DeInit();
+ 
+-void* AllocateCodeMem();
++// fresh (when not null): true when no JIT has written the slice yet, so all of it is still zero (a trap as code:
++// UDF #0, as the BRKs Compiler::Reset fills it with)
++void* AllocateCodeMem(bool* fresh = nullptr);
+ void FreeCodeMem(void* codeMem);
+ 
+ // (BananaDS patch 0021) bytes of [start, start + size) the kernel maps with transparent huge pages
