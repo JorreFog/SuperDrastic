@@ -7,6 +7,11 @@
 #ifndef BANANA_LANG_H
 #define BANANA_LANG_H
 
+/* (hidden: SuperDrastic is preloaded into DraStic, whose own symbols these mustn't stand in for) */
+#if defined(__GNUC__)
+#pragma GCC visibility push(hidden)
+#endif
+
 /* load the language for one part of the file ("bananads", "superdrastic"); BANANA_LANGUAGE and BANANA_LANG_DIR
  * override the setting and the folder (tests). 1: a language other than English is on */
 int lang_init(const char *part);
@@ -24,4 +29,7 @@ void lang_keep(const char *s);
 int lang_cjk(int cp);
 int lang_break_between(int prev, int cp);
 
+#if defined(__GNUC__)
+#pragma GCC visibility pop
+#endif
 #endif

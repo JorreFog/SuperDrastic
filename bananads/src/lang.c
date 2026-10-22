@@ -135,8 +135,11 @@ static void setting(char *out, size_t n) {
 }
 
 int lang_init(const char *part) {
+    static int done;
     char c[16]; setting(c, sizeof c);
     pthread_mutex_lock(&mu);
+    if (done) { pthread_mutex_unlock(&mu); return active; }   /* (once a process) */
+    done = 1;
     active = 0;
     if (!strcmp(c, "en")) { pthread_mutex_unlock(&mu); return 0; }
     const char *dir = getenv("BANANA_LANG_DIR"); if (!dir || !*dir) dir = "/usr/share/banana/lang";
