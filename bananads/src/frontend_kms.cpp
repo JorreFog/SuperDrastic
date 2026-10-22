@@ -166,6 +166,7 @@ struct Display {
     // kms.shader: each frame drawn through a fragment shader (SuperDrastic's) into panel-sized buffers, shown 1:1
     std::string shader_name;
     bool shader_tried = false, shader_on = false;
+    bool first_flip = false;  // (log.time's "[start] first flip")
     std::string shader_req;           // from the in-game menu (any thread): taken up by the presenter's next frame
     bool shader_req_set = false;
     Buf sbuf[2][3];
@@ -584,6 +585,7 @@ struct Display {
         }
         if (!shader_name.empty() && !shader_tried) {  // GL is made on this thread
             shader_tried = true;
+            start_mark("shader: start");
             shader_on = shader_init(fd, shader_name.c_str()) != 0;
             for (int i = 0; i < 2 && shader_on; i++)
                 for (auto& b : sbuf[i]) shader_on = shader_on && (b.fb || mkbuf(b, W, H));  // (made once)
@@ -711,6 +713,7 @@ struct Display {
     void flipped(long long t) {
         Lock l(mu);
         if (--pending > 0) return;
+        if (!first_flip) { first_flip = true; start_mark("first flip"); }
         if (scanout >= 0) state[scanout] = FREE;
         scanout = committed;
         state[scanout] = SCANOUT;
@@ -1141,7 +1144,9 @@ int run_kms(Emu& emu, const Config& cfg) {
         dp.p[0].name.c_str(), dp.p[1].name.c_str(), dp.W, dp.H, 1e6 / dp.period_us, dp.fw, dp.fh,
         dp.direct ? "drawn straight into the scanout buffers" : "copied into the scanout buffers",
         dp.hw ? "the display plane" : "the CPU");
+    start_mark("display open");
     std::vector<InputDev> devs = open_inputs(touch);
+    start_mark("inputs");
 
     // power.cpu_latency_us: hold the cores out of idle states slower to leave than this while the game runs (PM QoS,
     // /dev/cpu_dma_latency; the A55s' cpu-sleep takes 220 us to wake from). 0, the default: the kernel decides
@@ -1159,12 +1164,14 @@ int run_kms(Emu& emu, const Config& cfg) {
 
 #ifdef BANANADS_ALSA
     Alsa* snd = alsa_start(emu, cfg);
+    start_mark("alsa");
 #endif
     dp.shot_dir = cfg.str("screenshot.dir", "/data/screenshots");  // F + L2's PNGs (RetroArch's go there too)
     dp.shot_game = emu.game();
     GovFeed feed;
     feed.scale = emu.scale();
     cpugov_start(cfg, &feed);
+    start_mark("cpugov");
 
     // the presenter's (this thread's) requests for the emulator's thread, applied before its next frame
     std::atomic<uint32_t> in_keys{0};
@@ -1226,7 +1233,9 @@ int run_kms(Emu& emu, const Config& cfg) {
         h.cheat_name = mh_cheat_name;
         h.cheat_get = mh_cheat_get;
         h.cheat_set = mh_cheat_set;
+        start_mark("menu options");
         bmenu_init(&h);
+        start_mark("menu init");
         // cheats.dir (<BANANADS_DATA>/cheats): the games' .mch files; then RetroArch .cht files from cheats.retroarch_dir
         // (the card's RetroArch folder) and cheats.system_dir (the collection that comes with BananaOS)
         const char* data = getenv("BANANADS_DATA");
@@ -1236,6 +1245,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         g_cheat_emu = &emu;
         if (g_cheats.enabled()) emu.set_cheats(g_cheats.list());
         bmenu_session_start();
+        start_mark("cheats");
     }
     {  // RetroAchievements (ra.c): the account from BANANADS_RA_USER/PASSWORD, melonDS's memory read directly
         ra_host rh{};
@@ -1244,6 +1254,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         rh.dtcm = [](void* c) { return ((Emu*)c)->dtcm(); };
         rh.log = [](void*, const char* line) { Log(LogLevel::Info, "%s", line); };
         ra_init(&rh, emu.rom_path().c_str());
+        start_mark("ra init");
     }
 
     std::thread emu_thread([&] {
@@ -1268,6 +1279,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         if (pace_display) emu.set_audio_rate(48000.0 * dp.period_us * 1000.0 / 16715180.0);
         Pacer pace(feed, period);
         int touched = -1, ff = 0;
+        long emu_frames = 0;
         const bool ff_mute = cfg.flag("kms.ff_mute", true);
         while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
             if (pause_req.load(std::memory_order_acquire)) {  // the menu: at a frame's end, until it closes
@@ -1309,7 +1321,9 @@ int run_kms(Emu& emu, const Config& cfg) {
             const int s = dp.take();
             const auto work0 = std::chrono::steady_clock::now();  // (cpugov.tail: the frame's work, to its publish)
             if (dp.direct) emu.draw_into(dp.map(0, s), dp.map(1, s));
+            if (!emu_frames++) start_mark("first frame: start");
             emu.run_frame();
+            if (emu_frames == 1) start_mark("first frame: emulated");
             if (!dp.direct) dp.write(s, emu.top(), emu.bottom());
             ra_frame();  // RetroAchievements: this frame's memory (its pop-ups are drawn by the presenter)
             uint32_t fence = 0;
@@ -1566,15 +1580,21 @@ int run_kms(Emu& emu, const Config& cfg) {
     }
     cpugov_stop();
 #ifdef BANANADS_ALSA
+    start_mark("quit: cpugov");
     alsa_stop(snd);
 #endif
+    start_mark("quit: alsa");
     if (!screenshot_wait(3000)) Log(LogLevel::Warn, "[shot] still being written at quit\n");
+    start_mark("quit: screenshot");
     for (auto& d : devs) ::close(d.fd);
     if (qos >= 0) ::close(qos);
     emu.set_lazy_2d(false);  // render.2d_lazy: the last frame's lines drawn before its buffers go
+    start_mark("quit: 2d");
     emu.draw_into(nullptr, nullptr);  // (the buffers go with the device)
+    start_mark("quit: draw_into");
     dp.close();
     ::close(g_wake);
+    start_mark("quit: display closed");
     g_wake = -1;
     return 0;
 }

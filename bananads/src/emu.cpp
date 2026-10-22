@@ -268,6 +268,7 @@ bool Emu::load_rom(const std::string& path) {
         Log(LogLevel::Info, "[emu] save %s (%zu bytes)\n", save_path_.c_str(), sav.size());
     }
 
+    start_mark("save read");
     auto cart = NDSCart::ParseROM(std::move(romdata), (u32)romlen, this, std::move(cart_args));
     if (!cart) {
         if (romdata && rom_unmap(romdata.get())) (void)romdata.release();  // (rejected before melonDS took it)
@@ -553,13 +554,19 @@ bool Emu::load_rom(const std::string& path) {
         else if (geom == "off") setenv("MELONDS_GEOMFAST", "0", 1);
     }
 
+    start_mark("cart parsed, settings");
     setup_wifi();
     setup_local();
+    start_mark("wifi");
 
     nds_ = std::make_unique<NDS>(std::move(args), this);
+    start_mark("NDS created");
     nds_->SetNDSCart(std::move(cart));
+    start_mark("cart in");
     nds_->Reset();
+    start_mark("reset");
     nds_->SetupDirectBoot(game_ + ".nds");
+    start_mark("direct boot");
     setup_slice();
     // core.fast_gxdma / core.fast_spu: exact shortcuts in melonDS's DMA and SPU (patches/melonds/0004), off by
     // default until measured on the handheld
@@ -665,6 +672,7 @@ bool Emu::load_rom(const std::string& path) {
     if (banana2d) banana_->SetFenceWaitBlocking(cfg_.str("render.2d_fence_wait", "block") != "spin");
 #endif
 
+    start_mark("renderer");
     set_clock();
 
     if (scale != scale_)

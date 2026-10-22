@@ -18,6 +18,8 @@
 namespace melonDS { class NDS; class Net; class BananaRenderer; }
 
 namespace bananads {
+// with log.time: "[start] <what>" in the log, the start of a game timed step by step (platform.cpp)
+void start_mark(const char* what);
 bool rom_unmap(uint8_t* rom);  // a ROM Emu::load_rom mapped: unmapped, true (melonDS's Platform::ROMRelease)
 }
 

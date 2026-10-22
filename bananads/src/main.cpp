@@ -21,6 +21,7 @@
 namespace bananads {
 extern FILE* g_log;
 extern int g_log_level;
+extern bool g_log_time;
 }
 
 using namespace bananads;
@@ -66,6 +67,7 @@ int main(int argc, char** argv) {
         }
 
     g_log_level = (int)cfg.num("log.level", 1);
+    g_log_time = cfg.flag("log.time", false);
     std::string logfile = cfg.str("log.file", "");
     if (!logfile.empty()) g_log = fopen(logfile.c_str(), "w");
     Log(LogLevel::Info, "BananaDS %s, %s\n", BANANADS_VERSION, rom.c_str());
@@ -100,6 +102,7 @@ int main(int argc, char** argv) {
 #ifdef BANANADS_KMS
         else if (fe == "kms") {
             code = run_kms(emu, cfg);
+            start_mark("quit: frontend returned");
         }
 #endif
         else {
@@ -108,6 +111,7 @@ int main(int argc, char** argv) {
         }
         return code;
     }();
+    start_mark("quit: emulator gone");
     // (a log line after this, from anything still running at exit, goes nowhere rather than into the closed FILE)
     if (FILE* f = g_log) {
         g_log = nullptr;

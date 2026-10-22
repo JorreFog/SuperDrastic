@@ -12,6 +12,8 @@
 #include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
+#include <ctime>
 #include <mutex>
 #include <thread>
 
@@ -25,6 +27,11 @@
 namespace bananads {
 FILE* g_log = nullptr;  // main.cpp opens it (log.file); stderr too
 int g_log_level = 1;    // 0 debug .. 3 error
+bool g_log_time = false;  // log.time: each line after the clock since boot (CLOCK_BOOTTIME, /proc/uptime's)
+}
+
+void bananads::start_mark(const char* what) {
+    if (g_log_time) melonDS::Platform::Log(melonDS::Platform::LogLevel::Info, "[start] %s\n", what);
 }
 
 namespace melonDS::Platform {
@@ -112,6 +119,18 @@ void Log(LogLevel level, const char* fmt, ...) {
     va_start(ap, fmt);
     vsnprintf(buf, sizeof buf, fmt, ap);
     va_end(ap);
+    if (bananads::g_log_time) {
+        static bool bol = true;  // (a line can come in pieces: the time at its start only)
+        char t[2048 + 24];
+        timespec ts;
+        clock_gettime(CLOCK_BOOTTIME, &ts);
+        if (bol) snprintf(t, sizeof t, "%lld.%03ld %s", (long long)ts.tv_sec, ts.tv_nsec / 1000000, buf);
+        else snprintf(t, sizeof t, "%s", buf);
+        size_t n = strlen(buf);
+        bol = n && buf[n - 1] == '\n';
+        memcpy(buf, t, sizeof buf - 1);
+        buf[sizeof buf - 1] = 0;
+    }
     fputs(buf, stderr);
     if (bananads::g_log) {
         fputs(buf, bananads::g_log);
