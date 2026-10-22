@@ -89,6 +89,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `audio.out_device` | `default` | the ALSA output device |
 | `audio.latency_us` | `30000` | ALSA's buffer |
 | `audio.realtime` | `on` | the sound thread at SCHED_FIFO 10, when allowed |
+| `audio.close_child` | `on` | at a quit, the output's last close (where the driver stops the device) is left to a child process that keeps only that file until BananaDS has gone, so the quit doesn't wait for it: ~600 ms on the RG DS Plus, whose aw88166 amplifiers load their DSP firmware again as they stop. A menu sound in that time finds the device busy. `off`: closed before BananaDS exits |
 | `audio.servo` | `on` | the rate servo: when the game runs below full speed, the sound is stretched smoothly instead of crackling; only the sound changes, never the emulation |
 | `audio.stretch` | `on` | how the servo stretches: `on` keeps the pitch (a time stretch; at most +-0.5% goes to the resampler), `off` resamples, so the sound lowers with the game's speed |
 | `audio.servo_target` | `768` | the backlog of game sound (in 48 kHz frames) the servo holds: more absorbs longer dips, adds latency |

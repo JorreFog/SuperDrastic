@@ -29,10 +29,12 @@
 
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -76,6 +78,8 @@ static int retry_ms;  // clean time at the current clock while the clock just be
 static bool verbose, soft_max, mem_on = true;
 static std::atomic<long long> boost_until{0};
 static std::atomic<bool> gov_on{false}, gov_run{false};
+static std::mutex gov_mu;  // gov_cv: cpugov_stop wakes the loop out of its window's wait (a quit waited up to a window)
+static std::condition_variable gov_cv;
 static std::thread gov_th;
 static GovFeed* feed_;
 static std::string mem_dir, mem_rom, mem_path;
@@ -244,7 +248,10 @@ static void gov_loop() {
             nt = n;
             rescan = std::max(1, 1000 / window_ms);
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(window_ms));
+        {
+            std::unique_lock<std::mutex> l(gov_mu);
+            gov_cv.wait_for(l, std::chrono::milliseconds(window_ms), [] { return !gov_run.load(); });
+        }
         if (!gov_run) break;
         timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -493,7 +500,11 @@ void cpugov_boost(int ms) {
 
 void cpugov_stop() {
     if (!gov_on) return;
-    gov_run = false;
+    {
+        std::lock_guard<std::mutex> l(gov_mu);
+        gov_run = false;
+    }
+    gov_cv.notify_all();
     if (gov_th.joinable()) gov_th.join();
     gov_on = false;
     if (before_ > 0 && wr_int(pol("scaling_max_freq").c_str(), before_) == 0)

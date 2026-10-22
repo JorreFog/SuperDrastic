@@ -9,6 +9,7 @@
 #include <sched.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <poll.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -40,6 +41,8 @@ struct Alsa {
     int servo_target;  // audio.servo_target: the SPU backlog it holds, in frames
     bool stats;        // audio.stats: a line every 10 s (short chunks, the servo's range)
     std::string dump;  // audio.dump: <path>.in.raw (the game's sound) and <path>.out.raw (what ALSA plays), 48 kHz s16 stereo
+    bool close_child;  // audio.close_child: the output closed by a child process after the quit (below)
+    snd_pcm_t* left = nullptr;  // ...the output left open for it by out_thread
     // the in-game menu's sounds (alsa_ui_*), 48 kHz stereo, mixed over the game's output while one plays
     std::mutex ui_mu;
     std::vector<int16_t> ui[4];
@@ -289,7 +292,8 @@ static void out_thread(Alsa* a) {
     }
     if (dump_in) fclose(dump_in), fclose(dump_out);
     snd_pcm_drop(pcm);
-    snd_pcm_close(pcm);
+    if (a->close_child) a->left = pcm;  // (closed by alsa_stop's child)
+    else snd_pcm_close(pcm);
 }
 
 static void in_thread(Alsa* a) {
@@ -335,6 +339,7 @@ Alsa* alsa_start(Emu& emu, const Config& cfg) {
     // 60 ms with the stretch (a short stall plays through untouched), 16 ms for the old servo
     a->servo_target = std::max(256, (int)cfg.num("audio.servo_target", a->stretch ? 2880 : 768));
     a->stats = cfg.flag("audio.stats", false);
+    a->close_child = cfg.flag("audio.close_child", true);
     a->dump = cfg.str("audio.dump", "");
     a->out = std::thread(out_thread, a);
     if (cfg.str("mic.source", "device") == "device") a->in = std::thread(in_thread, a);
@@ -351,6 +356,26 @@ void alsa_stop(Alsa* a) {
     a->run = false;
     if (a->out.joinable()) a->out.join();
     if (a->in.joinable()) a->in.join();  // readi returns within one block (~23 ms)
+    if (snd_pcm_t* pcm = a->left) {
+        // audio.close_child (on): the last close of the output, where the driver stops the device, done by a child
+        // that holds only that file and lives until BananaDS has gone, so the quit doesn't wait for it. On the RG DS
+        // Plus the close took ~600 ms: the aw88166 amplifiers' stop (a "pa stop check fail" each) loads their DSP
+        // firmware again over I2C. BananaDS closes only its own copy, so the menu comes back without that wait (a
+        // sound it plays in those ~600 ms finds the device busy: it isn't heard)
+        pollfd pfd{};
+        const int fd = snd_pcm_poll_descriptors(pcm, &pfd, 1) == 1 ? pfd.fd : -1;
+        const pid_t parent = getpid();
+        const pid_t pid = fd >= 0 ? fork() : -1;
+        if (pid == 0) {  // (only async-signal-safe calls: the parent has other threads)
+            const int maxfd = (int)sysconf(_SC_OPEN_MAX);
+            for (int i = 0; i < maxfd; i++)
+                if (i != fd) close(i);
+            while (getppid() == parent) usleep(20000);
+            _exit(0);  // (the device's file closed here, its stop in this exit)
+        }
+        if (pid < 0) snd_pcm_close(pcm);
+        // (pid > 0: BananaDS's copy closes as it exits; alsa-lib's state for it is left as it is)
+    }
     delete a;
 }
 
