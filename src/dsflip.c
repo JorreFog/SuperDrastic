@@ -258,6 +258,34 @@ void dsflip_log(const char *fmt, ...) {
     va_list ap; va_start(ap, fmt); vfprintf(lg, fmt, ap); va_end(ap);
 }
 
+/* ---------- DraStic's clock ----------
+ * DraStic paces with gettimeofday, and its wait (0x8a010 in 2.5.2.x) works out "last + 14 ms - now" in 32-bit
+ * microseconds. While the handheld sleeps the game is stopped but the wall clock runs on, so the first wait after
+ * waking sees a jump of hours: past 2^31 us (36 min) the difference wraps to a large positive number and DraStic
+ * sleeps for up to another 36 minutes (white panels, a frozen game, longer the longer it slept; #64). A gap of more
+ * than a second between two calls (DraStic calls it every frame) is therefore taken out of the clock it sees: time
+ * asleep, SIGSTOP'd (dark on the charger), or a clock set while it ran. The DS's own clock reads time(), so the
+ * game's date and time stay right. DSFLIP_CLOCK_GAPS=1 keeps the raw clock. */
+int gettimeofday(struct timeval *restrict tv, void *restrict tz) {
+    REAL(int, gettimeofday, struct timeval *restrict, void *restrict);
+    static int raw = -1;
+    static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
+    static long long last, cut;             /* the last raw time returned (us), and the gaps taken out so far */
+    int r = real(tv, tz);
+    if (r || !tv) return r;
+    if (raw < 0) { const char *e = getenv("DSFLIP_CLOCK_GAPS"); raw = e && *e == '1'; }
+    if (raw) return r;
+    long long t = tv->tv_sec * 1000000LL + tv->tv_usec, gap = 0;
+    pthread_mutex_lock(&mu);
+    if (last && (t - last > 1000000 || t < last)) { gap = t - last; cut += gap - 1000; }  /* as if 1 ms had passed */
+    last = t;
+    t -= cut;
+    pthread_mutex_unlock(&mu);
+    if (gap) dsflip_log("[clock] a %+.1f s gap in the wall clock taken out of DraStic's\n", gap / 1e6);
+    tv->tv_sec = t / 1000000; tv->tv_usec = t % 1000000;
+    return 0;
+}
+
 /* ---------- presenter ---------- */
 static int pending_mask;                /* bit i: a flip event is still due for panel i's CRTC */
 
