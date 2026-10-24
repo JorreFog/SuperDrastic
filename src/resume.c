@@ -292,6 +292,11 @@ int resume_quit(void) {
     kill(getpid(), SIGKILL);
     return 0;
 }
+/* the menu's Quit without saving: at once, no resume state (the game's own save stays as DraStic last wrote it) */
+void resume_quit_nosave(void) {
+    dsflip_log("[resume] quit without saving\n");
+    kill(getpid(), SIGKILL);
+}
 static void menu_jobs(void) {
     if (m_saving && (m_saved || frames - m_t > 300)) {          /* written, failed, or nothing after 5 s */
         int ok = m_saved == 1; m_saving = 0;

@@ -72,6 +72,7 @@ int resume_menu_load(const char *path, const char *backup, const char *msg, cons
 int resume_menu_busy(void);
 void resume_press(int b);
 int resume_quit(void);
+void resume_quit_nosave(void);
 int resume_on(void);
 int resume_quit_pending(void);
 
@@ -585,12 +586,12 @@ static void load_wav(int id, const char *path) {
 static void play(int id) { if (snd_ok[id]) audio_ui_play(id); }
 
 /* ---------- state ---------- */
-enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC };
+enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_QUIT_NOSAVE };
 static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_top, dirty_bot;
 #define MAIN_BRI 6                                /* sel_main: the main page's Brightness row, under the tiles */
 static int main_col;                              /* the tiles' column the d-pad came down from (back up to it) */
 static char busy_msg[96];
-static int btn_menu[2] = { -1, -1 }, b_a = -1, b_b = -1, b_y = -1, b_l = -1, b_r = -1, b_start = -1;
+static int btn_menu[2] = { -1, -1 }, b_a = -1, b_b = -1, b_x = -1, b_y = -1, b_l = -1, b_r = -1, b_start = -1;
 static int b_up = -1, b_down = -1, b_left = -1, b_right = -1;
 static long long mic_until;
 static uint32_t *bgtop;                         /* the game's top frame, dimmed (panel size) */
@@ -804,7 +805,7 @@ static void draw_top(void) {
 
 /* ---------- bottom panel ---------- */
 typedef struct { int x0, y0, x1, y1; } rect;
-static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[4], R_BAR[4], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_UNDO, R_MBRI, R_MBRI_BAR;
+static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[4], R_BAR[4], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_DLG_X, R_UNDO, R_MBRI, R_MBRI_BAR;
 static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1; }
 
 static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
@@ -857,23 +858,28 @@ static int bar_value(rect b, int px, canvas *c) {   /* a tap on a row's bar: its
     int v = (px - b.x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5;
     return v < 0 ? 0 : v > 100 ? 100 : v;
 }
-static void dialog(canvas *c, const char *title, const char *body, const char *no, const char *yes, int danger) {
+/* a question over the page: B no, A yes; with alt, a second row under them: X alt, in red (Quit without saving) */
+static void dialog3(canvas *c, const char *title, const char *body, const char *no, const char *yes, int danger, const char *alt) {
     fill(c, 0, 0, c->w, c->h, C_DARK, 0.65f);
-    int w = S(460), h = S(210), x0 = (c->w - w) / 2, y0 = S(120);
+    int w = S(460), h = alt ? S(260) : S(210), x0 = (c->w - w) / 2, y0 = alt ? S(100) : S(120);
     box(c, x0, y0, x0 + w, y0 + h, S(14), S(3), C_LIGHT, C_DARK);
     text(c, &F_MED, title, x0 + S(26), y0 + S(22), S(24), C_LIGHT, w - S(52), 0);
     char l1[200], l2[200]; int n = wrap2(&F_REG, body, S(17), w - S(52), l1, l2, sizeof l1, 1);
     text(c, &F_REG, l1, x0 + S(26), y0 + S(66), S(17), C_BODY, w - S(52), 0);
     if (n > 1) text(c, &F_REG, l2, x0 + S(26), y0 + S(90), S(17), C_BODY, w - S(52), 0);
-    int by = y0 + h - S(60);
-    R_DLG_A = pill(c, x0 + w - S(24), by, 1, "A", yes, danger ? C_REDL : C_LIGHT, C_LIGHT, danger ? C_RED : C_BLUE);
+    int by = y0 + h - (alt ? S(110) : S(60));
+    R_DLG_A = pill(c, x0 + w - S(24), by, 1, "A", yes, danger ? C_REDL : C_LIGHT, danger ? C_LIGHT : C_ONSEL, danger ? C_RED : C_BLUE);
     R_DLG_B = pill(c, R_DLG_A.x0 - S(12), by, 1, "B", no, C_GREY, C_LIGHT, C_PILLBG);
+    R_DLG_X = alt ? pill(c, x0 + w - S(24), by + S(50), 1, "X", alt, C_REDDIM, C_REDL, C_DARK) : (rect){ 0, 0, 0, 0 };
+}
+static void dialog(canvas *c, const char *title, const char *body, const char *no, const char *yes, int danger) {
+    dialog3(c, title, body, no, yes, danger, 0);
 }
 static void draw_bottom(void) {
     canvas *c = &CV[1];
     dots(c, 0, 0, c->w, c->h, C_BG, C_DOT);
     int gx0 = S(20), gx1 = c->w - S(20), gy0 = S(58), gy1 = S(404), bw = S(3) < 2 ? 2 : S(3);
-    int s = scr == SC_OVERWRITE ? SC_SAVE : scr == SC_QUIT ? SC_MAIN : scr;
+    int s = scr == SC_OVERWRITE ? SC_SAVE : scr == SC_QUIT || scr == SC_QUIT_NOSAVE ? SC_MAIN : scr;
     if (scr == SC_BUSY) {
         draw_header(c, "Please wait", "", 0);
         int w = S(420), h = S(150), x0 = (c->w - w) / 2, y0 = S(150);
@@ -1022,9 +1028,13 @@ static void draw_bottom(void) {
         char w[48]; when_text(SL[sel_slot].mt, w, sizeof w);
         char b[160]; snprintf(b, sizeof b, "The save from %s will be replaced by this one.", w);
         dialog(c, t, b, "Cancel", "Replace", 0);
-    } else if (scr == SC_QUIT)
-        dialog(c, "Quit to the menu?", resume_on() ? "Your spot is saved. Next time the game picks up right here."
-                                                   : "Anything since your last save will be lost.", "Keep playing", "Quit", 1);
+    } else if (scr == SC_QUIT && resume_on())   /* saving the spot is the first choice; quitting without it, under it */
+        dialog3(c, "Quit to the menu?", "Your spot is saved. Next time the game picks up right here.", "Keep playing",
+                "Save and quit", 0, "Quit without saving");
+    else if (scr == SC_QUIT)
+        dialog(c, "Quit to the menu?", "Anything since your last save will be lost.", "Keep playing", "Quit", 1);
+    else if (scr == SC_QUIT_NOSAVE)
+        dialog(c, "Quit without saving?", "Anything since your last save will be lost.", "Cancel", "Quit", 1);
 }
 
 static void show(int i) {
@@ -1101,7 +1111,14 @@ static void activate(void) {
         if (resume_on()) { busy("Saving your spot"); dsflip_hold = 1; audio_mute(1); }
         close_menu(); bri_save_now(); resume_quit();   /* (the brightness written before DraStic goes: no worker after) */
         break;
+    case SC_QUIT_NOSAVE:
+        play(SND_SELECT); close_menu(); bri_save_now(); resume_quit_nosave();
+        break;
     }
+}
+static void quit_nosave_ask(void) {             /* X on the quit question: Quit without saving, asked again */
+    if (scr != SC_QUIT || !resume_on()) return;
+    scr = SC_QUIT_NOSAVE; play(SND_SELECT); dirty_bot = 1;
 }
 static void back(void) {
     play(SND_BACK);
@@ -1109,6 +1126,7 @@ static void back(void) {
     case SC_MAIN: close_menu(); break;
     case SC_OVERWRITE: scr = SC_SAVE; dirty_bot = 1; break;
     case SC_QUIT: scr = SC_MAIN; dirty_bot = 1; break;
+    case SC_QUIT_NOSAVE: scr = SC_QUIT; dirty_bot = 1; break;
     case SC_MIC: scr = SC_SET; dirty_bot = 1; break;
     default: scr = SC_MAIN; dirty_top = dirty_bot = 1; break;
     }
@@ -1144,8 +1162,9 @@ static void nav(int dx, int dy) {
     if (moved) { play(SND_MOVE); dirty_bot = 1; }
 }
 static void tap(int px, int py) {               /* a touch-down on the bottom panel, in panel pixels */
-    if (scr == SC_OVERWRITE || scr == SC_QUIT) {
+    if (scr == SC_OVERWRITE || scr == SC_QUIT || scr == SC_QUIT_NOSAVE) {
         if (in_rect(R_DLG_A, px, py)) activate(); else if (in_rect(R_DLG_B, px, py)) back();
+        else if (scr == SC_QUIT && in_rect(R_DLG_X, px, py)) quit_nosave_ask();
         return;
     }
     if (scr == SC_BUSY) return;
@@ -1215,6 +1234,7 @@ static void handle_sdl(const uint8_t *e) {
         else if (b == b_a) activate();
         else if (b == b_b) back();
         else if (b == b_y && scr == SC_LOAD && undo_ok) do_load(-1);
+        else if (b == b_x && scr == SC_QUIT) quit_nosave_ask();
         else if (b == b_up) dir_press(0, -1); else if (b == b_down) dir_press(0, 1);
         else if (b == b_left) dir_press(-1, 0); else if (b == b_right) dir_press(1, 0);
         else if (b == b_l && scr == SC_SET) adjust(-1); else if (b == b_r && scr == SC_SET) adjust(1);
@@ -1283,7 +1303,7 @@ static void menu_run(int start) {
                 int b = n ? (sum / n + 5) / 10 : bri;
                 if (b - bri >= 3 || bri - b >= 3) { bri = banana_brightness(); dirty_bot = 1; } }
         }
-        if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT) dirty_top = 1; }   /* the clock */
+        if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT || scr == SC_QUIT_NOSAVE) dirty_top = 1; }   /* the clock */
         if (open_) redraw();
         usleep(8000);
     }
@@ -1308,12 +1328,12 @@ int menu_event(void *ev) {
                       int v; if (sscanf(line, "controls_b[CONTROL_INDEX_MENU] = %d", &v) == 1 && v >= 1024 && v < 1088 && v - 1024 != a) btn_menu[1] = v - 1024;
                       if (sscanf(line, "controls_a[CONTROL_INDEX_MENU] = %d", &v) == 1 && v >= 1024 && v < 1088 && v - 1024 != a && btn_menu[1] < 0) btn_menu[1] = v - 1024; }
                    fclose(f); } }
-        b_a = resume_control_button("A"); b_b = resume_control_button("B"); b_y = resume_control_button("Y");
+        b_a = resume_control_button("A"); b_b = resume_control_button("B"); b_x = resume_control_button("X"); b_y = resume_control_button("Y");
         b_l = resume_control_button("L"); b_r = resume_control_button("R"); b_start = resume_control_button("START");
         b_up = resume_control_button("UP"); b_down = resume_control_button("DOWN"); b_left = resume_control_button("LEFT"); b_right = resume_control_button("RIGHT");
         /* a button DraStic has no control on any more (a setup gone wrong): the RG DS pad's own (retrogame_joypad's
          * order: B A X Y L R L2 R2 Select Start F L3 R3 up down left right), so the menu still works from HOME */
-        if (b_a < 0) b_a = 1; if (b_b < 0) b_b = 0; if (b_y < 0) b_y = 3; if (b_l < 0) b_l = 4; if (b_r < 0) b_r = 5;
+        if (b_a < 0) b_a = 1; if (b_b < 0) b_b = 0; if (b_x < 0) b_x = 2; if (b_y < 0) b_y = 3; if (b_l < 0) b_l = 4; if (b_r < 0) b_r = 5;
         if (b_start < 0) b_start = 9; if (b_up < 0) b_up = 13; if (b_down < 0) b_down = 14; if (b_left < 0) b_left = 15; if (b_right < 0) b_right = 16;
         /* (no menu button at all, a button setup gone wrong: HOME still opens it, lid.c) */
         dsflip_log("[menu] %s: menu buttons %d %d, A %d B %d Y %d, d-pad %d %d %d %d\n", enabled ? "on" : "off",
