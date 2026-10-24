@@ -146,6 +146,8 @@ volatile long long dsflip_frame_work_max; /* the heaviest frame's CPU time on Dr
 volatile int dsflip_queue_drops;        /* frames dropped from the queue since start (cpugov.c) */
 volatile int dsflip_screen_w;           /* DraStic's screen texture width, 256 or 512 (cpugov.c: 1x or 2x) */
 void cpugov_start(void);
+int resume_control_button(const char *name);   /* resume.c: a DraStic control's joystick button, -1 if none */
+static void lowlat_saw_event(const void *e);
 void resume_start(void); void resume_frame(void); int resume_poll(void *e); void resume_saw_event(const void *e);   /* resume.c */
 int menu_event(void *e); void menu_frame(void); int menu_touch_event(int down_change, int down, int x, int y, int xmax, int ymax);   /* menu.c */
 volatile int dsflip_hold;               /* menu.c: DraStic's frames are dropped, not shown (a load runs behind the menu's screen) */
@@ -296,6 +298,28 @@ static int pending_mask;                /* bit i: a flip event is still due for 
  * tracking the slow drift between the two clocks) and commits the newest frame at the opposite phase, so the
  * cut-off sits as far from the presents as possible. DSFLIP_PACING=immediate restores the old behaviour. */
 static int pacing_latch = 1, tfd = -1;
+/* Low latency (experimental, DSFLIP_LOWLAT=1; off by default). DraStic has no savestate API to run ahead with, so
+ * this takes out the wait between a finished frame and the panels instead:
+ *  - no frame queue (a mailbox: a newer frame replaces one still waiting) and no hold on a full queue;
+ *  - a frame is committed the moment it arrives while that still makes both panels' next vblank (before the cycle's
+ *    deadline, latch_hi()); one that arrives after it waits for the next cycle's deadline, where a newer frame that
+ *    came meanwhile replaces it (committing it at once would make the next, on-time frame wait behind its flip, and
+ *    every frame after it: a refresh more latency for good);
+ *  - DSFLIP_LOWLAT_ALIGN (on): DraStic is held in its present until its next frame, started then, will just make the
+ *    next deadline (the frame's measured time from that release, a decaying maximum, plus a pad that grows on a missed
+ *    vblank). DraStic reads its buttons when it starts a frame, so they're read as late as the panels allow. The hold
+ *    lets DraStic go early while its sound runs short (as the queue's hold: audio_floor_us) and never holds while it
+ *    isn't paced by its sound (fast-forward).
+ * Frames that come unevenly (2x) show as drops and repeats that the queue would have hidden: the price of no queue. */
+static int pacing_lowlat;               /* DSFLIP_LOWLAT=1 */
+static int lowlat_align = 1;            /* DSFLIP_LOWLAT_ALIGN=0: no hold (only the queue and the latch out) */
+static volatile int lowlat_ff;          /* DraStic's fast-forward is on (its control toggled it: see lowlat_saw_event) */
+static int ff_button = -1;              /* DraStic's FAST_FORWARD control, a joystick button (resume.c), -1 if none */
+static long long ll_work;               /* DraStic's time from a release to its next present (us), decaying maximum */
+static long long ll_release;            /* when the last present returned to DraStic (us), 0: not held (no sample) */
+static double ll_pad = 500;             /* us before the deadline a present aims at; +500 per missed vblank, decays */
+static long long ll_shade;              /* shader mode: present -> ready (us), decaying maximum */
+static int st_ll_hold, st_ll_cut, st_ll_late, st_ll_skip; static long long st_ll_hold_us, st_ll_lead_sum; static int st_ll_lead_n;
 static long long vbl_ref;               /* a recent top-panel vblank (flip timestamp, CLOCK_MONOTONIC us) */
 static double period = 16666.7;         /* measured refresh period, us */
 static double ph_c, ph_s;               /* EMA of cos/sin of the present phase */
@@ -471,7 +495,11 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         if (i == 0) {
             if (commit_t && commit_vref && P[0].queued) {  /* did the commit make the first vblank after it? */
                 double c = fmod((double)(commit_t - commit_vref), period); if (c < 0) c += period;
-                if ((double)(t - commit_t) > period - c + period / 2) st_miss++;
+                if ((double)(t - commit_t) > period - c + period / 2) {
+                    st_miss++;
+                    /* low latency: the frames aim this much earlier from now on (a slow GPU pass, a late commit) */
+                    if (pacing_lowlat && ph_n >= 600) { ll_pad = fmin(8000, ll_pad + 500); if (latch_margin < 3000) latch_margin += 200; }
+                }
             }
             if (vbl_ref) {
                 double iv = (double)(t - vbl_ref), k = floor(iv / period + 0.5);
@@ -488,7 +516,11 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
     }
-    if (!pending_mask && (!pacing_latch || ph_n < 120 || latch_skipped)) {
+    if (pacing_lowlat && ph_n >= 120) {
+        /* low latency: a frame that waited behind this flip goes at the deadline (the latch timer, armed when it came),
+         * where a newer one may replace it; nothing is committed here */
+        if (!pending_mask && latch_skipped) { latch_skipped = 0; commit_src = 'C'; if (phase_of(now_us()) <= latch_hi()) try_commit(); }
+    } else if (!pending_mask && (!pacing_latch || ph_n < 120 || latch_skipped)) {
         /* a skipped latch catches up now, but only while a commit still makes both panels' next vblanks: later in
          * the cycle (after the bottom panel's flip, when its vblank comes first) it misses one, the next latch finds
          * that flip pending, catches up after it again, and so on: every latch "late" from then on, and the margin
@@ -627,6 +659,25 @@ static void arm_latch(void) {         /* with mu held: next latch point after no
     timerfd_settime(tfd, TFD_TIMER_ABSTIME, &its, 0);
 }
 
+/* low latency: the latch timer at the next deadline after now (the last point of a cycle at which a commit still
+ * makes both panels' next vblanks), for a frame that couldn't go when it came. With mu held. */
+static void ll_arm(void) {
+    if (tfd < 0 || !vbl_ref) return;
+    latch_off = latch_hi();
+    long long now = now_us();
+    double k = ceil(((double)(now - vbl_ref) - latch_off + 300) / period);
+    long long at = vbl_ref + (long long)(k * period + latch_off);
+    struct itimerspec its = { { 0, 0 }, { at / 1000000, (at % 1000000) * 1000 } };
+    timerfd_settime(tfd, TFD_TIMER_ABSTIME, &its, 0);
+}
+/* low latency: a frame is ready (DraStic's present, or the shader's output). At once if that makes the next vblank;
+ * else at the next deadline, unless a newer frame replaces it before. With mu held. */
+static void ll_arrived(void) {
+    int late = phase_of(now_us()) > latch_hi();
+    if (!pending_mask && !late) { commit_src = 'I'; try_commit(); }
+    if (P[0].ready || P[1].ready) { if (late) st_ll_late++; ll_arm(); }
+}
+
 /* shader mode: draw each panel's newest DraStic buffer into a free output buffer, then publish both together
  * (one commit shows the same emulated frame on both screens). GL work happens with mu released. */
 /* diagnostics: DraStic's raw present timing (before any shading), and present -> ready delay in shader mode */
@@ -698,6 +749,7 @@ static void shade_pending(void) {
     if (!held_any) note_phase(tr);
     for (int i = 0; i < 2; i++) if (src[i] && st[i]) {
         long long l = tr - st[i]; lat_sum += l; lat_n++; if (l > lat_max) lat_max = l;
+        if (l < 2 * (long long)period) { long long d = ll_shade - ll_shade / 128; ll_shade = l > d ? l : d; }
     }
     for (int i = 0; i < 2; i++) if (src[i]) {
         release(src[i]);
@@ -747,6 +799,7 @@ static void *presenter(void *a) {
             uint64_t v; if (read(efd, &v, 8) < 0) {}
             lock(&mu);
             if (!pacing_latch || ph_n < 120) try_commit();              /* immediate (and while learning) */
+            else if (pacing_lowlat) ll_arrived();
             else arm_latch();
             unlock(&mu);
         }
@@ -770,7 +823,7 @@ static void *presenter(void *a) {
                  * 2-4 late latches/s for a whole session at 1700 us (measured 2026-10-01) */
                 if (commit_latch && latch_off >= latch_hi() - 1 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
             } else { in_latch = 1; commit_src = 'L'; try_commit(); in_latch = 0; }
-            if (P[0].ready || P[1].ready) arm_latch();
+            if (P[0].ready || P[1].ready) { if (pacing_lowlat) ll_arm(); else arm_latch(); }
             unlock(&mu);
         }
         if (pacing_latch && ph_n >= 120) {                                /* safety net: never sit on a frame */
@@ -791,7 +844,7 @@ static void *presenter(void *a) {
             h[16] = 0; memset(ph_hist, 0, sizeof ph_hist);
             double mean = fmod(atan2(ph_s, ph_c) / (2 * M_PI) * period + period, period);
             LOG("[pace] mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, margin %.0f us, bottom %+.0f us, late=%d missed=%d\n",
-                pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, latch_margin, bot_off, st_late, st_miss);
+                pacing_lowlat && ph_n >= 120 ? "lowlat" : pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, latch_margin, bot_off, st_late, st_miss);
             if (st_late) {
                 char ph[96]; size_t m = 0; ph[0] = 0;
                 for (int k = 0; k < st_late_n; k++) m += snprintf(ph + m, sizeof ph - m, "%s%.1f", k ? " " : "", st_late_ph[k]);
@@ -831,6 +884,16 @@ static void *presenter(void *a) {
                                             st_qwait_n, st_qwait_us / 1000.0, st_qwait_max / 1000.0, st_qcut);
                 if (n) LOG("\n");
                 memset(st_wait, 0, sizeof st_wait); st_qwait_n = st_qcut = 0; st_qwait_us = st_qwait_max = 0;
+            }
+            if (pacing_lowlat) {
+                LOG("[lowlat] frames %.1f ms before the deadline on average, %d after it (held to the next); DraStic held "
+                    "%d times (%.1f ms avg), let go early %d times for its sound, not held %d times; its frame %.1f ms, "
+                    "aiming %.1f ms early%s\n",
+                    st_ll_lead_n ? st_ll_lead_sum / 1000.0 / st_ll_lead_n : 0.0, st_ll_late, st_ll_hold,
+                    st_ll_hold ? st_ll_hold_us / 1000.0 / st_ll_hold : 0.0, st_ll_cut, st_ll_skip, ll_work / 1000.0,
+                    (ll_pad + (shader_on ? ll_shade : 0)) / 1000.0, lowlat_ff ? ", fast-forward on" : "");
+                st_ll_hold = st_ll_cut = st_ll_late = st_ll_skip = st_ll_lead_n = 0; st_ll_hold_us = st_ll_lead_sum = 0;
+                if (!st_miss && ll_pad > 500) ll_pad = fmax(500, ll_pad - 250);   /* back after a clean 10 s */
             }
             st_late = 0; st_miss = 0; st10 = t;
             unlock(&mu);
@@ -1099,6 +1162,7 @@ int SDL_PollEvent(void *e) {
     int r = real(e);
     if (r && e && ok) {
         resume_saw_event(e);                         /* a save/load state press: CPU boost (resume.c, cpugov.c) */
+        if (pacing_lowlat) lowlat_saw_event(e);      /* DraStic's fast-forward on or off (low latency) */
         if (menu_event(e)) return 0;                 /* the menu button: the in-game menu (menu.c), not DraStic's */
     }
     return r;
@@ -1294,12 +1358,27 @@ __attribute__((constructor)) static void init(void) {
     { const char *lm = getenv("DSFLIP_LATCH_MARGIN"); if (lm && atoi(lm) > 0) latch_margin = margin_base = atoi(lm); }
     { const char *qw = getenv("DSFLIP_QUEUE_WAIT"); if (qw && *qw) queue_wait_us = atoi(qw) * 1000; if (queue_wait_us < 0) queue_wait_us = 0; }
     { const char *af = getenv("DSFLIP_QUEUE_AUDIO_FLOOR"); if (af && *af) queue_audio_floor_us = atoi(af) * 1000; }
+    {   /* low latency (experimental): over DSFLIP_QUEUE, DSFLIP_QUEUE_WAIT and DSFLIP_PACING */
+        const char *ll = getenv("DSFLIP_LOWLAT");
+        if (ll && *ll == '1' && tfd < 0) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+        if (ll && *ll == '1' && tfd >= 0) {
+            pacing_lowlat = 1; pacing_latch = 1; queue_depth = 0; queue_wait_us = 0;
+            const char *al = getenv("DSFLIP_LOWLAT_ALIGN"); if (al && *al == '0') lowlat_align = 0;
+            ff_button = resume_control_button("FAST_FORWARD");
+            /* the sound a little closer too: the pump's ring at 1024 frames (23 ms) instead of 1536, ALSA's buffer
+             * 20 ms instead of 30 (unless set) */
+            setenv("DSFLIP_PUMP_TARGET", "1024", 0); setenv("DSFLIP_ALSA_LATENCY", "20000", 0);
+            LOG("[lowlat] on (experimental): no frame queue, a frame at the next vblank it can make%s; fast-forward "
+                "control: %s\n", lowlat_align ? ", DraStic held to start each frame as late as the panels allow" : "",
+                ff_button >= 0 ? "a joystick button" : "none found");
+        }
+    }
     if (queue_depth && queue_wait_us) LOG("[dsflip] pacing: %s, %d-frame queue, a full queue holds DraStic up to %d ms "
                                           "(while its sound is %s ahead)\n",
                                           pacing_latch ? "latch (adaptive)" : "immediate", queue_depth, queue_wait_us / 1000,
                                           queue_audio_floor_us ? "DSFLIP_QUEUE_AUDIO_FLOOR ms" : "its next frame's time + 4 ms");
     else if (queue_depth) LOG("[dsflip] pacing: %s, %d-frame queue\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_depth);
-    else LOG("[dsflip] pacing: %s, mailbox\n", pacing_latch ? "latch (adaptive)" : "immediate");
+    else LOG("[dsflip] pacing: %s, mailbox\n", pacing_lowlat ? "low latency" : pacing_latch ? "latch (adaptive)" : "immediate");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
@@ -1507,6 +1586,46 @@ int SDL_RenderClear(void *rn) {
     return ok ? 0 : real(rn);
 }
 
+/* low latency: hold DraStic (its main thread, in its present) until its next frame, started then, just makes the
+ * next cycle's deadline: as late as the panels allow, so the buttons it reads at the start are as fresh as can be.
+ * tp: when this frame was presented. Never while DraStic isn't paced by its sound (fast-forward: its lead runs far
+ * past the ~35-51 ms it keeps; or not known), and only while its sound stays ahead (audio_floor_us). */
+static void lowlat_hold(long long tp) {
+    lock(&mu);
+    int learned = ph_n >= 120 && vbl_ref;
+    double hi = latch_hi(), ph = learned ? phase_of(tp) : 0, per = period;
+    if (learned) {
+        if (ph <= hi) { st_ll_lead_sum += (long long)(hi - ph); st_ll_lead_n++; }
+    }
+    double pad = ll_pad + (shader_on ? (double)ll_shade : 0);
+    long long work = ll_work;
+    unlock(&mu);
+    long long lead = audio_drastic_lead_us();
+    if (!learned || lowlat_ff || lead >= 90000) { if (learned) st_ll_skip++; return; }
+    /* this frame's own deadline (the first at or after it came), then the next cycle's */
+    double own = (double)tp - ph + hi + (ph > hi ? per : 0);
+    long long target = (long long)(own + per - pad) - work, now = now_us();
+    if (target <= now) { ll_release = now; return; }       /* no time to spare: on at once (and a sample) */
+    long long left = lead - (long long)audio_floor_us();   /* until its sound would run short */
+    if (left <= 0) { st_ll_cut++; return; }                 /* (no sample: it may wait for its sound now) */
+    long long until = target, cut = 0;
+    if (now + left < until) { until = now + left; cut = 1; }
+    if (until - now > (long long)per) until = now + (long long)per;
+    struct timespec ts = { until / 1000000, (until % 1000000) * 1000 };
+    while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, 0) == EINTR) {}
+    st_ll_hold++; st_ll_hold_us += until - now;
+    if (cut) st_ll_cut++;
+    else ll_release = now_us();
+}
+/* low latency: DraStic's fast-forward control (a joystick button, drastic.cfg's CONTROL_INDEX_FAST_FORWARD) toggles
+ * it; while it's on, DraStic isn't held */
+static void lowlat_saw_event(const void *e) {
+    const uint8_t *p = e; uint32_t type; memcpy(&type, p, 4);
+    if (type != 0x603 || ff_button < 0 || p[12] != ff_button) return;   /* SDL_JOYBUTTONDOWN */
+    lowlat_ff = !lowlat_ff;
+    LOG("[lowlat] DraStic's fast-forward %s: %s\n", lowlat_ff ? "on" : "off", lowlat_ff ? "not held" : "held again");
+}
+
 void SDL_RenderPresent(void *rn) {
     REAL(void, SDL_RenderPresent, void *);
     if (!ok) { real(rn); return; }
@@ -1538,6 +1657,11 @@ void SDL_RenderPresent(void *rn) {
         unlock(&mu);
     }
     long long tp = now_us();
+    if (pacing_lowlat && ll_release) {   /* low latency: DraStic's time from its last release to this present */
+        long long w = tp - ll_release;
+        if (w < 2 * (long long)period) { long long d = ll_work - ll_work / 128; ll_work = w > d ? w : d; }
+        ll_release = 0;
+    }
     {   /* this frame's CPU time on DraStic's main thread (the one presenting) */
         static long long last; struct timespec ct; clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct);
         long long c = ct.tv_sec * 1000000000LL + ct.tv_nsec, w = last ? c - last : 0; last = c;
@@ -1555,10 +1679,12 @@ void SDL_RenderPresent(void *rn) {
     if (pending_route[1]) menu_touch = pending_route[1]->kind == K_MENU;
     int menu_opened = menu_touch && !menu_was;
 
+    int screen = 0;                     /* a game screen went to a panel (low latency: hold DraStic for the next) */
     for (int i = 0; i < 2; i++) {
         stex *s = pending_route[i]; pending_route[i] = 0;
         if (!s) continue;
         dbuf *b;
+        if (s->kind == K_SCREEN && !dsflip_hold) screen = 1;
         if (dsflip_hold && s->kind == K_SCREEN) {    /* the menu's screen stays up: this frame is dropped */
             if (s->written >= 0 && s->b[s->written].state == WRITTEN) s->b[s->written].state = FREE;
             s->written = -1;
@@ -1582,6 +1708,7 @@ void SDL_RenderPresent(void *rn) {
     }
     unlock(&mu);
     uint64_t one = 1; if (write(shader_on ? wfd : efd, &one, 8) < 0) {}   /* shader mode: the worker shades first */
+    if (pacing_lowlat && lowlat_align && screen && !menu_touch) lowlat_hold(tp);
     if (menu_opened) status_card();
     ra_frame();
     resume_frame();

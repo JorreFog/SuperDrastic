@@ -159,6 +159,8 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |
 | `DSFLIP_QUEUE` | 1 | Frames that may wait behind the next one, 0-3 (0 = newest only). Each is a refresh (16.7 ms) of input latency, and covers one late frame |
 | `DSFLIP_QUEUE_WAIT` | 0 (off) | Milliseconds DraStic is held when the queue is full, instead of dropping a frame (20 works; for capped clocks) |
+| `DSFLIP_LOWLAT` | 0 (off) | 1 = low latency (experimental): no frame queue and no hold on a full one (over `DSFLIP_QUEUE`, `DSFLIP_QUEUE_WAIT`, `DSFLIP_PACING`), each frame committed as soon as it still makes the next vblank (one that comes after that cycle's deadline waits for the next one, where a newer frame replaces it), DraStic held so it starts each frame as late as the panels allow, and the sound buffers shorter (`DSFLIP_PUMP_TARGET` 1024, `DSFLIP_ALSA_LATENCY` 20000 unless set). Frames that come unevenly show as drops a queue would have hidden. The log's `[lowlat]` line every 10 s says how it went |
+| `DSFLIP_LOWLAT_ALIGN` | 1 | 0 = with `DSFLIP_LOWLAT`, DraStic isn't held (only the queue and the latch wait go) |
 | `DSFLIP_LATCH_MARGIN` | 1300 | The shortest time (µs) before a vblank that a frame is committed at (diagnostics) |
 | `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD`, `DSFLIP_RESUME_ON_QUIT` | , 0, 1 | See *Quitting with a save* |
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
