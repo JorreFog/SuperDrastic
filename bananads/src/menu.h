@@ -76,6 +76,9 @@ void bmenu_fps(int fps_x10, int ff);
 void bmenu_fps_game(int fps_x10);
 // a pop-up of the frontend's own (a screenshot saved...): shown like an achievement's, for ms; any thread
 void bmenu_popup(const char* line1, const char* line2, int ms);
+// the game's name as the menu shows it (the gamelist's, else the file's), for the frontend's pop-ups; looked up at the
+// first call (not while the menu is open on another thread)
+const char* bmenu_game(void);
 
 #ifdef __cplusplus
 }

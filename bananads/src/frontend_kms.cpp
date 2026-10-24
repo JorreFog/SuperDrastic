@@ -1444,13 +1444,25 @@ int run_kms(Emu& emu, const Config& cfg) {
                 aim = 0;  // (kms.lowlat: aimed again from now, not from before the menu)
                 continue;
             }
+            // F + R / F + L: a pop-up once the state is written or read, as the menu's own say it
             if (int s = in_save.exchange(0)) {
                 cpugov_boost(3000);
-                emu.save_state(s);
+                char l1[64];
+                if (emu.save_state(s)) snprintf(l1, sizeof l1, "Saved to slot %d", s);
+                else snprintf(l1, sizeof l1, "Couldn't save");
+                bmenu_popup(l1, bmenu_game(), 2500);
             }
             if (int s = in_load.exchange(0)) {
                 cpugov_boost(3000);
-                emu.load_state(s);
+                char l1[64], l2[64];
+                if (emu.load_state(s)) {
+                    snprintf(l1, sizeof l1, "Loaded slot %d", s);
+                    bmenu_popup(l1, bmenu_game(), 2500);
+                } else {
+                    if (access(emu.state_path(s).c_str(), F_OK)) snprintf(l2, sizeof l2, "Nothing saved in slot %d", s);
+                    else snprintf(l2, sizeof l2, "Slot %d couldn't be read", s);
+                    bmenu_popup("Couldn't load", l2, 2500);
+                }
             }
             if (const int f = g_ff.load(std::memory_order_relaxed); f != ff) {
                 ff = f;

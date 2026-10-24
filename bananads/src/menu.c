@@ -329,6 +329,7 @@ static void game_info(void) {
     mlog("[menu] game '%s' (%s)\n", gtitle, gbase);
 }
 static void slot_path(int n, char *out, size_t sz) { H.state_file(H.ctx, n + 1, out, (int)sz); }
+const char *bmenu_game(void) { if (!gbase[0]) game_info(); return gtitle; }
 
 #define PIC_BYTES (256 * 192 * 2)
 /* a savestate's picture: BananaDS's <state>.pic beside it, both screens 256x384 XRGB8888; the top one as 256x192
