@@ -2,7 +2,9 @@
 // drawn in ROCKNIXDS Pixel's look (Pixelify Sans, the theme's colours, button pills and sounds) on both panels while
 // DraStic waits inside SDL_PollEvent, so the game, its sound and its clock all stand still.
 //
-// Bottom panel: six tiles (Resume, Save, Load, Quick settings, DraStic menu, Quit game), then a page for each.
+// Bottom panel: six tiles (Resume, Save, Load, Quick settings, DraStic menu, Quit game) over a Brightness row (both
+// panels' backlights, as Quick settings has it: down from the tiles, left / right or L / R to change), then a page for
+// each.
 // Top panel: the game's last frame, dimmed, under a card with the game, this session's play time, the last save and
 // RetroAchievements progress; while a save slot is picked, that slot's picture instead. D-pad, left stick and touch
 // all work; A picks, B goes back, the menu button (or START) closes it.
@@ -545,6 +547,15 @@ static void backlight(int pct) {     /* at once, straight to the panels; the set
     }
     globfree(&g);
 }
+/* the brightness as it is now (both panels' middle on BananaLinux, as bananad's F + volume left it; ROCKNIX's setting) */
+static int bri_now(void) { return is_banana() ? banana_brightness() : cfg_int("display.brightness", 80); }
+static long long bri_set_at;
+static int bri_set(int v) {          /* 1 if it changed */
+    v = v < 5 ? 5 : v > 100 ? 100 : v;
+    if (v == bri) return 0;
+    bri = v; backlight(bri); bri_changed = 1; bri_set_at = now_ms();
+    return 1;
+}
 
 /* ---------- sounds: the theme's WAVs ---------- */
 enum { SND_MOVE, SND_SELECT, SND_BACK, SND_N };
@@ -576,6 +587,8 @@ static void play(int id) { if (snd_ok[id]) audio_ui_play(id); }
 /* ---------- state ---------- */
 enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC };
 static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_top, dirty_bot;
+#define MAIN_BRI 6                                /* sel_main: the main page's Brightness row, under the tiles */
+static int main_col;                              /* the tiles' column the d-pad came down from (back up to it) */
 static char busy_msg[96];
 static int btn_menu[2] = { -1, -1 }, b_a = -1, b_b = -1, b_y = -1, b_l = -1, b_r = -1, b_start = -1;
 static int b_up = -1, b_down = -1, b_left = -1, b_right = -1;
@@ -791,7 +804,7 @@ static void draw_top(void) {
 
 /* ---------- bottom panel ---------- */
 typedef struct { int x0, y0, x1, y1; } rect;
-static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[4], R_BAR[4], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_UNDO;
+static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[4], R_BAR[4], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_UNDO, R_MBRI, R_MBRI_BAR;
 static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1; }
 
 static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
@@ -826,6 +839,24 @@ static void draw_header(canvas *c, const char *h, const char *sub, int sub_page)
 static void bar(canvas *c, int x, int y, int v, int sel) {      /* 10 segments, the theme's progress look */
     for (int k = 0; k < 10; k++) fill(c, x + k * S(15), y, x + k * S(15) + S(11), y + S(20), k < (v + 5) / 10 ? (sel ? C_BARSEL : C_CYAN) : (sel ? C_BAROFFSEL : C_LINE), 1.0f);
 }
+/* a Volume / Brightness row (Quick settings, and Brightness under the main page's tiles): its icon, its name, the bar
+ * and the percent; *bar_r: where a tap sets the level */
+static void level_row(canvas *c, int x0, int y, int x1, int rh, int sel, const char *const *ic, const char *lab, int val, rect *bar_r) {
+    int bw = S(3) < 2 ? 2 : S(3);
+    box(c, x0, y, x1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
+    int k = S(2) < 2 ? 2 : S(2);
+    bitmap(c, ic, 12, x0 + S(16), y + (rh - 12 * k) / 2, k, sel ? C_ONSEL : C_LIGHT);
+    text(c, &F_MED, lab, x0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
+    int bx = x1 - S(110) - S(146);
+    bar(c, bx, y + (rh - S(20)) / 2, val, sel);
+    *bar_r = (rect){ bx - S(8), y, bx + S(150), y + rh };
+    char v[16]; snprintf(v, sizeof v, "%d%%", val);
+    text_raw(c, &F_MED, v, x1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
+}
+static int bar_value(rect b, int px, canvas *c) {   /* a tap on a row's bar: its level, in steps of 5 */
+    int v = (px - b.x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5;
+    return v < 0 ? 0 : v > 100 ? 100 : v;
+}
 static void dialog(canvas *c, const char *title, const char *body, const char *no, const char *yes, int danger) {
     fill(c, 0, 0, c->w, c->h, C_DARK, 0.65f);
     int w = S(460), h = S(210), x0 = (c->w - w) / 2, y0 = S(120);
@@ -854,7 +885,7 @@ static void draw_bottom(void) {
     if (s == SC_MAIN) {
         char sub[120]; snprintf(sub, sizeof sub, "%s", gtitle);
         draw_header(c, "Paused", sub, 0);
-        int gap = S(12), tw = (gx1 - gx0 - 2 * gap) / 3, th = (gy1 - gy0 - gap) / 2;
+        int rh = S(54), gap = S(12), ty1 = gy1 - rh - S(10), tw = (gx1 - gx0 - 2 * gap) / 3, th = (ty1 - gy0 - gap) / 2;
         int nb = newest_slot();
         for (int i = 0; i < 6; i++) {
             int x = gx0 + (i % 3) * (tw + gap), y = gy0 + (i / 3) * (th + gap), sel = i == sel_main, red = i == 5;
@@ -862,9 +893,9 @@ static void draw_bottom(void) {
             uint32_t bd = sel ? (red ? C_REDL : C_LIGHT) : (red ? C_REDDIM : C_BORDER), bg = sel ? (red ? C_RED : C_BLUE) : C_PANEL;
             uint32_t fg = sel ? (red ? 0xffffff : C_ONSEL) : (red ? C_REDL : C_LIGHT), sub2 = sel ? (red ? 0xffd6dc : C_ONSELSUB) : (red ? 0xc98a92 : C_GREY);
             box(c, x, y, x + tw, y + th, S(14), bw, bd, bg);
-            int k = S(4) < 2 ? 2 : S(4);
-            bitmap(c, tile_icon[i], 12, x + (tw - 12 * k) / 2, y + S(24), k, fg);
-            text(c, &F_MED, tile_label[i], x + tw / 2.0f, y + S(86), S(20), fg, tw - S(16), 1);
+            int k = S(4) < 2 ? 2 : S(4), cy = y + (th - S(108)) / 2;   /* icon, name and hint, centred in the tile */
+            bitmap(c, tile_icon[i], 12, x + (tw - 12 * k) / 2, cy, k, fg);
+            text(c, &F_MED, tile_label[i], x + tw / 2.0f, cy + S(60), S(20), fg, tw - S(16), 1);
             char h[64] = "";
             switch (i) {
             case 0: snprintf(h, sizeof h, "or press L3"); break;
@@ -874,8 +905,10 @@ static void draw_bottom(void) {
             case 4: snprintf(h, sizeof h, "cheats, controls"); break;
             case 5: snprintf(h, sizeof h, resume_on() ? "keeps your spot" : "back to the menu"); break;
             }
-            text(c, &F_REG, h, x + tw / 2.0f, y + S(118), S(14), sub2, tw - S(16), 1);
+            text(c, &F_REG, h, x + tw / 2.0f, cy + S(92), S(14), sub2, tw - S(16), 1);
         }
+        R_MBRI = (rect){ gx0, gy1 - rh, gx1, gy1 };
+        level_row(c, gx0, gy1 - rh, gx1, rh, sel_main == MAIN_BRI, IC_SUN, "Brightness", bri, &R_MBRI_BAR);
     } else if (s == SC_SAVE || s == SC_LOAD) {
         char sub[48]; snprintf(sub, sizeof sub, "Slot %d of %d", sel_slot + 1, NSLOT);
         draw_header(c, s == SC_SAVE ? "Save" : "Load", sub, 1);
@@ -902,20 +935,16 @@ static void draw_bottom(void) {
         for (int r = 0; r < nrows; r++) {
             int sel = r == sel_set, id = rows[r];
             R_ROW[r] = (rect){ gx0, y, gx1, y + rh }; R_BAR[r] = (rect){ 0, 0, 0, 0 };
-            box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
-            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_BRI ? IC_SUN : IC_MIC;
-            int k = S(2) < 2 ? 2 : S(2);
-            bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? C_ONSEL : C_LIGHT);
-            const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : "Microphone";
-            text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
-            char v[32] = "";
             if (id == ROW_VOL || id == ROW_BRI) {
-                int val = id == ROW_VOL ? vol : bri, bx = gx1 - S(110) - S(146);
-                bar(c, bx, y + (rh - S(20)) / 2, val, sel);
-                R_BAR[r] = (rect){ bx - S(8), y, bx + S(150), y + rh };
-                snprintf(v, sizeof v, "%d%%", val);
-            } else snprintf(v, sizeof v, "Test / blow");
-            text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
+                level_row(c, gx0, y, gx1, rh, sel, id == ROW_VOL ? IC_VOL : IC_SUN, id == ROW_VOL ? "Volume" : "Brightness",
+                          id == ROW_VOL ? vol : bri, &R_BAR[r]);
+                y += rh + gap; continue;
+            }
+            box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
+            int k = S(2) < 2 ? 2 : S(2);
+            bitmap(c, IC_MIC, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? C_ONSEL : C_LIGHT);
+            text(c, &F_MED, "Microphone", gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
+            text(c, &F_MED, "Test / blow", gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
             y += rh + gap;
         }
         const char *help = "";
@@ -1047,11 +1076,12 @@ static void activate(void) {
             play(SND_SELECT); dirty_top = dirty_bot = 1; break;
         }
         case 3: scr = SC_SET; sel_set = 0;
-                if (is_banana()) { vol = banana_volume(); if (vol < 0) vol = 50; bri = banana_brightness(); }
-                else { vol = cfg_int("audio.volume", 50); bri = cfg_int("display.brightness", 80); }
+                if (is_banana()) { vol = banana_volume(); if (vol < 0) vol = 50; } else vol = cfg_int("audio.volume", 50);
+                bri = bri_now();
                 play(SND_SELECT); dirty_top = dirty_bot = 1; break;
         case 4: play(SND_SELECT); close_menu(); resume_press(btn_menu[0] >= 0 ? btn_menu[0] : btn_menu[1]); break;
         case 5: scr = SC_QUIT; play(SND_SELECT); dirty_bot = 1; break;
+        case MAIN_BRI: play(SND_SELECT); break;   /* (left / right change it) */
         }
         break;
     case SC_SAVE: if (SL[sel_slot].used) { scr = SC_OVERWRITE; play(SND_SELECT); dirty_bot = 1; } else do_save(sel_slot); break;
@@ -1086,15 +1116,21 @@ static void back(void) {
 static void adjust(int d) {                     /* left/right on a Quick settings row */
     int id = rows[sel_set];
     if (id == ROW_VOL) { int v = vol + d * 5; v = v < 0 ? 0 : v > 100 ? 100 : v; if (v != vol) { vol = v; want(vol, -1); play(SND_MOVE); dirty_bot = 1; } }
-    else if (id == ROW_BRI) { int v = bri + d * 5; v = v < 5 ? 5 : v > 100 ? 100 : v; if (v != bri) { bri = v; backlight(bri); bri_changed = 1; play(SND_MOVE); dirty_bot = 1; } }
+    else if (id == ROW_BRI) { if (bri_set(bri + d * 5)) { play(SND_MOVE); dirty_bot = 1; } }
 }
+static void adjust_main_bri(int d) { if (bri_set(bri + d * 5)) { play(SND_MOVE); dirty_bot = 1; } }
 static void nav(int dx, int dy) {
     int moved = 0;
     if (scr == SC_MAIN) {
-        int c = sel_main % 3, r = sel_main / 3;
-        if (dx) { int n = c + dx; if (n >= 0 && n < 3) { c = n; moved = 1; } }
-        if (dy) { int n = r + dy; if (n >= 0 && n < 2) { r = n; moved = 1; } }
-        sel_main = r * 3 + c;
+        if (sel_main == MAIN_BRI) {               /* the Brightness row: left / right change it, up is the tiles */
+            if (dx) { adjust_main_bri(dx); return; }
+            if (dy < 0) { sel_main = 3 + main_col; moved = 1; }
+        } else {
+            int c = sel_main % 3, r = sel_main / 3;
+            if (dx) { int n = c + dx; if (n >= 0 && n < 3) { c = n; moved = 1; } }
+            if (dy) { int n = r + dy; if (n >= 0 && n < 2) { r = n; moved = 1; } else if (n == 2) { main_col = c; sel_main = MAIN_BRI; moved = 1; } }
+            if (sel_main != MAIN_BRI) sel_main = r * 3 + c;
+        }
     } else if (scr == SC_SAVE || scr == SC_LOAD) {
         int c = sel_slot % 4, r = sel_slot / 4;
         if (dx) { int n = c + dx; if (n >= 0 && n < 4) { c = n; moved = 1; } else if (n == 4 && r == 0) { c = 0; r = 1; moved = 1; } else if (n < 0 && r == 1) { c = 3; r = 0; moved = 1; } }
@@ -1116,7 +1152,14 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
     if (in_rect(R_HEAD_B, px, py) || in_rect(R_FOOT_L, px, py)) { back(); return; }
     if (in_rect(R_FOOT_R, px, py)) { activate(); return; }
     if (scr == SC_LOAD && undo_ok && in_rect(R_UNDO, px, py)) { do_load(-1); return; }
-    if (scr == SC_MAIN) { for (int i = 0; i < 6; i++) if (in_rect(R_TILE[i], px, py)) { sel_main = i; dirty_bot = 1; activate(); return; } }
+    if (scr == SC_MAIN) {
+        for (int i = 0; i < 6; i++) if (in_rect(R_TILE[i], px, py)) { sel_main = i; dirty_bot = 1; activate(); return; }
+        if (in_rect(R_MBRI, px, py)) {
+            if (sel_main != MAIN_BRI) { if (sel_main >= 3) main_col = sel_main - 3; sel_main = MAIN_BRI; }
+            if (in_rect(R_MBRI_BAR, px, py)) bri_set(bar_value(R_MBRI_BAR, px, &CV[1]));
+            play(SND_MOVE); dirty_bot = 1; return;
+        }
+    }
     else if (scr == SC_SAVE || scr == SC_LOAD) {
         for (int n = 0; n < NSLOT; n++) if (in_rect(R_SLOT[n], px, py)) {
             if (n == sel_slot) activate();       /* a second tap picks it: the first one shows it on the top screen */
@@ -1128,9 +1171,8 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
             if (sel_set != r) { sel_set = r; dirty_bot = 1; }
             int id = rows[r];
             if ((id == ROW_VOL || id == ROW_BRI) && in_rect(R_BAR[r], px, py)) {
-                canvas *c = &CV[1];
-                int v = (px - R_BAR[r].x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5; v = v < 0 ? 0 : v > 100 ? 100 : v;
-                if (id == ROW_VOL) { vol = v; want(vol, -1); } else { bri = v < 5 ? 5 : v; backlight(bri); bri_changed = 1; }
+                int v = bar_value(R_BAR[r], px, &CV[1]);
+                if (id == ROW_VOL) { vol = v; want(vol, -1); } else bri_set(v);
                 play(SND_MOVE); dirty_bot = 1;
             } else if (id == ROW_MIC) activate();
             else play(SND_MOVE);
@@ -1176,6 +1218,7 @@ static void handle_sdl(const uint8_t *e) {
         else if (b == b_up) dir_press(0, -1); else if (b == b_down) dir_press(0, 1);
         else if (b == b_left) dir_press(-1, 0); else if (b == b_right) dir_press(1, 0);
         else if (b == b_l && scr == SC_SET) adjust(-1); else if (b == b_r && scr == SC_SET) adjust(1);
+        else if (b == b_l && scr == SC_MAIN) adjust_main_bri(-1); else if (b == b_r && scr == SC_MAIN) adjust_main_bri(1);
     } else if (type == 0x602) {                     /* SDL_JOYHATMOTION */
         int v = e[13];
         if (!v) { dir_release(); return; }
@@ -1205,7 +1248,8 @@ static void menu_run(int start) {
     audio_mic_quiet(1);             /* the real mic presses nothing while the game is paused */
     cpugov_boost(800);
     open_ = 1; scr = SC_MAIN; sel_main = 0; held_dir = 0; axis_dir[0] = axis_dir[1] = 0; tqn = 0;
-    bri_changed = 0; make_rows();
+    bri_changed = 0; make_rows(); main_col = 0;
+    bri = bri_now();                /* the main page's Brightness row */
     scan_slots(0);
     load_recent();
     grab_background();
@@ -1232,6 +1276,12 @@ static void menu_run(int start) {
         if (is_banana()) {                                 /* the volume keys' level while the settings are open */
             static long long vt; if (scr == SC_SET && now_ms() - vt >= 500) { vt = now_ms(); want_ex(-1, -1, 1); }
             int r = vol_read; if (r >= 0) { vol_read = -1; if (scr == SC_SET && r != vol && now_ms() - vol_set_at > 1500) { vol = r; dirty_bot = 1; } }
+            /* the brightness, as bananad's F + volume may have moved it (a step of its own: 3 or more off) */
+            static long long bt; if ((scr == SC_MAIN || scr == SC_SET) && now_ms() - bt >= 500 && now_ms() - bri_set_at > 1500) {
+                bt = now_ms(); int n = 0, sum = 0;
+                for (int i = 0; i < 2; i++) { int v = bl_pm(i); if (v > 0) { sum += v; n++; } }
+                int b = n ? (sum / n + 5) / 10 : bri;
+                if (b - bri >= 3 || bri - b >= 3) { bri = banana_brightness(); dirty_bot = 1; } }
         }
         if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT) dirty_top = 1; }   /* the clock */
         if (open_) redraw();
