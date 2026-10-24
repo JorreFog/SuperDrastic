@@ -926,6 +926,13 @@ static int mh_battery(void*, int* charging) {
         fclose(f);
     }
     *charging = !strncmp(st, "Charging", 8) || !strncmp(st, "Full", 4);
+    // a charger plugged in counts as charging, as in BananaOS's menu: the rk817's gauge can say "Discharging" while it
+    // charges (the menu's "+" was missing then, #35)
+    if (FILE* f = fopen("/sys/class/power_supply/charger/online", "r")) {
+        int on = 0;
+        if (fscanf(f, "%d", &on) == 1 && on) *charging = 1;
+        fclose(f);
+    }
     return pct;
 }
 static int mh_save(void* c, int slot) {
