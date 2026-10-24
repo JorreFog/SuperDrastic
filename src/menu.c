@@ -4,7 +4,7 @@
 //
 // Bottom panel: six tiles (Resume, Save, Load, Quick settings, DraStic menu, Quit game) over a Brightness row (both
 // panels' backlights, as Quick settings has it: down from the tiles, left / right or L / R to change), then a page for
-// each.
+// each; X (or its pill in the footer) lists the hotkeys, as drastic.cfg and SuperDrastic have them.
 // Top panel: the game's last frame, dimmed, under a card with the game, this session's play time, the last save and
 // RetroAchievements progress; while a save slot is picked, that slot's picture instead. D-pad, left stick and touch
 // all work; A picks, B goes back, the menu button (or START) closes it.
@@ -52,6 +52,7 @@ int dsflip_drastic_menu(void);
 extern volatile int dsflip_hold;
 void dsflip_mic_key(int down);
 int lid_home_pressed(void);   /* lid.c: HOME let go while the menu is open */
+int lid_home_on(void);        /* lid.c: HOME opens the menu */
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
@@ -76,6 +77,7 @@ int resume_quit(void);
 void resume_quit_nosave(void);
 int resume_on(void);
 int resume_quit_pending(void);
+int resume_exit_combo(int *start, int *select, int *menu, int *menu2);
 
 static long long now_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
 
@@ -590,7 +592,7 @@ static void load_wav(int id, const char *path) {
 static void play(int id) { if (snd_ok[id]) audio_ui_play(id); }
 
 /* ---------- state ---------- */
-enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_QUIT_NOSAVE };
+enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_QUIT_NOSAVE, SC_KEYS };
 static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_top, dirty_bot;
 #define MAIN_BRI 6                                /* sel_main: the main page's Brightness row, under the tiles */
 static int main_col;                              /* the tiles' column the d-pad came down from (back up to it) */
@@ -821,7 +823,7 @@ static void draw_top(void) {
 
 /* ---------- bottom panel ---------- */
 typedef struct { int x0, y0, x1, y1; } rect;
-static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[4], R_BAR[4], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_DLG_X, R_UNDO, R_MBRI, R_MBRI_BAR;
+static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[4], R_BAR[4], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_DLG_X, R_UNDO, R_MBRI, R_MBRI_BAR, R_KEYS;
 static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1; }
 
 static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
@@ -841,6 +843,54 @@ static rect pill(canvas *c, int x, int y, int right, const char *k, const char *
 }
 static const char *tile_label[6] = { "Resume", "Save", "Load", "Quick settings", "DraStic menu", "Quit game" };
 static const char *const *tile_icon[6] = { IC_PLAY, IC_SAVE, IC_LOAD, IC_SLIDERS, IC_LIST, IC_EXIT };
+
+/* ---------- the Hotkeys page: DraStic's own controls from config/drastic.cfg (both sets), SuperDrastic's exit combos and
+ * HOME, BananaLinux's volume keys ---------- */
+#define NKEYS 10
+static struct { char keys[80]; const char *what; } KEYS[NKEYS];
+static int nkeys;
+/* a joystick button's name: the pad's order (retrogame_joypad's, as the fallbacks in menu_event) */
+static const char *pad_name(int b) {
+    static const char *const n[] = { "B", "A", "X", "Y", "L", "R", "L2", "R2", "SELECT", "START", "F", "L3", "R3", "UP", "DOWN", "LEFT", "RIGHT" };
+    return b >= 0 && b < (int)(sizeof n / sizeof n[0]) ? n[b] : 0;
+}
+static int ctl_button(const char *set, const char *name) {   /* controls_<set>[CONTROL_INDEX_<name>]'s button, or -1 */
+    FILE *f = fopen("config/drastic.cfg", "r"); if (!f) return -1;
+    char key[96], line[256]; int b = -1;
+    snprintf(key, sizeof key, "controls_%s[CONTROL_INDEX_%s] = ", set, name);
+    while (fgets(line, sizeof line, f)) if (!strncmp(line, key, strlen(key))) { int v = atoi(line + strlen(key)); if (v >= 1024 && v < 1088) b = v - 1024; break; }
+    fclose(f);
+    return b;
+}
+/* a control's buttons ("L3 / F"); "" if neither set has one on the pad */
+static void ctl_keys(const char *name, char *o, size_t n) {
+    int a = ctl_button("a", name), b = ctl_button("b", name);
+    const char *na = pad_name(a), *nb = b != a ? pad_name(b) : 0;
+    snprintf(o, n, "%s%s%s", na ? na : "", na && nb ? " / " : "", nb ? nb : "");
+}
+static void key_add(const char *keys, const char *what) {
+    if (nkeys >= NKEYS) return;
+    snprintf(KEYS[nkeys].keys, sizeof KEYS[0].keys, "%s", keys); KEYS[nkeys].what = what; nkeys++;
+}
+static void make_keys(void) {
+    char k[80];
+    nkeys = 0;
+    ctl_keys("MENU", k, sizeof k);
+    if (lid_home_on()) { size_t l = strlen(k); snprintf(k + l, sizeof k - l, "%sHOME", l ? " / " : ""); }
+    key_add(k, "This menu");
+    ctl_keys("SAVE_STATE", k, sizeof k); key_add(k, "Save state");
+    ctl_keys("LOAD_STATE", k, sizeof k); key_add(k, "Load state");
+    ctl_keys("FAST_FORWARD", k, sizeof k); key_add(k, "Fast-forward");
+    ctl_keys("SWAP_SCREENS", k, sizeof k); key_add(k, "Swap screens");
+    ctl_keys("FAKE_MICROPHONE", k, sizeof k); if (*k) key_add(k, "Blow on the mic");
+    int st, se, m1, m2;
+    if (resume_exit_combo(&st, &se, &m1, &m2)) {   /* (held half a second) */
+        const char *m = pad_name(m2 >= 0 ? m2 : m1);
+        if (m) { snprintf(k, sizeof k, "%s + %s", m, pad_name(st)); key_add(k, resume_on() ? "Save your spot and quit (hold)" : "Quit (hold)"); }
+        if (pad_name(se)) { snprintf(k, sizeof k, "%s + %s", pad_name(st), pad_name(se)); key_add(k, resume_on() ? "Save your spot and quit (hold)" : "Quit (hold)"); }
+    }
+    if (is_banana()) { key_add("VOL + / -", "Volume"); key_add("F + VOL + / -", "Brightness"); }   /* (bananad's) */
+}
 
 static void draw_header(canvas *c, const char *h, const char *sub, int sub_page) {
     int x = S(20);
@@ -981,6 +1031,19 @@ static void draw_bottom(void) {
         }
         text(c, &F_REG, help, gx0 + S(4), y + S(6), S(16), C_GREY, gx1 - gx0, 0);
     }
+    else if (s == SC_KEYS) {
+        draw_header(c, "Hotkeys", "while you play", 1);
+        int rh = nkeys > 8 ? S(34) : S(38), y = gy0 + S(4), kx = gx0 + S(8), dx = gx0 + S(196);
+        for (int i = 0; i < nkeys; i++, y += rh) {
+            if (i) fill(c, gx0, y - S(4), gx1, y - S(3), C_LINE, 1.0f);
+            if (KEYS[i].keys[0]) {                  /* the theme's light key pill, as the top panel's */
+                float kw = text_w_raw(&F_MED, KEYS[i].keys, S(16), 99) + S(16);
+                rrect(c, kx, y + S(2), kx + (int)kw, y + rh - S(10), S(4), C_LIGHT, 1.0f);
+                text_raw(c, &F_MED, KEYS[i].keys, kx + S(8), y + (rh - S(8) - S(16)) / 2.0f, S(16), C_DARK, 0, 0);
+            } else text(c, &F_REG, "Not set", kx, y + S(5), S(16), C_DIM, 0, 0);
+            text(c, &F_REG, KEYS[i].what, dx, y + S(4), S(17), C_LIGHT, gx1 - dx, 0);
+        }
+    }
     else if (s == SC_MIC) {
         draw_header(c, "Microphone", "", 1);
         float lv = 0, fl = 0, th = 0; int st = audio_mic_meter(&lv, &fl, &th);
@@ -1032,6 +1095,7 @@ static void draw_bottom(void) {
     if (s == SC_SAVE) al = "Save"; else if (s == SC_LOAD) al = "Load";
     else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : "OK";
     else if (s == SC_MIC) al = "Blow for 3 s";
+    else if (s == SC_KEYS) al = "OK";
     if (s == SC_MAIN) mid = "D-pad or tap";
     /* the translator, where the menu's language shows (the file's translated-by: "简体中文 · Majirefy") */
     char credit[160];
@@ -1040,9 +1104,12 @@ static void draw_bottom(void) {
     }
     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
     R_FOOT_R = pill(c, c->w - S(20), fy, 1, "A", al, C_CYAN, C_CYAN, C_DARK);
-    R_UNDO = (rect){ 0, 0, 0, 0 };
+    R_UNDO = R_KEYS = (rect){ 0, 0, 0, 0 };
     if (s == SC_LOAD && undo_ok) R_UNDO = pill(c, R_FOOT_R.x0 - S(12), fy, 1, "Y", "Undo last load", C_GREY, C_LIGHT, C_PILLBG);
-    else if (*mid) text(c, &F_REG, mid, c->w / 2.0f, fy + S(11), S(15), C_GREY, 0, 1);
+    else {
+        if (s == SC_MAIN) R_KEYS = pill(c, R_FOOT_R.x0 - S(12), fy, 1, "X", "Hotkeys", C_GREY, C_LIGHT, C_PILLBG);
+        if (*mid) text(c, &F_REG, mid, s == SC_MAIN ? (R_FOOT_L.x1 + R_KEYS.x0) / 2.0f : c->w / 2.0f, fy + S(11), S(15), C_GREY, 0, 1);
+    }
     if (scr == SC_OVERWRITE) {
         char t[64]; snprintf(t, sizeof t, "Replace slot %d?", sel_slot + 1);
         char w[48]; when_text(SL[sel_slot].mt, w, sizeof w);
@@ -1134,8 +1201,10 @@ static void activate(void) {
     case SC_QUIT_NOSAVE:
         play(SND_SELECT); close_menu(); bri_save_now(); resume_quit_nosave();
         break;
+    case SC_KEYS: play(SND_BACK); scr = SC_MAIN; dirty_bot = 1; break;
     }
 }
+static void keys_open(void) { make_keys(); scr = SC_KEYS; play(SND_SELECT); dirty_bot = 1; }
 static void quit_nosave_ask(void) {             /* X on the quit question: Quit without saving, asked again */
     if (scr != SC_QUIT || !resume_on()) return;
     scr = SC_QUIT_NOSAVE; play(SND_SELECT); dirty_bot = 1;
@@ -1193,6 +1262,7 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
     if (scr == SC_LOAD && undo_ok && in_rect(R_UNDO, px, py)) { do_load(-1); return; }
     if (scr == SC_MAIN) {
         for (int i = 0; i < 6; i++) if (in_rect(R_TILE[i], px, py)) { sel_main = i; dirty_bot = 1; activate(); return; }
+        if (in_rect(R_KEYS, px, py)) { keys_open(); return; }
         if (in_rect(R_MBRI, px, py)) {
             if (sel_main != MAIN_BRI) { if (sel_main >= 3) main_col = sel_main - 3; sel_main = MAIN_BRI; }
             if (in_rect(R_MBRI_BAR, px, py)) bri_set(bar_value(R_MBRI_BAR, px, &CV[1]));
@@ -1255,6 +1325,7 @@ static void handle_sdl(const uint8_t *e) {
         else if (b == b_b) back();
         else if (b == b_y && scr == SC_LOAD && undo_ok) do_load(-1);
         else if (b == b_x && scr == SC_QUIT) quit_nosave_ask();
+        else if (b == b_x && scr == SC_MAIN) keys_open();
         else if (b == b_up) dir_press(0, -1); else if (b == b_down) dir_press(0, 1);
         else if (b == b_left) dir_press(-1, 0); else if (b == b_right) dir_press(1, 0);
         else if (b == b_l && scr == SC_SET) adjust(-1); else if (b == b_r && scr == SC_SET) adjust(1);

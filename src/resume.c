@@ -291,6 +291,11 @@ int resume_control_button(const char *name) { return control_button_any(name); }
 int resume_joy_id(void) { return joy_id >= 0 ? joy_id : 0; }
 int resume_on(void) { return resume_path[0] && btn_save >= 0 && quit_saves; }   /* the player's quits save */
 int resume_quit_pending(void) { return want_save; }   /* the exit hotkey came while the menu was open */
+/* the exit combos' buttons, for the menu's Hotkeys page: 0 when they are off (DSFLIP_EXIT_COMBO=0) */
+int resume_exit_combo(int *start, int *select, int *menu, int *menu2) {
+    *start = btn_start; *select = btn_select; *menu = btn_menu; *menu2 = btn_menu2;
+    return exit_combo && btn_start >= 0;
+}
 int resume_menu_busy(void) { return m_saving || m_loading || m_load_next[0] || saving; }
 /* press a DraStic control's button (held 40 frames, after any press before it) */
 void resume_press(int b) {

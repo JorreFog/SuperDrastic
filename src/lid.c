@@ -100,6 +100,9 @@ void lid_poll(void) {
     if (home) { dsflip_log("[lid] HOME: the menu\n"); menu_home(); }
 }
 
+/* HOME opens the menu (for the menu's Hotkeys page) */
+int lid_home_on(void) { return home_fd >= 0; }
+
 /* the menu's loop (menu.c): HOME pressed while the menu is open closes it, and isn't kept for after (it reopened
  * the menu as soon as it closed); 1 when HOME was let go */
 int lid_home_pressed(void) {
