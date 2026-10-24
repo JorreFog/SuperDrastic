@@ -547,6 +547,16 @@ static int battery_pct(int *charging) {
             snprintf(p, sizeof p, "%.*sstatus", (int)n, g.gl_pathv[i]);
             if ((f = fopen(p, "r"))) { char st[32] = ""; if (fgets(st, sizeof st, f)) *charging = !strncmp(st, "Charging", 8) || !strncmp(st, "Full", 4); fclose(f); }
         }
+        /* a charger plugged in counts as charging, as in BananaOS's menu: the rk817's gauge can say "Discharging" while
+         * it charges (the menu's "+" was missing then, #35) */
+        for (size_t i = 0; i < g.gl_pathc && !*charging; i++) {
+            char t[32] = "", p[300]; FILE *f = fopen(g.gl_pathv[i], "r");
+            if (f) { if (!fgets(t, sizeof t, f)) t[0] = 0; fclose(f); }
+            if (strncmp(t, "USB", 3) && strncmp(t, "Mains", 5)) continue;
+            size_t n = strlen(g.gl_pathv[i]) - 4;
+            snprintf(p, sizeof p, "%.*sonline", (int)n, g.gl_pathv[i]);
+            if ((f = fopen(p, "r"))) { int on = 0; if (fscanf(f, "%d", &on) == 1 && on) *charging = 1; fclose(f); }
+        }
         globfree(&g);
     }
     return pct;
