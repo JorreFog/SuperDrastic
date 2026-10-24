@@ -14,7 +14,8 @@
 // wrong slot never costs progress ("Undo last load", Y on the Load page). While a load runs DraStic's frames and
 // sound are held back (dsflip_hold, audio_mute) and the menu's "Loading" screen stays up. Slot pictures come from the
 // savestates themselves: a DraStic .dss starts (after a 0x44-byte header) with a zlib stream whose first 196,608
-// bytes are both DS screens, 256x384 RGB565.
+// bytes are both DS screens, 256x384 RGB565; both are shown, top over bottom (a state with only the top one is
+// shown the way it was before, one screen wide).
 //
 // DSFLIP_MENU=0: DraStic's own menu, as before. DSFLIP_MENU_TEST=<n> opens the menu 3 s in, on the main page (1),
 // Save (2), Load (3), Quick settings (4) or the quit question (5), for tests.
@@ -319,7 +320,7 @@ static int wrap2(font *F, const char *t, float px, float maxw, char *l1, char *l
 
 /* ---------- the game, its saves ---------- */
 #define NSLOT 8
-typedef struct { int used; time_t mt; uint16_t *pic; int pic_tried; } slot;
+typedef struct { int used; time_t mt; uint16_t *pic; int pic_rows, pic_tried; } slot;   /* pic_rows: 384 both screens, 192 the top */
 static slot SL[NSLOT];
 static char rom[512], gbase[256], gtitle[200], ggenre[100], sdir[512], undo_path[600];
 static int undo_ok;                 /* the undo file holds the game from before this session's last menu load */
@@ -381,9 +382,9 @@ typedef struct {
     int data_type; unsigned long adler, reserved;
 } zs_t;
 static int (*z_init)(zs_t *, const char *, int), (*z_inflate)(zs_t *, int), (*z_end)(zs_t *);
-#define PIC_BYTES (256 * 192 * 2)
-/* the top DS screen saved in a .dss: 256x192 RGB565, or 0 */
-static uint16_t *read_pic(const char *path) {
+#define PIC_BYTES (256 * 192 * 2)   /* one screen */
+/* the DS screens saved in a .dss, RGB565: both (*rows 384, top over bottom), or the top one alone (192); or 0 */
+static uint16_t *read_pic(const char *path, int *rows) {
     if (!z_init) {
         void *h = dlopen("libz.so.1", RTLD_NOW | RTLD_LOCAL); if (!h) return 0;
         *(void **)&z_init = dlsym(h, "inflateInit_"); *(void **)&z_inflate = dlsym(h, "inflate"); *(void **)&z_end = dlsym(h, "inflateEnd");
@@ -391,17 +392,18 @@ static uint16_t *read_pic(const char *path) {
     }
     FILE *f = fopen(path, "rb"); if (!f) return 0;
     uint8_t hdr[0x44], in[32768]; uint16_t *out = 0;
-    if (fread(hdr, 1, sizeof hdr, f) == sizeof hdr && !memcmp(hdr, "DraStic-SaveState", 17) && (out = malloc(PIC_BYTES))) {
+    if (fread(hdr, 1, sizeof hdr, f) == sizeof hdr && !memcmp(hdr, "DraStic-SaveState", 17) && (out = malloc(2 * PIC_BYTES))) {
         zs_t z; memset(&z, 0, sizeof z);
         if (z_init(&z, "1.2.11", (int)sizeof z) == 0) {
-            z.next_out = (uint8_t *)out; z.avail_out = PIC_BYTES;
+            z.next_out = (uint8_t *)out; z.avail_out = 2 * PIC_BYTES;
             int r = 0;
             while (z.avail_out && r == 0) {
                 if (!z.avail_in) { size_t n = fread(in, 1, sizeof in, f); if (!n) break; z.next_in = in; z.avail_in = (unsigned)n; }
                 r = z_inflate(&z, 0);
             }
-            int got = z.avail_out == 0; z_end(&z);
-            if (!got) { free(out); out = 0; }
+            unsigned got = 2 * PIC_BYTES - z.avail_out; z_end(&z);
+            *rows = got == 2 * PIC_BYTES ? 384 : 192;
+            if (got < PIC_BYTES) { free(out); out = 0; }
         } else { free(out); out = 0; }
     }
     fclose(f);
@@ -413,7 +415,7 @@ static void scan_slots(int pics) {
         int used = !stat(p, &st) && st.st_size > 0x44;
         if (!used || st.st_mtime != SL[n].mt) { free(SL[n].pic); SL[n].pic = 0; SL[n].pic_tried = 0; }
         SL[n].used = used; SL[n].mt = used ? st.st_mtime : 0;
-        if (pics && used && !SL[n].pic_tried) { SL[n].pic_tried = 1; SL[n].pic = read_pic(p); }
+        if (pics && used && !SL[n].pic_tried) { SL[n].pic_tried = 1; SL[n].pic = read_pic(p, &SL[n].pic_rows); }
     }
 }
 static int newest_slot(void) {
@@ -673,11 +675,11 @@ static void status_bar(canvas *c) {
     char tm[32]; time_t t = time(0); struct tm lt; localtime_r(&t, &lt); strftime(tm, sizeof tm, "%m/%d %H:%M", &lt);
     text_raw(c, &F_MED, tm, c->w - S(22), S(12), S(18), C_LIGHT, 0, 2);
 }
-/* an RGB565 256x192 picture into a rectangle (nearest) */
-static void draw_pic(canvas *c, const uint16_t *pic, int x0, int y0, int w, int h) {
+/* an RGB565 picture 256 wide and `rows` tall into a rectangle (nearest) */
+static void draw_pic(canvas *c, const uint16_t *pic, int rows, int x0, int y0, int w, int h) {
     for (int y = 0; y < h; y++) {
         if (y0 + y < 0 || y0 + y >= c->h) continue;
-        const uint16_t *row = pic + (size_t)(y * 192 / h) * 256; uint32_t *d = c->px + (size_t)(y0 + y) * c->w;
+        const uint16_t *row = pic + (size_t)(y * rows / h) * 256; uint32_t *d = c->px + (size_t)(y0 + y) * c->w;
         for (int x = 0; x < w; x++) {
             if (x0 + x < 0 || x0 + x >= c->w) continue;
             uint16_t p = row[x * 256 / w];
@@ -733,18 +735,30 @@ static void draw_top(void) {
     dotbox(c, x0, y0, x1, y1, S(16), S(3) < 2 ? 2 : S(3), C_LIGHT, C_TEAL, C_TEALDOT);
     int L = S(52);
     if (scr == SC_SAVE || scr == SC_LOAD || (scr == SC_OVERWRITE)) {
+        /* the slot's two screens, top over bottom, on the left; its number, date and what A does beside them */
         slot *s = &SL[sel_slot];
-        int pw_ = S(384), ph_ = S(288), px = (c->w - pw_) / 2, py = S(68);
+        int ph_ = S(348), pw_ = ph_ * 2 / 3, px = x0 + S(30), py = (y0 + y1 - ph_) / 2;
         box(c, px - S(3), py - S(3), px + pw_ + S(3), py + ph_ + S(3), S(6), S(3), C_LIGHT, C_DARK);
-        if (s->used && s->pic) draw_pic(c, s->pic, px, py, pw_, ph_);
-        else if (s->used) { fill(c, px, py, px + pw_, py + ph_, C_PANEL, 1.0f); text(c, &F_REG, "No picture in this save", c->w / 2.0f, py + ph_ / 2 - S(10), S(18), C_GREY, 0, 1); }
-        else { hatch(c, px, py, px + pw_, py + ph_, C_EMPTY0, C_EMPTY1); text(c, &F_MED, "Empty slot", c->w / 2.0f, py + ph_ / 2 - S(12), S(22), C_GREY, 0, 1); }
+        if (s->used && s->pic && s->pic_rows == 384) draw_pic(c, s->pic, 384, px, py, pw_, ph_);
+        else if (s->used && s->pic) {               /* a state with the top screen alone: that one, the bottom left blank */
+            draw_pic(c, s->pic, 192, px, py, pw_, ph_ / 2);
+            fill(c, px, py + ph_ / 2, px + pw_, py + ph_, C_PANEL, 1.0f);
+        } else if (s->used) {
+            fill(c, px, py, px + pw_, py + ph_, C_PANEL, 1.0f);
+            char l1[200], l2[200]; int n = wrap2(&F_REG, "No picture in this save", S(18), pw_ - S(20), l1, l2, sizeof l1, 1);
+            text(c, &F_REG, l1, px + pw_ / 2.0f, py + ph_ / 2 - S(n > 1 ? 22 : 10), S(18), C_GREY, 0, 1);
+            if (n > 1) text(c, &F_REG, l2, px + pw_ / 2.0f, py + ph_ / 2 + S(2), S(18), C_GREY, 0, 1);
+        } else { hatch(c, px, py, px + pw_, py + ph_, C_EMPTY0, C_EMPTY1); text(c, &F_MED, "Empty slot", px + pw_ / 2.0f, py + ph_ / 2 - S(12), S(22), C_GREY, pw_ - S(12), 1); }
+        int ix = px + pw_ + S(30), iw = x1 - S(28) - ix, iy = py + S(6);
         char t[48]; snprintf(t, sizeof t, "Slot %d", sel_slot + 1);
-        text(c, &F_MED, t, px, py + ph_ + S(14), S(24), C_LIGHT, 0, 0);
-        if (s->used) { char w[48]; when_text(s->mt, w, sizeof w); text(c, &F_REG, w, px + pw_, py + ph_ + S(18), S(18), C_TEALTXT, 0, 2); }
+        text(c, &F_MED, t, ix, iy, S(28), C_LIGHT, iw, 0); iy += S(40);
+        if (s->used) { char w[48]; when_text(s->mt, w, sizeof w); text(c, &F_REG, w, ix, iy, S(18), C_TEALTXT, iw, 0); iy += S(30); }
+        fill(c, ix, iy, x1 - S(28), iy + S(2), C_TEALLN, 1.0f); iy += S(16);
         const char *hint = scr == SC_LOAD ? (s->used ? "A: load this save. You can undo it after." : "Nothing saved here yet")
                                           : (s->used ? "A: save here (replaces this save)" : "A: save here");
-        text(c, &F_REG, hint, px, py + ph_ + S(50), S(16), C_TEALTXT, pw_, 0);
+        char l1[200], l2[200]; int n = wrap2(&F_REG, hint, S(17), iw, l1, l2, sizeof l1, 1);
+        text(c, &F_REG, l1, ix, iy, S(17), C_TEALTXT, iw, 0);
+        if (n > 1) text(c, &F_REG, l2, ix, iy + S(24), S(17), C_TEALTXT, iw, 0);
     } else {
         /* PAUSED pill, the game, its genre */
         int cw = x1 - L - S(28);
@@ -930,12 +944,16 @@ static void draw_bottom(void) {
             bitmap(c, DIG[(n + 1) % 10], 7, x + S(10), y + S(10), k, dim ? C_DIM : sel ? C_ONSEL : C_LIGHT);
             const char *tag = n == nb ? "LAST" : "";
             if (*tag) text(c, &F_MED, tag, x + cw - S(10), y + S(10), S(13), sel ? C_ONSEL : C_CYAN, 0, 2);
-            int tx0 = x + S(8), tx1 = x + cw - S(8), tth = (tx1 - tx0) * 3 / 4, ty0 = y + S(36);
-            if (sl->used && sl->pic) draw_pic(c, sl->pic, tx0, ty0, tx1 - tx0, tth);
-            else if (sl->used) fill(c, tx0, ty0, tx1, ty0 + tth, C_NOPIC, 1.0f);
+            /* both screens, top over bottom (2:3), centred; a state with the top screen alone: that one, card-wide (4:3) */
+            int ty0 = y + S(36), tth = ch - S(36) - S(28), ttw = tth * 2 / 3, tx0 = x + (cw - ttw) / 2, tx1 = tx0 + ttw;
+            if (sl->used && sl->pic && sl->pic_rows == 384) draw_pic(c, sl->pic, 384, tx0, ty0, ttw, tth);
+            else if (sl->used && sl->pic) {
+                int ow = cw - S(16), oh = ow * 3 / 4, oy = ty0 + (tth - oh) / 2;
+                draw_pic(c, sl->pic, 192, x + S(8), oy, ow, oh);
+            } else if (sl->used) fill(c, tx0, ty0, tx1, ty0 + tth, C_NOPIC, 1.0f);
             else hatch(c, tx0, ty0, tx1, ty0 + tth, dim ? C_DIMBG : C_EMPTY0, dim ? C_EMPTY0 : C_EMPTY1);
             char w[48]; if (sl->used) when_text(sl->mt, w, sizeof w); else snprintf(w, sizeof w, "Empty");
-            text(c, &F_REG, w, x + cw / 2.0f, ty0 + tth + S(8), S(13), dim ? C_DIM : sel ? C_ONSEL : C_BODY, cw - S(12), 1);
+            text(c, &F_REG, w, x + cw / 2.0f, ty0 + tth + S(7), S(13), dim ? C_DIM : sel ? C_ONSEL : C_BODY, cw - S(12), 1);
         }
     } else if (s == SC_SET) {
         draw_header(c, "Quick settings", "changes apply at once", 1);
