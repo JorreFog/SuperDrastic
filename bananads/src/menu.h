@@ -37,6 +37,9 @@ typedef struct {
     // Quit without saving: as quit, but no resume state is written (the one from before stays as it was); unset: the
     // quit question has no such choice
     void (*quit_nosave)(void* ctx);
+    // the Hotkeys page: the frontend's buttons, i from 0, each its keys ("F + R") and what it does ("Save state (slot 1)");
+    // 0 past the last one. Unset: no Hotkeys page
+    int (*hotkey)(void* ctx, int i, const char** keys, const char** what);
     void (*restart)(void* ctx);                     // the game from its start
     void (*blow)(void* ctx, int ms);                // the game hears a blow on the mic
     int (*mic_meter)(void* ctx, float* level, float* floor_, float* bar);  // -1 no mic, 0 starting, 1 listening

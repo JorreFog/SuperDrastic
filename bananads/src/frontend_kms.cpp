@@ -959,6 +959,18 @@ static int menu_key(int code) {
     }
 }
 static bool is_menu_button(int code) { return code == BTN_THUMBL || code == KEY_F2; }
+// the menu's Hotkeys page: the buttons the input loop below reads (keep the two together), and bananad's volume keys
+static bool g_quit_saves = true;  // resume.on_quit: F + START saves the spot
+static int mh_hotkey(void*, int i, const char** keys, const char** what) {
+    static const char* const k[][2] = {
+        {"F / L3 / HOME", "This menu"}, {"F + R", "Save state (slot 1)"}, {"F + L", "Load state (slot 1)"},
+        {"R2", "Fast-forward (held)"}, {"F + X", "Fast-forward on / off"}, {"F + L2", "Screenshot"},
+        {"F + START", nullptr}, {"VOL + / -", "Volume"}, {"F + VOL + / -", "Brightness"}};
+    if (i < 0 || i >= (int)(sizeof k / sizeof k[0])) return 0;
+    *keys = k[i][0];
+    *what = k[i][1] ? k[i][1] : g_quit_saves ? "Save your spot and quit" : "Quit";
+    return 1;
+}
 
 static int mh_canvas(void* c, int panel, uint32_t** px, int* pitch, int* w, int* h) {
     Display* dp = ((MenuHost*)c)->dp;
@@ -1353,6 +1365,8 @@ int run_kms(Emu& emu, const Config& cfg) {
         h.state_file = mh_state_file;
         h.quit = mh_quit;
         h.quit_nosave = mh_quit_nosave;
+        h.hotkey = mh_hotkey;
+        g_quit_saves = h.resume_on;
         h.restart = mh_restart;
         h.blow = mh_blow;
         h.mic_meter = mh_mic_meter;

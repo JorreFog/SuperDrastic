@@ -4,7 +4,7 @@
 //
 // Bottom panel: six tiles (Resume, Save, Load, Quick settings, Restart game, Quit game) over a Brightness row (both
 // panels' backlights, as Quick settings has it: down from the tiles, left / right or L / R to change), then a page for
-// each.
+// each; X (or its pill in the footer) lists the hotkeys, as the frontend reads them (bmenu_host's hotkey).
 // Top panel: the game's last frame, dimmed, under a card with the game, this session's play time and the last save;
 // while a save slot is picked, that slot's picture instead. D-pad and touch work; A picks, B goes back, L3 or START
 // closes it.
@@ -495,7 +495,7 @@ static void load_wav(int id, const char *path) {
 static void play(int id) { if (snd_ok[id] && H.sound_play) H.sound_play(H.ctx, id); }
 
 /* ---------- state ---------- */
-enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_RESTART, SC_CHEAT, SC_QUIT_NOSAVE };
+enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_RESTART, SC_CHEAT, SC_QUIT_NOSAVE, SC_KEYS };
 static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_top, dirty_bot;
 #define MAIN_BRI 6                                /* sel_main: the main page's Brightness row, under the tiles */
 static int main_col;                              /* the tiles' column the d-pad came down from (back up to it) */
@@ -750,7 +750,7 @@ static void draw_top(void) {
 
 /* ---------- bottom panel ---------- */
 typedef struct { int x0, y0, x1, y1; } rect;
-static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[8], R_BAR[8], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_DLG_X, R_UNDO, R_MBRI, R_MBRI_BAR;
+static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[8], R_BAR[8], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_DLG_X, R_UNDO, R_MBRI, R_MBRI_BAR, R_KEYS;
 static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1; }
 
 static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
@@ -772,6 +772,15 @@ static const char *const IC_RESTART[12] = { "............", "....####.#..", "...
     ".#..........", ".#........#.", "..#......#..", "...#....#...", "....####....", "............" };
 static const char *tile_label[6] = { "Resume", "Save", "Load", "Quick settings", "Restart game", "Quit game" };
 static const char *const *tile_icon[6] = { IC_PLAY, IC_SAVE, IC_LOAD, IC_SLIDERS, IC_RESTART, IC_EXIT };
+
+/* the Hotkeys page's rows, from the frontend when it opens */
+#define NKEYS 12
+static struct { const char *keys, *what; } KEYS[NKEYS];
+static int nkeys;
+static void make_keys(void) {
+    nkeys = 0;
+    if (H.hotkey) while (nkeys < NKEYS && H.hotkey(H.ctx, nkeys, &KEYS[nkeys].keys, &KEYS[nkeys].what)) nkeys++;
+}
 
 static void draw_header(canvas *c, const char *h, const char *sub, int sub_page) {
     int x = S(20);
@@ -963,6 +972,17 @@ static void draw_bottom(void) {
             text(c, &F_REG, "Up / down to pick, L / R a page; some games need a restart for a code to work", gx0 + S(4), y + S(4), S(15), C_GREY, gx1 - gx0, 0);
         }
     }
+    else if (s == SC_KEYS) {
+        draw_header(c, "Hotkeys", "while you play", 1);
+        int rh = nkeys > 8 ? S(34) : S(38), y = gy0 + S(4), kx = gx0 + S(8), dx = gx0 + S(196);
+        for (int i = 0; i < nkeys; i++, y += rh) {
+            if (i) fill(c, gx0, y - S(4), gx1, y - S(3), C_LINE, 1.0f);
+            float kw = text_w_raw(&F_MED, KEYS[i].keys, S(16), 99) + S(16);   /* the theme's light key pill, as the top panel's */
+            rrect(c, kx, y + S(2), kx + (int)kw, y + rh - S(10), S(4), C_LIGHT, 1.0f);
+            text_raw(c, &F_MED, KEYS[i].keys, kx + S(8), y + (rh - S(8) - S(16)) / 2.0f, S(16), C_DARK, 0, 0);
+            text(c, &F_REG, KEYS[i].what, dx, y + S(4), S(17), C_LIGHT, gx1 - dx, 0);
+        }
+    }
     else if (s == SC_MIC) {
         draw_header(c, "Microphone", "", 1);
         float lv = 0, fl = 0, th = 0; int st = H.mic_meter ? H.mic_meter(H.ctx, &lv, &fl, &th) : -1;
@@ -1014,6 +1034,7 @@ static void draw_bottom(void) {
     else if (s == SC_SET) al = rows[sel_set] == ROW_MIC || rows[sel_set] == ROW_CHEAT ? "Open" : "OK";
     else if (s == SC_CHEAT) al = H.cheat_count(H.ctx) ? (H.cheat_get(H.ctx, sel_cheat) ? "Turn off" : "Turn on") : "Back";
     else if (s == SC_MIC) al = "Blow for 3 s";
+    else if (s == SC_KEYS) al = "OK";
     if (s == SC_MAIN) mid = "D-pad or tap";
     /* the translator, where the menu's language shows (the file's translated-by: "简体中文 · Majirefy") */
     char credit[160];
@@ -1022,9 +1043,13 @@ static void draw_bottom(void) {
     }
     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
     R_FOOT_R = pill(c, c->w - S(20), fy, 1, "A", al, C_CYAN, C_CYAN, C_DARK);
-    R_UNDO = (rect){ 0, 0, 0, 0 };
+    R_UNDO = R_KEYS = (rect){ 0, 0, 0, 0 };
     if (s == SC_LOAD && undo_ok) R_UNDO = pill(c, R_FOOT_R.x0 - S(12), fy, 1, "Y", "Undo last load", C_GREY, C_LIGHT, C_PILLBG);
-    else if (*mid) text(c, &F_REG, mid, c->w / 2.0f, fy + S(11), S(15), C_GREY, 0, 1);
+    else {
+        int keys = s == SC_MAIN && H.hotkey;
+        if (keys) R_KEYS = pill(c, R_FOOT_R.x0 - S(12), fy, 1, "X", "Hotkeys", C_GREY, C_LIGHT, C_PILLBG);
+        if (*mid) text(c, &F_REG, mid, keys ? (R_FOOT_L.x1 + R_KEYS.x0) / 2.0f : c->w / 2.0f, fy + S(11), S(15), C_GREY, 0, 1);
+    }
     if (scr == SC_OVERWRITE) {
         char t[64]; snprintf(t, sizeof t, "Replace slot %d?", sel_slot + 1);
         char w[48]; when_text(SL[sel_slot].mt, w, sizeof w);
@@ -1129,8 +1154,10 @@ static void activate(void) {
     case SC_QUIT_NOSAVE:
         play(SND_SELECT); close_menu(); H.quit_nosave(H.ctx);
         break;
+    case SC_KEYS: play(SND_BACK); scr = SC_MAIN; dirty_bot = 1; break;
     }
 }
+static void keys_open(void) { if (!H.hotkey) return; make_keys(); scr = SC_KEYS; play(SND_SELECT); dirty_bot = 1; }
 static void quit_nosave_ask(void) {             /* X on the quit question: Quit without saving, asked again */
     if (scr != SC_QUIT || !H.resume_on || !H.quit_nosave) return;
     scr = SC_QUIT_NOSAVE; play(SND_SELECT); dirty_bot = 1;
@@ -1196,6 +1223,7 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
     if (scr == SC_LOAD && undo_ok && in_rect(R_UNDO, px, py)) { do_load(-1); return; }
     if (scr == SC_MAIN) {
         for (int i = 0; i < 6; i++) if (in_rect(R_TILE[i], px, py)) { sel_main = i; dirty_bot = 1; activate(); return; }
+        if (in_rect(R_KEYS, px, py)) { keys_open(); return; }
         if (in_rect(R_MBRI, px, py)) {
             if (sel_main != MAIN_BRI) { if (sel_main >= 3) main_col = sel_main - 3; sel_main = MAIN_BRI; }
             if (in_rect(R_MBRI_BAR, px, py)) bri_set(bar_value(R_MBRI_BAR, px, &CV[1]));
@@ -1241,6 +1269,7 @@ static void handle(const bmenu_ev *e) {
     else if (b == BM_B) back();
     else if (b == BM_Y && scr == SC_LOAD && undo_ok) do_load(-1);
     else if (b == BM_X && scr == SC_QUIT) quit_nosave_ask();
+    else if (b == BM_X && scr == SC_MAIN) keys_open();
     else if (b == BM_UP) dir_press(0, -1); else if (b == BM_DOWN) dir_press(0, 1);
     else if (b == BM_LEFT) dir_press(-1, 0); else if (b == BM_RIGHT) dir_press(1, 0);
     else if (b == BM_L && scr == SC_SET) adjust(-1); else if (b == BM_R && scr == SC_SET) adjust(1);
