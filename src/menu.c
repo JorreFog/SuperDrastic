@@ -370,6 +370,8 @@ static void game_info(void) {
     dsflip_log("[menu] game '%s' (%s), savestates in %s\n", gtitle, gbase, sdir);
 }
 static void slot_path(int n, char *out, size_t sz) { snprintf(out, sz, "%s/%s_%d.dss", sdir, gbase, n); }
+/* the game's name, for resume.c's pop-ups (DraStic's save / load state buttons) */
+const char *menu_game_title(void) { if (!gbase[0]) game_info(); return gtitle; }
 
 /* zlib, as ra.c loads it */
 typedef struct {

@@ -55,6 +55,22 @@ void resume_press(int b);
 static void menu_jobs(void);
 static long long load_at_frame, loaded_frame;
 static long long frames;
+/* DraStic's own save / load state buttons (the hotkeys, not the menu's): a pop-up once the state is written or read */
+static long long hk_load_at = -1000, hk_load_seen;
+static volatile int hk_load_slot = -1;
+const char *menu_game_title(void);                    /* menu.c: the game's name, as ES shows it */
+int resume_menu_busy(void);
+static int is_slot(const char *p);
+static int slot_digit(const char *p) { size_t n = strlen(p); return p[n - 5] - '0'; }
+static void hotkey_toast(const char *what, int digit) {
+    char m[64]; snprintf(m, sizeof m, what, digit + 1);   /* (DraStic's slot 0 is the menu's slot 1) */
+    dsflip_toast(m, menu_game_title(), 0x3aa0ff, 2500);
+}
+/* a slot file DraStic opened for reading, while a press of its load state button is fresh */
+static void hotkey_load_seen(const char *p, int reading) {
+    if (!reading || m_loading || loading || !is_slot(p) || frames - hk_load_at > 300) return;
+    if (hk_load_slot < 0) { hk_load_slot = slot_digit(p); hk_load_seen = frames; }
+}
 
 static long long now_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
 
@@ -105,7 +121,9 @@ int rename(const char *a, const char *b) {
         saved = r ? -1 : 1;
         return r;
     }
-    return real(a, b);
+    int r = real(a, b);
+    if (!r && is_slot(b)) { dsflip_log("[resume] savestate hotkey: %s\n", b); hotkey_toast("Saved to slot %d", slot_digit(b)); }
+    return r;
 }
 /* DraStic deletes the slot's old file before renaming the new one in: not while the save goes to the resume file */
 int unlink(const char *p) {
@@ -118,17 +136,31 @@ int remove(const char *p) {
     if ((saving || m_saving) && is_slot(p)) { if (trace) dsflip_log("[resume] kept %s (DraStic deletes it before saving)\n", p); return 0; }
     return real(p);
 }
-FILE *fopen(const char *p, const char *m) { NEXT(FILE *, "fopen", const char *, const char *); return real(redirect_load(p, "fopen"), m); }
-FILE *fopen64(const char *p, const char *m) { NEXT(FILE *, "fopen64", const char *, const char *); return real(redirect_load(p, "fopen64"), m); }
+FILE *fopen(const char *p, const char *m) {
+    NEXT(FILE *, "fopen", const char *, const char *);
+    FILE *r = real(redirect_load(p, "fopen"), m);
+    if (r) hotkey_load_seen(p, m && m[0] == 'r' && !strchr(m, '+'));
+    return r;
+}
+FILE *fopen64(const char *p, const char *m) {
+    NEXT(FILE *, "fopen64", const char *, const char *);
+    FILE *r = real(redirect_load(p, "fopen64"), m);
+    if (r) hotkey_load_seen(p, m && m[0] == 'r' && !strchr(m, '+'));
+    return r;
+}
 int open(const char *p, int f, ...) {
     NEXT(int, "open", const char *, int, ...);
     mode_t md = 0; if (f & O_CREAT) { va_list ap; va_start(ap, f); md = va_arg(ap, int); va_end(ap); }
-    return real(redirect_load(p, "open"), f, md);
+    int r = real(redirect_load(p, "open"), f, md);
+    if (r >= 0) hotkey_load_seen(p, (f & O_ACCMODE) == O_RDONLY);
+    return r;
 }
 int open64(const char *p, int f, ...) {
     NEXT(int, "open64", const char *, int, ...);
     mode_t md = 0; if (f & O_CREAT) { va_list ap; va_start(ap, f); md = va_arg(ap, int); va_end(ap); }
-    return real(redirect_load(p, "open64"), f, md);
+    int r = real(redirect_load(p, "open64"), f, md);
+    if (r >= 0) hotkey_load_seen(p, (f & O_ACCMODE) == O_RDONLY);
+    return r;
 }
 int access(const char *p, int m) { NEXT(int, "access", const char *, int); return real(redirect_load(p, "access"), m); }
 int __xstat(int v, const char *p, struct stat *s) { NEXT(int, "__xstat", int, const char *, struct stat *); return real(v, redirect_load(p, "stat"), s); }
@@ -192,6 +224,7 @@ void resume_saw_event(const void *ev) {
     if (type != 0x603 && type != 0x604) return;          /* SDL_JOYBUTTONDOWN / UP */
     int b = e[12], down = type == 0x603;
     if (down && (b == btn_save || b == btn_load)) cpugov_boost(3000);
+    if (down && b == btn_load && !resume_menu_busy()) { hk_load_at = frames; hk_load_slot = -1; }   /* (a pop-up once it's read) */
     if (b < 64) { if (down) held_btns |= 1ULL << b; else held_btns &= ~(1ULL << b); }
     #define HELD(x) ((x) >= 0 && (held_btns >> (x) & 1))
     int combo = exit_combo && HELD(btn_start) && (HELD(btn_select) || HELD(btn_menu) || HELD(btn_menu2));
@@ -220,6 +253,10 @@ static void on_usr1(int sig) {
 void resume_frame(void) {
     frames++;
     menu_jobs();
+    if (hk_load_slot >= 0 && frames - hk_load_seen >= 20) {   /* read in (the menu's own loads wait as long) */
+        dsflip_log("[resume] load state hotkey: slot file %d\n", hk_load_slot);
+        hotkey_toast("Loaded slot %d", hk_load_slot); hk_load_slot = -1; hk_load_at = -1000;
+    }
     if (combo_since && now_ms() - combo_since >= EXIT_HOLD_MS) {
         combo_since = 0; held_btns = 0;
         dsflip_log("[resume] exit combo held: quitting\n");
