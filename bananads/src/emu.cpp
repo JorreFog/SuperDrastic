@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -646,6 +647,10 @@ bool Emu::load_rom(const std::string& path) {
 #endif
             nds_->SetRenderer(std::make_unique<SoftRenderer>(*nds_));
         nds_->GetRenderer().SetRenderSettings(rs);
+        // melonDS's renderer on its own thread draws the frame again after any load (PostSavestate), with semaphores
+        // that a snapshot every frame got out of step (its pictures, and display captures, went wrong): run-ahead
+        // stays off with it
+        ra_soft_threaded_ = rs.Threaded;
     }
 #ifdef BANANADS_2D
     // render.2d_thread: on draws the Banana 2D engine's lines on a thread of its own (gpu2d/GPU_Banana.h), the same
@@ -725,6 +730,7 @@ void Emu::run_frame() {
         bank3d_ = b;
         swaps3d_.fetch_add(1, std::memory_order_relaxed);
     }
+    note_capture();
     flush_save(false);
     if (slice_stats_ > 0 && ++slice_frames_ % slice_stats_ == 0) {
         // the share of emulated time within core.slice_hold cycles of an IPC access (where the short slice runs)
@@ -735,6 +741,83 @@ void Emu::run_frame() {
         nds_->SliceIPCAccesses = 0;
         nds_->SliceNearIPCCycles = 0;
     }
+}
+
+// ---- run-ahead ----
+void Emu::note_capture() {
+    if (const uint32_t c = nds_->GPU.CaptureFrames; c != ra_captures_) {
+        ra_captures_ = c;
+        ra_capture_at_ = frames_run_;
+    }
+}
+
+bool Emu::runahead_ok() const { return !ra_broken_ && !ra_soft_threaded_ && nds_ && !local_ && nds_->ConsoleType == 0; }
+
+bool Emu::run_ahead(int n, const std::function<void()>& before_last, const std::function<void()>& after_last) {
+    if (n < 1 || !runahead_ok()) return false;
+    using clk = std::chrono::steady_clock;
+    const auto t0 = clk::now();
+    nds_->LeanSavestate = true;
+    bool ok;
+    if (ra_buf_.empty()) {  // the first time: a snapshot that grows as it must, then a buffer with room to spare
+        Savestate st(8 << 20);
+        nds_->DoSavestate(&st);
+        st.Finish();
+        ok = !st.Error;
+        if (ok) {
+            ra_len_ = st.Length();
+            ra_buf_.resize(ra_len_ + ra_len_ / 4 + (1 << 20));
+            memcpy(ra_buf_.data(), st.Buffer(), ra_len_);
+            Log(LogLevel::Info, "[runahead] %d frame%s ahead; the snapshot is %.1f MB\n", n, n > 1 ? "s" : "",
+                ra_len_ / 1048576.0);
+        }
+    } else {
+        Savestate st(ra_buf_.data(), (u32)ra_buf_.size(), true);
+        nds_->DoSavestate(&st);
+        st.Finish();
+        ok = !st.Error;
+        ra_len_ = st.Length();
+        if (!ok) ra_buf_.clear();  // (it didn't fit: made again, bigger, next time)
+    }
+    const auto t1 = clk::now();
+    if (!ok) {
+        nds_->LeanSavestate = false;
+        Log(LogLevel::Warn, "[runahead] the snapshot failed; this frame isn't run ahead\n");
+        return false;
+    }
+#ifdef JIT_ENABLED
+    nds_->JIT.TrackNewBlocks(true);
+#endif
+    nds_->SPU.DiscardOutput = true;
+    hidden_ = true;
+    for (int i = 0; i < n; i++) {
+        if (i == n - 1 && before_last) before_last();
+        nds_->RunFrame();
+        note_capture();
+    }
+    if (after_last) after_last();
+    const auto t2 = clk::now();
+    Savestate ld(ra_buf_.data(), (u32)ra_len_, false);
+    ok = !ld.Error && nds_->DoSavestate(&ld);
+    hidden_ = false;
+    nds_->SPU.DiscardOutput = false;
+    nds_->LeanSavestate = false;
+    if (ok && frames_run_ - ra_capture_at_ <= 120) {
+        // a game that captures the display (into VRAM, which is the game's state): the 3D frame the real next frame
+        // shows and captures is drawn again from the state put back, not left as the frame ahead drew it
+        nds_->GPU.GetRenderer().Start3DRendering();
+    }
+    if (!ok) {
+        // (the game goes on from the frame ahead: a skip of n frames, once; run-ahead off from here)
+        ra_broken_ = true;
+#ifdef JIT_ENABLED
+        nds_->JIT.Reset();
+#endif
+        Log(LogLevel::Error, "[runahead] the snapshot couldn't be loaded back: run-ahead off\n");
+    }
+    ra_save_ms_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    ra_load_ms_ = std::chrono::duration<double, std::milli>(clk::now() - t2).count();
+    return true;
 }
 
 void Emu::set_cheats(std::vector<melonDS::ARCode> codes) { nds_->AREngine.Cheats = std::move(codes); }
@@ -816,6 +899,7 @@ int Emu::audio(int16_t* stereo, int max_frames) {
 }
 
 void Emu::write_save(const uint8_t* data, uint32_t len, uint32_t off, uint32_t n) {
+    if (hidden_) return;  // a frame run ahead (run_ahead): undone, and written again when it runs for real
     // The game writes its save in many small pieces; it goes to disk a second after the last one. Only the piece
     // that changed is copied (#33): copying the whole save at every page cost Nintendogs' 256 KB save a 256 KB copy
     // per page written, frames of the emulator's thread over a whole save

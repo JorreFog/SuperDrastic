@@ -100,6 +100,15 @@ int run_headless(Emu& emu, const Config& cfg) {
     if (cfg.flag("render.2d_lazy", true)) emu.set_lazy_2d(true);
     double worst_w = 1e9, worst_f = 0;
     long worst_at = 0;
+    // runahead=N (Emu::run_ahead): each frame run N frames ahead and undone, as frontend=kms does; the dumps show the
+    // frame ahead's picture. headless.ram_hash=<file>: a line per frame with a hash of main RAM after it (after the
+    // undo with run-ahead), so a run with and one without compare: the game's own timeline must be the same
+    const int ahead = (int)std::clamp(cfg.num("runahead", 0), 0L, 2L);
+    std::vector<uint32_t> pic[2];
+    const std::string rhash = cfg.str("headless.ram_hash", "");
+    FILE* hf = rhash.empty() ? nullptr : fopen(rhash.c_str(), "w");
+    long ra_done = 0;
+    double ra_save = 0, ra_load = 0;
     for (; done < frames && !emu.stopped(); done++) {
         if (done == from) tm = tw = tf = std::chrono::steady_clock::now();
         if (!input.empty()) {
@@ -110,6 +119,21 @@ int run_headless(Emu& emu, const Config& cfg) {
         }
         if (!ring.empty()) emu.draw_into(ring[done % 4 * 2].data(), ring[done % 4 * 2 + 1].data());
         emu.run_frame();
+        if (ahead) {
+            const size_t px = (size_t)256 * 192 * emu.scale() * emu.scale();
+            const bool ran = emu.run_ahead(ahead, nullptr, [&] {
+                pic[0].assign(emu.top(), emu.top() + px);
+                pic[1].assign(emu.bottom(), emu.bottom() + px);
+            });
+            if (ran) { ra_done++; ra_save += emu.runahead_save_ms(); ra_load += emu.runahead_load_ms(); }
+            else pic[0].clear();
+        }
+        if (hf) {
+            uint64_t h = 1469598103934665603ULL;
+            const uint64_t* r = (const uint64_t*)emu.main_ram();
+            for (uint32_t i = 0; i < emu.main_ram_size() / 8; i++) h = (h ^ r[i]) * 1099511628211ULL;
+            fprintf(hf, "%ld %016llx\n", done + 1, (unsigned long long)h);
+        }
         for (int n; (n = emu.audio(snd.data(), 4096)) > 0;)  // drain it, as a sound device would
             if (af) fwrite(snd.data(), sizeof(int16_t) * 2, n, af);
         if (done + 1 == reload && !(emu.save_state(3) && emu.load_state(3)))
@@ -127,9 +151,15 @@ int run_headless(Emu& emu, const Config& cfg) {
             }
         }
         if (!dir.empty() && every > 0 && (done + 1) % every == 0)
-            dump_ppm(dir + "/frame" + std::to_string(done + 1) + ".ppm", emu.top(), emu.bottom(), emu.scale());
+            dump_ppm(dir + "/frame" + std::to_string(done + 1) + ".ppm", pic[0].empty() ? emu.top() : pic[0].data(),
+                     pic[0].empty() ? emu.bottom() : pic[1].data(), emu.scale());
     }
     if (af) fclose(af);
+    if (hf) fclose(hf);
+    if (ahead)
+        Log(LogLevel::Info, "[headless] run-ahead %d: %ld of %ld frames, snapshot %.1f MB, save %.2f ms, load %.2f ms on average\n",
+            ahead, ra_done, done, emu.runahead_bytes() / 1048576.0, ra_done ? ra_save / ra_done : 0.0,
+            ra_done ? ra_load / ra_done : 0.0);
     if (!ring.empty()) emu.draw_into(nullptr, nullptr);  // (the ring goes with this function)
     double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     Log(LogLevel::Info, "[headless] %ld frames in %.2f s: %.1f fps (%.0f%% of a DS)\n", done, s, done / s,

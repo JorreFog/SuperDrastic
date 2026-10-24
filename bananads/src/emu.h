@@ -3,6 +3,7 @@
 #pragma once
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <cstdint>
@@ -69,6 +70,21 @@ public:
     // any thread may ask, the emulator's thread applies it between frames (never inside the SPU's mix)
     void set_audio_skew(double s) { skew_req_.store(s, std::memory_order_relaxed); }
 
+    // Run-ahead (runahead = 1 or 2, experimental): right after run_frame(), the state kept in memory, n more frames
+    // run with the same buttons (the last one's picture is the one shown: before_last() points draw_into at it,
+    // after_last() may copy it), and the state put back, so the game answers a press n frames sooner than its own
+    // lag. Those frames are undone: no sound, no save writes, no microphone or network traffic (hidden()), and the
+    // JIT's blocks compiled meanwhile are dropped (melonDS patch 0091). Within ~2 s of a display capture the 3D frame
+    // is drawn again from the state put back (the capture would otherwise carry the frame ahead's 3D into the game's
+    // VRAM). False when it couldn't run: the picture is run_frame()'s then. runahead_ok(): whether it can (not with
+    // local wireless, on a DSi, or with melonDS's own 3D renderer on its thread).
+    bool runahead_ok() const;
+    bool run_ahead(int n, const std::function<void()>& before_last, const std::function<void()>& after_last);
+    bool hidden() const { return hidden_; }
+    double runahead_save_ms() const { return ra_save_ms_; }  // the last snapshot's save and load, ms
+    double runahead_load_ms() const { return ra_load_ms_; }
+    size_t runahead_bytes() const { return ra_len_; }
+
     bool save_state(int slot);  // slot 0 = the quit/resume state
     bool load_state(int slot);
     void restart();  // the game from its start (the in-game menu's Restart game): a reset, booted straight into it
@@ -131,6 +147,15 @@ private:
     long slice_frames_ = 0;
     std::unique_ptr<Profiler> prof_;  // prof.hz: the emulator's thread sampled (prof.cpp), off by default
     long frames_run_ = 0;
+    // run-ahead's snapshot (run_ahead)
+    std::vector<uint8_t> ra_buf_;
+    size_t ra_len_ = 0;
+    bool hidden_ = false, ra_broken_ = false;
+    bool ra_soft_threaded_ = false;  // render.renderer=soft with render.threaded: no run-ahead (emu.cpp)
+    uint32_t ra_captures_ = 0;   // GPU::CaptureFrames when last seen
+    long ra_capture_at_ = -100000;  // frames_run_ then
+    double ra_save_ms_ = 0, ra_load_ms_ = 0;
+    void note_capture();
 };
 
 }  // namespace bananads

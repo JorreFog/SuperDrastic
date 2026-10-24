@@ -1,0 +1,512 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sat, 24 Oct 2026 12:00:00 +0000
+Subject: [PATCH] NDS: an in-memory snapshot for run-ahead (LeanSavestate),
+ loaded back without a JIT reset
+
+BananaDS's run-ahead (runahead=1-2) saves the state after each frame, runs one or two frames ahead with the same
+buttons to show the last one's picture, and loads the state back: every frame. melonDS's savestate as it was did
+that badly: a load reset the JIT's whole block cache, it wrote 16 MB of main RAM for a DS's 4, a load made the
+timing tables and protection maps again (~6 MB), the cart's code was CRC'd twice, and frames run in between left
+state a file never needs back. NDS::LeanSavestate, set only around run-ahead's snapshot (never for a file):
+- main RAM: 4 MB on a DS; the GPU3D's vertex and polygon RAM and its render list copied as they are (the polygons'
+  vertex pointers too: the snapshot never leaves the process); no cart checksum;
+- also kept, as a state file doesn't: the divider's and square root's operands and results, the adaptive slice's
+  window, each CPU's IRQ line, halt and idle flags and its code/data region timings, the ARM9's instruction cache and
+  its replacement seed, and the Wi-Fi access point's beacon clock and client. Without them a game ran differently
+  after the undone frames (a frame later at most: GS:DD from frame 16, 399, 406, ...);
+- a load leaves the shared WRAM's mapping, the timing tables and the CP15's PU maps alone when what they are made
+  from is unchanged, and drops exactly the JIT blocks compiled since the snapshot (ARMJIT::TrackNewBlocks /
+  DropNewBlocks: deleted, not retired, their ranges' masks and code protection put right) instead of resetting the
+  cache; writes from the undone frames don't count towards a hot self-modifying granule;
+- SPU::DiscardOutput: the undone frames add nothing to the sound output (the mixer runs; its output stage, which
+  isn't in the state, is left as it was);
+- GPU::CaptureFrames counts the frames that started a display capture (the frontend redraws the 3D frame after a
+  load then: a capture would carry the frame ahead's 3D into the game's VRAM).
+Tested headless (bananads runahead=1 and 2 against no run-ahead, Golden Sun: Dark Dawn, 900 frames with presses,
+interpreter, melonDS's renderer unthreaded): main RAM after every frame, the sound byte for byte and the save the
+same; each frame shown is the next frame of the run without. Snapshot 6.7 MB; save 0.14 ms, load ~0.1 ms plus the
+3D redraw on a PC.
+---
+ src/ARM.cpp     | 27 ++++++++++++++++++++++++
+ src/ARMJIT.cpp  | 55 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ src/ARMJIT.h    |  7 +++++++
+ src/CP15.cpp    | 18 +++++++++++++---
+ src/GPU.cpp     |  1 +
+ src/GPU.h       |  1 +
+ src/GPU3D.cpp   | 15 +++++++++++++-
+ src/NDS.cpp     | 35 +++++++++++++++++++++++++------
+ src/NDS.h       |  5 +++++
+ src/NDSCart.cpp |  3 ++-
+ src/SPU.cpp     | 15 +++++++++++---
+ src/SPU.h       |  3 +++
+ src/Wifi.cpp    |  4 ++++
+ src/WifiAP.cpp  | 14 +++++++++++++
+ src/WifiAP.h    |  2 ++
+ 15 files changed, 190 insertions(+), 15 deletions(-)
+
+diff --git a/src/ARM.cpp b/src/ARM.cpp
+index b52aaab..22195ff 100644
+--- a/src/ARM.cpp
++++ b/src/ARM.cpp
+@@ -273,12 +273,39 @@ void ARM::DoSavestate(Savestate* file)
+             CodeCycles = R[15] >> 15; // cheato
+         }
+     }
++
++    if (NDS.LeanSavestate)
++    {
++        // (BananaDS patch 0091) run-ahead's snapshot: what a state file leaves to be set up again, as it was: the
++        // IRQ line the CPU checks between instructions and the code and data regions' timings (frames run on and
++        // then undone left theirs, a different timing from there on)
++        file->Var8(&Halted);
++        file->Var8(&IRQ);
++        file->Var8(&IdleLoop);
++        file->Var32(&CodeRegion);
++        file->Var32((u32*)&CodeCycles);
++        file->Var32(&DataRegion);
++        file->Var32((u32*)&DataCycles);
++    }
+ }
+ 
+ void ARMv5::DoSavestate(Savestate* file)
+ {
+     ARM::DoSavestate(file);
+     CP15DoSavestate(file);
++    if (NDS.LeanSavestate)
++    {
++        // (patch 0091) the instruction cache and its replacement seed: timings a state file starts over
++        file->Var32(&RNGSeed);
++        file->Var32(&TraceProcessID);
++        file->Var32((u32*)&RegionCodeCycles);
++        file->VarArray(ICache, sizeof(ICache));
++        file->VarArray(ICacheTags, sizeof(ICacheTags));
++        file->VarArray(ICacheCount, sizeof(ICacheCount));
++        s32 line = CurICacheLine ? (s32)(CurICacheLine - ICache) : -1;
++        file->Var32((u32*)&line);
++        if (!file->Saving) CurICacheLine = line >= 0 ? ICache + line : nullptr;
++    }
+ }
+ 
+ 
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 065b495..21bd6f5 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -1547,6 +1547,52 @@ void ARMJIT::CompileBlock(ARM* cpu) noexcept
+     u64* entry = &FastBlockLookupRegions[(localAddr >> 27)][(localAddr & 0x7FFFFFF) / 2];
+     *entry = ((u64)blockAddr | cpu->Num) << 32;
+     *entry |= JITCompiler.SubEntryOffset(block->EntryPoint);
++    if (TrackingNewBlocks) NewBlocks.push_back(block);  // (patch 0091)
++}
++
++// BananaDS run-ahead (patch 0091): after a snapshot taken with TrackNewBlocks(true) is loaded back, every block
++// compiled since and still there goes, and only those (deleted, not retired: a block the frames ahead compiled is
++// compiled again when the game gets there, as it would have been without them). Blocks from before the snapshot
++// stay: memory they were compiled from that the frames since wrote was invalidated by those writes (and dropped
++// them), the rest is what the load puts back unchanged.
++void ARMJIT::DropNewBlocks() noexcept
++{
++    TrackingNewBlocks = false;
++    for (JitBlock* block : NewBlocks)
++    {
++        for (int j = 0; j < block->NumAddresses; j++)
++        {
++            u32 addr = block->AddressRanges()[j];
++            AddressRange* region = CodeMemRegions[addr >> 27];
++            AddressRange* range = &region[(addr & 0x7FFFFFF) / 512];
++            bool removed = range->Blocks.RemoveByValue(block);
++            assert(removed);
++            (void)removed;
++            if (!HotRangeIdx.empty())
++                if (auto ix = HotRangeIdx.find(range); ix != HotRangeIdx.end())
++                    for (size_t q = 0; q < ix->second.size(); q++)
++                        if (ix->second[q].first == block) { ix->second.erase(ix->second.begin() + q); break; }
++            u32 code = 0;  // the 16-byte granules the range's other blocks still cover
++            for (int i = 0; i < range->Blocks.Length; i++)
++            {
++                JitBlock* other = range->Blocks[i];
++                for (int k = 0; k < other->NumAddresses; k++)
++                    if (other->AddressRanges()[k] == addr) code |= other->AddressMasks()[k];
++            }
++            range->Code = code;
++            if (range->Blocks.Length == 0
++                && !PageContainsCode(&region[(addr & 0x7FFF000 & ~(Memory.PageSize - 1)) / 512], Memory.PageSize))
++                Memory.SetCodeProtection(addr >> 27, addr & 0x7FFFFFF, false);
++        }
++#if defined(__aarch64__)
++        JITCompiler.UnlinkBlock(block->EntryPoint);
++#endif
++        FastBlockLookupRegions[block->StartAddrLocal >> 27][(block->StartAddrLocal & 0x7FFFFFF) / 2] = (u64)UINT32_MAX << 32;
++        auto& map = block->Num == 0 ? JitBlocks9 : JitBlocks7;
++        if (auto it = map.find(block->StartAddr); it != map.end() && it->second == block) map.erase(it);
++        delete block;
++    }
++    NewBlocks.clear();
+ }
+ 
+ void ARMJIT::InvalidateByAddr(u32 localAddr) noexcept
+@@ -1612,7 +1658,13 @@ void ARMJIT::InvalidateByAddr(u32 localAddr) noexcept
+ 
+ void ARMJIT::InvalidateBlock(JitBlock* block, AddressRange* range, AddressRange* region, u32 localAddr) noexcept
+ {
+-    if (HotSmcOn() && HotSmc.size() < 16)
++    if (TrackingNewBlocks)  // (patch 0091) a frame run ahead: the block is no longer DropNewBlocks' to drop
++    {
++        for (size_t q = 0; q < NewBlocks.size(); q++)
++            if (NewBlocks[q] == block) { NewBlocks[q] = NewBlocks.back(); NewBlocks.pop_back(); break; }
++    }
++    // (patch 0091: and a frame run ahead's writes don't count towards a hot granule: they happen again for real)
++    if (HotSmcOn() && HotSmc.size() < 16 && !TrackingNewBlocks)
+     {
+         u32& n = SmcDrops[localAddr & ~15u];
+         if (++n == 32) HotSmc.push_back(localAddr & ~15u);
+@@ -1771,6 +1823,7 @@ template void ARMJIT::CheckAndInvalidate<1, ARMJIT_Memory::memregion_NewSharedWR
+ 
+ void ARMJIT::ResetBlockCache() noexcept
+ {
++    NewBlocks.clear();  // (patch 0091: every block goes)
+     HotRangeIdx.clear();  // (patch 0018: the ranges are emptied below)
+     // (the hot granules stay: they're the game's habit, not the cache's)
+     Log(LogLevel::Debug, "Resetting JIT block cache...\n");
+diff --git a/src/ARMJIT.h b/src/ARMJIT.h
+index fa7b773..efc026a 100644
+--- a/src/ARMJIT.h
++++ b/src/ARMJIT.h
+@@ -105,6 +105,13 @@ public:
+     std::unordered_map<u32, JitBlock*> JitBlocks7 {};
+ 
+     std::unordered_map<u32, JitBlock*> RestoreCandidates {};
++    // BananaDS run-ahead (patch 0091): the blocks compiled (or restored) while TrackNewBlocks is on and still
++    // there. A snapshot loaded back without Reset() drops exactly those (DropNewBlocks): they may come from memory
++    // the frames run since the snapshot changed, which the load puts back without telling the JIT
++    bool TrackingNewBlocks = false;
++    std::vector<JitBlock*> NewBlocks {};
++    void TrackNewBlocks(bool on) noexcept { TrackingNewBlocks = on; if (on) NewBlocks.clear(); }
++    void DropNewBlocks() noexcept;
+     // hot self-modifying code (patch 0017): 16-byte granules a write keeps dropping compiled blocks in; blocks stop
+     // short of them, and a block starting in one stays in it, so each write recompiles only a few instructions
+     std::unordered_map<u32, u32> SmcDrops {};
+diff --git a/src/CP15.cpp b/src/CP15.cpp
+index 4078125..e6aac55 100644
+--- a/src/CP15.cpp
++++ b/src/CP15.cpp
+@@ -77,6 +77,13 @@ void ARMv5::CP15DoSavestate(Savestate* file)
+ {
+     file->Section("CP15");
+ 
++    // (BananaDS patch 0091) a run-ahead load: the PU and TCM settings as they are now; unchanged by it (and the
++    // NDS's timing tables too), the PU maps and the timing table (6 MB) aren't made again
++    const u32 leanCtl = CP15Control, leanDTCM = DTCMSetting, leanITCM = ITCMSetting;
++    const u32 leanPU[5] = {PU_CodeCacheable, PU_DataCacheable, PU_DataCacheWrite, PU_CodeRW, PU_DataRW};
++    u32 leanRegions[8];
++    memcpy(leanRegions, PU_Region, sizeof(leanRegions));
++
+     file->Var32(&CP15Control);
+ 
+     file->Var32(&DTCMSetting);
+@@ -96,9 +103,14 @@ void ARMv5::CP15DoSavestate(Savestate* file)
+ 
+     if (!file->Saving)
+     {
+-        UpdateDTCMSetting();
+-        UpdateITCMSetting();
+-        UpdatePURegions(true);
++        const u32 pu[5] = {PU_CodeCacheable, PU_DataCacheable, PU_DataCacheWrite, PU_CodeRW, PU_DataRW};
++        if (!NDS.LeanSavestate || NDS.LeanTimingsChanged || CP15Control != leanCtl || DTCMSetting != leanDTCM
++            || ITCMSetting != leanITCM || memcmp(pu, leanPU, sizeof(pu)) || memcmp(PU_Region, leanRegions, sizeof(leanRegions)))
++        {
++            UpdateDTCMSetting();
++            UpdateITCMSetting();
++            UpdatePURegions(true);
++        }
+     }
+ }
+ 
+diff --git a/src/GPU.cpp b/src/GPU.cpp
+index 935ba47..d534a63 100644
+--- a/src/GPU.cpp
++++ b/src/GPU.cpp
+@@ -1273,6 +1273,7 @@ void GPU::StartScanline(u32 line) noexcept
+         if (CaptureCnt & (1<<31))
+         {
+             CaptureEnable = true;
++            CaptureFrames++;  // (patch 0091)
+             CheckCaptureStart();
+         }
+     }
+diff --git a/src/GPU.h b/src/GPU.h
+index 5648a48..1898934 100644
+--- a/src/GPU.h
++++ b/src/GPU.h
+@@ -793,6 +793,7 @@ public:
+ 
+     u32 CaptureCnt;
+     bool CaptureEnable;
++    u32 CaptureFrames = 0;  // BananaDS (patch 0091): frames that started a display capture (run-ahead stays off)
+ 
+     alignas(u64) u8 Palette[2*1024] {};
+     alignas(u64) u8 OAM[2*1024] {};
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index 218ca8f..3645f46 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -392,6 +392,9 @@ void GPU3D::DoSavestate(Savestate* file) noexcept
+     file->Var32(&VertexNumInPoly);
+     file->Var32(&NumConsecutivePolygons);
+ 
++    if (NDS.LeanSavestate)  // (BananaDS patch 0091: run-ahead's snapshot, in this process: as they are, pointers too)
++        file->VarArray(TempVertexBuffer, sizeof(TempVertexBuffer));
++    else
+     for (Vertex& vtx : TempVertexBuffer)
+     {
+         vtx.DoSavestate(file);
+@@ -417,6 +420,13 @@ void GPU3D::DoSavestate(Savestate* file) noexcept
+     file->Var32(&FlushRequest);
+     file->Var32(&FlushAttributes);
+ 
++    if (NDS.LeanSavestate)  // (patch 0091) the vertex and polygon RAM as they are (the polygons' vertex pointers too)
++    {
++        file->VarArray(VertexRAM, sizeof(VertexRAM));
++        file->VarArray(PolygonRAM, sizeof(PolygonRAM));
++    }
++    else
++    {
+     for (Vertex& vtx : VertexRAM)
+     {
+         vtx.DoSavestate(file);
+@@ -490,6 +500,7 @@ void GPU3D::DoSavestate(Savestate* file) noexcept
+             if (poly->YBottom > 192) poly->Degenerate = true;
+         }
+     }
++    }
+ 
+     CmdStallQueue.DoSavestate(file);
+ 
+@@ -509,7 +520,9 @@ void GPU3D::DoSavestate(Savestate* file) noexcept
+     }
+ 
+     file->Var32(&RenderNumPolygons);
+-    if (file->Saving)
++    if (NDS.LeanSavestate)  // (patch 0091)
++        file->VarArray(RenderPolygonRAM.data(), sizeof(RenderPolygonRAM));
++    else if (file->Saving)
+     {
+         for (const Polygon* p : RenderPolygonRAM)
+         {
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 5d231f8..7c52703 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -674,7 +674,11 @@ bool NDS::DoSavestate(Savestate* file)
+         }
+     }
+ 
+-    file->VarArray(MainRAM, MainRAMMaxSize);
++    // (patch 0091) a run-ahead load: the registers the timing tables and the shared WRAM's mapping are made from, as
++    // they are now: unchanged by the load, the tables (some MB) aren't made again
++    const u16 leanEx0 = ExMemCnt[0], leanEx1 = ExMemCnt[1], leanWifiWait = WifiWaitCnt, leanPow7 = PowerControl7;
++    const u8 leanWRAMCnt = WRAMCnt;
++    file->VarArray(MainRAM, LeanSavestate && ConsoleType == 0 ? MainRAMMask + 1 : MainRAMMaxSize);  // (patch 0091)
+     file->VarArray(SharedWRAM, SharedWRAMSize);
+     file->VarArray(ARM7WRAM, ARM7WRAMSize);
+ 
+@@ -707,6 +711,18 @@ bool NDS::DoSavestate(Savestate* file)
+ 
+     file->Var16(&DivCnt);
+     file->Var16(&SqrtCnt);
++    if (LeanSavestate)
++    {
++        // (patch 0091) run-ahead's snapshot: the divider's and the square root's operands and results too, which a
++        // state file leaves out: a game reads a result, or writes half an operand, across a frame boundary
++        file->VarArray(DivNumerator, sizeof(DivNumerator));
++        file->VarArray(DivDenominator, sizeof(DivDenominator));
++        file->VarArray(DivQuotient, sizeof(DivQuotient));
++        file->VarArray(DivRemainder, sizeof(DivRemainder));
++        file->VarArray(SqrtVal, sizeof(SqrtVal));
++        file->Var32(&SqrtRes);
++        file->Var64(&SliceNearIPCUntil);
++    }
+ 
+     file->Var32(&CPUStop);
+ 
+@@ -766,12 +782,18 @@ bool NDS::DoSavestate(Savestate* file)
+     {
+         // 'dept of redundancy dept'
+         // but we do need to update the mappings
+-        MapSharedWRAM(WRAMCnt);
++        if (!LeanSavestate || WRAMCnt != leanWRAMCnt)  // (patch 0091)
++            MapSharedWRAM(WRAMCnt);
+ 
+-        InitTimings();
+-        SetGBASlotTimings();
++        LeanTimingsChanged = !LeanSavestate || ExMemCnt[0] != leanEx0 || ExMemCnt[1] != leanEx1
++            || WifiWaitCnt != leanWifiWait || PowerControl7 != leanPow7;
++        if (LeanTimingsChanged)
++        {
++            InitTimings();
++            SetGBASlotTimings();
+ 
+-        UpdateWifiTimings();
++            UpdateWifiTimings();
++        }
+     }
+ 
+     for (int i = 0; i < 8; i++)
+@@ -800,7 +822,8 @@ bool NDS::DoSavestate(Savestate* file)
+         Wifi.SetPowerCnt(PowerControl7 & 0x0002);
+ 
+ #ifdef JIT_ENABLED
+-        JIT.Reset();
++        if (LeanSavestate) JIT.DropNewBlocks();  // (patch 0091: run-ahead's snapshot)
++        else JIT.Reset();
+ #endif
+     }
+ 
+diff --git a/src/NDS.h b/src/NDS.h
+index 1dc5f6c..5408c11 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -326,6 +326,11 @@ public: // TODO: Encapsulate the rest of these members
+ #endif
+     }
+     bool RegionPair = false;
++    // BananaDS run-ahead (patch 0091): DoSavestate makes and loads an in-memory snapshot: only the DS's 4 MB of main
++    // RAM (not MainRAMMaxSize's 16), and a load doesn't reset the JIT: it drops the blocks compiled since the
++    // snapshot instead (ARMJIT::TrackNewBlocks before running on from it). Never for a file
++    bool LeanSavestate = false;
++    bool LeanTimingsChanged = true;  // (a lean load changed what the timing tables are made from: CP15 makes its own)
+     // RegionTrio (exact, BananaDS patch 0087; with RegionPair): two regions the PC left are kept, not one, and the
+     // ARM9's BIOS and the ARM7's shared WRAM can be kept too (an IRQ takes the ARM9 from main RAM through its BIOS
+     // to an ITCM handler and back; the ARM7's sound driver runs in shared WRAM and goes through its BIOS). On by
+diff --git a/src/NDSCart.cpp b/src/NDSCart.cpp
+index 6c5b16d..bcb6e5b 100644
+--- a/src/NDSCart.cpp
++++ b/src/NDSCart.cpp
+@@ -259,7 +259,8 @@ void NDSCartSlot::DoSavestate(Savestate* file) noexcept
+     if (Cart)
+     {
+         carttype = Cart->Type();
+-        cartchk = Cart->Checksum();
++        // (BananaDS patch 0091: run-ahead's snapshot never leaves the process and its cart: no CRC of the game's code)
++        cartchk = NDS.LeanSavestate ? 0 : Cart->Checksum();
+     }
+ 
+     if (file->Saving)
+diff --git a/src/SPU.cpp b/src/SPU.cpp
+index ea028dd..1ed9384 100644
+--- a/src/SPU.cpp
++++ b/src/SPU.cpp
+@@ -1357,9 +1357,12 @@ void SPU::Mix(u32 spucycles)
+     if (same && FastTailValid && NDS.ConsoleType == 0)
+     {
+         NDS.Mic.Advance(spucycles << 1);
+-        BlipTimer += spucycles;
+-        if (BlipTimer >= 512 * 128)
+-            BufferAudio();
++        if (!DiscardOutput)  // (patch 0091)
++        {
++            BlipTimer += spucycles;
++            if (BlipTimer >= 512 * 128)
++                BufferAudio();
++        }
+         NDS.ScheduleEvent(Event_SPU, true, MixInterval, 0, MixInterval >> 1);
+         return;
+     }
+@@ -1408,6 +1411,12 @@ void SPU::Mix(u32 spucycles)
+         output[1] &= 0xFFC0;
+     }
+ 
++    if (DiscardOutput)  // (patch 0091)
++    {
++        NDS.ScheduleEvent(Event_SPU, true, MixInterval, 0, MixInterval >> 1);
++        return;
++    }
++
+     BlipTimer += spucycles;
+ 
+     if (output[0] != OutputLastSamples[0])
+diff --git a/src/SPU.h b/src/SPU.h
+index 10740ba..8b8345a 100644
+--- a/src/SPU.h
++++ b/src/SPU.h
+@@ -259,6 +259,9 @@ public:
+     // FastMix (BananaDS, exact): channels whose output can't have changed since the last Mix aren't run again,
+     // the mixers sum with NEON, sound DMA and capture access main RAM directly. Off by default.
+     void SetFastMix(bool enable);
++    // BananaDS run-ahead (patch 0091): frames run ahead and then undone add nothing to the output (the mixer's
++    // state goes on and is put back by the snapshot; the resampler's, which isn't in it, is left as it was)
++    bool DiscardOutput = false;
+     bool GetFastMix() const { return FastMix; }
+     // FastSamples (BananaDS, exact; with FastMix): a due PCM16 or ADPCM channel's samples are taken with its state in
+     // registers and ADPCM's step from tables (RunSamples); the FIFO refills, the start, the loop and the end take
+diff --git a/src/Wifi.cpp b/src/Wifi.cpp
+index 89bdb02..ac8da0d 100644
+--- a/src/Wifi.cpp
++++ b/src/Wifi.cpp
+@@ -313,6 +313,10 @@ void Wifi::DoSavestate(Savestate* file)
+     file->Bool32(&IsMPClient);
+     file->Var64(&NextSync);
+     file->Var64(&RXTimestamp);
++
++    // (BananaDS patch 0091) run-ahead's snapshot: the access point's beacon clock and its one client too, which a
++    // state file leaves out: frames run on and then undone would otherwise move its beacons for good
++    if (NDS.LeanSavestate) WifiAP->DoSavestate(file);
+ }
+ 
+ 
+diff --git a/src/WifiAP.cpp b/src/WifiAP.cpp
+index ccb50e4..8feec3d 100644
+--- a/src/WifiAP.cpp
++++ b/src/WifiAP.cpp
+@@ -21,6 +21,7 @@
+ #include "NDS.h"
+ #include "Wifi.h"
+ #include "WifiAP.h"
++#include "Savestate.h"
+ #include "Platform.h"
+ 
+ #ifndef __WIN32__
+@@ -95,6 +96,19 @@ void WifiAP::Reset()
+ }
+ 
+ 
++void WifiAP::DoSavestate(Savestate* file)
++{
++    file->Section("WFAP");
++    file->Var64(&USCounter);
++    file->Var16(&SeqNo);
++    file->VarBool(&BeaconDue);
++    file->VarArray(PacketBuffer, sizeof(PacketBuffer));
++    file->Var32((u32*)&PacketLen);
++    file->Var32((u32*)&RXNum);
++    file->VarArray(LANBuffer, sizeof(LANBuffer));
++    file->Var32((u32*)&ClientStatus);
++}
++
+ void WifiAP::MSTimer()
+ {
+     USCounter += 0x400;
+diff --git a/src/WifiAP.h b/src/WifiAP.h
+index 38c9042..17ab744 100644
+--- a/src/WifiAP.h
++++ b/src/WifiAP.h
+@@ -24,6 +24,7 @@
+ namespace melonDS
+ {
+ class Wifi;
++class Savestate;
+ 
+ class WifiAP
+ {
+@@ -37,6 +38,7 @@ public:
+     static const u8 APChannel;
+ 
+     void MSTimer();
++    void DoSavestate(Savestate* file);  // (BananaDS patch 0091: only in run-ahead's in-memory snapshot)
+ 
+     // packet format: 12-byte TX header + original 802.11 frame
+     int SendPacket(const u8* data, int len);
+-- 
+2.56.0
+
