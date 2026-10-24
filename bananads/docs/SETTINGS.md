@@ -72,7 +72,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `save.dir` | the ROM's folder | where `<game>.sav` lives |
 | `save.per_game_folder` | `off` | `<save.dir>/<game>/<game>.sav` (ROCKNIXDS #42/#56) |
 | `state.dir` | the save folder | savestates: `<game>.resume.mst` (the quit/resume state) and `<game>.<1-3>.mst`, each with a `.pic` |
-| `resume.on_quit` | `on` | save the resume state when the game is quit |
+| `resume.on_quit` | `on` | save the resume state when the game is quit (`SIGUSR1` to the kms frontend saves it either way) |
 | `resume.on_start` | `on` | load it when the game starts |
 | `firmware.nickname` | `BananaDS` | the DS's user name (10 characters at most; games and WFC show it) |
 | `firmware.language` | the firmware's | 0 Japanese, 1 English, 2 French, 3 German, 4 Italian, 5 Spanish |

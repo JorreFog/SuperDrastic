@@ -23,6 +23,8 @@
 //   slot 1, F + L loads it.
 // - SIGTERM/SIGINT/SIGHUP quit the same way (the resume state written, then the save): BananaLinux's shutdown waits
 //   5 s for that. SIGSTOP/SIGCONT around sleep only leave a gap: the pacing starts again from the time it wakes.
+// - SIGUSR1 quits with the resume state written whatever resume.on_quit says (BananaOS's Power off after sleeping:
+//   the game saved before the handheld powers itself off, loaded once at the next boot even with Quick resume off).
 #include <cstdarg>
 #include <dirent.h>
 #include <fcntl.h>
@@ -74,6 +76,7 @@ using melonDS::Platform::LogLevel;
 namespace bananads {
 
 static std::atomic<bool> g_quit{false};
+static std::atomic<bool> g_save{false};  // SIGUSR1: the quit writes the resume state, resume.on_quit or not
 static std::atomic<int> g_ff{0};  // fast-forward: 0 off, else the speed (99: as fast as it goes)
 static int g_wake = -1;  // eventfd: a signal or a new frame wakes the presenter
 
@@ -85,6 +88,11 @@ static void wake() {
     }
 }
 static void on_signal(int) {
+    g_quit = true;
+    wake();
+}
+static void on_save_quit(int) {
+    g_save = true;
     g_quit = true;
     wake();
 }
@@ -1129,6 +1137,8 @@ int run_kms(Emu& emu, const Config& cfg) {
     sa.sa_handler = on_signal;
     sigemptyset(&sa.sa_mask);
     for (int s : {SIGTERM, SIGINT, SIGHUP}) sigaction(s, &sa, nullptr);
+    sa.sa_handler = on_save_quit;
+    sigaction(SIGUSR1, &sa, nullptr);
     signal(SIGPIPE, SIG_IGN);
 
     Display dp;
@@ -1581,7 +1591,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         dp.shown.load(), dp.dropped.load());
 
     // the resume state at the top clock (a save at 2x takes a visible moment at a low one), then the rest
-    if (cfg.flag("resume.on_quit", true)) {
+    if (cfg.flag("resume.on_quit", true) || g_save) {
         cpugov_boost(5000);
         emu.save_state(0);
     }
