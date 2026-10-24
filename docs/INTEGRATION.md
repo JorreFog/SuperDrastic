@@ -95,6 +95,11 @@ With DraStic's `backup_in_savestates` on (its default), loading a state also put
 with: don't load a resume state older than the game's `.dsv` (ROCKNIXDS drops it then). On ROCKNIX the hotkey runs
 `killall $(cat /tmp/.process-kill-data)`, so writing `-USR1 drastic` there after `start_drastic.sh` has set it is enough.
 
+`DSFLIP_RESUME_ON_QUIT=0` keeps the resume file for SIGUSR1 alone: the in-game menu's Quit, the exit combos and
+`superdrastic-run`'s stop on SIGTERM then quit without a save, as with no file. For a frontend whose quick resume is
+off that still wants the game saved before it powers the handheld off by itself (BananaOS's Power off after
+sleeping sends SIGUSR1 to `drastic`, then loads the state once at the next boot).
+
 **Exit combos.** Holding **Start + Select** or **Menu + Start** for half a second quits the same way (with a resume
 save when `DSFLIP_RESUME_FILE` is set, else at once), like ROCKNIX's gptokeyb did for DraStic. The buttons are the
 ones `drastic.cfg` maps to `START`, `SELECT` and `MENU` (either control set). `DSFLIP_EXIT_COMBO=0` turns them off.
@@ -155,7 +160,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_QUEUE` | 1 | Frames that may wait behind the next one, 0-3 (0 = newest only). Each is a refresh (16.7 ms) of input latency, and covers one late frame |
 | `DSFLIP_QUEUE_WAIT` | 0 (off) | Milliseconds DraStic is held when the queue is full, instead of dropping a frame (20 works; for capped clocks) |
 | `DSFLIP_LATCH_MARGIN` | 1300 | The shortest time (µs) before a vblank that a frame is committed at (diagnostics) |
-| `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD` | | See *Quitting with a save* |
+| `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD`, `DSFLIP_RESUME_ON_QUIT` | , 0, 1 | See *Quitting with a save* |
 | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
 | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |

@@ -11,6 +11,8 @@
 // older in-game save).
 //
 // DSFLIP_RESUME_FILE: where the resume state goes (unset: SIGUSR1 just quits). DSFLIP_RESUME_LOAD=1: load it at start.
+// DSFLIP_RESUME_ON_QUIT=0: only SIGUSR1 saves; the in-game menu's Quit and the exit combos quit at once, as without a
+// file (a frontend whose own quick resume is off, that still saves the game before a power-off of its own).
 // A second SIGUSR1 while saving, or no file within 5 s, quits at once. DSFLIP_RESUME_TRACE=1 logs DraStic's savestate
 // file calls.
 #define _GNU_SOURCE
@@ -37,6 +39,7 @@ extern volatile int dsflip_hold;
 
 static char resume_path[512];
 static int trace;
+static int quit_saves = 1;                            /* DSFLIP_RESUME_ON_QUIT: the player's own quits save too */
 static volatile int want_save, saving, saved, want_load, loading, load_redirects;
 static volatile int btn_press, btn_release;          /* joystick button to press now / to release (-1: none) */
 static long long release_at;                          /* the frame to release it at: DraStic ignores a tap, it wants it held */
@@ -220,11 +223,13 @@ void resume_frame(void) {
     if (combo_since && now_ms() - combo_since >= EXIT_HOLD_MS) {
         combo_since = 0; held_btns = 0;
         dsflip_log("[resume] exit combo held: quitting\n");
+        if (!quit_saves) kill(getpid(), SIGKILL);
         on_usr1(SIGUSR1);
     }
     if (want_save && !saving) {
         saving = 1; want_save = 0;
         dsflip_log("[resume] quit requested: saving a resume state\n");
+        audio_mute(1);                                 /* (the game runs on for the save: silent, as the menu's quit) */
         unlink(resume_path);
         resume_press(btn_save);
         pthread_t t; if (pthread_create(&t, 0, save_thread, 0)) kill(getpid(), SIGKILL);
@@ -247,7 +252,7 @@ void resume_frame(void) {
 /* ---- the in-game menu (menu.c) ---- */
 int resume_control_button(const char *name) { return control_button_any(name); }
 int resume_joy_id(void) { return joy_id >= 0 ? joy_id : 0; }
-int resume_on(void) { return resume_path[0] && btn_save >= 0; }
+int resume_on(void) { return resume_path[0] && btn_save >= 0 && quit_saves; }   /* the player's quits save */
 int resume_quit_pending(void) { return want_save; }   /* the exit hotkey came while the menu was open */
 int resume_menu_busy(void) { return m_saving || m_loading || m_load_next[0] || saving; }
 /* press a DraStic control's button (held 40 frames, after any press before it) */
@@ -313,6 +318,7 @@ void resume_start(void) {
     btn_menu2 = control_button_in("b", "MENU"); if (btn_menu2 == btn_menu) btn_menu2 = -1;
     { const char *x = getenv("DSFLIP_EXIT_COMBO"); exit_combo = !(x && *x == '0'); }
     if (exit_combo) dsflip_log("[resume] exit combos: start %d + select %d, menu %d or %d + start\n", btn_start, btn_select, btn_menu, btn_menu2);
+    { const char *q = getenv("DSFLIP_RESUME_ON_QUIT"); quit_saves = !(q && *q == '0'); }
     const char *p = getenv("DSFLIP_RESUME_FILE");
     if (!p || !*p) return;
     snprintf(resume_path, sizeof resume_path, "%s", p);
@@ -320,7 +326,8 @@ void resume_start(void) {
     const char *l = getenv("DSFLIP_RESUME_LOAD");
     int have = access(resume_path, R_OK) == 0;
     if (l && *l == '1' && have && btn_load >= 0) { want_load = 1; load_at_frame = 120; }   /* 2 s in: the game runs */
-    dsflip_log("[resume] quit-with-save on SIGUSR1 (save = button %d, load = button %d)%s\n", btn_save, btn_load,
+    dsflip_log("[resume] quit-with-save on SIGUSR1%s (save = button %d, load = button %d)%s\n",
+               quit_saves ? "" : " only", btn_save, btn_load,
                want_load ? ", resuming this session" : have ? ", a resume state exists but isn't loaded" : "");
     if (btn_save < 0) dsflip_log("[resume] DraStic's save-state control isn't a joystick button: SIGUSR1 quits without saving\n");
 }
