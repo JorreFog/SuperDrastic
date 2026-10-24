@@ -80,6 +80,7 @@ namespace bananads {
 
 static std::atomic<bool> g_quit{false};
 static std::atomic<bool> g_save{false};  // SIGUSR1: the quit writes the resume state, resume.on_quit or not
+static std::atomic<bool> g_nosave{false};  // the menu's Quit without saving: no resume state (SIGUSR1's still is)
 static std::atomic<int> g_ff{0};  // fast-forward: 0 off, else the speed (99: as fast as it goes)
 static int g_wake = -1;  // eventfd: a signal or a new frame wakes the presenter
 
@@ -937,6 +938,7 @@ struct MenuHost {
     std::string rom;
     std::deque<bmenu_ev> q;
     bool quit = false;
+    bool nosave = false;  // the quit is Quit without saving
 };
 
 static int menu_key(int code) {
@@ -944,6 +946,7 @@ static int menu_key(int code) {
         case BTN_EAST: case KEY_ENTER: return BM_A;
         case BTN_SOUTH: case KEY_BACKSPACE: return BM_B;
         case BTN_WEST: case KEY_Y: return BM_Y;
+        case BTN_NORTH: case KEY_X: return BM_X;
         case BTN_TL: case KEY_PAGEUP: return BM_L;
         case BTN_TR: case KEY_PAGEDOWN: return BM_R;
         case BTN_START: case KEY_S: return BM_START;
@@ -1053,6 +1056,10 @@ static void mh_state_file(void* c, int slot, char* out, int n) {
     snprintf(out, n, "%s", ((MenuHost*)c)->emu->state_path(slot).c_str());
 }
 static void mh_quit(void* c) { ((MenuHost*)c)->quit = true; }
+static void mh_quit_nosave(void* c) {
+    ((MenuHost*)c)->quit = true;
+    ((MenuHost*)c)->nosave = true;
+}
 static void mh_restart(void* c) {
     cpugov_boost(2000);
     ((MenuHost*)c)->emu->restart();
@@ -1345,6 +1352,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         h.load = mh_load;
         h.state_file = mh_state_file;
         h.quit = mh_quit;
+        h.quit_nosave = mh_quit_nosave;
         h.restart = mh_restart;
         h.blow = mh_blow;
         h.mic_meter = mh_mic_meter;
@@ -1583,6 +1591,7 @@ int run_kms(Emu& emu, const Config& cfg) {
             if (poll(&p, 1, 50) > 0) drmHandleEvent(dp.fd, &ev);
         }
         mh.quit = false;
+        mh.nosave = false;
         mh.q.clear();
         bmenu_run(start);
         dp.show_game();
@@ -1591,7 +1600,10 @@ int run_kms(Emu& emu, const Config& cfg) {
         menu_down = false;
         in_keys = 0;
         in_touch = -1;
-        if (mh.quit) g_quit = true;
+        if (mh.quit) {
+            if (mh.nosave) g_nosave = true;
+            g_quit = true;
+        }
         if (ff_held) {  // (R2's release went to the menu)
             ff_held = false;
             g_ff = 0;
@@ -1804,10 +1816,11 @@ int run_kms(Emu& emu, const Config& cfg) {
         dp.shown.load(), dp.dropped.load());
 
     // the resume state at the top clock (a save at 2x takes a visible moment at a low one), then the rest
-    if (cfg.flag("resume.on_quit", true) || g_save) {
+    if (g_save || (cfg.flag("resume.on_quit", true) && !g_nosave)) {
         cpugov_boost(5000);
         emu.save_state(0);
-    }
+    } else if (g_nosave)
+        Log(LogLevel::Info, "[kms] quit without saving: the resume state left as it was\n");
     cpugov_stop();
 #ifdef BANANADS_ALSA
     start_mark("quit: cpugov");

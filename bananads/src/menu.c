@@ -491,7 +491,7 @@ static void load_wav(int id, const char *path) {
 static void play(int id) { if (snd_ok[id] && H.sound_play) H.sound_play(H.ctx, id); }
 
 /* ---------- state ---------- */
-enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_RESTART, SC_CHEAT };
+enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_RESTART, SC_CHEAT, SC_QUIT_NOSAVE };
 static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_top, dirty_bot;
 #define MAIN_BRI 6                                /* sel_main: the main page's Brightness row, under the tiles */
 static int main_col;                              /* the tiles' column the d-pad came down from (back up to it) */
@@ -734,7 +734,7 @@ static void draw_top(void) {
 
 /* ---------- bottom panel ---------- */
 typedef struct { int x0, y0, x1, y1; } rect;
-static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[8], R_BAR[8], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_UNDO, R_MBRI, R_MBRI_BAR;
+static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[8], R_BAR[8], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_DLG_X, R_UNDO, R_MBRI, R_MBRI_BAR;
 static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1; }
 
 static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
@@ -789,23 +789,28 @@ static int bar_value(rect b, int px, canvas *c) {   /* a tap on a row's bar: its
     int v = (px - b.x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5;
     return v < 0 ? 0 : v > 100 ? 100 : v;
 }
-static void dialog(canvas *c, const char *title, const char *body, const char *no, const char *yes, int danger) {
+/* a question over the page: B no, A yes; with alt, a second row under them: X alt, in red (Quit without saving) */
+static void dialog3(canvas *c, const char *title, const char *body, const char *no, const char *yes, int danger, const char *alt) {
     fill(c, 0, 0, c->w, c->h, C_DARK, 0.65f);
-    int w = S(460), h = S(210), x0 = (c->w - w) / 2, y0 = S(120);
+    int w = S(460), h = alt ? S(260) : S(210), x0 = (c->w - w) / 2, y0 = alt ? S(100) : S(120);
     box(c, x0, y0, x0 + w, y0 + h, S(14), S(3), C_LIGHT, C_DARK);
     text(c, &F_MED, title, x0 + S(26), y0 + S(22), S(24), C_LIGHT, w - S(52), 0);
     char l1[200], l2[200]; int n = wrap2(&F_REG, body, S(17), w - S(52), l1, l2, sizeof l1, 1);
     text(c, &F_REG, l1, x0 + S(26), y0 + S(66), S(17), C_BODY, w - S(52), 0);
     if (n > 1) text(c, &F_REG, l2, x0 + S(26), y0 + S(90), S(17), C_BODY, w - S(52), 0);
-    int by = y0 + h - S(60);
-    R_DLG_A = pill(c, x0 + w - S(24), by, 1, "A", yes, danger ? C_REDL : C_LIGHT, C_LIGHT, danger ? C_RED : C_BLUE);
+    int by = y0 + h - (alt ? S(110) : S(60));
+    R_DLG_A = pill(c, x0 + w - S(24), by, 1, "A", yes, danger ? C_REDL : C_LIGHT, danger ? C_LIGHT : C_ONSEL, danger ? C_RED : C_BLUE);
     R_DLG_B = pill(c, R_DLG_A.x0 - S(12), by, 1, "B", no, C_GREY, C_LIGHT, C_PILLBG);
+    R_DLG_X = alt ? pill(c, x0 + w - S(24), by + S(50), 1, "X", alt, C_REDDIM, C_REDL, C_DARK) : (rect){ 0, 0, 0, 0 };
+}
+static void dialog(canvas *c, const char *title, const char *body, const char *no, const char *yes, int danger) {
+    dialog3(c, title, body, no, yes, danger, 0);
 }
 static void draw_bottom(void) {
     canvas *c = &CV[1];
     dots(c, 0, 0, c->w, c->h, C_BG, C_DOT);
     int gx0 = S(20), gx1 = c->w - S(20), gy0 = S(58), gy1 = S(404), bw = S(3) < 2 ? 2 : S(3);
-    int s = scr == SC_OVERWRITE ? SC_SAVE : (scr == SC_QUIT || scr == SC_RESTART) ? SC_MAIN : scr;
+    int s = scr == SC_OVERWRITE ? SC_SAVE : (scr == SC_QUIT || scr == SC_RESTART || scr == SC_QUIT_NOSAVE) ? SC_MAIN : scr;
     if (scr == SC_BUSY) {
         draw_header(c, "Please wait", "", 0);
         int w = S(420), h = S(150), x0 = (c->w - w) / 2, y0 = S(150);
@@ -1005,9 +1010,14 @@ static void draw_bottom(void) {
         char w[48]; when_text(SL[sel_slot].mt, w, sizeof w);
         char b[160]; snprintf(b, sizeof b, "The save from %s will be replaced by this one.", w);
         dialog(c, t, b, "Cancel", "Replace", 0);
-    } else if (scr == SC_QUIT)
+    } else if (scr == SC_QUIT && H.resume_on && H.quit_nosave)   /* saving the spot first; quitting without it, under it */
+        dialog3(c, "Quit to the menu?", "Your spot is saved. Next time the game picks up right here.", "Keep playing",
+                "Save and quit", 0, "Quit without saving");
+    else if (scr == SC_QUIT)
         dialog(c, "Quit to the menu?", H.resume_on ? "Your spot is saved. Next time the game picks up right here."
                                                    : "Anything since your last save will be lost.", "Keep playing", "Quit", 1);
+    else if (scr == SC_QUIT_NOSAVE)
+        dialog(c, "Quit without saving?", "Anything since your last save will be lost.", "Cancel", "Quit", 1);
     else if (scr == SC_RESTART)
         dialog(c, "Restart the game?", "Back to the title screen. Anything since your last save will be lost.",
                "Keep playing", "Restart", 1);
@@ -1096,7 +1106,14 @@ static void activate(void) {
     case SC_RESTART:
         play(SND_SELECT); busy("Restarting"); H.restart(H.ctx); undo_ok = 0; close_menu();
         break;
+    case SC_QUIT_NOSAVE:
+        play(SND_SELECT); close_menu(); H.quit_nosave(H.ctx);
+        break;
     }
+}
+static void quit_nosave_ask(void) {             /* X on the quit question: Quit without saving, asked again */
+    if (scr != SC_QUIT || !H.resume_on || !H.quit_nosave) return;
+    scr = SC_QUIT_NOSAVE; play(SND_SELECT); dirty_bot = 1;
 }
 static void back(void) {
     play(SND_BACK);
@@ -1104,6 +1121,7 @@ static void back(void) {
     case SC_MAIN: close_menu(); break;
     case SC_OVERWRITE: scr = SC_SAVE; dirty_bot = 1; break;
     case SC_QUIT: case SC_RESTART: scr = SC_MAIN; dirty_bot = 1; break;
+    case SC_QUIT_NOSAVE: scr = SC_QUIT; dirty_bot = 1; break;
     case SC_MIC: case SC_CHEAT: scr = SC_SET; dirty_bot = 1; break;
     default: scr = SC_MAIN; dirty_top = dirty_bot = 1; break;
     }
@@ -1147,8 +1165,9 @@ static void nav(int dx, int dy) {
     if (moved) { play(SND_MOVE); dirty_bot = 1; }
 }
 static void tap(int px, int py) {               /* a touch-down on the bottom panel, in panel pixels */
-    if (scr == SC_OVERWRITE || scr == SC_QUIT || scr == SC_RESTART) {
+    if (scr == SC_OVERWRITE || scr == SC_QUIT || scr == SC_RESTART || scr == SC_QUIT_NOSAVE) {
         if (in_rect(R_DLG_A, px, py)) activate(); else if (in_rect(R_DLG_B, px, py)) back();
+        else if (scr == SC_QUIT && in_rect(R_DLG_X, px, py)) quit_nosave_ask();
         return;
     }
     if (scr == SC_BUSY) return;
@@ -1201,6 +1220,7 @@ static void handle(const bmenu_ev *e) {
     else if (b == BM_A) activate();
     else if (b == BM_B) back();
     else if (b == BM_Y && scr == SC_LOAD && undo_ok) do_load(-1);
+    else if (b == BM_X && scr == SC_QUIT) quit_nosave_ask();
     else if (b == BM_UP) dir_press(0, -1); else if (b == BM_DOWN) dir_press(0, 1);
     else if (b == BM_LEFT) dir_press(-1, 0); else if (b == BM_RIGHT) dir_press(1, 0);
     else if (b == BM_L && scr == SC_SET) adjust(-1); else if (b == BM_R && scr == SC_SET) adjust(1);
@@ -1240,7 +1260,7 @@ int bmenu_run(int start) {
             for (int i = 0; i < 2; i++) { int v = bl_pm(i); if (v > 0) { sum += v; n++; } }
             int b = n ? (sum / n + 5) / 10 : bri;
             if (b - bri >= 3 || bri - b >= 3) { bri = brightness_get(); dirty_bot = 1; } } }
-        if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT) dirty_top = 1; }   /* the clock */
+        if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT || scr == SC_QUIT_NOSAVE) dirty_top = 1; }   /* the clock */
         /* RetroAchievements finishes its login and the game's lookup 10-15 s after a start: a menu opened before that
          * had no achievements on its top screen until it was opened again. Looked at twice a second while open. */
         { static long long rt; if (now_ms() - rt >= 500) { rt = now_ms(); unsigned u = 0, t = 0; int has = ra_progress(&u, &t) && t;

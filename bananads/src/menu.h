@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-enum { BM_A, BM_B, BM_Y, BM_L, BM_R, BM_START, BM_UP, BM_DOWN, BM_LEFT, BM_RIGHT, BM_MENU };
+enum { BM_A, BM_B, BM_Y, BM_L, BM_R, BM_START, BM_UP, BM_DOWN, BM_LEFT, BM_RIGHT, BM_MENU, BM_X };
 enum { BM_EV_KEY = 1, BM_EV_TOUCH = 2 };
 typedef struct {
     int kind;      // BM_EV_KEY: key (BM_*) and down; BM_EV_TOUCH: a touch going down at (x, y), bottom panel pixels
@@ -34,6 +34,9 @@ typedef struct {
     int (*load)(void* ctx, int slot);               // 0: done
     void (*state_file)(void* ctx, int slot, char* out, int n);  // the slot's file (+ ".pic": 256x384 XRGB8888)
     void (*quit)(void* ctx);                        // after the menu closes: the resume state, then the menu
+    // Quit without saving: as quit, but no resume state is written (the one from before stays as it was); unset: the
+    // quit question has no such choice
+    void (*quit_nosave)(void* ctx);
     void (*restart)(void* ctx);                     // the game from its start
     void (*blow)(void* ctx, int ms);                // the game hears a blow on the mic
     int (*mic_meter)(void* ctx, float* level, float* floor_, float* bar);  // -1 no mic, 0 starting, 1 listening
