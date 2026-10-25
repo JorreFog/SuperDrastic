@@ -411,6 +411,8 @@ int shader_init(int fd, const char *name) {
     return 1;
 }
 
+int shader_fast_on(void) { return nfast && fast_ok; }
+
 /* the program in use for this draw: the fast twin when it passed its check at these sizes, else the shader itself */
 static sprog *pick(int sw, int shh, int dw, int dhh) {
     if (!nfast) return &slow;

@@ -38,6 +38,7 @@
 #include <signal.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
+#include <sys/syscall.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -133,6 +134,7 @@ int shader_init(int fd, const char* name);
 int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 int shader_viewport(int* v, int pw, int ph);
 extern int shader_fast;
+int shader_fast_on(void);
 extern int clear_first;
 void dsflip_log(const char* fmt, ...) {
     char b[512];
@@ -689,6 +691,7 @@ struct Display {
         }
         if (!shader_name.empty() && !shader_tried) {  // GL is made on this thread
             shader_tried = true;
+            if (gpu_floor_low) { gpu_floor(false); gpu_floor_low = false; }   // (another shader: the 600 floor again)
             start_mark("shader: start");
             shader_on = shader_init(fd, shader_name.c_str()) != 0;
             for (int i = 0; i < 2 && shader_on; i++)
@@ -783,6 +786,14 @@ struct Display {
             shader_n++;
             if (dt > shader_max_us) shader_max_us = dt;
             snext = (snext + 1) % 3;  // (one on screen, one committed, one drawn ahead)
+            // kms.gpu_floor_mhz auto: with ds-grid-2x's fast twin the pass is ~5 ms a frame at 400 MHz, ~31% busy,
+            // under panfrost's 45% up-threshold: the GPU stays at 400 instead of 600 (measured on the RG DS Plus)
+            if (!gpu_floor_low && gpu_floor_mhz < 0 && shader_fast_on() && !gpu_dir.empty()) {
+                gpu_floor_low = true;
+                std::ofstream(gpu_dir + "/min_freq") << gpu_min_was;   // (put back first: the floor goes down)
+                gpu_dir.clear();
+                gpu_floor(true);
+            }
             ll_ready(s);
             if (swapped) std::swap(out[0], out[1]);  // (F + SELECT: each DS screen on the other panel)
             overlay(out[0]);
@@ -804,7 +815,8 @@ struct Display {
     // refresh: frames missed their vblank), and put back at the end
     std::string gpu_dir;
     std::string gpu_min_was;
-    long gpu_floor_mhz = 600;
+    long gpu_floor_mhz = -1;   // kms.gpu_floor_mhz; -1 (auto): 600, or 400 once a fast twin draws
+    bool gpu_floor_low = false;
     long long shader_us = 0, shader_max_us = 0;
     long shader_n = 0;
     void gpu_floor(bool on) {
@@ -824,8 +836,9 @@ struct Display {
             std::vector<long> fr;
             for (long v; a >> v;) fr.push_back(v);
             std::sort(fr.begin(), fr.end());
-            long want = 0;  // kms.gpu_floor_mhz (600), or the highest under it
-            for (long v : fr) if (v <= gpu_floor_mhz * 1000000L) want = v;
+            long want = 0;  // kms.gpu_floor_mhz (auto: 600, 400 with a fast twin), or the highest under it
+            const long mhz = gpu_floor_mhz >= 0 ? gpu_floor_mhz : gpu_floor_low ? 400 : 600;
+            for (long v : fr) if (v <= mhz * 1000000L) want = v;
             if (want) std::ofstream(gpu_dir + "/min_freq") << want;
             Log(LogLevel::Info, "[kms] GPU at least %ld MHz while the shader runs\n", want / 1000000);
         } else if (!gpu_dir.empty() && !gpu_min_was.empty()) {
@@ -1427,7 +1440,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         // kms.shader_fast (on): a shader's faster built-in twin (ds-grid-2x at 4x), used once it drew a test picture
         // the same, byte for byte (shader.c)
         shader_fast = cfg.flag("kms.shader_fast", true) ? 1 : 0;
-        dp.gpu_floor_mhz = cfg.num("kms.gpu_floor_mhz", 600);
+        dp.gpu_floor_mhz = cfg.num("kms.gpu_floor_mhz", -1);
         clear_first = cfg.flag("kms.shader_clear", true) ? 1 : 0;
     }
     dp.direct = dp.packed() && emu.draw_into(dp.map(0, 1), dp.map(1, 1));  // (each frame is given its own slot)
@@ -1571,6 +1584,21 @@ int run_kms(Emu& emu, const Config& cfg) {
             cpu_set_t set; CPU_ZERO(&set); CPU_SET((int)c, &set);
             if (sched_setaffinity(0, sizeof set, &set)) Log(LogLevel::Warn, "[kms] sched.emu_cpu %ld: %s\n", c, strerror(errno));
             else Log(LogLevel::Info, "[kms] the emulator's thread pinned to cpu%ld\n", c);
+            // sched.emu_excl: every other thread of ours off that core (the 2D thread, Gengis's, the presenter, sound)
+            if (cfg.flag("sched.emu_excl", false)) {
+                const long self = (long)syscall(SYS_gettid);
+                cpu_set_t rest; CPU_ZERO(&rest);
+                for (int k = 0; k < std::min(CPU_SETSIZE, (int)sysconf(_SC_NPROCESSORS_CONF)); k++) if (k != c) CPU_SET(k, &rest);
+                int n = 0;
+                if (DIR* d = opendir("/proc/self/task")) {
+                    while (dirent* e = readdir(d)) {
+                        const long tid = atol(e->d_name);
+                        if (tid > 0 && tid != self && sched_setaffinity((pid_t)tid, sizeof rest, &rest) == 0) n++;
+                    }
+                    closedir(d);
+                }
+                Log(LogLevel::Info, "[kms] sched.emu_excl: %d other threads off cpu%ld\n", n, c);
+            }
         }
         // kms.pace: display (the default) runs the DS at the panels' refresh (60.002 Hz on the RG DS, 0.3% faster than
         // its 59.826) so every refresh shows a new frame, with the SPU's output rate lowered as much so the sound
