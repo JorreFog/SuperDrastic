@@ -1,6 +1,7 @@
 #include "mic.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace bananads {
@@ -125,6 +126,9 @@ int Mic::read(int16_t* out, int max) {
 }
 
 Mic::Meter Mic::meter() const {
+    meter_us_.store(std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch()).count(),
+                    std::memory_order_relaxed);
     std::lock_guard<std::mutex> l(mu_);
     return Meter{m_level_, (float)floor_, m_bar_, open_};
 }
