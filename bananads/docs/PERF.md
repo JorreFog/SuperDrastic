@@ -1108,6 +1108,28 @@ checkpoint's; the `Run` trace (every call's timing state) gives the same hash ov
 and exact-suite.sh as 0080's. Sabotage (`MELONDS_GEOMSAB`, read at creation): (1) no full-ring check and no batch
 wake, so the ring overflows: MK's scene fails (crash, no frames); (2) no drain: the scene fails (crash).
 
+### Gengis wakes one render thread a frame (`render.gengis_wake`, default `1`; 2026-10-25 night run, P4)
+
+HeartGold's grass area at 2x on the RG DS Plus, fast-forward at a pinned 1992 MHz: the emulator's thread is the
+bottleneck (98% busy) and does none of the 3D itself (it drew 0 of ~30k bins and converted 0 frames; its profile
+has 0.0% in Gengis's waits and ~0.3% in the renderer and the per-frame wake). The 3D still cost it: at line 215 all
+three render threads woke at once and burst through the frame's 12 bins beside the emulator's, the 2D and the
+presenter threads, more runnable threads than the four A55s, all streaming through the shared 512 KB cache.
+`render.gengis_ab` (SETTINGS.md) cycles modes every 5 s in one run, so one device run is an interleaved A/B
+(medians of the 1-s `kms.stats` windows; the game has a periodic dip to ~90 that lands in any mode):
+
+| Run | 3 threads (before) | 2 | 1 | `wake=1` + late wake | no rasterization (wrong pictures: the bound) |
+|---|---|---|---|---|---|
+| P4ab1 | 113 | | 118 | | 120 |
+| P4ab2 | 115 | 117 | 120 | 118.5 | |
+| P4ab3 | 114.0 | | | 118.1 | |
+
+One render thread keeps up with the frame (at fast-forward too: the emulator's thread drew 0 bins, 1 late frame a
+run). The others wait on a condition variable of their own (`WakeLate`), so a frame's start wakes one thread, not
+three that go back to sleep; they join a frame when the 2D thread (`render.3d_wait2d`) or the emulator's thread
+finds a bin it needs not drawn yet, and are woken at the start for the next 60 frames after that (a heavy scene).
+Same pictures by construction: a bin is the same whichever thread draws it.
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an
