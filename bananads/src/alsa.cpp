@@ -215,7 +215,10 @@ static void out_thread(Alsa* a) {
                     sent = rate;
                     a->emu->set_audio_skew(rate);
                 }
-            } else if (tick && !hold && hn >= 6) {
+            } else if (tick && !hold && hn >= 6 && !a->stretch) {
+                // (the old servo: only with audio.stretch off. With it on and the buffer not primed yet, e.g. after a
+                // state load's gap, this branch used to run and pull the SPU's resampler down to 0.75: the first
+                // ~0.8 s played after a load came out up to 1.5 semitones low)
                 double avg = 0;
                 for (int v : hist) avg += v;
                 avg /= 6;
