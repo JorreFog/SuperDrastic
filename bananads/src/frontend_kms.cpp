@@ -186,23 +186,53 @@ struct Display {
     int committed = -1, scanout = -1, pending = 0;
     PiMutex mu;
     double period_us = 16666.7;
-    // kms.lowlat (experimental): each frame is aimed at a vblank (the emulator's thread starts it so that it is ready
-    // just before that vblank's deadline: the buttons read as late as the panels allow), there's no queue (a newer frame
-    // replaces one still waiting), and a frame that comes after its deadline waits for the next one, where a newer frame
-    // replaces it (committed at once, it would show a refresh late and every on-time frame after it would wait behind
-    // its flip: a refresh more latency for good). Below, with mu held unless said.
+    // kms.lowlat (experimental): each frame is aimed at a vblank: the emulator's thread starts it so that it is ready
+    // just before that vblank's deadline (the buttons read as late as the panels allow). The time a frame takes is its
+    // own work alone: the emulator's thread's (start -> published) and the presenter's (taken -> ready: the 2D thread's
+    // last lines and the shader), each a decaying maximum. Never the time it waited for the panels: counted in, a frame
+    // that waited made the next one start earlier, wait longer, and so on (measured on the RG DS Plus: 14 -> 26 ms in
+    // Mario Kart DS, the deadlines it then skipped on purpose 100-200 repeats a minute). A frame that will miss its
+    // vblank isn't held or replaced: it goes at once (it may still make it), and the next one aims at the vblank after
+    // the one it makes (one repeat, no frame lost). Two frames may wait, so a game whose frames take longer than a
+    // refresh starts the next one before the last is on screen: more latency while it needs it, not a stutter.
+    // Below, with mu held unless said.
     bool lowlat = false;
     long long vbl_top = 0, vbl_bot = 0;  // the panels' last vblanks (flip timestamps, CLOCK_MONOTONIC us)
     double bot_off = 0;                  // the bottom panel's vblank after the top's, us in (-P/2, P/2]
     int nflips = 0;                      // flip pairs seen (the timing is trusted after a few)
     double margin_us = 1500, margin_base = 1500;  // the deadline: this long before the earlier panel's vblank (+300 a miss)
     long long start_us[NB] = {}, aim_us[NB] = {};  // when a slot's frame was started, and the deadline it aims at (0: none)
-    std::atomic<long long> est_us{0};    // a frame's start -> ready for the panels (us), a decaying maximum
+    long long take_us[NB] = {};          // when the presenter took the slot's frame off the queue
+    std::atomic<long long> emu_us{0};    // the emulator's thread's time for a frame (us), a decaying maximum
+    std::atomic<long long> pres_us{0};   // the presenter's: taken -> ready for the panels (us), a decaying maximum
     long long first_ev = 0;              // the first flip event of the commit in flight
-    long long commit_aim = 0;            // the deadline the commit in flight aimed at (0: none)
-    int ll_tfd = -1;                     // a timer at the next deadline, for a frame that came after its own
-    long long hold_us[NB] = {};          // such a frame waits until then (0: it doesn't)
+    long long commit_aim = 0;            // the deadline the commit in flight aimed at, if it went before it (0: none)
     long ll_late = 0, ll_miss = 0, ll_n = 0;  // statistics: frames after their deadline, commits that missed it, on time
+    long ll_behind = 0;                  // ...frames shown after the vblank they aimed at (refreshes)
+    // refreshes the frames on screen fell behind their aims since the emulator's thread last looked: it aims that much
+    // later (the panels tell, at the flip; predicting it from the worst-case times shifted frames that were on time,
+    // a repeat each: 280-340 a minute on the RG DS Plus)
+    std::atomic<int> slip{0};
+    // every slip counted so far, and its value when each slot's frame was aimed: the frames aimed before a slip was
+    // known show late by that much too, and mustn't count it again (they did: each frame behind a late one moved the
+    // aims on once more, 61 of 95 repeats in a minute on the RG DS)
+    long slip_total = 0, slip_at[NB] = {};
+    long long shown_vbl = 0;
+    long long wake_at = 0;               // kms.lowlat: the presenter's next wake-up for a frame held to its window             // the top panel's vblank at which the last frame went on screen
+    // (mu held) the vblank at which the newest frame not on screen yet will be: the frames waiting go one a refresh
+    // after the last one shown, and none before the next vblank from now
+    long long tail_vbl(long long now) const {
+        int n = 0;
+        for (int i = 0; i < NB; i++) n += state[i] == QUEUED || state[i] == COMMITTED;
+        long long shown = shown_vbl;
+        // between the pair's two flip events the committed frame is on screen already (at the first one's vblank):
+        // counted as waiting, the next frame was aimed a refresh too late (a repeat each time, 16-27 a minute)
+        if (pending == 1 && committed >= 0) { n--; shown = std::max(shown, first_ev ? first_ev : vbl_top); }
+        if (n <= 0 || !shown) return 0;
+        const double k = std::ceil((double)(now - vbl_top) / period_us);   // the next vblank after now
+        const long long next_vbl = vbl_top + (long long)(std::max(1.0, k) * period_us);
+        return std::max(shown + (long long)(n * period_us), next_vbl + (long long)((n - 1) * period_us));
+    }
     double ll_lead_sum = 0;              // ...and how far before it the on-time ones were (us)
     bool vbl_known() const { return lowlat && vbl_top && nflips >= 30; }
     // the first deadline at or after t
@@ -211,13 +241,18 @@ struct Display {
         const double k = std::ceil(((double)(t - vbl_top) - hi) / period_us);
         return vbl_top + (long long)(k * period_us + hi);
     }
-    void ll_arm(long long at) {          // the timer at `at` (CLOCK_MONOTONIC us)
-        if (ll_tfd < 0) return;
-        itimerspec its{};
-        its.it_value.tv_sec = at / 1000000;
-        its.it_value.tv_nsec = (at % 1000000) * 1000;
-        timerfd_settime(ll_tfd, TFD_TIMER_ABSTIME, &its, nullptr);
+    static void decay_max(std::atomic<long long>& m, long long w) {   // (~6 s half-life at 60 frames a second: a heavy
+        const long long d = m.load(std::memory_order_relaxed);         // stretch's frames come back within seconds)
+        m.store(std::max(w, d - d / 512), std::memory_order_relaxed);
     }
+    // more lead after a frame shown late: +1 ms each (at most 8), back 0.25 ms after a clean 10 s
+    std::atomic<long long> extra_us{0};
+    // kms.lowlat_trace=<file>: each frame's times (us, CLOCK_MONOTONIC) in a ring, written at the quit: started,
+    // published, aimed deadline, taken by the presenter, ready, committed, on screen (the pair's first flip event)
+    struct Trace { long long start, pub, aim, take, ready, commit, flip; };
+    std::vector<Trace> trace;
+    unsigned long seq_next = 0, seq[NB] = {};
+    Trace* tr(int s) { return trace.empty() ? nullptr : &trace[seq[s] % trace.size()]; }
     // statistics (kms.stats, the governor)
     std::atomic<long> made{0}, dropped{0}, shown{0};
     long repeats = 0;
@@ -586,12 +621,20 @@ struct Display {
             }
         }
     }
-    void publish(int s, int depth, bool fenced = false, uint32_t f = 0, long long start = 0, long long aim = 0) {
+    void publish(int s, int depth, bool fenced = false, uint32_t f = 0, long long start = 0, long long aim = 0,
+                 long slip_seen = 0) {
         {
             Lock l(mu);
+            slip_at[s] = slip_seen;
             start_us[s] = start;
             aim_us[s] = aim;
-            hold_us[s] = 0;
+            take_us[s] = 0;
+            if (start) {
+                const long long t = now_us();
+                if (t - start > 0 && t - start < 3 * (long long)period_us) decay_max(emu_us, t - start);
+                seq[s] = seq_next++;
+                if (Trace* x = tr(s)) *x = Trace{start, t, aim, 0, 0, 0, 0};
+            }
             has_fence[s] = fenced;
             fence[s] = f;
             state[s] = QUEUED;
@@ -661,7 +704,9 @@ struct Display {
         }
         committed = s;
         pending = 2;
-        commit_aim = aim_us[s];
+        const long long t = now_us();
+        commit_aim = t <= aim_us[s] ? aim_us[s] : 0;   // (one after its deadline is a late frame, not a missed commit)
+        if (Trace* x = tr(s)) x->commit = t;
         return true;
     }
     // F + L2: the frame as it goes to the panels (its 3D in: right after the emulator's frame it may not be yet), before
@@ -684,6 +729,7 @@ struct Display {
     void commit_next() {
         shader_settings();
         if (ready >= 0) {  // drawn ahead: on screen as soon as the flip allows (tried again at the next wake-up)
+            if (ll_early(ready)) return;   // (kms.lowlat: not before its vblank's window)
             if (!commit(ready, ready_out)) return;
             ready = -1;
         }
@@ -692,12 +738,18 @@ struct Display {
             Lock l(mu);
             // without a shader a frame is only taken when it can be committed at once; with one, it is drawn ahead
             if (queue.empty() || (pending && !shader_on)) return;
-            if (vbl_known() && !ll_held(queue.front())) return;  // (kms.lowlat: after its deadline, it waits)
+            // kms.lowlat: a frame goes no sooner than the vblank before the one it aims at has passed: shown a refresh
+            // early (it was ready early), the next frame, on time for its own vblank, left that one empty (a repeat
+            // after every early frame: the most of v4's 180-280 a minute on the RG DS). The presenter wakes then.
+            // With a shader only the commit waits: the frame is drawn through it ahead (10-14 ms a frame on the RG DS
+            // Plus: started at the window, it missed the deadline 17 times a minute)
+            if (!shader_on && ll_early(queue.front())) return;
             // the oldest frame, taken off the queue so the emulator can't recycle it while the shader draws it (outside
             // the lock: the emulator's thread never waits for the GPU)
             s = queue.front();
             queue.pop_front();
             state[s] = COMMITTED;
+            if (lowlat) ll_take(s);
         }
         if (has_fence[s] && wait2d) wait2d(fence[s]);  // render.2d_lazy: its last lines drawn
         if (!shader_on) ll_ready(s);
@@ -720,7 +772,7 @@ struct Display {
             ready = s;
             ready_out[0] = out[0];
             ready_out[1] = out[1];
-            if (commit(s, out)) ready = -1;  // the flip had already come
+            if (!ll_early(s) && commit(s, out)) ready = -1;  // the flip had already come
             return;
         }
         overlay(out[0]);
@@ -761,36 +813,35 @@ struct Display {
             std::ofstream(gpu_dir + "/min_freq") << gpu_min_was;
         }
     }
-    // kms.lowlat: slot s's frame is ready for the panels (its last lines drawn, through the shader): its start -> ready
-    // time goes into est_us, once
+    // kms.lowlat: is slot s's frame too early for the panels (before the vblank ahead of the one it aims at)? Then the
+    // presenter wakes when its window opens
+    bool ll_early(int s) {
+        if (!lowlat || !vbl_known() || !aim_us[s]) return false;
+        const long long earliest = aim_us[s] - (long long)period_us + (long long)margin_us + 500;
+        if (now_us() >= earliest) return false;
+        wake_at = earliest;
+        return true;
+    }
+    // kms.lowlat (mu held): the presenter takes slot s's frame off the queue (to draw it through the shader, or to
+    // commit it): how far before its deadline that is
+    void ll_take(int s) {
+        const long long now = now_us(), a = aim_us[s];
+        take_us[s] = now;
+        if (Trace* x = tr(s)) x->take = now;
+        if (!a) return;                  // not aimed (the first frames, fast-forward)
+        if (now <= a) { ll_lead_sum += (double)(a - now); ll_n++; }
+        else ll_late++;
+    }
+    // kms.lowlat: slot s's frame is ready for the panels (its last lines drawn, through the shader): the presenter's
+    // time for it (taken -> ready) goes into pres_us, once
     void ll_ready(int s) {
         if (!lowlat) return;
         Lock l(mu);
-        if (!start_us[s]) return;
-        const long long w = now_us() - start_us[s];
-        if (w > 0 && w < 3 * (long long)period_us) {
-            const long long d = est_us.load(std::memory_order_relaxed);
-            est_us.store(std::max(w, d - d / 128), std::memory_order_relaxed);   // (~2 s half-life)
-        }
-        start_us[s] = 0;
-    }
-    // kms.lowlat (mu held): may slot s go to the panels now? Not if it came after the deadline it aimed at: it waits for
-    // the next one (the timer), where a newer frame may replace it
-    bool ll_held(int s) {
-        const long long now = now_us();
-        if (hold_us[s]) {                // late, waiting for the next deadline
-            if (now < hold_us[s]) return false;
-            hold_us[s] = 0;
-            return true;
-        }
-        const long long a = aim_us[s];
-        if (!a) return true;             // not aimed (the first frames, fast-forward): as soon as it can
-        if (now <= a) { ll_lead_sum += (double)(a - now); ll_n++; return true; }
-        ll_late++;
-        aim_us[s] = 0;
-        hold_us[s] = deadline_after(now);
-        ll_arm(hold_us[s]);
-        return false;
+        if (!take_us[s]) return;
+        const long long now = now_us(), w = now - take_us[s];
+        if (w >= 0 && w < 2 * (long long)period_us) decay_max(pres_us, w);
+        take_us[s] = 0;
+        if (Trace* x = tr(s)) x->ready = now;
     }
     void flipped(long long t, long long kt = 0, unsigned crtc = 0) {
         Lock l(mu);
@@ -814,10 +865,27 @@ struct Display {
                     }
                     commit_aim = 0;
                 }
+                if (committed >= 0) {
+                    shown_vbl = vbl_top;
+                    if (Trace* x = tr(committed)) x->flip = first_ev;
+                    if (const long long a = aim_us[committed]) {   // shown after the vblank it aimed at?
+                        const double late = (double)(first_ev - a) - margin_us;
+                        const long k = late > period_us / 2 ? std::lround(late / period_us) : 0;
+                        const long more = std::min(3L, k - (slip_total - slip_at[committed]));   // (not known when aimed)
+                        if (more > 0) {
+                            slip += (int)more;
+                            slip_total += more;
+                            extra_us.store(std::min(8000LL, extra_us.load() + 1000));
+                        }
+                        if (k > 0) ll_behind++;
+                    }
+                }
                 first_ev = 0;
             }
         }
         if (--pending > 0) return;
+        if (!lowlat && committed >= 0)
+            if (Trace* x = tr(committed)) x->flip = kt ? std::min(kt, first_ev ? first_ev : kt) : t;
         if (!first_flip) { first_flip = true; start_mark("first flip"); }
         if (scanout >= 0) state[scanout] = FREE;
         scanout = committed;
@@ -1246,13 +1314,15 @@ int run_kms(Emu& emu, const Config& cfg) {
     const char* eh = getenv("BANANADS_TOUCH");
     const std::string top = cfg.str("kms.top", et && *et ? et : "DSI-2");
     const std::string touch = cfg.str("kms.touch", eh && *eh ? eh : "fe5e0000.i2c");
-    // kms.lowlat (experimental, off by default): on = no frame queue, each frame aimed at a vblank (see Display);
-    // runahead1 / runahead2 = that and run-ahead (Emu::run_ahead: the game answers a press one or two frames sooner
-    // than its own lag), also the setting `runahead` = 1 or 2 alone
+    // kms.lowlat (experimental, off by default): on = each frame aimed at a vblank, started as late as that allows (see
+    // Display); runahead1 / runahead2 = that and run-ahead (Emu::run_ahead: the game answers a press one or two frames
+    // sooner than its own lag), also the setting `runahead` = 1 or 2 alone. The queue holds two: the frames are timed
+    // so one at most waits, but a frame started before the last is on screen (a game slower than a refresh) mustn't
+    // replace it
     const std::string ll = cfg.str("kms.lowlat", "off");
     const bool lowlat = ll != "off";
     const int ra_n = (int)std::clamp(cfg.num("runahead", ll == "runahead1" ? 1 : ll == "runahead2" ? 2 : 0), 0L, 2L);
-    const int depth = lowlat ? 1 : std::clamp((int)cfg.num("kms.queue", 2), 1, 3);
+    const int depth = lowlat ? 2 : std::clamp((int)cfg.num("kms.queue", 2), 1, 3);
     const long every = cfg.num("kms.stats", 0);
 
     g_wake = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
@@ -1271,13 +1341,14 @@ int run_kms(Emu& emu, const Config& cfg) {
     }
     if (lowlat) {
         dp.lowlat = true;
-        dp.ll_tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
         if (long m = cfg.num("kms.lowlat_margin_us", 0); m > 0) dp.margin_us = dp.margin_base = (double)m;
-        Log(LogLevel::Info, "[lowlat] on (experimental): no frame queue, each frame started to be ready %.1f ms before "
-            "the vblank it aims at%s\n", dp.margin_us / 1000.0,
+        Log(LogLevel::Info, "[lowlat] on (experimental): each frame started to be ready %.1f ms before the vblank it "
+            "aims at%s\n", dp.margin_us / 1000.0,
             ra_n ? (ra_n == 1 ? ", and run-ahead: 1 frame" : ", and run-ahead: 2 frames") : "");
     } else if (ra_n)
         Log(LogLevel::Info, "[runahead] %d frame%s (experimental)\n", ra_n, ra_n > 1 ? "s" : "");
+    // (kms.lowlat_trace also without kms.lowlat: started, published, committed and on screen, to compare)
+    if (!cfg.str("kms.lowlat_trace", "").empty()) dp.trace.resize(16384);   // (~4.5 minutes)
     // kms.shader: a fragment shader's name (SuperDrastic's: ds-grid, ds-crisp, ds-fsr... from DSFLIP_SHADER_DIR), or
     // none: the display plane scales the frames (the default)
     {
@@ -1435,8 +1506,9 @@ int run_kms(Emu& emu, const Config& cfg) {
         long emu_frames = 0;
         const bool ff_mute = cfg.flag("kms.ff_mute", true);
         // kms.lowlat: the deadline the next frame aims at (0: none yet), and kms.lowlat_pad_us on top of the frames'
-        // measured time (a decaying maximum, Display::est_us)
+        // measured times (decaying maxima, Display::emu_us and pres_us)
         long long aim = 0;
+        long aim_slips = 0, aim_slips_next = 0;  // Display::slip_total as the aim was made
         const long long pad = std::max(0L, cfg.num("kms.lowlat_pad_us", 1000));
         // run-ahead: the real frame's picture goes here (direct drawing), the frame ahead's into the slot; off for a
         // while (5, 10, 20, then 60 s) when it doesn't fit the refresh: 20 of the last 32 frames over it
@@ -1545,31 +1617,45 @@ int run_kms(Emu& emu, const Config& cfg) {
             uint32_t fence = 0;
             const bool fenced = emu.frame_fence(fence);
             feed.frame_time(std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - work0).count());
-            dp.publish(s, depth, fenced, fence, lowlat ? t_start : 0, lowlat && !ff ? aim : 0);
-            // kms.lowlat: the next frame aimed at the next deadline, started its measured time before it
+            dp.publish(s, depth, fenced, fence, lowlat || !dp.trace.empty() ? t_start : 0, lowlat && !ff ? aim : 0, aim_slips);
+            // kms.lowlat: the next frame aimed at the next deadline, started its measured time (the emulator's + the
+            // presenter's, + kms.lowlat_pad_us; at most two refreshes) before it, or at once if that has passed. Never
+            // a deadline skipped ahead of time: a frame shown late (one repeat) moves the aims after it a refresh on
+            // (Display::slip)
             bool aimed = false;
             if (lowlat && !ff) {
-                long long known = 0, next = 0, est = 0, per = 0;
+                long long known = 0, next = 0, start = 0;
                 {
                     Lock l(dp.mu);
                     if (dp.vbl_known()) {
                         known = 1;
-                        est = dp.est_us.load(std::memory_order_relaxed) + pad;
-                        per = (long long)dp.period_us;
-                        const long long now = now_us();
-                        next = aim ? aim + per : dp.deadline_after(now + est);
-                        if (next - est < now) {   // behind: the next deadline it can make (the ones between: late frames)
-                            const long long re = dp.deadline_after(now + est);
-                            const long long skipped = per > 0 ? (re - next) / per : 0;
-                            if (skipped > 0) feed.late += std::min(2LL, skipped);
-                            next = re;
+                        const long long per = std::llround(dp.period_us), now = now_us();
+                        const long long pres = dp.pres_us.load(std::memory_order_relaxed);
+                        const long long est = std::min(dp.emu_us.load(std::memory_order_relaxed) + pres + pad +
+                                                       dp.extra_us.load(std::memory_order_relaxed), 2 * per);
+                        // the deadline after the last frame's, on the panels' grid (a chain of + period drifts off it
+                        // over a minute), and not before the refresh after the one the newest waiting frame goes on
+                        // screen at (from the queue as it is: a frame shown late moves the ones after it on by as much
+                        // as it did, never more; counting each late frame's lateness overshot after long frames)
+                        next = aim ? dp.deadline_after(aim + per / 2) : dp.deadline_after(now + est);
+                        aim_slips_next = dp.slip_total;
+                        dp.slip.store(0);
+                        if (const long long tv = dp.tail_vbl(now)) {
+                            const long long after = dp.deadline_after(tv + per / 2);
+                            if (after > next) {
+                                feed.late += std::min(2LL, (after - next + per / 2) / per);   // (the governor's signal)
+                                next = after;
+                            }
                         }
+                        if (next < now) next = dp.deadline_after(now + est);   // (a stall: aimed afresh)
+                        start = std::max(next - est, now);
                     }
                 }
                 if (known) {
                     aim = next;
+                    aim_slips = aim_slips_next;
                     aimed = true;
-                    pace.wait_until(std::chrono::steady_clock::time_point(std::chrono::microseconds(next - est)));
+                    pace.wait_until(std::chrono::steady_clock::time_point(std::chrono::microseconds(start)));
                 } else aim = 0;
             } else aim = 0;
             if (!aimed) pace.wait();  // (and the governor's signal: the frames it fell behind)
@@ -1651,13 +1737,13 @@ int run_kms(Emu& emu, const Config& cfg) {
         pfd.push_back({dp.fd, POLLIN, 0});
         pfd.push_back({g_wake, POLLIN, 0});
         for (auto& d : devs) pfd.push_back({d.fd, POLLIN, 0});
-        if (dp.ll_tfd >= 0) pfd.push_back({dp.ll_tfd, POLLIN, 0});  // (kms.lowlat: a late frame's deadline; last)
-        if (poll(pfd.data(), pfd.size(), 250) < 0 && errno != EINTR) break;
-        if (dp.ll_tfd >= 0 && (pfd.back().revents & POLLIN)) {
-            uint64_t v;
-            ssize_t r = read(dp.ll_tfd, &v, sizeof v);
-            (void)r;
+        int timeout = 250;
+        if (dp.wake_at) {                // (kms.lowlat: a frame held until its vblank's window opens)
+            const long long w = dp.wake_at - now_us();
+            timeout = w <= 0 ? 0 : (int)std::min(250LL, (w + 999) / 1000);
+            dp.wake_at = 0;
         }
+        if (poll(pfd.data(), pfd.size(), timeout) < 0 && errno != EINTR) break;
         if (g_quit) break;
         if (pfd[1].revents & POLLIN) {
             uint64_t v;
@@ -1794,12 +1880,14 @@ int run_kms(Emu& emu, const Config& cfg) {
             static long long ll_since = now_us();
             if (const long long t = now_us(); t - ll_since >= 10000000) {
                 Lock l(dp.mu);
-                Log(LogLevel::Info, "[lowlat] %ld frames on time, %.1f ms before their deadline on average; %ld late (held "
-                    "for the next), %ld commits missed their vblank; a frame takes %.1f ms, deadline %.1f ms before the "
-                    "vblank, bottom panel %+.1f ms\n", dp.ll_n, dp.ll_n ? dp.ll_lead_sum / dp.ll_n / 1000.0 : 0.0,
-                    dp.ll_late, dp.ll_miss, dp.est_us.load() / 1000.0, dp.margin_us / 1000.0, dp.bot_off / 1000.0);
+                Log(LogLevel::Info, "[lowlat] %ld frames taken before their deadline (%.1f ms before on average), %ld "
+                    "after it; %ld finished too late for their vblank, %ld commits missed theirs; a frame: emulator %.1f "
+                    "ms + presenter %.1f ms + %.1f ms more lead, deadline %.1f ms before the vblank, bottom panel %+.1f ms\n", dp.ll_n,
+                    dp.ll_n ? dp.ll_lead_sum / dp.ll_n / 1000.0 : 0.0, dp.ll_late, dp.ll_behind, dp.ll_miss,
+                    dp.emu_us.load() / 1000.0, dp.pres_us.load() / 1000.0, dp.extra_us.load() / 1000.0, dp.margin_us / 1000.0, dp.bot_off / 1000.0);
                 if (!dp.ll_miss && dp.margin_us > dp.margin_base) dp.margin_us = std::max(dp.margin_base, dp.margin_us - 300);
-                dp.ll_n = dp.ll_late = dp.ll_miss = 0;
+                if (!dp.ll_behind) dp.extra_us.store(std::max(0LL, dp.extra_us.load() - 250));
+                dp.ll_n = dp.ll_late = dp.ll_miss = dp.ll_behind = 0;
                 dp.ll_lead_sum = 0;
                 ll_since = t;
             }
@@ -1859,10 +1947,20 @@ int run_kms(Emu& emu, const Config& cfg) {
     if (qos >= 0) ::close(qos);
     emu.set_lazy_2d(false);  // render.2d_lazy: the last frame's lines drawn before its buffers go
     start_mark("quit: 2d");
+    if (!dp.trace.empty()) {  // kms.lowlat_trace: the frames' times, oldest first
+        if (FILE* f = fopen(cfg.str("kms.lowlat_trace", "").c_str(), "w")) {
+            fprintf(f, "# seq start pub aim take ready commit flip (us, CLOCK_MONOTONIC; 0: not reached)\n");
+            const unsigned long n = dp.trace.size(), first = dp.seq_next > n ? dp.seq_next - n : 0;
+            for (unsigned long q = first; q < dp.seq_next; q++) {
+                const Display::Trace& x = dp.trace[q % n];
+                fprintf(f, "%lu %lld %lld %lld %lld %lld %lld %lld\n", q, x.start, x.pub, x.aim, x.take, x.ready, x.commit, x.flip);
+            }
+            fclose(f);
+        }
+    }
     emu.draw_into(nullptr, nullptr);  // (the buffers go with the device)
     start_mark("quit: draw_into");
     dp.close();
-    if (dp.ll_tfd >= 0) ::close(dp.ll_tfd);
     ::close(g_wake);
     start_mark("quit: display closed");
     g_wake = -1;
