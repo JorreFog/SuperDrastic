@@ -5,7 +5,12 @@
 //   --frontend <name>   kms (the handheld's panels: the default without a display server), sdl (a desktop window),
 //                       headless (benchmark/tests)
 //   --version
+#include <sched.h>
+#include <signal.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -27,6 +32,31 @@ extern bool g_log_time;
 using namespace bananads;
 using melonDS::Platform::Log;
 using melonDS::Platform::LogLevel;
+
+// quit.fast (off by default until the RG DS Plus is understood, below): the quit leaves the emulator's memory to a helper that shares it (CLONE_VM) and goes after BananaDS
+// has: the melonDS console's teardown (its JIT's fast-memory area unmapped, ~140 ms on the RG DS Plus) and the exit's
+// own unmapping of everything (~50 ms) then happen after the menu has been told the game ended, not before. The save
+// and the console's stop are done first (Emu::shutdown); nothing is written after them.
+#ifndef SYS_close_range
+#define SYS_close_range 436  // (the toolchain's headers predate it; the handhelds' kernel has it)
+#endif
+static pid_t g_fast_parent;
+static int mm_holder(void*) {
+    // (raw system calls only: this shares BananaDS's memory and its thread pointer, and runs no C library code that
+    // keeps state)
+    syscall(SYS_close_range, 0U, ~0U, 0U);
+    syscall(SYS_prctl, PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0);  // killed as BananaDS's thread that made it ends
+    if (syscall(SYS_getppid) != g_fast_parent) syscall(SYS_exit, 0);
+    for (;;) syscall(SYS_ppoll, nullptr, 0, nullptr, nullptr, 0);
+    return 0;
+}
+[[noreturn]] static void fast_exit(int code) {
+    fflush(nullptr);
+    g_fast_parent = getpid();
+    alignas(16) static char stack[16384];
+    clone(mm_holder, stack + sizeof stack, CLONE_VM | SIGCHLD, nullptr);  // (failed: the exit unmaps it all itself)
+    _exit(code);
+}
 
 static void usage() {
     fprintf(stderr, "usage: bananads [--config file] [--set key=value]... [--frontend kms|sdl|headless] game.nds\n");
@@ -103,6 +133,15 @@ int main(int argc, char** argv) {
         else if (fe == "kms") {
             code = run_kms(emu, cfg);
             start_mark("quit: frontend returned");
+            if (cfg.flag("quit.fast", false)) {
+                emu.shutdown();
+                start_mark("quit: fast exit");
+                if (FILE* f = g_log) {
+                    g_log = nullptr;
+                    fclose(f);
+                }
+                fast_exit(code);
+            }
         }
 #endif
         else {

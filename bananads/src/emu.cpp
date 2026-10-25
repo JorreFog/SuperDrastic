@@ -93,11 +93,17 @@ Emu::Emu(const Config& cfg) : cfg_(cfg) {
     mic_.set_tuning(mt);
 }
 
-Emu::~Emu() {
+Emu::~Emu() { shutdown(); }
+
+void Emu::shutdown() {
+    if (shut_) return;
+    shut_ = true;
     if (prof_) prof_->finish();  // (its report: the emulator's thread is done by now)
     flush_save(true);
+    start_mark("quit: save written");
     if (nds_) nds_->Stop();
     if (net_) net_->UnregisterInstance(0);
+    start_mark("quit: console stopped");
 }
 
 void Emu::setup_wifi() {
