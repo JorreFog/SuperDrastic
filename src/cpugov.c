@@ -95,7 +95,8 @@ static double sum_max = 1.2;                 /* DSFLIP_CPUGOV_SUM: no step down 
 static volatile long long boost_until;       /* CLOCK_MONOTONIC ns: boosted until then (cpugov_boost) */
 static volatile int gov_on;
 static volatile int menu_open;               /* the in-game menu is up (menu.c): DraStic is paused */
-static int menu_khz = 816000;                /* DSFLIP_CPUGOV_MENU: the clock while it is (0: leave the clock to the model) */
+static int menu_khz;                         /* DSFLIP_CPUGOV_MENU=<kHz> (e.g. 816000): the clock while it is (default 0, off: the model's
+                                               clock; not measured on a device yet) */
 
 /* how long a clock's (k+1)th drop keeps it banned */
 static long long ban_ns(int k) {

@@ -1428,8 +1428,8 @@ void SDL_PauseAudio(int on) {
  * ring drains only when the pump calls DraStic's callback, so that SDL_Delay(0) sleeps until the pump's next call
  * (audio.c, at most 8 ms). Recognised by the code it returns to (delay_us tail-calls SDL_Delay, so the return address
  * is in audio_sync, after "mov w0, #10; bl delay_us": "ldp w0, w1, [x19, #8]; ldr w2, [x19, #24]; sub w1, w1, w0",
- * r2.5.2.x at 0x88678). Any other SDL_Delay goes through as it was. DSFLIP_AUDIO_WAIT=0: the spin as before; not with
- * low latency, which paces DraStic itself. */
+ * r2.5.2.x at 0x88678). Any other SDL_Delay goes through as it was. OFF by default for now (DSFLIP_AUDIO_WAIT=1 turns
+ * it on: one A/B pair measured, 2026-10-25); not with low latency, which paces DraStic itself. */
 void audio_wait_drain(int timeout_us);
 static int audio_wait = -1;
 static const uint32_t *sync_ra;
@@ -1440,7 +1440,7 @@ static int is_audio_sync(const uint32_t *ra) {
 void SDL_Delay(uint32_t ms) {
     REAL(void, SDL_Delay, uint32_t);
     if (!ms && pump_on && !pacing_lowlat) {
-        if (audio_wait < 0) { const char *e = getenv("DSFLIP_AUDIO_WAIT"); audio_wait = !(e && *e == '0'); }
+        if (audio_wait < 0) { const char *e = getenv("DSFLIP_AUDIO_WAIT"); audio_wait = e && *e == '1'; }
         const uint32_t *ra = __builtin_return_address(0);
         if (audio_wait && (ra == sync_ra || (!sync_ra && is_audio_sync(ra)))) {
             if (!sync_ra) { sync_ra = ra; LOG("[audio] DraStic's sound wait sleeps until the pump's next call (was a spin)\n"); }
