@@ -425,7 +425,12 @@ static uint16_t *read_pic(const char *path, int *rows) {
         *(void **)&z_init = dlsym(h, "inflateInit_"); *(void **)&z_inflate = dlsym(h, "inflate"); *(void **)&z_end = dlsym(h, "inflateEnd");
         if (!z_init || !z_inflate || !z_end) { z_init = 0; return 0; }
     }
-    FILE *f = fopen(path, "rb"); if (!f) return 0;
+    /* libc's own fopen, not this library's (resume.c): while a resume state is being loaded, that one sends every
+     * slot file to the resume state, and a menu opened in those seconds showed the resume state's picture on every
+     * slot, kept until the slot was saved again (SuperDrastic #4) */
+    static FILE *(*libc_fopen)(const char *, const char *);
+    if (!libc_fopen) *(void **)&libc_fopen = dlsym(RTLD_NEXT, "fopen");
+    FILE *f = libc_fopen ? libc_fopen(path, "rb") : 0; if (!f) return 0;
     uint8_t hdr[0x44], in[32768]; uint16_t *out = 0;
     if (fread(hdr, 1, sizeof hdr, f) == sizeof hdr && !memcmp(hdr, "DraStic-SaveState", 17) && (out = malloc(2 * PIC_BYTES))) {
         zs_t z; memset(&z, 0, sizeof z);
