@@ -37,6 +37,8 @@ class Emu {
 public:
     explicit Emu(const Config& cfg);
     ~Emu();
+    // the quit's part of the destructor: the save written out, the console stopped (once; the destructor's too)
+    void shutdown();
 
     bool load_rom(const std::string& path);  // also loads its save; false with a logged reason
     void run_frame();                          // one DS frame (~1/59.83 s)
@@ -129,6 +131,7 @@ private:
     Mic mic_;
     std::string rom_path_, save_path_, game_;
     bool stop_ = false;
+    bool shut_ = false;  // shutdown() done
     bool local_ = false;
     int scale_ = 1;
     melonDS::BananaRenderer* banana_ = nullptr;  // the renderer, when it's the Banana 2D engine's

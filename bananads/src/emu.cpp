@@ -93,7 +93,11 @@ Emu::Emu(const Config& cfg) : cfg_(cfg) {
     mic_.set_tuning(mt);
 }
 
-Emu::~Emu() {
+Emu::~Emu() { shutdown(); }
+
+void Emu::shutdown() {
+    if (shut_) return;
+    shut_ = true;
     if (prof_) prof_->finish();  // (its report: the emulator's thread is done by now)
     flush_save(true);
     start_mark("quit: save written");
