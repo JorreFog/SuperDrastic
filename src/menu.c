@@ -53,6 +53,8 @@ extern volatile int dsflip_hold;
 void dsflip_mic_key(int down);
 int lid_home_pressed(void);   /* lid.c: HOME let go while the menu is open */
 int lid_home_on(void);        /* lid.c: HOME opens the menu */
+long long lid_wall_ms(void);  /* lid.c: now, to give lid_vol_since */
+int lid_vol_since(long long since);   /* lid.c: a volume key pressed since then (F + volume: brightness) */
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
@@ -1317,10 +1319,22 @@ static void handle_sdl(const uint8_t *e) {
     uint32_t type; memcpy(&type, e, 4);
     if (type == 0x603 || type == 0x604) {           /* SDL_JOYBUTTONDOWN / UP */
         int b = e[12], down = type == 0x603;
-        if (!down) { if (b == b_up || b == b_down || b == b_left || b == b_right) dir_release(); return; }
+        /* the menu button closes it when let go, unless a volume key was pressed meanwhile (bananad's F + volume) */
+        static long long mdown = -1;
+        if (!down) {
+            if (b == b_up || b == b_down || b == b_left || b == b_right) dir_release();
+            if (is_menu_btn(b) && mdown >= 0) {
+                int mod = lid_vol_since(mdown); mdown = -1;
+                if (mod) dsflip_log("[menu] menu button let go after a volume key: kept open\n");
+                else if (scr != SC_BUSY) { play(SND_BACK); close_menu(); }
+            }
+            return;
+        }
         cpugov_boost(400);
+        if (is_menu_btn(b)) { mdown = lid_wall_ms(); return; }
+        mdown = -1;
         if (scr == SC_BUSY) return;
-        if (is_menu_btn(b) || b == b_start) { play(SND_BACK); close_menu(); }
+        if (b == b_start) { play(SND_BACK); close_menu(); }
         else if (b == b_a) activate();
         else if (b == b_b) back();
         else if (b == b_y && scr == SC_LOAD && undo_ok) do_load(-1);
@@ -1407,7 +1421,7 @@ static void menu_run(int start) {
 
 /* SDL_PollEvent (dsflip.c) shows this each event DraStic would get: 1 = swallow it. The menu button opens the menu
  * when it is released with nothing else pressed meanwhile (so "menu + start" still quits, resume.c). */
-static int pending, other;
+static int pending, other; static long long pending_ms;
 int menu_event(void *ev) {
     if (enabled < 0) {
         const char *e = getenv("DSFLIP_MENU"); enabled = !(e && *e == '0');
@@ -1436,8 +1450,9 @@ int menu_event(void *ev) {
     int b = e[12], down = type == 0x603;
     if (is_menu_btn(b)) {
         if (dsflip_drastic_menu() || resume_menu_busy()) return 0;   /* DraStic's own menu is up: its button */
-        if (down) { pending = 1; other = 0; return 1; }
+        if (down) { pending = 1; other = 0; pending_ms = lid_wall_ms(); return 1; }
         int go = pending && !other; pending = 0;
+        if (go && lid_vol_since(pending_ms)) { go = 0; dsflip_log("[menu] menu button let go after a volume key (F + volume: brightness): no menu\n"); }
         if (go) menu_run(SC_MAIN);
         return 1;
     }
