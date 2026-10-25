@@ -203,6 +203,83 @@ static void OutputDisplayNeonT(u32* dst, const u16* display, u32 factor)
     }
 }
 
+// 2x: WriteLine of two 256-pixel lines and ZipLine of the results (a 512-pixel row of their pixels in turn), in one
+// pass: the same bytes as the two passes, without the 2 KB in between
+template<int mode>
+static void WriteZipNeon(u32* dst, const u32* even, const u32* odd, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    const uint8x16_t ff = vdupq_n_u8(0xFF);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint8x16x4_t e = vld4q_u8((const u8*)(even + i));
+        uint8x16x4_t o = vld4q_u8((const u8*)(odd + i));
+        uint8x16_t er = e.val[0], eg = e.val[1], eb = e.val[2];
+        uint8x16_t orr = o.val[0], og = o.val[1], ob = o.val[2];
+        if (mode)
+        {
+            er = Bright6<mode>(er, f); eg = Bright6<mode>(eg, f); eb = Bright6<mode>(eb, f);
+            orr = Bright6<mode>(orr, f); og = Bright6<mode>(og, f); ob = Bright6<mode>(ob, f);
+        }
+        er = Expand6(er); eg = Expand6(eg); eb = Expand6(eb);
+        orr = Expand6(orr); og = Expand6(og); ob = Expand6(ob);
+        uint8x16x4_t lo, hi;
+        lo.val[0] = vzip1q_u8(eb, ob); hi.val[0] = vzip2q_u8(eb, ob);
+        lo.val[1] = vzip1q_u8(eg, og); hi.val[1] = vzip2q_u8(eg, og);
+        lo.val[2] = vzip1q_u8(er, orr); hi.val[2] = vzip2q_u8(er, orr);
+        lo.val[3] = ff; hi.val[3] = ff;
+        vst4q_u8((u8*)(dst + 2 * i), lo);
+        vst4q_u8((u8*)(dst + 2 * i + 16), hi);
+    }
+}
+
+// 2x: WriteLine and DoubleLine in one pass (each pixel twice, on both rows)
+template<int mode>
+static void WriteDoubleNeon(u32* dst, const u32* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    const uint8x16_t ff = vdupq_n_u8(0xFF);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint8x16x4_t s = vld4q_u8((const u8*)(src + i));
+        uint8x16_t r = s.val[0], g = s.val[1], b = s.val[2];
+        if (mode)
+        {
+            r = Bright6<mode>(r, f); g = Bright6<mode>(g, f); b = Bright6<mode>(b, f);
+        }
+        r = Expand6(r); g = Expand6(g); b = Expand6(b);
+        uint8x16x4_t lo, hi;
+        lo.val[0] = vzip1q_u8(b, b); hi.val[0] = vzip2q_u8(b, b);
+        lo.val[1] = vzip1q_u8(g, g); hi.val[1] = vzip2q_u8(g, g);
+        lo.val[2] = vzip1q_u8(r, r); hi.val[2] = vzip2q_u8(r, r);
+        lo.val[3] = ff; hi.val[3] = ff;
+        vst4q_u8((u8*)(dst + 2 * i), lo);
+        vst4q_u8((u8*)(dst + 2 * i + 16), hi);
+        vst4q_u8((u8*)(dst + 512 + 2 * i), lo);
+        vst4q_u8((u8*)(dst + 512 + 2 * i + 16), hi);
+    }
+}
+
+static void WriteZip(u32* dst, const u32* even, const u32* odd, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteZipNeon<1>(dst, even, odd, factor);
+    else if (mode == 2 && factor) WriteZipNeon<2>(dst, even, odd, factor);
+    else                          WriteZipNeon<0>(dst, even, odd, 0);
+}
+
+static void WriteDouble(u32* dst, const u32* src, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteDoubleNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteDoubleNeon<2>(dst, src, factor);
+    else                          WriteDoubleNeon<0>(dst, src, 0);
+}
+
 // display modes 2 and 3: the conversion to the 18-bit format fused with WriteLine
 static void OutputDisplayNeon(u32* dst, const u16* display, u16 brightness)
 {
@@ -347,9 +424,23 @@ void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* dis
         OutputLineA(dst, dispcnt, brightness, display);
         return;
     }
+    auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    // (render.2d_fast: the output stage and the 2x rows in one pass: WriteZip, WriteDouble)
+    if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1)
+    {
+        if (a.HiLines == 1)
+            WriteDouble(dst, Output2D[0], brightness);
+        else
+        {
+            WriteZip(dst, Output2D[0], a.HiOut[0], brightness);
+            WriteZip(dst + 512, a.HiOut[1], a.HiOut[2], brightness);
+        }
+        return;
+    }
+#endif
     alignas(16) u32 q[4][256];
     OutputLineA(q[0], dispcnt, brightness, display);
-    auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
     if (((dispcnt >> 16) & 0x3) != 1 || a.HiLines == 1)
     {
         DoubleLine(dst, q[0]);
@@ -368,6 +459,13 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
         OutputLineB(dst, dispcnt, brightness, src);
         return;
     }
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    if (Banana2DFast && ((dispcnt >> 16) & 0x1))
+    {
+        WriteDouble(dst, src ? src : Output2D[1], brightness);
+        return;
+    }
+#endif
     alignas(16) u32 t[256];
     OutputLineB(t, dispcnt, brightness, src);
     DoubleLine(dst, t);
