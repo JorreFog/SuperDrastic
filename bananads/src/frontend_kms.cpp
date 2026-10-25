@@ -130,6 +130,7 @@ using Lock = std::lock_guard<PiMutex>;
 extern "C" {
 int shader_init(int fd, const char* name);
 int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
+int shader_viewport(int* v, int pw, int ph);
 void dsflip_log(const char* fmt, ...) {
     char b[512];
     va_list ap;
@@ -184,6 +185,10 @@ struct Display {
     Buf sbuf[2][3];
     int snext = 0;
     int committed = -1, scanout = -1, pending = 0;
+    // what the panels show for the slots above: the slot's own buffers, or the shader's output drawn from them (the
+    // in-game menu's background and the picture it puts back are these, so a shader's look stays while it is open)
+    const Buf* committed_out[2] = {nullptr, nullptr};
+    const Buf* scanout_out[2] = {nullptr, nullptr};
     PiMutex mu;
     double period_us = 16666.7;
     // kms.lowlat (experimental): each frame is aimed at a vblank (the emulator's thread starts it so that it is ready
@@ -305,14 +310,15 @@ struct Display {
     void show_menu(int panel, int k) { commit_now(panel, 0, &mbuf[panel][k], nullptr); }
     void show_game() {
         Lock l(mu);
-        if (scanout >= 0) commit_now(0, 1, &buf[0][scanout], &buf[1][scanout]);
+        if (scanout >= 0) commit_now(0, 1, scanout_out[0] ? scanout_out[0] : &buf[0][scanout], scanout_out[1] ? scanout_out[1] : &buf[1][scanout]);
     }
-    // the game's top screen as last shown, at the panel's size (nearest)
+    // the game's top screen as last shown (through the shader, when one is on: #49), at the panel's size (nearest)
     bool grab_top(uint32_t* dst, int pitch, int w, int h) {
         Lock l(mu);
         if (scanout < 0) return false;
-        const Buf& b = buf[0][scanout];
-        const int sw = hw ? fw : W, sh = hw ? fh : H;
+        const Buf& b = scanout_out[0] ? *scanout_out[0] : buf[0][scanout];
+        if (!b.map || !b.w || !b.h) return false;
+        const int sw = (int)b.w, sh = (int)b.h;
         std::vector<uint32_t> row(sw);
         for (int y = 0; y < h; y++) {
             const int sy = y * sh / h;
@@ -660,6 +666,8 @@ struct Display {
             return false;
         }
         committed = s;
+        committed_out[0] = out[0];
+        committed_out[1] = out[1];
         pending = 2;
         commit_aim = aim_us[s];
         return true;
@@ -821,6 +829,8 @@ struct Display {
         if (!first_flip) { first_flip = true; start_mark("first flip"); }
         if (scanout >= 0) state[scanout] = FREE;
         scanout = committed;
+        scanout_out[0] = committed_out[0];
+        scanout_out[1] = committed_out[1];
         state[scanout] = SCANOUT;
         committed = -1;
         shown++;
@@ -1690,9 +1700,15 @@ int run_kms(Emu& emu, const Config& cfg) {
                                 double py = d.maxy > d.miny ? (double)(d.y - d.miny) * dp.H / (d.maxy - d.miny + 1) : d.y;
                                 double rx = dp.hw ? 0 : dp.ox, ry = dp.hw ? 0 : dp.oy;
                                 double rw = dp.hw ? dp.W : dp.fw * dp.k, rh = dp.hw ? dp.H : dp.fh * dp.k;
+                                // a shader that draws the DS screen into part of the panel (Integer: 512x384 in the
+                                // middle of the RG DS's 640x480) says where; before, touch went by the whole panel
+                                // there, off by up to 64 px at the edges (#49). (shader_settings runs on this thread)
+                                int v[4];
+                                if (dp.shader_on && shader_viewport(v, dp.W, dp.H)) { rx = v[0]; ry = v[1]; rw = v[2]; rh = v[3]; }
                                 int tx = std::clamp((int)((px - rx) * 256 / rw), 0, 255);
                                 int ty = std::clamp((int)((py - ry) * 192 / rh), 0, 191);
                                 in_touch = ty << 16 | tx;
+                                if (!d.was) Log(LogLevel::Info, "[touch] down at %d,%d on the panel -> %d,%d on the DS\n", (int)px, (int)py, tx, ty);
                             } else if (d.was)
                                 in_touch = -1;
                             d.was = d.down;
