@@ -1255,6 +1255,20 @@ int run_kms(Emu& emu, const Config& cfg) {
     const int depth = lowlat ? 1 : std::clamp((int)cfg.num("kms.queue", 2), 1, 3);
     const long every = cfg.num("kms.stats", 0);
 
+    // the cheats (the card's .mch, else RetroArch's .cht for the game: a scan of the ~4200 files of the collection and
+    // a parse) read on a thread of their own while the panels open: ~50 ms on the game's way to its first picture
+    // otherwise. Taken (joined) where the menu gets them, before the emulator's thread starts.
+    std::thread cheats_load([&emu, &cfg] {
+        const char* data = getenv("BANANADS_DATA");
+        g_cheats.load(emu.game(), cfg.str("cheats.dir", std::string(data && *data ? data : "/data/bananads") + "/cheats"),
+                      {cfg.str("cheats.retroarch_dir", "/data/retroarch/retroarch/cheats/Nintendo - Nintendo DS"),
+                       cfg.str("cheats.system_dir", "/usr/share/libretro/cheats/Nintendo - Nintendo DS")});
+    });
+    struct CheatsJoin {
+        std::thread& t;
+        ~CheatsJoin() { if (t.joinable()) t.join(); }  // (every return before the menu's: never a running thread left)
+    } cheats_join{cheats_load};
+
     g_wake = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     struct sigaction sa{};
     sa.sa_handler = on_signal;
@@ -1390,10 +1404,8 @@ int run_kms(Emu& emu, const Config& cfg) {
         start_mark("menu init");
         // cheats.dir (<BANANADS_DATA>/cheats): the games' .mch files; then RetroArch .cht files from cheats.retroarch_dir
         // (the card's RetroArch folder) and cheats.system_dir (the collection that comes with BananaOS)
-        const char* data = getenv("BANANADS_DATA");
-        g_cheats.load(emu.game(), cfg.str("cheats.dir", std::string(data && *data ? data : "/data/bananads") + "/cheats"),
-                      {cfg.str("cheats.retroarch_dir", "/data/retroarch/retroarch/cheats/Nintendo - Nintendo DS"),
-                       cfg.str("cheats.system_dir", "/usr/share/libretro/cheats/Nintendo - Nintendo DS")});
+        // (read on cheats_load's thread since run_kms began)
+        cheats_load.join();
         g_cheat_emu = &emu;
         if (g_cheats.enabled()) emu.set_cheats(g_cheats.list());
         bmenu_session_start();
@@ -1578,6 +1590,10 @@ int run_kms(Emu& emu, const Config& cfg) {
         pcv.notify_all();
         wake();  // the presenter
     });
+    // kms.shader: its program made now, on this thread (GL's), while the emulator's thread runs the game's first frame.
+    // Made at the first commit instead, it came after that frame: ~135 ms more before the first picture on an RG DS Plus
+    // (log.time's "[start] shader: start" after "first frame: emulated")
+    dp.shader_settings();
 
     // kms.rt: the presenter at SCHED_FIFO 5, below the sound thread (10), as dsflip's below its audio pump. Set after
     // the other threads are started (a new thread takes its creator's policy), and dropped again before the quit's
