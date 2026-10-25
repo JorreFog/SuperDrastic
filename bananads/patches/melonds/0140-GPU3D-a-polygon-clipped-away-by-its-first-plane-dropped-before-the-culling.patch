@@ -1,0 +1,116 @@
+From 07e5d290f1931efda30e18e60f450c4e773196a7 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 00:06:22 +0100
+Subject: [PATCH] GPU3D: a polygon every vertex of which is outside the first
+ clip plane, on one side, dropped before the culling (render.geom_reject)
+
+---
+ src/GPU3D.cpp | 65 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/GPU3D.h   |  5 ++++
+ 2 files changed, 70 insertions(+)
+
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index 3645f46..fbad252 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -1003,9 +1003,67 @@ void GPU3D::SubmitPolygon() noexcept
+     SubmitPolygonBody<false>();
+ }
+ 
++// render.geom_reject: a polygon the clipping will leave with no vertex, found from its own vertices (most of a
++// HeartGold map's polygons: ~460 of ~570 a frame), dropped before SubmitPolygonBodyT, as its culling or its clipping
++// drops it: the polygon pipeline's start (PolygonPipeline 8, one vertex slot) and LastStripPolygon cleared, nothing
++// else (the culling, the line detection, the vertex copies and ClipAgainstPlane have no other effects; with
++// render.geom_thread the ring's slot it takes is not published).
++// Only with clipstart 0 (no strip vertices shared: ClipAgainstPlane keeps a strip's two shared vertices whatever
++// the new ones are; tested here more widely than SubmitPolygonBodyT does, without the Clipped flags). The passes
++// run Z, Y, X, each only if a vertex is outside its plane (GeomFast's mask, the same comparisons); the first that
++// runs sees these vertices unchanged and returns 0 when
++//  - Z, a vertex is beyond the far plane (z > w) and the attribute's bit 12 is clear (its early return);
++//  - every vertex is above the plane (p > w): its first loop keeps none and makes no clip vertex (both neighbours
++//    of each are above too);
++//  - every vertex is below the plane and not above it (p < -w, p <= w): the first loop keeps them all unchanged,
++//    the second keeps none and makes no clip vertex.
++// A pass returning 0 makes the later ones return 0 (clipstart 0). The tests use ClipAgainstPlane's comparisons
++// (the wrapping -w GCC compiles).
++inline __attribute__((always_inline)) bool GPU3D::PolygonClippedAway() const noexcept
++{
++    if (PolygonMode >= 2 && LastStripPolygon)
++    {
++        if (GeomThread ? (!GeomShadowValid || GeomShadow.NumVertices == (PolygonMode == 2 ? 3u : 4u))
++                       : LastStripPolygon->NumVertices == (PolygonMode == 2 ? 3 : 4))
++            return false;
++    }
++    const int nverts = PolygonMode & 0x1 ? 4 : 3;
++    // per component (bits 0-2: x, y, z): some vertex above (p > w) / below (p < -w), all above, all below and not above
++    u32 hi_any = 0, lo_any = 0, hi_all = 7, lo_all = 7;
++    for (int i = 0; i < nverts; i++)
++    {
++        const s32* p = TempVertexBuffer[i].Position;
++        const s32 w = p[3], nw = (s32)(0u - (u32)w);
++        const u32 hi = (u32)(p[0] > w) | ((u32)(p[1] > w) << 1) | ((u32)(p[2] > w) << 2);
++        const u32 lo = (u32)(p[0] < nw) | ((u32)(p[1] < nw) << 1) | ((u32)(p[2] < nw) << 2);
++        hi_any |= hi; lo_any |= lo;
++        hi_all &= hi; lo_all &= lo & ~hi;
++    }
++    const u32 any = hi_any | lo_any;
++    if (!any)
++        return false;
++    // the first pass that runs: Z (bit 2), else Y (bit 1), else X (bit 0)
++    const u32 first = (any & 4) ? 4 : (any & 2) ? 2 : 1;
++    if ((hi_all | lo_all) & first)
++        return true;
++    return first == 4 && (hi_any & 4) && !(CurPolygonAttr & (1<<12));
++}
++
+ template<bool Fast>
+ inline __attribute__((always_inline)) void GPU3D::SubmitPolygonBody() noexcept
+ {
++    if constexpr (Fast)
++    {
++        if (GeomReject && PolygonClippedAway())
++        {
++            // SubmitPolygonBodyT's start and its drop
++            PolygonPipeline = 8;
++            VertexSlotCounter = 1;
++            VertexSlotsFree = 0b11110;
++            LastStripPolygon = NULL;
++            return;
++        }
++    }
+     // render.geom_thread: its own instance, so that the polygon setup without it is the code it was
+     if constexpr (Fast)
+     {
+@@ -3392,6 +3450,13 @@ int GPU3D::GeomSabEnv() noexcept
+     return e ? atoi(e) : 0;
+ }
+ 
++bool GPU3D::GeomRejectEnv() noexcept
++{
++    // read as the GPU3D is created
++    const char* e = getenv("MELONDS_GEOMREJECT");
++    return !(e && e[0] == '0');
++}
++
+ bool GPU3D::GeomSwitchEnv() noexcept
+ {
+     // read as the GPU3D is created (a difftest's two NDS objects each with its own setting)
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index 67a4d8a..d881183 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -452,6 +452,11 @@ public:
+     // parameter count first and switching on the command again for a first or last parameter
+     static bool GeomSwitchEnv() noexcept;
+     bool GeomSwitch = GeomSwitchEnv();
++    // render.geom_reject (MELONDS_GEOMREJECT): a polygon all of whose vertices are outside the first clip plane
++    // that has an outside vertex, on the same side, is dropped before the culling and the clipping
++    static bool GeomRejectEnv() noexcept;
++    bool GeomReject = GeomRejectEnv();
++    bool PolygonClippedAway() const noexcept;
+     // BananaDS (render.geom_thread, MELONDS_GEOMTHREAD=0 turns it off; exact): with GeomFast a stored
+     // polygon's build (its fields, bounds, W and Z, and its new vertices' copy into vertex RAM) runs on a worker
+     // thread; every decision that sets timing or the counts (culling, clipping, zero-dot, RAM full, the strip's
+-- 
+2.56.0
+
