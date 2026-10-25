@@ -74,7 +74,8 @@ enum { FREE, WRITING, WRITTEN, READY, QUEUED, SCANOUT };
 enum { K_SCREEN, K_MENU, K_BLACK };
 
 typedef struct { uint32_t fb, handle, pitch, w, h; uint64_t size; void *map; int state; uint64_t gen;
-                 int fence; } dbuf;         /* fence: GPU "done" sync_file for a shaded frame, -1 if none */
+                 int fence; unsigned long fseq; } dbuf;   /* fence: GPU "done" sync_file for a shaded frame, -1 if
+                                                              none; fseq: the present it came from (low latency) */
 typedef struct {                        /* one DraStic texture we scan out */
     void *tex; int kind, w, h;
     dbuf b[NBUF]; int nb;
@@ -319,6 +320,10 @@ static long long ll_work;               /* DraStic's time from a release to its 
 static long long ll_release;            /* when the last present returned to DraStic (us), 0: not held (no sample) */
 static double ll_pad = 500;             /* us before the deadline a present aims at; +500 per missed vblank, decays */
 static long long ll_shade;              /* shader mode: present -> ready (us), decaying maximum */
+static unsigned long ll_fseq;           /* presents so far (dbuf.fseq: which present a frame came from) */
+static long long fs_tp[64];             /* each present's time (us), by fseq % 64: present -> on screen, any mode */
+static long long st_p2s_sum, st_p2s_max; static int st_p2s_n;
+static int st_ll_ahead;                 /* holds that waited a refresh more for a frame still waiting ahead */
 static int st_ll_hold, st_ll_cut, st_ll_late, st_ll_skip; static long long st_ll_hold_us, st_ll_lead_sum; static int st_ll_lead_n;
 static long long vbl_ref;               /* a recent top-panel vblank (flip timestamp, CLOCK_MONOTONIC us) */
 static double period = 16666.7;         /* measured refresh period, us */
@@ -513,6 +518,10 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         if (!P[i].queued) continue;     /* toast-only flip on this CRTC */
         if (P[i].last_flip && t - P[i].last_flip > st_iv_max[i]) st_iv_max[i] = t - P[i].last_flip;
         P[i].last_flip = t; st_flips[i]++;
+        if (i == 0 && P[i].queued->fseq && ll_fseq - P[i].queued->fseq < 60) {   /* present -> on screen */
+            long long l = t - fs_tp[P[i].queued->fseq % 64];
+            if (l > 0 && l < 200000) { st_p2s_sum += l; st_p2s_n++; if (l > st_p2s_max) st_p2s_max = l; }
+        }
         if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
     }
@@ -754,7 +763,7 @@ static void shade_pending(void) {
     for (int i = 0; i < 2; i++) if (src[i]) {
         release(src[i]);
         if (bad[i]) { dst[i]->state = FREE; st_drop++; continue; }
-        dst[i]->state = READY;
+        dst[i]->state = READY; dst[i]->fseq = src[i]->fseq;
         enqueue(i, dst[i], tr);
     }
     unlock(&mu);
@@ -887,14 +896,17 @@ static void *presenter(void *a) {
             }
             if (pacing_lowlat) {
                 LOG("[lowlat] frames %.1f ms before the deadline on average, %d after it (held to the next); DraStic held "
-                    "%d times (%.1f ms avg), let go early %d times for its sound, not held %d times; its frame %.1f ms, "
-                    "aiming %.1f ms early%s\n",
+                    "%d times (%.1f ms avg; %d a refresh more for a frame waiting ahead), let go early %d times for its "
+                    "sound, not held %d times; its frame %.1f ms, aiming %.1f ms early%s\n",
                     st_ll_lead_n ? st_ll_lead_sum / 1000.0 / st_ll_lead_n : 0.0, st_ll_late, st_ll_hold,
-                    st_ll_hold ? st_ll_hold_us / 1000.0 / st_ll_hold : 0.0, st_ll_cut, st_ll_skip, ll_work / 1000.0,
+                    st_ll_hold ? st_ll_hold_us / 1000.0 / st_ll_hold : 0.0, st_ll_ahead, st_ll_cut, st_ll_skip, ll_work / 1000.0,
                     (ll_pad + (shader_on ? ll_shade : 0)) / 1000.0, lowlat_ff ? ", fast-forward on" : "");
-                st_ll_hold = st_ll_cut = st_ll_late = st_ll_skip = st_ll_lead_n = 0; st_ll_hold_us = st_ll_lead_sum = 0;
+                st_ll_hold = st_ll_cut = st_ll_late = st_ll_skip = st_ll_lead_n = st_ll_ahead = 0; st_ll_hold_us = st_ll_lead_sum = 0;
                 if (!st_miss && ll_pad > 500) ll_pad = fmax(500, ll_pad - 250);   /* back after a clean 10 s */
             }
+            if (st_p2s_n) LOG("[latency] DraStic's present -> on screen: %.1f ms on average, %.1f at most (%d frames)\n",
+                              st_p2s_sum / 1000.0 / st_p2s_n, st_p2s_max / 1000.0, st_p2s_n);
+            st_p2s_sum = st_p2s_max = 0; st_p2s_n = 0;
             st_late = 0; st_miss = 0; st10 = t;
             unlock(&mu);
         }
@@ -1362,13 +1374,22 @@ __attribute__((constructor)) static void init(void) {
         const char *ll = getenv("DSFLIP_LOWLAT");
         if (ll && *ll == '1' && tfd < 0) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
         if (ll && *ll == '1' && tfd >= 0) {
-            pacing_lowlat = 1; pacing_latch = 1; queue_depth = 0; queue_wait_us = 0;
+            /* one frame may wait behind the next one to go: two that come in one refresh are both shown (a mailbox
+             * dropped the first, a hitch: 14-16 a minute in Mario Kart DS on the RG DS Plus), and the hold aims
+             * DraStic a refresh later per frame still waiting, so the queue drains again instead of staying a refresh
+             * of latency */
+            pacing_lowlat = 1; pacing_latch = 1; queue_depth = 1; queue_wait_us = 0;
+            { const char *lq = getenv("DSFLIP_LOWLAT_QUEUE"); if (lq && *lq) queue_depth = atoi(lq) < 0 ? 0 : atoi(lq) > 2 ? 2 : atoi(lq); }
             const char *al = getenv("DSFLIP_LOWLAT_ALIGN"); if (al && *al == '0') lowlat_align = 0;
             ff_button = resume_control_button("FAST_FORWARD");
             /* the sound a little closer too: the pump's ring at 1024 frames (23 ms) instead of 1536, ALSA's buffer
-             * 20 ms instead of 30 (unless set) */
+             * 20 ms instead of 30 (unless set). And DraStic keeps 60 ms of sound made ahead instead of its 35: the hold
+             * spends that (DraStic makes no sound while it waits), and with its own 35 it ran down to ~10 ms, under
+             * the floor the hold lets go at, in 13-73% of frames on the RG DS Plus (the hold cut short, the frame
+             * early). Picture to sound stays about as before: +25 ms here, -22 ms in the ring and ALSA's buffer */
             setenv("DSFLIP_PUMP_TARGET", "1024", 0); setenv("DSFLIP_ALSA_LATENCY", "20000", 0);
-            LOG("[lowlat] on (experimental): no frame queue, a frame at the next vblank it can make%s; fast-forward "
+            setenv("DSFLIP_AUDIO_AHEAD", "60", 0);
+            LOG("[lowlat] on (experimental): a frame at the next vblank it can make, one more may wait%s; fast-forward "
                 "control: %s\n", lowlat_align ? ", DraStic held to start each frame as late as the panels allow" : "",
                 ff_button >= 0 ? "a joystick button" : "none found");
         }
@@ -1590,7 +1611,7 @@ int SDL_RenderClear(void *rn) {
  * next cycle's deadline: as late as the panels allow, so the buttons it reads at the start are as fresh as can be.
  * tp: when this frame was presented. Never while DraStic isn't paced by its sound (fast-forward: its lead runs far
  * past the ~35-51 ms it keeps; or not known), and only while its sound stays ahead (audio_floor_us). */
-static void lowlat_hold(long long tp) {
+static void lowlat_hold(long long tp, unsigned long mine) {
     lock(&mu);
     int learned = ph_n >= 120 && vbl_ref;
     double hi = latch_hi(), ph = learned ? phase_of(tp) : 0, per = period;
@@ -1598,19 +1619,40 @@ static void lowlat_hold(long long tp) {
         if (ph <= hi) { st_ll_lead_sum += (long long)(hi - ph); st_ll_lead_n++; }
     }
     double pad = ll_pad + (shader_on ? (double)ll_shade : 0);
-    long long work = ll_work;
+    /* its frame's time: release -> present, sampled after a hold that ran its course; at least its heaviest recent
+     * frame's CPU time (when every hold is cut short for its sound there's no sample at all: 0 ms, DraStic let go a
+     * frame's time too late, every frame late and queued, measured on the RG DS) */
+    long long work = ll_work, cpu = frame_recent_ns / 1000;
+    if (work < cpu) work = cpu;
+    /* the top panel's frames from earlier presents that still go before this one: each takes a vblank first, so
+     * DraStic's next frame is aimed a refresh later per frame (a burst of two drains instead of staying a refresh
+     * of latency for good, and isn't dropped either). A flip in flight takes this cycle's vblank if it was committed
+     * before its deadline (this frame came by then too). */
+    int ahead = 0;
+    if (P[0].ready && P[0].ready->fseq < mine) ahead++;
+    for (int j = 0; j < P[0].nq; j++) if (P[0].q[j]->fseq < mine) ahead++;
+    if ((pending_mask & 1) && P[0].queued && P[0].queued->fseq < mine && ph <= hi) ahead++;
+    if (ahead > 2) ahead = 2;
+    if (ahead) st_ll_ahead++;
+    {   /* DSFLIP_LOWLAT_DEBUG=n: the first n holds after warm-up, what was counted ahead */
+        static int dbg = -1; if (dbg < 0) { const char *d = getenv("DSFLIP_LOWLAT_DEBUG"); dbg = d ? atoi(d) : 0; }
+        static int seen; if (dbg && learned && ++seen > 600 && seen <= 600 + dbg)
+            LOG("[lowlat-dbg] mine=%lu ph=%.0f hi=%.0f ready=%ld nq=%d q0=%ld pending=%d queued=%ld src=%ld ahead=%d\n", mine, ph, hi,
+                P[0].ready ? (long)P[0].ready->fseq : -1L, P[0].nq, P[0].nq ? (long)P[0].q[0]->fseq : -1L, pending_mask,
+                P[0].queued ? (long)P[0].queued->fseq : -1L, P[0].src ? (long)P[0].src->fseq : -1L, ahead);
+    }
     unlock(&mu);
     long long lead = audio_drastic_lead_us();
-    if (!learned || lowlat_ff || lead >= 90000) { if (learned) st_ll_skip++; return; }
+    if (!learned || lowlat_ff || lead >= 120000) { if (learned) st_ll_skip++; return; }
     /* this frame's own deadline (the first at or after it came), then the next cycle's */
-    double own = (double)tp - ph + hi + (ph > hi ? per : 0);
+    double own = (double)tp - ph + hi + (ph > hi ? per : 0) + ahead * per;
     long long target = (long long)(own + per - pad) - work, now = now_us();
     if (target <= now) { ll_release = now; return; }       /* no time to spare: on at once (and a sample) */
     long long left = lead - (long long)audio_floor_us();   /* until its sound would run short */
     if (left <= 0) { st_ll_cut++; return; }                 /* (no sample: it may wait for its sound now) */
     long long until = target, cut = 0;
     if (now + left < until) { until = now + left; cut = 1; }
-    if (until - now > (long long)per) until = now + (long long)per;
+    if (until - now > (long long)(2 * per)) until = now + (long long)(2 * per);
     struct timespec ts = { until / 1000000, (until % 1000000) * 1000 };
     while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, 0) == EINTR) {}
     st_ll_hold++; st_ll_hold_us += until - now;
@@ -1680,6 +1722,8 @@ void SDL_RenderPresent(void *rn) {
     int menu_opened = menu_touch && !menu_was;
 
     int screen = 0;                     /* a game screen went to a panel (low latency: hold DraStic for the next) */
+    unsigned long mine = ++ll_fseq;     /* (this present's frames' number: the hold counts the frames ahead of them) */
+    fs_tp[mine % 64] = tp;
     for (int i = 0; i < 2; i++) {
         stex *s = pending_route[i]; pending_route[i] = 0;
         if (!s) continue;
@@ -1697,7 +1741,7 @@ void SDL_RenderPresent(void *rn) {
             if (held) continue;
         } else {
             if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
-            b = &s->b[s->written]; s->written = -1; b->state = READY;
+            b = &s->b[s->written]; s->written = -1; b->state = READY; b->fseq = ll_fseq;
             if (shader_on && s->kind == K_SCREEN) {   /* the presenter shades it into a panel buffer */
                 if (P[i].src) { release(P[i].src); st_drop++; st_drop_src++; }
                 P[i].src = b; P[i].src_t = tp; P[i].src_held = held;
@@ -1708,7 +1752,7 @@ void SDL_RenderPresent(void *rn) {
     }
     unlock(&mu);
     uint64_t one = 1; if (write(shader_on ? wfd : efd, &one, 8) < 0) {}   /* shader mode: the worker shades first */
-    if (pacing_lowlat && lowlat_align && screen && !menu_touch) lowlat_hold(tp);
+    if (pacing_lowlat && lowlat_align && screen && !menu_touch) lowlat_hold(tp, mine);
     if (menu_opened) status_card();
     ra_frame();
     resume_frame();
