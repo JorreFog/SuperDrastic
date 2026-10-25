@@ -117,8 +117,10 @@ static void theme_banana(void) {
 typedef struct { uint32_t *px; int w, h; float s; } canvas;   /* s: panel width / 640 (layouts are made at 640x480) */
 #define S(v) ((int)lroundf((v) * c->s))
 
+static int clip_x0 = -1, clip_x1 = -1;   /* a marquee's box (text_raw): only these columns drawn; -1: no clip */
 static inline void blendpx(canvas *c, int x, int y, uint32_t rgb, float a) {
     if ((unsigned)x >= (unsigned)c->w || (unsigned)y >= (unsigned)c->h || a <= 0.0f) return;
+    if (clip_x0 >= 0 && (x < clip_x0 || x >= clip_x1)) return;
     uint32_t *d = c->px + (size_t)y * c->w + x;
     if (a >= 1.0f) { *d = rgb; return; }
     uint32_t o = *d; float ia = 1.0f - a;
@@ -255,6 +257,24 @@ static float text_w_raw(font *F, const char *t, float px, int max_cp) {
     }
     return w;
 }
+/* a label too long for its box, on the picked item (mq_pick set around the call): it scrolls instead of ending in
+ * "...": 1.5 s still, 36 px/s (at 640 wide) to its end, 1.5 s still, back. The same timing as BananaOS's menu
+ * (rnds::marqueeOffset). The loop redraws while one moves (mq_moving) and when its pause ends (mq_wake_at) */
+static int mq_pick, text_raw_mq, mq_moving;
+static long long mq_t0, mq_wake_at;
+static char mq_key[200];
+static long long mq_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return ts.tv_sec * 1000LL + ts.tv_nsec / 1000000; }
+static float mq_offset(const char *t, float overflow, float mq_scale) {
+    long long now = mq_now();
+    if (strncmp(mq_key, t, sizeof mq_key - 1)) { snprintf(mq_key, sizeof mq_key, "%s", t); mq_t0 = now; }
+    const double pause = 1500, speed = 36.0 * mq_scale, run = overflow / speed * 1000, cycle = pause + run + pause;
+    double e = fmod((double)(now - mq_t0), cycle);
+    if (e < pause) { long long w = now + (long long)(pause - e); if (!mq_wake_at || w < mq_wake_at) mq_wake_at = w; return 0; }
+    e -= pause;
+    if (e < run) { mq_moving = 1; return (float)(e / 1000 * speed); }
+    { long long w = now + (long long)(pause - (e - run)); if (!mq_wake_at || w < mq_wake_at) mq_wake_at = w; }
+    return overflow;
+}
 /* text whose box starts at y (top), aligned left (0), centred (1) or right (2) on x; cut with "..." past maxw. As
  * given: text() and text_w() are the ones that translate */
 static void text_raw(canvas *c, font *F, const char *t, float x, float y, float px, uint32_t rgb, float maxw, int align) {
@@ -262,6 +282,16 @@ static void text_raw(canvas *c, font *F, const char *t, float x, float y, float 
     int n = 0; for (const char *s = t; *s; n++) utf8_next(&s);
     int keep = n, dots3 = 0;
     float w = text_w_raw(F, t, px, n);
+    if (maxw > 0 && w > maxw && mq_pick) {   /* the picked item's label: it scrolls in its box (BananaOS's marquee) */
+        float bx = align == 1 ? x - maxw / 2 : align == 2 ? x - maxw : x;
+        float off = mq_offset(t, w - maxw, c->s);
+        clip_x0 = (int)lroundf(bx); clip_x1 = (int)lroundf(bx + maxw);
+        text_raw_mq = 1;
+        int sp = mq_pick; mq_pick = 0;
+        text_raw(c, F, t, bx - off, y, px, rgb, 0, 0);
+        mq_pick = sp; clip_x0 = clip_x1 = -1; text_raw_mq = 0;
+        return;
+    }
     if (maxw > 0 && w > maxw) {
         float dw = text_w_raw(F, "...", px, 3);
         while (keep > 0 && text_w_raw(F, t, px, keep) + dw > maxw) keep--;
@@ -904,7 +934,7 @@ static void draw_header(canvas *c, const char *h, const char *sub, int sub_page)
     if (sw > S(300)) sw = S(300);
     int lx0 = x + (int)hw + S(14), lx1 = c->w - S(20) - (sw > 0 ? (int)sw + S(14) : 0);
     if (lx1 > lx0) fill(c, lx0, S(27), lx1, S(30), C_LINE, 1.0f);
-    if (sub && *sub) text(c, &F_REG, sub, c->w - S(20), S(19), S(16), C_GREY, S(300), 2);
+    if (sub && *sub) { mq_pick = 1; text(c, &F_REG, sub, c->w - S(20), S(19), S(16), C_GREY, S(300), 2); mq_pick = 0; }
 }
 static void bar(canvas *c, int x, int y, int v, int sel) {      /* 10 segments, the theme's progress look */
     for (int k = 0; k < 10; k++) fill(c, x + k * S(15), y, x + k * S(15) + S(11), y + S(20), k < (v + 5) / 10 ? (sel ? C_BARSEL : C_CYAN) : (sel ? C_BAROFFSEL : C_LINE), 1.0f);
@@ -970,7 +1000,7 @@ static void draw_bottom(void) {
             box(c, x, y, x + tw, y + th, S(14), bw, bd, bg);
             int k = S(4) < 2 ? 2 : S(4), cy = y + (th - S(108)) / 2;   /* icon, name and hint, centred in the tile */
             bitmap(c, tile_icon[i], 12, x + (tw - 12 * k) / 2, cy, k, fg);
-            text(c, &F_MED, tile_label[i], x + tw / 2.0f, cy + S(60), S(20), fg, tw - S(16), 1);
+            mq_pick = sel; text(c, &F_MED, tile_label[i], x + tw / 2.0f, cy + S(60), S(20), fg, tw - S(16), 1); mq_pick = 0;
             char h[64] = "";
             switch (i) {
             case 0: snprintf(h, sizeof h, "or press L3"); break;
@@ -1135,8 +1165,9 @@ static void show(int i) {
     dsflip_menu_show(i, k);
 }
 static void redraw(void) {
+    if (!dirty_bot && (mq_moving || (mq_wake_at && mq_now() >= mq_wake_at))) dirty_bot = 1;   /* a marquee's next step */
     if (dirty_top) { draw_top(); show(0); dirty_top = 0; }
-    if (dirty_bot) { draw_bottom(); show(1); dirty_bot = 0; }
+    if (dirty_bot) { mq_moving = 0; mq_wake_at = 0; draw_bottom(); show(1); dirty_bot = 0; }
 }
 
 /* ---------- actions ---------- */
