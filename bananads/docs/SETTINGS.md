@@ -95,7 +95,9 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `audio.servo` | `on` | the rate servo: when the game runs below full speed, the sound is stretched smoothly instead of crackling; only the sound changes, never the emulation |
 | `audio.stretch` | `on` | how the servo stretches: `on` keeps the pitch (a time stretch; at most +-0.5% goes to the resampler), `off` resamples, so the sound lowers with the game's speed |
 | `audio.servo_target` | `768` | the backlog of game sound (in 48 kHz frames) the servo holds: more absorbs longer dips, adds latency |
-| `audio.stats` | `off` | a log line every 10 s: short chunks (the crackle), the servo's stretch range, the backlog |
+| `audio.stats` | `off` | a log line every 10 s: short chunks (the crackle), the servo's stretch range, the backlog (average and lowest while playing), ALSA write errors (xruns: underruns at the device) and chunks played at a tempo below 1 |
+| `audio.dump` | none | `<path>.in.raw` (what the SPU's resampler hands the sound thread) and `<path>.out.raw` (exactly what is written to ALSA), 48 kHz stereo s16, the first two minutes |
+| `audio.tap` | none | the emulated sound itself: the SPU mixer's final output (stereo s16 at 32768 Hz, before the output resampler and its skew) from the last state load, kept in memory for `audio.tap_secs` (`90`) and written to this file at the quit (melonDS patch 0180). Two builds' runs from the same state compare sample for sample on the handheld |
 | `sdl.scale` | `2` | the window's size |
 | `sdl.present` | `queue` | `queue`: the emulator runs on a thread of its own at the DS's rate and the window shows its finished frames in order, one per vsync, each about one vsync after it is done (a steady picture when frames alternate between slower and faster than a vsync, as HeartGold's do at 1104 MHz; one frame more latency). `direct`: each frame shown as soon as it is done, on the emulator's thread (a frame slower than a vsync misses it) |
 | `sdl.stats` | `0` | with `sdl.present=queue`, every this many vsyncs log the vsync rate, the emulated frames per second, the vsyncs that showed no new frame and the frames never shown |

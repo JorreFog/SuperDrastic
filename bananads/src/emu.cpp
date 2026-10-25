@@ -594,7 +594,7 @@ bool Emu::load_rom(const std::string& path) {
     // core.fast_samples: with core.fast_mix, a due PCM16/ADPCM channel's samples taken with its state in registers and
     // ADPCM's step from tables (patches/melonds/0070; exact)
     nds_->SPU.SetFastSamples(cfg_.flag("core.fast_samples", true));
-    // audio.tap=<file>: the emulated sound itself (SPU::Tap, patch 0093: stereo s16 at 32768 Hz, before the output
+    // audio.tap=<file>: the emulated sound itself (SPU::Tap, patch 0180: stereo s16 at 32768 Hz, before the output
     // resampler and its skew) for audio.tap_secs from the last state load, kept in memory and written at the quit.
     // Two builds' runs from the same state compare sample for sample (tools/audiocheck.py). Off by default
     tap_path_ = cfg_.str("audio.tap", "");

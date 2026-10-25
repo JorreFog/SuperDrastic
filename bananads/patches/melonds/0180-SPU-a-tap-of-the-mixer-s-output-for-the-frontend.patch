@@ -17,7 +17,7 @@ sample for sample on the handheld. Off: one untaken branch per Mix.
          NDS.Mic.Advance(spucycles << 1);
          if (!DiscardOutput)  // (patch 0091)
          {
-+            if (Tap && TapPos < TapLen) [[unlikely]]  // (patch 0093)
++            if (Tap && TapPos < TapLen) [[unlikely]]  // (patch 0180)
 +            {
 +                Tap[TapPos * 2] = OutputLastSamples[0];
 +                Tap[TapPos * 2 + 1] = OutputLastSamples[1];
@@ -30,7 +30,7 @@ sample for sample on the handheld. Off: one untaken branch per Mix.
      OutputLastSamples[0] = output[0];
      OutputLastSamples[1] = output[1];
  
-+    if (Tap && TapPos < TapLen) [[unlikely]]  // (patch 0093)
++    if (Tap && TapPos < TapLen) [[unlikely]]  // (patch 0180)
 +    {
 +        Tap[TapPos * 2] = output[0];
 +        Tap[TapPos * 2 + 1] = output[1];
@@ -46,7 +46,7 @@ sample for sample on the handheld. Off: one untaken branch per Mix.
      // BananaDS run-ahead (patch 0091): frames run ahead and then undone add nothing to the output (the mixer's
      // state goes on and is put back by the snapshot; the resampler's, which isn't in it, is left as it was)
      bool DiscardOutput = false;
-+    // BananaDS audio tap (patch 0093, the frontend's audio.tap): when Tap is set, every Mix's final output (stereo
++    // BananaDS audio tap (patch 0180, the frontend's audio.tap): when Tap is set, every Mix's final output (stereo
 +    // s16 at 32768 Hz, before the resampler, the same samples blip gets) goes into it until TapLen frames are in.
 +    // Off (null) by default: one untaken branch per Mix. Frames run ahead (DiscardOutput) aren't kept.
 +    s16* Tap = nullptr;

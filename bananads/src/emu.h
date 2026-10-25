@@ -125,7 +125,7 @@ private:
     bool lid_closed_ = false;  // the lid as set_lid last had it (emulator thread)
     uint32_t bank3d_ = 0;
     double skew_cur_ = 1.0;
-    std::vector<int16_t> tap_;  // audio.tap: the mixer's 32768 Hz output (melonDS patch 0093), written at the quit
+    std::vector<int16_t> tap_;  // audio.tap: the mixer's 32768 Hz output (melonDS patch 0180), written at the quit
     std::string tap_path_;
     Config cfg_;
     std::unique_ptr<melonDS::NDS> nds_;
