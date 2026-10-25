@@ -245,7 +245,8 @@ struct Display {
         const long long d = m.load(std::memory_order_relaxed);         // stretch's frames come back within seconds)
         m.store(std::max(w, d - d / 512), std::memory_order_relaxed);
     }
-    // more lead after a frame shown late: +1 ms each (at most 8), back 0.25 ms after a clean 10 s
+    // more lead after a frame shown late: +2 ms each (at most 16: a heavy scene's spikes buy their own headroom), back
+    // 0.25 ms after a clean 10 s
     std::atomic<long long> extra_us{0};
     // kms.lowlat_trace=<file>: each frame's times (us, CLOCK_MONOTONIC) in a ring, written at the quit: started,
     // published, aimed deadline, taken by the presenter, ready, committed, on screen (the pair's first flip event)
@@ -875,7 +876,7 @@ struct Display {
                         if (more > 0) {
                             slip += (int)more;
                             slip_total += more;
-                            extra_us.store(std::min(8000LL, extra_us.load() + 1000));
+                            extra_us.store(std::min(16000LL, extra_us.load() + 2000));
                         }
                         if (k > 0) ll_behind++;
                     }
@@ -1322,7 +1323,7 @@ int run_kms(Emu& emu, const Config& cfg) {
     const std::string ll = cfg.str("kms.lowlat", "off");
     const bool lowlat = ll != "off";
     const int ra_n = (int)std::clamp(cfg.num("runahead", ll == "runahead1" ? 1 : ll == "runahead2" ? 2 : 0), 0L, 2L);
-    const int depth = lowlat ? 2 : std::clamp((int)cfg.num("kms.queue", 2), 1, 3);
+    const int depth = lowlat ? 3 : std::clamp((int)cfg.num("kms.queue", 2), 1, 3);
     const long every = cfg.num("kms.stats", 0);
 
     g_wake = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
@@ -1632,7 +1633,7 @@ int run_kms(Emu& emu, const Config& cfg) {
                         const long long per = std::llround(dp.period_us), now = now_us();
                         const long long pres = dp.pres_us.load(std::memory_order_relaxed);
                         const long long est = std::min(dp.emu_us.load(std::memory_order_relaxed) + pres + pad +
-                                                       dp.extra_us.load(std::memory_order_relaxed), 2 * per);
+                                                       dp.extra_us.load(std::memory_order_relaxed), 3 * per);
                         // the deadline after the last frame's, on the panels' grid (a chain of + period drifts off it
                         // over a minute), and not before the refresh after the one the newest waiting frame goes on
                         // screen at (from the queue as it is: a frame shown late moves the ones after it on by as much
