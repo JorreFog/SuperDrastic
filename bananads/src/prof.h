@@ -25,4 +25,8 @@ public:
     virtual void finish() = 0;
 };
 
+// prof.thread=present (tests): the profiler samples the calling thread (the KMS presenter) instead of the emulator's;
+// its CPU-time percentages are then the emulator's thread's, the shares are the presenter's
+void prof_target_this_thread();
+
 }  // namespace bananads

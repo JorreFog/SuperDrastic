@@ -73,6 +73,8 @@ GLFN(void, glFinish, void) GLFN(void, glFlush, void)
 GLFN(const unsigned char *, glGetString, GLenum) GLFN(void, glPixelStorei, GLenum, GLint)
 GLFN(void, glTexImage2D, GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void *)
 GLFN(void, glTexSubImage2D, GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void *) GLFN(GLenum, glGetError, void) GLFN(void, glDisable, GLenum)
+GLFN(void, glClear, unsigned) GLFN(void, glClearColor, GLfloat, GLfloat, GLfloat, GLfloat)
+GLFN(void, glReadPixels, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *) GLFN(void, glDeleteProgram, GLuint)
 
 #define EGL_NONE 0x3038
 #define EGL_EXTENSIONS 0x3055
@@ -95,6 +97,9 @@ GLFN(void, glTexSubImage2D, GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenu
 #define GL_TEXTURE_WRAP_S 0x2802
 #define GL_TEXTURE_WRAP_T 0x2803
 #define GL_LINEAR 0x2601
+#define GL_NEAREST 0x2600
+#define GL_RGBA 0x1908
+#define GL_UNSIGNED_BYTE 0x1401
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_FRAMEBUFFER 0x8D40
 #define GL_COLOR_ATTACHMENT0 0x8CE0
@@ -112,7 +117,16 @@ GLFN(void, glTexSubImage2D, GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenu
 static EGLDisplay dpy;
 static GLenum up_fmt; int shader_copy_mode;      /* set by the caller before shader_init */
 static GLuint up_tex[2]; static int up_w[2], up_h[2];
-static GLuint prog; static GLint u_tex, u_tsize, u_osize, u_fch;
+/* a program and its uniforms; slow = the shader as asked for, fast = its built-in faster twin (if any) */
+typedef struct { GLuint prog; GLint u_tex, u_tsize, u_osize, u_fch; int nearest; } sprog;
+#define NFAST 4
+static sprog slow, fastc[NFAST], *fast = &fastc[0]; static int nfast; static const sprog *cur_prog;
+int shader_fast = 1;
+int clear_first = 1;                                 /* kms.shader_clear: see quad() */                                 /* set by the caller before shader_init (kms.shader_fast) */
+static int fast_ok, fast_w, fast_h, fast_dw, fast_dh;
+static struct { int sw, sh, dw, dh; const sprog *p; } seen[4]; static int nseen;   /* pick(): each size's verdict */
+static int fast_check(int sw, int shh, int dw, int dhh);
+static void use(const sprog *p) { if (cur_prog != p || !p->prog) { glUseProgram(p->prog); cur_prog = p; } }
 /* a shader that draws the DS screen into part of the panel (ds-integer) says where, in panel pixels, with a line
  * "dsflip-viewport: x y w h" in its source; libdsflip maps touches into that rectangle. "dsflip-viewport: integer"
  * means the largest whole multiple of 256x192 that fits the panel, centred: 512x384 at 64,48 on the RG DS's 640x480,
@@ -238,6 +252,60 @@ const char *shader_name(void) {
     return s;
 }
 
+static sprog make_prog(const char *vsrc, const char *pre, const char *fsrc) {
+    sprog r = {0};
+    GLuint v = compile(GL_VERTEX_SHADER, "", vsrc), f = compile(GL_FRAGMENT_SHADER, pre, fsrc);
+    if (!v || !f) return r;
+    GLuint pg = glCreateProgram();
+    glAttachShader(pg, v); glAttachShader(pg, f);
+    glBindAttribLocation(pg, 0, "a_position"); glBindAttribLocation(pg, 1, "a_texcoord");
+    glLinkProgram(pg);
+    GLint okl = 0; glGetProgramiv(pg, GL_LINK_STATUS, &okl);
+    if (!okl) { char log[1024] = ""; glGetProgramInfoLog(pg, sizeof log, 0, log); SLOG("[shader] link failed: %s\n", log); glDeleteProgram(pg); return r; }
+    r.prog = pg;
+    glUseProgram(pg); cur_prog = 0;
+    r.u_tex = glGetUniformLocation(pg, "u_texture"); r.u_tsize = glGetUniformLocation(pg, "u_texture_size");
+    r.u_osize = glGetUniformLocation(pg, "u_output_size"); r.u_fch = glGetUniformLocation(pg, "dsf_fch");
+    glUniform1i(r.u_tex, 0);
+    r.nearest = strstr(fsrc, "dsflip-filter: nearest") != 0;
+    return r;
+}
+
+/* ds-grid-2x (SuperDrastic's shaders/ds-grid-2x.frag) where the panel is a whole multiple of the DS screen with no
+ * border, 4x (the RG DS Plus's 1024x768): the same picture with the per-pixel work cut down. The Mali-G52's compiler
+ * doesn't hoist expressions of uniforms only out of the per-pixel code, so the file's scale, origin, letterbox test,
+ * cell position and brightness are worked out for every pixel. Here: the scale is 4 (no letterbox), a texel is
+ * fetched with GL_NEAREST at the pixel's own coordinate (the file fetches it at the centre of floor(pixel * texels /
+ * pixels) with GL_LINEAR: the same texel), a pixel is on a grid line when it is the last of its 4-pixel cell (fract
+ * of its DS-pixel coordinate (k + 0.5) / 4 = 0.875; the others 0.125-0.625), and the line darkness and compensation
+ * are constants folded at compile time. The light math (c * c * k, clamped, sqrt) is the file's, in its order.
+ * fast_check proves it gives the same bytes before it is used. */
+#define GRID2X_HEAD \
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n" \
+    "// dsflip-filter: nearest\n" \
+    "varying vec2 v_texcoord;\nuniform sampler2D u_texture;\n" \
+    "const float S = 4.0;\nconst float GRID_WIDTH_PX = 1.0;\nconst float GRID_LEVEL = 0.55;\nconst float GRID_COMPENSATE = 0.5;\n" \
+    "const float meanAxis = min(GRID_WIDTH_PX / S, 1.0);\n" \
+    "const float meanCov = meanAxis + meanAxis - meanAxis * meanAxis;\n" \
+    "const float bright = mix(1.0, 1.0 / mix(1.0, GRID_LEVEL, meanCov), GRID_COMPENSATE);\n" \
+    "const float K_LINE = mix(1.0, GRID_LEVEL, 1.0) * bright;\n" \
+    "const float K_CELL = mix(1.0, GRID_LEVEL, 0.0) * bright;\n" \
+    "void main() {\n" \
+    "    vec4 c = SWIZ(texture2D(u_texture, v_texcoord));\n" \
+    "    vec2 f = fract(v_texcoord * vec2(256.0, 192.0));\n" \
+    "    bool line = max(f.x, f.y) > 0.75;\n"
+/* the twins, cheapest first: the first one whose test picture matches is used. (0) sqrt(c * c * k) = c * sqrt(k) when
+ * under 1: one multiply and a clamp a channel, if the GPU's rounding agrees to the byte; (1) the file's light math */
+static const char *fast_grid2x_fs[] = {
+    GRID2X_HEAD
+    "    gl_FragColor = vec4(min(c.rgb * (line ? sqrt(K_LINE) : sqrt(K_CELL)), vec3(1.0)), c.a);\n"
+    "}\n",
+    GRID2X_HEAD
+    "    vec3 lin = c.rgb * c.rgb * (line ? K_LINE : K_CELL);\n"
+    "    gl_FragColor = vec4(sqrt(min(lin, vec3(1.0))), c.a);\n"
+    "}\n",
+};
+
 /* on the presenter thread; returns 0 if the shader can't be used (the caller stays zero-copy) */
 int shader_init(int fd, const char *name) {
     drm_fd = fd;
@@ -268,7 +336,7 @@ int shader_init(int fd, const char *name) {
     G(glBindTexture) G(glTexParameteri) G(glActiveTexture) G(glGenFramebuffers) G(glDeleteFramebuffers)
     G(glBindFramebuffer) G(glFramebufferTexture2D) G(glCheckFramebufferStatus) G(glViewport) G(glVertexAttribPointer)
     G(glEnableVertexAttribArray) G(glDrawArrays) G(glFinish) G(glFlush)
-    G(glGetString) G(glPixelStorei) G(glTexImage2D) G(glTexSubImage2D) G(glGetError) G(glDisable)
+    G(glGetString) G(glPixelStorei) G(glTexImage2D) G(glTexSubImage2D) G(glGetError) G(glDisable) G(glReadPixels) G(glDeleteProgram) G(glClear) G(glClearColor)
 
     /* a display: libmali's default one (GBM, see above), else Mesa's surfaceless platform (needs a render node) */
     dpy = eglGetDisplay(0);
@@ -322,39 +390,129 @@ int shader_init(int fd, const char *name) {
                       "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
                     : "#define SWIZ(c) (c)\nuniform highp float dsf_fch;\n"
                       "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n";
-    GLuint v = compile(GL_VERTEX_SHADER, "", vs ? vs : default_vs), f = compile(GL_FRAGMENT_SHADER, pre, ffs);
+    sprog np = make_prog(vs ? vs : default_vs, pre, ffs);
+    /* a faster built-in twin of this shader (shader_fast): used only once a self-test on the GPU has drawn the same
+     * test picture through both, byte for byte, at the frames' sizes (see fast_check) */
+    sprog nf[NFAST] = {{0}};
+    int nn = 0;
+    if (shader_fast && !strcmp(name, "ds-grid-2x") && !vs)
+        for (size_t i = 0; i < sizeof fast_grid2x_fs / sizeof *fast_grid2x_fs && nn < NFAST; i++)
+            if ((nf[nn] = make_prog(default_vs, pre, fast_grid2x_fs[i])).prog) nn++;
     free(fs); free(ffs); free(vs);
-    if (!v || !f) return 0;
-    prog = glCreateProgram();
-    glAttachShader(prog, v); glAttachShader(prog, f);
-    glBindAttribLocation(prog, 0, "a_position"); glBindAttribLocation(prog, 1, "a_texcoord");
-    glLinkProgram(prog);
-    GLint okl = 0; glGetProgramiv(prog, GL_LINK_STATUS, &okl);
-    if (!okl) { char log[1024] = ""; glGetProgramInfoLog(prog, sizeof log, 0, log); SLOG("[shader] link failed: %s\n", log); return 0; }
-    glUseProgram(prog);
-    u_tex = glGetUniformLocation(prog, "u_texture"); u_tsize = glGetUniformLocation(prog, "u_texture_size");
-    u_osize = glGetUniformLocation(prog, "u_output_size"); u_fch = glGetUniformLocation(prog, "dsf_fch");
-    glUniform1i(u_tex, 0);
+    if (!np.prog) { for (int i = 0; i < nn; i++) glDeleteProgram(nf[i].prog); return 0; }
+    if (slow.prog) glDeleteProgram(slow.prog);
+    for (int i = 0; i < nfast; i++) glDeleteProgram(fastc[i].prog);
+    slow = np; nfast = nn; memcpy(fastc, nf, sizeof fastc); fast = &fastc[0];
+    fast_ok = 0; fast_w = fast_h = fast_dw = fast_dh = 0; nseen = 0;
+    cur_prog = 0; use(&slow);
     glDisable(GL_BLEND); glDisable(GL_DITHER);
-    SLOG("[shader] \"%s\" from %s, EGL %d.%d (%s%s, %s display)\n", name, from, maj, min, *dir ? dir : "system ", "libEGL", how);
+    SLOG("[shader] \"%s\" from %s, EGL %d.%d (%s%s, %s display)%s\n", name, from, maj, min, *dir ? dir : "system ", "libEGL", how,
+         nfast ? "; faster built-in twins, checked at the first frame" : "");
     return 1;
+}
+
+int shader_fast_on(void) { return nfast && fast_ok; }
+
+/* the program in use for this draw: the fast twin when it passed its check at these sizes, else the shader itself */
+static sprog *pick(int sw, int shh, int dw, int dhh) {
+    if (!nfast) return &slow;
+    if (sw != fast_w || shh != fast_h || dw != fast_dw || dhh != fast_dh) {
+        /* each size's verdict kept (a test is a few frames' GPU time and two read-backs: once a size) */
+        int i = 0;
+        while (i < nseen && (seen[i].sw != sw || seen[i].sh != shh || seen[i].dw != dw || seen[i].dh != dhh)) i++;
+        if (i == nseen) {
+            fast_ok = fast_check(sw, shh, dw, dhh);
+            i = nseen < 4 ? nseen++ : 3;
+            seen[i].sw = sw; seen[i].sh = shh; seen[i].dw = dw; seen[i].dh = dhh; seen[i].p = fast_ok ? fast : 0;
+        }
+        fast_ok = seen[i].p != 0;
+        if (fast_ok) fast = (sprog *)seen[i].p;
+        fast_w = sw; fast_h = shh; fast_dw = dw; fast_dh = dhh;
+    }
+    return fast_ok ? fast : &slow;
+}
+static void bind_src(GLuint tex, const sprog *p) {
+    glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, tex);
+    const GLint f = p->nearest ? GL_NEAREST : GL_LINEAR;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, f);
+}
+static void quad(const sprog *p, int sw, int shh, int dw, int dhh) {
+    static const GLfloat pos[] = { -1, -1, 1, -1, -1, 1, 1, 1 };
+    static const GLfloat uv[] = { 0, 0, 1, 0, 0, 1, 1, 1 };     /* buffer row 0 (panel top) at GL y = -1 */
+    glViewport(0, 0, dw, dhh);
+    /* a clear first, though the quad covers every pixel: without it the GPU reads each tile's old contents back
+     * from the buffer before drawing (a tile-based GPU keeps what a draw doesn't cover), 3 MB a panel a frame */
+    if (clear_first) glClear(0x4000 /* GL_COLOR_BUFFER_BIT */);
+    use(p);
+    glUniform2f(p->u_tsize, (GLfloat)sw, (GLfloat)shh);
+    glUniform2f(p->u_osize, (GLfloat)dw, (GLfloat)dhh);
+    glUniform1f(p->u_fch, (GLfloat)dhh);
+    glVertexAttribPointer(0, 2, GL_FLOAT, 0, 0, pos); glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, 0, 0, uv); glEnableVertexAttribArray(1);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+/* the fast twin's check: a test picture (every 8-bit level in every channel, at every position in the grid's cells)
+ * drawn through both programs into GL textures of the panel's size and read back; the twin is used only if every
+ * byte is the same. Once per frame size (the first frame), ~1 frame of GPU time */
+static int fast_check(int sw, int shh, int dw, int dhh) {
+    uint8_t *in = malloc((size_t)sw * shh * 4), *a = malloc((size_t)dw * dhh * 4), *b = malloc((size_t)dw * dhh * 4);
+    GLuint t[2] = {0}, fb = 0;
+    int ok = 0;
+    if (!in || !a || !b) goto out;
+    for (int y = 0; y < shh; y++)
+        for (int x = 0; x < sw; x++) {
+            uint8_t *q = in + ((size_t)y * sw + x) * 4;
+            q[0] = (uint8_t)(x + y * 37); q[1] = (uint8_t)(x * 3 + y * 11 + 85); q[2] = (uint8_t)(x * 7 + y * 5 + 170); q[3] = 255;
+        }
+    glGenTextures(2, t); glGenFramebuffers(1, &fb);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, t[0]);
+    glPixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 4);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sw, shh, 0, GL_RGBA, GL_UNSIGNED_BYTE, in);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, t[1]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dw, dhh, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, fb);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t[1], 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { SLOG("[shader] fast twin: test target incomplete\n"); goto out; }
+    glPixelStorei(0x0D05 /* GL_PACK_ALIGNMENT */, 4);
+    for (int i = -1; i < nfast && !ok; i++) {         /* -1: the shader itself, the reference */
+        const sprog *p = i < 0 ? &slow : &fastc[i];
+        bind_src(t[0], p);
+        quad(p, sw, shh, dw, dhh);
+        glReadPixels(0, 0, dw, dhh, GL_RGBA, GL_UNSIGNED_BYTE, i < 0 ? a : b);
+        if (glGetError()) { SLOG("[shader] fast twin: GL error in its test\n"); goto out; }
+        if (i < 0) continue;
+        long diff = 0, first = -1;
+        for (size_t k = 0; k < (size_t)dw * dhh; k++)
+            if (memcmp(a + k * 4, b + k * 4, 3)) { diff++; if (first < 0) first = (long)k; }
+        if (!diff) {
+            ok = 1; fast = &fastc[i];
+            SLOG("[shader] fast twin %d: the same %dx%d picture as the shader's from %dx%d frames (%ld pixels compared): on\n", i, dw, dhh, sw, shh, (long)dw * dhh);
+        } else SLOG("[shader] fast twin %d: %ld of %ld pixels differ (first at %ld,%ld: %02x%02x%02x vs %02x%02x%02x)\n", i, diff, (long)dw * dhh,
+                    first % dw, first / dw, a[first * 4], a[first * 4 + 1], a[first * 4 + 2], b[first * 4], b[first * 4 + 1], b[first * 4 + 2]);
+    }
+    if (!ok) SLOG("[shader] no fast twin matches: the shader itself draws\n");
+out:
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (fb) glDeleteFramebuffers(1, &fb);
+    if (t[0]) glDeleteTextures(2, t);
+    free(in); free(a); free(b);
+    use(&slow);
+    return ok;
 }
 
 /* draw src (a DraStic screen buffer) into dst (a panel-sized buffer); finish: block until the GPU is done */
 int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish) {
     gimg *s = image_for(sh, sw, shh, sp, sgen, 0), *d = image_for(dh, dw, dhh, dp, dgen, 1);
     if (!s || !d) return -1;
-    static const GLfloat pos[] = { -1, -1, 1, -1, -1, 1, 1, 1 };
-    static const GLfloat uv[] = { 0, 0, 1, 0, 0, 1, 1, 1 };     /* buffer row 0 (panel top) at GL y = -1 */
+    const sprog *p = pick(sw, shh, dw, dhh);
     glBindFramebuffer(GL_FRAMEBUFFER, d->fbo);
-    glViewport(0, 0, dw, dhh);
-    glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, s->tex);
-    glUniform2f(u_tsize, (GLfloat)sw, (GLfloat)shh);
-    glUniform2f(u_osize, (GLfloat)dw, (GLfloat)dhh);
-    glUniform1f(u_fch, (GLfloat)dhh);
-    glVertexAttribPointer(0, 2, GL_FLOAT, 0, 0, pos); glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, 0, 0, uv); glEnableVertexAttribArray(1);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    bind_src(s->tex, p);
+    quad(p, sw, shh, dw, dhh);
     if (finish) glFinish();
     return glGetError() ? -1 : 0;
 }
@@ -389,16 +547,10 @@ int shader_draw_mem(int panel, const void *px, int sw, int shh, int sp, uint32_t
     }
     if (sp == sw * 4) glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sw, shh, up_fmt, 0x1401, px);
     else for (int y = 0; y < shh; y++) glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, sw, 1, up_fmt, 0x1401, (const char *)px + (size_t)y * sp);
-    static const GLfloat pos[] = { -1, -1, 1, -1, -1, 1, 1, 1 };
-    static const GLfloat uv[] = { 0, 0, 1, 0, 0, 1, 1, 1 };
+    const sprog *p = pick(sw, shh, dw, dhh);
     glBindFramebuffer(GL_FRAMEBUFFER, d->fbo);
-    glViewport(0, 0, dw, dhh);
-    glUniform2f(u_tsize, (GLfloat)sw, (GLfloat)shh);
-    glUniform2f(u_osize, (GLfloat)dw, (GLfloat)dhh);
-    glUniform1f(u_fch, (GLfloat)dhh);
-    glVertexAttribPointer(0, 2, GL_FLOAT, 0, 0, pos); glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, 0, 0, uv); glEnableVertexAttribArray(1);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    bind_src(up_tex[panel], p);
+    quad(p, sw, shh, dw, dhh);
     if (finish) glFinish();
     return glGetError() ? -1 : 0;
 }

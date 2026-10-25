@@ -1,4 +1,5 @@
 // Gengis Engine as melonDS's 3D renderer: see gengis_renderer.h.
+#include <pthread.h>
 #include <sys/resource.h>
 #include "gengis_renderer.h"
 
@@ -300,6 +301,7 @@ bool GengisRenderer3D::RenderOne(bool emu) {
 }
 
 void GengisRenderer3D::Worker(int idx) {
+    pthread_setname_np(pthread_self(), "bds-gengis");  // (else "bananads", summed with the presenter by top -H)
     if (Nice) setpriority(PRIO_PROCESS, 0, Nice);
     unsigned seen = 0;
     for (;;) {
