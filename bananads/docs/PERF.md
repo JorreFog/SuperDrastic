@@ -1108,6 +1108,27 @@ checkpoint's; the `Run` trace (every call's timing state) gives the same hash ov
 and exact-suite.sh as 0080's. Sabotage (`MELONDS_GEOMSAB`, read at creation): (1) no full-ring check and no batch
 wake, so the ring overflows: MK's scene fails (crash, no frames); (2) no drain: the scene fails (crash).
 
+## HeartGold's map: polygons clipped away dropped first (2026-10-26 night run, agent P5)
+
+GX stats on the benchmark (Origin HeartGold, first grass area, instrumented build, per emulated frame): 568
+polygons, 14 back-face culled, **461 (81%) clipped away entirely**, ~93 stored; 2,148 vertices; 7,200 FIFO entries
+in ~1,280 working `Run` calls; the words from the GX FIFO DMA (5,046 in ~198 blocks) and the CPU's STRs to the FIFO
+port (3,537); no STMs. Profile (prof.hz, PIN=1 FF=1): the geometry 16% of the emulator's thread, spread over the
+command loop (~5%), polygon setup and clipping (~4%), the FIFO writes (~2-3%).
+
+### A polygon clipped away by its first plane, dropped before the culling (patch 0140, `render.geom_reject`, default `on`)
+
+`PolygonClippedAway` (inline, before `SubmitPolygonBodyT`): with no strip vertices shared, the first clip pass
+that would run (Z, else Y, else X: GeomFast's mask) sees the polygon's own vertices and returns 0 when they are all
+above the plane, all below and not above it, or (Z) one is beyond the far plane without the attribute's bit 12;
+the later passes then return 0 too. The polygon is dropped as the old code drops it (PolygonPipeline 8, one vertex
+slot, LastStripPolygon cleared). Exact by construction; the predicate checked offline against the patched
+`ClipAgainstPlane` code and GeomFast's pass order on 20M random polygons (boundary, huge, negative and INT_MIN W):
+9.2M predicted drops, all really clipped to 0, none wrong. Panels, PIN=1 FF=1 30 s, alternating: off 112.8,
+112.2; on 115.6, 113.1 (and 112.5 in the next pair) emulated/s: **+1..1.6%, at the noise floor**.
+Tried and dropped: prefetching the GX DMA block's source and the next 192 bytes: 112.5 off vs 111.2 on (no gain:
+the display lists are in the caches).
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an

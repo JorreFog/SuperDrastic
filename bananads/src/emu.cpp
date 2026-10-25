@@ -506,13 +506,6 @@ bool Emu::load_rom(const std::string& path) {
         if (v == "on") setenv("MELONDS_GEOMREJECT", "1", 1);
         else if (v == "off") setenv("MELONDS_GEOMREJECT", "0", 1);
     }
-    // render.gx_prefetch=on|off sets MELONDS_GXPREFETCH (melonDS patch 0141: the GX FIFO DMA's block's source and the
-    // next 192 bytes prefetched; a prefetch changes nothing else; read as the NDS is created; default on).
-    {
-        const std::string v = cfg_.str("render.gx_prefetch", "");
-        if (v == "on") setenv("MELONDS_GXPREFETCH", "1", 1);
-        else if (v == "off") setenv("MELONDS_GXPREFETCH", "0", 1);
-    }
     // render.geom_thread=on|off sets MELONDS_GEOMTHREAD (melonDS patch 0083: a stored polygon's build on a worker
     // thread, every timing decision kept on the emulator thread; drained at VBlank, savestates and reset; exact; read
     // as the NDS is created). Default OFF: on the RG DS Plus (four A55s shared by the emulator's thread, the 2D thread
