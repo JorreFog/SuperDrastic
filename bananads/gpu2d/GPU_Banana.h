@@ -182,6 +182,8 @@ private:
     void ApplyLog(u64 end);
     void DrawScanlineInPlace(u32 line);
     void SetAInPlace(bool on);
+    bool CaptureNeedsA(u32 line) const;
+    u32 CaptureHeight() const;
     static void DirectCopy(void*, void* dst, const void* src, u32 len) { memcpy(dst, src, len); }
     bool AInPlace = false;      // unit A drawn on the emulator's thread, its copies written directly
     void PrepareScanlineJob(Job& job, u32 line, u32*& line3d);

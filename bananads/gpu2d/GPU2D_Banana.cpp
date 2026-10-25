@@ -128,6 +128,7 @@ namespace melonDS
 bool Banana2DFast = true;
 bool Banana3DShare = true;
 bool Banana3DWait2D = true;
+bool BananaCapNeedA = true;
 
 // 15-bit palette colour to the 18-bit internal format; bit 15 is the low green bit
 // (melonDS: applies to BG/OBJ palette colours, not to direct colour)
