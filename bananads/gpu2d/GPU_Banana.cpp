@@ -406,8 +406,9 @@ void BananaRenderer::DrawScanline(u32 line)
         return;
     }
 
-    // display capture writes unit A's lines back into VRAM at their time: unit A is drawn here and now
-    SetAInPlace(GPU.CaptureEnable);
+    // display capture writes unit A's lines back into VRAM at their time: unit A is drawn here and now (when the
+    // capture reads them)
+    SetAInPlace(CaptureNeedsA(GPU.VCount));
 
     Job& job = NewJob();
     u32* line3d;
@@ -432,6 +433,34 @@ void BananaRenderer::DrawScanline(u32 line)
         else
             Fill(job.DstA, job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000);
     }
+    else if (GPU.CaptureEnable && job.Line < CaptureHeight())
+    {
+        // a capture of the 3D layer and/or source B: unit A stays on the 2D thread (Output2D isn't read)
+        Output3D = line3d ? line3d : Rend3D->GetLine(job.Line);
+        DoCapture(job.Line);
+    }
+}
+
+// does this line's display capture read unit A's 2D line (Output2D[0])? With render.cap_unit_a, only a capture with
+// source A (modes 0, 2, 3) of the graphics screen (DISPCAPCNT bit 24 clear) on a line it covers; source B (VRAM or the
+// main memory FIFO) and the 3D layer are read on this thread without unit A's drawing
+bool BananaRenderer::CaptureNeedsA(u32 line) const
+{
+    if (!GPU.CaptureEnable)
+        return false;
+    if (!BananaCapNeedA)
+        return true;
+    u32 cnt = GPU.CaptureCnt;
+    if (((cnt >> 29) & 0x3) == 1 || (cnt & (1<<24)))
+        return false;
+    return line < CaptureHeight();
+}
+
+// the lines DISPCAPCNT's size covers (DoCapture's height)
+u32 BananaRenderer::CaptureHeight() const
+{
+    u32 sz = (GPU.CaptureCnt >> 20) & 0x3;
+    return sz ? 64 * sz : 128;
 }
 
 // unit A on the emulator's thread or not: switched with the 2D thread done with unit A's jobs
@@ -568,7 +597,7 @@ void BananaRenderer::DrawSprites(u32 line)
         return;
     }
 
-    SetAInPlace(GPU.CaptureEnable);
+    SetAInPlace(CaptureNeedsA(line));
 
     Job& job = NewJob();
     PrepareSpritesJob(job, line);

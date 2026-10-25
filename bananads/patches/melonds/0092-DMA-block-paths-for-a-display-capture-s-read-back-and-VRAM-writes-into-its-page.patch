@@ -1,0 +1,144 @@
+From 7cdead007efc11e27164baf60075a6fffc3bd658 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 25 Oct 2026 12:31:18 +0100
+Subject: [PATCH] DMA: block paths for a display capture's read-back (VRAM to
+ main RAM) and VRAM writes into a capture's page
+
+The DMA of LCDC VRAM up into main RAM (a game reading a display capture back,
+Golden Sun: Dark Dawn's flyover every frame) took Run9Full's unit-by-unit path
+(UnitTimings9_32, ARM9Read32, FastWrite9 per word). With MELONDS_DMACAPBLOCK=1,
+for a page with one bank: the MRAM write burst table's units timed as
+UnitTimings9_32 does, the capture's read sync once for the page (a read marks
+it synced, so the words after it take no sync either), the words copied as
+FastWrite9 writes main RAM. 0018's main RAM -> VRAM block path also takes a
+page with a display capture in it: WriteVRAMDirect's sync once for the first
+word (it clears the capture's flags). Off by default: not difftested yet.
+---
+ src/DMA.cpp | 53 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/GPU.h   | 30 +++++++++++++++++++++++++++++-
+ 2 files changed, 82 insertions(+), 1 deletion(-)
+
+diff --git a/src/DMA.cpp b/src/DMA.cpp
+index a536448..1196c0b 100644
+--- a/src/DMA.cpp
++++ b/src/DMA.cpp
+@@ -1033,7 +1033,60 @@ __attribute__((noinline)) void DMA::Run9Full()
+                         t = UnitTimings9_32(burststart);
+                 }
+                 else
++                {
++                    // the block path for the other direction (patch 0092, MELONDS_DMACAPBLOCK=1, default off until difftested): VRAM going
++                    // up (one bank at the page, e.g. a display capture read back from LCDC VRAM) into main RAM going
++                    // up: UnitTimings9_32's MRAM write burst table, chosen by the source page's timings, for the
++                    // units up to the source page's end, the count's end or the one whose timing reaches ARM9Target
++                    // (that one included), then the words copied as FastWrite9 writes main RAM (the JIT's check, the
++                    // store), the capture's read sync once for the page (VRAMReadPageFor)
++                    if (vramblock && SrcAddrInc > 0 && DstAddrInc > 0 && (src >> 24) == 0x06 && (dst >> 24) == 0x02 &&
++                        NDS.ARM9Regions[dst >> 14] == Mem9_MainRAM && NDS.GPU.DMACapBlockOn())
++                    {
++                        if (const u8* mem = NDS.GPU.VRAMReadPageFor(src))
++                        {
++                            const u32 s0 = src & ~3u, d0 = dst & ~3u;
++                            const u32 n = std::min({IterCount, (0x4000 - (s0 & 0x3FFF)) >> 2, (0x03000000 - d0) >> 2});
++                            const u32 src_id = s0 >> 14;
++                            const std::array<u8, 256>* wtab = &DMATiming::MRAMWrite32Bursts[NDS.ARM9MemTimings[src_id][6] == 2 ? 0 : 1];
++                            const std::array<u8, 256>* cur = nullptr;
++                            u32 cnt = MRAMBurstCount;
++                            u64 ts = NDS.ARM9Timestamp;
++                            const u64 target = NDS.ARM9Target;
++                            u32 k = 0;
++                            while (k < n)
++                            {
++                                const u8* tb = cur ? cur->data() : MRAMBurstTable.data();
++                                if (burststart || tb[cnt] == 0)
++                                {
++                                    cnt = 0;
++                                    cur = wtab;
++                                    tb = cur->data();
++                                }
++                                ts += (u64)tb[cnt++] << clockshift;
++                                burststart = false;
++                                k++;
++                                if (ts >= target) break;
++                            }
++                            for (u32 i = 0; i < k; i++)
++                            {
++                                const u32 a = d0 + (i << 2);
++                                NDS.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(a);
++                                *(u32*)&ram[a & mask] = *(const u32*)&mem[(s0 + (i << 2)) & 0x3FFF];
++                            }
++                            if (cur) MRAMBurstTable = *cur;
++                            MRAMBurstCount = cnt;
++                            NDS.ARM9Timestamp = ts;
++                            CurSrcAddr += k << 2;
++                            CurDstAddr += k << 2;
++                            IterCount -= k;
++                            RemCount -= k;
++                            if (ts >= target) break;
++                            continue;
++                        }
++                    }
+                     t = UnitTimings9_32(burststart);
++                }
+                 NDS.ARM9Timestamp += t << clockshift;
+                 burststart = false;
+ 
+diff --git a/src/GPU.h b/src/GPU.h
+index 1898934..8eaf0d2 100644
+--- a/src/GPU.h
++++ b/src/GPU.h
+@@ -20,6 +20,7 @@
+ #define GPU_H
+ 
+ #include <memory>
++#include <cstdlib>
+ 
+ #include "GPU2D.h"
+ #include "GPU3D.h"
+@@ -268,8 +269,16 @@ public:
+         if (__builtin_expect(VRAMDirectStale, 0))
+             UpdateVRAMDirect();
+         const VRAMDirectPage& p = VRAMDirect[(addr >> 14) & 0x3FF];
+-        if (!p.Mem || (*p.CaptureFlags & CaptureBlockIsCapture))
++        if (!p.Mem)
+             return nullptr;
++        if (*p.CaptureFlags & CaptureBlockIsCapture)
++        {
++            // (patch 0092, MELONDS_DMACAPBLOCK) a display capture's page: WriteVRAMDirect's sync for the first word
++            // (the capture's blocks lose the flag then, so the words after it take no sync there either)
++            if (!DMACapBlockOn())
++                return nullptr;
++            SyncVRAMCaptureBlock(p.CaptureFlags - VRAMCaptureBlockFlags, true);
++        }
+         dirty = p.DirtyWord;
+         bit = p.DirtyBit;
+         return p.Mem;
+@@ -290,6 +299,25 @@ public:
+         return true;
+     }
+ 
++    // (patch 0092) the page in its bank for reads from addr's 16 KB, after ReadVRAMDirect's capture sync (a read
++    // marks the capture synced, so one sync stands for each word's); null: no bank or several (the full path)
++    const u8* VRAMReadPageFor(u32 addr)
++    {
++        if (__builtin_expect(VRAMDirectStale, 0))
++            UpdateVRAMDirect();
++        const VRAMDirectPage& p = VRAMDirect[(addr >> 14) & 0x3FF];
++        if (!p.Mem)
++            return nullptr;
++        if (__builtin_expect(*p.CaptureFlags & CaptureBlockIsCapture, 0))
++            SyncVRAMCaptureBlock(p.CaptureFlags - VRAMCaptureBlockFlags, false);
++        return p.Mem;
++    }
++    static bool DMACapBlockOn() noexcept
++    {
++        static const bool v = [] { const char* e = getenv("MELONDS_DMACAPBLOCK"); return e && *e == '1'; }();  // (off by default: not difftested)
++        return v;
++    }
++
+     template<typename T>
+     bool ReadVRAMDirect(u32 addr, T& val)
+     {
+-- 
+2.56.0
+
