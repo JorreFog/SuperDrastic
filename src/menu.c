@@ -53,6 +53,8 @@ extern volatile int dsflip_hold;
 void dsflip_mic_key(int down);
 int lid_home_pressed(void);   /* lid.c: HOME let go while the menu is open */
 int lid_home_on(void);        /* lid.c: HOME opens the menu */
+long long lid_wall_ms(void);  /* lid.c: now, to give lid_vol_since */
+int lid_vol_since(long long since);   /* lid.c: a volume key pressed since then (F + volume: brightness) */
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
@@ -116,8 +118,10 @@ static void theme_banana(void) {
 typedef struct { uint32_t *px; int w, h; float s; } canvas;   /* s: panel width / 640 (layouts are made at 640x480) */
 #define S(v) ((int)lroundf((v) * c->s))
 
+static int clip_x0 = -1, clip_x1 = -1;   /* a marquee's box (text_raw): only these columns drawn; -1: no clip */
 static inline void blendpx(canvas *c, int x, int y, uint32_t rgb, float a) {
     if ((unsigned)x >= (unsigned)c->w || (unsigned)y >= (unsigned)c->h || a <= 0.0f) return;
+    if (clip_x0 >= 0 && (x < clip_x0 || x >= clip_x1)) return;
     uint32_t *d = c->px + (size_t)y * c->w + x;
     if (a >= 1.0f) { *d = rgb; return; }
     uint32_t o = *d; float ia = 1.0f - a;
@@ -254,6 +258,24 @@ static float text_w_raw(font *F, const char *t, float px, int max_cp) {
     }
     return w;
 }
+/* a label too long for its box, on the picked item (mq_pick set around the call): it scrolls instead of ending in
+ * "...": 1.5 s still, 36 px/s (at 640 wide) to its end, 1.5 s still, back. The same timing as BananaOS's menu
+ * (rnds::marqueeOffset). The loop redraws while one moves (mq_moving) and when its pause ends (mq_wake_at) */
+static int mq_pick, text_raw_mq, mq_moving;
+static long long mq_t0, mq_wake_at;
+static char mq_key[200];
+static long long mq_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return ts.tv_sec * 1000LL + ts.tv_nsec / 1000000; }
+static float mq_offset(const char *t, float overflow, float mq_scale) {
+    long long now = mq_now();
+    if (strncmp(mq_key, t, sizeof mq_key - 1)) { snprintf(mq_key, sizeof mq_key, "%s", t); mq_t0 = now; }
+    const double pause = 1500, speed = 36.0 * mq_scale, run = overflow / speed * 1000, cycle = pause + run + pause;
+    double e = fmod((double)(now - mq_t0), cycle);
+    if (e < pause) { long long w = now + (long long)(pause - e); if (!mq_wake_at || w < mq_wake_at) mq_wake_at = w; return 0; }
+    e -= pause;
+    if (e < run) { mq_moving = 1; return (float)(e / 1000 * speed); }
+    { long long w = now + (long long)(pause - (e - run)); if (!mq_wake_at || w < mq_wake_at) mq_wake_at = w; }
+    return overflow;
+}
 /* text whose box starts at y (top), aligned left (0), centred (1) or right (2) on x; cut with "..." past maxw. As
  * given: text() and text_w() are the ones that translate */
 static void text_raw(canvas *c, font *F, const char *t, float x, float y, float px, uint32_t rgb, float maxw, int align) {
@@ -261,6 +283,16 @@ static void text_raw(canvas *c, font *F, const char *t, float x, float y, float 
     int n = 0; for (const char *s = t; *s; n++) utf8_next(&s);
     int keep = n, dots3 = 0;
     float w = text_w_raw(F, t, px, n);
+    if (maxw > 0 && w > maxw && mq_pick) {   /* the picked item's label: it scrolls in its box (BananaOS's marquee) */
+        float bx = align == 1 ? x - maxw / 2 : align == 2 ? x - maxw : x;
+        float off = mq_offset(t, w - maxw, c->s);
+        clip_x0 = (int)lroundf(bx); clip_x1 = (int)lroundf(bx + maxw);
+        text_raw_mq = 1;
+        int sp = mq_pick; mq_pick = 0;
+        text_raw(c, F, t, bx - off, y, px, rgb, 0, 0);
+        mq_pick = sp; clip_x0 = clip_x1 = -1; text_raw_mq = 0;
+        return;
+    }
     if (maxw > 0 && w > maxw) {
         float dw = text_w_raw(F, "...", px, 3);
         while (keep > 0 && text_w_raw(F, t, px, keep) + dw > maxw) keep--;
@@ -598,6 +630,7 @@ static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_
 #define MAIN_BRI 6                                /* sel_main: the main page's Brightness row, under the tiles */
 static int main_col;                              /* the tiles' column the d-pad came down from (back up to it) */
 static char busy_msg[96];
+static int b_select = -1;
 static int btn_menu[2] = { -1, -1 }, b_a = -1, b_b = -1, b_x = -1, b_y = -1, b_l = -1, b_r = -1, b_start = -1;
 static int b_up = -1, b_down = -1, b_left = -1, b_right = -1;
 static long long mic_until;
@@ -882,7 +915,7 @@ static void make_keys(void) {
     ctl_keys("SAVE_STATE", k, sizeof k); key_add(k, "Save state");
     ctl_keys("LOAD_STATE", k, sizeof k); key_add(k, "Load state");
     ctl_keys("FAST_FORWARD", k, sizeof k); key_add(k, "Fast-forward");
-    ctl_keys("SWAP_SCREENS", k, sizeof k); key_add(k, "Swap screens");
+    ctl_keys("SWAP_SCREENS", k, sizeof k); { size_t l = strlen(k); snprintf(k + l, sizeof k - l, "%sF + SELECT", l ? " / " : ""); } key_add(k, "Swap screens");
     ctl_keys("FAKE_MICROPHONE", k, sizeof k); if (*k) key_add(k, "Blow on the mic");
     int st, se, m1, m2;
     if (resume_exit_combo(&st, &se, &m1, &m2)) {   /* (held half a second) */
@@ -902,7 +935,7 @@ static void draw_header(canvas *c, const char *h, const char *sub, int sub_page)
     if (sw > S(300)) sw = S(300);
     int lx0 = x + (int)hw + S(14), lx1 = c->w - S(20) - (sw > 0 ? (int)sw + S(14) : 0);
     if (lx1 > lx0) fill(c, lx0, S(27), lx1, S(30), C_LINE, 1.0f);
-    if (sub && *sub) text(c, &F_REG, sub, c->w - S(20), S(19), S(16), C_GREY, S(300), 2);
+    if (sub && *sub) { mq_pick = 1; text(c, &F_REG, sub, c->w - S(20), S(19), S(16), C_GREY, S(300), 2); mq_pick = 0; }
 }
 static void bar(canvas *c, int x, int y, int v, int sel) {      /* 10 segments, the theme's progress look */
     for (int k = 0; k < 10; k++) fill(c, x + k * S(15), y, x + k * S(15) + S(11), y + S(20), k < (v + 5) / 10 ? (sel ? C_BARSEL : C_CYAN) : (sel ? C_BAROFFSEL : C_LINE), 1.0f);
@@ -968,7 +1001,7 @@ static void draw_bottom(void) {
             box(c, x, y, x + tw, y + th, S(14), bw, bd, bg);
             int k = S(4) < 2 ? 2 : S(4), cy = y + (th - S(108)) / 2;   /* icon, name and hint, centred in the tile */
             bitmap(c, tile_icon[i], 12, x + (tw - 12 * k) / 2, cy, k, fg);
-            text(c, &F_MED, tile_label[i], x + tw / 2.0f, cy + S(60), S(20), fg, tw - S(16), 1);
+            mq_pick = sel; text(c, &F_MED, tile_label[i], x + tw / 2.0f, cy + S(60), S(20), fg, tw - S(16), 1); mq_pick = 0;
             char h[64] = "";
             switch (i) {
             case 0: snprintf(h, sizeof h, "or press L3"); break;
@@ -1133,8 +1166,9 @@ static void show(int i) {
     dsflip_menu_show(i, k);
 }
 static void redraw(void) {
+    if (!dirty_bot && (mq_moving || (mq_wake_at && mq_now() >= mq_wake_at))) dirty_bot = 1;   /* a marquee's next step */
     if (dirty_top) { draw_top(); show(0); dirty_top = 0; }
-    if (dirty_bot) { draw_bottom(); show(1); dirty_bot = 0; }
+    if (dirty_bot) { mq_moving = 0; mq_wake_at = 0; draw_bottom(); show(1); dirty_bot = 0; }
 }
 
 /* ---------- actions ---------- */
@@ -1318,10 +1352,22 @@ static void handle_sdl(const uint8_t *e) {
     uint32_t type; memcpy(&type, e, 4);
     if (type == 0x603 || type == 0x604) {           /* SDL_JOYBUTTONDOWN / UP */
         int b = e[12], down = type == 0x603;
-        if (!down) { if (b == b_up || b == b_down || b == b_left || b == b_right) dir_release(); return; }
+        /* the menu button closes it when let go, unless a volume key was pressed meanwhile (bananad's F + volume) */
+        static long long mdown = -1;
+        if (!down) {
+            if (b == b_up || b == b_down || b == b_left || b == b_right) dir_release();
+            if (is_menu_btn(b) && mdown >= 0) {
+                int mod = lid_vol_since(mdown); mdown = -1;
+                if (mod) dsflip_log("[menu] menu button let go after a volume key: kept open\n");
+                else if (scr != SC_BUSY) { play(SND_BACK); close_menu(); }
+            }
+            return;
+        }
         cpugov_boost(400);
+        if (is_menu_btn(b)) { mdown = lid_wall_ms(); return; }
+        mdown = -1;
         if (scr == SC_BUSY) return;
-        if (is_menu_btn(b) || b == b_start) { play(SND_BACK); close_menu(); }
+        if (b == b_start) { play(SND_BACK); close_menu(); }
         else if (b == b_a) activate();
         else if (b == b_b) back();
         else if (b == b_y && scr == SC_LOAD && undo_ok) do_load(-1);
@@ -1408,9 +1454,38 @@ static void menu_run(int start) {
     dsflip_log("[menu] closed\n");
 }
 
+/* ---------- F + SELECT: the DS's screens on the other panels (dsflip.c swaps them), remembered for each game in
+ * config/superdrastic-swapped.txt (one game's file name a line, in DraStic's folder) ---------- */
+extern volatile int dsflip_swap;
+#define SWAP_FILE "config/superdrastic-swapped.txt"
+static void swap_load(void) {
+    if (!gbase[0]) game_info();
+    FILE *f = fopen(SWAP_FILE, "r"); if (!f) return;
+    char line[300];
+    while (fgets(line, sizeof line, f)) { line[strcspn(line, "\r\n")] = 0; if (*line && !strcmp(line, gbase)) dsflip_swap = 1; }
+    fclose(f);
+    if (dsflip_swap) dsflip_log("[menu] %s: screens swapped (remembered)\n", gbase);
+}
+static void swap_toggle(void) {
+    dsflip_swap = !dsflip_swap;
+    if (!gbase[0]) game_info();
+    /* the file again without this game, then with it when swapped */
+    FILE *f = fopen(SWAP_FILE, "r"), *w = fopen(SWAP_FILE ".new", "w");
+    char line[300];
+    if (w) {
+        while (f && fgets(line, sizeof line, f)) { line[strcspn(line, "\r\n")] = 0; if (*line && strcmp(line, gbase)) fprintf(w, "%s\n", line); }
+        if (dsflip_swap && gbase[0]) fprintf(w, "%s\n", gbase);
+        fclose(w);
+        rename(SWAP_FILE ".new", SWAP_FILE);
+    }
+    if (f) fclose(f);
+    dsflip_log("[menu] F + SELECT: screens %s\n", dsflip_swap ? "swapped" : "back as they were");
+    dsflip_toast(dsflip_swap ? "Screens swapped" : "Screens back", dsflip_swap ? "F + SELECT puts them back" : "F + SELECT swaps them again", 0x7ec8ee, 1800);
+}
+
 /* SDL_PollEvent (dsflip.c) shows this each event DraStic would get: 1 = swallow it. The menu button opens the menu
  * when it is released with nothing else pressed meanwhile (so "menu + start" still quits, resume.c). */
-static int pending, other;
+static int pending, other; static long long pending_ms;
 int menu_event(void *ev) {
     if (enabled < 0) {
         const char *e = getenv("DSFLIP_MENU"); enabled = !(e && *e == '0');
@@ -1424,6 +1499,8 @@ int menu_event(void *ev) {
                    fclose(f); } }
         b_a = resume_control_button("A"); b_b = resume_control_button("B"); b_x = resume_control_button("X"); b_y = resume_control_button("Y");
         b_l = resume_control_button("L"); b_r = resume_control_button("R"); b_start = resume_control_button("START");
+        b_select = resume_control_button("SELECT"); if (b_select < 0) b_select = 8;
+        swap_load();
         b_up = resume_control_button("UP"); b_down = resume_control_button("DOWN"); b_left = resume_control_button("LEFT"); b_right = resume_control_button("RIGHT");
         /* a button DraStic has no control on any more (a setup gone wrong): the RG DS pad's own (retrogame_joypad's
          * order: B A X Y L R L2 R2 Select Start F L3 R3 up down left right), so the menu still works from HOME */
@@ -1439,12 +1516,17 @@ int menu_event(void *ev) {
     int b = e[12], down = type == 0x603;
     if (is_menu_btn(b)) {
         if (dsflip_drastic_menu() || resume_menu_busy()) return 0;   /* DraStic's own menu is up: its button */
-        if (down) { pending = 1; other = 0; return 1; }
+        if (down) { pending = 1; other = 0; pending_ms = lid_wall_ms(); return 1; }
         int go = pending && !other; pending = 0;
+        if (go && lid_vol_since(pending_ms)) { go = 0; dsflip_log("[menu] menu button let go after a volume key (F + volume: brightness): no menu\n"); }
         if (go) menu_run(SC_MAIN);
         return 1;
     }
     if (pending && down) other = 1;
+    /* F + SELECT: the screens swapped, the SELECT press (and its release) not the game's */
+    static int sel_eaten;
+    if (b == b_select && down && pending) { sel_eaten = 1; swap_toggle(); return 1; }
+    if (b == b_select && !down && sel_eaten) { sel_eaten = 0; return 1; }
     return 0;
 }
 
