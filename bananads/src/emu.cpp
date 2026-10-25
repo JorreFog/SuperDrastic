@@ -658,6 +658,19 @@ bool Emu::load_rom(const std::string& path) {
         const bool defer = cfg_.flag("render.gengis_defer", false);
         GengisRenderer3D::Help = (int)cfg_.num("render.gengis_help", 1);
         GengisRenderer3D::Nice = (int)cfg_.num("sched.gengis_nice", 0);
+        GengisRenderer3D::WakeN = (int)cfg_.num("render.gengis_wake", 1);
+        {
+            // render.gengis_ab=3,1,0 (a measurement aid: GengisRenderer3D::AbModes), render.gengis_ab_secs
+            const std::string ab = cfg_.str("render.gengis_ab", "");
+            GengisRenderer3D::AbModes.clear();
+            for (size_t i = 0; i < ab.size();) {
+                size_t j = ab.find(',', i);
+                if (j == std::string::npos) j = ab.size();
+                if (j > i) GengisRenderer3D::AbModes.push_back(atoi(ab.substr(i, j - i).c_str()));
+                i = j + 1;
+            }
+            GengisRenderer3D::AbSecs = cfg_.num("render.gengis_ab_secs", 5);
+        }
         // render.edge_marking, render.fog: off leaves the effect out even where the game turns it on (outlines
         // round 3D models; distance fog)
         GengisRenderer3D::SetEffects(cfg_.flag("render.edge_marking", true), cfg_.flag("render.fog", true));

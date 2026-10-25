@@ -5,6 +5,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -45,6 +46,17 @@ public:
     // kept off the emulator's thread), 0 never (it waits); with no render threads it always does
     static int Help;
     static int Nice;  // sched.gengis_nice: the workers' nice value (0: the default)
+    // render.gengis_ab (a device measurement aid, default off): a list of modes the renderer cycles through every
+    // render.gengis_ab_secs seconds, logged as "[gengis] ab mode N" (the kms.stats windows between two such lines ran
+    // in that mode): N >= 1 render threads take part, 0 = no rasterization (the 3D layer keeps its last frame: wrong
+    // pictures, for an upper bound of what the 3D costs the other threads)
+    static std::vector<int> AbModes;  // (modes 11..19: render.gengis_wake=1..9 with the late wake)
+    // render.gengis_wake: the render threads woken at a frame's start; the others join the frame only when a bin is
+    // late (the 2D thread or the emulator's thread waits for a bin not drawn yet). 3 bursting workers beside the
+    // emulator's, the 2D and the presenter threads took cores and shared cache from the emulator's thread
+    static int WakeN;
+    std::atomic<unsigned long> LateFrames{0};
+    static double AbSecs;
     unsigned long EmuBins = 0, EmuConverts = 0;  // drawn and converted on the emulator's thread (logged at the end)
     std::atomic<unsigned long> AllBins{0};
     // at 2x, DS line `line`'s four 256-pixel lines: quarter q is 2x row 2 * line + (q >> 1), its even pixels (q & 1
@@ -85,7 +97,7 @@ private:
     bool RenderOne(bool emu = false);  // claim and render a bin of the frame; false when none is left
     void WaitBin(unsigned bin);
     void WaitAll();
-    void Worker();
+    void Worker(int idx);
 
     std::unordered_map<uint64_t, std::unique_ptr<Texture>> Textures;
     std::vector<gx_poly> Polys;
@@ -103,8 +115,17 @@ private:
     std::atomic<int> Converted{2};  // the frame's conversion: 0 to do, 1 being done, 2 done
     unsigned Gen = 0;
     std::mutex M;
-    std::condition_variable Wake, BinDone, ConvDone;  // ConvDone: the frame's conversion finished (a waiter blocks, no spin)
+    std::condition_variable Wake, WakeLate, BinDone, ConvDone;  // WakeLate: the render threads past Active (render.gengis_wake)
+     // ConvDone: the frame's conversion finished (a waiter blocks, no spin)
     bool Quit = false;
+    int Active = 1 << 30;     // render threads woken at a frame's start (render.gengis_wake, render.gengis_ab)
+    bool LateWake = true;     // the others join when a bin is late
+    std::atomic<bool> Late{false};  // this frame: a waiter found a bin not drawn (set under M)
+    void MarkLate();
+    std::atomic<int> LateHold{0};   // frames left that wake every render thread at the start (after a late one)
+    bool NoRaster = false;
+    size_t AbIdx = 0;
+    std::chrono::steady_clock::time_point AbNext{};
     std::vector<std::thread> Threads;
 };
 
