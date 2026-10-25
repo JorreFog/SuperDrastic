@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 typedef struct { const char *text; int len, slot, named; } piece;   /* text: into the pattern's own string */
 typedef struct { char *en, *tr; piece *pe, *pt; int npe, npt, fixed; } entry;
@@ -220,6 +221,15 @@ const char *lang_tr(const char *s) {
     if (m >= 0) { const char *o = memo[m].out; pthread_mutex_unlock(&mu); return o; }
     char *out = 0;
     for (int i = 0; i < nE && !out; i++) if (!strcmp(E[i].en, s)) out = strdup(E[i].tr);
+    /* the same line in another case ("Save your spot and quit" written "save your spot and quit", "START" for "Start"),
+     * as banana-ui's lang.cpp does: when every such line has one translation, and not a line kept as it is
+     * ("Nintendo DS" -> "Nintendo DS" mustn't change a capitals one's case) */
+    if (!out) {
+        const char *one = 0; int two = 0;
+        for (int i = 0; i < nE && !two; i++)
+            if (!strcasecmp(E[i].en, s) && strcasecmp(E[i].tr, E[i].en)) { if (one && strcmp(one, E[i].tr)) two = 1; else one = E[i].tr; }
+        if (one && !two) out = strdup(one);
+    }
     for (int k = 0; k < npat && !out; k++) {
         const entry *x = &E[pat[k]];
         const char *cs[32], *ce[32];
