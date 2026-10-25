@@ -44,6 +44,7 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <glob.h>
+#include <linux/input.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <pthread.h>
@@ -132,6 +133,10 @@ static void unlock(int *l) { unlock_mu_stat(l); pthread_mutex_unlock(&mtx[l == &
 static int logical_w = 512, logical_h = 192;
 static stex *pending_route[2];          /* routes recorded by RenderCopy during this frame */
 static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a DS screen is on the bottom panel */
+/* F + SELECT (menu.c): the DS's two screens on the other panels. The game's frame routes swap at the present, and touch
+ * follows the DS's bottom screen: the top panel's touchscreen (the RG DS has one; the Plus none) drives the stylus,
+ * the bottom panel's (now the DS's top screen) reaches nothing. DraStic's menu and the in-game menu stay as they are. */
+volatile int dsflip_swap;
 static int menu_touch;                                     /* DraStic's menu is on the bottom panel (no touch: see touch_emit) */
 static int vp_x, vp_y, vp_w, vp_h;                         /* where a shader draws the DS screen on the panel (0x0: all of it) */
 static int touch_outside;                                  /* the current touch began outside that rectangle: ignore it */
@@ -1032,11 +1037,20 @@ static void stylus_move(int tx, int ty, int down, int resync) {
     push_ev(&e); sty_x = tx; sty_y = ty;
 }
 
-static void touch_emit(int down_change, int down, int x, int y, int xmax, int ymax) {
+static void touch_emit_on(int panel, int down_change, int down, int x, int y, int xmax, int ymax) {
     int rx = x, ry = y;
     if (touch_inv_x) x = xmax - x;      /* raw touch is already aligned with the panel on the RG DS */
     if (touch_inv_y) y = ymax - y;
-    if (menu_touch_event(down_change, down, x, y, xmax, ymax)) return;   /* the in-game menu is up (menu.c) */
+    if (panel == 1 && menu_touch_event(down_change, down, x, y, xmax, ymax)) return;   /* the in-game menu is up (menu.c) */
+    /* the stylus is the DS's bottom screen's: the bottom panel's touch, or the top panel's while the screens are swapped
+     * (and DraStic's menu, on the bottom panel, takes none either way). A touch held across a swap is let go. */
+    static int was_on = -1;
+    int want = dsflip_swap && !menu_touch ? 0 : 1;
+    if (panel != want) {
+        if (was_on == panel && !down_change) { down_change = 1; down = 0; }   /* (ends the stylus press it started) */
+        else return;
+    }
+    if (down_change) was_on = down ? panel : -1;
     /* the bottom panel shows exactly the bottom DS screen: panel pixels -> DS pixels is a straight rescale.
      * DraStic's menu (also on the bottom panel) takes no touch: its input loop (r2.5.2.2, aarch64) handles only
      * SDL key, joystick axis/hat/button events, never mouse or finger events, so taps in it go nowhere. */
@@ -1072,6 +1086,8 @@ static void touch_emit(int down_change, int down, int x, int y, int xmax, int ym
     st_touch++;
 }
 
+static void touch_emit(int down_change, int down, int x, int y, int xmax, int ymax) { touch_emit_on(1, down_change, down, x, y, xmax, ymax); }
+
 /* test hook: lines "x y" written to /tmp/dsflip-tap inject a tap at those bottom-PANEL pixels, through the same
  * path as a real touch */
 static void *tap_fifo_thread(void *a) {
@@ -1102,15 +1118,34 @@ static int touch_find(const char *want, char *path, size_t n) {   /* the evdev n
     return *path ? 0 : -1;
 }
 
+/* the other touchscreen (the RG DS's top panel's): a multitouch device whose path doesn't contain `not` */
+static int touch_find_other(const char *not_, char *path, size_t n) {
+    glob_t g; *path = 0;
+    if (glob("/sys/class/input/event*", 0, 0, &g)) return -1;
+    for (size_t i = 0; i < g.gl_pathc && !*path; i++) {
+        char dev[300], real_[PATH_MAX]; snprintf(dev, sizeof dev, "%s/device", g.gl_pathv[i]);
+        if (!realpath(dev, real_) || strstr(real_, not_)) continue;
+        char node[64]; snprintf(node, sizeof node, "/dev/input/%s", strrchr(g.gl_pathv[i], '/') + 1);
+        int f = open(node, O_RDONLY | O_CLOEXEC); if (f < 0) continue;
+        unsigned long abs_[1] = { 0 };
+        if (ioctl(f, EVIOCGBIT(EV_ABS, sizeof abs_), abs_) >= 0 && (abs_[0] >> 0x35 & 1) && (abs_[0] >> 0x36 & 1)) snprintf(path, n, "%s", node);
+        close(f);
+    }
+    globfree(&g);
+    return *path ? 0 : -1;
+}
+
 /* Reads the touchscreen for the whole session. If the device goes away (a suspend/resume or a driver rebind removes
  * and recreates it), a held stylus is released and the device is found and opened again. */
-static void *touch_thread(void *a) {
-    const char *want = a;
+static const char *touch_bottom;   /* the bottom panel's touchscreen's device path fragment (DSFLIP_TOUCH) */
+static void *touch_thread_on(int panel) {
+    const char *want = touch_bottom;
     int missing_logged = 0;
     for (;;) {
         char path[64];
-        int tfd = touch_find(want, path, sizeof path) ? -1 : open(path, O_RDONLY | O_CLOEXEC);
+        int tfd = (panel ? touch_find(want, path, sizeof path) : touch_find_other(want, path, sizeof path)) ? -1 : open(path, O_RDONLY | O_CLOEXEC);
         if (tfd < 0) {
+            if (!panel) { if (!missing_logged++) LOG("[dsflip] no top touchscreen: swapped screens take no touch\n"); if (missing_logged > 20) return 0; sleep(1); continue; }
             if (!missing_logged++) LOG("[dsflip] no touchscreen matching %s (still looking)\n", want);
             usleep(500000); continue;
         }
@@ -1118,7 +1153,7 @@ static void *touch_thread(void *a) {
         int ax[6] = { 0 }, ay[6] = { 0 };
         ioctl(tfd, 0x80184540 + 0x35, ax); ioctl(tfd, 0x80184540 + 0x36, ay);   /* EVIOCGABS(ABS_MT_POSITION_X/Y) */
         int xmax = ax[2] > 0 ? ax[2] : 639, ymax = ay[2] > 0 ? ay[2] : 479;
-        LOG("[dsflip] touch %s range %dx%d\n", path, xmax + 1, ymax + 1);
+        LOG("[dsflip] touch %s (%s panel) range %dx%d\n", path, panel ? "bottom" : "top", xmax + 1, ymax + 1);
         struct { long s, us; uint16_t type, code; int32_t value; } ev[32];
         int x = 0, y = 0, down = 0, was_down = 0;
         ssize_t n;
@@ -1131,18 +1166,20 @@ static void *touch_thread(void *a) {
                 else if (ev[i].type == 3 && (ev[i].code == 0x36 || ev[i].code == 1)) y = ev[i].value;
                 else if (ev[i].type == 1 && ev[i].code == 0x14a) down = ev[i].value != 0;   /* BTN_TOUCH */
                 else if (ev[i].type == 0 && ev[i].code == 0) {                                /* SYN_REPORT */
-                    if (down || was_down) touch_emit(down != was_down, down, x, y, xmax, ymax);
+                    if (down || was_down) touch_emit_on(panel, down != was_down, down, x, y, xmax, ymax);
                     was_down = down;
                 }
             }
         }
         LOG("[dsflip] touch read ended (%s): reopening\n", n < 0 ? strerror(errno) : "end of file");
         close(tfd);
-        if (was_down) touch_emit(1, 0, x, y, xmax, ymax);      /* don't leave DraStic's stylus pressed */
+        if (was_down) touch_emit_on(panel, 1, 0, x, y, xmax, ymax);      /* don't leave DraStic's stylus pressed */
         usleep(200000);
     }
     return 0;
 }
+static void *touch_thread(void *a) { (void)a; return touch_thread_on(1); }
+static void *touch_thread_top(void *a) { (void)a; return touch_thread_on(0); }
 
 void lid_poll(void);
 int SDL_PollEvent(void *e) {
@@ -1400,7 +1437,9 @@ __attribute__((constructor)) static void init(void) {
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");
-    if (!pthread_create(&th, 0, touch_thread, (void *)(tp ? tp : "fe5e0000.i2c"))) pthread_setname_np(th, "dsf-touch");
+    touch_bottom = tp ? tp : "fe5e0000.i2c";
+    if (!pthread_create(&th, 0, touch_thread, 0)) pthread_setname_np(th, "dsf-touch");
+    if (!pthread_create(&th, 0, touch_thread_top, 0)) pthread_setname_np(th, "dsf-touch-top");   /* (swapped screens) */
     cursor_log = getenv("DSFLIP_CURSOR_LOG") != 0;
     if (getenv("DSFLIP_TAP_FIFO")) pthread_create(&th, 0, tap_fifo_thread, 0);
     ok = 1;
@@ -1673,6 +1712,10 @@ void SDL_RenderPresent(void *rn) {
     if (vbl_ref) {                       /* where in the refresh cycle did this frame arrive? */
         note_raw(tp);
         if (!shader_on && !held) note_phase(tp);  /* shader mode: when the shaded frame is ready (shade_pending) */
+    }
+    if (dsflip_swap && pending_route[0] && pending_route[1] && pending_route[0]->kind == K_SCREEN && pending_route[1]->kind == K_SCREEN) {
+        stex *t = pending_route[0]; pending_route[0] = pending_route[1]; pending_route[1] = t;   /* (screens swapped) */
+        SDL_Rect r = route_dst[0]; route_dst[0] = route_dst[1]; route_dst[1] = r;
     }
     touch_rect_ok = pending_route[1] && pending_route[1]->kind == K_SCREEN;
     int menu_was = menu_touch;

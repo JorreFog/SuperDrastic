@@ -599,6 +599,7 @@ static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_
 #define MAIN_BRI 6                                /* sel_main: the main page's Brightness row, under the tiles */
 static int main_col;                              /* the tiles' column the d-pad came down from (back up to it) */
 static char busy_msg[96];
+static int b_select = -1;
 static int btn_menu[2] = { -1, -1 }, b_a = -1, b_b = -1, b_x = -1, b_y = -1, b_l = -1, b_r = -1, b_start = -1;
 static int b_up = -1, b_down = -1, b_left = -1, b_right = -1;
 static long long mic_until;
@@ -883,7 +884,7 @@ static void make_keys(void) {
     ctl_keys("SAVE_STATE", k, sizeof k); key_add(k, "Save state");
     ctl_keys("LOAD_STATE", k, sizeof k); key_add(k, "Load state");
     ctl_keys("FAST_FORWARD", k, sizeof k); key_add(k, "Fast-forward");
-    ctl_keys("SWAP_SCREENS", k, sizeof k); key_add(k, "Swap screens");
+    ctl_keys("SWAP_SCREENS", k, sizeof k); { size_t l = strlen(k); snprintf(k + l, sizeof k - l, "%sF + SELECT", l ? " / " : ""); } key_add(k, "Swap screens");
     ctl_keys("FAKE_MICROPHONE", k, sizeof k); if (*k) key_add(k, "Blow on the mic");
     int st, se, m1, m2;
     if (resume_exit_combo(&st, &se, &m1, &m2)) {   /* (held half a second) */
@@ -1419,6 +1420,35 @@ static void menu_run(int start) {
     dsflip_log("[menu] closed\n");
 }
 
+/* ---------- F + SELECT: the DS's screens on the other panels (dsflip.c swaps them), remembered for each game in
+ * config/superdrastic-swapped.txt (one game's file name a line, in DraStic's folder) ---------- */
+extern volatile int dsflip_swap;
+#define SWAP_FILE "config/superdrastic-swapped.txt"
+static void swap_load(void) {
+    if (!gbase[0]) game_info();
+    FILE *f = fopen(SWAP_FILE, "r"); if (!f) return;
+    char line[300];
+    while (fgets(line, sizeof line, f)) { line[strcspn(line, "\r\n")] = 0; if (*line && !strcmp(line, gbase)) dsflip_swap = 1; }
+    fclose(f);
+    if (dsflip_swap) dsflip_log("[menu] %s: screens swapped (remembered)\n", gbase);
+}
+static void swap_toggle(void) {
+    dsflip_swap = !dsflip_swap;
+    if (!gbase[0]) game_info();
+    /* the file again without this game, then with it when swapped */
+    FILE *f = fopen(SWAP_FILE, "r"), *w = fopen(SWAP_FILE ".new", "w");
+    char line[300];
+    if (w) {
+        while (f && fgets(line, sizeof line, f)) { line[strcspn(line, "\r\n")] = 0; if (*line && strcmp(line, gbase)) fprintf(w, "%s\n", line); }
+        if (dsflip_swap && gbase[0]) fprintf(w, "%s\n", gbase);
+        fclose(w);
+        rename(SWAP_FILE ".new", SWAP_FILE);
+    }
+    if (f) fclose(f);
+    dsflip_log("[menu] F + SELECT: screens %s\n", dsflip_swap ? "swapped" : "back as they were");
+    dsflip_toast(dsflip_swap ? "Screens swapped" : "Screens back", dsflip_swap ? "F + SELECT puts them back" : "F + SELECT swaps them again", 0x7ec8ee, 1800);
+}
+
 /* SDL_PollEvent (dsflip.c) shows this each event DraStic would get: 1 = swallow it. The menu button opens the menu
  * when it is released with nothing else pressed meanwhile (so "menu + start" still quits, resume.c). */
 static int pending, other; static long long pending_ms;
@@ -1435,6 +1465,8 @@ int menu_event(void *ev) {
                    fclose(f); } }
         b_a = resume_control_button("A"); b_b = resume_control_button("B"); b_x = resume_control_button("X"); b_y = resume_control_button("Y");
         b_l = resume_control_button("L"); b_r = resume_control_button("R"); b_start = resume_control_button("START");
+        b_select = resume_control_button("SELECT"); if (b_select < 0) b_select = 8;
+        swap_load();
         b_up = resume_control_button("UP"); b_down = resume_control_button("DOWN"); b_left = resume_control_button("LEFT"); b_right = resume_control_button("RIGHT");
         /* a button DraStic has no control on any more (a setup gone wrong): the RG DS pad's own (retrogame_joypad's
          * order: B A X Y L R L2 R2 Select Start F L3 R3 up down left right), so the menu still works from HOME */
@@ -1457,6 +1489,10 @@ int menu_event(void *ev) {
         return 1;
     }
     if (pending && down) other = 1;
+    /* F + SELECT: the screens swapped, the SELECT press (and its release) not the game's */
+    static int sel_eaten;
+    if (b == b_select && down && pending) { sel_eaten = 1; swap_toggle(); return 1; }
+    if (b == b_select && !down && sel_eaten) { sel_eaten = 0; return 1; }
     return 0;
 }
 
