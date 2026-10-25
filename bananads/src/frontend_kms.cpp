@@ -1597,6 +1597,7 @@ int run_kms(Emu& emu, const Config& cfg) {
     bool ff_held = false;  // fast-forward from R2 held down (off again when it's let go)
     bool hot = false, menu_down = false;
     bool hot_used = false;      // a button went down while F was held (F + something, not F alone)
+    bool home_down = false, home_used = false;  // HOME held, and a key (a volume key: a modifier) pressed meanwhile
     uint32_t stick_keys = 0;    // the d-pad directions the left stick holds
     // the menu: the game paused at its next frame, the flips in flight done, then the menu until it closes; the
     // game's frame back on both panels, no button left held for the game, the game running again
@@ -1623,6 +1624,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         dp.show_game();
         keys = 0;
         hot = false;
+        home_down = false;
         menu_down = false;
         in_keys = 0;
         in_touch = -1;
@@ -1718,8 +1720,11 @@ int run_kms(Emu& emu, const Config& cfg) {
                         continue;
                     }
                     if (x.type != EV_KEY || x.value == 2) continue;
-                    if (x.code == BTN_Z) {  // HOME: the menu, on release (whatever F and L3 do)
-                        if (!x.value && menu_on) open_menu(0);
+                    if (home_down && x.value && x.code != BTN_Z) home_used = true;  // HOME + something: not HOME alone
+                    if (x.code == BTN_Z) {  // HOME: the menu, on release (whatever F and L3 do), when let go on its own
+                        if (x.value) { home_down = true; home_used = false; continue; }
+                        if (home_down && !home_used && menu_on) open_menu(0);
+                        home_down = false;
                         continue;
                     }
                     if (hot && x.value && !is_hotkey(x.code)) hot_used = true;  // F + something: not F alone
