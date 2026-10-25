@@ -35,6 +35,8 @@ void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void audio_mute(int on);
+void audio_hand_off(void);   /* audio.c: the output's last close left to a helper process */
+static void quit_kill(void) { audio_hand_off(); kill(getpid(), SIGKILL); }
 extern volatile int dsflip_hold;
 
 static char resume_path[512];
@@ -240,12 +242,12 @@ static void *save_thread(void *a) {
     while (!saved && now_ms() - t0 < 5000) usleep(20000);
     if (saved == 1) dsflip_log("[resume] saved in %lld ms: quitting\n", now_ms() - t0);
     else dsflip_log("[resume] %s: quitting without one\n", saved ? "the resume state couldn't be written" : "no savestate within 5 s");
-    kill(getpid(), SIGKILL);
+    quit_kill();
     return 0;
 }
 static void on_usr1(int sig) {
     (void)sig;
-    if (saving || !resume_path[0] || btn_save < 0) kill(getpid(), SIGKILL);   /* again, or nothing to save with */
+    if (saving || !resume_path[0] || btn_save < 0) quit_kill();   /* again, or nothing to save with */
     want_save = 1;
 }
 
@@ -260,7 +262,7 @@ void resume_frame(void) {
     if (combo_since && now_ms() - combo_since >= EXIT_HOLD_MS) {
         combo_since = 0; held_btns = 0;
         dsflip_log("[resume] exit combo held: quitting\n");
-        if (!quit_saves) kill(getpid(), SIGKILL);
+        if (!quit_saves) quit_kill();
         on_usr1(SIGUSR1);
     }
     if (want_save && !saving) {
@@ -269,7 +271,7 @@ void resume_frame(void) {
         audio_mute(1);                                 /* (the game runs on for the save: silent, as the menu's quit) */
         unlink(resume_path);
         resume_press(btn_save);
-        pthread_t t; if (pthread_create(&t, 0, save_thread, 0)) kill(getpid(), SIGKILL);
+        pthread_t t; if (pthread_create(&t, 0, save_thread, 0)) quit_kill();
         pthread_setname_np(t, "dsf-resume");
     }
     if (want_load && frames >= load_at_frame && !loading) {
@@ -331,13 +333,13 @@ int resume_menu_load(const char *path, const char *backup, const char *msg, cons
 /* quit to the menu, with a resume state when that is on: 1 if it saves first */
 int resume_quit(void) {
     if (resume_on() && !saving) { want_save = 1; return 1; }
-    kill(getpid(), SIGKILL);
+    quit_kill();
     return 0;
 }
 /* the menu's Quit without saving: at once, no resume state (the game's own save stays as DraStic last wrote it) */
 void resume_quit_nosave(void) {
     dsflip_log("[resume] quit without saving\n");
-    kill(getpid(), SIGKILL);
+    quit_kill();
 }
 static void menu_jobs(void) {
     if (m_saving && (m_saved || frames - m_t > 300)) {          /* written, failed, or nothing after 5 s */
