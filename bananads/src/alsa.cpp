@@ -41,6 +41,7 @@ struct Alsa {
     int servo_target;  // audio.servo_target: the SPU backlog it holds, in frames
     bool stats;        // audio.stats: a line every 10 s (short chunks, the servo's range)
     std::string dump;  // audio.dump: <path>.in.raw (the game's sound) and <path>.out.raw (what ALSA plays), 48 kHz s16 stereo
+    bool mic_idle;     // mic.idle_stop: the capture stopped while nothing listens (below)
     bool close_child;  // audio.close_child: the output closed by a child process after the quit (below)
     snd_pcm_t* left = nullptr;  // ...the output left open for it by out_thread
     // the in-game menu's sounds (alsa_ui_*), 48 kHz stereo, mixed over the game's output while one plays
@@ -319,7 +320,30 @@ static void in_thread(Alsa* a) {
     std::vector<int16_t> buf(1024);
     int silent_blocks = 0;
     bool told = false;
+    // mic.idle_stop (on): the capture runs only while it is wanted: the first 5 s (the gate learns the room's noise
+    // and the speakers' leak, as before), while the game listens (Mic_Start..Mic_Stop) and while the menu shows the
+    // meter; otherwise it is stopped (snd_pcm_drop) and checked every 50 ms. The always-on capture cost ~4.7% of a
+    // core on the RG DS Plus (alsa-lib's plug converting 48 kHz stereo to 44.1 kHz mono) for samples nothing read.
+    // The gate's state and the samples queued for the game stay as they were across a stop.
+    const int64_t opened = mono_us();
+    bool running = true;
     while (a->run) {
+        if (a->mic_idle) {
+            const int64_t now = mono_us();
+            const bool want = now - opened < 5000000 || a->emu->mic().active() || now - a->emu->mic().meter_us() < 2000000;
+            if (!want) {
+                if (running) {
+                    snd_pcm_drop(pcm);
+                    running = false;
+                }
+                usleep(50000);
+                continue;
+            }
+            if (!running) {
+                snd_pcm_prepare(pcm);  // (readi starts it again)
+                running = true;
+            }
+        }
         snd_pcm_sframes_t n = snd_pcm_readi(pcm, buf.data(), buf.size());
         if (n < 0) {
             snd_pcm_recover(pcm, (int)n, 1);
@@ -351,6 +375,7 @@ Alsa* alsa_start(Emu& emu, const Config& cfg) {
     a->servo_target = std::max(256, (int)cfg.num("audio.servo_target", a->stretch ? 2880 : 768));
     a->stats = cfg.flag("audio.stats", false);
     a->close_child = cfg.flag("audio.close_child", true);
+    a->mic_idle = cfg.flag("mic.idle_stop", true);
     a->dump = cfg.str("audio.dump", "");
     a->out = std::thread(out_thread, a);
     if (cfg.str("mic.source", "device") == "device") a->in = std::thread(in_thread, a);

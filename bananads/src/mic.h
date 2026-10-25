@@ -47,6 +47,8 @@ public:
     Meter meter() const;
 
     bool active() const { return active_.load(); }
+    // when the menu last read the meter (steady_clock microseconds): the capture runs while it is shown
+    int64_t meter_us() const { return meter_us_.load(std::memory_order_relaxed); }
     void set_active(bool on) { active_.store(on); }  // the game started / stopped reading the mic
 
 private:
@@ -76,6 +78,7 @@ private:
     std::atomic<float> out_level_{0};
     std::atomic<int> blow_left_{0};
     std::atomic<bool> active_{false};
+    mutable std::atomic<int64_t> meter_us_{0};
     uint32_t noise_ = 0x1234567;
     double noise_lp_ = 0;
 };

@@ -88,6 +88,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `mic.gate` | `3` | the echo gate's factor over the learned speaker leak; `0` turns it off |
 | `mic.coupling_max` | `4` | the most leak it will learn |
 | `mic.hold_ms` | `120` | the shortest time the gate stays open |
+| `mic.idle_stop` | `on` | the capture runs only while it is wanted: the first 5 s (the gate learns the room and the speakers' leak), while the game listens, and while the menu shows the meter; otherwise it is stopped and checked every 50 ms. The always-on capture cost ~4.7% of a core on the RG DS Plus (alsa-lib's plug converting 48 kHz stereo to 44.1 kHz mono) for samples nothing read. `off`: always on, as before |
 | `audio.out_device` | `default` | the ALSA output device |
 | `audio.latency_us` | `30000` | ALSA's buffer |
 | `audio.realtime` | `on` | the sound thread at SCHED_FIFO 10, when allowed |
