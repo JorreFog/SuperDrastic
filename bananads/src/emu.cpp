@@ -605,6 +605,9 @@ bool Emu::load_rom(const std::string& path) {
     // the ARM9's BIOS and the ARM7's shared WRAM among them (an IRQ's round main RAM -> BIOS -> ITCM and back, the
     // ARM7's sound driver in shared WRAM). Exact. off: jit.region_pair's own way
     nds_->SetRegionTrio(cfg_.flag("jit.region_trio", true));
+    // jit.lookup_prefetch: a CPU's slice ending in the slice loop prefetches the block-lookup slot of its next PC
+    // (melonDS patch 0120; a cache hint, exact, default on)
+    nds_->SetLookupPrefetch(cfg_.flag("jit.lookup_prefetch", true));
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;
