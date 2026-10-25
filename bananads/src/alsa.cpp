@@ -134,6 +134,7 @@ static void out_thread(Alsa* a) {
     long st_frames = 0, st_pulls = 0;
     long st_short = 0, st_held = 0;
     double st_min = 1.0, st_max = 1.0, st_sum = 0.0, st_back = 0.0;
+    long st_xruns = 0, st_stretched = 0, st_bmin = 1 << 30;  // (audio.stats) ALSA errors, chunks at tempo < 1
     while (a->run) {
         if (++since_check >= 47) {  // ~250 ms of 256-frame chunks at 48 kHz
             since_check = 0;
@@ -255,11 +256,18 @@ static void out_thread(Alsa* a) {
             if (got < n) { st_short++; st_held += n - got; }
             st_frames += n;
             st_min = std::min(st_min, skew); st_max = std::max(st_max, skew); st_sum += skew; st_back += backlog;
+            if (primed && !hold) st_bmin = std::min(st_bmin, (long)backlog);
+            if (tempo < 1.0) st_stretched++;
             if (st_frames >= 480000) {  // 10 s
-                Log(LogLevel::Info, "[alsa] 10 s: %ld short chunks (%.2f s held), skew %.3f-%.3f avg %.3f (%s), backlog avg %.0f\n",
+                // (after the backlog: xruns = snd_pcm_writei errors (an underrun at the device), stretched = chunks
+                // played at a tempo below 1, min = the lowest backlog while playing: the headroom left)
+                Log(LogLevel::Info, "[alsa] 10 s: %ld short chunks (%.2f s held), skew %.3f-%.3f avg %.4f (%s), backlog avg %.0f min %ld, xruns %ld, stretched %ld\n",
                     st_short, st_held / 48000.0, st_min, st_max, st_sum / st_pulls,
-                    a->stretch ? "pitch kept: +-0.5% rate, the rest tempo" : "the pitch follows it", st_back / st_pulls);
+                    a->stretch ? "pitch kept: +-0.5% rate, the rest tempo" : "the pitch follows it", st_back / st_pulls,
+                    st_bmin == (1 << 30) ? -1L : st_bmin, st_xruns, st_stretched);
                 st_frames = st_pulls = st_short = st_held = 0;
+                st_xruns = st_stretched = 0;
+                st_bmin = 1 << 30;
                 st_min = st_max = skew; st_sum = st_back = 0;
             }
         }
@@ -288,7 +296,10 @@ static void out_thread(Alsa* a) {
             }
         }
         snd_pcm_sframes_t w = snd_pcm_writei(pcm, buf.data(), n);
-        if (w < 0) snd_pcm_recover(pcm, (int)w, 1);
+        if (w < 0) {
+            if (a->stats && st_xruns++ < 3) Log(LogLevel::Warn, "[alsa] write: %s\n", snd_strerror((int)w));
+            snd_pcm_recover(pcm, (int)w, 1);
+        }
     }
     if (dump_in) fclose(dump_in), fclose(dump_out);
     snd_pcm_drop(pcm);

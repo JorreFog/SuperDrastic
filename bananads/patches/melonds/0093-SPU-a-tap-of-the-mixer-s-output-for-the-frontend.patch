@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 25 Oct 2026 23:30:00 +0100
+Subject: [PATCH] SPU: a tap of the mixer's output for the frontend
+
+SPU::Tap (null by default): every Mix's final output, stereo s16 at 32768 Hz
+before the resampler (the samples blip gets), is copied into the frontend's
+buffer until TapLen frames are in, both on FastMix's unchanged-output path and
+the full one. Frames run ahead (DiscardOutput) aren't kept. BananaDS's
+audio.tap writes it to a file at the quit: the emulated sound, independent of
+the output resampler's skew, so two builds' runs from the same state compare
+sample for sample on the handheld. Off: one untaken branch per Mix.
+---
+--- a/src/SPU.cpp	2026-10-25 23:19:32.235559631 +0100
++++ b/src/SPU.cpp	2026-10-25 23:19:32.246418300 +0100
+@@ -1359,6 +1359,12 @@
+         NDS.Mic.Advance(spucycles << 1);
+         if (!DiscardOutput)  // (patch 0091)
+         {
++            if (Tap && TapPos < TapLen) [[unlikely]]  // (patch 0093)
++            {
++                Tap[TapPos * 2] = OutputLastSamples[0];
++                Tap[TapPos * 2 + 1] = OutputLastSamples[1];
++                TapPos++;
++            }
+             BlipTimer += spucycles;
+             if (BlipTimer >= 512 * 128)
+                 BufferAudio();
+@@ -1427,6 +1433,13 @@
+     OutputLastSamples[0] = output[0];
+     OutputLastSamples[1] = output[1];
+ 
++    if (Tap && TapPos < TapLen) [[unlikely]]  // (patch 0093)
++    {
++        Tap[TapPos * 2] = output[0];
++        Tap[TapPos * 2 + 1] = output[1];
++        TapPos++;
++    }
++
+     if (BlipTimer >= 512 * 128)
+         BufferAudio();
+ 
+--- a/src/SPU.h	2026-10-25 23:19:32.235513904 +0100
++++ b/src/SPU.h	2026-10-25 23:19:32.246295326 +0100
+@@ -262,6 +262,11 @@
+     // BananaDS run-ahead (patch 0091): frames run ahead and then undone add nothing to the output (the mixer's
+     // state goes on and is put back by the snapshot; the resampler's, which isn't in it, is left as it was)
+     bool DiscardOutput = false;
++    // BananaDS audio tap (patch 0093, the frontend's audio.tap): when Tap is set, every Mix's final output (stereo
++    // s16 at 32768 Hz, before the resampler, the same samples blip gets) goes into it until TapLen frames are in.
++    // Off (null) by default: one untaken branch per Mix. Frames run ahead (DiscardOutput) aren't kept.
++    s16* Tap = nullptr;
++    u32 TapLen = 0, TapPos = 0;
+     bool GetFastMix() const { return FastMix; }
+     // FastSamples (BananaDS, exact; with FastMix): a due PCM16 or ADPCM channel's samples are taken with its state in
+     // registers and ADPCM's step from tables (RunSamples); the FIFO refills, the start, the loop and the end take

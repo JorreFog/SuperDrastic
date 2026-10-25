@@ -101,6 +101,15 @@ void Emu::shutdown() {
     if (prof_) prof_->finish();  // (its report: the emulator's thread is done by now)
     flush_save(true);
     start_mark("quit: save written");
+    if (nds_ && !tap_path_.empty()) {
+        if (FILE* f = fopen(tap_path_.c_str(), "wb")) {
+            fwrite(tap_.data(), 4, nds_->SPU.TapPos, f);
+            fclose(f);
+            Log(LogLevel::Info, "[audio] tap: %u frames (%.1f s at 32768 Hz) in %s\n", nds_->SPU.TapPos,
+                nds_->SPU.TapPos / 32768.0, tap_path_.c_str());
+        }
+        nds_->SPU.Tap = nullptr;
+    }
     if (nds_) nds_->Stop();
     if (net_) net_->UnregisterInstance(0);
     start_mark("quit: console stopped");
@@ -585,6 +594,17 @@ bool Emu::load_rom(const std::string& path) {
     // core.fast_samples: with core.fast_mix, a due PCM16/ADPCM channel's samples taken with its state in registers and
     // ADPCM's step from tables (patches/melonds/0070; exact)
     nds_->SPU.SetFastSamples(cfg_.flag("core.fast_samples", true));
+    // audio.tap=<file>: the emulated sound itself (SPU::Tap, patch 0093: stereo s16 at 32768 Hz, before the output
+    // resampler and its skew) for audio.tap_secs from the last state load, kept in memory and written at the quit.
+    // Two builds' runs from the same state compare sample for sample (tools/audiocheck.py). Off by default
+    tap_path_ = cfg_.str("audio.tap", "");
+    if (!tap_path_.empty()) {
+        const long secs = std::clamp(cfg_.num("audio.tap_secs", 90), 1L, 600L);
+        tap_.assign((size_t)secs * 32768 * 2, 0);
+        nds_->SPU.Tap = tap_.data();
+        nds_->SPU.TapLen = (u32)(secs * 32768);
+        nds_->SPU.TapPos = 0;
+    }
     // core.fast_dma: 32-bit DMA from main RAM to the GX FIFO or within main RAM without the bus dispatch, and the
     // ARM9's MRAM burst timing looked up inline (patches/melonds/0013; exact, default on)
     nds_->SetFastDMA(cfg_.flag("core.fast_dma", true));
@@ -1024,6 +1044,7 @@ bool Emu::load_state(int slot) {
     // lid-open interrupt that nothing would send again. Open, this raises that interrupt; a game that isn't asleep
     // has it off.
     nds_->SetLidClosed(lid_closed_);
+    nds_->SPU.TapPos = 0;  // audio.tap: from the state on
     Log(LogLevel::Info, "[emu] state loaded: %s\n", p.c_str());
     return true;
 }
