@@ -124,6 +124,7 @@ static sprog slow, fastc[NFAST], *fast = &fastc[0]; static int nfast; static con
 int shader_fast = 1;
 int clear_first = 1;                                 /* kms.shader_clear: see quad() */                                 /* set by the caller before shader_init (kms.shader_fast) */
 static int fast_ok, fast_w, fast_h, fast_dw, fast_dh;
+static struct { int sw, sh, dw, dh; const sprog *p; } seen[4]; static int nseen;   /* pick(): each size's verdict */
 static int fast_check(int sw, int shh, int dw, int dhh);
 static void use(const sprog *p) { if (cur_prog != p || !p->prog) { glUseProgram(p->prog); cur_prog = p; } }
 /* a shader that draws the DS screen into part of the panel (ds-integer) says where, in panel pixels, with a line
@@ -402,7 +403,7 @@ int shader_init(int fd, const char *name) {
     if (slow.prog) glDeleteProgram(slow.prog);
     for (int i = 0; i < nfast; i++) glDeleteProgram(fastc[i].prog);
     slow = np; nfast = nn; memcpy(fastc, nf, sizeof fastc); fast = &fastc[0];
-    fast_ok = 0; fast_w = fast_h = fast_dw = fast_dh = 0;
+    fast_ok = 0; fast_w = fast_h = fast_dw = fast_dh = 0; nseen = 0;
     cur_prog = 0; use(&slow);
     glDisable(GL_BLEND); glDisable(GL_DITHER);
     SLOG("[shader] \"%s\" from %s, EGL %d.%d (%s%s, %s display)%s\n", name, from, maj, min, *dir ? dir : "system ", "libEGL", how,
@@ -414,8 +415,17 @@ int shader_init(int fd, const char *name) {
 static sprog *pick(int sw, int shh, int dw, int dhh) {
     if (!nfast) return &slow;
     if (sw != fast_w || shh != fast_h || dw != fast_dw || dhh != fast_dh) {
+        /* each size's verdict kept (a test is a few frames' GPU time and two read-backs: once a size) */
+        int i = 0;
+        while (i < nseen && (seen[i].sw != sw || seen[i].sh != shh || seen[i].dw != dw || seen[i].dh != dhh)) i++;
+        if (i == nseen) {
+            fast_ok = fast_check(sw, shh, dw, dhh);
+            i = nseen < 4 ? nseen++ : 3;
+            seen[i].sw = sw; seen[i].sh = shh; seen[i].dw = dw; seen[i].dh = dhh; seen[i].p = fast_ok ? fast : 0;
+        }
+        fast_ok = seen[i].p != 0;
+        if (fast_ok) fast = (sprog *)seen[i].p;
         fast_w = sw; fast_h = shh; fast_dw = dw; fast_dh = dhh;
-        fast_ok = fast_check(sw, shh, dw, dhh);
     }
     return fast_ok ? fast : &slow;
 }
