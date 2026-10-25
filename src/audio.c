@@ -42,6 +42,9 @@
 #include <dlfcn.h>
 #include <math.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <linux/futex.h>
+#include <unistd.h>
 
 void dsflip_log(const char *fmt, ...);
 
@@ -205,6 +208,22 @@ static void ui_mix(unsigned char *buf, int frames) {
     __atomic_compare_exchange_n(&ui_pos, &p, next, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED);
 }
 
+/* DraStic's sound wait (audio_sync) polls its ring with SDL_Delay(0), a spin: the ring only drains when the pump calls
+ * its callback, so dsflip.c's SDL_Delay hook sleeps here until the pump's next call instead (audio_wait_drain) */
+static int pump_tick, tick_waiters;
+static void tick_bump(void) {
+    __atomic_add_fetch(&pump_tick, 1, __ATOMIC_RELEASE);
+    if (__atomic_load_n(&tick_waiters, __ATOMIC_ACQUIRE)) syscall(SYS_futex, &pump_tick, FUTEX_WAKE_PRIVATE, INT_MAX, 0, 0, 0);
+}
+/* until the pump's next call into DraStic's callback, at most timeout_us */
+void audio_wait_drain(int timeout_us) {
+    int t = __atomic_load_n(&pump_tick, __ATOMIC_ACQUIRE);
+    struct timespec ts = { 0, timeout_us * 1000L };
+    __atomic_add_fetch(&tick_waiters, 1, __ATOMIC_ACQ_REL);
+    syscall(SYS_futex, &pump_tick, FUTEX_WAIT_PRIVATE, t, &ts, 0, 0);
+    __atomic_sub_fetch(&tick_waiters, 1, __ATOMIC_ACQ_REL);
+}
+
 static double lock_in;                   /* DraStic's rate as taken with DSFLIP_AUDIO_LOCK (see alsa_open), else 0: the pump's
                                             nominal rate too, so its trim stays the few ppm it is without the lock */
 static void *pump(void *a) {             /* steady calls into DraStic's callback */
@@ -225,7 +244,7 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
             if (av < chunk) { st_dshort++; st_dshort_fr += chunk - av; audio_runouts++; }
         }
         if (paused) memset(tmp, 0, (size_t)chunk * fb);   /* the menu's sounds over silence (16-bit samples) */
-        else { dcb(dud, tmp, chunk * fb); if (mute) memset(tmp, 0, (size_t)chunk * fb); }
+        else { dcb(dud, tmp, chunk * fb); tick_bump(); if (mute) memset(tmp, 0, (size_t)chunk * fb); }
         sfx_mix(tmp, chunk);
         ui_mix(tmp, chunk);
         st_pump++; st_pumped += chunk;
