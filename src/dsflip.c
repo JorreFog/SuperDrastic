@@ -173,7 +173,8 @@ static void set_fifo(int prio) {
 static long long st_shade_sum, st_shade_max; static int st_shade_n;
 static long long st_t0, st_iv_max[2];
 
-#define LOG(...) do { if (lg) fprintf(lg, __VA_ARGS__); } while (0)
+void dsflip_log(const char *fmt, ...);
+#define LOG(...) dsflip_log(__VA_ARGS__)
 #define REAL(ret, fn, ...) static ret (*real)(__VA_ARGS__); if (!real) real = dlsym(RTLD_NEXT, #fn)
 
 static long long now_us(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000000LL + t.tv_nsec / 1000; }
@@ -255,8 +256,14 @@ static void add_fb(drmModeAtomicReq *r, panel *p, dbuf *b) {
 
 void ra_frame(void);
 
+static int log_time = -1;               /* DSFLIP_LOG_TIME=1: each line after the boot clock (CLOCK_BOOTTIME, /proc/uptime's) */
 void dsflip_log(const char *fmt, ...) {
     if (!lg) return;
+    if (log_time < 0) { const char *e = getenv("DSFLIP_LOG_TIME"); log_time = e && *e == '1'; }
+    if (log_time) {
+        struct timespec ts; clock_gettime(CLOCK_BOOTTIME, &ts);
+        fprintf(lg, "%lld.%03ld ", (long long)ts.tv_sec, ts.tv_nsec / 1000000);
+    }
     va_list ap; va_start(ap, fmt); vfprintf(lg, fmt, ap); va_end(ap);
 }
 
@@ -470,6 +477,7 @@ static void try_commit(void) {         /* called with mu held */
         P[i].ready = dequeue(i);        /* the oldest queued frame is next */
         if (P[i].ready && 1 + P[i].nq > waiting) waiting = 1 + P[i].nq;
     }
+    if (frames) { static int first; if (!first++) LOG("[start] first frame committed\n"); }
     if (frames) { st_wait[waiting]++; st_fcommit++; }   /* frames left waiting behind this one = refreshes of latency */
     if (frames && queue_wait_us) pthread_cond_broadcast(&qcond);   /* a present held on a full queue may go on */
     if (P[0].ready || P[1].ready) ready_since = now_us();

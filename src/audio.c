@@ -42,6 +42,10 @@
 #include <dlfcn.h>
 #include <math.h>
 #include <sys/stat.h>
+#include <poll.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <unistd.h>
 
 void dsflip_log(const char *fmt, ...);
 
@@ -273,6 +277,8 @@ static int (*a_recover)(void *, int, int);
 static const char *(*a_strerror)(int);
 static int (*a_close)(void *);
 static int (*a_cfgfree)(void);            /* snd_config_update_free_global: forget the configuration read so far */
+static int (*a_pollfds)(void *, struct pollfd *, unsigned);   /* snd_pcm_poll_descriptors: the stream's file */
+static volatile int out_fd = -1;          /* the output's file (the device node), for audio_hand_off */
 static volatile int st_xrun;
 /* Opening and configuring PCMs is serialized: the output and the mic used to be opened at the same moment from two
  * threads (DraStic's, in SDL_OpenAudio, and the mic's), and PipeWire's ALSA plugin sets itself up on each open
@@ -289,6 +295,7 @@ static void alsa_load(void) {
     *(void **)&a_strerror = dlsym(h, "snd_strerror");
     *(void **)&a_readi = dlsym(h, "snd_pcm_readi"); *(void **)&a_close = dlsym(h, "snd_pcm_close");
     *(void **)&a_cfgfree = dlsym(h, "snd_config_update_free_global");
+    *(void **)&a_pollfds = dlsym(h, "snd_pcm_poll_descriptors");
     alsa_ok = a_open && a_set_params && a_writei && a_readi && a_recover;
 }
 static int alsa_syms(void) { pthread_once(&alsa_once, alsa_load); return alsa_ok ? 0 : -1; }
@@ -301,6 +308,10 @@ static int alsa_pcm(void **p, int stream, int channels, int rate, unsigned laten
     else if ((e = a_set_params(*p, 2 /* SND_PCM_FORMAT_S16_LE */, 3 /* SND_PCM_ACCESS_RW_INTERLEAVED */, channels, rate,
                                1 /* soft resample */, latency_us)) < 0)
         dsflip_log("[%s] ALSA params: %s\n", who, a_strerror ? a_strerror(e) : "?");
+    if (e >= 0 && stream == 0 && a_pollfds) {   /* the output's device file, for a quit's hand-off (audio_hand_off) */
+        struct pollfd pf;
+        out_fd = a_pollfds(*p, &pf, 1) == 1 ? pf.fd : -1;
+    }
     pthread_mutex_unlock(&alsa_mu);
     return e < 0 ? e : 0;
 }
@@ -445,6 +456,36 @@ static void *writer(void *a) {           /* blocking writes pace this thread at 
     return 0;
 }
 
+/* Quitting (resume.c, just before DraStic is killed): the output's last close, where the driver stops the device, is
+ * left to a helper that holds only that file until DraStic has gone, so the quit doesn't wait for it. On the RG DS
+ * Plus that close takes ~600 ms (the aw88166 amplifiers' stop writes their DSP over I2C), and it ran in DraStic's
+ * last thread to exit: the menu came back that much later. The helper is exec'd at once (/bin/sh, an empty
+ * environment), so it holds none of DraStic's memory or display buffers, only the sound device's file; a fork that
+ * kept DraStic's memory (the 0.4.2 try) also kept its mappings of the display's buffers until it exited. The device
+ * is busy for those ~600 ms (a menu sound then isn't heard). Async-signal-safe (fork, dup2, close, execve): it runs
+ * from the USR1 handler too. DSFLIP_AUDIO_CLOSE_CHILD=0: off. */
+static int hand_off_off = -1;
+void audio_hand_off(void) {
+    int fd = out_fd;
+    if (hand_off_off < 0) { const char *e = getenv("DSFLIP_AUDIO_CLOSE_CHILD"); hand_off_off = e && *e == '0'; }
+    if (hand_off_off || fd < 0) return;
+    char pid[24]; int n = 0; long v = (long)getpid(); char t[24]; int k = 0;
+    do { t[k++] = (char)('0' + v % 10); v /= 10; } while (v && k < 23);
+    while (k) pid[n++] = t[--k];
+    pid[n] = 0;
+    pid_t c = fork();
+    if (c == 0) {
+        for (int i = 0; i < 32; i++) signal(i, SIG_DFL);
+        if (fd != 3) { if (dup2(fd, 3) < 0) _exit(1); }
+        else { int fl = fcntl(3, F_GETFD); if (fl >= 0) fcntl(3, F_SETFD, fl & ~FD_CLOEXEC); }
+        long maxfd = sysconf(_SC_OPEN_MAX);
+        for (long i = 0; i < maxfd && i < 65536; i++) if (i != 3) close((int)i);
+        char *const argv[] = { "sh", "-c", "while [ -e /proc/$0 ]; do /bin/sleep 0.05; done", pid, 0 };
+        char *const envp[] = { 0 };
+        execve("/bin/sh", argv, envp);
+        _exit(0);                         /* (no shell: the file closes here, in this exit) */
+    }
+}
 int audio_pump_enabled(void) { const char *e = getenv("DSFLIP_AUDIO_PUMP"); return !(e && *e == '0'); }
 int audio_out_alsa(void) { const char *o = getenv("DSFLIP_AUDIO_OUT"); return !(o && !strcmp(o, "sdl")); }
 int audio_sdl_off;                       /* dsflip.c's SDL_Init left SDL's audio subsystem out: start it before SDL's device */
