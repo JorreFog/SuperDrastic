@@ -20,20 +20,22 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     memset(OutBuf, 0, sizeof OutBuf);
     for (auto& d : Done) d.store(0);
     if (threads < 0) threads = 0;
-    for (int i = 0; i < threads; i++) Threads.emplace_back([this] { Worker(); });
+    Active = WakeN < 1 ? 1 : WakeN;
+    for (int i = 0; i < threads; i++) Threads.emplace_back([this, i] { Worker(i); });
     Platform::Log(Platform::LogLevel::Info, "[gengis] Gengis Engine at %dx, %d render threads%s\n", Scale_, threads,
                   defer ? ", deferred shading" : "");
 }
 
 GengisRenderer3D::~GengisRenderer3D() {
     WaitAll();
-    Platform::Log(Platform::LogLevel::Info, "[gengis] the emulator's thread drew %lu of %lu bins and converted %lu frames\n",
-                  EmuBins, AllBins.load(), EmuConverts);
+    Platform::Log(Platform::LogLevel::Info, "[gengis] the emulator's thread drew %lu of %lu bins and converted %lu frames; %lu late frames (render.gengis_wake=%d of %zu)\n",
+                  EmuBins, AllBins.load(), EmuConverts, LateFrames.load(), Active, Threads.size());
     {
         std::lock_guard<std::mutex> l(M);
         Quit = true;
     }
     Wake.notify_all();
+    WakeLate.notify_all();
     for (auto& t : Threads) t.join();
 }
 
@@ -264,6 +266,9 @@ void GengisRenderer3D::Convert() {
 
 int GengisRenderer3D::Help = 1;
 int GengisRenderer3D::Nice = 0;
+std::vector<int> GengisRenderer3D::AbModes;
+double GengisRenderer3D::AbSecs = 5;
+int GengisRenderer3D::WakeN = 1;
 
 bool GengisRenderer3D::RenderOne(bool emu) {
     const unsigned b = Next.fetch_add(1, std::memory_order_acq_rel);
@@ -294,21 +299,44 @@ bool GengisRenderer3D::RenderOne(bool emu) {
     return true;
 }
 
-void GengisRenderer3D::Worker() {
+void GengisRenderer3D::Worker(int idx) {
     if (Nice) setpriority(PRIO_PROCESS, 0, Nice);
     unsigned seen = 0;
     for (;;) {
         {
             std::unique_lock<std::mutex> l(M);
-            Wake.wait(l, [&] { return Quit || (Gen != seen && Next.load(std::memory_order_acquire) < GX_NBINS); });
+            // the first Active threads wait on Wake (a frame's start wakes them alone), the others on WakeLate (and
+            // wait again on the other one when render.gengis_ab moved Active across them)
+            const bool first = idx < Active;
+            (first ? Wake : WakeLate).wait(l, [&] {
+                return Quit || (idx < Active) != first ||
+                       (Gen != seen && Next.load(std::memory_order_acquire) < GX_NBINS &&
+                        (first || (LateWake && Late.load(std::memory_order_relaxed))));
+            });
             if (Quit) return;
+            if ((idx < Active) != first && !(Gen != seen && Next.load(std::memory_order_acquire) < GX_NBINS)) continue;
             seen = Gen;
         }
         while (RenderOne()) {}
     }
 }
 
+// a waiter found a bin not drawn: the render threads not woken at the frame's start join it (render.gengis_wake)
+void GengisRenderer3D::MarkLate() {
+    if (!LateWake || Active >= (int)Threads.size()) return;
+    LateHold.store(60, std::memory_order_relaxed);  // (the next 60 frames wake them all at the start: a heavy scene)
+    if (Late.load(std::memory_order_relaxed)) return;
+    {
+        std::lock_guard<std::mutex> l(M);
+        if (Late.load(std::memory_order_relaxed)) return;
+        Late.store(true, std::memory_order_relaxed);
+    }
+    LateFrames.fetch_add(1, std::memory_order_relaxed);
+    WakeLate.notify_all();
+}
+
 void GengisRenderer3D::WaitBin(unsigned bin) {
+    if (Done[bin].load(std::memory_order_acquire) != Frame.gen) MarkLate();
     while (Done[bin].load(std::memory_order_acquire) != Frame.gen) {
         // the emulator's thread renders a bin itself rather than wait (render.gengis_help)
         const bool help = Threads.empty() || Help == 2 || (Help == 1 && Converted.load(std::memory_order_acquire) == 2);
@@ -323,6 +351,7 @@ void GengisRenderer3D::WaitRows(int line, unsigned gen) {
     if (line >= GX_H) line = GX_H - 1;
     const unsigned bin = (unsigned)line / GX_BL;
     auto drawn = [&] { return (int)(Done[bin].load(std::memory_order_acquire) - gen) >= 0; };
+    if (!drawn()) MarkLate();
     while (!drawn()) {
         if (Converted.load(std::memory_order_acquire) == 2 && RenderOne()) continue;  // (the 2D thread may help)
         std::unique_lock<std::mutex> l(M);
@@ -340,20 +369,42 @@ void GengisRenderer3D::RenderFrame() {
     auto texPalDirty = GPU.VRAMDirty_TexPal.DeriveState(GPU.VRAMMap_TexPal, GPU);
     const bool textureChanged = GPU.MakeVRAMFlat_TextureCoherent(textureDirty);
     const bool texPalChanged = GPU.MakeVRAMFlat_TexPalCoherent(texPalDirty);
+    if (!AbModes.empty()) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= AbNext) {
+            const int m = AbModes[AbIdx++ % AbModes.size()];
+            AbNext = now + std::chrono::milliseconds((long)(AbSecs * 1000));
+            {
+                std::lock_guard<std::mutex> l(M);
+                NoRaster = m == 0;
+                Active = m == 0 ? 1 << 30 : m > 10 ? m - 10 : m;
+                LateWake = m > 10;
+            }
+            Wake.notify_all();  // (the threads Active moved across wait again on the other condition variable)
+            WakeLate.notify_all();
+            Platform::Log(Platform::LogLevel::Info, "[gengis] ab mode %d\n", m);
+        }
+        if (NoRaster) return;  // (debug: the lines stay the last frame's)
+    }
     if (!(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical) return;  // the lines are the last frame's
     if (textureChanged || texPalChanged) Textures.clear();
     Out = Out == OutBuf[0] ? OutBuf[1] : OutBuf[0];  // (the workers see it through Next's store under M)
     Frame.gen = ++Gen;
     if (Gen % 3600 == 0) {  // (render.gengis_help's effect, in the game's log, a line a minute or so)
-        Platform::Log(Platform::LogLevel::Info, "[gengis] %lu frames: the emulator's thread drew %lu of %lu bins and converted %lu frames\n",
-                      (unsigned long)Gen, EmuBins, AllBins.load(), EmuConverts);
+        Platform::Log(Platform::LogLevel::Info, "[gengis] %lu frames: the emulator's thread drew %lu of %lu bins and converted %lu frames; %lu late frames\n",
+                      (unsigned long)Gen, EmuBins, AllBins.load(), EmuConverts, LateFrames.load());
     }
     Converted.store(0, std::memory_order_relaxed);
+    // render.gengis_wake: the other render threads too while a frame in the last 60 was late
+    const bool hold = LateWake && Active < (int)Threads.size() && LateHold.load(std::memory_order_relaxed) > 0;
+    if (hold) LateHold.fetch_sub(1, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> l(M);
+        Late.store(hold, std::memory_order_relaxed);
         Next.store(0, std::memory_order_release);
     }
     Wake.notify_all();
+    if (hold) WakeLate.notify_all();
     if (Threads.empty()) WaitAll();
 }
 
