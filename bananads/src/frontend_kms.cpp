@@ -160,6 +160,9 @@ struct Display {
     static const int NB = 7;  // writing, up to 3 queued, drawn ahead through the shader, committed, on screen
     int fd = -1;
     Panel p[2];               // [0] = top, [1] = bottom
+    // F + SELECT: the DS's top screen on the bottom panel and its bottom screen on the top one (the frames' buffers go to
+    // the other planes at the commit; touch follows the DS's bottom screen, see the input loop)
+    std::atomic<bool> swapped{false};
     int W = 0, H = 0;         // the panels' mode
     int fw = 0, fh = 0;       // a DS screen's size at render.scale
     bool hw = true;           // the plane scales the frame; else the CPU does, into panel-sized buffers
@@ -305,7 +308,8 @@ struct Display {
     void show_menu(int panel, int k) { commit_now(panel, 0, &mbuf[panel][k], nullptr); }
     void show_game() {
         Lock l(mu);
-        if (scanout >= 0) commit_now(0, 1, &buf[0][scanout], &buf[1][scanout]);
+        const int t = swapped ? 1 : 0;
+        if (scanout >= 0) commit_now(0, 1, &buf[t][scanout], &buf[t ^ 1][scanout]);
     }
     // the game's top screen as last shown, at the panel's size (nearest)
     bool grab_top(uint32_t* dst, int pitch, int w, int h) {
@@ -716,6 +720,7 @@ struct Display {
             if (dt > shader_max_us) shader_max_us = dt;
             snext = (snext + 1) % 3;  // (one on screen, one committed, one drawn ahead)
             ll_ready(s);
+            if (swapped) std::swap(out[0], out[1]);  // (F + SELECT: each DS screen on the other panel)
             overlay(out[0]);
             ready = s;
             ready_out[0] = out[0];
@@ -723,6 +728,7 @@ struct Display {
             if (commit(s, out)) ready = -1;  // the flip had already come
             return;
         }
+        if (swapped) std::swap(out[0], out[1]);
         overlay(out[0]);
         if (!commit(s, out)) {
             Lock l(mu);
@@ -841,6 +847,7 @@ static void on_flip(int, unsigned, unsigned sec, unsigned usec, unsigned crtc, v
 struct InputDev {
     int fd = -1;
     bool touch = false, pointer = false;
+    int panel = 1;          // a touchscreen's panel: 1 the bottom one (kms.touch), 0 the top one (the RG DS has one)
     int stick = 0;          // the left stick's half range (ABS_X/ABS_Y on a pad, not a touchscreen): 0 none
     int minx = 0, maxx = 0, miny = 0, maxy = 0, x = 0, y = 0;
     bool down = false, was = false;
@@ -887,13 +894,14 @@ static std::vector<InputDev> open_inputs(const std::string& touch_name) {
         bool st = !mt && bit(abs, ABS_X) && bit(abs, ABS_Y) &&
                   (bit(keys, BTN_TOUCH) || (bit(keys, BTN_LEFT) && !bit(keys, BTN_SOUTH)));
         if (mt || st) {
-            // only the bottom panel's touchscreen (the top one's isn't the DS's)
+            // the bottom panel's touchscreen is the DS's; the top one's (the RG DS's) only while the screens are swapped
             char link[300], real[PATH_MAX];
             snprintf(link, sizeof link, "/sys/class/input/%s/device", e->d_name);
-            if (touch_name.empty() || !realpath(link, real) || !strstr(real, touch_name.c_str())) {
+            if (touch_name.empty() || !realpath(link, real)) {
                 ::close(fd);
                 continue;
             }
+            dv.panel = strstr(real, touch_name.c_str()) ? 1 : 0;
             dv.touch = true;
             dv.pointer = st && !bit(keys, BTN_TOUCH);
             input_absinfo ax{}, ay{};
@@ -921,11 +929,44 @@ static std::vector<InputDev> open_inputs(const std::string& touch_name) {
                 continue;
             }
         }
-        Log(LogLevel::Info, "[kms] input %s: %s\n", e->d_name, dv.touch ? "the touchscreen" : "buttons");
+        Log(LogLevel::Info, "[kms] input %s: %s\n", e->d_name, dv.touch ? (dv.panel ? "the touchscreen" : "the top panel's touchscreen") : "buttons");
         devs.push_back(dv);
     }
     closedir(d);
     return devs;
+}
+
+// ---- F + SELECT: the DS's screens on the other panels, remembered for each game in <BANANADS_DATA>/swapped.txt (one
+// game's file name a line) ----
+static std::string swap_file() {
+    const char* data = getenv("BANANADS_DATA");
+    return std::string(data && *data ? data : "/data/bananads") + "/swapped.txt";
+}
+static std::string rom_base(const std::string& rom) { return rom.substr(rom.rfind('/') + 1); }
+static bool swap_remembered(const std::string& rom) {
+    std::ifstream f(swap_file());
+    std::string ln, me = rom_base(rom);
+    while (std::getline(f, ln)) if (!me.empty() && ln == me) return true;
+    return false;
+}
+static void swap_toggle(Display& dp, const std::string& rom) {
+    const bool on = !dp.swapped;
+    dp.swapped = on;
+    const std::string path = swap_file(), me = rom_base(rom);
+    std::vector<std::string> keep;
+    {
+        std::ifstream f(path);
+        std::string ln;
+        while (std::getline(f, ln)) if (!ln.empty() && ln != me) keep.push_back(ln);
+    }
+    if (on && !me.empty()) keep.push_back(me);
+    if (FILE* w = fopen((path + ".new").c_str(), "w")) {
+        for (auto& k : keep) fprintf(w, "%s\n", k.c_str());
+        fclose(w);
+        rename((path + ".new").c_str(), path.c_str());
+    }
+    Log(LogLevel::Info, "[kms] F + SELECT: screens %s\n", on ? "swapped" : "back as they were");
+    bmenu_popup(on ? "Screens swapped" : "Screens back", on ? "F + SELECT puts them back" : "F + SELECT swaps them again", 1800);
 }
 
 // ---- the in-game menu's host (menu.h): the panels, the input, the emulator, while the game is paused -----------
@@ -965,7 +1006,7 @@ static int mh_hotkey(void*, int i, const char** keys, const char** what) {
     static const char* const k[][2] = {
         {"F / L3 / HOME", "This menu"}, {"F + R", "Save state (slot 1)"}, {"F + L", "Load state (slot 1)"},
         {"R2", "Fast-forward (held)"}, {"F + X", "Fast-forward on / off"}, {"F + L2", "Screenshot"},
-        {"F + START", nullptr}, {"VOL + / -", "Volume"}, {"F + VOL + / -", "Brightness"}};
+        {"F + SELECT", "Swap the screens"}, {"F + START", nullptr}, {"VOL + / -", "Volume"}, {"F + VOL + / -", "Brightness"}};
     if (i < 0 || i >= (int)(sizeof k / sizeof k[0])) return 0;
     *keys = k[i][0];
     *what = k[i][1] ? k[i][1] : g_quit_saves ? "Save your spot and quit" : "Quit";
@@ -1005,7 +1046,7 @@ static int mh_poll(void* c, bmenu_ev* out) {
                         else if (x.type == EV_KEY && (x.code == BTN_TOUCH || (d.pointer && x.code == BTN_LEFT)))
                             d.down = x.value != 0;
                         else if (x.type == EV_SYN && x.code == SYN_REPORT) {
-                            if (d.down && !d.was) {
+                            if (d.down && !d.was && d.panel == 1) {  // (the menu is on the bottom panel)
                                 const Display* dp = m->dp;
                                 int px = d.maxx > d.minx ? (int)((double)(d.x - d.minx) * dp->W / (d.maxx - d.minx + 1)) : d.x;
                                 int py = d.maxy > d.miny ? (int)((double)(d.y - d.miny) * dp->H / (d.maxy - d.miny + 1)) : d.y;
@@ -1351,6 +1392,10 @@ int run_kms(Emu& emu, const Config& cfg) {
             for (size_t i = 0; i < n; i += strlen(rom + i) + 1)
                 if (i && rom[i] && rom[i] != '-') mh.rom = rom + i;  // (the last argument: the game)
         }
+        if (swap_remembered(mh.rom)) {
+            dp.swapped = true;
+            Log(LogLevel::Info, "[kms] screens swapped for this game (F + SELECT, remembered)\n");
+        }
         bmenu_host h{};
         h.ctx = &mh;
         h.rom = mh.rom.c_str();
@@ -1686,6 +1731,11 @@ int run_kms(Emu& emu, const Config& cfg) {
                         else if (x.type == EV_KEY && (x.code == BTN_TOUCH || (d.pointer && x.code == BTN_LEFT)))
                             d.down = x.value != 0;
                         else if (x.type == EV_SYN && x.code == SYN_REPORT) {
+                            if (d.panel != (dp.swapped ? 0 : 1)) {  // not the panel the DS's bottom screen is on
+                                if (d.was) in_touch = -1;          // (a press held across F + SELECT: let go)
+                                d.was = false;
+                                continue;
+                            }
                             if (d.down) {
                                 // the panel's pixel, then the DS's: where the bottom picture is on the panel
                                 double px = d.maxx > d.minx ? (double)(d.x - d.minx) * dp.W / (d.maxx - d.minx + 1) : d.x;
@@ -1764,6 +1814,7 @@ int run_kms(Emu& emu, const Config& cfg) {
                     const uint32_t b = pad_bit(x.code);
                     if (hot && x.value && b) {  // F + a button: BananaDS's own, not the game's
                         if (b == KeyStart) g_quit = true;
+                        else if (b == KeySelect) swap_toggle(dp, mh.rom);
                         else if (b == KeyR) in_save = 1;
                         else if (b == KeyL) in_load = 1;
                         else if (b == KeyX) ff_toggle();
