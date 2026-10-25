@@ -56,6 +56,7 @@ int lid_home_on(void);        /* lid.c: HOME opens the menu */
 void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
+void cpugov_menu(int open);
 void SDL_PauseAudio(int on);
 /* audio.c */
 void audio_mute(int on);
@@ -1358,6 +1359,7 @@ static void menu_run(int start) {
     SDL_PauseAudio(1);
     audio_mic_quiet(1);             /* the real mic presses nothing while the game is paused */
     cpugov_boost(800);
+    cpugov_menu(1);
     open_ = 1; scr = SC_MAIN; sel_main = 0; held_dir = 0; axis_dir[0] = axis_dir[1] = 0; tqn = 0;
     bri_changed = 0; make_rows(); main_col = 0;
     bri = bri_now();                /* the main page's Brightness row */
@@ -1402,6 +1404,7 @@ static void menu_run(int start) {
     if (mic_until) dsflip_mic_key(1);
     SDL_PauseAudio(0);
     audio_mic_quiet(0);
+    cpugov_menu(0);
     dsflip_log("[menu] closed\n");
 }
 

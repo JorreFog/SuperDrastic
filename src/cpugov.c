@@ -90,8 +90,13 @@ static long long now_ns;
 static int verbose;
 static int hwmax_;                           /* the hardware's top clock (savestate boosts, a soft DSFLIP_CPU_MAX) */
 static int soft_max;                         /* DSFLIP_CPU_MAX_SOFT=1: fmax_ may be passed when the game needs it */
+static double sum_max = 1.2;                 /* DSFLIP_CPUGOV_SUM: no step down when all of DraStic's threads together
+                                               would exceed this many cores at the lower clock */
 static volatile long long boost_until;       /* CLOCK_MONOTONIC ns: boosted until then (cpugov_boost) */
 static volatile int gov_on;
+static volatile int menu_open;               /* the in-game menu is up (menu.c): DraStic is paused */
+static int menu_khz;                         /* DSFLIP_CPUGOV_MENU=<kHz> (e.g. 816000): the clock while it is (default 0, off: the model's
+                                               clock; not measured on a device yet) */
 
 /* how long a clock's (k+1)th drop keeps it banned */
 static long long ban_ns(int k) {
@@ -194,6 +199,7 @@ static void *gov_thread(void *a) {
     double peaks[FPS_WINDOWS] = { 0 };                  /* the heaviest frame of each of the last windows (1 s) */
     int w_cand = 0, w_stable = 0;                        /* DraStic's screen width, and for how many windows */
     int boosted = 0;                                     /* during a savestate boost: the clock to go back to */
+    int menu_from = 0;                                   /* while the in-game menu is up: the game's clock, for after */
     for (;;) {
         if (--rescan <= 0) {                             /* DraStic's threads (not ours: dsf-*), once a second */
             DIR *d = opendir("/proc/self/task"); struct dirent *e; int n = 0; int nt_[MAXT]; long long nl[MAXT];
@@ -229,11 +235,22 @@ static void *gov_thread(void *a) {
                 if (!boosted) { boosted = cur; dsflip_log("[cpugov] savestate: %d MHz until it's done\n", hwmax_ / 1000); }
                 cur = hwmax_;
             } else {
+                if (menu_from && !menu_open) { boosted = menu_from; menu_from = 0; }   /* the menu closed meanwhile */
                 dsflip_log("[cpugov] savestate done: back to %d MHz\n", boosted / 1000);
                 if (wr_int(POL "scaling_max_freq", boosted) == 0) cur = boosted;
                 boosted = 0;
                 for (int k = 0; k < FPS_WINDOWS; k++) { fps_t[k] = 0; peaks[k] = 0; }   /* the stall isn't this clock's */
             }
+            __atomic_exchange_n(&dsflip_frame_work_max, 0, __ATOMIC_RELAXED);
+            drops_prev = dsflip_queue_drops; runouts_prev = audio_runouts; low = 0; down_t = 0;
+            continue;
+        }
+        /* the in-game menu: DraStic is paused and the menu draws only on a press (each press boosts, menu.c), so a low
+         * clock while it is up, and the game's clock back when it closes; nothing counts meanwhile */
+        if (menu_khz && (menu_open || menu_from)) {
+            if (menu_open) { if (!menu_from) { menu_from = cur ? cur : fmax_; set_clock(menu_khz, "in-game menu", umax, fps); } }
+            else { set_clock(menu_from, "in-game menu closed", umax, fps); menu_from = 0; }
+            for (int k = 0; k < FPS_WINDOWS; k++) { fps_t[k] = 0; peaks[k] = 0; }
             __atomic_exchange_n(&dsflip_frame_work_max, 0, __ATOMIC_RELAXED);
             drops_prev = dsflip_queue_drops; runouts_prev = audio_runouts; low = 0; down_t = 0;
             continue;
@@ -277,7 +294,10 @@ static void *gov_thread(void *a) {
         else if (dropped) {
             /* up one step either way (at 816 MHz frames were dropped with the heaviest at only ~40% of a refresh, in a
              * still HeartGold dialog; the floor is 1104 now), but only a CPU-bound drop is a strike (see the top) */
-            int blame = peak1s >= BLAME_PEAK || umax > TARGET;
+            /* a frame that would have been late at the top clock too (a load, a scene change: Mario Kart DS's race
+             * start runs 150-250% of a refresh) is no clock's fault: not a strike */
+            int spike = peak1s * cur / hwmax_ > 1.0;
+            int blame = !spike && (peak1s >= BLAME_PEAK || umax > TARGET);
             why = blame ? "dropped" : "dropped, light frames"; if (want <= cur) want = blame ? step_up(cur) : fit(cur + 1);
             int c = idx(cur);
             int top = soft_max ? hwmax_ : fmax_;         /* (at the top there's nothing to avoid: not held against it) */
@@ -293,7 +313,7 @@ static void *gov_thread(void *a) {
         else if (behind) {
             why = "slow"; if (want <= cur) want = step_up(cur);                              /* +1 step... */
             int c = idx(cur);                                                                /* ...and the clock that was */
-            if (c >= 0 && cur < (soft_max ? hwmax_ : fmax_)) { bad_until[c] = t + ban_ns(strikes[c]); strikes[c]++; mem_save(); }   /* too slow is held
+            if (c >= 0 && cur < (soft_max ? hwmax_ : fmax_) && peak1s * cur / hwmax_ <= 1.0) { bad_until[c] = t + ban_ns(strikes[c]); strikes[c]++; mem_save(); }   /* too slow is held
                 against it like a drop: stepping back down to it after 15 s "light" and up again made a 1104/1416 see-saw */
         }
         if (!dropped) {                                  /* a window without a drop: time towards forgiveness */
@@ -306,7 +326,7 @@ static void *gov_thread(void *a) {
             if (forgiven) mem_save();
         }
         if (why && want > cur) { set_clock(want, why, umax, fps); low = 0; }
-        else if (fits < cur && fps >= 59 && usum < 1.2 * cur / (double)step_down(cur) && (!mem_on || mem_w)) {   /* never while below full speed, nor
+        else if (fits < cur && fps >= 59 && usum < sum_max * cur / (double)step_down(cur) && (!mem_on || mem_w)) {   /* never while below full speed, nor
                  when all of DraStic's threads together would exceed 1.2 cores at the lower clock */
             if (++low >= DOWN_AFTER) { int from = cur; set_clock(step_down(cur), "light", umax, fps); low = 0; if (cur < from) { down_t = t; down_from = from; } } }
         else low = 0;
@@ -321,6 +341,8 @@ void cpugov_start(void) {
     if (e && *e == '0') { dsflip_log("[cpugov] off (DSFLIP_CPUGOV=0)\n"); return; }
     verbose = getenv("DSFLIP_CPUGOV_LOG") != 0;
     { const char *m = getenv("DSFLIP_CPUGOV_MEMORY"); mem_on = !(m && *m == '0'); }
+    { const char *m = getenv("DSFLIP_CPUGOV_MENU"); if (m) menu_khz = atoi(m); }
+    { const char *m = getenv("DSFLIP_CPUGOV_SUM"); if (m && atof(m) > 0) sum_max = atof(m); }
     char gov[32], avail[256];
     rd_str(POL "scaling_governor", gov, sizeof gov);
     if (strcmp(gov, "performance")) { dsflip_log("[cpugov] off: governor is %s, not performance\n", gov); return; }
@@ -360,3 +382,6 @@ void cpugov_boost(int ms) {
     boost_until = until;
     if (fresh) wr_int(POL "scaling_max_freq", hwmax_);  /* at once, not at the governor's next window */
 }
+
+/* the in-game menu opened (1) or closed (0) (menu.c) */
+void cpugov_menu(int open) { menu_open = open; }
