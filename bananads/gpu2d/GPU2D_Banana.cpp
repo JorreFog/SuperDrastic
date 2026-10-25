@@ -129,6 +129,7 @@ bool Banana2DFast = true;
 bool Banana3DShare = true;
 bool Banana3DWait2D = true;
 bool BananaCapNeedA = true;
+bool BananaHiresShown = true;
 
 // 15-bit palette colour to the 18-bit internal format; bit 15 is the low green bit
 // (melonDS: applies to BG/OBJ palette colours, not to direct colour)
@@ -2841,7 +2842,10 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
     else
         OBJPrioPresent = 0;
 
-    if (!q3d || !drew3d)
+    // (render.2d_hires_shown: in display mode 0, 2 or 3 unit A's picture isn't shown, EmitA doubles quarter 0 then,
+    // and quarter 0 alone is what display capture reads: e.g. Golden Sun: Dark Dawn's title flyover captures unit
+    // A and shows the VRAM bank it captured into, every line on the emulator's thread)
+    if (!q3d || !drew3d || (BananaHiresShown && ((R.DispCnt >> 16) & 0x3) != 1))
     {
         CompositeTo(dst);
         return;

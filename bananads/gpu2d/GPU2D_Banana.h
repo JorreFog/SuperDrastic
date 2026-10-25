@@ -35,6 +35,7 @@ namespace melonDS
 // bitmaps) and the sprite line's partial clears. Off: the portable code they replace. The same pixels either way.
 extern bool Banana2DFast;
 extern bool Banana3DShare;
+extern bool BananaHiresShown;  // render.2d_hires_shown: unit A's 2x quarters 1-3 composited only when its display mode shows them (BananaRenderer2D)
 extern bool BananaCapNeedA;  // render.cap_unit_a: unit A drawn on the emulator's thread only while display capture reads its 2D output (BananaRenderer)
 extern bool Banana3DWait2D;  // render.3d_wait2d: the 2D thread, not the emulator's, waits for the 3D rows (BananaRenderer)  // render.3d_share: 2D jobs point at Gengis's rows of the 3D frame (BananaRenderer)
 

@@ -615,6 +615,8 @@ bool Emu::load_rom(const std::string& path) {
     // render.cap_unit_a: unit A goes onto the emulator's thread for display capture only when the capture reads unit A's
     // 2D line (source A = the graphics screen); a capture of the 3D layer or of VRAM/main memory alone leaves it on the 2D thread (on)
     melonDS::BananaCapNeedA = cfg_.flag("render.cap_unit_a", true);
+    // render.2d_hires_shown: at 2x, unit A's quarters 1-3 composited only on lines whose display mode shows unit A (on)
+    melonDS::BananaHiresShown = cfg_.flag("render.2d_hires_shown", true);
 #else
     const bool banana2d = false;
 #endif
