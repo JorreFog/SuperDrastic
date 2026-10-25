@@ -1,4 +1,4 @@
-From a61df12c13ef0bb7d7d0d5233b09d3fc2acfe585 Mon Sep 17 00:00:00 2001
+From 7cdead007efc11e27164baf60075a6fffc3bd658 Mon Sep 17 00:00:00 2001
 From: BananaDS <bananads@localhost>
 Date: Sun, 25 Oct 2026 12:31:18 +0100
 Subject: [PATCH] DMA: block paths for a display capture's read-back (VRAM to
@@ -6,20 +6,20 @@ Subject: [PATCH] DMA: block paths for a display capture's read-back (VRAM to
 
 The DMA of LCDC VRAM up into main RAM (a game reading a display capture back,
 Golden Sun: Dark Dawn's flyover every frame) took Run9Full's unit-by-unit path
-(UnitTimings9_32, ARM9Read32, FastWrite9 per word). Now, for a page with one
-bank: the MRAM write burst table's units timed as UnitTimings9_32 does, the
-capture's read sync once for the page (a read marks it synced, so the words
-after it take no sync either), the words copied as FastWrite9 writes main RAM.
-0018's main RAM -> VRAM block path also takes a page with a display capture
-in it: WriteVRAMDirect's sync once for the first word (it clears the capture's
-flags, so the words after it take none). MELONDS_DMACAPBLOCK=0: both off.
+(UnitTimings9_32, ARM9Read32, FastWrite9 per word). With MELONDS_DMACAPBLOCK=1,
+for a page with one bank: the MRAM write burst table's units timed as
+UnitTimings9_32 does, the capture's read sync once for the page (a read marks
+it synced, so the words after it take no sync either), the words copied as
+FastWrite9 writes main RAM. 0018's main RAM -> VRAM block path also takes a
+page with a display capture in it: WriteVRAMDirect's sync once for the first
+word (it clears the capture's flags). Off by default: not difftested yet.
 ---
  src/DMA.cpp | 53 +++++++++++++++++++++++++++++++++++++++++++++++++++++
  src/GPU.h   | 30 +++++++++++++++++++++++++++++-
  2 files changed, 82 insertions(+), 1 deletion(-)
 
 diff --git a/src/DMA.cpp b/src/DMA.cpp
-index a536448..5d0543b 100644
+index a536448..1196c0b 100644
 --- a/src/DMA.cpp
 +++ b/src/DMA.cpp
 @@ -1033,7 +1033,60 @@ __attribute__((noinline)) void DMA::Run9Full()
@@ -27,7 +27,7 @@ index a536448..5d0543b 100644
                  }
                  else
 +                {
-+                    // the block path for the other direction (patch 0092, MELONDS_DMACAPBLOCK, default on): VRAM going
++                    // the block path for the other direction (patch 0092, MELONDS_DMACAPBLOCK=1, default off until difftested): VRAM going
 +                    // up (one bank at the page, e.g. a display capture read back from LCDC VRAM) into main RAM going
 +                    // up: UnitTimings9_32's MRAM write burst table, chosen by the source page's timings, for the
 +                    // units up to the source page's end, the count's end or the one whose timing reaches ARM9Target
@@ -84,7 +84,7 @@ index a536448..5d0543b 100644
                  burststart = false;
  
 diff --git a/src/GPU.h b/src/GPU.h
-index 1898934..4a14023 100644
+index 1898934..8eaf0d2 100644
 --- a/src/GPU.h
 +++ b/src/GPU.h
 @@ -20,6 +20,7 @@
@@ -132,7 +132,7 @@ index 1898934..4a14023 100644
 +    }
 +    static bool DMACapBlockOn() noexcept
 +    {
-+        static const bool v = [] { const char* e = getenv("MELONDS_DMACAPBLOCK"); return !e || *e != '0'; }();
++        static const bool v = [] { const char* e = getenv("MELONDS_DMACAPBLOCK"); return e && *e == '1'; }();  // (off by default: not difftested)
 +        return v;
 +    }
 +
