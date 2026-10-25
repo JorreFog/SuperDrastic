@@ -275,7 +275,9 @@ void BananaRenderer2D::UseCopies(CopyFn copy, void* ctx)
         return;
     }
     u32 bgsize = BGVRAMMask + 1, objsize = OBJVRAMMask + 1;
-    CopyMem.reset(new u8[bgsize + objsize + ExtBGSize + ExtOBJSize + PalSize]);
+    CopyMemSize = bgsize + objsize + ExtBGSize + ExtOBJSize + PalSize;
+    CopyMem.reset(new u8[CopyMemSize]);
+    CacheEpoch++;
     u8* p = CopyMem.get();
     BGVRAM = p; p += bgsize;
     OBJVRAM = p; p += objsize;
@@ -340,6 +342,7 @@ BananaRenderer2D::~BananaRenderer2D()
 
 void BananaRenderer2D::Reset()
 {
+    CacheEpoch++;
     memset(BGLineBuf, 0, sizeof(BGLineBuf));
     memset(OBJLine, 0, sizeof(OBJLine));
     memset(OBJTransAttr, 0, sizeof(OBJTransAttr));
@@ -2730,11 +2733,34 @@ void BananaRenderer2D::PrepareScanline(Banana2DRegs& regs)
     }
 }
 
-void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d, const u32* const* q3d)
+// render.2d_skip: what DrawScanlineFrom leaves behind besides its line, for a line whose picture is known (the same
+// registers and memory as when it was last drawn): the registers, and the palettes' conversions and invalidations
+void BananaRenderer2D::ScanlineState(const Banana2DRegs& regs)
+{
+    if (&regs != &R) R = regs;
+    HiLines = 1;
+    if (!R.Enabled || R.ForcedBlank)
+        return;
+    if (R.BGExtChanged) BGExtPalValid = 0;
+    if (R.OBJExtChanged) ObjExtValid = false;
+    if (R.PalBG || R.PalOBJ)
+        UpdatePalettes(R.PalBG, R.PalOBJ, R.PalBGStale);
+}
+
+bool BananaRenderer2D::InCopies(const void* p) const
+{
+    const u8* b = (const u8*)p;
+    if (b >= (const u8*)OAMCopy && b < (const u8*)OAMCopy + sizeof(OAMCopy))
+        return true;
+    return CopyMem && b >= CopyMem.get() && b < CopyMem.get() + CopyMemSize;
+}
+
+void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d, const u32* const* q3d,
+                                        u32* dstOverride)
 {
     if (&regs != &R) R = regs;
     Line3D = line3d;
-    u32* dst = Parent.Output2D[GPU2D.Num];
+    u32* dst = dstOverride ? dstOverride : Parent.Output2D[GPU2D.Num];
     HiLines = 1;
 
     if (!R.Enabled)
