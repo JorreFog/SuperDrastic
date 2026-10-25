@@ -613,8 +613,8 @@ bool Emu::load_rom(const std::string& path) {
     // render.3d_wait2d: with render.3d_share, the 2D thread waits for the 3D rows, not the emulator's thread (on)
     melonDS::Banana3DWait2D = cfg_.flag("render.3d_wait2d", true);
     // render.cap_unit_a: unit A goes onto the emulator's thread for display capture only when the capture reads unit A's
-    // 2D line (source A = the graphics screen); a capture of the 3D layer or of VRAM/main memory alone leaves it on the 2D thread (on)
-    melonDS::BananaCapNeedA = cfg_.flag("render.cap_unit_a", true);
+    // 2D line (source A = the graphics screen); a capture of the 3D layer or of VRAM/main memory alone leaves it on the 2D thread (off by default: no game measured that captures that way)
+    melonDS::BananaCapNeedA = cfg_.flag("render.cap_unit_a", false);
     // render.2d_hires_shown: at 2x, unit A's quarters 1-3 composited only on lines whose display mode shows unit A (on)
     melonDS::BananaHiresShown = cfg_.flag("render.2d_hires_shown", true);
 #else
