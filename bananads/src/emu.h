@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "ARCodeFile.h"
+#include "Args.h"
+#include "NDSCart/CartCommon.h"
 #include "config.h"
 #include "mic.h"
 #include "prof.h"
@@ -41,6 +43,10 @@ public:
     void shutdown();
 
     bool load_rom(const std::string& path);  // also loads its save; false with a logged reason
+    bool is_dsi() const { return dsi_; }  // the game runs on a DSi (console = auto picks it for DSi-only games)
+    // a message for the player, shown on the panels when the game starts (the frontend takes it once): what's missing
+    void notice(const char* line1, const char* line2);
+    bool take_notice(std::string& line1, std::string& line2);
     void run_frame();                          // one DS frame (~1/59.83 s)
     // the game's own frames: its 3D buffer swaps so far (a game that can't finish a frame in one DS frame swaps
     // every other one or less, as on a DS, while the emulator still runs 60 DS frames a second); any thread
@@ -119,6 +125,20 @@ private:
     void flush_save(bool now);
     void setup_slice();
     void set_clock();
+    std::unique_ptr<melonDS::NDS> make_dsi(melonDS::NDSArgs&& args);
+    std::optional<melonDS::DSi_NAND::NANDImage> setup_nand(const std::array<uint8_t, 0x10000>& arm7i);
+    void check_secure_area();
+    void export_dsi_saves();
+    const melonDS::NDSCart::CartCommon* dsi_cart_ = nullptr;  // (the game's, while make_dsi runs)
+    bool dsi_nand_ = false;  // the NAND's working copy is in
+    uint32_t dsi_title_cat_ = 0, dsi_title_id_ = 0;
+    bool dsi_ = false;       // a DSi, not a DS
+    bool dsi_bios_ = false;  // the DSi's own BIOS images, not the free ones
+    bool key1_ = false;      // the free BIOS got the secure area's key from a DS bios7.bin
+    bool secure_missing_ = false;
+    std::vector<uint8_t> cia_tmd_;  // a .cia's title metadata (3DS format), for a NAND import
+    std::mutex notice_mu_;
+    std::string notice1_, notice2_;
 
     std::atomic<double> skew_req_{1.0};
     std::atomic<long> swaps3d_{0};

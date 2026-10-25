@@ -1536,6 +1536,10 @@ int run_kms(Emu& emu, const Config& cfg) {
         g_cheat_emu = &emu;
         if (g_cheats.enabled()) emu.set_cheats(g_cheats.list());
         bmenu_session_start();
+        {   // what the emulator found missing at the start (a DSi game's BIOS file...): on the top panel for a while
+            std::string n1, n2;
+            if (emu.take_notice(n1, n2)) bmenu_popup(n1.c_str(), n2.c_str(), 15000);
+        }
         start_mark("cheats");
     }
     {  // RetroAchievements (ra.c): the account from BANANADS_RA_USER/PASSWORD, melonDS's memory read directly
