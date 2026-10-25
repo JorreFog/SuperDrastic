@@ -132,6 +132,8 @@ extern "C" {
 int shader_init(int fd, const char* name);
 int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 int shader_viewport(int* v, int pw, int ph);
+extern int shader_fast;
+extern int clear_first;
 void dsflip_log(const char* fmt, ...) {
     char b[512];
     va_list ap;
@@ -802,6 +804,7 @@ struct Display {
     // refresh: frames missed their vblank), and put back at the end
     std::string gpu_dir;
     std::string gpu_min_was;
+    long gpu_floor_mhz = 600;
     long long shader_us = 0, shader_max_us = 0;
     long shader_n = 0;
     void gpu_floor(bool on) {
@@ -821,8 +824,8 @@ struct Display {
             std::vector<long> fr;
             for (long v; a >> v;) fr.push_back(v);
             std::sort(fr.begin(), fr.end());
-            long want = 0;  // 600 MHz, or the highest under it
-            for (long v : fr) if (v <= 600000000) want = v;
+            long want = 0;  // kms.gpu_floor_mhz (600), or the highest under it
+            for (long v : fr) if (v <= gpu_floor_mhz * 1000000L) want = v;
             if (want) std::ofstream(gpu_dir + "/min_freq") << want;
             Log(LogLevel::Info, "[kms] GPU at least %ld MHz while the shader runs\n", want / 1000000);
         } else if (!gpu_dir.empty() && !gpu_min_was.empty()) {
@@ -1421,6 +1424,11 @@ int run_kms(Emu& emu, const Config& cfg) {
     {
         const std::string sh = cfg.str("kms.shader", "none");
         if (sh != "none" && sh != "bilinear" && !sh.empty()) dp.shader_name = sh;
+        // kms.shader_fast (on): a shader's faster built-in twin (ds-grid-2x at 4x), used once it drew a test picture
+        // the same, byte for byte (shader.c)
+        shader_fast = cfg.flag("kms.shader_fast", true) ? 1 : 0;
+        dp.gpu_floor_mhz = cfg.num("kms.gpu_floor_mhz", 600);
+        clear_first = cfg.flag("kms.shader_clear", true) ? 1 : 0;
     }
     dp.direct = dp.packed() && emu.draw_into(dp.map(0, 1), dp.map(1, 1));  // (each frame is given its own slot)
     // render.2d_lazy (on): drawing straight into the slots, the 2D thread may finish a frame while the emulator runs the
