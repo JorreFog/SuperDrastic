@@ -5,7 +5,8 @@
 // watches the volume keys' evdev device and, after a press, follows audio.volume for a second and shows it in the
 // overlay (ui.c) as the setting changes. The value shown is ROCKNIX's own, so it matches the menus' indicator.
 // BananaLinux has no system.cfg: its bananad changes the volume and writes the new level to /run/banana/osd
-// ("volume <percent>", the file BananaOS's menu and BananaDS show it from); that is followed instead.
+// ("volume <percent>", the file BananaOS's menu and BananaDS show it from); that is followed instead, and so is its
+// "brightness <percent>" (F + volume: both panels' backlights), shown with a sun.
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
@@ -20,7 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 
-void ui_volume(int pct);
+void ui_level(int brightness, int pct);
 void dsflip_log(const char *fmt, ...);
 
 #define CFG "/storage/.config/system/configs/system.cfg"
@@ -52,13 +53,16 @@ static long long wall_ms(void) { struct timespec t; clock_gettime(CLOCK_REALTIME
 
 /* the level, -1 while unknown; on BananaLinux only one bananad wrote after `since` (wall ms: the press), so the level
  * from an earlier press isn't shown first */
-static int read_volume(long long since) {
+static int read_volume(long long since, int *bright) {
+    *bright = 0;
     struct stat st;
     if (!stat(BANANA_OSD, &st)) {
         if (st.st_mtim.tv_sec * 1000LL + st.st_mtim.tv_nsec / 1000000 < since) return -1;
         FILE *f = fopen(BANANA_OSD, "r"); if (!f) return -1;
         char what[32]; int v = -1;
-        if (fscanf(f, "%31s %d", what, &v) != 2 || strcmp(what, "volume")) v = -1;     /* (F + volume: brightness) */
+        if (fscanf(f, "%31s %d", what, &v) != 2) v = -1;
+        else if (!strcmp(what, "brightness")) *bright = 1;                              /* F + volume */
+        else if (strcmp(what, "volume")) v = -1;
         fclose(f);
         return v > 100 ? 100 : v;
     }
@@ -74,7 +78,7 @@ static void *vol_thread(void *a) {
     (void)a;
     char name[64] = "";
     int fd = -1;
-    long long until = 0, next = 0, pressed = 0; int shown = -1;
+    long long until = 0, next = 0, pressed = 0; int shown = -1, shown_b = -1;
     for (;;) {
         if (fd < 0) {
             fd = open_dev(name, sizeof name);
@@ -92,13 +96,13 @@ static void *vol_thread(void *a) {
             for (ssize_t k = 0; k < n / (ssize_t)sizeof *ev; k++)
                 if (ev[k].type == EV_KEY && (ev[k].code == KEY_VOLUMEUP || ev[k].code == KEY_VOLUMEDOWN)) {
                     long long t = now_ms();
-                    if (!until) { shown = -1; next = t; pressed = wall_ms() - 100; }   /* a new press: show at once, then follow */
+                    if (!until) { shown = -1; shown_b = -1; next = t; pressed = wall_ms() - 100; }   /* a new press: show at once, then follow */
                     until = t + FOLLOW_MS;
                 }
         }
         if (until && now_ms() >= next) {
-            int v = read_volume(pressed);
-            if (v >= 0 && v != shown) { shown = v; ui_volume(v); }
+            int b, v = read_volume(pressed, &b);
+            if (v >= 0 && (v != shown || b != shown_b)) { shown = v; shown_b = b; ui_level(b, v); }
             next += POLL_MS;
             if (now_ms() >= until) until = 0;
         }
