@@ -57,11 +57,15 @@ using melonDS::Platform::LogLevel;
 namespace bananads {
 
 #ifndef BANANADS_PROF
+void prof_target_this_thread() {}
 std::unique_ptr<Profiler> Profiler::create(const Config& cfg) {
     if (cfg.num("prof.hz", 0) > 0) Log(LogLevel::Warn, "[prof] prof.hz: only in Linux aarch64/x86-64 builds\n");
     return nullptr;
 }
 #else
+
+// prof.thread=present: the presenter's tid (prof_target), sampled instead of the emulator's thread
+static std::atomic<long> g_target_tid{0};
 
 namespace {
 
@@ -368,6 +372,7 @@ private:
         sigemptyset(&sa.sa_mask);
         sigaction(SIGPROF, &sa, nullptr);
         tid_ = (long)syscall(SYS_gettid);
+        if (const long t = g_target_tid.load()) tid_ = t;
         cpu0_ = cpu_last_ = now_s(CLOCK_THREAD_CPUTIME_ID);
         wall0_ = wall_last_ = now_s(CLOCK_MONOTONIC);
         first_frame_ = last_frame_ = n;
@@ -684,6 +689,8 @@ private:
 };
 
 }  // namespace
+
+void prof_target_this_thread() { g_target_tid = (long)syscall(SYS_gettid); }
 
 std::unique_ptr<Profiler> Profiler::create(const Config& cfg) {
     if (cfg.num("prof.hz", 0) <= 0) return nullptr;

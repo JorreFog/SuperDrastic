@@ -71,6 +71,7 @@
 #include "cheats.h"
 #include "screenshot.h"
 #include "menu.h"
+#include "prof.h"
 #include "ra.h"
 
 using melonDS::Platform::Log;
@@ -1548,6 +1549,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         start_mark("ra init");
     }
 
+    if (cfg.str("prof.thread", "emu") == "present") prof_target_this_thread();   // (this thread presents)
     std::thread emu_thread([&] {
         pthread_setname_np(pthread_self(), "bds-emu");
         // sched.emu_nice: this thread's nice value (negative = ahead of the 2D thread, Gengis's workers and the rest
