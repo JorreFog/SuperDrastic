@@ -62,6 +62,10 @@ static double tail_limit = 1.4;
 static std::string sum_cfg = "auto";
 static double sum_limit = 0, sum_hi = 0;
 static const double SUM_EDGE = 3.7;
+// the kernel's thermal cap (the cpufreq cooling device; the RG DS Plus trips at 70 C, at 4x within a minute): a late
+// frame while it holds the CPU below the clock cpugov set is the heat's, not that clock's: no strike, no ban, nothing
+// remembered (a strike stays in the game's memory for up to a week)
+static std::string cool_state;
 static long tail_from = 0;  // frames before this one are the previous clock's  // cpugov.window_ms (the tests')
 static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5, REPEAT_BUSY = 0.5;
 // Ahead of a late frame: the busiest thread this busy for EDGE_WINDOWS windows in a row is a step up (and a ban of the
@@ -230,6 +234,15 @@ static void gov_loop() {
         now_ns = n.tv_sec * 1000000000LL + n.tv_nsec;
     }
     mem_load(feed_->scale);
+    if (DIR* d = opendir("/sys/class/thermal")) {
+        while (dirent* e = readdir(d)) {
+            if (strncmp(e->d_name, "cooling_device", 14)) continue;
+            const std::string c = std::string("/sys/class/thermal/") + e->d_name;
+            if (rd_str((c + "/type").c_str()).rfind("cpufreq-cpu", 0) == 0) cool_state = c + "/cur_state";
+        }
+        closedir(d);
+    }
+    bool hot_said = false;
     sum_limit = sum_cfg == "auto" ? (feed_->scale >= 3 ? 3.3 : 0) : atof(sum_cfg.c_str());
     if (sum_limit > 0) Log(LogLevel::Info, "[cpugov] sum limit: down a step only while all threads' load fits %.1f cores there\n", sum_limit);
     while (gov_run) {
@@ -314,6 +327,9 @@ static void gov_loop() {
         const bool running = umax >= IDLE_BUSY;
         const bool slow = fps >= 0 && fps < SLOW_FPS && fps > 5 && (umax > 0.5 || usum > 1.0);
         const int top = soft_max ? hwmax_ : fmax_;
+        const bool hot = !cool_state.empty() && rd_int(cool_state.c_str()) > 0;
+        if (hot && !hot_said) Log(LogLevel::Info, "[cpugov] the CPU is thermally capped (cooling state > 0): late frames don't strike a clock meanwhile\n");
+        hot_said = hot_said || hot;  // (said once: at 4x the cap comes and goes every few seconds)
         const char* why = nullptr;
         int want = cur;
         if (late && !running)
@@ -330,7 +346,7 @@ static void gov_loop() {
             want = step_up(cur);
             if (late >= 3 || (fps >= 0 && fps < 50)) want = step_up(want);
             int c = idx(cur);
-            if (c >= 0 && cur < top) {
+            if (c >= 0 && cur < top && !hot) {
                 bad_until[c] = t + ban_ns(strikes[c]);
                 strikes[c]++;
                 for (int i = 0; i < nf; i++)
