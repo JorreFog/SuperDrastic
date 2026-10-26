@@ -3,7 +3,7 @@ ARMJIT: jit.stats, a debug readout of blocks, exits and links (BananaDS J6)
 MELONDS_JIT_STATS=N: a "[jit] stats" log line every N frames. Off (default): nothing counted, the exit stubs
 are emitted byte for byte as before. The emulation never reads the counters.
 
-diff -ruN a/src/ARM.cpp b/src/ARM.cpp
+diff -ruN '--exclude=.git' a/src/ARM.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARM.cpp
 --- a/src/ARM.cpp
 +++ b/src/ARM.cpp
 @@ -25,6 +25,7 @@
@@ -36,7 +36,7 @@ diff -ruN a/src/ARM.cpp b/src/ARM.cpp
              else
                  NDS.JIT.CompileBlock(this);
  
-diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 @@ -27,6 +27,7 @@
@@ -55,7 +55,7 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
  
      {
          // patch 0007's code generation improvements: MELONDS_JIT_OLDCODEGEN=1 turns all of them off, or one
-@@ -1058,6 +1060,8 @@
+@@ -1055,6 +1057,8 @@
      const u8* resume = nullptr;   // (a self loop's way round after the late check: SLICECHAIN goes on there)
      if (selfLoop)
      {
@@ -64,7 +64,7 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
          LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
          stop = CBNZ(W0);
          ARM64Reg ts = LoopMode && LoopTsReg != INVALID_REG ? LoopTsReg : X16;
-@@ -1144,6 +1148,17 @@
+@@ -1141,6 +1145,17 @@
      SwapCodeRegion();
  }
  
@@ -82,7 +82,7 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
  void Compiler::Gen_ExitStubs(int num)
  {
      // ExitCheck (a BL from an exit with a known target): what ARMv5/ARMv4::Execute's loop does after a block.
-@@ -1213,12 +1228,14 @@
+@@ -1210,12 +1225,14 @@
      if (!OptExitStub)
      {
          ExitCheck[num][0] = ExitCheck[num][1] = GetRXPtr();
@@ -94,10 +94,10 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
          SetJumpTarget(stop);
          SetJumpTarget(late);
 +        Comp_StatInc(num ? JS_ExitCheckLoop7 : JS_ExitCheckLoop9);
-         MOVP2R(X30, (void*)ARM_Ret);
+         MOVP2R(X30, (void*)RetLoop);
          RET();
      }
-@@ -1238,7 +1255,17 @@
+@@ -1235,7 +1252,17 @@
              ExitCheckPC[num][c] = GetRXPtr();
              LDR(INDEX_UNSIGNED, W0, X30, 4);
              STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
@@ -116,7 +116,7 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
              FixupBranch stop, late;
              checks(stop, late);
              if (c)
-@@ -1255,6 +1282,7 @@
+@@ -1252,6 +1279,7 @@
                  SetJumpTarget(out);
              }
              SetJumpTarget(stop);
@@ -124,7 +124,7 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
              retToLoop();
          }
          if (chain)
-@@ -1286,6 +1314,7 @@
+@@ -1283,6 +1311,7 @@
      for (int c = 1; c >= (OptExitStub ? 0 : 1); c--)
      {
          (a ? DynExitA : DynExit)[num][c] = GetRXPtr();
@@ -132,15 +132,15 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
          FixupBranch stop, late;
          checks(stop, late);
          const u8* resume = (const u8*)GetRXPtr();
-@@ -1357,6 +1386,7 @@
+@@ -1354,6 +1383,7 @@
          SetJumpTarget(stop);
          SetJumpTarget(outside);
          SetJumpTarget(miss);
 +        Comp_StatInc(num ? JS_DynExitLoop7 : JS_DynExitLoop9);
-         QuickTailCall(X16, ARM_Ret);
+         QuickTailCall(X16, RetLoop);
          if (lit)
          {
-@@ -1489,6 +1519,7 @@
+@@ -1634,6 +1664,7 @@
      *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
      NDS.JIT.JitEnableExecute();
      FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
@@ -148,7 +148,7 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
      LinkedTo[(u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
  }
  
-@@ -1515,6 +1546,7 @@
+@@ -1660,6 +1691,7 @@
      u8* slot = (u8*)(uintptr_t)melonds_jit_link[0];
      ARM* from = (ARM*)(uintptr_t)melonds_jit_link[1];
      melonds_jit_link[0] = 0;
@@ -156,7 +156,7 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.
      if (from == cpu)
          cpu->NDS.JIT.JITCompiler.Link(slot, cpu, entry);
  }
-diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.h /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_A64/ARMJIT_Compiler.h
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.h
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
 @@ -246,6 +246,7 @@
@@ -167,7 +167,7 @@ diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
      // [num][1]: the stubs store the CPSR before going on into the next block; [num][0] (OptExitStub, for exits
      // whose block left RCPSR as it is in memory) don't
      void* ExitCheck[2][2] = {};
-diff -ruN a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+diff -ruN '--exclude=.git' a/src/ARMJIT.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT.cpp
 --- a/src/ARMJIT.cpp
 +++ b/src/ARMJIT.cpp
 @@ -23,6 +23,7 @@
@@ -220,7 +220,7 @@ diff -ruN a/src/ARMJIT.cpp b/src/ARMJIT.cpp
      NewBlocks.clear();  // (patch 0091: every block goes)
      HotRangeIdx.clear();  // (patch 0018: the ranges are emptied below)
      // (the hot granules stay: they're the game's habit, not the cache's)
-diff -ruN a/src/ARMJIT_Stats.cpp b/src/ARMJIT_Stats.cpp
+diff -ruN '--exclude=.git' a/src/ARMJIT_Stats.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_Stats.cpp
 --- a/src/ARMJIT_Stats.cpp
 +++ b/src/ARMJIT_Stats.cpp
 @@ -0,0 +1,57 @@
@@ -281,7 +281,7 @@ diff -ruN a/src/ARMJIT_Stats.cpp b/src/ARMJIT_Stats.cpp
 +}
 +
 +}
-diff -ruN a/src/ARMJIT_Stats.h b/src/ARMJIT_Stats.h
+diff -ruN '--exclude=.git' a/src/ARMJIT_Stats.h /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_Stats.h
 --- a/src/ARMJIT_Stats.h
 +++ b/src/ARMJIT_Stats.h
 @@ -0,0 +1,35 @@
@@ -320,7 +320,7 @@ diff -ruN a/src/ARMJIT_Stats.h b/src/ARMJIT_Stats.h
 +}
 +
 +#endif
-diff -ruN a/src/CMakeLists.txt b/src/CMakeLists.txt
+diff -ruN '--exclude=.git' a/src/CMakeLists.txt /home/joar/bdnight/obj/jit-integ/melonds/src/CMakeLists.txt
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -119,6 +119,7 @@
@@ -331,7 +331,7 @@ diff -ruN a/src/CMakeLists.txt b/src/CMakeLists.txt
  
          dolphin/CommonFuncs.cpp)
      
-diff -ruN a/src/NDS.cpp b/src/NDS.cpp
+diff -ruN '--exclude=.git' a/src/NDS.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/NDS.cpp
 --- a/src/NDS.cpp
 +++ b/src/NDS.cpp
 @@ -21,6 +21,7 @@
