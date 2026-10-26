@@ -59,6 +59,10 @@ _Static_assert(sizeof(gx_poly) % 4 == 0, "gx_poly");
 uintptr_t ds_base;
 uint32_t gx_tabs[GX_TABS_N];
 int gx_defer;
+int gx_stats;
+__thread unsigned long gx_px_opa, gx_px_trl, gx_lines;
+int gx_zva;
+int gx_trim = 1;
 /* rast.c's (RAST_STATS: the opaque pixels written, which fused.c counts when it is set) */
 int rast_stats;
 unsigned long st_written, st_covered;
@@ -76,6 +80,10 @@ extern uint32_t gx_tabs[GX_TABS_N];
 uint8_t *gx_sys, *gx_geom;
 
 void gx_init(void) {
+    {   /* dc zva usable with 64-byte blocks (DZP clear, BS = log2 of the block in words = 4)? else gx_zva stays off */
+        uint64_t z; __asm__("mrs %0, dczid_el0" : "=r"(z));
+        if (gx_zva && ((z >> 4) & 1 || (z & 15) != 4)) gx_zva = 0;
+    }
     if (gx_sys) return;
     for (uint32_t i = 1; i < 1024; i++) {
         gx_tabs[i] = (0x3fffffffu + i) / i;
@@ -136,7 +144,8 @@ static gx_t *gx_get(void) {
 
 /* one polygon into the bin's context: hr.c's hr_polygon on its fused path. bin_top/bin_bot: the frame lines the walk
  * covers (the bin and its neighbour lines), lb: the frame line of context line 0 */
-static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer) {
+static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer,
+                       unsigned trim) {
     const unsigned count = p->count, flags = p->flags;
     if (count < 1 || count > 10) return;
     vtx_t *vptr[12];
@@ -168,18 +177,51 @@ static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin
         sp = span + 4 * top_clip;
         walk_markers(sp, (uint32_t)lines, (uint32_t)(bot_clip << 1 | top_clip));
     } else walk_spans(span, lines, 1);
-    const unsigned line0 = (unsigned)((int)y_first - lb);
+    unsigned line0 = (unsigned)((int)y_first - lb);
     if (line0 + (unsigned)lines > GX_CL) return;     /* (cannot happen: the walk is within the window) */
+    /* trim (edge marking off, opaque polygons; gx_render_bin says when): the context lines above and below the bin
+     * are walked as before (the spans' values depend on where the walk starts) but not rasterized. Nothing reads
+     * them then (the resolve and the output take the bin's lines; edge marking, their reader, is off), and an opaque
+     * polygon's pixels in the bin's lines do not depend on its batches (the flat colour is every line's colour, the
+     * white-line shortcut gives the same bits) */
+    int nl = lines;
+    if (trim & 1 && line0 == 0) { sp += 4; line0 = 1; nl--; }
+    if (trim & 2 && line0 + (unsigned)nl == GX_CL) nl--;
+    if (nl <= 0) return;
     uint8_t *rec = (uint8_t *)p->rec;
-    if (defer) defer_poly(&layout_gx, H->ctx, sp, rec, 0, line0, (unsigned)lines, flags, vptr[0]);
-    else f_run(&layout_gx, H->ctx, sp, rec, 0, line0, (unsigned)lines, flags, vptr[0], 0, 0);
+    if (gx_stats) {             /* render.gengis_stats: the span pixels rasterized (the counts: array 9's low halves) */
+        const uint16_t *cnt = (const uint16_t *)(sp + 9 * GX_SPS);
+        unsigned long n = 0;
+        for (int k = 0; k < nl; k++) n += cnt[2 * k];
+        if (flags & GXF_TRANSLUCENT) gx_px_trl += n; else gx_px_opa += n;
+        gx_lines++;
+    }
+    if (defer) defer_poly(&layout_gx, H->ctx, sp, rec, 0, line0, (unsigned)nl, flags, vptr[0]);
+    else f_run(&layout_gx, H->ctx, sp, rec, 0, line0, (unsigned)nl, flags, vptr[0], 0, 0);
 }
+
+/* dc zva: the 64-byte line at p (64-aligned) zeroed in the cache without a read (gx_zva: DCZID_EL0 says 64 bytes) */
+#define GX_ZVA(p) __asm__ volatile("dc zva, %0" : : "r"(p) : "memory")
 
 /* ---- clear: the clear colour, or the rear-plane bitmap ---- */
 static void gx_clear(gx_t *H, const gx_frame *f, int y0) {
     uint32_t *col = (uint32_t *)H->ctx, *att = (uint32_t *)(H->ctx + GX_ATTR);
     if (!(f->d3 & (1u << 14))) {
         const uint32x4_t c = vdupq_n_u32(f->clear_color), a = vdupq_n_u32(f->clear_attr);
+        if (gx_zva) {
+            /* each 64-byte line zeroed by dc zva first (allocated in L1 without reading it from the shared cache
+             * or DRAM: the bin context is far larger than L1, so the plain stores missed on every line), then
+             * written: the same bytes. One buffer after the other (sequential streams) */
+            for (int i = 0; i < GX_CL * GX_W; i += 16) {
+                GX_ZVA(col + i);
+                vst1q_u32(col + i, c); vst1q_u32(col + i + 4, c); vst1q_u32(col + i + 8, c); vst1q_u32(col + i + 12, c);
+            }
+            for (int i = 0; i < GX_CL * GX_W; i += 16) {
+                GX_ZVA(att + i);
+                vst1q_u32(att + i, a); vst1q_u32(att + i + 4, a); vst1q_u32(att + i + 8, a); vst1q_u32(att + i + 12, a);
+            }
+            return;
+        }
         for (int i = 0; i < GX_CL * GX_W; i += 4) { vst1q_u32(col + i, c); vst1q_u32(att + i, a); }
         return;
     }
@@ -249,20 +291,35 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     U64(H->ctx, GX_HDR + 0x18) = ~0ull;                             /* the shadow line mask: all lines clean */
     const int defer = gx_defer;
     const unsigned nopa = f->npolys - f->ntranslucent;
+    const uint32_t *yr = f->yr;                                     /* ytop | ybot << 16: one cache line a 16 polygons */
+    /* the opaque polygons' trim (gx_polygon): with edge marking off, the context line above the bin always (it only
+     * feeds what is below it to the line above), the one below unless a translucent polygon reaches it (its first
+     * pixel's new id there is the id quirk's for the bin's last line, and it depends on that line's depths) */
+    unsigned trim = 0;
+    if (gx_trim && !((f->d3 >> 5) & 1) && !defer) {
+        trim = hy0 ? 1 : 0;
+        const unsigned below = hy0 + GX_BL;                          /* the frame line of the context line below */
+        if (bin_bot == below + 1) {
+            trim |= 2;
+            for (unsigned i = nopa; i < f->npolys; i++)
+                if ((yr[i] >> 16) > below && (yr[i] & 0xffff) <= below) { trim &= ~2u; break; }
+        }
+    }
     for (unsigned i = 0; i < nopa; i++) {
+        const uint32_t y = yr[i];
+        if ((y >> 16) <= bin_top || (y & 0xffff) >= bin_bot) continue;
         const gx_poly *p = &f->polys[i];
-        if (p->ybot <= bin_top || p->ytop >= bin_bot) continue;
         const int d = defer && !((U32(p->rec, 4) >> 4) & 3);       /* modulate-shaded ones are deferred */
         if (defer && !d) defer_flush(&layout_gx, H->ctx);
-        gx_polygon(H, p, bin_top, bin_bot, lb, f->d3, d);
+        gx_polygon(H, p, bin_top, bin_bot, lb, f->d3, d, trim);
     }
     if (defer) defer_flush(&layout_gx, H->ctx);
     if (f->ntranslucent) {
         memset(H->ctx + GX_ID, 0xff, GX_CL * GX_W);
         for (unsigned i = nopa; i < f->npolys; i++) {
-            const gx_poly *p = &f->polys[i];
-            if (p->ybot <= bin_top || p->ytop >= bin_bot) continue;
-            gx_polygon(H, p, bin_top, bin_bot, lb, f->d3, 0);
+            const uint32_t y = yr[i];
+            if ((y >> 16) <= bin_top || (y & 0xffff) >= bin_bot) continue;
+            gx_polygon(H, &f->polys[i], bin_top, bin_bot, lb, f->d3, 0, 0);
         }
     }
     const uint32_t *res = gx_resolve(H, f);
@@ -275,11 +332,21 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     for (int l = 0; l < GX_BL; l++) {
         const uint32_t *r = res + l * GX_W;
         uint32_t *e = out + l * GX_W, *o = e + GX_W / 2;
-        for (int i = 0; i < GX_W; i += 8) {
-            const uint32x4x2_t v = vld2q_u32(r + i);
-            vst1q_u32(e + i / 2, vandq_u32(v.val[0], m));
-            vst1q_u32(o + i / 2, vandq_u32(v.val[1], m));
-        }
+        if (gx_zva)         /* (out's rows are 64-byte aligned: OutBuf; gx_clear says why) */
+            for (int i = 0; i < GX_W; i += 32) {
+                GX_ZVA(e + i / 2); GX_ZVA(o + i / 2);
+                for (int j = i; j < i + 32; j += 8) {
+                    const uint32x4x2_t v = vld2q_u32(r + j);
+                    vst1q_u32(e + j / 2, vandq_u32(v.val[0], m));
+                    vst1q_u32(o + j / 2, vandq_u32(v.val[1], m));
+                }
+            }
+        else
+            for (int i = 0; i < GX_W; i += 8) {
+                const uint32x4x2_t v = vld2q_u32(r + i);
+                vst1q_u32(e + i / 2, vandq_u32(v.val[0], m));
+                vst1q_u32(o + i / 2, vandq_u32(v.val[1], m));
+            }
     }
 #endif
 }

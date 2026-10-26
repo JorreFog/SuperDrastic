@@ -3,7 +3,9 @@
 #include "gengis_renderer.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
+#include <time.h>
 
 #include "GPU.h"
 #include "NDS.h"
@@ -13,8 +15,22 @@ using namespace melonDS;
 
 namespace bananads {
 
+static inline uint64_t ThreadNs() {
+    timespec t;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
+    return (uint64_t)t.tv_sec * 1000000000u + (uint64_t)t.tv_nsec;
+}
+static inline uint64_t MonoNs() {
+    timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (uint64_t)t.tv_sec * 1000000000u + (uint64_t)t.tv_nsec;
+}
+
 GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defer, int scale)
     : Renderer3D(gpu3D), Scale_(scale == 2 ? 2 : 1) {
+    gx_zva = Zva;
+    gx_stats = Stats != 0;
+    gx_trim = Trim;
     gx_init();
     gx_defer = defer;
     memset(OutBuf, 0, sizeof OutBuf);
@@ -41,12 +57,28 @@ void GengisRenderer3D::Reset() {
     WaitAll();
     Textures.clear();
     memset(OutBuf, 0, sizeof OutBuf);
+    for (auto& k : BinKey) k.clear();
 }
 
 // ---- textures: decoded once into the rasterizer's formats (u32 r6 | g6 << 8 | b6 << 16 | a5 << 24, or u8 indices
 // into a u32 palette), kept until texture or palette VRAM changes ----
 
 static uint32_t Texel(uint16_t c, uint32_t a) { return gx_expand555(c) | a << 24; }
+
+// the blocks of [start, start + len) (wrapping at the VRAM's size: the accessors mask the address) into a bitmap of
+// nblk 512-byte blocks
+static void MarkRange(uint64_t* bits, uint32_t nblk, uint32_t start, uint32_t len) {
+    if (!len) return;
+    const uint32_t b0 = start >> 9, b1 = (start + len - 1) >> 9;
+    if (b1 - b0 + 1 >= nblk) {
+        for (uint32_t i = 0; i < nblk / 64; i++) bits[i] = ~0ull;
+        return;
+    }
+    for (uint32_t b = b0; b <= b1; b++) {
+        const uint32_t k = b & (nblk - 1);
+        bits[k >> 6] |= 1ull << (k & 63);
+    }
+}
 
 void GengisRenderer3D::Decode(Texture& tx, uint32_t texparam, uint32_t texpal) {
     const u8* vram = GPU.VRAMFlat_Texture;
@@ -57,6 +89,23 @@ void GengisRenderer3D::Decode(Texture& tx, uint32_t texparam, uint32_t texpal) {
     const uint32_t addr = (texparam & 0xFFFF) << 3;
     const uint32_t w = 8u << ((texparam >> 20) & 7), h = 8u << ((texparam >> 23) & 7), n = w * h;
     const uint32_t fmt = (texparam >> 26) & 7, alpha0 = (texparam & (1u << 29)) ? 0 : 31;
+    // what the decode reads (byte() and half() mask with 0x7FFFF, col() with 0x1FFFF): the formats' texel bytes
+    // and palette entries; the 4x4 compressed format's slot-1 words and palette entries are marked as read
+    switch (fmt) {
+    case 1: case 4: case 6: MarkRange(tx.texblk, 1024, addr, n); break;
+    case 2: MarkRange(tx.texblk, 1024, addr, n >> 2); break;
+    case 3: MarkRange(tx.texblk, 1024, addr, n >> 1); break;
+    case 7: MarkRange(tx.texblk, 1024, addr, n << 1); break;
+    default: break;
+    }
+    switch (fmt) {
+    case 1: MarkRange(tx.palblk, 256, (texpal << 4) & 0x1FFFF, 64); break;
+    case 2: MarkRange(tx.palblk, 256, (texpal << 3) & 0x1FFFF, 8); break;
+    case 3: MarkRange(tx.palblk, 256, (texpal << 4) & 0x1FFFF, 32); break;
+    case 4: MarkRange(tx.palblk, 256, (texpal << 4) & 0x1FFFF, 512); break;
+    case 6: MarkRange(tx.palblk, 256, (texpal << 4) & 0x1FFFF, 16); break;
+    default: break;
+    }
     gx_texture& t = tx.t;
     t.params = texparam;
     t.width = (uint16_t)w;
@@ -118,6 +167,13 @@ void GengisRenderer3D::Decode(Texture& tx, uint32_t texparam, uint32_t texpal) {
                 const uint32_t val = (va >= 0x20000 && va < 0x40000) ? 0 : (byte(va) >> (2 * (x & 3))) & 3;
                 const uint16_t info = half(slot1);
                 const uint32_t po = pbase + ((info & 0x3FFF) << 2), mode = info >> 14;
+                {   // (all the reads below: va's byte, slot1's half, palette entries po..po + 7 masked)
+                    const uint32_t vb = va >> 9, sb = (slot1 & 0x7FFFE) >> 9, pb0 = (po & 0x1FFFF) >> 9, pb1 = ((po + 7) & 0x1FFFF) >> 9;
+                    tx.texblk[vb >> 6] |= 1ull << (vb & 63);
+                    tx.texblk[sb >> 6] |= 1ull << (sb & 63);
+                    tx.palblk[pb0 >> 6] |= 1ull << (pb0 & 63);
+                    tx.palblk[pb1 >> 6] |= 1ull << (pb1 & 63);
+                }
                 uint16_t c = 0;
                 uint32_t a = 31;
                 switch (val) {
@@ -147,9 +203,26 @@ const gx_texture* GengisRenderer3D::GetTexture(uint32_t texparam, uint32_t texpa
     auto& e = Textures[key];
     if (!e) {
         e = std::make_unique<Texture>();
+        const uint64_t d0 = Stats ? ThreadNs() : 0;
         Decode(*e, texparam, texpal);
+        const uint64_t serial = ++TexSerial;  // (render.gengis_reuse: this decode's identity, in the unused +8)
+        memcpy(e->t.pad0, &serial, sizeof serial);
+        if (Stats) { StDecNs += ThreadNs() - d0; StDecoded++; StDecTexels += (uint64_t)e->t.width * e->t.height; }
     }
     return &e->t;
+}
+
+// texture or palette VRAM changed (melonDS's flat copies: only their dirty blocks were copied): the entries that read
+// a dirty block are decoded again when next used, the others are as they were
+void GengisRenderer3D::InvalidateTextures(const uint64_t* texdirty, const uint64_t* paldirty, bool tex, bool pal) {
+    for (auto it = Textures.begin(); it != Textures.end();) {
+        const Texture& e = *it->second;
+        uint64_t hit = 0;
+        if (tex) for (int i = 0; i < 1024 / 64; i++) hit |= e.texblk[i] & texdirty[i];
+        if (pal) for (int i = 0; i < 256 / 64; i++) hit |= e.palblk[i] & paldirty[i];
+        if (hit) it = Textures.erase(it);
+        else ++it;
+    }
 }
 
 // ---- melonDS's polygons as the rasterizer's ----
@@ -226,9 +299,13 @@ void GengisRenderer3D::Convert() {
         (p->Translucent ? trl : Polys).push_back(g);
     }
     Frame.ntranslucent = (unsigned)trl.size();
+    if (Stats) { StOpa += Polys.size(); StTrl += trl.size(); }
     Polys.insert(Polys.end(), trl.begin(), trl.end());
     Frame.polys = Polys.data();
     Frame.npolys = (unsigned)Polys.size();
+    YRange.resize(Polys.size());
+    for (size_t i = 0; i < Polys.size(); i++) YRange[i] = Polys[i].ytop | (uint32_t)Polys[i].ybot << 16;
+    Frame.yr = YRange.data();
 
     Frame.d3 = d3 & DispMask;	// edge marking (bit 5), fog (bit 7): render.edge_marking, render.fog
     Frame.aref = GPU3D.RenderAlphaRef;
@@ -258,12 +335,57 @@ void GengisRenderer3D::Convert() {
         Frame.toon[32 + i] = (uint8_t)(t >> 8);
         Frame.toon[64 + i] = (uint8_t)(t >> 16);
     }
+    BinKeys();
+}
+
+// render.gengis_reuse: a bin is a pure function of the frame state the rasterizer reads and of the polygons that
+// reach its window (the bin's lines and one above and below), in order, with their textures' contents. Each bin's
+// inputs are kept as bytes (each texture by the serial of its decode: a texture decoded again counts as changed);
+// a bin whose inputs equal the last rendered frame's is copied from that frame's rows (the other buffer, complete:
+// every rendered frame renders or copies all its bins) instead of rendered. Not with the rear-plane bitmap (VRAM
+// the bytes do not cover)
+void GengisRenderer3D::BinKeys() {
+    const unsigned BL = GX_BL * Scale_, H = GX_H * Scale_;
+    uint8_t fs[sizeof(gx_frame)];
+    size_t nfs = 0;
+    auto put = [&](const void* p, size_t n) { memcpy(fs + nfs, p, n); nfs += n; };
+    put(&Frame.d3, 4); put(&Frame.aref, 4); put(&Frame.clear_color, 4); put(&Frame.clear_attr, 4);
+    put(&Frame.rear_x, 1); put(&Frame.rear_y, 1); put(Frame.fog_table, sizeof Frame.fog_table);
+    put(&Frame.fog_color, 4); put(&Frame.fog_offset, 4); put(Frame.edge, sizeof Frame.edge); put(Frame.toon, sizeof Frame.toon);
+    const bool can = Reuse && !(Frame.d3 & (1u << 14)) && LastOut;
+    for (unsigned b = 0; b < GX_NBINS; b++) {
+        const unsigned hy0 = b * BL, top = hy0 ? hy0 - 1 : 0, bot = hy0 + BL + 1 < H ? hy0 + BL + 1 : H;
+        std::vector<uint8_t>& k = NewKey[b];
+        k.assign(fs, fs + nfs);
+        for (unsigned i = 0; i < Frame.npolys; i++) {
+            const gx_poly& p = Polys[i];
+            if (p.ybot <= top || p.ytop >= bot) continue;
+            uint8_t rec[32];
+            memcpy(rec, p.rec, 32);
+            const gx_texture* t;
+            memcpy(&t, rec + 0x10, sizeof t);
+            uint64_t serial = 0;
+            if (t) memcpy(&serial, t->pad0, sizeof serial);
+            memcpy(rec + 0x10, &serial, sizeof serial);
+            k.insert(k.end(), rec, rec + 32);
+            k.insert(k.end(), &p.vtx[0][0], &p.vtx[0][0] + 16 * p.count);
+            k.insert(k.end(), (const uint8_t*)&p.ytop, (const uint8_t*)&p.ytop + 6);   // ytop ybot count flags
+        }
+        BinReuse[b] = can && k == BinKey[b];
+        BinKey[b].swap(k);
+    }
 }
 
 // ---- the bins and the threads ----
 
 int GengisRenderer3D::Help = 1;
 int GengisRenderer3D::Nice = 0;
+int GengisRenderer3D::Stats = 0;
+int GengisRenderer3D::TexInval = 1;
+int GengisRenderer3D::Zva = 1;
+int GengisRenderer3D::Trim = 1;
+int GengisRenderer3D::Reuse = 1;
+
 
 bool GengisRenderer3D::RenderOne(bool emu) {
     const unsigned b = Next.fetch_add(1, std::memory_order_acq_rel);
@@ -273,7 +395,9 @@ bool GengisRenderer3D::RenderOne(bool emu) {
     int expect = 0;
     if (Converted.compare_exchange_strong(expect, 1, std::memory_order_acq_rel)) {
         if (emu) EmuConverts++;
+        const uint64_t c0 = Stats ? ThreadNs() : 0;
         Convert();
+        if (Stats) StConvNs += ThreadNs() - c0;
         gx_begin_frame(&Frame);
         Converted.store(2, std::memory_order_release);
         { std::lock_guard<std::mutex> l(M); }  // (a waiter between its test and its wait sees the notify)
@@ -284,8 +408,24 @@ bool GengisRenderer3D::RenderOne(bool emu) {
         std::unique_lock<std::mutex> l(M);
         ConvDone.wait(l, [&] { return Converted.load(std::memory_order_acquire) == 2; });
     }
-    if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 4);
+    const uint64_t b0 = Stats ? ThreadNs() : 0;
+    if (BinReuse[b]) {  // (render.gengis_reuse: the same inputs as the last rendered frame's bin, BinKeys)
+        const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_;
+        memcpy(Out + b * n, LastOut + b * n, n * sizeof(uint32_t));
+        if (Stats) StReused.fetch_add(1, std::memory_order_relaxed);
+    }
+    else if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 4);
     else gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);
+    if (Stats) {
+        StPxOpa.fetch_add(gx_px_opa, std::memory_order_relaxed); StPxTrl.fetch_add(gx_px_trl, std::memory_order_relaxed);
+        StPolyLines.fetch_add(gx_lines, std::memory_order_relaxed);
+        gx_px_opa = gx_px_trl = gx_lines = 0;
+        const uint64_t t = ThreadNs() - b0;
+        StBinNs.fetch_add(t, std::memory_order_relaxed);
+        uint64_t m = StBinMax.load(std::memory_order_relaxed);
+        while (t > m && !StBinMax.compare_exchange_weak(m, t, std::memory_order_relaxed)) {}
+        if (AllBins.load(std::memory_order_relaxed) % GX_NBINS == GX_NBINS - 1) StLastNs.store(MonoNs(), std::memory_order_relaxed);
+    }
     if (emu) EmuBins++;
     AllBins.fetch_add(1, std::memory_order_relaxed);
     Done[b].store(Frame.gen, std::memory_order_release);
@@ -335,13 +475,23 @@ void GengisRenderer3D::WaitAll() {
 }
 
 void GengisRenderer3D::RenderFrame() {
+    if (Stats) StFrames++;
+    const uint64_t w0 = Stats ? MonoNs() : 0;
     WaitAll();  // the last frame's bins read VRAM and the polygons: done before either changes
+    if (Stats) StWaitNs += MonoNs() - w0;
     auto textureDirty = GPU.VRAMDirty_Texture.DeriveState(GPU.VRAMMap_Texture, GPU);
     auto texPalDirty = GPU.VRAMDirty_TexPal.DeriveState(GPU.VRAMMap_TexPal, GPU);
     const bool textureChanged = GPU.MakeVRAMFlat_TextureCoherent(textureDirty);
     const bool texPalChanged = GPU.MakeVRAMFlat_TexPalCoherent(texPalDirty);
     if (!(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical) return;  // the lines are the last frame's
-    if (textureChanged || texPalChanged) Textures.clear();
+    if (textureChanged || texPalChanged) {
+        if (TexInval) InvalidateTextures(textureDirty.Data, texPalDirty.Data, textureChanged, texPalChanged);
+        else Textures.clear();
+        if (Stats) StClears++;
+    }
+    if (Stats && StRendered && StRendered % Stats == 0) StatsLine();
+    if (Stats) { StRendered++; StStartNs = MonoNs(); }
+    LastOut = Out == OutBuf[0] || Out == OutBuf[1] ? (Gen ? Out : nullptr) : nullptr;  // (render.gengis_reuse)
     Out = Out == OutBuf[0] ? OutBuf[1] : OutBuf[0];  // (the workers see it through Next's store under M)
     Frame.gen = ++Gen;
     if (Gen % 3600 == 0) {  // (render.gengis_help's effect, in the game's log, a line a minute or so)
@@ -358,6 +508,23 @@ void GengisRenderer3D::RenderFrame() {
 }
 
 void GengisRenderer3D::FinishRendering() { WaitAll(); }
+
+// render.gengis_stats=N: a line every N rendered frames, per rendered frame: the bins' CPU time (all threads), the
+// slowest bin, the conversion (polygons + textures) and its texture decoding, the polygons, the textures decoded,
+// and how often texture VRAM changed (the cache cleared); the emulator's thread's wait at the next frame's start
+void GengisRenderer3D::StatsLine() {
+    const double n = (double)Stats;
+    Platform::Log(Platform::LogLevel::Info,
+                  "[gengis-stats] %u rendered of %lu frames: bins %.3f ms/frame (max bin %.3f), convert %.3f ms (decode %.3f ms, "
+                  "%.1f tex %.0f texels), polys %.1f opa %.1f trl, clears %lu, emu wait %.3f ms/frame, d3 %04x, px %.0f opa %.0f trl, %.0f poly-bins, reused %.1f bins\n",
+                  Stats, StFrames, StBinNs.load() / n / 1e6, StBinMax.load() / 1e6, StConvNs / n / 1e6, StDecNs / n / 1e6,
+                  StDecoded / n, StDecTexels / n, StOpa / n, StTrl / n, StClears, StWaitNs / (double)StFrames / 1e6,
+                  (unsigned)Frame.d3, StPxOpa.load() / n, StPxTrl.load() / n, StPolyLines.load() / n, StReused.load() / n);
+    StReused = 0;
+    StPxOpa = 0; StPxTrl = 0; StPolyLines = 0;
+    StBinNs = 0; StBinMax = 0; StConvNs = StDecNs = StDecoded = StDecTexels = StOpa = StTrl = 0;
+    StClears = 0; StWaitNs = 0; StFrames = 0;
+}
 
 u32* GengisRenderer3D::GetLine(int line) { return const_cast<u32*>(GetQuarter(line, 0)); }
 

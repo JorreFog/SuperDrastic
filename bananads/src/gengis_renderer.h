@@ -44,6 +44,11 @@ public:
     // 1 (the default) only once a render thread has converted the frame (its polygons and textures, the long part,
     // kept off the emulator's thread), 0 never (it waits); with no render threads it always does
     static int Help;
+    static int Reuse;  // render.gengis_reuse: a bin with the last rendered frame's inputs is copied (BinKeys)
+    static int Trim;  // render.gengis_trim: opaque polygons skip the bins' context lines when edge marking is off
+    static int Zva;  // render.gengis_zva: dc zva before the clear's and the 2x output's stores (same bytes)
+    static int TexInval;  // render.gengis_texinval: 1 (blocks) drops only the textures whose VRAM changed, 0 all
+    static int Stats;  // render.gengis_stats: a [gengis-stats] line every N rendered frames (0: off)
     static int Nice;  // sched.gengis_nice: the workers' nice value (0: the default)
     unsigned long EmuBins = 0, EmuConverts = 0;  // drawn and converted on the emulator's thread (logged at the end)
     std::atomic<unsigned long> AllBins{0};
@@ -75,6 +80,9 @@ public:
 private:
     struct Texture {
         gx_texture t{};
+        // the 512-byte blocks of texture VRAM (1024) and texture palette VRAM (256) the decode read: the entry stays
+        // valid while none of them is dirty (render.gengis_texinval=blocks)
+        uint64_t texblk[1024 / 64] = {}, palblk[256 / 64] = {};
         std::vector<uint32_t> texels;
         std::vector<uint8_t> idx;
         std::vector<uint32_t> pal;
@@ -86,9 +94,21 @@ private:
     void WaitBin(unsigned bin);
     void WaitAll();
     void Worker();
+    void StatsLine();
+    void BinKeys();
+    std::vector<uint8_t> BinKey[GX_NBINS], NewKey[GX_NBINS];
+    bool BinReuse[GX_NBINS] = {};
+    uint32_t* LastOut = nullptr;  // the last rendered frame's rows (the other buffer)
+    uint64_t TexSerial = 0;
+    std::atomic<uint64_t> StReused{0};
+    void InvalidateTextures(const uint64_t* texdirty, const uint64_t* paldirty, bool tex, bool pal);
+    std::atomic<uint64_t> StBinNs{0}, StBinMax{0}, StLastNs{0}, StPxOpa{0}, StPxTrl{0}, StPolyLines{0};
+    uint64_t StConvNs = 0, StDecNs = 0, StDecoded = 0, StDecTexels = 0, StOpa = 0, StTrl = 0, StWaitNs = 0, StStartNs = 0;
+    unsigned long StClears = 0, StFrames = 0, StRendered = 0;
 
     std::unordered_map<uint64_t, std::unique_ptr<Texture>> Textures;
     std::vector<gx_poly> Polys;
+    std::vector<uint32_t> YRange;  // Frame.yr
     gx_frame Frame{};
     int Scale_;
     // two frames' rows, alternated by each frame rendered: a frame's stay as they are through the next frame's
