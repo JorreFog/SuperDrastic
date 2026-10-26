@@ -1,5 +1,4 @@
-diff --git a/src/ARM.cpp b/src/ARM.cpp
-index 22195ff..99188fa 100644
+diff -ruN '--exclude=.git' a/src/ARM.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARM.cpp
 --- a/src/ARM.cpp
 +++ b/src/ARM.cpp
 @@ -31,6 +31,10 @@
@@ -13,7 +12,7 @@ index 22195ff..99188fa 100644
  using Platform::Log;
  using Platform::LogLevel;
  
-@@ -669,6 +673,9 @@ void ARMv5::Execute()
+@@ -669,6 +673,9 @@
                  ARM_Dispatch(this, block, NDS.JIT.Memory.FastMemStart(0));
              else
                  NDS.JIT.CompileBlock(this);
@@ -23,7 +22,7 @@ index 22195ff..99188fa 100644
  
              if (StopExecution)
              {
-@@ -810,6 +817,9 @@ void ARMv4::Execute()
+@@ -810,6 +817,9 @@
                  ARM_Dispatch(this, block, NDS.JIT.Memory.FastMemStart(1));
              else
                  NDS.JIT.CompileBlock(this);
@@ -33,11 +32,10 @@ index 22195ff..99188fa 100644
  
              if (StopExecution)
              {
-diff --git a/src/ARMJIT_A64/ARMJIT_ALU.cpp b/src/ARMJIT_A64/ARMJIT_ALU.cpp
-index 4b1ca1f..113683b 100644
+diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_ALU.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_A64/ARMJIT_ALU.cpp
 --- a/src/ARMJIT_A64/ARMJIT_ALU.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_ALU.cpp
-@@ -590,7 +590,10 @@ void Compiler::A_Comp_ALUMovOp()
+@@ -590,7 +590,10 @@
      }
  
      if (CurInstr.Info.Branches())
@@ -48,7 +46,7 @@ index 4b1ca1f..113683b 100644
  }
  
  void Compiler::A_Comp_ALUTriOp()
-@@ -613,7 +616,10 @@ void Compiler::A_Comp_ALUTriOp()
+@@ -613,7 +616,10 @@
          Comp_Arithmetic(op, S, rd, rn, op2);
  
      if (CurInstr.Info.Branches())
@@ -59,7 +57,7 @@ index 4b1ca1f..113683b 100644
  }
  
  void Compiler::A_Comp_Clz()
-@@ -961,6 +967,7 @@ void Compiler::T_Comp_ALU_HiReg()
+@@ -961,6 +967,7 @@
  
      if (rd == 15)
      {
@@ -67,11 +65,10 @@ index 4b1ca1f..113683b 100644
          Comp_JumpTo(rdMapped, false, false);
      }
  }
-diff --git a/src/ARMJIT_A64/ARMJIT_Branch.cpp b/src/ARMJIT_A64/ARMJIT_Branch.cpp
-index 37a549d..c5bf145 100644
+diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Branch.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_A64/ARMJIT_Branch.cpp
 --- a/src/ARMJIT_A64/ARMJIT_Branch.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Branch.cpp
-@@ -30,6 +30,7 @@ namespace melonDS
+@@ -30,6 +30,7 @@
  template <typename T>
  void JumpToTrampoline(T* cpu, u32 addr, bool changeCPSR)
  {
@@ -79,7 +76,7 @@ index 37a549d..c5bf145 100644
      cpu->JumpTo(addr, changeCPSR);
  }
  
-@@ -334,6 +335,7 @@ void Compiler::Comp_JumpTo(Arm64Gen::ARM64Reg addr, bool switchThumb, bool resto
+@@ -334,6 +335,7 @@
      KnownCodeValid = false;   // (the run-time jump stores them)
      R15Stored = true;         // (and R15)
  
@@ -87,7 +84,7 @@ index 37a549d..c5bf145 100644
      if (!restoreCPSR)
      {
          if (switchThumb)
-@@ -396,6 +398,7 @@ void Compiler::A_Comp_BranchImm()
+@@ -396,6 +398,7 @@
  void Compiler::A_Comp_BranchXchangeReg()
  {
      ARM64Reg rn = MapReg(CurInstr.A_Reg(0));
@@ -95,7 +92,7 @@ index 37a549d..c5bf145 100644
      MOV(W0, rn);
      if ((CurInstr.Instr & 0xF0) == 0x30) // BLX_reg
          MOVI2R(MapReg(14), R15 - 4);
-@@ -441,6 +444,7 @@ void Compiler::T_Comp_B()
+@@ -441,6 +444,7 @@
  void Compiler::T_Comp_BranchXchangeReg()
  {
      bool link = CurInstr.Instr & (1 << 7);
@@ -103,7 +100,7 @@ index 37a549d..c5bf145 100644
  
      if (link)
      {
-@@ -473,6 +477,7 @@ void Compiler::T_Comp_BL_LONG_2()
+@@ -473,6 +477,7 @@
      s32 offset = (CurInstr.Instr & 0x7FF) << 1;
      ADD(W0, lr, offset);
      MOVI2R(lr, (R15 - 2) | 1);
@@ -111,11 +108,10 @@ index 37a549d..c5bf145 100644
      Comp_JumpTo(W0, Num == 0 && !(CurInstr.Instr & (1 << 12)));
  }
  
-diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-index 2c9e442..7652ba9 100644
+diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-@@ -40,6 +40,20 @@ uint64_t melonds_jit_link[2] = {0, 0};
+@@ -40,6 +40,20 @@
  
  namespace melonDS
  {
@@ -136,7 +132,7 @@ index 2c9e442..7652ba9 100644
  
  /*
  
-@@ -972,6 +986,16 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -971,6 +985,16 @@
      // RCPSR as in memory (nothing in this block changed it: CPSR is in memory at every block's entry) needs no store
      const int c = (OptExitStub && !CPSRDirty) ? 0 : 1;
  
@@ -153,7 +149,7 @@ index 2c9e442..7652ba9 100644
      if (!known && LastJumpViaFunc && OptDynCache)
      {
          // DYNCACHE: the target's key (address | T, in W4) against the one this exit learnt; the same: ExitCheck and
-@@ -988,6 +1012,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -987,6 +1011,7 @@
          }
          CMP(W4, W1);
          FixupBranch miss = B(CC_NEQ);
@@ -161,7 +157,7 @@ index 2c9e442..7652ba9 100644
          BL(ExitCheck[Num][c]);
          u8* slot = GetWriteableRWPtr();
          u8* slotRX = (u8*)GetRXPtr();
-@@ -1005,8 +1030,10 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1004,8 +1029,10 @@
          {
              CMP(W1, 2);
              FixupBranch learn = B(CC_EQ);
@@ -172,7 +168,7 @@ index 2c9e442..7652ba9 100644
              BL(ExitCheck[Num][c]);
              B(learnPath);
          };
-@@ -1346,6 +1373,7 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -1345,6 +1372,7 @@
              for (int i = 0; i < 4; i++)
                  Write32(0xD503201F);
          }
@@ -180,7 +176,7 @@ index 2c9e442..7652ba9 100644
          ADD(X16, X17, W16, ArithOption(W16));   // + the entry's offset (uxtw)
          BR(X16);
          SetJumpTarget(late);
-@@ -1355,8 +1383,22 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -1354,8 +1382,22 @@
              CBNZ(W0, resume);
          }
          SetJumpTarget(stop);
@@ -202,10 +198,10 @@ index 2c9e442..7652ba9 100644
 +            SetJumpTarget(outside);
 +            SetJumpTarget(miss);
 +        }
-         QuickTailCall(X16, ARM_Ret);
+         QuickTailCall(X16, RetLoop);
          if (lit)
          {
-@@ -1471,6 +1513,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+@@ -1618,6 +1660,7 @@
      if (it->second.lit)
      {
          // a DYNCACHE slot: it learns the key of the block it goes to, the one the loop dispatches now
@@ -213,7 +209,7 @@ index 2c9e442..7652ba9 100644
          if (it->second.num != cpu->Num)
              return;
          const bool thumb = cpu->CPSR & 0x20;
-@@ -1488,6 +1531,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+@@ -1635,6 +1678,7 @@
      u32* slot = (u32*)(RWBase() + off);
      *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
      NDS.JIT.JitEnableExecute();
@@ -221,7 +217,7 @@ index 2c9e442..7652ba9 100644
      FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
      LinkedTo[(u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
  }
-@@ -1515,6 +1559,7 @@ extern "C" void melonds_jit_link_pending(ARM* cpu, u8* entry)
+@@ -1662,6 +1706,7 @@
      u8* slot = (u8*)(uintptr_t)melonds_jit_link[0];
      ARM* from = (ARM*)(uintptr_t)melonds_jit_link[1];
      melonds_jit_link[0] = 0;
@@ -229,7 +225,7 @@ index 2c9e442..7652ba9 100644
      if (from == cpu)
          cpu->NDS.JIT.JITCompiler.Link(slot, cpu, entry);
  }
-@@ -1594,6 +1639,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1743,6 +1788,7 @@
          LastJumpKnown = false;
          JumpR15Deferred = false;
          LastJumpViaFunc = false;
@@ -237,8 +233,7 @@ index 2c9e442..7652ba9 100644
  
          CompileFunc comp = Thumb
              ? T_Comp[CurInstr.Info.Kind]
-diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
-index b271d40..f79b90a 100644
+diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.h /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_A64/ARMJIT_Compiler.h
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.h
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
 @@ -34,6 +34,9 @@
@@ -251,7 +246,7 @@ index b271d40..f79b90a 100644
  class ARMJIT;
  const Arm64Gen::ARM64Reg RMemBase = Arm64Gen::X26;
  const Arm64Gen::ARM64Reg RCPSR = Arm64Gen::W27;
-@@ -262,6 +265,9 @@ public:
+@@ -262,6 +265,9 @@
      bool OptDynAddr = true;       // NODYNADDR: the JumpTo functions leave the address in W4 and an exit after one
                                    // looks the block up from it (DynExitA)
      bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
@@ -261,11 +256,10 @@ index b271d40..f79b90a 100644
      bool OptDynCache = true;      // NODYNCACHE: such an exit keeps the last target it went to (its key: address | T)
      bool OptFlagStub = true;      // NOFLAGSTUB (patch 0042): an exit through ExitCheck/ExitCheckPC with flags pending leaves
                                    // putting them in RCPSR to the stub (ExitCheckF/ExitCheckPCF): 12 bytes less per exit
-diff --git a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
-index df5131b..d8f0db9 100644
+diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
 --- a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
-@@ -354,6 +354,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+@@ -354,6 +354,7 @@
      {
          if (size < 32)
              Log(LogLevel::Debug, "LDR size < 32 branching?\n");
@@ -273,7 +267,7 @@ index df5131b..d8f0db9 100644
          Comp_JumpTo(rdMapped, Num == 0, false);
      }
  }
-@@ -809,6 +810,7 @@ s32 Compiler::Comp_MemAccessBlock(int rn, BitSet16 regs, bool store, bool preinc
+@@ -809,6 +810,7 @@
      if (!store && regs[15])
      {
          ARM64Reg mapped = MapReg(15);
@@ -281,8 +275,7 @@ index df5131b..d8f0db9 100644
          Comp_JumpTo(mapped, Num == 0, usermode);
      }
  
-diff --git a/src/NDS.cpp b/src/NDS.cpp
-index 5ead02b..3040651 100644
+diff -ruN '--exclude=.git' a/src/NDS.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/NDS.cpp
 --- a/src/NDS.cpp
 +++ b/src/NDS.cpp
 @@ -47,6 +47,16 @@
@@ -302,7 +295,7 @@ index 5ead02b..3040651 100644
  using namespace Platform;
  
  // kMaxIterationCycles (64) is now NDS::SliceShort/SliceIdle (SetSlice). An event due less than
-@@ -1228,6 +1238,24 @@ u32 NDS::RunFrame()
+@@ -1228,6 +1238,24 @@
      // In the context of TASes, frame count is traditionally the primary measure of emulated time,
      // so it needs to be tracked even if NDS is powered off.
      NumFrames++;
@@ -327,7 +320,7 @@ index 5ead02b..3040651 100644
      if (LagFrameFlag)
          NumLagFrames++;
  
-@@ -1431,10 +1459,23 @@ template <u32 num, typename CPU>
+@@ -1431,10 +1459,23 @@
          if (entry >> 32 == (instrAddr | num)) [[likely]]
              ARM_Dispatch(&cpu, (JitBlockEntry)(rxBase + (u32)entry), nds.JIT.Memory.FastMemStart(num));
          else

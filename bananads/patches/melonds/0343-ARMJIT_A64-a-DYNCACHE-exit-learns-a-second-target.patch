@@ -1,8 +1,7 @@
-diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-index 74b896d..3a7866d 100644
+diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnight/obj/jit-integ/melonds/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-@@ -54,6 +54,9 @@ u8 J3StopMask = !getenv("MELONDS_JIT_NOSTOPMASK");
+@@ -54,6 +54,9 @@
  // whose target is outside the CPU's lookup region does the loop's region step itself (NDS.cpp JitStubRegion: the
  // RegionPair/RegionTrio swap, else SetupExecutableRegion) and its lookup, instead of returning to the loop for both
  u8 J3RegionStub = !getenv("MELONDS_JIT_NOREGIONSTUB");
@@ -12,10 +11,10 @@ index 74b896d..3a7866d 100644
  u32 JitStubRegion(NDS* nds, u32 num, u32 instrAddr);
  
  void Compiler::J3Count(int k, ARM64Reg a, ARM64Reg b)
-@@ -1063,7 +1066,47 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1062,7 +1065,47 @@
          MOVP2R(X17, &melonds_jit_link[0]);
          STP(INDEX_SIGNED, X16, RCPU, X17, 0);
-         QuickTailCall(X16, ARM_Ret);
+         QuickTailCall(X16, RetLoop);
 -        if (OptDynCold)
 +        if (OptDynCold && J3Dyn2 && Num == 0)
 +        {
@@ -54,14 +53,14 @@ index 74b896d..3a7866d 100644
 +            MOVP2R(X16, slot2RX);
 +            MOVP2R(X17, &melonds_jit_link[0]);
 +            STP(INDEX_SIGNED, X16, RCPU, X17, 0);
-+            QuickTailCall(X16, ARM_Ret);
++            QuickTailCall(X16, RetLoop);
 +            LinkSlots[(u32)(slot2RX - GetRXBase())] = {*(u32*)slot2, 0, Num, (u32)(key2RX - GetRXBase())};
 +        }
 +        else if (OptDynCold)
          {
              SetJumpTarget(toMissWay);   // (a B from the block to here: the emitter's distance is in its RW view)
              missWay();
-@@ -1576,7 +1619,6 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+@@ -1723,7 +1766,6 @@
      if (it->second.lit)
      {
          // a DYNCACHE slot: it learns the key of the block it goes to, the one the loop dispatches now
