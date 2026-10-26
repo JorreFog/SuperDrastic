@@ -1,0 +1,22 @@
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 05:55:00 +0100
+Subject: [PATCH] NDS: HaltInterrupted always inline
+
+GCC kept an out-of-line copy of it that the slice loop (RunSlicesJIT, HaltSkip,
+SliceChain) called for every halted CPU: 0.5% of the emulator thread in
+HeartGold (P5 profile). Code placement only: exact.
+---
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -521,8 +521,9 @@
+     void ClearIRQ(u32 cpu, u32 irq);
+     void SetIRQ2(u32 irq);
+     void ClearIRQ2(u32 irq);
+-    // (inline: a halted CPU's Execute asks it every scheduler slice)
+-    bool HaltInterrupted(u32 cpu) const
++    // (inline: a halted CPU's Execute asks it every scheduler slice; always (patch 0220): GCC kept an out-of-line copy
++    // that the slice loop called, 0.5% of the emulator thread in HeartGold)
++    [[gnu::always_inline]] bool HaltInterrupted(u32 cpu) const
+     {
+         if (cpu == 0)
+         {

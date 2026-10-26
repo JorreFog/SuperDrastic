@@ -1,0 +1,101 @@
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 05:58:00 +0100
+Subject: [PATCH] NDS: RunSlicesJIT out of RunFrame, its DMA paths out of line
+ and cold
+
+Inlined into RunFrame<JIT>, the slice loop (the emulator thread's hottest C++
+loop) was spread over 5.8 KB with RunFrame's sleep loop, its plain loop and the
+DMA runs (DMA::Run and DSi NDMA code inline). Now RunSlicesJIT is its own 3.2 KB
+function (one call a frame) and the DMA paths (CPUStop_DMA9 / CPUStop_DMA7) are
+cold out-of-line functions. The same code in the same order: exact.
+---
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -823,7 +823,11 @@
+     bool FastLoop = false;
+     bool HaltSkip = false;
+     bool SliceChainOK = false; // FastLoop && FastSched: RunSlicesJIT is the loop SliceChain9 stands in for
+-    void RunSlicesJIT();
++    // (noinline, patch 0222: inlined into RunFrame its hot loop was spread among RunFrame's sleep and plain loops;
++    // the DMA paths it reaches only with a DMA running, out of line and cold for the same reason)
++    [[gnu::noinline]] void RunSlicesJIT();
++    [[gnu::noinline, gnu::cold]] void RunDMAs9Slice();
++    [[gnu::noinline, gnu::cold]] void RunDMAs7Slice();
+     void SliceIPC(u32 cpu) noexcept
+     {
+         const u64 now = cpu ? ARM7Timestamp : (ARM9Timestamp >> ARM9ClockShift);
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -1511,17 +1511,7 @@
+             ARM7Target = target; // might be changed by a reschedule
+ 
+             if (!clean && (CPUStop & CPUStop_DMA7))
+-            {
+-                DMAs[4].Run();
+-                DMAs[5].Run();
+-                DMAs[6].Run();
+-                DMAs[7].Run();
+-                if (ConsoleType == 1)
+-                {
+-                    auto& dsi = dynamic_cast<melonDS::DSi&>(*this);
+-                    dsi.RunNDMAs(1);
+-                }
+-            }
++                RunDMAs7Slice();
+             else if (clean || !arm7.Halted)
+             {
+                 ExecuteJITInline<1>(*this, arm7, ARM7Timestamp, ARM7Target, rxBase);
+@@ -1613,17 +1603,7 @@
+                 ARM9Timestamp = std::min(ARM9Target, ARM9Timestamp+(cycles<<ARM9ClockShift));
+             }
+             else
+-            {
+-                DMAs[0].Run();
+-                if (!(CPUStop & CPUStop_GXStall)) DMAs[1].Run();
+-                if (!(CPUStop & CPUStop_GXStall)) DMAs[2].Run();
+-                if (!(CPUStop & CPUStop_GXStall)) DMAs[3].Run();
+-                if (ConsoleType == 1)
+-                {
+-                    auto& dsi = dynamic_cast<melonDS::DSi&>(*this);
+-                    dsi.RunNDMAs(0);
+-                }
+-            }
++                RunDMAs9Slice();
+         }
+         else if (!arm9.Halted) [[likely]]
+         {
+@@ -1705,6 +1685,34 @@
+     }
+ }
+ 
++// RunSlicesJIT's DMA paths (the ARM9's / the ARM7's DMAs running: CPUStop_DMA9 / CPUStop_DMA7), as melonDS's loop
++// runs them
++void NDS::RunDMAs9Slice()
++{
++    DMAs[0].Run();
++    if (!(CPUStop & CPUStop_GXStall)) DMAs[1].Run();
++    if (!(CPUStop & CPUStop_GXStall)) DMAs[2].Run();
++    if (!(CPUStop & CPUStop_GXStall)) DMAs[3].Run();
++    if (ConsoleType == 1)
++    {
++        auto& dsi = dynamic_cast<melonDS::DSi&>(*this);
++        dsi.RunNDMAs(0);
++    }
++}
++
++void NDS::RunDMAs7Slice()
++{
++    DMAs[4].Run();
++    DMAs[5].Run();
++    DMAs[6].Run();
++    DMAs[7].Run();
++    if (ConsoleType == 1)
++    {
++        auto& dsi = dynamic_cast<melonDS::DSi&>(*this);
++        dsi.RunNDMAs(1);
++    }
++}
++
+ // SliceChain (exact): the end of RunSlicesJIT's iteration and the start of the next, for the case where they only
+ // keep time, from the ARM9's exit stubs (NDS.h). The checks are the loop's own, in the order it makes them; any
+ // other case returns 0 before changing anything, and the loop then does what it always did. Continuing differs

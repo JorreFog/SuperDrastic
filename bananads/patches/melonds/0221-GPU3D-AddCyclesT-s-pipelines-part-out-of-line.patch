@@ -1,0 +1,92 @@
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 05:55:00 +0100
+Subject: [PATCH] GPU3D: AddCyclesT's pipelines part out of line
+
+AddCyclesT (AddCycles inline, GeomFast) was inlined into every command of
+GPU3D::Run's switch with its VertexPipeline/PolygonPipeline work (the slot
+counter loop): ~2,200 of Run's 3,800 instructions. Now CycleCount is added
+inline and the rest is one out-of-line leaf (AddCyclesPipelines), called only
+when a pipeline is running: Run 15.3 KB -> 9.3 KB, the binary -28 KB.
+The same code in the same order: exact.
+---
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -179,33 +179,15 @@
+     template<bool Fast> [[gnu::always_inline]] void AddCyclesT(s32 num) noexcept
+     {
+         if constexpr (!Fast) { AddCycles(num); return; }
+-        // AddCycles, inline
++        // AddCycles, inline; its pipelines' part out of line (patch 0221: inlined into every command of GPU3D::Run's
++        // switch it was ~60% of that function's 15 KB of code, against a 32 KB L1I on an emulator thread whose
++        // front-end stalls are its biggest cost)
+         CycleCount += num;
+-        if (VertexPipeline > 0)
+-        {
+-            if (VertexPipeline > num) VertexPipeline -= num;
+-            else                      VertexPipeline = 0;
+-        }
+-        if (PolygonPipeline > 0)
+-        {
+-            if (PolygonPipeline > num)
+-            {
+-                PolygonPipeline -= num;
+-                VertexSlotCounter += num;
+-                while (VertexSlotCounter > 9)
+-                {
+-                    VertexSlotCounter -= 9;
+-                    VertexSlotsFree >>= 1;
+-                }
+-            }
+-            else
+-            {
+-                PolygonPipeline = 0;
+-                VertexSlotCounter = 0;
+-                VertexSlotsFree = 0x1;
+-            }
+-        }
++        if (VertexPipeline > 0 || PolygonPipeline > 0)
++            AddCyclesPipelines(num);
+     }
++    // AddCycles' VertexPipeline and PolygonPipeline part (out of line: see AddCyclesT)
++    [[gnu::noinline]] void AddCyclesPipelines(s32 num) noexcept;
+ 
+     void NextVertexSlot() noexcept;
+     void StallPolygonPipeline(s32 delay, s32 nonstalldelay) noexcept;
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -742,6 +742,35 @@
+ 
+ 
+ 
++void GPU3D::AddCyclesPipelines(s32 num) noexcept
++{
++    if (VertexPipeline > 0)
++    {
++        if (VertexPipeline > num) VertexPipeline -= num;
++        else                      VertexPipeline = 0;
++    }
++
++    if (PolygonPipeline > 0)
++    {
++        if (PolygonPipeline > num)
++        {
++            PolygonPipeline -= num;
++            VertexSlotCounter += num;
++            while (VertexSlotCounter > 9)
++            {
++                VertexSlotCounter -= 9;
++                VertexSlotsFree >>= 1;
++            }
++        }
++        else
++        {
++            PolygonPipeline = 0;
++            VertexSlotCounter = 0;
++            VertexSlotsFree = 0x1;
++        }
++    }
++}
++
+ void GPU3D::AddCycles(s32 num) noexcept
+ {
+     CycleCount += num;

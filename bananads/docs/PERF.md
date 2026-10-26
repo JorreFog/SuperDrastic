@@ -1251,3 +1251,22 @@ word copy loop written as branch-over-branch (`blt +8; b +8; ldm r0!,{r2}`...), 
 - **0121 `jit.ldm_mainram`** (default on, exact): `SlowBlockTransfer9Body` does a block whose words are all in
   main RAM (both ends at 0x02, above `ITCMSize`, neither end in the DTCM) in one loop: the same loads, and the same
   `CheckAndInvalidate` before each store, in the same order. The JIT charges the cycles in the compiled code.
+
+## Emulator-thread code layout: GPU3D::Run and the slice loop (2026-10-26 round 2, R3)
+
+The emulator thread runs at IPC ~0.46 with front-end (instruction fetch) stalls its biggest cost, against the A55's
+32 KB L1I. Measured first: the slice loop's GPU3D::Run calls (~1,210 a frame in HeartGold's grass) nearly all run
+commands; a call whose current command still had cycles left (nothing to run) happened only ~16 times a frame
+(debug counters), so skipping those (a tried `core.gx_notdue`) was nothing (in-run A/B within noise) and was dropped.
+What the -g1 binary showed instead: `AddCyclesT` (AddCycles inline) was inlined into every command of Run's switch
+with its pipelines' slot loop, ~2,200 of Run's 3,800 instructions.
+
+- **0220** `HaltInterrupted` always inline (GCC kept an out-of-line copy the slice loop called: 0.5% of the thread).
+- **0221** `AddCyclesT` adds CycleCount inline and calls one out-of-line leaf (`AddCyclesPipelines`) only while a
+  pipeline runs: `GPU3D::Run` 15.3 KB -> 9.3 KB, the binary -28 KB.
+- **0222** `RunSlicesJIT` no longer inlined into `RunFrame` (its loop sat among RunFrame's sleep and plain loops,
+  5.8 KB), its DMA paths cold out-of-line functions: the loop is a 3.2 KB function.
+All three are code placement only (the same code, in the same order): exact.
+Device (PIN=1 FF=1 60 s, HG grass, alternated with integ 9): i9 125.9 / 125.7 / 124.9 / 126.1 emulated/s;
+0220+0221 126.8 / 126.4; +0222 126.6 / 125.2. About +0.5%, below the ~2% noise floor: kept because it is exact and
+smaller code, not as a measured win. On-panel audio test (0220-0222): PASS, tap identical to the base over 67 s.
