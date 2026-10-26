@@ -241,7 +241,7 @@ private:
     void ApplyWindowEdges(const u8* coords, u8& active, u8 cnt);
     void ApplyWindow(u32* line, u8 bit);
     void MakeWin3D();
-    void VerifyRaw3D(const u32* dst, const u32* const* q3d);
+    void VerifyRaw3D(const u32* dst, const u32* const* q3d, bool allq0);
     static void ApplyMosaicX(u32* line, u32 size);
 
     void DrawBG_3D();
@@ -268,6 +268,16 @@ private:
     template<bool window> void DrawSprite_Normal(u32 num, u32 width, u32 height, s32 xpos, s32 ypos);
 
     void Composite(u32* outTop, u32* outSecond, bool needSecond);
+    // 3x/4x, the 3D layer read raw (render.2d_fast): the layers under and over the 3D step composited once a line
+    // (PrepareSplit), then each quarter is its 3D line between them (CompositeSplit): the same top/second pixels
+    int PrepareSplit();   // 1: split ready; 0: no split; 2: the 3D step is under a full layer (quarters all alike)
+    void CompositeSplit(u32* outTop, u32* outSecond, bool needSecond);
+    bool SplitReady = false, SplitSecond = false;
+    const u32* SplitWin = nullptr;
+    alignas(16) u32 BelowTop[256];
+    alignas(16) u32 BelowSec[256];
+    alignas(16) u32 AboveTop[256];
+    alignas(16) u32 AboveSec[256];
     void CompositeTo(u32* dst);
     template<bool up> void BrightnessPass(u32* dst);
     template<u32 effect> void EffectsPass(u32* dst);
