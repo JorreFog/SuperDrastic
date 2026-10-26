@@ -264,7 +264,7 @@ struct Display {
     std::atomic<long long> extra_us{0};
     // kms.lowlat_trace=<file>: each frame's times (us, CLOCK_MONOTONIC) in a ring, written at the quit: started,
     // published, aimed deadline, taken by the presenter, ready, committed, on screen (the pair's first flip event)
-    struct Trace { long long start, pub, aim, take, ready, commit, flip; };
+    struct Trace { long long start, pub, aim, take, ready, commit, flip, ftop, fbot; };
     std::vector<Trace> trace;
     unsigned long seq_next = 0, seq[NB] = {};
     Trace* tr(int s) { return trace.empty() ? nullptr : &trace[seq[s] % trace.size()]; }
@@ -570,6 +570,7 @@ struct Display {
     }
 
     void close() {
+        cthread_stop();
         gpu_floor(false);
         if (fd < 0) return;
         freebufs();
@@ -650,7 +651,7 @@ struct Display {
                 const long long t = now_us();
                 if (t - start > 0 && t - start < 3 * (long long)period_us) decay_max(emu_us, t - start);
                 seq[s] = seq_next++;
-                if (Trace* x = tr(s)) *x = Trace{start, t, aim, 0, 0, 0, 0};
+                if (Trace* x = tr(s)) *x = Trace{start, t, aim, 0, 0, 0, 0, 0, 0};
             }
             has_fence[s] = fenced;
             fence[s] = f;
@@ -708,17 +709,84 @@ struct Display {
     void overlay(const Buf* b) {
         if (b && b->map) bmenu_overlay((uint32_t*)b->map, (int)(b->pitch / 4), (int)b->w, (int)b->h);
     }
+    // kms.commit_thread: the commits made blocking, on a thread of their own at SCHED_FIFO. A nonblocking commit
+    // programs the display in a kernel worker (an ordinary-priority kworker): with every core busy at 4x (the Gengis
+    // threads, the 2D thread) it ran late, and frames committed up to 5.5 ms before the top panel's vblank were shown
+    // a refresh later (Mario Kart DS's demo race at 4x on the RG DS Plus: 78 of ~1370 frames). A blocking commit does
+    // that work in the caller's own context (here: real-time), then waits for the flip
+    bool cthread_on = false;
+    std::thread cthread;
+    std::mutex cm;
+    std::condition_variable ccv;
+    bool creq = false, cquit = false;
+    const Buf* cout_[2] = {nullptr, nullptr};
+    void committer() {
+        sched_param sp{};
+        sp.sched_priority = 6;   // (above the presenter's 5, below the sound's 10; it sleeps in the kernel almost always)
+        pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
+        pthread_setname_np(pthread_self(), "bds-commit");
+        for (;;) {
+            const Buf* o[2];
+            {
+                std::unique_lock<std::mutex> l(cm);
+                ccv.wait(l, [&] { return creq || cquit; });
+                if (cquit) return;
+                o[0] = cout_[0];
+                o[1] = cout_[1];
+                creq = false;
+            }
+            drmModeAtomicReq* r = drmModeAtomicAlloc();
+            for (int i = 0; i < 2; i++) add_plane(r, p[i], *o[i]);
+            const int ret = drmModeAtomicCommit(fd, r, DRM_MODE_PAGE_FLIP_EVENT, this);
+            drmModeAtomicFree(r);
+            if (ret) {   // (the frame back at the head of the queue, as a nonblocking commit's failure leaves it)
+                Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
+                Lock l(mu);
+                if (committed >= 0) {
+                    state[committed] = QUEUED;
+                    queue.push_front(committed);
+                    committed = -1;
+                }
+                pending = 0;
+                wake();
+            }
+        }
+    }
+    void cthread_start() {
+        cthread_on = true;
+        cthread = std::thread([this] { committer(); });
+    }
+    void cthread_stop() {
+        if (!cthread.joinable()) return;
+        {
+            std::lock_guard<std::mutex> l(cm);
+            cquit = true;
+        }
+        ccv.notify_all();
+        cthread.join();
+        cthread_on = false;
+    }
     // slot s onto both panels, unless a flip is still pending; false when it wasn't committed
     bool commit(int s, const Buf* const out[2]) {
         Lock l(mu);
         if (pending) return false;
-        drmModeAtomicReq* r = drmModeAtomicAlloc();
-        for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
-        int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
-        drmModeAtomicFree(r);
-        if (ret) {
-            if (errno != EBUSY) Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
-            return false;
+        if (cthread_on) {
+            {
+                std::lock_guard<std::mutex> c(cm);
+                cout_[0] = out[0];
+                cout_[1] = out[1];
+                creq = true;
+            }
+            ccv.notify_one();
+        } else {
+            drmModeAtomicReq* r = drmModeAtomicAlloc();
+            for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
+            int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
+            drmModeAtomicFree(r);
+            if (ret) {
+                if (errno != EBUSY) Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
+                return false;
+            }
         }
         committed = s;
         committed_out[0] = out[0];
@@ -770,8 +838,10 @@ struct Display {
             queue.pop_front();
             state[s] = COMMITTED;
             if (lowlat) ll_take(s);
+            else if (Trace* x = tr(s)) x->take = now_us();   // (kms.lowlat_trace without kms.lowlat too)
         }
         if (has_fence[s] && wait2d) wait2d(fence[s]);  // render.2d_lazy: its last lines drawn
+        if (!lowlat) { Lock l(mu); if (Trace* x = tr(s)) x->ready = now_us(); }
         if (!shader_on) ll_ready(s);
         if (shot.exchange(false)) take_shot(buf[0][s], buf[1][s]);
         const Buf* out[2] = {&buf[0][s], &buf[1][s]};
@@ -916,6 +986,8 @@ struct Display {
                 first_ev = 0;
             }
         }
+        if (kt && committed >= 0)   // (kms.lowlat_trace: each panel's own flip)
+            if (Trace* x = tr(committed)) (crtc == p[0].crtc ? x->ftop : x->fbot) = kt;
         if (--pending > 0) return;
         if (!lowlat && committed >= 0)
             if (Trace* x = tr(committed)) x->flip = kt ? std::min(kt, first_ev ? first_ev : kt) : t;
@@ -1484,6 +1556,13 @@ int run_kms(Emu& emu, const Config& cfg) {
         shader_fast = cfg.flag("kms.shader_fast", true) ? 1 : 0;
         dp.gpu_floor_mhz = cfg.num("kms.gpu_floor_mhz", -1);
         clear_first = cfg.flag("kms.shader_clear", true) ? 1 : 0;
+    }
+    // kms.commit_thread (Display::committer): blocking commits on a real-time thread of their own. auto (the default):
+    // at render.scale 3 and 4, where every core is busy (2x as before: nonblocking commits from this thread)
+    const std::string ct = cfg.str("kms.commit_thread", "auto");
+    if (ct == "on" || ct == "1" || (ct == "auto" && emu.scale() >= 3)) {
+        dp.cthread_start();
+        Log(LogLevel::Info, "[kms] commits on a thread of their own (blocking, SCHED_FIFO 6)\n");
     }
     dp.direct = dp.packed() && emu.draw_into(dp.map(0, 1), dp.map(1, 1));  // (each frame is given its own slot)
     // render.2d_lazy (on): drawing straight into the slots, the 2D thread may finish a frame while the emulator runs the
@@ -2146,11 +2225,11 @@ int run_kms(Emu& emu, const Config& cfg) {
     start_mark("quit: 2d");
     if (!dp.trace.empty()) {  // kms.lowlat_trace: the frames' times, oldest first
         if (FILE* f = fopen(cfg.str("kms.lowlat_trace", "").c_str(), "w")) {
-            fprintf(f, "# seq start pub aim take ready commit flip (us, CLOCK_MONOTONIC; 0: not reached)\n");
+            fprintf(f, "# seq start pub aim take ready commit flip ftop fbot (us, CLOCK_MONOTONIC; 0: not reached)\n");
             const unsigned long n = dp.trace.size(), first = dp.seq_next > n ? dp.seq_next - n : 0;
             for (unsigned long q = first; q < dp.seq_next; q++) {
                 const Display::Trace& x = dp.trace[q % n];
-                fprintf(f, "%lu %lld %lld %lld %lld %lld %lld %lld\n", q, x.start, x.pub, x.aim, x.take, x.ready, x.commit, x.flip);
+                fprintf(f, "%lu %lld %lld %lld %lld %lld %lld %lld %lld %lld\n", q, x.start, x.pub, x.aim, x.take, x.ready, x.commit, x.flip, x.ftop, x.fbot);
             }
             fclose(f);
         }
