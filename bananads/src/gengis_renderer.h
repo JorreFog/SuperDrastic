@@ -51,6 +51,7 @@ public:
     static int Zva;  // render.gengis_zva: dc zva before the clear's and the 2x output's stores (same bytes)
     static int TexInval;  // render.gengis_texinval: 1 (blocks) drops only the textures whose VRAM changed, 0 all
     static int HrNeon;  // render.gengis_hrneon: decal/toon/highlight polygons on NEON batches (hrneon.c); -1: at 3x and 4x
+    static int Lazy;  // render.gengis_lazy (gx.c); -1: at 3x and 4x
     static int Verify;  // render.gengis_verify: every rendered bin rendered again on the reference paths (gx_ref) and compared
     std::atomic<uint64_t> VerBins{0}, VerBad{0}, VerNewNs{0}, VerRefNs{0};
     void RenderBin(unsigned b, uint32_t* dst);
@@ -60,7 +61,7 @@ public:
     // render.gengis_ab_secs seconds, logged as "[gengis] ab mode N" (the kms.stats windows between two such lines ran
     // in that mode): N >= 1 render threads take part, 0 = no rasterization (the 3D layer keeps its last frame: wrong
     // pictures, for an upper bound of what the 3D costs the other threads)
-    static std::vector<int> OptAb;  // render.gengis_optab: M2's in-run A/B, a list of option masks (1 hrneon, 2 defer) cycled every render.gengis_ab_secs
+    static std::vector<int> OptAb;  // render.gengis_optab: M2's in-run A/B, a list of option masks (1 hrneon, 2 defer, 4 lazy) cycled every render.gengis_ab_secs
     size_t OptIdx = 0;
     std::chrono::steady_clock::time_point OptNext{};
     static std::vector<int> AbModes;  // (modes 11..19: render.gengis_wake=1..9 with the late wake)

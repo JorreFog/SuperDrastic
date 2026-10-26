@@ -34,6 +34,7 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     gx_stats = Stats != 0;
     gx_trim = Trim;
     gx_hrneon = HrNeon < 0 ? Scale_ >= 3 : HrNeon != 0;
+    gx_lazy = Lazy < 0 ? Scale_ >= 3 : Lazy != 0;
     gx_init();
     gx_defer = defer;
     for (auto& o : OutBuf) {
@@ -453,6 +454,7 @@ int GengisRenderer3D::WakeN = 1;
 int GengisRenderer3D::Stats = 0;
 int GengisRenderer3D::HrNeon = -1;
 int GengisRenderer3D::Verify = 0;
+int GengisRenderer3D::Lazy = -1;
 int GengisRenderer3D::TexInval = 1;
 int GengisRenderer3D::Zva = 1;
 int GengisRenderer3D::Trim = 1;
@@ -646,6 +648,7 @@ void GengisRenderer3D::RenderFrame() {
             OptNext = now + std::chrono::milliseconds((long)(AbSecs * 1000));
             gx_hrneon = m & 1;
             gx_defer = (m >> 1) & 1;
+            gx_lazy = (m >> 2) & 1;
             if (Stats) StatsLine();
             Platform::Log(Platform::LogLevel::Info, "[gengis] optab mode %d\n", m);
         }

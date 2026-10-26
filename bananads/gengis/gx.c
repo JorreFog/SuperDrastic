@@ -156,6 +156,56 @@ static gx_t *gx_get(void) {
     return H;
 }
 
+/* ---- render.gengis_lazy: the clear done 64 pixels at a time, just before a polygon first touches them ----
+ * The eager clear wrote the whole context (at 4x 34 lines of 1024 pixels: 278 KB of colour and attributes) before
+ * the first polygon; with three threads' contexts the shared 512 KB cache could not hold them, so the cleared lines
+ * went to DRAM and came back when a polygon reached them. Here each line's 64-pixel chunks are cleared when a
+ * polygon's span reaches them (with a margin: the pixels a kernel can read around its span, its last group of 8 and
+ * the translucent quirk's pixel one past the end, pipe()'s next group), and the chunks no polygon touched before the
+ * resolve. Each chunk is cleared before anything reads it, so every read sees the eager clear's values. Not with the
+ * rear-plane bitmap or deferred shading (eager clear there). */
+#define GX_ZVA(p) __asm__ volatile("dc zva, %0" : : "r"(p) : "memory")
+#define GX_CHUNKS (GX_W / 64)
+_Static_assert(GX_CHUNKS <= 16, "a line's chunk mask");
+static __thread uint16_t gx_lz[64];     /* per context line: its chunks already cleared */
+static __thread int gx_lazy_on;         /* this bin is cleared lazily */
+static __thread uint32_t gx_lz_col, gx_lz_att;
+
+static void gx_clear_chunks(gx_t *H, unsigned l, unsigned need) {
+    uint32_t *col = (uint32_t *)H->ctx + l * GX_W, *att = (uint32_t *)(H->ctx + GX_ATTR) + l * GX_W;
+    const uint32x4_t c = vdupq_n_u32(gx_lz_col), a = vdupq_n_u32(gx_lz_att);
+    gx_lz[l] |= (uint16_t)need;
+    while (need) {
+        const unsigned k = (unsigned)__builtin_ctz(need);
+        need &= need - 1;
+        for (unsigned i = k * 64; i < k * 64 + 64; i += 16) {
+            if (gx_zva) { GX_ZVA(col + i); GX_ZVA(att + i); }
+            vst1q_u32(col + i, c); vst1q_u32(col + i + 4, c); vst1q_u32(col + i + 8, c); vst1q_u32(col + i + 12, c);
+            vst1q_u32(att + i, a); vst1q_u32(att + i + 4, a); vst1q_u32(att + i + 8, a); vst1q_u32(att + i + 12, a);
+        }
+    }
+}
+/* the chunks of context lines line0.. that the spans at sp (nl lines) reach, with the margin */
+static void gx_lazy_spans(gx_t *H, const uint8_t *sp, unsigned line0, int nl) {
+    for (int k = 0; k < nl; k++) {
+        const unsigned X = *(const uint16_t *)(sp + 8 * GX_SPS + 4 * k), C = *(const uint16_t *)(sp + 9 * GX_SPS + 4 * k);
+        if (!C) continue;
+        const unsigned lo = X > 16 ? (X - 16) >> 6 : 0, e = X + C + 32, hi = (e < GX_W ? e : GX_W - 1) >> 6;
+        const unsigned m = (unsigned)((2u << hi) - (1u << lo)) & ~(unsigned)gx_lz[line0 + k];
+        if (m) gx_clear_chunks(H, line0 + k, m);
+    }
+}
+/* the chunks not cleared yet, of lines l0..l1 (before the resolve and the output read them) */
+static void gx_lazy_finish(gx_t *H, unsigned l0, unsigned l1) {
+    for (unsigned l = l0; l <= l1; l++) {
+        const unsigned m = ((1u << GX_CHUNKS) - 1) & ~(unsigned)gx_lz[l];
+        if (m) gx_clear_chunks(H, l, m);
+    }
+}
+#if GX_SCALE == 1
+int gx_lazy;                            /* render.gengis_lazy (gengis_renderer.cpp sets it per scale) */
+#endif
+
 /* one polygon into the bin's context: hr.c's hr_polygon on its fused path. bin_top/bin_bot: the frame lines the walk
  * covers (the bin and its neighbour lines), lb: the frame line of context line 0 */
 static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer,
@@ -210,6 +260,7 @@ static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin
         if (flags & GXF_TRANSLUCENT) gx_px_trl += n; else gx_px_opa += n;
         gx_lines++;
     }
+    if (gx_lazy_on) gx_lazy_spans(H, sp, line0, nl);
     if (defer) defer_poly(&layout_gx, H->ctx, sp, rec, 0, line0, (unsigned)nl, flags, vptr[0]);
     else f_run(&layout_gx, H->ctx, sp, rec, 0, line0, (unsigned)nl, flags, vptr[0], 0, 0);
 }
@@ -305,10 +356,14 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     const unsigned bin_top = hy0 ? hy0 - 1 : 0;
     unsigned bin_bot = hy0 + GX_BL + 1;
     if (bin_bot > GX_H) bin_bot = GX_H;
-    gx_clear(H, f, lb);
+    const int defer = gx_defer && !gx_ref;
+    gx_lazy_on = gx_lazy && !gx_ref && !defer && !(f->d3 & (1u << 14));
+    if (gx_lazy_on) {
+        memset(gx_lz, 0, sizeof gx_lz);
+        gx_lz_col = f->clear_color; gx_lz_att = f->clear_attr;
+    } else gx_clear(H, f, lb);
     U32(H->ctx, GX_HDR + 0x10) = 0xffffffffu; U32(H->ctx, GX_HDR + 0x14) = 0;
     U64(H->ctx, GX_HDR + 0x18) = ~0ull;                             /* the shadow line mask: all lines clean */
-    const int defer = gx_defer && !gx_ref;
     const unsigned nopa = f->npolys - f->ntranslucent;
     const uint32_t *yr = f->yr;                                     /* ytop | ybot << 16: one cache line a 16 polygons */
     /* the opaque polygons' trim (gx_polygon): with edge marking off, the context line above the bin always (it only
@@ -340,6 +395,10 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
             if ((y >> 16) <= bin_top || (y & 0xffff) >= bin_bot) continue;
             gx_polygon(H, &f->polys[i], bin_top, bin_bot, lb, f->d3, 0, 0);
         }
+    }
+    if (gx_lazy_on) {   /* (the resolve and the output read the bin's lines; edge marking also the two context lines) */
+        if ((f->d3 >> 5) & 1) gx_lazy_finish(H, 0, GX_CL - 1);
+        else gx_lazy_finish(H, 1, GX_BL);
     }
     const uint32_t *res = gx_resolve(H, f);
     /* the layer's format: alpha 5 bits, no flags */
