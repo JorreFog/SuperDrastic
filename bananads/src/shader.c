@@ -326,8 +326,10 @@ static const char *fast_grid2x_fs[] = {
 };
 
 /* on the presenter thread; returns 0 if the shader can't be used (the caller stays zero-copy) */
+static char cur_name[64];   /* the shader asked for (shader_grid4_lut) */
 int shader_init(int fd, const char *name) {
     drm_fd = fd;
+    snprintf(cur_name, sizeof cur_name, "%s", name ? name : "");
     /* EGL and GL once: a later call (another shader chosen while the game runs) only makes the new program, in the
      * same context, so the frames' imported images stay valid */
     static int ready; static const char *dir = "/usr/lib/mali/", *how = "default"; static EGLint maj, min;
@@ -520,6 +522,70 @@ out:
     if (fb) glDeleteFramebuffers(1, &fb);
     if (t[0]) glDeleteTextures(2, t);
     free(in); free(a); free(b);
+    use(&slow);
+    return ok;
+}
+
+/* kms.grid_cpu: ds-grid-2x at 1:1 on 1024x768 frames (render.scale=4) is a per-byte function of the input byte and
+ * of the pixel's place in its DS pixel's 4x4 cell. This draws a test picture (every input byte in each channel at
+ * every place in the cell) through the shader itself (the file's program, not a twin), reads it back, and fills
+ * lut[0][v] (a cell pixel: column and row 0-2 of the cell) and lut[1][v] (a grid-line pixel: column or row 3) from it.
+ * 1 only when every pixel of the picture agrees with the two tables (so the tables give the shader's bytes) and
+ * every byte value was seen in both; the GPU's own output, so no float rounding is guessed on the CPU */
+int shader_grid4_lut(unsigned char lut[2][256]) {
+    const int sw = 1024, shh = 768, dw = 1024, dhh = 768;
+    if (!slow.prog || strcmp(cur_name, "ds-grid-2x")) return 0;
+    uint8_t *in = malloc((size_t)sw * shh * 4), *a = malloc((size_t)dw * dhh * 4);
+    short seen[2][256];
+    GLuint t[2] = {0}, fb = 0;
+    int ok = 0;
+    long bad = 0;
+    memset(seen, -1, sizeof seen);
+    if (!in || !a) goto out;
+    for (int y = 0; y < shh; y++)
+        for (int x = 0; x < sw; x++) {
+            uint8_t *q = in + ((size_t)y * sw + x) * 4;
+            const int d = (x >> 2) + (y >> 2) * 7;   /* (the DS pixel: every byte reaches every place in a cell) */
+            q[0] = (uint8_t)(d + (x & 3) * 61 + (y & 3) * 17); q[1] = (uint8_t)(q[0] * 3 + 85); q[2] = (uint8_t)(q[0] * 7 + 170); q[3] = 255;
+        }
+    glGenTextures(2, t); glGenFramebuffers(1, &fb);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, t[0]);
+    glPixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 4);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sw, shh, 0, GL_RGBA, GL_UNSIGNED_BYTE, in);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, t[1]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dw, dhh, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, fb);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t[1], 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) goto out;
+    glPixelStorei(0x0D05 /* GL_PACK_ALIGNMENT */, 4);
+    bind_src(t[0], &slow);
+    quad(&slow, sw, shh, dw, dhh);
+    glReadPixels(0, 0, dw, dhh, GL_RGBA, GL_UNSIGNED_BYTE, a);
+    if (glGetError()) goto out;
+    for (int y = 0; y < dhh; y++)
+        for (int x = 0; x < dw; x++) {
+            const int c = (x & 3) == 3 || (y & 3) == 3;
+            const uint8_t *i = in + ((size_t)y * sw + x) * 4, *o = a + ((size_t)y * dw + x) * 4;
+            for (int k = 0; k < 3; k++) {
+                if (seen[c][i[k]] < 0) seen[c][i[k]] = o[k];
+                else if (seen[c][i[k]] != o[k]) bad++;
+            }
+        }
+    ok = !bad;
+    for (int c = 0; c < 2; c++)
+        for (int v = 0; v < 256; v++) {
+            if (seen[c][v] < 0) ok = 0;
+            else lut[c][v] = (unsigned char)seen[c][v];
+        }
+    SLOG("[shader] grid tables for the 2D engine: %s (%ld bytes of %ld disagree with them)\n", ok ? "the shader's own bytes, every place in the cell" : "NOT usable", bad, (long)dw * dhh * 3);
+out:
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (fb) glDeleteFramebuffers(1, &fb);
+    if (t[0]) glDeleteTextures(2, t);
+    free(in); free(a);
     use(&slow);
     return ok;
 }

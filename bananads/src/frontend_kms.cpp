@@ -134,6 +134,7 @@ extern "C" {
 int shader_init(int fd, const char* name);
 int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 int shader_viewport(int* v, int pw, int ph);
+int shader_grid4_lut(unsigned char lut[2][256]);
 extern int shader_fast;
 int shader_fast_on(void);
 extern int clear_first;
@@ -675,6 +676,14 @@ struct Display {
     // frame is drawn through it ahead, while the last commit's flip is still pending, and committed the moment that
     // flip completes. Drawn only after the flip (13.6 ms a frame for both of the RG DS Plus's 1024x768 panels with
     // Dot (MiZai, RG DS+)), the commit missed the next refresh every other frame: 40 frames shown a second of 60.
+    // kms.grid_cpu: with ds-grid-2x at render.scale=4 (1:1), the grid applied by the Banana 2D engine as it writes the
+    // frame (Emu::set_grid4, tables from shader_grid4_lut) instead of a GPU pass a frame: the same bytes on the panels
+    // (the tables are the GPU's own output of the shader), no GPU pass, no Mesa work. grid_req: the emulator's thread's
+    // next frame turns it on (1) or off (0); gridded[s]: slot s's frame has it (shown as it is)
+    bool grid_cpu = false;
+    std::atomic<int> grid_req{-1};
+    unsigned char grid_lut[2][256] = {};
+    bool gridded[NB] = {};
     int ready = -1;                                // a frame already drawn through the shader: its slot, or -1
     const Buf* ready_out[2] = {nullptr, nullptr};  // ...and the shader's output for each panel
     void shader_settings() {  // a change asked for in the in-game menu, and the program made at its first frame
@@ -685,6 +694,7 @@ struct Display {
             if (shader_req_set) { want = shader_req; asked = true; shader_req_set = false; }
         }
         if (asked) {
+            if (grid_cpu) grid_req = 0;   // (kms.grid_cpu: back to drawing frames without the grid)
             if (want == "none") {
                 if (shader_on) gpu_floor(false);
                 shader_on = false;
@@ -703,6 +713,11 @@ struct Display {
                 for (auto& b : sbuf[i]) shader_on = shader_on && (b.fb || mkbuf(b, W, H));  // (made once)
             if (shader_on && gpu_dir.empty()) gpu_floor(true);
             Log(LogLevel::Info, "[kms] shader %s: %s\n", shader_name.c_str(), shader_on ? "on (panel-sized, 1:1)" : "unavailable");
+            if (shader_on && grid_cpu && direct && fw == 1024 && fh == 768 && W == 1024 && H == 768 &&
+                shader_name == "ds-grid-2x" && shader_grid4_lut(grid_lut)) {
+                grid_req = 1;
+                Log(LogLevel::Info, "[kms] grid: drawn by the 2D engine as it writes the 4x frame (kms.grid_cpu), no GPU pass\n");
+            }
         }
     }
     // the achievements' pop-ups and the volume pill (menu.c's bmenu_overlay) over the top panel's picture as it goes
@@ -831,13 +846,13 @@ struct Display {
         {
             Lock l(mu);
             // without a shader a frame is only taken when it can be committed at once; with one, it is drawn ahead
-            if (queue.empty() || (pending && !shader_on)) return;
+            if (queue.empty() || (pending && !(shader_on && !gridded[queue.front()]))) return;
             // kms.lowlat: a frame goes no sooner than the vblank before the one it aims at has passed: shown a refresh
             // early (it was ready early), the next frame, on time for its own vblank, left that one empty (a repeat
             // after every early frame: the most of v4's 180-280 a minute on the RG DS). The presenter wakes then.
             // With a shader only the commit waits: the frame is drawn through it ahead (10-14 ms a frame on the RG DS
             // Plus: started at the window, it missed the deadline 17 times a minute)
-            if (!shader_on && ll_early(queue.front())) return;
+            if (!(shader_on && !gridded[queue.front()]) && ll_early(queue.front())) return;
             // the oldest frame, taken off the queue so the emulator can't recycle it while the shader draws it (outside
             // the lock: the emulator's thread never waits for the GPU)
             s = queue.front();
@@ -848,10 +863,12 @@ struct Display {
         }
         if (has_fence[s] && wait2d) wait2d(fence[s]);  // render.2d_lazy: its last lines drawn
         if (!lowlat) { Lock l(mu); if (Trace* x = tr(s)) x->ready = now_us(); }
-        if (!shader_on) ll_ready(s);
+        const bool pass = shader_on && !gridded[s];   // (kms.grid_cpu: a frame with the grid in goes as it is)
+        if (!pass) ll_ready(s);
         if (shot.exchange(false)) take_shot(buf[0][s], buf[1][s]);
         const Buf* out[2] = {&buf[0][s], &buf[1][s]};
-        if (shader_on) {
+        if (gridded[s] && !gpu_dir.empty()) gpu_floor(false);   // (no GPU pass: its clock floor put back)
+        if (pass) {
             const long long t0 = now_us();
             for (int i = 0; i < 2; i++) {
                 const Buf& a = buf[i][s];
@@ -1562,6 +1579,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         shader_fast = cfg.flag("kms.shader_fast", true) ? 1 : 0;
         dp.gpu_floor_mhz = cfg.num("kms.gpu_floor_mhz", -1);
         clear_first = cfg.flag("kms.shader_clear", true) ? 1 : 0;
+        dp.grid_cpu = cfg.flag("kms.grid_cpu", true);
     }
     // kms.commit_thread (Display::committer): blocking commits on a real-time thread of their own. auto (the default):
     // at render.scale 3 and 4, where every core is busy (2x as before: nonblocking commits from this thread)
@@ -1770,6 +1788,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         long ra_frames = 0, ra_suspends = 0;
         double ra_ms = 0, ra_snap_ms = 0;
         long long ra_t = now_us();
+        bool grid_now = false;   // kms.grid_cpu: the 2D engine draws the grid into the frames
         while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
             if (pause_req.load(std::memory_order_acquire)) {  // the menu: at a frame's end, until it closes
                 std::unique_lock<std::mutex> l(pm);
@@ -1832,7 +1851,13 @@ int run_kms(Emu& emu, const Config& cfg) {
                 else emu.touch(t & 0xFFFF, t >> 16);
                 touched = t;
             }
+            if (const int g = dp.grid_req.exchange(-1); g >= 0) {
+                grid_now = emu.set_grid4(g ? dp.grid_lut : nullptr) && g && melonDS::BananaGrid4On();
+                Log(LogLevel::Info, "[kms] grid in the 2D engine: %s\n", grid_now ? "on (its NEON writers checked against the tables)" :
+                    g ? "NOT on (check failed): the GPU pass draws it" : "off");
+            }
             const int s = dp.take();
+            dp.gridded[s] = grid_now;
             const auto work0 = std::chrono::steady_clock::now();  // (cpugov.tail: the frame's work, to its publish)
             const long long t_start = now_us();
             const bool ahead = ra_n && !ff && t_start >= ra_off_until && emu_frames > 60 && emu.runahead_ok();

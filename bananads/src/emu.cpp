@@ -1392,6 +1392,16 @@ void Emu::cpu_regs(int cpu, uint32_t r[17]) const {
     r[16] = a.CPSR;
 }
 
+bool Emu::set_grid4(const unsigned char (*lut)[256]) {
+#ifdef BANANADS_2D
+    if (!banana_ || scale() != 4) return false;
+    banana_->SetGrid4(lut);
+    return true;
+#else
+    (void)lut;
+    return false;
+#endif
+}
 bool Emu::set_lazy_2d(bool on) {
 #ifdef BANANADS_2D
     if (!banana_) return false;
