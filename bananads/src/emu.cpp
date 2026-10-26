@@ -1146,6 +1146,13 @@ bool Emu::load_rom(const std::string& path) {
         const std::string g3 = cfg_.str("render.gpu3d", "off");
         if (banana2d && scale >= 3 && (g3 == "gl" || g3 == "compute")) {
             GpuRenderer3D::Stats = (int)cfg_.num("render.gpu3d_stats", 0);
+            {
+                const std::string rm = cfg_.str("render.gpu3d_read", "heap");
+                GpuRenderer3D::ReadMode = rm == "heap" ? 2 : rm == "pbo" ? 1 : 0;
+            }
+            GpuRenderer3D::Finish = (int)cfg_.num("render.gpu3d_finish", 0);
+            GpuRenderer3D::Clear = cfg_.flag("render.gpu3d_clear", true) ? 1 : 0;
+            GpuRenderer3D::MesaDebug = cfg_.str("render.gpu3d_mesa_debug", "");
             auto be = g3 == "gl" ? MakeGl3DBackend(nds_->GPU.GPU3D) : MakeCompute3DBackend(nds_->GPU.GPU3D);
             std::unique_ptr<GpuRenderer3D> r;
             if (be) {

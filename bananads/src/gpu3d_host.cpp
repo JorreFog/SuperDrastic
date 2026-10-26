@@ -10,6 +10,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <linux/dma-buf.h>
+// <linux/dma-heap.h> (not in the toolchain's headers)
+struct dma_heap_allocation_data {
+    uint64_t len;
+    uint32_t fd;
+    uint32_t fd_flags;
+    uint64_t heap_flags;
+};
+#define DMA_HEAP_IOCTL_ALLOC _IOWR('H', 0x0, struct dma_heap_allocation_data)
+#include <drm_fourcc.h>
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -21,6 +35,10 @@ using namespace melonDS;
 namespace bananads {
 
 int GpuRenderer3D::Stats = 0;
+int GpuRenderer3D::ReadMode = 1;
+int GpuRenderer3D::Finish = 0;
+int GpuRenderer3D::Clear = 1;
+std::string GpuRenderer3D::MesaDebug;
 
 __attribute__((weak)) std::unique_ptr<Gpu3DBackend> MakeCompute3DBackend(melonDS::GPU3D&) { return nullptr; }
 
@@ -51,6 +69,7 @@ Egl E;
 
 // the GL thread: a surfaceless GLES 3.1 context of its own (the presenter's shader context, if any, is separate)
 bool GpuRenderer3D::GlSetup() {
+    if (!MesaDebug.empty()) setenv("PAN_MESA_DEBUG", MesaDebug.c_str(), 1);
     E.lib = dlopen("libEGL.so.1", RTLD_NOW | RTLD_LOCAL);
     if (!E.lib) { Platform::Log(Platform::LogLevel::Error, "[gpu3d] no libEGL.so.1\n"); return false; }
     E.GetProc = (PFNEGLGETPROCADDRESSPROC)dlsym(E.lib, "eglGetProcAddress");
@@ -127,7 +146,58 @@ bool GpuRenderer3D::GlSetup() {
         return false;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    return glGetError() == GL_NO_ERROR || true;
+    if (ReadMode == 2 && !HeapSetup()) {
+        Platform::Log(Platform::LogLevel::Warn, "[gpu3d] no cached dma-heap target: read-back through a pixel buffer\n");
+        ReadMode = 1;
+    }
+    glGenBuffers(1, &Pbo);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, Pbo);
+    glBufferData(GL_PIXEL_PACK_BUFFER, (size_t)256 * 192 * Scale_ * Scale_ * 4, nullptr, GL_STREAM_READ);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    return true;
+}
+
+// render.gpu3d_read=heap: the pack pass draws straight into two dma-bufs from /dev/dma_heap/system (CPU-cached pages,
+// imported into EGL as linear ABGR8888 render targets); they ARE the 2D engine's 3D rows: no read-back copy, the CPU
+// cache invalidated with DMA_BUF_IOCTL_SYNC once the GPU is done
+bool GpuRenderer3D::HeapSetup() {
+    auto createImage = (PFNEGLCREATEIMAGEKHRPROC)E.GetProc("eglCreateImageKHR");
+    auto target = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)E.GetProc("glEGLImageTargetTexture2DOES");
+    if (!createImage || !target) return false;
+    const int hfd = open("/dev/dma_heap/system", O_RDWR | O_CLOEXEC);
+    if (hfd < 0) return false;
+    const int W = 256 * Scale_, H = 192 * Scale_;
+    const size_t len = (size_t)W * H * 4;
+    for (int i = 0; i < 2; i++) {
+        dma_heap_allocation_data a{};
+        a.len = len;
+        a.fd_flags = O_RDWR | O_CLOEXEC;
+        if (ioctl(hfd, DMA_HEAP_IOCTL_ALLOC, &a) < 0) { close(hfd); return false; }
+        HeapFd[i] = (int)a.fd;
+        void* p = mmap(nullptr, len, PROT_READ | PROT_WRITE, MAP_SHARED, HeapFd[i], 0);
+        if (p == MAP_FAILED) { close(hfd); return false; }
+        HeapMap[i] = (u32*)p;
+        const EGLint at[] = {EGL_WIDTH, W, EGL_HEIGHT, H, EGL_LINUX_DRM_FOURCC_EXT, (EGLint)DRM_FORMAT_ABGR8888,
+                             EGL_DMA_BUF_PLANE0_FD_EXT, HeapFd[i], EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
+                             EGL_DMA_BUF_PLANE0_PITCH_EXT, W * 4, EGL_NONE};
+        EGLImageKHR img = createImage(E.dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, at);
+        if (img == EGL_NO_IMAGE_KHR) { Platform::Log(Platform::LogLevel::Warn, "[gpu3d] dma-buf import failed (0x%x)\n", E.GetError()); close(hfd); return false; }
+        glGenTextures(1, &HeapTex[i]);
+        glBindTexture(GL_TEXTURE_2D, HeapTex[i]);
+        target(GL_TEXTURE_2D, img);
+        glGenFramebuffers(1, &HeapFb[i]);
+        glBindFramebuffer(GL_FRAMEBUFFER, HeapFb[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, HeapTex[i], 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            Platform::Log(Platform::LogLevel::Warn, "[gpu3d] dma-buf framebuffer incomplete\n");
+            close(hfd);
+            return false;
+        }
+    }
+    close(hfd);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    Platform::Log(Platform::LogLevel::Info, "[gpu3d] the 3D rows are 2 cached dma-heap buffers the GPU draws into (no read-back)\n");
+    return true;
 }
 
 GpuRenderer3D::GpuRenderer3D(melonDS::GPU3D& gpu3D, std::unique_ptr<Gpu3DBackend> be, int scale)
@@ -143,6 +213,15 @@ GpuRenderer3D::GpuRenderer3D(melonDS::GPU3D& gpu3D, std::unique_ptr<Gpu3DBackend
     T = std::thread([this] { Thread(); });
     std::unique_lock<std::mutex> l(M);
     DoneCv.wait(l, [this] { return Inited; });
+    if (ReadMode == 2) {  // the rows live in the dma-bufs
+        for (int i = 0; i < 2; i++) {
+            if (HeapMap[i]) memset(HeapMap[i], 0, words * 4);
+            free(OutBuf[i]);
+            OutBuf[i] = HeapMap[i];
+        }
+        HeapOwned = true;
+        Out = Target = OutBuf[0];
+    }
 }
 
 GpuRenderer3D::~GpuRenderer3D() {
@@ -154,7 +233,12 @@ GpuRenderer3D::~GpuRenderer3D() {
         Cv.notify_all();
         T.join();
     }
-    for (auto& b : OutBuf) free(b);
+    if (!HeapOwned)
+        for (auto& b : OutBuf) free(b);
+    for (int i = 0; i < 2; i++) {
+        if (HeapMap[i]) munmap(HeapMap[i], (size_t)256 * 192 * Scale_ * Scale_ * 4);
+        if (HeapFd[i] >= 0) close(HeapFd[i]);
+    }
 }
 
 void GpuRenderer3D::Thread() {
@@ -179,7 +263,18 @@ void GpuRenderer3D::Thread() {
         }
         const uint64_t t0 = NowNs();
         const GLuint tex = Be->GlRender();
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, PackFb);
+        uint64_t tf = 0;
+        if (Finish) {
+            const uint64_t a = NowNs();
+            glFinish();
+            tf = NowNs() - a;
+        }
+        const int hb = Target == OutBuf[1] ? 1 : 0;
+        if (ReadMode == 2) {  // the CPU's reads of this buffer (two frames ago) are over
+            dma_buf_sync sy{DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ};
+            ioctl(HeapFd[hb], DMA_BUF_IOCTL_SYNC, &sy);
+        }
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, ReadMode == 2 ? HeapFb[hb] : PackFb);
         glViewport(0, 0, W, H);
         glDisable(GL_BLEND);
         glDisable(GL_DEPTH_TEST);
@@ -191,24 +286,43 @@ void GpuRenderer3D::Thread() {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, tex);
         glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, PackFb);
+        if (ReadMode == 1) {  // the GPU copies into the pixel buffer; the CPU reads that linear buffer
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, Pbo);
+            for (int c = 0; c < NCHUNK; c++)
+                glReadPixels(0, c * CH, W, CH, GL_RGBA, GL_UNSIGNED_BYTE, (void*)((size_t)c * CH * W * 4));
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        }
         GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
         glFlush();
         const uint64_t t1 = NowNs();
         glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ull);
         glDeleteSync(fence);
         const uint64_t t2 = NowNs();
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, PackFb);
         u32* dst = Target;
+        if (ReadMode == 2) {
+            dma_buf_sync sy{DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ};
+            ioctl(HeapFd[hb], DMA_BUF_IOCTL_SYNC, &sy);
+        }
+        if (ReadMode == 1) glBindBuffer(GL_PIXEL_PACK_BUFFER, Pbo);
         for (int c = 0; c < NCHUNK; c++) {
-            glReadPixels(0, c * CH, W, CH, GL_RGBA, GL_UNSIGNED_BYTE, dst + (size_t)c * CH * W);
+            if (ReadMode == 1) {
+                const size_t len = (size_t)CH * W * 4;
+                const void* p = glMapBufferRange(GL_PIXEL_PACK_BUFFER, c * len, len, GL_MAP_READ_BIT);
+                if (p) memcpy(dst + (size_t)c * CH * W, p, len);
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            } else if (ReadMode == 0)
+                glReadPixels(0, c * CH, W, CH, GL_RGBA, GL_UNSIGNED_BYTE, dst + (size_t)c * CH * W);
             Done[c].store(gen, std::memory_order_release);
             {
                 std::lock_guard<std::mutex> l(M);
             }
             DoneCv.notify_all();
         }
+        if (ReadMode == 1) glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
         const uint64_t t3 = NowNs();
-        StGlNs += t1 - t0;
+        StFinNs += tf;
+        StGlNs += t1 - t0 - tf;
         StWaitNs += t2 - t1;
         StReadNs += t3 - t2;
         {
@@ -254,9 +368,9 @@ void GpuRenderer3D::RenderFrame() {
         const double n = Stats * 1e6;
         Platform::Log(Platform::LogLevel::Info,
                       "[gpu3d] %u frames: emu wait %.3f ms, prepare %.3f ms (emu thread); gl submit %.3f ms, gpu wait %.3f ms, "
-                      "read-back %.3f ms (gpu3d thread) per frame\n",
-                      Stats, StEmuWaitNs / n, StPrepNs / n, StGlNs / n, StWaitNs / n, StReadNs / n);
-        StEmuWaitNs = StPrepNs = StGlNs = StWaitNs = StReadNs = 0;
+                      "read-back %.3f ms, finish %.3f ms (gpu3d thread) per frame\n",
+                      Stats, StEmuWaitNs / n, StPrepNs / n, StGlNs / n, StWaitNs / n, StReadNs / n, StFinNs / n);
+        StEmuWaitNs = StPrepNs = StGlNs = StWaitNs = StReadNs = StFinNs = 0;
     }
 }
 

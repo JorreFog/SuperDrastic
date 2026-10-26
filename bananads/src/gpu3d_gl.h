@@ -81,6 +81,13 @@
     X(glVertexAttribIPointer, PFNGLVERTEXATTRIBIPOINTERPROC) \
     X(glVertexAttribPointer, PFNGLVERTEXATTRIBPOINTERPROC) \
     X(glViewport, PFNGLVIEWPORTPROC) \
+    X(glGenSamplers, PFNGLGENSAMPLERSPROC) \
+    X(glDeleteSamplers, PFNGLDELETESAMPLERSPROC) \
+    X(glBindSampler, PFNGLBINDSAMPLERPROC) \
+    X(glSamplerParameteri, PFNGLSAMPLERPARAMETERIPROC) \
+    X(glFinish, PFNGLFINISHPROC) \
+    X(glClearColor, PFNGLCLEARCOLORPROC) \
+    X(glClearStencil, PFNGLCLEARSTENCILPROC) \
     X(glDispatchCompute, PFNGLDISPATCHCOMPUTEPROC) \
     X(glMemoryBarrier, PFNGLMEMORYBARRIERPROC) \
     X(glBindImageTexture, PFNGLBINDIMAGETEXTUREPROC) \

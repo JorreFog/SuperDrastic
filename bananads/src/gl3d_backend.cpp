@@ -11,6 +11,7 @@
 #include "gl3d_shaders.h"
 
 #include <string.h>
+#include <time.h>
 #include <string>
 #include <vector>
 
@@ -23,6 +24,23 @@ using namespace melonDS;
 namespace bananads {
 
 namespace {
+
+uint64_t NowNs() {
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + ts.tv_nsec;
+}
+// render.gpu3d_finish (a measurement): glFinish after each phase, its time added to Ph[i] (logged every
+// render.gpu3d_stats frames): 0 uploads, 1 clear, 2 opaque, 3 translucent, 4 edge/fog
+uint64_t Ph[5], PhLast;
+unsigned PhN;
+void Phase(int i) {
+    if (!GpuRenderer3D::Finish) return;
+    glFinish();
+    const uint64_t t = NowNs();
+    Ph[i] += t - PhLast;
+    PhLast = t;
+}
 
 GLuint Compile(const char* vs, const char* fs, const char* name, const char* defs,
                std::initializer_list<std::pair<const char*, int>> attrs) {
@@ -175,6 +193,7 @@ private:
     int CurShaderID = -1;
     GLuint ShaderConfigUBO = 0, ClearVertexBufferID = 0, ClearVertexArrayID = 0, ClearBitmapTex[2]{};
     GLuint VertexBufferID = 0, VertexArrayID = 0, IndexBufferID = 0;
+    GLuint Samplers[9]{};
     GLuint ColorBufferTex = 0, DepthBufferTex = 0, AttrBufferTex = 0, MainFramebuffer = 0, FinalFramebuffer = 0;
 };
 
@@ -254,6 +273,14 @@ bool Gl3DBackend::GlInit(int scale) {
         else glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, 256, 256, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, nullptr);
     }
 
+    glGenSamplers(9, Samplers);
+    for (int i = 0; i < 9; i++) {
+        const GLint m[3] = {GL_CLAMP_TO_EDGE, GL_REPEAT, GL_MIRRORED_REPEAT};
+        glSamplerParameteri(Samplers[i], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glSamplerParameteri(Samplers[i], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glSamplerParameteri(Samplers[i], GL_TEXTURE_WRAP_S, m[i / 3]);
+        glSamplerParameteri(Samplers[i], GL_TEXTURE_WRAP_T, m[i % 3]);
+    }
     glGenBuffers(1, &VertexBufferID);
     glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID);
     glBufferData(GL_ARRAY_BUFFER, sizeof(VertexBuffer), nullptr, GL_DYNAMIC_DRAW);
@@ -323,6 +350,7 @@ void Gl3DBackend::GlShutdown() {
     glDeleteBuffers(1, &ClearVertexBufferID);
     glDeleteTextures(2, ClearBitmapTex);
     glDeleteBuffers(1, &ShaderConfigUBO);
+    glDeleteSamplers(9, Samplers);
     for (GLuint p : {ClearShaderPlain, ClearShaderBitmap, RenderShader[0], RenderShader[1], FinalPassEdgeShader, FinalPassFogShader})
         if (p) glDeleteProgram(p);
 }
@@ -541,13 +569,10 @@ bool Gl3DBackend::Prepare(melonDS::GPU3D& g3) {
 void Gl3DBackend::SetupPolygonTexture(const RendererPolygon* poly) const {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D_ARRAY, poly->TexID < Real.size() ? Real[poly->TexID] : 0);
-    GLint repeatS, repeatT;
-    if (poly->TexRepeat & 1) repeatS = (poly->TexRepeat & 4) ? GL_MIRRORED_REPEAT : GL_REPEAT;
-    else repeatS = GL_CLAMP_TO_EDGE;
-    if (poly->TexRepeat & 2) repeatT = (poly->TexRepeat & 8) ? GL_MIRRORED_REPEAT : GL_REPEAT;
-    else repeatT = GL_CLAMP_TO_EDGE;
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, repeatS);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, repeatT);
+    // the wrap modes through sampler objects (melonDS sets them on the texture: a texture state change per draw)
+    const int ms = (poly->TexRepeat & 1) ? ((poly->TexRepeat & 4) ? 2 : 1) : 0;
+    const int mt = (poly->TexRepeat & 2) ? ((poly->TexRepeat & 8) ? 2 : 1) : 0;
+    glBindSampler(0, Samplers[ms * 3 + mt]);
 }
 
 int Gl3DBackend::RenderSinglePolygon(int i) const {
@@ -573,6 +598,16 @@ int Gl3DBackend::RenderPolygonBatch(int i) const {
 }
 
 unsigned Gl3DBackend::GlRender() {
+    if (GpuRenderer3D::Finish) {
+        glFinish();
+        PhLast = NowNs();
+        if (GpuRenderer3D::Stats && ++PhN % GpuRenderer3D::Stats == 0) {
+            const double n = GpuRenderer3D::Stats * 1e6;
+            Platform::Log(Platform::LogLevel::Info, "[gpu3d] gl phases (glFinish each) ms/frame: uploads %.3f clear %.3f opaque %.3f translucent %.3f final %.3f; %d polys\n",
+                          Ph[0] / n, Ph[1] / n, Ph[2] / n, Ph[3] / n, Ph[4] / n, NumFinalPolys);
+            memset(Ph, 0, sizeof Ph);
+        }
+    }
     // the texture cache's recorded work
     for (const Op& o : Ops) {
         if (o.id >= Real.size()) Real.resize(o.id + 64, 0);
@@ -603,6 +638,7 @@ unsigned Gl3DBackend::GlRender() {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RED_INTEGER, GL_UNSIGNED_INT, ClearBitmap[1].data());
     }
 
+    Phase(0);
     CurShaderID = -1;
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, MainFramebuffer);
     glBindBuffer(GL_UNIFORM_BUFFER, ShaderConfigUBO);
@@ -621,6 +657,14 @@ unsigned Gl3DBackend::GlRender() {
     glDepthFunc(GL_ALWAYS);
     glStencilFunc(GL_ALWAYS, 0xFF, 0xFF);
     glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+    // a real clear first (the clear plane's quad below overwrites every value): a tiler then starts the pass without
+    // loading the last frame's colour, attributes and depth/stencil from memory (render.gpu3d_clear, on)
+    if (GpuRenderer3D::Clear) {
+        glClearColor(0, 0, 0, 0);
+        glClearDepthf(1.0f);
+        glClearStencil(0xFF);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    }
 
     if (DispCnt & (1 << 14)) {
         glUseProgram(ClearShaderBitmap);
@@ -645,6 +689,7 @@ unsigned Gl3DBackend::GlRender() {
     glBindBuffer(GL_ARRAY_BUFFER, ClearVertexBufferID);
     glBindVertexArray(ClearVertexArrayID);
     glDrawArrays(GL_TRIANGLES, 0, 2 * 3);
+    Phase(1);
 
     if (HavePolys) {
         glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID);
@@ -682,6 +727,7 @@ void Gl3DBackend::RenderSceneChunk() {
         glStencilMask(0xFF);
         i += RenderPolygonBatch(i);
     }
+    Phase(2);
 
     glEnable(GL_BLEND);
     glBlendEquationSeparate(GL_FUNC_ADD, GL_MAX);
@@ -814,6 +860,8 @@ void Gl3DBackend::RenderSceneChunk() {
         }
     }
 
+    glBindSampler(0, 0);
+    Phase(3);
     if (DispCnt & 0x00A0) {  // fog/edge marking: through the colour-only framebuffer
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, FinalFramebuffer);
         glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -848,6 +896,7 @@ void Gl3DBackend::RenderSceneChunk() {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+    Phase(4);
 }
 
 std::unique_ptr<Gpu3DBackend> MakeGl3DBackend(melonDS::GPU3D& g) { return std::make_unique<Gl3DBackend>(g); }

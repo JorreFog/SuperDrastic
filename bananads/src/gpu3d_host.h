@@ -13,6 +13,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 
 #include "GPU3D.h"
@@ -56,6 +57,10 @@ public:
     void RestartFrame() override {}
     melonDS::u32* GetLine(int line) override;
     static int Stats;  // render.gpu3d_stats: a [gpu3d] timing line every N frames
+    static int ReadMode;  // render.gpu3d_read: 2 heap (default: drawn into cached dma-bufs), 1 pbo, 0 direct glReadPixels
+    static int Clear;     // render.gpu3d_clear (on): a glClear before the clear plane's quad
+    static int Finish;    // render.gpu3d_finish (measurement): glFinish after the backend's draw, its GPU time apart
+    static std::string MesaDebug;  // render.gpu3d_mesa_debug: PAN_MESA_DEBUG for the context (e.g. perf)
 
     // the Banana 2D engine's hi-res interface (as GengisRenderer3D's: gx.h's 3x/4x row layout, melonDS's 3D format)
     const melonDS::u32* GetQuarter(int line, int q);
@@ -93,6 +98,13 @@ private:
     alignas(16) melonDS::u32 Scrolled[16][256];
     std::thread T;
     // GL objects of the pack pass (host side)
+    unsigned Pbo = 0;
+    bool HeapSetup();
+    int HeapFd[2] = {-1, -1};
+    melonDS::u32* HeapMap[2] = {};
+    unsigned HeapTex[2] = {}, HeapFb[2] = {};
+    bool HeapOwned = false;
+    uint64_t StFinNs = 0;
     unsigned PackProg = 0, PackTex = 0, PackFb = 0, Vao = 0;
     int PackScaleLoc = -1;
     // stats
