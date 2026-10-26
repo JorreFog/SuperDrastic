@@ -31,6 +31,8 @@
 #define gx_render_bin gx2_render_bin
 #elif GX_SCALE == 3
 #define gx_render_bin gx3_render_bin
+#elif GX_SCALE == 4 && defined(GX_QUARTER)
+#define gx_render_bin gx4q_render_bin
 #elif GX_SCALE == 4
 #define gx_render_bin gx4_render_bin
 #endif
@@ -44,7 +46,9 @@
 /* GX_SUB: the bins a frame bin is rendered as, one after the other (4x: two of 32 lines, so that a bin's context of
  * GX_BL + 2 lines fits the walker's and the kernels' 64-line span arrays, the 64-bit shadow line mask and defer.c's
  * owner buffer; 64 + 2 lines would not) */
-#if GX_SCALE == 4
+#if GX_SCALE == 4 && defined(GX_QUARTER)
+#define GX_SUB 4                            /* (gx4q.c: 16-line bins, render.gengis_units=2) */
+#elif GX_SCALE == 4
 #define GX_SUB 2
 #else
 #define GX_SUB 1
@@ -222,20 +226,25 @@ int gx_lazy;                            /* render.gengis_lazy (gengis_renderer.c
 /* one polygon into the bin's context: hr.c's hr_polygon on its fused path. bin_top/bin_bot: the frame lines the walk
  * covers (the bin and its neighbour lines), lb: the frame line of context line 0 */
 static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer,
-                       unsigned trim) {
+                       unsigned trim, unsigned wtop, unsigned wbot) {
     const unsigned count = p->count, flags = p->flags;
     if (count < 1 || count > 10) return;
     vtx_t *vptr[12];
     for (unsigned k = 0; k < count; k++) vptr[k] = (vtx_t *)p->vtx[k];
     vptr[count] = vptr[0]; vptr[count + 1] = vptr[1];
     const unsigned y_top = p->ytop, ybot = p->ybot;
-    const int top_clip = y_top < bin_top, bot_clip = ybot > bin_bot;
-    const unsigned y_end = ybot < bin_bot ? ybot : bin_bot, y_first = y_top > bin_top ? y_top : bin_top;
+    /* the walk's window [wtop, wbot): the bin's own lines, except in gx4q.c's 16-line bins, which walk their 32-line
+     * bin's window (the walker's values on a line depend on the line it starts at) and rasterize only their lines:
+     * the same spans as the 32-line bins, bit for bit */
+    const int top_clip = y_top < wtop, bot_clip = ybot > wbot;
+    const unsigned y_end = ybot < wbot ? ybot : wbot, y_first = y_top > wtop ? y_top : wtop;
     const int lines = (int)y_end - (int)y_first;
     if (lines <= 0) return;
+    const unsigned c_end = ybot < bin_bot ? ybot : bin_bot, c_first = y_top > bin_top ? y_top : bin_top;
+    if ((int)c_end - (int)c_first <= 0) return;
     uint8_t *span = H->spans, *sp = span;
     const int marks = (d3 >> 5) & 1;
-    const unsigned ys0 = marks ? bin_top - top_clip : bin_top, ye = marks ? y_end + bot_clip : y_end;
+    const unsigned ys0 = marks ? wtop - top_clip : wtop, ye = marks ? y_end + bot_clip : y_end;
     if (!(flags & 0x18)) {
         walk_chain(span, &vptr[0], 1, ys0, ye, 1);
         walk_chain(span + GX_SPS, &vptr[count], -1, ys0, ye, 1);
@@ -254,14 +263,15 @@ static void gx_polygon(gx_t *H, const gx_poly *p, unsigned bin_top, unsigned bin
         sp = span + 4 * top_clip;
         walk_markers(sp, (uint32_t)lines, (uint32_t)(bot_clip << 1 | top_clip));
     } else walk_spans(span, lines, 1);
-    unsigned line0 = (unsigned)((int)y_first - lb);
-    if (line0 + (unsigned)lines > GX_CL) return;     /* (cannot happen: the walk is within the window) */
+    sp += 4 * (c_first - y_first);                   /* (the bin's lines of the walk: all of it unless gx4q.c) */
+    unsigned line0 = (unsigned)((int)c_first - lb);
+    if (line0 + (c_end - c_first) > GX_CL) return;   /* (cannot happen: the walk is within the window) */
     /* trim (edge marking off, opaque polygons; gx_render_bin says when): the context lines above and below the bin
      * are walked as before (the spans' values depend on where the walk starts) but not rasterized. Nothing reads
      * them then (the resolve and the output take the bin's lines; edge marking, their reader, is off), and an opaque
      * polygon's pixels in the bin's lines do not depend on its batches (the flat colour is every line's colour, the
      * white-line shortcut gives the same bits) */
-    int nl = lines;
+    int nl = (int)(c_end - c_first);
     if (trim & 1 && line0 == 0) { sp += 4; line0 = 1; nl--; }
     if (trim & 2 && line0 + (unsigned)nl == GX_CL) nl--;
     if (nl <= 0) return;
@@ -369,6 +379,13 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     const unsigned bin_top = hy0 ? hy0 - 1 : 0;
     unsigned bin_bot = hy0 + GX_BL + 1;
     if (bin_bot > GX_H) bin_bot = GX_H;
+#if defined(GX_QUARTER)
+    const unsigned whys0 = hy0 / (2 * GX_BL) * (2 * GX_BL);         /* the 32-line bin's walk window */
+    const unsigned wtop = whys0 ? whys0 - 1 : 0;
+    const unsigned wbot = whys0 + 2 * GX_BL + 1 > GX_H ? GX_H : whys0 + 2 * GX_BL + 1;
+#else
+    const unsigned wtop = bin_top, wbot = bin_bot;
+#endif
     const int defer = gx_defer && !gx_ref;
     gx_lazy_on = gx_lazy && !gx_ref && !defer && !(f->d3 & (1u << 14));
     if (gx_lazy_on) {
@@ -398,7 +415,7 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
         const gx_poly *p = &f->polys[i];
         const int d = defer && !((U32(p->rec, 4) >> 4) & 3);       /* modulate-shaded ones are deferred */
         if (defer && !d) defer_flush(&layout_gx, H->ctx);
-        gx_polygon(H, p, bin_top, bin_bot, lb, f->d3, d, trim);
+        gx_polygon(H, p, bin_top, bin_bot, lb, f->d3, d, trim, wtop, wbot);
     }
     if (defer) defer_flush(&layout_gx, H->ctx);
     if (f->ntranslucent) {
@@ -407,7 +424,7 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
         for (unsigned i = nopa; i < f->npolys; i++) {
             const uint32_t y = yr[i];
             if ((y >> 16) <= bin_top || (y & 0xffff) >= bin_bot) continue;
-            gx_polygon(H, &f->polys[i], bin_top, bin_bot, lb, f->d3, 0, 0);
+            gx_polygon(H, &f->polys[i], bin_top, bin_bot, lb, f->d3, 0, 0, wtop, wbot);
         }
         gx_lzid_on = 0;
     }
@@ -480,7 +497,9 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
 void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     for (unsigned s = 0; s < GX_SUB; s++) gx_render_sub(f, bin * GX_SUB + s, out + s * GX_BL * GX_W);
 }
-#if GX_SCALE == 4
+#if GX_SCALE == 4 && defined(GX_QUARTER)
+void gx4q_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
+#elif GX_SCALE == 4
 void gx4_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
 #endif
 #endif
