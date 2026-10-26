@@ -49,6 +49,7 @@
 #include <algorithm>
 #include <fstream>
 #include <glob.h>
+#include <iterator>
 #include <atomic>
 #include <chrono>
 #include <climits>
@@ -1097,6 +1098,47 @@ static int menu_key(int code) {
 }
 static bool is_menu_button(int code) { return code == BTN_THUMBL || code == KEY_F2; }
 // the menu's Hotkeys page: the buttons the input loop below reads (keep the two together), and bananad's volume keys
+// kms.input: scripted presses by emulated frame (a benchmark's input that is the same at every speed and scale, so
+// two runs emulate the same frames: their sound compares bit for bit). headless.input's syntax: "<frame>:<keys>[:<frames
+// held>]" separated by commas (or newlines), keys joined by '+' (a b select start right left up down r l x y), held
+// 6 frames unless given; frame 0 = the first frame emulated (after the resume state's load). "save1".."save3" as a
+// key saves the state to that slot at the frame's start. "@<file>" reads the list from a file. OR-ed with the pad's.
+struct KmsPress { long at, len; uint32_t keys; int save; };
+static std::vector<KmsPress> kms_parse_input(std::string spec) {
+    static const char* names[12] = {"a", "b", "select", "start", "right", "left", "up", "down", "r", "l", "x", "y"};
+    std::vector<KmsPress> out;
+    if (!spec.empty() && spec[0] == '@') {
+        std::ifstream f(spec.substr(1));
+        if (!f) { Log(LogLevel::Error, "[kms] kms.input: can't read %s\n", spec.c_str() + 1); return out; }
+        std::string all((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        spec = all;
+    }
+    for (char& c : spec) if (c == '\n' || c == '\r' || c == ' ') c = ',';
+    size_t i = 0;
+    while (i < spec.size()) {
+        size_t e = spec.find(',', i);
+        std::string item = spec.substr(i, e == std::string::npos ? std::string::npos : e - i);
+        i = e == std::string::npos ? spec.size() : e + 1;
+        size_t c1 = item.find(':');
+        if (c1 == std::string::npos) continue;
+        size_t c2 = item.find(':', c1 + 1);
+        KmsPress p{atol(item.c_str()), c2 == std::string::npos ? 6 : atol(item.c_str() + c2 + 1), 0, 0};
+        std::string keys = item.substr(c1 + 1, c2 == std::string::npos ? std::string::npos : c2 - c1 - 1);
+        size_t k = 0;
+        while (k <= keys.size()) {
+            size_t plus = keys.find('+', k);
+            std::string name = keys.substr(k, plus == std::string::npos ? std::string::npos : plus - k);
+            for (int b = 0; b < 12; b++)
+                if (name == names[b]) p.keys |= 1u << b;
+            if (name.size() == 5 && name.compare(0, 4, "save") == 0 && name[4] >= '1' && name[4] <= '3') p.save = name[4] - '0';
+            if (plus == std::string::npos) break;
+            k = plus + 1;
+        }
+        out.push_back(p);
+    }
+    return out;
+}
+
 static bool g_quit_saves = true;  // resume.on_quit: F + START saves the spot
 static int mh_hotkey(void*, int i, const char** keys, const char** what) {
     static const char* const k[][2] = {
@@ -1622,6 +1664,10 @@ int run_kms(Emu& emu, const Config& cfg) {
         Pacer pace(feed, period);
         int touched = -1, ff = 0;
         long emu_frames = 0;
+        const std::vector<KmsPress> script = kms_parse_input(cfg.str("kms.input", ""));
+        long script_end = 0;
+        for (const KmsPress& p : script) script_end = std::max(script_end, p.at + p.len);
+        if (!script.empty()) Log(LogLevel::Info, "[kms] kms.input: %zu presses, to frame %ld\n", script.size(), script_end);
         const bool ff_mute = cfg.flag("kms.ff_mute", true);
         // kms.lowlat: the deadline the next frame aims at (0: none yet), and kms.lowlat_pad_us on top of the frames'
         // measured times (decaying maxima, Display::emu_us and pres_us)
@@ -1676,7 +1722,19 @@ int run_kms(Emu& emu, const Config& cfg) {
 #endif
                 Log(LogLevel::Info, "[kms] fast-forward %s\n", ff ? (ff == 99 ? "max" : ff == 2 ? "2x" : "3x") : "off");
             }
-            emu.set_keys(in_keys.load(std::memory_order_relaxed));
+            if (!script.empty() && emu_frames <= script_end) {
+                uint32_t keys = 0;
+                for (const KmsPress& p : script) {
+                    if (emu_frames >= p.at && emu_frames < p.at + p.len) keys |= p.keys;
+                    if (p.save && emu_frames == p.at) {
+                        const bool ok = emu.save_state(p.save);
+                        Log(LogLevel::Info, "[kms] kms.input: frame %ld state %s slot %d\n", emu_frames, ok ? "saved to" : "NOT saved to", p.save);
+                    }
+                }
+                emu.set_keys(in_keys.load(std::memory_order_relaxed) | keys);
+                if (emu_frames == script_end) Log(LogLevel::Info, "[kms] kms.input: done at frame %ld\n", emu_frames);
+            } else
+                emu.set_keys(in_keys.load(std::memory_order_relaxed));
             if (const bool l = in_lid.load(std::memory_order_relaxed); l != lid) {
                 lid = l;
                 emu.set_lid(l);  // the game sees the DS close: most go to their sleep mode, some play a sound
