@@ -1,0 +1,385 @@
+ARMJIT: jit.stats, a debug readout of blocks, exits and links (BananaDS J6)
+
+MELONDS_JIT_STATS=N: a "[jit] stats" log line every N frames. Off (default): nothing counted, the exit stubs
+are emitted byte for byte as before. The emulation never reads the counters.
+
+diff -ruN a/src/ARM.cpp b/src/ARM.cpp
+--- a/src/ARM.cpp
++++ b/src/ARM.cpp
+@@ -25,6 +25,7 @@
+ #include "ARMInterpreter.h"
+ #include "AREngine.h"
+ #include "ARMJIT.h"
++#include "ARMJIT_Stats.h"
+ #include "Platform.h"
+ #include "GPU.h"
+ #include "ARMJIT_Memory.h"
+@@ -666,7 +667,10 @@
+             JitBlockEntry block = NDS.JIT.LookUpBlock(0, FastBlockLookup,
+                 instrAddr - FastBlockLookupStart, instrAddr);
+             if (block)
++            {
++                JitStatInc(JS_Dispatch9);
+                 ARM_Dispatch(this, block, NDS.JIT.Memory.FastMemStart(0));
++            }
+             else
+                 NDS.JIT.CompileBlock(this);
+ 
+@@ -807,7 +811,10 @@
+             JitBlockEntry block = NDS.JIT.LookUpBlock(1, FastBlockLookup,
+                 instrAddr - FastBlockLookupStart, instrAddr);
+             if (block)
++            {
++                JitStatInc(JS_Dispatch7);
+                 ARM_Dispatch(this, block, NDS.JIT.Memory.FastMemStart(1));
++            }
+             else
+                 NDS.JIT.CompileBlock(this);
+ 
+diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -27,6 +27,7 @@
+ #include "../ARMJIT.h"
+ #include "../NDS.h"
+ #include "../ARMJIT_Global.h"
++#include "../ARMJIT_Stats.h"
+ 
+ #include <stdlib.h>
+ 
+@@ -325,6 +326,7 @@
+     JitMemMainSize = ARMJIT_Global::CodeMemorySliceSize;
+ #endif
+     SetCodePtr(0);
++    JitStatsInit();   // (patch 0400: before the stubs, which have counters only with it on)
+ 
+     {
+         // patch 0007's code generation improvements: MELONDS_JIT_OLDCODEGEN=1 turns all of them off, or one
+@@ -1058,6 +1060,8 @@
+     const u8* resume = nullptr;   // (a self loop's way round after the late check: SLICECHAIN goes on there)
+     if (selfLoop)
+     {
++        if (!LoopMode)
++            Comp_StatInc(Num ? JS_SelfLoop7 : JS_SelfLoop9);
+         LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
+         stop = CBNZ(W0);
+         ARM64Reg ts = LoopMode && LoopTsReg != INVALID_REG ? LoopTsReg : X16;
+@@ -1144,6 +1148,17 @@
+     SwapCodeRegion();
+ }
+ 
++void Compiler::Comp_StatInc(int id)
++{
++    // (patch 0400, jit.stats) ++JitStat[id] with x16/x17 only, NZCV untouched; never emitted with the stats off
++    if (!JitStatsOn())
++        return;
++    MOVP2R(X16, &JitStat[id]);
++    LDR(INDEX_UNSIGNED, X17, X16, 0);
++    ADD(X17, X17, 1);
++    STR(INDEX_UNSIGNED, X17, X16, 0);
++}
++
+ void Compiler::Gen_ExitStubs(int num)
+ {
+     // ExitCheck (a BL from an exit with a known target): what ARMv5/ARMv4::Execute's loop does after a block.
+@@ -1213,12 +1228,14 @@
+     if (!OptExitStub)
+     {
+         ExitCheck[num][0] = ExitCheck[num][1] = GetRXPtr();
++        Comp_StatInc(num ? JS_ExitCheck7 : JS_ExitCheck9);
+         FixupBranch stop, late;
+         checks(stop, late);
+         STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));   // (the next block reads it from memory)
+         RET();
+         SetJumpTarget(stop);
+         SetJumpTarget(late);
++        Comp_StatInc(num ? JS_ExitCheckLoop7 : JS_ExitCheckLoop9);
+         MOVP2R(X30, (void*)ARM_Ret);
+         RET();
+     }
+@@ -1238,7 +1255,17 @@
+             ExitCheckPC[num][c] = GetRXPtr();
+             LDR(INDEX_UNSIGNED, W0, X30, 4);
+             STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
+-            ExitCheck[num][c] = GetRXPtr();
++            if (JitStatsOn())
++            {
++                // (jit.stats: ExitCheckPC counted here, then over ExitCheck's own count)
++                Comp_StatInc(num ? JS_ExitCheck7 : JS_ExitCheck9);
++                FixupBranch counted = B();
++                ExitCheck[num][c] = GetRXPtr();
++                Comp_StatInc(num ? JS_ExitCheck7 : JS_ExitCheck9);
++                SetJumpTarget(counted);
++            }
++            else
++                ExitCheck[num][c] = GetRXPtr();
+             FixupBranch stop, late;
+             checks(stop, late);
+             if (c)
+@@ -1255,6 +1282,7 @@
+                 SetJumpTarget(out);
+             }
+             SetJumpTarget(stop);
++            Comp_StatInc(num ? JS_ExitCheckLoop7 : JS_ExitCheckLoop9);
+             retToLoop();
+         }
+         if (chain)
+@@ -1286,6 +1314,7 @@
+     for (int c = 1; c >= (OptExitStub ? 0 : 1); c--)
+     {
+         (a ? DynExitA : DynExit)[num][c] = GetRXPtr();
++        Comp_StatInc(num ? JS_DynExit7 : JS_DynExit9);
+         FixupBranch stop, late;
+         checks(stop, late);
+         const u8* resume = (const u8*)GetRXPtr();
+@@ -1357,6 +1386,7 @@
+         SetJumpTarget(stop);
+         SetJumpTarget(outside);
+         SetJumpTarget(miss);
++        Comp_StatInc(num ? JS_DynExitLoop7 : JS_DynExitLoop9);
+         QuickTailCall(X16, ARM_Ret);
+         if (lit)
+         {
+@@ -1489,6 +1519,7 @@
+     *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
+     NDS.JIT.JitEnableExecute();
+     FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
++    JitStatInc(JS_Linked);
+     LinkedTo[(u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
+ }
+ 
+@@ -1515,6 +1546,7 @@
+     u8* slot = (u8*)(uintptr_t)melonds_jit_link[0];
+     ARM* from = (ARM*)(uintptr_t)melonds_jit_link[1];
+     melonds_jit_link[0] = 0;
++    JitStatInc(JS_LinkReq);
+     if (from == cpu)
+         cpu->NDS.JIT.JITCompiler.Link(slot, cpu, entry);
+ }
+diff -ruN a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -246,6 +246,7 @@
+     void Comp_Exit(bool known, u32 knownR15, bool thumbAfter, bool storeR15 = false);
+     void Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool storeR15);
+     void Gen_ExitStubs(int num);
++    void Comp_StatInc(int id);   // (patch 0400, jit.stats)
+     // [num][1]: the stubs store the CPSR before going on into the next block; [num][0] (OptExitStub, for exits
+     // whose block left RCPSR as it is in memory) don't
+     void* ExitCheck[2][2] = {};
+diff -ruN a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -23,6 +23,7 @@
+ #include <assert.h>
+ #include <unordered_map>
+ 
++#include "ARMJIT_Stats.h"
+ #define XXH_STATIC_LINKING_ONLY
+ #include "xxhash/xxhash.h"
+ 
+@@ -1543,6 +1544,9 @@
+         JitEnableWrite();
+         block->EntryPoint = JITCompiler.CompileBlock(cpu, thumb, instrs, i, hasMemoryInstr);
+         JitEnableExecute();
++        JitStatInc(cpu->Num ? JS_Compiled7 : JS_Compiled9);
++        JitStatInc(cpu->Num ? JS_Thumb7 : JS_Thumb9, thumb ? 1 : 0);
++        JitStatInc(cpu->Num ? JS_Instrs7 : JS_Instrs9, i);
+ 
+         JIT_DEBUGPRINT("block start %p\n", block->EntryPoint);
+     }
+@@ -1550,6 +1554,7 @@
+     {
+         JIT_DEBUGPRINT("restored! %p\n", prevBlock);
+         block = prevBlock;
++        JitStatInc(cpu->Num ? JS_Restored7 : JS_Restored9);
+     }
+ 
+     assert((localAddr & 1) == 0);
+@@ -1631,6 +1636,7 @@
+ void ARMJIT::InvalidateByAddr(u32 localAddr) noexcept
+ {
+     JIT_DEBUGPRINT("invalidating by addr %x\n", localAddr);
++    JitStatInc(JS_InvalAddr);
+ 
+     AddressRange* region = CodeMemRegions[localAddr >> 27];
+     AddressRange* range = &region[(localAddr & 0x7FFFFFF) / 512];
+@@ -1691,6 +1697,7 @@
+ 
+ void ARMJIT::InvalidateBlock(JitBlock* block, AddressRange* range, AddressRange* region, u32 localAddr) noexcept
+ {
++    JitStatInc(block->Num ? JS_Removed7 : JS_Removed9);
+     if (TrackingNewBlocks)  // (patch 0091) a frame run ahead: the block is no longer DropNewBlocks' to drop
+     {
+         for (size_t q = 0; q < NewBlocks.size(); q++)
+@@ -1856,6 +1863,7 @@
+ 
+ void ARMJIT::ResetBlockCache() noexcept
+ {
++    JitStatInc(JS_Resets);
+     NewBlocks.clear();  // (patch 0091: every block goes)
+     HotRangeIdx.clear();  // (patch 0018: the ranges are emptied below)
+     // (the hot granules stay: they're the game's habit, not the cache's)
+diff -ruN a/src/ARMJIT_Stats.cpp b/src/ARMJIT_Stats.cpp
+--- a/src/ARMJIT_Stats.cpp
++++ b/src/ARMJIT_Stats.cpp
+@@ -0,0 +1,57 @@
++// JIT statistics (BananaDS patch 0400): see ARMJIT_Stats.h
++#include <stdlib.h>
++#include <string.h>
++#include "ARMJIT_Stats.h"
++#include "Platform.h"
++
++namespace melonDS
++{
++using Platform::Log;
++using Platform::LogLevel;
++
++static int ReadStatsEnv()
++{
++    const char* e = getenv("MELONDS_JIT_STATS");
++    const long v = e ? strtol(e, nullptr, 0) : 0;
++    return v > 0 ? (int)v : 0;
++}
++
++int JitStatsEvery = 0;
++
++void JitStatsInit()
++{
++    JitStatsEvery = ReadStatsEnv();
++    if (JitStatsEvery)
++        Log(LogLevel::Info, "[jit] stats on: a line every %d frames\n", JitStatsEvery);
++}
++u64 JitStat[JS_Count] = {};
++static int JitStatsFrames = 0;
++
++void JitStatsFrame(NDS&)
++{
++    if (++JitStatsFrames < JitStatsEvery)
++        return;
++    const double f = JitStatsFrames;
++    const u64* s = JitStat;
++    auto pf = [&](int id) { return (double)s[id] / f; };
++    // ExitCheck/DynExit entries that didn't go back to the loop went on into a block (ExitCheck: through its
++    // slot, linked unless it was a link request)
++    const double ecOn9 = pf(JS_ExitCheck9) - pf(JS_ExitCheckLoop9), ecOn7 = pf(JS_ExitCheck7) - pf(JS_ExitCheckLoop7);
++    Log(LogLevel::Info, "[jit] stats %d frames, per frame: compiled 9:%.1f (thumb %.0f%%, %.1f instrs/block) 7:%.1f"
++        " (thumb %.0f%%) restored 9:%.1f 7:%.1f removed 9:%.1f 7:%.1f inval-addr %.1f resets %llu |"
++        " loop dispatch 9:%.0f 7:%.0f | ExitCheck 9:%.0f (to loop %.0f, on %.0f) 7:%.0f (to loop %.0f, on %.0f)"
++        " DynExit 9:%.0f (to loop %.0f) 7:%.0f (to loop %.0f) | self loops 9:%.0f 7:%.0f | slicechain %.0f ok %.0f |"
++        " link req %.1f linked %.1f\n",
++        JitStatsFrames, pf(JS_Compiled9), s[JS_Compiled9] ? 100.0 * s[JS_Thumb9] / s[JS_Compiled9] : 0.0,
++        s[JS_Compiled9] ? (double)s[JS_Instrs9] / s[JS_Compiled9] : 0.0, pf(JS_Compiled7),
++        s[JS_Compiled7] ? 100.0 * s[JS_Thumb7] / s[JS_Compiled7] : 0.0, pf(JS_Restored9), pf(JS_Restored7),
++        pf(JS_Removed9), pf(JS_Removed7), pf(JS_InvalAddr), (unsigned long long)s[JS_Resets],
++        pf(JS_Dispatch9), pf(JS_Dispatch7),
++        pf(JS_ExitCheck9), pf(JS_ExitCheckLoop9), ecOn9, pf(JS_ExitCheck7), pf(JS_ExitCheckLoop7), ecOn7,
++        pf(JS_DynExit9), pf(JS_DynExitLoop9), pf(JS_DynExit7), pf(JS_DynExitLoop7),
++        pf(JS_SelfLoop9), pf(JS_SelfLoop7), pf(JS_Chain9), pf(JS_ChainOk9), pf(JS_LinkReq), pf(JS_Linked));
++    memset(JitStat, 0, sizeof(JitStat));
++    JitStatsFrames = 0;
++}
++
++}
+diff -ruN a/src/ARMJIT_Stats.h b/src/ARMJIT_Stats.h
+--- a/src/ARMJIT_Stats.h
++++ b/src/ARMJIT_Stats.h
+@@ -0,0 +1,35 @@
++// JIT statistics (BananaDS patch 0400, `jit.stats`): counters for a debug readout, off by default.
++// MELONDS_JIT_STATS=N (N > 0): one "[jit] stats" log line every N frames (counts over those frames). Off: no counter is
++// touched anywhere and the exit stubs are emitted byte for byte as without this patch (the counters in the stubs
++// are only generated when it is on). The emulation doesn't see it either way (counters are host memory only).
++#ifndef ARMJIT_STATS_H
++#define ARMJIT_STATS_H
++
++#include "types.h"
++
++namespace melonDS
++{
++class NDS;
++
++enum JitStatId
++{
++    JS_Compiled9, JS_Compiled7, JS_Thumb9, JS_Thumb7, JS_Instrs9, JS_Instrs7, JS_Restored9, JS_Restored7,
++    JS_Removed9, JS_Removed7, JS_InvalAddr, JS_Resets,
++    JS_Dispatch9, JS_Dispatch7, JS_LinkReq, JS_Linked,
++    JS_ExitCheck9, JS_ExitCheck7, JS_ExitCheckLoop9, JS_ExitCheckLoop7,
++    JS_DynExit9, JS_DynExit7, JS_DynExitLoop9, JS_DynExitLoop7,
++    JS_SelfLoop9, JS_SelfLoop7, JS_Chain9, JS_ChainOk9,
++    JS_Count
++};
++
++extern int JitStatsEvery;          // frames per line, 0 = off (from MELONDS_JIT_STATS at the first use)
++extern u64 JitStat[JS_Count];
++
++inline bool JitStatsOn() { return JitStatsEvery > 0; }
++inline void JitStatInc(int id, u64 n = 1) { if (__builtin_expect(JitStatsEvery > 0, 0)) JitStat[id] += n; }
++void JitStatsFrame(NDS& nds);       // after each frame, when on
++void JitStatsInit();                // reads MELONDS_JIT_STATS (as the JIT compiler is created)
++
++}
++
++#endif
+diff -ruN a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -119,6 +119,7 @@
+         ARMJIT.cpp
+         ARMJIT_Memory.cpp
+         ARMJIT_Global.cpp
++        ARMJIT_Stats.cpp
+ 
+         dolphin/CommonFuncs.cpp)
+     
+diff -ruN a/src/NDS.cpp b/src/NDS.cpp
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -21,6 +21,7 @@
+ #include <string.h>
+ #include <inttypes.h>
+ #include "NDS.h"
++#include "ARMJIT_Stats.h"
+ #include "ARM.h"
+ #include "NDSCart.h"
+ #include "GBACart.h"
+@@ -1429,7 +1430,10 @@
+         // LookUpBlock
+         const u64 entry = cpu.FastBlockLookup[offset / 2];
+         if (entry >> 32 == (instrAddr | num)) [[likely]]
++        {
++            JitStatInc(num ? JS_Dispatch7 : JS_Dispatch9);
+             ARM_Dispatch(&cpu, (JitBlockEntry)(rxBase + (u32)entry), nds.JIT.Memory.FastMemStart(num));
++        }
+         else
+             nds.JIT.CompileBlock(&cpu);
+ 
+@@ -1762,6 +1766,13 @@
+ 
+ u32 NDS::SliceChain9(NDS* nds) noexcept
+ {
++    if (__builtin_expect(JitStatsOn(), 0))
++    {
++        const u32 r = nds->SliceChainStep();
++        JitStat[JS_Chain9]++;
++        JitStat[JS_ChainOk9] += r ? 1 : 0;
++        return r;
++    }
+     return nds->SliceChainStep();
+ }
+ #endif
+@@ -1770,7 +1781,15 @@
+ {
+ #ifdef JIT_ENABLED
+     if (EnableJIT)
++    {
++        if (__builtin_expect(JitStatsOn(), 0))   // (patch 0400, jit.stats)
++        {
++            const u32 r = RunFrame<CPUExecuteMode::JIT>();
++            JitStatsFrame(*this);
++            return r;
++        }
+         return RunFrame<CPUExecuteMode::JIT>();
++    }
+     else
+ #endif
+ #ifdef GDBSTUB_ENABLED

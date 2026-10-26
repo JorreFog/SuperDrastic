@@ -446,6 +446,14 @@ bool Emu::load_rom(const std::string& path) {
         else if (v == "off") setenv("MELONDS_JIT_NOCP15NOP", "1", 1);
     }
 
+    // jit.stats=N (frames, 0 = off): MELONDS_JIT_STATS (melonDS patch 0400): a "[jit] stats" log line every N frames
+    // (blocks compiled/restored/removed, resets, loop dispatches, exits by kind, self loops, links). A debug readout:
+    // with it on, the exit stubs count (a few host instructions each); off, nothing is counted or emitted
+    {
+        const long n = cfg_.num("jit.stats", 0);
+        if (n > 0) setenv("MELONDS_JIT_STATS", std::to_string(n).c_str(), 1);
+    }
+
     // jit.fastclz=on|off: off sets MELONDS_JIT_SOFTCLZ=1, on unsets it (melonDS patch 0088: the AArch64 emitter's
     // CountLeadingZeros by CLZ instead of a bit-by-bit loop; the JIT compiles faster, the code it emits is the same).
     // Read at the emitter's first use: one setting per process
