@@ -56,6 +56,7 @@ GengisRenderer3D::~GengisRenderer3D() {
 void GengisRenderer3D::Reset() {
     WaitAll();
     Textures.clear();
+    Stale.clear();
     memset(OutBuf, 0, sizeof OutBuf);
     for (auto& k : BinKey) k.clear();
 }
@@ -205,7 +206,18 @@ const gx_texture* GengisRenderer3D::GetTexture(uint32_t texparam, uint32_t texpa
         e = std::make_unique<Texture>();
         const uint64_t d0 = Stats ? ThreadNs() : 0;
         Decode(*e, texparam, texpal);
-        const uint64_t serial = ++TexSerial;  // (render.gengis_reuse: this decode's identity, in the unused +8)
+        // render.gengis_reuse: the decode's identity (in the unused +8), kept from the dropped decode of the same
+        // texture when the new one has the same texels and palette (a VRAM write of the same bytes, or an
+        // animation back to a frame it had): bins that use it can still be reused
+        uint64_t serial = 0;
+        auto st = Stale.find(key);
+        if (st != Stale.end()) {
+            const Texture& o = *st->second;
+            if (o.texels == e->texels && o.idx == e->idx && o.pal == e->pal) memcpy(&serial, o.t.pad0, sizeof serial);
+            Stale.erase(st);
+            if (Stats) StSameTex += serial != 0;
+        }
+        if (!serial) serial = ++TexSerial;
         memcpy(e->t.pad0, &serial, sizeof serial);
         if (Stats) { StDecNs += ThreadNs() - d0; StDecoded++; StDecTexels += (uint64_t)e->t.width * e->t.height; }
     }
@@ -220,8 +232,11 @@ void GengisRenderer3D::InvalidateTextures(const uint64_t* texdirty, const uint64
         uint64_t hit = 0;
         if (tex) for (int i = 0; i < 1024 / 64; i++) hit |= e.texblk[i] & texdirty[i];
         if (pal) for (int i = 0; i < 256 / 64; i++) hit |= e.palblk[i] & paldirty[i];
-        if (hit) it = Textures.erase(it);
-        else ++it;
+        if (hit) {
+            if (Stale.size() >= 512) Stale.clear();
+            Stale[it->first] = std::move(it->second);  // (GetTexture compares the next decode with it)
+            it = Textures.erase(it);
+        } else ++it;
     }
 }
 
@@ -372,6 +387,32 @@ void GengisRenderer3D::BinKeys() {
             k.insert(k.end(), (const uint8_t*)&p.ytop, (const uint8_t*)&p.ytop + 6);   // ytop ybot count flags
         }
         BinReuse[b] = can && k == BinKey[b];
+        if (Stats && can && !BinReuse[b] && !BinKey[b].empty()) {
+            // why not (the stats' "why"): the first differing byte's field. 0 frame state, 1 polygon set (sizes
+            // differ), 2 a polygon record (attr, texture...), 3 its vertices' x y, 4 their w z, 5 colour, 6 s t,
+            // 7 ytop/ybot/count/flags
+            const std::vector<uint8_t>& o = BinKey[b];
+            size_t i = 0, n = std::min(o.size(), k.size());
+            while (i < n && o[i] == k[i]) i++;
+            int why = 1;
+            if (i < nfs) why = 0;
+            else if (i < n) {
+                size_t at = nfs;
+                while (at < k.size()) {
+                    const unsigned cnt = k[at + 8] & 0xF;   // (rec + 8: the count, a8's low byte)
+                    const size_t len = 32 + 16 * cnt + 6;
+                    if (i < at + len) {
+                        const size_t r = i - at;
+                        if (r < 32) why = r >= 16 && r < 24 ? 10 : r >= 8 && r < 12 ? 9 : r >= 4 && r < 8 ? 2 : 8;
+                        else if (r < 32 + 16 * cnt) { const size_t v = (r - 32) % 16; why = v < 4 ? 4 : v < 8 ? 3 : v < 10 ? 4 : v < 12 ? 5 : 6; }
+                        else why = 7;
+                        break;
+                    }
+                    at += len;
+                }
+            }
+            StWhy[why]++;
+        }
         BinKey[b].swap(k);
     }
 }
@@ -526,10 +567,13 @@ void GengisRenderer3D::StatsLine() {
     const double n = (double)Stats;
     Platform::Log(Platform::LogLevel::Info,
                   "[gengis-stats] %u rendered of %lu frames: bins %.3f ms/frame (max bin %.3f), convert %.3f ms (decode %.3f ms, "
-                  "%.1f tex %.0f texels), polys %.1f opa %.1f trl, clears %lu, emu wait %.3f ms/frame, d3 %04x, px %.0f opa %.0f trl, %.0f poly-bins, reused %.1f bins (checked bad %lu)\n",
+                  "%.1f tex %.0f texels), polys %.1f opa %.1f trl, clears %lu, emu wait %.3f ms/frame, d3 %04x, px %.0f opa %.0f trl, %.0f poly-bins, reused %.1f bins (checked bad %lu), why %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu, same-content decodes %lu\n",
                   Stats, StFrames, StBinNs.load() / n / 1e6, StBinMax.load() / 1e6, StConvNs / n / 1e6, StDecNs / n / 1e6,
                   StDecoded / n, StDecTexels / n, StOpa / n, StTrl / n, StClears, StWaitNs / (double)StFrames / 1e6,
-                  (unsigned)Frame.d3, StPxOpa.load() / n, StPxTrl.load() / n, StPolyLines.load() / n, StReused.load() / n, (unsigned long)StReuseBad.load());
+                  (unsigned)Frame.d3, StPxOpa.load() / n, StPxTrl.load() / n, StPolyLines.load() / n, StReused.load() / n, (unsigned long)StReuseBad.load(), StWhy[0], StWhy[1], StWhy[2], StWhy[3], StWhy[4], StWhy[5],
+                  StWhy[6], StWhy[7], StWhy[8], StWhy[9], StWhy[10], StSameTex);
+    StSameTex = 0;
+    for (auto& w : StWhy) w = 0;
     StReused = 0;
     StPxOpa = 0; StPxTrl = 0; StPolyLines = 0;
     StBinNs = 0; StBinMax = 0; StConvNs = StDecNs = StDecoded = StDecTexels = StOpa = StTrl = 0;

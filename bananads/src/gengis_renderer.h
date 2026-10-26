@@ -102,6 +102,8 @@ private:
     uint32_t* LastOut = nullptr;  // the last rendered frame's rows (the other buffer)
     uint64_t TexSerial = 0;
     std::atomic<uint64_t> StReused{0}, StReuseBad{0};
+    unsigned long StWhy[11] = {}, StSameTex = 0;
+    std::unordered_map<uint64_t, std::unique_ptr<Texture>> Stale;  // dropped decodes (GetTexture's same-content test)
     void InvalidateTextures(const uint64_t* texdirty, const uint64_t* paldirty, bool tex, bool pal);
     std::atomic<uint64_t> StBinNs{0}, StBinMax{0}, StLastNs{0}, StPxOpa{0}, StPxTrl{0}, StPolyLines{0};
     uint64_t StConvNs = 0, StDecNs = 0, StDecoded = 0, StDecTexels = 0, StOpa = 0, StTrl = 0, StWaitNs = 0, StStartNs = 0;
