@@ -66,6 +66,8 @@ void gx3_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
 /* 4x (gx4.c, render.scale=4, experimental): 4 * GX_BL rows of 4 * GX_W, each row as its pixels 4k .. 4k + 3 (GX_W
  * each): a DS line's sixteen 256-pixel lines are rows 4y + q / 4, quarter q % 4 */
 void gx4_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
+/* one of 4x's 32-line halves of a bin (the frame's 24: bin 2 u / 2's half u % 2), 32 rows of 4 * GX_W, as above */
+void gx4_render_unit(const gx_frame *f, unsigned unit, uint32_t *out);
 static inline uint32_t gx_expand555(uint32_t c) {   /* BGR555 -> r6 | g6 << 8 | b6 << 16 (5 -> 6 as c*2 + (c != 0)) */
     uint32_t p = (c & 0x1f) | ((c >> 5) & 0x1f) << 8 | ((c >> 10) & 0x1f) << 16;
     return (p << 1) + (((p + 0x1f1f1f) >> 5) & 0x010101);

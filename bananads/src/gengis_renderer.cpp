@@ -35,6 +35,9 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     gx_trim = Trim;
     gx_hrneon = HrNeon < 0 ? Scale_ >= 3 : HrNeon != 0;
     gx_lazy = Lazy < 0 ? Scale_ >= 3 : Lazy != 0;
+    Sub = Scale_ == 4 && Units ? 2 : 1;
+    NU = GX_NBINS * Sub;
+    Next.store(NU);
     gx_init();
     gx_defer = defer;
     for (auto& o : OutBuf) {
@@ -376,7 +379,19 @@ void GengisRenderer3D::Convert() {
         Frame.toon[32 + i] = (uint8_t)(t >> 8);
         Frame.toon[64 + i] = (uint8_t)(t >> 16);
     }
-    BinKeys();
+    // render.gengis_keyskip: while no bin was reusable for 32 rendered frames (a moving camera: a race), the keys are
+    // built on 2 frames of every 16 only (enough to see the scene stop); a frame without keys reuses nothing and
+    // leaves no keys for the next one to match
+    if (KeySkip && Scale_ >= 3 && ReuseMiss > 32 && (KeyFrames++ & 15) > 1) {
+        for (unsigned b = 0; b < GX_NBINS; b++) { BinKey[b].clear(); BinReuse[b] = false; }
+        ReuseMiss++;
+    } else {
+        BinKeys();
+        bool any = false;
+        for (unsigned b = 0; b < GX_NBINS; b++) any |= BinReuse[b];
+        ReuseMiss = any ? 0 : ReuseMiss + 1;
+        if (any) KeyFrames = 0;
+    }
 }
 
 // render.gengis_reuse: a bin is a pure function of the frame state the rasterizer reads and of the polygons that
@@ -455,14 +470,17 @@ int GengisRenderer3D::Stats = 0;
 int GengisRenderer3D::HrNeon = -1;
 int GengisRenderer3D::Verify = 0;
 int GengisRenderer3D::Lazy = -1;
+int GengisRenderer3D::Units = 1;
+int GengisRenderer3D::KeySkip = 1;
 int GengisRenderer3D::TexInval = 1;
 int GengisRenderer3D::Zva = 1;
 int GengisRenderer3D::Trim = 1;
 int GengisRenderer3D::Reuse = 1;
 
 
-void GengisRenderer3D::RenderBin(unsigned b, uint32_t* dst) {
-    if (Scale_ == 2) gx2_render_bin(&Frame, b, dst);
+void GengisRenderer3D::RenderBin(unsigned b, uint32_t* dst) {   // (b: a work unit, a frame bin unless Sub > 1)
+    if (Sub > 1) gx4_render_unit(&Frame, b, dst);
+    else if (Scale_ == 2) gx2_render_bin(&Frame, b, dst);
     else if (Scale_ == 3) gx3_render_bin(&Frame, b, dst);
     else if (Scale_ == 4) gx4_render_bin(&Frame, b, dst);
     else gx_render_bin(&Frame, b, dst);
@@ -470,7 +488,7 @@ void GengisRenderer3D::RenderBin(unsigned b, uint32_t* dst) {
 
 bool GengisRenderer3D::RenderOne(bool emu) {
     const unsigned b = Next.fetch_add(1, std::memory_order_acq_rel);
-    if (b >= GX_NBINS) return false;
+    if (b >= NU) return false;
     // the frame's polygons and textures, converted by the first thread to claim a bin of it (melonDS's state stays
     // until VBlank, where Finish3DRendering waits for the frame first)
     int expect = 0;
@@ -490,29 +508,27 @@ bool GengisRenderer3D::RenderOne(bool emu) {
         ConvDone.wait(l, [&] { return Converted.load(std::memory_order_acquire) == 2; });
     }
     const uint64_t b0 = Stats ? ThreadNs() : 0;
-    if (BinReuse[b] && Reuse != 2) {  // (render.gengis_reuse: the same inputs as the last rendered frame's bin, BinKeys)
-        const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_;
+    const size_t un = (size_t)GX_BL * GX_W * Scale_ * Scale_ / Sub;   // a unit's words
+    if (BinReuse[b / Sub] && Reuse != 2) {  // (render.gengis_reuse: the same inputs as the last rendered frame's bin, BinKeys)
+        const size_t n = un;
         memcpy(Out + b * n, LastOut + b * n, n * sizeof(uint32_t));
         if (Stats) StReused.fetch_add(1, std::memory_order_relaxed);
     }
-    else if (BinReuse[b]) {  // render.gengis_reuse=2: render it, and count the bins that differ from the copy
-        const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_;
-        if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * n);
-        else if (Scale_ == 3) gx3_render_bin(&Frame, b, Out + b * n);
-        else if (Scale_ == 4) gx4_render_bin(&Frame, b, Out + b * n);
-        else gx_render_bin(&Frame, b, Out + b * n);
+    else if (BinReuse[b / Sub]) {  // render.gengis_reuse=2: render it, and count the bins that differ from the copy
+        const size_t n = un;
+        RenderBin(b, Out + b * n);
         StReused.fetch_add(1, std::memory_order_relaxed);
         if (memcmp(Out + b * n, LastOut + b * n, n * sizeof(uint32_t))) {
             StReuseBad.fetch_add(1, std::memory_order_relaxed);
             Platform::Log(Platform::LogLevel::Warn, "[gengis] reuse check: bin %u of frame %u differs\n", b, Frame.gen);
         }
     }
-    else if (!Verify) RenderBin(b, Out + b * GX_BL * GX_W * Scale_ * Scale_);
+    else if (!Verify) RenderBin(b, Out + b * un);
     else {
         // render.gengis_verify: the bin again on the reference paths (gx_ref: the code before render.gengis_hrneon
         // and the later 4x changes) into a scratch buffer, compared with what this render wrote; the two renders'
         // CPU times summed (in turn first: the second finds the bin's data in the caches)
-        const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_;
+        const size_t n = un;
         static thread_local std::vector<uint32_t> ref;
         ref.resize(n);
         const bool reffirst = Frame.gen & 1;
@@ -539,7 +555,7 @@ bool GengisRenderer3D::RenderOne(bool emu) {
         StBinNs.fetch_add(t, std::memory_order_relaxed);
         uint64_t m = StBinMax.load(std::memory_order_relaxed);
         while (t > m && !StBinMax.compare_exchange_weak(m, t, std::memory_order_relaxed)) {}
-        if (AllBins.load(std::memory_order_relaxed) % GX_NBINS == GX_NBINS - 1) StLastNs.store(MonoNs(), std::memory_order_relaxed);
+        if (AllBins.load(std::memory_order_relaxed) % NU == NU - 1) StLastNs.store(MonoNs(), std::memory_order_relaxed);
     }
     if (emu) EmuBins++;
     AllBins.fetch_add(1, std::memory_order_relaxed);
@@ -562,11 +578,11 @@ void GengisRenderer3D::Worker(int idx) {
             const bool first = idx < Active;
             (first ? Wake : WakeLate).wait(l, [&] {
                 return Quit || (idx < Active) != first ||
-                       (Gen != seen && Next.load(std::memory_order_acquire) < GX_NBINS &&
+                       (Gen != seen && Next.load(std::memory_order_acquire) < NU &&
                         (first || (LateWake && Late.load(std::memory_order_relaxed))));
             });
             if (Quit) return;
-            if ((idx < Active) != first && !(Gen != seen && Next.load(std::memory_order_acquire) < GX_NBINS)) continue;
+            if ((idx < Active) != first && !(Gen != seen && Next.load(std::memory_order_acquire) < NU)) continue;
             seen = Gen;
         }
         while (RenderOne()) {}
@@ -601,7 +617,7 @@ void GengisRenderer3D::WaitBin(unsigned bin) {
 
 void GengisRenderer3D::WaitRows(int line, unsigned gen) {
     if (line >= GX_H) line = GX_H - 1;
-    const unsigned bin = (unsigned)line / GX_BL;
+    const unsigned bin = (unsigned)line / (GX_BL / Sub);
     auto drawn = [&] { return (int)(Done[bin].load(std::memory_order_acquire) - gen) >= 0; };
     if (!drawn()) MarkLate();
     while (!drawn()) {
@@ -612,7 +628,7 @@ void GengisRenderer3D::WaitRows(int line, unsigned gen) {
 }
 
 void GengisRenderer3D::WaitAll() {
-    for (unsigned b = 0; b < GX_NBINS; b++) WaitBin(b);
+    for (unsigned b = 0; b < NU; b++) WaitBin(b);
 }
 
 void GengisRenderer3D::RenderFrame() {
@@ -712,7 +728,7 @@ const u32* GengisRenderer3D::GetQuarter(int line, int q) {
         memset(sc, 0, sizeof Scrolled[0]);
         return sc;
     }
-    if (line < GX_H) WaitBin((unsigned)line / GX_BL);  // (the same bin at 2x: 2 * GX_BL rows a bin)
+    if (line < GX_H) WaitBin((unsigned)line / (GX_BL / Sub));  // (the same bin at 2x: 2 * GX_BL rows a bin)
     else line = GX_H - 1;
     const u32* raw = QuarterRow(line, q);  // (line < GX_H here)
     const u16 xpos = GPU3D.RenderXPos;

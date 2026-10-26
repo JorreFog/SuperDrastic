@@ -51,6 +51,9 @@ public:
     static int Zva;  // render.gengis_zva: dc zva before the clear's and the 2x output's stores (same bytes)
     static int TexInval;  // render.gengis_texinval: 1 (blocks) drops only the textures whose VRAM changed, 0 all
     static int HrNeon;  // render.gengis_hrneon: decal/toon/highlight polygons on NEON batches (hrneon.c); -1: at 3x and 4x
+    static int KeySkip;  // render.gengis_keyskip (3x, 4x): render.gengis_reuse's keys only now and then while nothing is reusable
+    unsigned ReuseMiss = 0, KeyFrames = 0;
+    static int Units;  // render.gengis_units: 4x sub-bins as work units (default on)
     static int Lazy;  // render.gengis_lazy (gx.c); -1: at 3x and 4x
     static int Verify;  // render.gengis_verify: every rendered bin rendered again on the reference paths (gx_ref) and compared
     std::atomic<uint64_t> VerBins{0}, VerBad{0}, VerNewNs{0}, VerRefNs{0};
@@ -145,8 +148,11 @@ private:
     alignas(16) uint32_t Scrolled[16][GX_W];
 
     // the frame's bins: claimed by the workers (and by the emulator's thread while it waits for one)
-    std::atomic<unsigned> Next{GX_NBINS};
-    std::atomic<unsigned> Done[GX_NBINS];
+    // (render.gengis_units: at 4x each frame bin's two 32-line halves (gx4.c's sub-bins) are claimed, drawn and
+    // waited for as units of their own: NU = GX_NBINS * Sub)
+    unsigned Sub = 1, NU = GX_NBINS;
+    std::atomic<unsigned> Next{2 * GX_NBINS};
+    std::atomic<unsigned> Done[2 * GX_NBINS];
     std::atomic<int> Converted{2};  // the frame's conversion: 0 to do, 1 being done, 2 done
     unsigned Gen = 0;
     std::mutex M;

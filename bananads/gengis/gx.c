@@ -168,6 +168,8 @@ static gx_t *gx_get(void) {
 #define GX_CHUNKS (GX_W / 64)
 _Static_assert(GX_CHUNKS <= 16, "a line's chunk mask");
 static __thread uint16_t gx_lz[64];     /* per context line: its chunks already cleared */
+static __thread uint16_t gx_lzid[64];   /* the same for the translucent ids (0xff), during the translucent polygons */
+static __thread int gx_lzid_on;
 static __thread int gx_lazy_on;         /* this bin is cleared lazily */
 static __thread uint32_t gx_lz_col, gx_lz_att;
 
@@ -191,8 +193,19 @@ static void gx_lazy_spans(gx_t *H, const uint8_t *sp, unsigned line0, int nl) {
         const unsigned X = *(const uint16_t *)(sp + 8 * GX_SPS + 4 * k), C = *(const uint16_t *)(sp + 9 * GX_SPS + 4 * k);
         if (!C) continue;
         const unsigned lo = X > 16 ? (X - 16) >> 6 : 0, e = X + C + 32, hi = (e < GX_W ? e : GX_W - 1) >> 6;
-        const unsigned m = (unsigned)((2u << hi) - (1u << lo)) & ~(unsigned)gx_lz[line0 + k];
+        const unsigned r = (unsigned)((2u << hi) - (1u << lo)), m = r & ~(unsigned)gx_lz[line0 + k];
         if (m) gx_clear_chunks(H, line0 + k, m);
+        if (gx_lzid_on) {
+            unsigned mi = r & ~(unsigned)gx_lzid[line0 + k];
+            gx_lzid[line0 + k] |= (uint16_t)mi;
+            uint8_t *id = H->ctx + GX_ID + (line0 + k) * GX_W;
+            const uint8x16_t ff = vdupq_n_u8(0xff);
+            while (mi) {
+                const unsigned c = (unsigned)__builtin_ctz(mi);
+                mi &= mi - 1;
+                vst1q_u8(id + 64 * c, ff); vst1q_u8(id + 64 * c + 16, ff); vst1q_u8(id + 64 * c + 32, ff); vst1q_u8(id + 64 * c + 48, ff);
+            }
+        }
     }
 }
 /* the chunks not cleared yet, of lines l0..l1 (before the resolve and the output read them) */
@@ -389,12 +402,14 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     }
     if (defer) defer_flush(&layout_gx, H->ctx);
     if (f->ntranslucent) {
-        memset(H->ctx + GX_ID, 0xff, GX_CL * GX_W);
+        if (gx_lazy_on) { memset(gx_lzid, 0, sizeof gx_lzid); gx_lzid_on = 1; }   /* (the ids too: 64 bytes a chunk) */
+        else memset(H->ctx + GX_ID, 0xff, GX_CL * GX_W);
         for (unsigned i = nopa; i < f->npolys; i++) {
             const uint32_t y = yr[i];
             if ((y >> 16) <= bin_top || (y & 0xffff) >= bin_bot) continue;
             gx_polygon(H, &f->polys[i], bin_top, bin_bot, lb, f->d3, 0, 0);
         }
+        gx_lzid_on = 0;
     }
     if (gx_lazy_on) {   /* (the resolve and the output read the bin's lines; edge marking also the two context lines) */
         if ((f->d3 >> 5) & 1) gx_lazy_finish(H, 0, GX_CL - 1);
@@ -465,6 +480,9 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
 void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     for (unsigned s = 0; s < GX_SUB; s++) gx_render_sub(f, bin * GX_SUB + s, out + s * GX_BL * GX_W);
 }
+#if GX_SCALE == 4
+void gx4_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
+#endif
 #endif
 
 #if GX_SCALE == 1
