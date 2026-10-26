@@ -66,7 +66,7 @@ _Static_assert(sizeof(gx_poly) % 4 == 0, "gx_poly");
  * (DS_RECIP_U = DS_RECIP + 0x1400: the affine steps); 0 for i = 0 */
 #define GX_RECIP_OFF   0x3f27120u
 #define GX_RECIP_U_OFF 0x3f28520u
-#define GX_TABS_N ((GX_RECIP_U_OFF - GX_RECIP_OFF) / 4 + 1024)
+#define GX_TABS_N ((GX_RECIP_U_OFF - GX_RECIP_OFF) / 4 + 1025)
 #if GX_SCALE == 1
 uintptr_t ds_base;
 uint32_t gx_tabs[GX_TABS_N];
@@ -97,7 +97,9 @@ void gx_init(void) {
         if (gx_zva && ((z >> 4) & 1 || (z & 15) != 4)) gx_zva = 0;
     }
     if (gx_sys) return;
-    for (uint32_t i = 1; i < 1024; i++) {
+    /* (to 1024: a span's pixel count C indexes them, and at render.scale=4 a line can be 1024 pixels; the walker's
+     * edge heights stop at 1023, wrecip) */
+    for (uint32_t i = 1; i <= 1024; i++) {
         gx_tabs[i] = (0x3fffffffu + i) / i;
         gx_tabs[(GX_RECIP_U_OFF - GX_RECIP_OFF) / 4 + i] = (0x7fffffffu + i) / i;
     }
