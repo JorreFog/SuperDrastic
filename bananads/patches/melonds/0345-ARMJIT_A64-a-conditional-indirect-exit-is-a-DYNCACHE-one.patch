@@ -1,0 +1,78 @@
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index ee25973..378f0ee 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -59,6 +59,8 @@ u8 J3RegionStub = !getenv("MELONDS_JIT_NOREGIONSTUB");
+ u8 J3Dyn2 = !getenv("MELONDS_JIT_NODYN2");
+ // J3 DYNIMM (patch 0344, MELONDS_JIT_NODYNIMM=1 off; read when a block is compiled): the DYNCACHE key as movz/movk
+ u8 J3DynImm = !getenv("MELONDS_JIT_NODYNIMM");
++// J3 CONDDYN (patch 0345, MELONDS_JIT_NOCONDDYN=1 off; read when a block is compiled)
++u8 J3CondDyn = !getenv("MELONDS_JIT_NOCONDDYN");
+ u32 JitStubRegion(NDS* nds, u32 num, u32 instrAddr);
+ 
+ void Compiler::J3Count(int k, ARM64Reg a, ARM64Reg b)
+@@ -404,6 +406,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         J3RegionStub = !old && !getenv("MELONDS_JIT_NOREGIONSTUB");
+         J3Dyn2 = !old && !getenv("MELONDS_JIT_NODYN2");
+         J3DynImm = !old && !getenv("MELONDS_JIT_NODYNIMM");
++        J3CondDyn = !old && !getenv("MELONDS_JIT_NOCONDDYN");
+         // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
+         for (int num = 0; num < 2; num++)
+         {
+@@ -1780,6 +1783,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         JumpR15Deferred = false;
+         LastJumpViaFunc = false;
+         J3RestoreJump = false;
++        J3CondW4 = false;
+ 
+         CompileFunc comp = Thumb
+             ? T_Comp[CurInstr.Info.Kind]
+@@ -1938,7 +1942,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+                 }
+                 else if (cond < 0xE)
+                 {
+-                    if (IrregularCycles || (CurInstr.BranchFlags & branch_FollowCondTaken))
++                    // J3 CONDDYN (patch 0345): a conditional indirect jump ending the block (through a JumpTo
++                    // function: W4 = its target's key) gets the next instruction's key in W4 on the not taken way
++                    // too, so the exit is a DYNCACHE one (both ways learnt with DYN2) instead of DynExit's
++                    const bool condDyn = J3CondDyn && Exit && i == instrsCount - 1 && LastJumpViaFunc && OptDynCache
++                        && !(CurInstr.BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken));
++                    if (IrregularCycles || (CurInstr.BranchFlags & branch_FollowCondTaken) || condDyn)
+                     {
+                         FixupBranch skipNop = B();
+                         SetJumpTarget(skipExecute);
+@@ -1947,6 +1956,11 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+                             Comp_AddCycles_C(true);
+ 
+                         Comp_BranchSpecialBehaviour(false);
++                        if (condDyn)
++                        {
++                            MOVI2R(W4, CurInstr.Addr + 4);   // (ARM: the next instruction, its key; R15 is in memory)
++                            J3CondW4 = true;
++                        }
+ 
+                         SetJumpTarget(skipNop);
+                     }
+@@ -2019,7 +2033,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         }
+         else
+         {
+-            if (cond)
++            if (cond && !J3CondW4)
+                 LastJumpViaFunc = false;   // (W4 is the jump's only on the way it was taken)
+             Comp_Exit(false, 0, Thumb);
+         }
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index ed987ac..caa833b 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -266,7 +266,8 @@ public:
+                                   // looks the block up from it (DynExitA)
+     bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
+     int J3JumpKind = 0;           // (J3 EXITSTATS: the indirect jump's kind, 0 BX, 1 LDM/POP, 2 LDR, 3 ALU, 4 BL_LONG_2)
+-    bool J3RestoreJump = false;   // (J3 EXITSTATS: the jump went through C++ JumpTo with restoreCPSR)
++    bool J3RestoreJump = false;
++    bool J3CondW4 = false;        // (J3 CONDDYN: W4 holds the key on both ways of the block's last instruction)   // (J3 EXITSTATS: the jump went through C++ JumpTo with restoreCPSR)
+     int J3StubNum = -1;           // (J3 EXITSTATS: the CPU of the stubs being generated)
+     void J3Count(int k, Arm64Gen::ARM64Reg a = Arm64Gen::X16, Arm64Gen::ARM64Reg b = Arm64Gen::X17);
+     bool OptDynCache = true;      // NODYNCACHE: such an exit keeps the last target it went to (its key: address | T)

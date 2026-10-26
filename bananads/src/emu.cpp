@@ -434,7 +434,7 @@ bool Emu::load_rom(const std::string& path) {
     // NODYNIMM (each also on its own), on unsets them
     {
         const std::string v = cfg_.str("jit.exits", "");
-        for (const char* e : {"MELONDS_JIT_NOSTOPMASK", "MELONDS_JIT_NOREGIONSTUB", "MELONDS_JIT_NODYN2", "MELONDS_JIT_NODYNIMM"})
+        for (const char* e : {"MELONDS_JIT_NOSTOPMASK", "MELONDS_JIT_NOREGIONSTUB", "MELONDS_JIT_NODYN2", "MELONDS_JIT_NODYNIMM", "MELONDS_JIT_NOCONDDYN"})
         {
             if (v == "on") unsetenv(e);
             else if (v == "off") setenv(e, "1", 1);

@@ -1,23 +1,23 @@
 diff --git a/src/NDS.cpp b/src/NDS.cpp
-index 619726b..82622b6 100644
+index 619726b..2e91120 100644
 --- a/src/NDS.cpp
 +++ b/src/NDS.cpp
 @@ -55,6 +55,7 @@ namespace melonDS
  #define J3STATS_ON 0
  #endif
  extern u64 J3ExitStats[64];   // (ARMJIT_Compiler.cpp)
-+extern u8 J3StopMask, J3RegionStub, J3Dyn2, J3DynImm;
++extern u8 J3StopMask, J3RegionStub, J3Dyn2, J3DynImm, J3CondDyn;
  extern bool J3Stats;
  #endif
  using namespace Platform;
-@@ -1239,6 +1240,30 @@ u32 NDS::RunFrame()
+@@ -1239,6 +1240,32 @@ u32 NDS::RunFrame()
      // so it needs to be tracked even if NDS is powered off.
      NumFrames++;
  #ifdef JIT_ENABLED
 +#ifdef MELONDS_J3AB
 +    {
 +        // J3 in-run A/B (debug builds only): MELONDS_J3AB=<frames>, MELONDS_J3ABMASK=<switch bits on in mode 1>
-+        // (1 STOPMASK, 2 REGIONSTUB, 4 DYN2, 8 DYNIMM: those two with a JIT reset): mode 0 = all of them off, mode 1 = those on; flipped every <frames> frames
++        // (1 STOPMASK, 2 REGIONSTUB, 4 DYN2, 8 DYNIMM, 16 CONDDYN: those three with a JIT reset): mode 0 = all of them off, mode 1 = those on; flipped every <frames> frames
 +        static const int abN = getenv("MELONDS_J3AB") ? atoi(getenv("MELONDS_J3AB")) : 0;
 +        static const int abMask = getenv("MELONDS_J3ABMASK") ? atoi(getenv("MELONDS_J3ABMASK")) : 3;
 +        static int abMode = 1;
@@ -28,10 +28,12 @@ index 619726b..82622b6 100644
 +            const int m = (abMode ? abMask : 0) | abBase;
 +            J3StopMask = m & 1;
 +            J3RegionStub = (m >> 1) & 1;
-+            if (((abMask | abBase) & 12) && (J3Dyn2 != ((m >> 2) & 1) || J3DynImm != ((m >> 3) & 1)))
++            if (((abMask | abBase) & 28) && (J3Dyn2 != ((m >> 2) & 1) || J3DynImm != ((m >> 3) & 1)
++                || J3CondDyn != ((m >> 4) & 1)))
 +            {
 +                J3Dyn2 = (m >> 2) & 1;
 +                J3DynImm = (m >> 3) & 1;
++                J3CondDyn = (m >> 4) & 1;
 +                JIT.ResetBlockCache();
 +            }
 +            Log(LogLevel::Info, "[gengis] ab mode %d\n", abMode);
@@ -41,7 +43,7 @@ index 619726b..82622b6 100644
      if (J3STATS_ON && J3Stats && NumFrames % 300 == 0)
      {
          // J3 EXITSTATS: ARM9 exits per frame by kind over the last 300 frames
-@@ -1248,7 +1273,7 @@ u32 NDS::RunFrame()
+@@ -1248,7 +1275,7 @@ u32 NDS::RunFrame()
          Log(LogLevel::Info, "[j3stats] ARM%d per frame: known %.0f selfloop %.0f | ind BX %.0f POP/LDM %.0f LDRpc %.0f ALUpc %.0f "
              "BL2 %.0f | restoreCPSR %.0f otherdyn %.0f | dyncache hit %.0f miss %.0f learn %.0f | DynExit found %.0f "
              "outside %.0f miss %.0f | DynExitA found %.0f outside %.0f miss %.0f | regionstep %.0f %.0f | loop: returns %.0f compiles %.0f stop %.0f "

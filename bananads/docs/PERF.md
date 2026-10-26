@@ -1349,7 +1349,10 @@ that SliceChain can't continue. DYNCACHE: 8.4k hits, 3.2k misses.
 - **0343 DYN2**: an ARM9 DYNCACHE exit's miss way (far region) checks and learns a second target before DynExitA:
   DynExitA lookups 3.0k -> 2.0k/frame.
 - **0344 DYNIMM**: the DYNCACHE key as movz/movk w1 (Link patches both) instead of a literal load from the code line.
-All four: `jit.exits` (SETTINGS.md); runtime bytes (0341/0342) and compile-time flags (0343/0344) for in-run A/B
+- **0345 CONDDYN**: a conditional indirect jump ending a block (BXcc, LDMcc pc, ...) puts the next instruction's key in
+  W4 on its not-taken way too, so its exit is a DYNCACHE one (with DYN2: both ways learnt) instead of a DynExit
+  lookup from R15: ARM9 "other dynamic" exits 632 -> 0/frame, DynExit+DynExitA lookups 3.9k -> 2.4k/frame.
+All five: `jit.exits` (SETTINGS.md); runtime bytes (0341/0342) and compile-time flags (0343/0344) for in-run A/B
 (debug patch 0349, `-DMELONDS_J3AB=1`: `MELONDS_J3AB=<frames>`, `MELONDS_J3ABMASK`, `MELONDS_J3ABBASE`).
 Speed: see reports/jit-J3.md (a loop round trip turned out to cost only ~50 cycles: the gains are small).
 
