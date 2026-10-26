@@ -32,6 +32,7 @@ public:
     void Reset() override;
     void RenderFrame() override;
     void FinishRendering() override;
+    void FinishAll() { WaitAll(); }  // (every bin of the frame, whatever render.gengis_vbwait: before a savestate)
     void RestartFrame() override {}
     melonDS::u32* GetLine(int line) override;  // at 2x (3x): quarter 0 of the line
     int Scale() const { return Scale_; }
@@ -51,6 +52,12 @@ public:
     static int Zva;  // render.gengis_zva: dc zva before the clear's and the 2x output's stores (same bytes)
     static int TexInval;  // render.gengis_texinval: 1 (blocks) drops only the textures whose VRAM changed, 0 all
     static int HrNeon;  // render.gengis_hrneon: decal/toon/highlight polygons on NEON batches (hrneon.c); -1: at 3x and 4x
+    static int VbWait;  // render.gengis_vbwait: 1 VBlank waits for all bins, 0 for the conversion only; -1: 0 at 3x and 4x
+    bool VbConvOnly = false;
+    static int KeySkip;  // render.gengis_keyskip (3x, 4x): render.gengis_reuse's keys only now and then while nothing is reusable
+    unsigned ReuseMiss = 0, KeyFrames = 0;
+    static int Units;  // render.gengis_units: 4x sub-bins as work units (default on)
+    static int Lazy;  // render.gengis_lazy (gx.c); -1: at 3x and 4x
     static int Verify;  // render.gengis_verify: every rendered bin rendered again on the reference paths (gx_ref) and compared
     std::atomic<uint64_t> VerBins{0}, VerBad{0}, VerNewNs{0}, VerRefNs{0};
     void RenderBin(unsigned b, uint32_t* dst);
@@ -60,7 +67,7 @@ public:
     // render.gengis_ab_secs seconds, logged as "[gengis] ab mode N" (the kms.stats windows between two such lines ran
     // in that mode): N >= 1 render threads take part, 0 = no rasterization (the 3D layer keeps its last frame: wrong
     // pictures, for an upper bound of what the 3D costs the other threads)
-    static std::vector<int> OptAb;  // render.gengis_optab: M2's in-run A/B, a list of option masks (1 hrneon, 2 defer) cycled every render.gengis_ab_secs
+    static std::vector<int> OptAb;  // render.gengis_optab: M2's in-run A/B, a list of option masks (1 hrneon, 2 defer, 4 lazy) cycled every render.gengis_ab_secs
     size_t OptIdx = 0;
     std::chrono::steady_clock::time_point OptNext{};
     static std::vector<int> AbModes;  // (modes 11..19: render.gengis_wake=1..9 with the late wake)
@@ -131,7 +138,7 @@ private:
     unsigned long StClears = 0, StFrames = 0, StRendered = 0;
 
     std::unordered_map<uint64_t, std::unique_ptr<Texture>> Textures;
-    std::vector<gx_poly> Polys;
+    std::vector<gx_poly> Polys, Trl;  // (Trl: Convert's translucent ones, kept to keep its capacity)
     std::vector<uint32_t> YRange;  // Frame.yr
     gx_frame Frame{};
     int Scale_;
@@ -144,8 +151,11 @@ private:
     alignas(16) uint32_t Scrolled[16][GX_W];
 
     // the frame's bins: claimed by the workers (and by the emulator's thread while it waits for one)
-    std::atomic<unsigned> Next{GX_NBINS};
-    std::atomic<unsigned> Done[GX_NBINS];
+    // (render.gengis_units: at 4x each frame bin's two 32-line halves (gx4.c's sub-bins) are claimed, drawn and
+    // waited for as units of their own: NU = GX_NBINS * Sub)
+    unsigned Sub = 1, NU = GX_NBINS;
+    std::atomic<unsigned> Next{2 * GX_NBINS};
+    std::atomic<unsigned> Done[2 * GX_NBINS];
     std::atomic<int> Converted{2};  // the frame's conversion: 0 to do, 1 being done, 2 done
     unsigned Gen = 0;
     std::mutex M;
@@ -191,7 +201,7 @@ public:
     }
     void PreSavestate() override {
         Drain2D(this);
-        this->Rend3D->FinishRendering();
+        static_cast<GengisRenderer3D*>(this->Rend3D.get())->FinishAll();   // (all bins, whatever render.gengis_vbwait)
     }
     void PostSavestate() override { Resync2D(this); }
     void SetRenderSettings(melonDS::RendererSettings&) override {}

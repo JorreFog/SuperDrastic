@@ -53,6 +53,7 @@ typedef struct {
 } gx_frame;
 
 void gx_init(void);
+void gx_tex_minalpha_store(uint8_t *tex);   /* fused.c: a decoded texture entry's lowest alpha, into its bytes 0x20-0x21 */
 /* the frame's state the pixel pipeline reads from its own places; before any thread renders a bin of the frame */
 void gx_begin_frame(const gx_frame *f);
 /* render bin `bin` of the frame into out (GX_BL lines of GX_W pixels, melonDS's 3D layer format) */
@@ -66,6 +67,8 @@ void gx3_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
 /* 4x (gx4.c, render.scale=4, experimental): 4 * GX_BL rows of 4 * GX_W, each row as its pixels 4k .. 4k + 3 (GX_W
  * each): a DS line's sixteen 256-pixel lines are rows 4y + q / 4, quarter q % 4 */
 void gx4_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
+/* one of 4x's 32-line halves of a bin (the frame's 24: bin 2 u / 2's half u % 2), 32 rows of 4 * GX_W, as above */
+void gx4_render_unit(const gx_frame *f, unsigned unit, uint32_t *out);
 static inline uint32_t gx_expand555(uint32_t c) {   /* BGR555 -> r6 | g6 << 8 | b6 << 16 (5 -> 6 as c*2 + (c != 0)) */
     uint32_t p = (c & 0x1f) | ((c >> 5) & 0x1f) << 8 | ((c >> 10) & 0x1f) << 16;
     return (p << 1) + (((p + 0x1f1f1f) >> 5) & 0x010101);
@@ -74,6 +77,7 @@ extern int gx_defer;                    /* deferred shading of opaque polygons (
 extern int gx_stats;                    /* render.gengis_stats: count the span pixels (per thread: gx_px_*) */
 extern __thread unsigned long gx_px_opa, gx_px_trl, gx_lines;
 extern int gx_trim;                     /* render.gengis_trim: opaque polygons skip the bins' context lines without edge marking */
+extern int gx_lazy;                     /* render.gengis_lazy: the bin context cleared 64 pixels at a time when a polygon reaches them */
 extern int gx_hrneon;                   /* render.gengis_hrneon: decal/toon/highlight polygons on NEON batches (hrneon.c) */
 extern __thread int gx_ref;             /* render.gengis_verify's reference render (this thread): the paths before the 4x changes */
 extern int gx_zva;                      /* render.gengis_zva: the clear and the 2x output allocate lines with dc zva */

@@ -1408,3 +1408,19 @@ Numbers (MKDS race state, M1's mkbench, 4x shader None, PIN=1 1992 MHz, 40 s, th
 41.94 fps with `bananads-2d` 80.1 / 79.0%; raw 3D + out_skip 42.87 / 71.3%; + split 43.29 / 69.2%; + sprite-content
 keys **44.45 fps / 61.3%** (unit B cache hits 52606 -> 153139, rows not rewritten 51648 -> 83636). Audio tap at 4x
 identical to the base 2x tap (M1's mktap gate, 33.7 s); 2x verify run 60.17 fps, 524288 lines 0 differ.
+
+## Gengis at 4x in Mario Kart DS (2026-10-26, MK4x team, M2)
+
+MKDS race at 4x (1024x768, M1's mkbench: Figure-8 grid state + scripted input, the same emulated frames every run):
+Gengis 40-80 ms CPU per 3D frame (every frame renders), 1.3-2.9 M opaque + up to 1.2 M translucent span pixels (786K
+screen pixels), DISP3DCNT 0x1d (no fog, no edge marking); the emulator's thread drew ~15% of the bins.
+- **Shadow volumes on NEON** (`render.gengis_hrneon`, `gengis/hrneon.c`): 14% of the Gengis threads' time was the
+  scalar `line_px`, which the hi-res pipeline used for every shadow polygon (MKDS's kart shadows) and for decal, toon
+  and highlight. NEON batches lane for lane with `line_px` (shadow: the line mask, the mask's stencil where its depth
+  test fails, the shadow's stencil/id test). Same bins rendered both ways in one run (`render.gengis_verify`):
+  4.673 -> 3.584 ms CPU a bin (-23%), 13716 bins, 0 differ. Default on at 3x/4x.
+- `render.gengis_units`: 4x bin halves as work units (24 a frame): shorter slowest item, finer row waits.
+- `render.gengis_keyskip`, the texture entries' lowest alpha found at decode: smaller serial/per-thread costs.
+Dropped: `render.gengis_defer` at 4x (37.7 vs 33.0 ns a span pixel); `render.gengis_lazy` (clear 64 pixels at a time
+when first reached: mkbench 47.76 vs 47.58 fps, bins 41.9 vs 41.7 ms: nothing; kept as an option, off).
+perf stat of the Gengis threads at 4x: IPC 0.41, ~66M L3 misses in 8 s (the A55s' L2D events count the DSU's L3).
