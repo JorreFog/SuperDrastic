@@ -31,6 +31,8 @@
 #define gx_render_bin gx2_render_bin
 #elif GX_SCALE == 3
 #define gx_render_bin gx3_render_bin
+#elif GX_SCALE == 4 && defined(GX_QUARTER)
+#define gx_render_bin gx4q_render_bin
 #elif GX_SCALE == 4
 #define gx_render_bin gx4_render_bin
 #endif
@@ -44,7 +46,9 @@
 /* GX_SUB: the bins a frame bin is rendered as, one after the other (4x: two of 32 lines, so that a bin's context of
  * GX_BL + 2 lines fits the walker's and the kernels' 64-line span arrays, the 64-bit shadow line mask and defer.c's
  * owner buffer; 64 + 2 lines would not) */
-#if GX_SCALE == 4
+#if GX_SCALE == 4 && defined(GX_QUARTER)
+#define GX_SUB 4                            /* (gx4q.c: 16-line bins, render.gengis_units=2) */
+#elif GX_SCALE == 4
 #define GX_SUB 2
 #else
 #define GX_SUB 1
@@ -480,7 +484,9 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
 void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     for (unsigned s = 0; s < GX_SUB; s++) gx_render_sub(f, bin * GX_SUB + s, out + s * GX_BL * GX_W);
 }
-#if GX_SCALE == 4
+#if GX_SCALE == 4 && defined(GX_QUARTER)
+void gx4q_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
+#elif GX_SCALE == 4
 void gx4_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
 #endif
 #endif

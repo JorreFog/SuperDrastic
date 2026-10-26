@@ -156,8 +156,8 @@ private:
     // (render.gengis_units: at 4x each frame bin's two 32-line halves (gx4.c's sub-bins) are claimed, drawn and
     // waited for as units of their own: NU = GX_NBINS * Sub)
     unsigned Sub = 1, NU = GX_NBINS;
-    std::atomic<unsigned> Next{2 * GX_NBINS};
-    std::atomic<unsigned> Done[2 * GX_NBINS];
+    std::atomic<unsigned> Next{4 * GX_NBINS};
+    std::atomic<unsigned> Done[4 * GX_NBINS];
     std::atomic<int> Converted{2};  // the frame's conversion: 0 to do, 1 being done, 2 done
     unsigned Gen = 0;
     std::mutex M;
