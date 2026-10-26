@@ -1062,7 +1062,9 @@ BananaRenderer::Job& BananaRenderer::NewJob()
 void BananaRenderer::Submit(u32 units)
 {
     u32 head = ++LocalHead;
-    if (!Merging)
+    // (render.2d_merge: every 8th job too, without a wake-up, so a 2D thread still awake goes on with them as it did
+    // with a store per job: the frame's last lines aren't all left for the wake-up at VBlank)
+    if (!Merging || !(head & 7))
         HeadP->store(head, std::memory_order_release);
     StatJobs += units;
     Units += units;
