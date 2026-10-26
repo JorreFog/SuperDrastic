@@ -51,8 +51,20 @@ using Platform::LogLevel;
 namespace bananads {
 
 int g_emu_core = -1;
+int g_emu_share = 0;
 void sched_off_emu_core() {
     if (g_emu_core < 0) return;
+    if (g_emu_share > 0) {  // sched.emu_share: a Gengis worker may run on the emulator's core while that thread waits
+        char comm[16] = {};
+        pthread_getname_np(pthread_self(), comm, sizeof comm);
+        if (!strcmp(comm, "bds-gengis") || (g_emu_share > 1 && !strcmp(comm, "bananads-2d"))) {
+            cpu_set_t all;
+            CPU_ZERO(&all);
+            for (int k = 0; k < std::min(CPU_SETSIZE, (int)sysconf(_SC_NPROCESSORS_CONF)); k++) CPU_SET(k, &all);
+            sched_setaffinity(0, sizeof all, &all);
+            return;
+        }
+    }
     cpu_set_t rest;
     CPU_ZERO(&rest);
     for (int k = 0; k < std::min(CPU_SETSIZE, (int)sysconf(_SC_NPROCESSORS_CONF)); k++)

@@ -55,6 +55,17 @@ static bool use_repeats = true;  // cpugov.repeats
 // Dawn's town alternates 26-29 ms and 11 ms frames on the RG DS Plus at 1992 MHz: the panels show every frame there
 // (the queue evens out one late frame), but a step down made each heavy frame miss its refresh. 0: no check
 static double tail_limit = 1.4;
+// cpugov.sum_limit (cores; auto: 3.3 at render.scale 3 and 4, off at 1x/2x): at 4x the frame is drawn by every thread
+// together (Gengis's workers, the 2D thread, the emulator's), so the busiest thread alone doesn't say whether a lower
+// clock fits: all of BananaDS's threads' load in the clean windows, scaled to the lower clock, has to stay under this
+// many cores (else it stays), and that sum this close to the four cores is a step up like a busiest thread at 96%
+static std::string sum_cfg = "auto";
+static double sum_limit = 0, sum_hi = 0;
+static const double SUM_EDGE = 3.7;
+// the kernel's thermal cap (the cpufreq cooling device; the RG DS Plus trips at 70 C, at 4x within a minute): a late
+// frame while it holds the CPU below the clock cpugov set is the heat's, not that clock's: no strike, no ban, nothing
+// remembered (a strike stays in the game's memory for up to a week)
+static std::string cool_state;
 static long tail_from = 0;  // frames before this one are the previous clock's  // cpugov.window_ms (the tests')
 static const double IDLE_BUSY = 0.25, SLOW_FPS = 58.5, REPEAT_BUSY = 0.5;
 // Ahead of a late frame: the busiest thread this busy for EDGE_WINDOWS windows in a row is a step up (and a ban of the
@@ -223,6 +234,17 @@ static void gov_loop() {
         now_ns = n.tv_sec * 1000000000LL + n.tv_nsec;
     }
     mem_load(feed_->scale);
+    if (DIR* d = opendir("/sys/class/thermal")) {
+        while (dirent* e = readdir(d)) {
+            if (strncmp(e->d_name, "cooling_device", 14)) continue;
+            const std::string c = std::string("/sys/class/thermal/") + e->d_name;
+            if (rd_str((c + "/type").c_str()).rfind("cpufreq-cpu", 0) == 0) cool_state = c + "/cur_state";
+        }
+        closedir(d);
+    }
+    bool hot_said = false;
+    sum_limit = sum_cfg == "auto" ? (feed_->scale >= 3 ? 3.3 : 0) : atof(sum_cfg.c_str());
+    if (sum_limit > 0) Log(LogLevel::Info, "[cpugov] sum limit: down a step only while all threads' load fits %.1f cores there\n", sum_limit);
     while (gov_run) {
         if (--rescan <= 0) {  // BananaDS's threads (not the governor or the sound's), once a second
             DIR* d = opendir("/proc/self/task");
@@ -305,13 +327,16 @@ static void gov_loop() {
         const bool running = umax >= IDLE_BUSY;
         const bool slow = fps >= 0 && fps < SLOW_FPS && fps > 5 && (umax > 0.5 || usum > 1.0);
         const int top = soft_max ? hwmax_ : fmax_;
+        const bool hot = !cool_state.empty() && rd_int(cool_state.c_str()) > 0;
+        if (hot && !hot_said) Log(LogLevel::Info, "[cpugov] the CPU is thermally capped (cooling state > 0): late frames don't strike a clock meanwhile\n");
+        hot_said = hot_said || hot;  // (said once: at 4x the cap comes and goes every few seconds)
         const char* why = nullptr;
         int want = cur;
         if (late && !running)
             Log(LogLevel::Info, "[cpugov] %ld late frames ignored: the game isn't running (busiest thread %.0f%%)\n", late,
                 umax * 100);
         else if (!late && !slow && running && cur < top &&
-                 (edge = umax >= EDGE_BUSY && !feed_->catching.load(std::memory_order_relaxed) ? edge + 1 : 0) >= EDGE_WINDOWS) {
+                 (edge = (umax >= EDGE_BUSY || (sum_limit > 0 && usum >= SUM_EDGE)) && !feed_->catching.load(std::memory_order_relaxed) ? edge + 1 : 0) >= EDGE_WINDOWS) {
             why = "near the limit";
             want = step_up(cur);
             if (int c = idx(cur); c >= 0) bad_until[c] = t + ban_ns(0);
@@ -321,7 +346,7 @@ static void gov_loop() {
             want = step_up(cur);
             if (late >= 3 || (fps >= 0 && fps < 50)) want = step_up(want);
             int c = idx(cur);
-            if (c >= 0 && cur < top) {
+            if (c >= 0 && cur < top && !hot) {
                 bad_until[c] = t + ban_ns(strikes[c]);
                 strikes[c]++;
                 for (int i = 0; i < nf; i++)
@@ -357,6 +382,7 @@ static void gov_loop() {
             set_clock(want, why, late, umax, fps);
             low = 0;
         } else if (!late && (fps < 0 || fps >= 59)) {  // clean: the next clock down once it has been for DOWN_AFTER windows
+            sum_hi = low ? std::max(sum_hi, usum) : usum;
             if (++low >= DOWN_AFTER) {
                 const int lower = step_down(cur);
                 // the heavy frames' tail at the lower clock (frame time scales with the clock; memory-bound work less)
@@ -370,7 +396,11 @@ static void gov_loop() {
                     p99 = v[k];
                 }
                 const double at_lower = lower < cur ? p99 * cur / lower : 0;
-                if (lower < cur && tail_limit > 0 && at_lower > tail_limit * 16.67) {
+                if (lower < cur && sum_limit > 0 && sum_hi * cur / lower > sum_limit) {
+                    if (verbose)
+                        Log(LogLevel::Info, "[cpugov] staying at %d MHz: all threads' load (up to %.2f cores) would be %.2f at %d MHz\n",
+                            cur / 1000, sum_hi, sum_hi * cur / lower, lower / 1000);
+                } else if (lower < cur && tail_limit > 0 && at_lower > tail_limit * 16.67) {
                     if (verbose)
                         Log(LogLevel::Info, "[cpugov] staying at %d MHz: the slowest frames (p99 %.1f ms) would take %.1f ms at %d MHz\n",
                             cur / 1000, p99, at_lower, lower / 1000);
@@ -435,6 +465,7 @@ void cpugov_start(const Config& cfg, GovFeed* feed) {
     mem_on = cfg.flag("cpugov.memory", true);
     use_repeats = cfg.flag("cpugov.repeats", true);
     tail_limit = atof(cfg.str("cpugov.tail", "1.4").c_str());
+    sum_cfg = cfg.str("cpugov.sum_limit", "auto");
     std::string gov = rd_str(pol("scaling_governor").c_str());
     if (gov != "performance") {
         Log(LogLevel::Info, "[cpugov] off: the governor is %s, not performance\n", gov.empty() ? "unknown" : gov.c_str());

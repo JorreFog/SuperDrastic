@@ -1747,14 +1747,38 @@ int run_kms(Emu& emu, const Config& cfg) {
                 const long self = (long)syscall(SYS_gettid);
                 cpu_set_t rest; CPU_ZERO(&rest);
                 for (int k = 0; k < std::min(CPU_SETSIZE, (int)sysconf(_SC_NPROCESSORS_CONF)); k++) if (k != c) CPU_SET(k, &rest);
-                int n = 0;
+                // sched.emu_share=1|2 (off: 0): Gengis's workers (2: and the 2D thread) keep every core; this thread
+                // at SCHED_FIFO 1 takes its core back from them at once when it wakes
+                const std::string sh = cfg.str("sched.emu_share", "off");
+                g_emu_share = sh == "2" ? 2 : sh == "1" || sh == "on" ? 1 : sh == "auto" ? (emu.scale() >= 4 ? 1 : 0) : 0;
+                if (g_emu_share) {
+                    sched_param sp{};
+                    sp.sched_priority = 1;
+                    if (int e = pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp)) {
+                        Log(LogLevel::Warn, "[kms] sched.emu_share: no SCHED_FIFO: %s\n", strerror(e));
+                        g_emu_share = 0;
+                    }
+                }
+                cpu_set_t all; CPU_ZERO(&all);
+                for (int k = 0; k < std::min(CPU_SETSIZE, (int)sysconf(_SC_NPROCESSORS_CONF)); k++) CPU_SET(k, &all);
+                int n = 0, ns = 0;
                 if (DIR* d = opendir("/proc/self/task")) {
                     while (dirent* e = readdir(d)) {
                         const long tid = atol(e->d_name);
-                        if (tid > 0 && tid != self && sched_setaffinity((pid_t)tid, sizeof rest, &rest) == 0) n++;
+                        if (tid <= 0 || tid == self) continue;
+                        bool share = false;
+                        if (g_emu_share) {
+                            char path[64], comm[32] = {};
+                            snprintf(path, sizeof path, "/proc/self/task/%ld/comm", tid);
+                            if (FILE* f = fopen(path, "r")) { if (!fgets(comm, sizeof comm, f)) comm[0] = 0; fclose(f); }
+                            share = !strncmp(comm, "bds-gengis", 10) || (g_emu_share > 1 && !strncmp(comm, "bananads-2d", 11));
+                        }
+                        if (share ? sched_setaffinity((pid_t)tid, sizeof all, &all) == 0 && ++ns
+                                  : sched_setaffinity((pid_t)tid, sizeof rest, &rest) == 0) n++;
                     }
                     closedir(d);
                 }
+                if (g_emu_share) Log(LogLevel::Info, "[kms] sched.emu_share=%d: %d threads may use cpu%ld too (this thread SCHED_FIFO 1)\n", g_emu_share, ns, c);
                 Log(LogLevel::Info, "[kms] sched.emu_excl: the emulator's thread on cpu%ld, %d other threads off it\n", c, n);
             }
         }
