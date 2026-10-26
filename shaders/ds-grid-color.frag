@@ -1,6 +1,6 @@
 // ds-grid + NDS screen colour (generated from ds-grid.frag by tools/gen-color-shaders.py: edit ds-grid.frag, then run it).
-// ds-grid -- exact-area 2.5x reconstruction plus an LCD column/row structure, for
-// DraStic at 1x on the Anbernic RG DS. Full screen, no letterboxing.
+// ds-grid -- exact-area 2.5x reconstruction plus a thin LCD grid, for the Anbernic RG DS (DS screens full screen,
+// no letterboxing).
 //
 // SCALING (identical to ds-crisp)
 // At 1x each DS screen is its own 256x192 texture drawn to 640x480: a uniform 2.5x
@@ -8,41 +8,31 @@
 // Measured against the ideal on this GPU: RMSE 0.29/255, versus 12.2 for the built-in
 // sharp-bilinear, 36.8 for bilinear, 40.6 for nearest.
 //
-// WHY THE GRID IS BUILT THIS WAY
-// One DS pixel is 2.5 output pixels, so a grid line cannot be given a fractional
-// position without changing shape from cell to cell. Computing exact sub-pixel
-// coverage -- the obvious "correct" approach, and what the first version of this file
-// did -- makes every second line land inside a pixel and the one after it straddle
-// two. The energy per line is then identical, which is why it does not shimmer, but
-// the lines visibly alternate between thin-and-dark and wide-and-soft. On a flat
-// gradient that reads as a plaid weave, not as a screen.
+// THE GRID ON THE RG DS (a DS pixel is 2.5 panel pixels, at every internal resolution)
+// A real DS LCD shows a thin, faint gap between its pixels, every cell the same. Until 0.5.0 every line here was
+// snapped to one whole panel pixel (0.42 in linear light) plus a partly darkened neighbour (0.72): about 1.5 of
+// every 2.5 pixels dark, which read as thick bars, and the line pixels fell at 0, 2, 5, 7, 10..., cells
+// alternating 2 and 3 pixels wide (a beat every 2 DS pixels, 0.70 of the grid's own amplitude).
 //
-// So instead every line is snapped to exactly one output pixel. All lines are then
-// identical by construction; what varies is the spacing, which alternates 2px, 3px,
-// 2px, 3px (line columns fall at floor(k * 2.5) = 0, 2, 5, 7, 10, ...). Uneven
-// spacing in a fine repeating stripe is far less visible than uneven line weight,
-// because the eye reads the texture rather than measuring the gaps.
+// At 2.5 panel pixels per DS pixel the grid's pattern repeats every 5 pixels, and anything sharper than a pure
+// 2.5-pixel wave has harmonics that land on that 5-pixel period: a beat, seen as plaid. So by default
+// (GRID_CRISP 0) each axis's darkening is 1 + cos, peaking on the DS-pixel boundaries: the band-limited form of a
+// thin gap. On a boundary that falls on a pixel centre it darkens that one pixel, on one that falls between two
+// pixels it darkens both a little less, and the cell centres are nearly untouched; every cell loses the same
+// light and there is no beat. GRID_CRISP 1 instead takes a sharp gap GAP_WIDTH wide by area coverage (each pixel
+// darkened by the share of it the gap covers): crisper, but one dark pixel then two lighter ones alternate
+// (beat 0.14 of the grid) and that shows as a faint plaid when you look closely.
 //
-// Both axes carry the grid, at equal weight. An earlier revision ran columns only,
-// reasoning that a DS panel is an RGB/BGR vertical stripe layout -- true, but at this
-// scale it simply made the grid disappear. Rendering the shim's own lcd1x-nds-color
-// and lcd3x and looking at them settled it: both draw a full mesh in *both* axes with
-// clearly visible lines, and they read as a screen rather than as noise because their
-// mask is panel-aligned on an integer period, so every cell is identical. The snapping
-// above buys the same property here -- identical lines -- while staying locked to DS
-// pixels rather than to the panel.
+// At a whole-number scale (the RG DS Plus at 1x: 4x) the grid stays as it was: one snapped line and its edge per
+// cell, every cell identical. Only the fractional (RG DS) case changed.
 //
-// Strength is limited by legibility, not taste: a snapped line is one whole output
-// pixel, i.e. 40% of a cell, so at GRID_LEVEL_V below about 0.78 thin white text
-// starts to break up where strokes land on a dark column.
+// Darkening is applied in linear light so it dims like a black matrix instead of crushing shadows.
+// GRID_COMPENSATE restores part of the lost light; full compensation pushes lit pixels above the source value
+// and reads as glare.
 //
-// Darkening is applied in linear light so it dims like a black matrix instead of
-// crushing shadows. GRID_COMPENSATE only restores part of the lost light; full
-// compensation pushes lit pixels above the source value and reads as glare.
-//
-// highp is required: mediump on this Mali-G52 is fp16 and quantises a texel
-// coordinate near x=256 to 0.25 texels, which would scramble the line phase.
-// No #version and no backslash continuations: the shim compiles this as ESSL 1.00.
+// highp is required: mediump on this Mali-G52 is fp16 and quantises a texel coordinate near x=256 to 0.25
+// texels, which would scramble the line phase. No #version and no backslash continuations: the shim compiles
+// this as ESSL 1.00.
 
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -75,40 +65,39 @@ mediump vec3 ndsColor(mediump vec3 c)
 // resolution, so 2x keeps its detail inside a DS-accurate grid. At 1x the two are the same.
 const vec2 DS_SIZE = vec2(256.0, 192.0);
 
-// --- taste knobs -------------------------------------------------------------
-// Column darkness in linear light. 1.0 = off.
-//
-// Calibrated against the shim's own filters by screenshotting the actual panel with
-// grim and measuring grid depth as (1 - mean of line columns / mean of the rest),
-// which is scene-independent -- a no-grid capture measures -0.1% on it:
-//   level 0.80 -> 10.4%    0.70 -> 16.0%    0.60 -> 22.3%    0.50 -> 28.9%
-//   lcd3x      -> 20.0%    lcd1x-nds-color -> 24.3%
-// Earlier versions of this file sat at 10%, half of lcd3x, which is why the grid was
-// reported as invisible. It is not a rendering fault: these panels are ~200 PPI
-// (81mm across 640px), so one DS pixel is 0.32mm and subtends roughly 3.6 arcmin at
-// normal viewing distance -- near the acuity limit, where low-contrast detail simply
-// is not resolved. The grid has to be lcd3x-class deep to register at all.
-const float GRID_LEVEL_V    = 0.42;
-// Row darkness. Matched to the columns so the result is a square mesh like a real
-// LCD. Raise toward 1.0 for a column-dominant look.
-const float GRID_LEVEL_H    = 0.42;
-// Line thickness. A snapped line is one whole output pixel, and a cell is only 2.5,
-// so a second full pixel would leave almost no gap. Instead the column after each
-// line is darkened partially: 1.0 = off (1px lines), lower = thicker. Because every
-// line gets the same two-step profile, all lines stay identical and the grid stays
-// uniform. 0.72 reads as roughly 1.5px lines.
-const float GRID_EDGE       = 0.72;
-// Fraction of the removed light to restore. 1.0 reads as glare.
+// --- taste knobs: the RG DS (fractional scale) -------------------------------
+// How dark: the share of a DS pixel's light the grid takes, per axis, in linear light (0.0 = no grid). With
+// GRID_CRISP 0 the darkest panel pixel (on a boundary) keeps sqrt(1 - 2 * GRID_DARKNESS) of its colour before
+// compensation, the pixel pairs sqrt(1 - 1.31 * GRID_DARKNESS): 0.18 -> 0.80 and 0.87. Before 0.5.0 the grid
+// took 0.34 per axis.
+const float GRID_DARKNESS = 0.18;
+// 0.0 = even (the default): the band-limited form of a thin gap, a 2.5-pixel cosine, the one profile that has no
+// period-5 beat at all on this panel. 1.0 = crisp: a gap GAP_WIDTH wide by area coverage, one panel pixel darker,
+// but the lines alternate (one dark pixel, then two lighter ones) and that beat shows as a faint plaid. Between
+// the two mixes them.
+const float GRID_CRISP = 0.0;
+// The crisp gap's width in DS pixels (0.2 = half a panel pixel on the RG DS); only used with GRID_CRISP > 0.
+const float GAP_WIDTH = 0.2;
+
+// --- taste knobs: whole-number scales (the RG DS Plus), unchanged -------------
+// Calibrated in 2026-09 against the shim's own filters by screenshotting the panel and measuring grid depth as
+// (1 - mean of line columns / mean of the rest): level 0.80 -> 10.4%, 0.70 -> 16.0%, 0.60 -> 22.3%,
+// 0.50 -> 28.9%; lcd3x -> 20.0%, lcd1x-nds-color -> 24.3%.
+const float GRID_LEVEL_V    = 0.42;   // column darkness in linear light, 1.0 = off
+const float GRID_LEVEL_H    = 0.42;   // row darkness
+const float GRID_EDGE       = 0.72;   // the pixel after each line, partly darkened: 1.0 = 1px lines
+
+// Fraction of the removed light to restore (both cases). 1.0 reads as glare.
 const float GRID_COMPENSATE = 0.5;
 // -----------------------------------------------------------------------------
 
-// 1.0 when this output pixel is the one a DS-pixel boundary snaps to.
+// 1.0 when this output pixel is the one a DS-pixel boundary snaps to (the whole-number case).
 // Is there a DS pixel boundary inside output pixel p (per component)? The boundary k*scale lands in output pixel
 // floor(k*scale), so p has one when the first boundary at or after p, ceil(p/scale)*scale, is below p+1. The same
 // decision as snapping to the nearest boundary (verified identical for every pixel at scales 2.5 to 7.5, also with
-// the division done as a reciprocal 1 ulp off either way), for all four lines at once: ~11% faster than the old
-// per-line version. The -1e-4 keeps ceil() exact when p/scale is a whole number computed through a reciprocal
-// (its fractions are multiples of 1/output size, far above 1e-4).
+// the division done as a reciprocal 1 ulp off either way), for all four lines at once. The -1e-4 keeps ceil()
+// exact when p/scale is a whole number computed through a reciprocal (its fractions are multiples of 1/output
+// size, far above 1e-4).
 vec4 linesHere(vec4 p, vec4 scale)
 {
     vec4 c = ceil(p / scale - 1e-4);
@@ -126,21 +115,37 @@ void main()
     vec4 c = SWIZ(texture2D(u_texture, (i0 + 0.5 + w) / u_texture_size));
     c.rgb = ndsColor(c.rgb);
 
-    // --- snapped, uniform-weight LCD structure
+    vec2  p     = floor(v_texcoord * u_output_size);
+
     vec2  scale = u_output_size / DS_SIZE;          // output pixels per DS pixel (2.5 on the RG DS)
     vec2  invG  = DS_SIZE / u_output_size;
-    vec2  p     = floor(v_texcoord * u_output_size);
-    vec4  L  = linesHere(vec4(p.x, p.x - 1.0, p.y, p.y - 1.0), scale.xxyy);   // line here, line one pixel back
-    vec4  m  = mix(vec4(1.0), vec4(GRID_LEVEL_V, GRID_EDGE, GRID_LEVEL_H, GRID_EDGE), L);
-    float gx = min(m.x, m.y);
-    float gy = min(m.z, m.w);
-    float g  = gx * gy;
-
-    // One line and one edge column per texel, so the cell mean is exact: invS of the
-    // columns are lines, invS are edges, the rest untouched.
-    float meanX  = invG.x * GRID_LEVEL_V + invG.x * GRID_EDGE + (1.0 - 2.0 * invG.x);
-    float meanY  = invG.y * GRID_LEVEL_H + invG.y * GRID_EDGE + (1.0 - 2.0 * invG.y);
-    float meanG  = meanX * meanY;
+    float g, meanG;
+    if (fract(scale.x) != 0.0 || fract(scale.y) != 0.0) {
+        // --- thin gap: per axis, the light a panel pixel loses is GRID_DARKNESS * (profile), whose mean over a
+        // DS pixel is 1, so every cell loses the same light. Even profile: 1 + cos, peaking on the DS-pixel
+        // boundaries (sampled at pixel centres). Crisp profile: the share of panel pixel [p, p+1] inside a gap
+        // GAP_WIDTH wide round the nearest boundary b (a pixel can't reach two gaps while GAP_WIDTH * scale + 1 < scale)
+        // (the phase reduced with fract() first: cos() of a large argument loses precision on some GPUs)
+        vec2 prof = 1.0 + cos(fract((p + 0.5) * invG) * 6.2831853);
+        if (GRID_CRISP > 0.0) {                     // (a constant: compiled out at 0)
+            vec2 hw  = 0.5 * GAP_WIDTH * scale;
+            vec2 b   = floor((p + 0.5) * invG + 0.5) * scale;
+            vec2 cov = max(min(p + 1.0, b + hw) - max(p, b - hw), 0.0) * (invG / GAP_WIDTH);
+            prof = mix(prof, cov, GRID_CRISP);
+        }
+        vec2 m    = 1.0 - GRID_DARKNESS * prof;
+        g = m.x * m.y;
+        meanG = (1.0 - GRID_DARKNESS) * (1.0 - GRID_DARKNESS);
+    } else {
+        // --- snapped, uniform-weight lines (whole-number scale)
+        vec4  L  = linesHere(vec4(p.x, p.x - 1.0, p.y, p.y - 1.0), scale.xxyy);   // line here, line one pixel back
+        vec4  m  = mix(vec4(1.0), vec4(GRID_LEVEL_V, GRID_EDGE, GRID_LEVEL_H, GRID_EDGE), L);
+        g = min(m.x, m.y) * min(m.z, m.w);
+        // one line and one edge column per texel, so the cell mean is exact
+        float meanX = invG.x * GRID_LEVEL_V + invG.x * GRID_EDGE + (1.0 - 2.0 * invG.x);
+        float meanY = invG.y * GRID_LEVEL_H + invG.y * GRID_EDGE + (1.0 - 2.0 * invG.y);
+        meanG = meanX * meanY;
+    }
     float bright = mix(1.0, 1.0 / meanG, GRID_COMPENSATE);
 
     vec3 lin = c.rgb * c.rgb * (g * bright);
