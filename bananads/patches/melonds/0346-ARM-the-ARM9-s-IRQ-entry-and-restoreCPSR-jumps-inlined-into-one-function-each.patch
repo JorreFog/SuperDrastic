@@ -1,0 +1,183 @@
+diff --git a/src/ARM.cpp b/src/ARM.cpp
+index 99188fa..a3ad486 100644
+--- a/src/ARM.cpp
++++ b/src/ARM.cpp
+@@ -329,10 +329,41 @@ void ARM::SetupCodeMem(u32 addr)
+ }
+ 
+ void ARMv5::JumpTo(u32 addr, bool restorecpsr)
++{
++    JumpToInl(addr, restorecpsr);
++}
++
++// J3 FASTIRQ (patch 0346): the JIT's restoreCPSR jumps (JumpToTrampoline) and the loop's TriggerIRQ for the ARM9
++// through one function each with JumpTo, RestoreCPSR and UpdateMode inlined into it (the same code, fewer calls and
++// cold cache lines). J3FastIRQ = 0 (MELONDS_JIT_NOFASTIRQ=1): the calls as before.
++u8 J3FastIRQ = 1;
++
++[[gnu::noinline]] void ARMv5::JumpToJIT(u32 addr, bool restorecpsr)
++{
++    JumpToInl(addr, restorecpsr);
++}
++
++[[gnu::noinline]] void ARMv5::TriggerIRQJIT()
++{
++    // ARM::TriggerIRQ for the ARM9 (no ARDS part: that is the ARM7's)
++    if (CPSR & 0x80)
++        return;
++
++    u32 oldcpsr = CPSR;
++    CPSR &= ~0xFF;
++    CPSR |= 0xD2;
++    UpdateModeInl(oldcpsr, CPSR);
++
++    R_IRQ[2] = oldcpsr;
++    R[14] = R[15] + (oldcpsr & 0x20 ? 2 : 0);
++    JumpToInl(ExceptionBase + 0x18, false);
++}
++
++[[gnu::always_inline]] inline void ARMv5::JumpToInl(u32 addr, bool restorecpsr)
+ {
+     if (restorecpsr)
+     {
+-        RestoreCPSR();
++        RestoreCPSRInl();
+ 
+         if (CPSR & 0x20)    addr |= 0x1;
+         else                addr &= ~0x1;
+@@ -441,6 +472,11 @@ void ARMv4::JumpTo(u32 addr, bool restorecpsr)
+ }
+ 
+ void ARM::RestoreCPSR()
++{
++    RestoreCPSRInl();
++}
++
++[[gnu::always_inline]] inline void ARM::RestoreCPSRInl()
+ {
+     u32 oldcpsr = CPSR;
+ 
+@@ -479,10 +515,15 @@ void ARM::RestoreCPSR()
+ 
+     CPSR |= 0x00000010;
+ 
+-    UpdateMode(oldcpsr, CPSR);
++    UpdateModeInl(oldcpsr, CPSR);
+ }
+ 
+ void ARM::UpdateMode(u32 oldmode, u32 newmode, bool phony)
++{
++    UpdateModeInl(oldmode, newmode, phony);
++}
++
++[[gnu::always_inline]] inline void ARM::UpdateModeInl(u32 oldmode, u32 newmode, bool phony)
+ {
+     if ((oldmode & 0x1F) == (newmode & 0x1F)) return;
+ 
+diff --git a/src/ARM.h b/src/ARM.h
+index b1e644d..5b1a81f 100644
+--- a/src/ARM.h
++++ b/src/ARM.h
+@@ -78,6 +78,7 @@ public:
+ 
+     virtual void JumpTo(u32 addr, bool restorecpsr = false) = 0;
+     void RestoreCPSR();
++    inline void RestoreCPSRInl();   // (J3 FASTIRQ: the bodies, inlined into ARMv5::JumpToJIT/TriggerIRQJIT)
+ 
+     void Halt(u32 halt)
+     {
+@@ -129,6 +130,7 @@ public:
+     }
+ 
+     void UpdateMode(u32 oldmode, u32 newmode, bool phony = false);
++    inline void UpdateModeInl(u32 oldmode, u32 newmode, bool phony = false);
+ 
+     void TriggerIRQ();
+ 
+@@ -251,6 +253,9 @@ public:
+     void FillPipeline() override;
+ 
+     void JumpTo(u32 addr, bool restorecpsr = false) override;
++    inline void JumpToInl(u32 addr, bool restorecpsr);
++    void JumpToJIT(u32 addr, bool restorecpsr);   // (J3 FASTIRQ, patch 0346)
++    void TriggerIRQJIT();
+ 
+     void PrefetchAbort();
+     void DataAbort();
+diff --git a/src/ARMJIT_A64/ARMJIT_Branch.cpp b/src/ARMJIT_A64/ARMJIT_Branch.cpp
+index c5bf145..5a35340 100644
+--- a/src/ARMJIT_A64/ARMJIT_Branch.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Branch.cpp
+@@ -27,10 +27,20 @@ const int kCodeCacheTiming = 3;
+ namespace melonDS
+ {
+ 
++extern u8 J3FastIRQ;   // (ARM.cpp, patch 0346)
++
+ template <typename T>
+ void JumpToTrampoline(T* cpu, u32 addr, bool changeCPSR)
+ {
+     if (J3Stats) J3ExitStats[24 + 32 * cpu->Num]++;
++    if constexpr (std::is_same_v<T, ARMv5>)
++    {
++        if (J3FastIRQ)
++        {
++            cpu->JumpToJIT(addr, changeCPSR);
++            return;
++        }
++    }
+     cpu->JumpTo(addr, changeCPSR);
+ }
+ 
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 378f0ee..40b68c9 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -61,6 +61,7 @@ u8 J3Dyn2 = !getenv("MELONDS_JIT_NODYN2");
+ u8 J3DynImm = !getenv("MELONDS_JIT_NODYNIMM");
+ // J3 CONDDYN (patch 0345, MELONDS_JIT_NOCONDDYN=1 off; read when a block is compiled)
+ u8 J3CondDyn = !getenv("MELONDS_JIT_NOCONDDYN");
++extern u8 J3FastIRQ;   // (ARM.cpp, patch 0346)
+ u32 JitStubRegion(NDS* nds, u32 num, u32 instrAddr);
+ 
+ void Compiler::J3Count(int k, ARM64Reg a, ARM64Reg b)
+@@ -407,6 +408,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         J3Dyn2 = !old && !getenv("MELONDS_JIT_NODYN2");
+         J3DynImm = !old && !getenv("MELONDS_JIT_NODYNIMM");
+         J3CondDyn = !old && !getenv("MELONDS_JIT_NOCONDDYN");
++        J3FastIRQ = !old && !getenv("MELONDS_JIT_NOFASTIRQ");
+         // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
+         for (int num = 0; num < 2; num++)
+         {
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 2e91120..2eeb621 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -1469,6 +1471,8 @@ u32 JitStubRegion(NDS* nds, u32 num, u32 instrAddr)
+         || SetupExecutableRegionFor<1>(n, n.ARM7, instrAddr);
+ }
+ 
++extern u8 J3FastIRQ;   // (J3 FASTIRQ, patch 0346; ARM.cpp)
++
+ // ARMv5/ARMv4::Execute<JIT>'s block loop and its end, for a CPU that isn't halted (FastLoop)
+ template <u32 num, typename CPU>
+ [[gnu::always_inline]] static inline void ExecuteJITInline(NDS& nds, CPU& cpu, u64& timestamp, u64& target, u8* const rxBase)
+@@ -1518,7 +1522,17 @@ template <u32 num, typename CPU>
+             }
+             // this order is crucial otherwise idle loops waiting for an IRQ won't function
+             if (cpu.IRQ)
+-                cpu.TriggerIRQ();
++            {
++                if constexpr (num == 0)
++                {
++                    if (J3FastIRQ)
++                        cpu.TriggerIRQJIT();   // (J3 FASTIRQ, patch 0346: the same, inlined)
++                    else
++                        cpu.TriggerIRQ();
++                }
++                else
++                    cpu.TriggerIRQ();
++            }
+ 
+             if (cpu.Halted || cpu.IdleLoop)
+             {

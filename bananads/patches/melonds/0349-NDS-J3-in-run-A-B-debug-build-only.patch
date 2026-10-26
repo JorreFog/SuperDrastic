@@ -52,3 +52,25 @@ index 619726b..2e91120 100644
              c[0]/300., c[1]/300., c[2]/300., c[3]/300., c[4]/300., c[5]/300., c[6]/300., c[7]/300., c[8]/300.,
              c[10]/300., c[11]/300., c[12]/300., c[13]/300., c[15]/300., c[16]/300., c[14]/300., c[17]/300., c[18]/300., c[9]/300., c[19]/300.,
              c[20]/300., c[21]/300., c[22]/300., c[23]/300., c[25]/300., c[26]/300., c[27]/300., c[24]/300., c[28]/300., c[31]/300., c[29]/300., c[30]/300.);
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 2e91120..2eeb621 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -1243,7 +1243,7 @@ u32 NDS::RunFrame()
+ #ifdef MELONDS_J3AB
+     {
+         // J3 in-run A/B (debug builds only): MELONDS_J3AB=<frames>, MELONDS_J3ABMASK=<switch bits on in mode 1>
+-        // (1 STOPMASK, 2 REGIONSTUB, 4 DYN2, 8 DYNIMM, 16 CONDDYN: those three with a JIT reset): mode 0 = all of them off, mode 1 = those on; flipped every <frames> frames
++        // (1 STOPMASK, 2 REGIONSTUB, 4 DYN2, 8 DYNIMM, 16 CONDDYN: those three with a JIT reset, 32 FASTIRQ): mode 0 = all of them off, mode 1 = those on; flipped every <frames> frames
+         static const int abN = getenv("MELONDS_J3AB") ? atoi(getenv("MELONDS_J3AB")) : 0;
+         static const int abMask = getenv("MELONDS_J3ABMASK") ? atoi(getenv("MELONDS_J3ABMASK")) : 3;
+         static int abMode = 1;
+@@ -1253,6 +1253,8 @@ u32 NDS::RunFrame()
+             static const int abBase = getenv("MELONDS_J3ABBASE") ? atoi(getenv("MELONDS_J3ABBASE")) : 0;   // (on in both)
+             const int m = (abMode ? abMask : 0) | abBase;
+             J3StopMask = m & 1;
++            extern u8 J3FastIRQ;
++            J3FastIRQ = (m >> 5) & 1;
+             J3RegionStub = (m >> 1) & 1;
+             if (((abMask | abBase) & 28) && (J3Dyn2 != ((m >> 2) & 1) || J3DynImm != ((m >> 3) & 1)
+                 || J3CondDyn != ((m >> 4) & 1)))
