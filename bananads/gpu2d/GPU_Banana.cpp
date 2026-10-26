@@ -292,14 +292,14 @@ void BananaRenderer::OutputLineA(u32* dst, u32 dispcnt, u16 brightness, const u1
     }
 }
 
-void BananaRenderer::OutputLineB(u32* dst, u32 dispcnt, u16 brightness)
+void BananaRenderer::OutputLineB(u32* dst, u32 dispcnt, u16 brightness, const u32* src)
 {
     if (!((dispcnt >> 16) & 0x1))
     {
         FillLine(dst, 0xFFFFFFFF);
         return;
     }
-    WriteLine(dst, Output2D[1], brightness);
+    WriteLine(dst, src ? src : Output2D[1], brightness);
 }
 
 // ---- 2x: a DS line is two framebuffer rows of 512 pixels ----
@@ -361,15 +361,15 @@ void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* dis
     ZipLine(dst + 512, q[2], q[3]);
 }
 
-void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness)
+void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src)
 {
     if (!Quarter)
     {
-        OutputLineB(dst, dispcnt, brightness);
+        OutputLineB(dst, dispcnt, brightness, src);
         return;
     }
     alignas(16) u32 t[256];
-    OutputLineB(t, dispcnt, brightness);
+    OutputLineB(t, dispcnt, brightness, src);
     DoubleLine(dst, t);
 }
 
@@ -406,6 +406,8 @@ void BananaRenderer::DrawScanline(u32 line)
         return;
     }
 
+    FlushPending();
+
     // display capture writes unit A's lines back into VRAM at their time: unit A is drawn here and now (when the
     // capture reads them)
     SetAInPlace(CaptureNeedsA(GPU.VCount));
@@ -414,7 +416,14 @@ void BananaRenderer::DrawScanline(u32 line)
     u32* line3d;
     PrepareScanlineJob(job, line, line3d);
     job.OnlyB = AInPlace;
-    Submit();
+    // render.2d_merge: GPU::StartHBlank prepares the next sprite line right after this one (line < 191): that goes
+    // into this job, which is handed over then. Not while display capture is on (capture's lines go as before)
+    if (Merging && line < 191 && !AInPlace && !GPU.CaptureEnable)
+    {
+        Pending = true;
+        return;
+    }
+    Submit(1);
 
     if (AInPlace)
     {
@@ -481,7 +490,7 @@ void BananaRenderer::SetAInPlace(bool on)
 
 void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
 {
-    job.Kind = Job::Scanline;
+    job.Kind = ScanBit;
     job.DstA = LineDst(GPU.ScreenSwap ? 0 : 1, line);
     job.DstB = LineDst(GPU.ScreenSwap ? 1 : 0, line);
     job.ScreensEnabled = GPU.ScreensEnabled;
@@ -529,18 +538,28 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
         const u16* display = DisplaySource(GPU, line);
         job.HasDisplay = display != nullptr;
         if (display)
-            memcpy(job.Display, display, sizeof(job.Display));
+            memcpy(job.Display, display, 256 * sizeof(u16));
     }
+    job.LogEndScan = job.LogEnd = LogWrite;
+}
+
+// a sprite line: a job of its own, or the second half of the pending merged job (render.2d_merge)
+void BananaRenderer::PrepareSpritesJob(Job& job, u32 line)
+{
+    job.Kind |= SpriteBit;
+    job.SpriteLine = line;
+    static_cast<BananaRenderer2D&>(*Rend2D_A).PrepareSprites(job.SRegs[0]);
+    static_cast<BananaRenderer2D&>(*Rend2D_B).PrepareSprites(job.SRegs[1]);
     job.LogEnd = LogWrite;
 }
 
-void BananaRenderer::PrepareSpritesJob(Job& job, u32 line)
+// a merged job's scanline half handed over alone (anything but its sprite line came next)
+void BananaRenderer::FlushPending()
 {
-    job.Kind = Job::Sprites;
-    job.Line = line;
-    static_cast<BananaRenderer2D&>(*Rend2D_A).PrepareSprites(job.Regs[0]);
-    static_cast<BananaRenderer2D&>(*Rend2D_B).PrepareSprites(job.Regs[1]);
-    job.LogEnd = LogWrite;
+    if (!Pending)
+        return;
+    Pending = false;
+    Submit(1);
 }
 
 void BananaRenderer::DrawScanlineInPlace(u32 line)
@@ -597,15 +616,27 @@ void BananaRenderer::DrawSprites(u32 line)
         return;
     }
 
+    if (Pending && !CaptureNeedsA(line))
+    {
+        // render.2d_merge: the scanline prepared just before, in the same job (its OnlyB: unit A not in place)
+        Pending = false;
+        Job& job = Jobs[LocalHead % NumJobs];
+        PrepareSpritesJob(job, line);
+        Submit(2);
+        return;
+    }
+    FlushPending();
+
     SetAInPlace(CaptureNeedsA(line));
 
     Job& job = NewJob();
+    job.Kind = 0;
     PrepareSpritesJob(job, line);
     job.OnlyB = AInPlace;
-    Submit();
+    Submit(1);
 
     if (AInPlace)
-        static_cast<BananaRenderer2D&>(*Rend2D_A).DrawSpritesFrom(job.Line, job.Regs[0]);
+        static_cast<BananaRenderer2D&>(*Rend2D_A).DrawSpritesFrom(job.SpriteLine, job.SRegs[0]);
 }
 
 // on the 2D thread
@@ -614,27 +645,73 @@ void BananaRenderer::Execute(Job& job)
     auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
     auto& b = static_cast<BananaRenderer2D&>(*Rend2D_B);
 
-    ApplyLog(job.LogEnd);
-
     bool doA = !job.OnlyB;
 
-    if (job.Kind == Job::Sprites)
+    if (job.Kind & ScanBit)
     {
-        if (doA) a.DrawSpritesFrom(job.Line, job.Regs[0]);
-        b.DrawSpritesFrom(job.Line, job.Regs[1]);
-        return;
+        ApplyLog(job.LogEndScan);
+        ExecuteScanline(job, a, b, doA);
     }
+    if (job.Kind & SpriteBit)
+    {
+        ApplyLog(job.LogEnd);
+        if (doA) a.DrawSpritesFrom(job.SpriteLine, job.SRegs[0]);
+        b.DrawSpritesFrom(job.SpriteLine, job.SRegs[1]);
+        if (Skipping)
+        {
+            // (render.2d_skip: what unit B's next scanline reads of the sprites: this line's OBJ line, made from these
+            // registers and memory)
+            SprKeyB.Line = job.SpriteLine;
+            SprKeyB.Gen = GenB;
+            SprKeyB.Regs = job.SRegs[1];
+        }
+    }
+}
 
+// render.2d_skip (the 2D thread): unit B's scanline from its line cache when everything the drawing reads is as it was
+// when the cached line was drawn: the same registers (with what Prepare* found changed), the same sprite line before
+// it (its registers, and memory as then), no change to the unit's memory copies since (GenB counts the copy log's
+// records that changed them, byte for byte), and the same engine state (CacheEpoch: reset, savestate, new copies).
+// The drawing is a function of exactly these, so the cached line is the line it would draw. Returns the line.
+const u32* BananaRenderer::DrawBCached(Job& job, BananaRenderer2D& b)
+{
+    u32* dst = &CacheB[job.Line * 256];
+    LineKey& k = KeysB[job.Line];
+    LineKey cur;
+    memset(&cur, 0, sizeof(cur));
+    cur.Epoch = b.CacheEpoch;
+    cur.Valid = 1;
+    cur.GenScan = GenB;
+    cur.Spr = SprKeyB;
+    cur.Regs = job.Regs[1];
+    // (OBJ mosaic rewrites the whole sprite line in place as the line is drawn: such lines are always drawn)
+    if (!job.Regs[1].OBJMosaicSize[0] && memcmp(&cur, &k, sizeof(cur)) == 0)
+    {
+        b.ScanlineState(job.Regs[1]);
+        StatSkipped++;
+        return dst;
+    }
+    b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0], nullptr, dst);
+    memcpy(&k, &cur, sizeof(k));
+    return dst;
+}
+
+void BananaRenderer::ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRenderer2D& b, bool doA)
+{
     if (job.Line < 192)
     {
         if (doA && job.WaitRows) WaitRows(QuarterCtx, job.Line, job.RowsGen);
         if (doA) a.DrawScanlineFrom(job.Line, job.Regs[0], job.Q3D[0], Quarter ? job.Q3D : nullptr);
-        b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0]);
+        const u32* srcB = nullptr;
+        if (Skipping)
+            srcB = DrawBCached(job, b);
+        else
+            b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0]);
 
         if (job.ScreensEnabled)
         {
             if (doA) EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
-            EmitB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB);
+            EmitB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB, srcB);
         }
         else
         {
@@ -678,7 +755,16 @@ void BananaRenderer::SetThreaded2D(bool on)
         return;
     }
     if (!Jobs)
+    {
         Jobs = std::make_unique<Job[]>(NumJobs);
+        JobLine3D = std::make_unique<u32[]>(NumJobs * 4 * 256);
+        JobDisplay = std::make_unique<u16[]>(NumJobs * 256);
+        for (u32 i = 0; i < NumJobs; i++)
+        {
+            Jobs[i].Line3D = (u32 (*)[256])&JobLine3D[i * 4 * 256];
+            Jobs[i].Display = &JobDisplay[i * 256];
+        }
+    }
     if (!Log)
         Log = std::make_unique<u8[]>(LogSize);
     RingSplit = SplitRing;
@@ -692,6 +778,19 @@ void BananaRenderer::SetThreaded2D(bool on)
     LogReadP->store(0, std::memory_order_relaxed);
     LogReadSeen = 0;
     Kicked = 0;
+    LocalHead = 0;
+    Units = KickedUnits = 0;
+    Pending = false;
+    Merging = Merge;
+    Skipping = SkipLines;
+    if (Skipping && !CacheB)
+    {
+        CacheB = std::make_unique<u32[]>(192 * 256);
+        KeysB = std::make_unique<LineKey[]>(192);
+    }
+    if (Skipping)
+        memset(KeysB.get(), 0, 192 * sizeof(LineKey));  // (Valid 0: nothing cached)
+    memset(&SprKeyB, 0, sizeof(SprKeyB));
     KickPending = false;
     Quit = false;
     AInPlace = false;
@@ -718,9 +817,9 @@ void BananaRenderer::StopWorker()
     AInPlace = false;
     Platform::Log(Platform::LogLevel::Info,
                   "[2d] 2D thread: %llu jobs, %llu lines with unit A drawn in place (display capture), %.1f MB through the copy "
-                  "log, %llu waits for the thread (capture, full ring or log)\n",
+                  "log, %llu waits for the thread (capture, full ring or log), %llu of unit B's lines from its cache (render.2d_skip)\n",
                   (unsigned long long)StatJobs, (unsigned long long)StatInPlace, StatLogBytes / 1048576.0,
-                  (unsigned long long)StatWaits);
+                  (unsigned long long)StatWaits, (unsigned long long)StatSkipped);
 }
 
 // the emulator's thread: a copy for the line being prepared, applied by Execute before it is drawn
@@ -784,7 +883,11 @@ void BananaRenderer::ApplyLog(u64 end)
             rd += LogSize - pos;
             continue;
         }
-        memcpy(r.Dst, &Log[pos + sizeof(LogRecord)], r.Len);
+        const u8* src = &Log[pos + sizeof(LogRecord)];
+        // (render.2d_skip: a record that changes unit B's copies)
+        if (Skipping && static_cast<BananaRenderer2D&>(*Rend2D_B).InCopies(r.Dst) && memcmp(r.Dst, src, r.Len))
+            GenB++;
+        memcpy(r.Dst, src, r.Len);
         rd += sizeof(LogRecord) + ((r.Len + 15) & ~15ull);
     }
     LogReadP->store(rd, std::memory_order_release);
@@ -827,7 +930,10 @@ void BananaRenderer::WorkerLoop()
 
 void BananaRenderer::Kick()
 {
-    Kicked = HeadP->load(std::memory_order_relaxed);
+    if (Merging)
+        HeadP->store(LocalHead, std::memory_order_release);  // (render.2d_merge: the jobs handed over here)
+    Kicked = LocalHead;
+    KickedUnits = Units;
     {
         std::lock_guard<std::mutex> l(M);
         KickPending = true;
@@ -837,7 +943,7 @@ void BananaRenderer::Kick()
 
 BananaRenderer::Job& BananaRenderer::NewJob()
 {
-    u32 head = HeadP->load(std::memory_order_relaxed);
+    u32 head = LocalHead;
     if (RingSplit)
     {
         if (head - TailSeen < NumJobs)
@@ -854,12 +960,15 @@ BananaRenderer::Job& BananaRenderer::NewJob()
     return Jobs[head % NumJobs];
 }
 
-void BananaRenderer::Submit()
+// units: the lines in the job (a merged job is two), counted for render.2d_kick as the jobs before merging were
+void BananaRenderer::Submit(u32 units)
 {
-    u32 head = HeadP->load(std::memory_order_relaxed) + 1;
-    HeadP->store(head, std::memory_order_release);
-    StatJobs++;
-    if (head - Kicked >= KickBatch)
+    u32 head = ++LocalHead;
+    if (!Merging)
+        HeadP->store(head, std::memory_order_release);
+    StatJobs += units;
+    Units += units;
+    if (Units - KickedUnits >= KickBatch)
         Kick();
 }
 
@@ -889,7 +998,8 @@ bool BananaRenderer::Drain2D()
 {
     if (!Thread2D)
         return false;
-    u32 head = HeadP->load(std::memory_order_relaxed);
+    FlushPending();
+    u32 head = LocalHead;
     if (TailP->load(std::memory_order_acquire) == head)
         return false;
     Kick();
@@ -906,6 +1016,7 @@ void BananaRenderer::WaitFence(u32 fence) const
 // frame's jobs may still read with render.2d_lazy
 void BananaRenderer::Start3DRendering()
 {
+    FlushPending();
     if (LazyFrames)
         WaitFence(FenceCur);
     SoftRenderer::Start3DRendering();
@@ -914,7 +1025,8 @@ void BananaRenderer::Start3DRendering()
 void BananaRenderer::VBlank()
 {
     // the frame's last lines: drawn while the emulator runs VBlank
-    if (Thread2D && HeadP->load(std::memory_order_relaxed) != Kicked)
+    FlushPending();
+    if (Thread2D && LocalHead != Kicked)
         Kick();
 }
 
@@ -924,16 +1036,17 @@ void BananaRenderer::SwapBuffers()
     {
         // render.2d_lazy: this frame's last jobs handed over, and only the frame before waited for (the buffers the
         // next frame's lines go into: the other back buffer, or a scanout slot the frontend frees after its fence)
-        if (HeadP->load(std::memory_order_relaxed) != Kicked)
+        FlushPending();
+        if (LocalHead != Kicked)
             Kick();
         FencePrev = FenceCur;
-        FenceCur = HeadP->load(std::memory_order_relaxed);
+        FenceCur = LocalHead;
         WaitFence(FencePrev);
     }
     else
     {
         Drain2D();  // the frame's lines are all in the back buffer (or SetOutput's)
-        FencePrev = FenceCur = HeadP->load(std::memory_order_relaxed);
+        FencePrev = FenceCur = LocalHead;
     }
     Front[0] = Out[0];
     Front[1] = Out[1];

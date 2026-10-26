@@ -81,6 +81,8 @@ public:
     // the log looks full by the last values it read (TailSeen, LogReadSeen: the 2D thread only moves them on).
     // The same jobs in the same order, so the same pictures. Takes effect when the 2D thread starts.
     void SetSplitRing(bool on) { SplitRing = on; }
+    void SetMerge(bool on) { Merge = on; }
+    void SetSkip(bool on) { SkipLines = on; }  // render.2d_skip; takes effect when the 2D thread starts  // render.2d_merge; takes effect when the 2D thread starts
     // render.2d_test_delay (tests only): the 2D thread sleeps this many microseconds after each job, so that it falls
     // behind and the ring and the log fill (their full paths are rare otherwise). The same pictures, slower.
     void SetTestDelay(u32 us) { TestDelayUs = us; }
@@ -115,13 +117,13 @@ public:
 
 private:
     void OutputLineA(u32* dst, u32 dispcnt, u16 brightness, const u16* display);
-    void OutputLineB(u32* dst, u32 dispcnt, u16 brightness);
+    void OutputLineB(u32* dst, u32 dispcnt, u16 brightness, const u32* src = nullptr);
     static void WriteLine(u32* dst, const u32* src, u16 brightness);
     static void FillLine(u32* dst, u32 val);
     // a DS line into the framebuffer at either scale (at 2x dst is two rows of 512)
     u32* LineDst(int screen, u32 line);
     void EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display);
-    void EmitB(u32* dst, u32 dispcnt, u16 brightness);
+    void EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src = nullptr);
     void Fill(u32* dst, u32 val);
     QuarterFn Quarter = nullptr;
     QuarterRowsFn QuarterRows = nullptr;
@@ -136,24 +138,54 @@ private:
     u32* Front[2] = {};  // the last finished frame's, when it went to SetOutput's
 
     // ---- the 2D thread (render.2d_thread) ----
+    // A job: a scanline (VCOUNT < 192: both units' snapshots), a sprite line, or (render.2d_merge) both: the scanline
+    // and the sprite line GPU::StartHBlank prepares right after it, drawn in that order, each after the copy log up to
+    // its own point (LogEndScan, LogEnd), exactly as two jobs would be. Kept small (render.2d_merge also moves the
+    // 3D-line copies and the display line to arrays of their own, touched only when used): the ring is written by
+    // the emulator's thread and read by the 2D thread for every line.
     struct Job
     {
-        enum : u8 { Scanline, Sprites } Kind;
+        u8 Kind;                    // ScanBit | SpriteBit
         bool ScreensEnabled;
         bool HasDisplay;            // Display holds unit A's VRAM or FIFO display line
         bool OnlyB;                 // unit A is drawn on the emulator's thread (display capture)
-        u32 Line;                   // VCOUNT for a scanline, the sprite line for sprites
+        bool WaitRows;              // render.3d_wait2d: the 2D thread waits for the rows of render RowsGen first
+        u16 BrightnessA, BrightnessB;
+        u32 Line;                   // VCOUNT for a scanline, the sprite line for sprites (SpriteLine when merged)
+        u32 SpriteLine;
+        unsigned RowsGen;
         u32* DstA;
         u32* DstB;
-        u16 BrightnessA, BrightnessB;
+        u64 LogEndScan;             // (merged) the copy log up to here is applied before the scanline is drawn
+        u64 LogEnd;                 // the copy log up to here is applied before the job (its sprite line) is drawn
+        const u32* Q3D[4];          // where the drawing reads the 3D layer's line: Line3D's, or the 3D frame's rows (render.3d_share)
+        u32 (*Line3D)[256];         // the 3D layer's line, when unit A's DISPCNT enables 3D (2x: its quarters)
+        u16* Display;
         Banana2DRegs Regs[2];
-        alignas(16) u32 Line3D[4][256];  // the 3D layer's line, when unit A's DISPCNT enables 3D (2x: its quarters)
-        const u32* Q3D[4];               // where the drawing reads them: Line3D's, or the 3D frame's rows (render.3d_share)
-        bool WaitRows;                   // render.3d_wait2d: the 2D thread waits for the rows of render RowsGen first
-        unsigned RowsGen;
-        alignas(16) u16 Display[256];
-        u64 LogEnd;                 // the copy log up to here is applied before the job is drawn
+        Banana2DRegs SRegs[2];      // (merged) the sprite line's
     };
+    enum : u8 { ScanBit = 1, SpriteBit = 2 };
+    std::unique_ptr<u32[]> JobLine3D;   // [NumJobs][4][256]
+    std::unique_ptr<u16[]> JobDisplay;  // [NumJobs][256]
+    // render.2d_merge (default on): one job per line pair (above), the head published to the 2D thread only when it
+    // is woken (Kick): a store-release per job waited for the job's stores (1% of the emulator's thread)
+    bool Merge = true, Merging = false;
+    bool Pending = false;       // a merged job's scanline half is prepared, the sprite half not yet
+    u32 LocalHead = 0;          // jobs prepared (Head: jobs handed over)
+    u32 Units = 0, KickedUnits = 0;  // lines handed over (a merged job is two), for render.2d_kick
+    void FlushPending();
+
+    // render.2d_skip (default on; with the 2D thread): unit B's scanlines drawn into a line cache of their own, and a
+    // line whose inputs are all as they were when it was cached is not drawn again (DrawBCached). Same pictures
+    bool SkipLines = true, Skipping = false;
+    struct SprKey { u32 Line; u32 Pad; u64 Gen; Banana2DRegs Regs; };
+    struct LineKey { u32 Epoch; u32 Valid; u64 GenScan; SprKey Spr; Banana2DRegs Regs; };
+    std::unique_ptr<u32[]> CacheB;      // [192][256]
+    std::unique_ptr<LineKey[]> KeysB;   // [192]
+    SprKey SprKeyB;                     // the last sprite line unit B drew
+    u64 GenB = 0;                       // records of the copy log that changed unit B's copies
+    u64 StatSkipped = 0;
+    const u32* DrawBCached(Job& job, BananaRenderer2D& b);
     // a whole frame's jobs (192 lines and 191 sprite lines): the emulator's thread doesn't wait for a 2D thread that
     // lags within the frame, which catches up in VBlank (drained at the frame's end, SwapBuffers)
     static constexpr u32 NumJobs = 512;
@@ -163,9 +195,10 @@ private:
     int Nice = 0;
 
     Job& NewJob();
-    void Submit();
+    void Submit(u32 units);
     void Kick();
     void Execute(Job& job);
+    void ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRenderer2D& b, bool doA);
     void WorkerLoop();
     void StopWorker();
     // the copy log: a ring of {destination, length, data} records, 16-byte aligned. LogWrite (the emulator's

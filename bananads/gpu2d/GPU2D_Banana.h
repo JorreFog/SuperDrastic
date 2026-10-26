@@ -111,7 +111,11 @@ public:
     void PrepareSprites(Banana2DRegs& regs);
     // q3d (2x, unit A): the 3D layer's four quarter lines (q3d[0] == line3d); when BG0 shows the 3D layer the line
     // is composited once per quarter: quarter 0 into Output2D, quarters 1-3 into HiOut, and HiLines is 4 (else 1)
-    void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d, const u32* const* q3d = nullptr);
+    void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d, const u32* const* q3d = nullptr,
+                          u32* dstOverride = nullptr);
+    void ScanlineState(const Banana2DRegs& regs);  // render.2d_skip: DrawScanlineFrom's state, without drawing
+    bool InCopies(const void* p) const;           // p is in this engine's copies of GPU memory (UseCopies, OAMCopy)
+    u32 CacheEpoch = 0;   // render.2d_skip: changed whenever the copies or the drawing state are made anew
     void DrawScanlineHires(u32 line, const u32* const* q3d);   // DrawScanline at 2x
     int HiLines = 1;
     alignas(16) u32 HiOut[3][256];
@@ -120,7 +124,7 @@ public:
     typedef void (*CopyFn)(void* ctx, void* dst, const void* src, u32 len);
     void UseCopies(CopyFn copy, void* ctx);   // copy null: back to GPU's memory
     void SetCopyFn(CopyFn copy, void* ctx) { CopyTo = copy; CopyCtx = ctx; }  // (after UseCopies)
-    void Resync() { NeedResync = true; }      // copy all of GPU's VRAM flats at the next Prepare*
+    void Resync() { NeedResync = true; CacheEpoch++; }  // copy all of GPU's VRAM flats at the next Prepare*
 
 private:
     SoftRenderer& Parent;
@@ -136,6 +140,7 @@ private:
     u8* OBJExtMem;              // 16 palettes
     const u8* PalMem;           // BG palette, then OBJ palette at 0x200
     std::unique_ptr<u8[]> CopyMem;
+    u32 CopyMemSize = 0;
     CopyFn CopyTo = nullptr;
     void* CopyCtx = nullptr;
     bool NeedResync = false;
