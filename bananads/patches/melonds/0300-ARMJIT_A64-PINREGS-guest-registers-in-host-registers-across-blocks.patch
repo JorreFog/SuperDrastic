@@ -1,0 +1,489 @@
+From: Claude <noreply@anthropic.com>
+Date: Sun, 26 Oct 2026 08:00:00 +0100
+Subject: [PATCH] ARMJIT_A64: PINREGS, guest registers kept in host registers
+ across linked blocks (MELONDS_JIT_PINREGS=<hex mask>, default off)
+
+A block loads the guest registers it uses at its entry and stores the ones it
+wrote at its exit; with ~40k block exits a frame that is a big share of the
+emulator thread. With MELONDS_JIT_PINREGS=<hex mask of r0-r14> (at most 7
+registers; MELONDS_JIT_PINREGS7 for the ARM7, else the same mask) each masked
+guest register has a fixed home in the callee-saved w19-w25 and stays there
+across linked blocks:
+- The register cache pins them (loaded from the block's start, never unloaded,
+  never stored by an exit).
+- The block's entry prologue (0007's FASTENTRY slot, EntrySkip) loads them: the
+  loop's way in (ARM_Dispatch). Linked exits, DynExit (its base literal includes
+  EntrySkip) and self loops enter past it with the registers live.
+- Every way back to the loop goes through RetLoop = RetStub, a JIT stub that
+  stores the CPU's pinned registers and goes on to ARM_Ret (ARM_Ret itself when
+  the variable is unset).
+- C that reads or writes R[0-14] has them stored before and loaded after: the
+  interpreter fallbacks (Comp_PinnedSync round the call, the MCRNop far path),
+  UpdateModeTrampoline and JumpToTrampoline (PushRegs/PopRegs' hi-register
+  store and reload: a pinned one is stored, not unloaded). The slow memory
+  paths, SlowBlockTransfer and SliceChain9 don't touch R[0-14] (callee-saved
+  survive them). NocashPrint's register dump from a slow write reads memory:
+  log text only.
+- Reset re-reads the variables and refills RetStub, EntrySkip and DynExit's
+  bases, so an in-run A/B can flip the mask at a block cache reset.
+Exact: the same values reach every reader (memory copies are brought up to
+date before any C that reads them and reloaded after any C that writes them);
+no cycle changes.
+---
+--- a/src/ARMJIT_RegisterCache.h
++++ b/src/ARMJIT_RegisterCache.h
+@@ -52,9 +52,22 @@
+             : (1 << 15));
+     }
+ 
++    // PINREGS (BananaDS patch 0300): a pinned register has a fixed host register across linked blocks: in it at
++    // every block's entry, never unloaded, never stored by an exit (the stores and loads are at the block's entry
++    // prologue, RetLoop, and the compiler's sync points round C that reads or writes R[])
++    void Pin(int reg, Reg nativeReg)
++    {
++        Mapping[reg] = nativeReg;
++        NativeRegsUsed |= 1 << (int)nativeReg;
++        LoadedRegs |= 1 << reg;
++        PinnedRegs |= 1 << reg;
++    }
++
+     void UnloadRegister(int reg)
+     {
+         assert(Mapping[reg] != -1);
++        if (PinnedRegs & (1 << reg))
++            return;
+ 
+         if (DirtyRegs & (1 << reg))
+             Compiler->SaveReg(reg, Mapping[reg]);
+@@ -106,14 +119,14 @@
+ 
+     void PrepareExit()
+     {
+-        BitSet16 dirtyRegs(DirtyRegs);
++        BitSet16 dirtyRegs(DirtyRegs & ~PinnedRegs);
+         for (int reg : dirtyRegs)
+             Compiler->SaveReg(reg, Mapping[reg]);
+     }
+ 
+     void Flush()
+     {
+-        BitSet16 loadedSet(LoadedRegs);
++        BitSet16 loadedSet(LoadedRegs & ~PinnedRegs);
+         for (int reg : loadedSet)
+             UnloadRegister(reg);
+         LiteralsLoaded = 0;
+@@ -144,7 +157,7 @@
+         }
+ 
+         // we'll unload all registers which are never used again
+-        BitSet16 neverNeededAgain(LoadedRegs & ~futureNeeded);
++        BitSet16 neverNeededAgain(LoadedRegs & ~futureNeeded & ~PinnedRegs);
+         for (int reg : neverNeededAgain)
+             UnloadRegister(reg);
+ 
+@@ -160,7 +173,7 @@
+                 int rank = 1000;
+                 for (int reg : loadedSet)
+                 {
+-                    if (!((1 << reg) & necessaryRegs) && ranking[reg] < rank)
++                    if (!((1 << reg) & (necessaryRegs | PinnedRegs)) && ranking[reg] < rank)
+                     {
+                         leastReg = reg;
+                         rank = ranking[reg];
+@@ -209,6 +222,7 @@
+     u32 NativeRegsUsed = 0;
+     u16 LoadedRegs = 0;
+     u16 DirtyRegs = 0;
++    u16 PinnedRegs = 0;
+ 
+     u16 PCAllocatableAsSrc = 0;
+ 
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -338,6 +338,21 @@
+     bool R15Stored = false;       // ... and whether its code so far stores R15 (or may: calls, the interpreter)
+     u32 EntrySkip[2] = {0, 0};    // the entry prologue's size in bytes, per CPU (0 without OptFastEntry)
+     void Comp_EntryPrologue();
++    // PINREGS (patch 0300, MELONDS_JIT_PINREGS=<hex mask of r0-r14>, MELONDS_JIT_PINREGS7 for the ARM7; off unset or
++    // 0): guest registers with a fixed host register (w19 up, callee-saved) across linked blocks. The block's entry
++    // prologue (the loop's way in) loads them, RetLoop (every way back to the loop) stores them; linked exits,
++    // DynExit and self loops enter past the prologue with them live. Any C the JIT calls that reads or writes
++    // R[0-14] (the interpreter, UpdateMode, JumpTo with a CPSR restore) has them stored before and loaded after.
++    u32 PinMask[2] = {0, 0};
++    Arm64Gen::ARM64Reg PinHome[2][16] = {};
++    const void* RetLoop = nullptr;    // where every way back to the loop goes: RetStub (PINREGS), else ARM_Ret
++    u8* RetStubRW = nullptr;
++    u8* RetStubRX = nullptr;
++    bool ReadPinEnv();                // the masks from the environment: true when they changed
++    void SetupPins();                 // homes, EntrySkip, RetStub and DynExit's bases for the current masks
++    void FillRetStub();
++    void FillDynExitBases();
++    void Comp_PinnedSync(bool store); // all pinned registers to memory (store) or back (load), in pairs
+     // CodeRegion/CodeCycles (ARM7) or RegionCodeCycles (ARM9) as this block last stored them on every path to here
+     // (KnownCodeValid), so a constant jump storing the same values again can skip it
+     bool KnownCodeValid = false;
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -128,7 +128,7 @@
+     if (CPSRDirty)
+         STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
+     SaveCycles();
+-    for (int reg : BitSet16(RegCache.LoadedRegs & RegCache.DirtyRegs))
++    for (int reg : BitSet16((RegCache.LoadedRegs & RegCache.DirtyRegs) | RegCache.PinnedRegs))
+         SaveReg(reg, RegCache.Mapping[reg]);
+     MOVI2R(W0, R15);
+     STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
+@@ -241,7 +241,7 @@
+         BitSet32 hiRegsLoaded(RegCache.LoadedRegs & 0x7F00);
+         for (int reg : hiRegsLoaded)
+         {
+-            if (Thumb || CurInstr.Cond() == 0xE)
++            if ((Thumb || CurInstr.Cond() == 0xE) && !(RegCache.PinnedRegs & (1 << reg)))
+                 RegCache.UnloadRegister(reg);
+             else
+                 SaveReg(reg, RegCache.Mapping[reg]);
+@@ -348,6 +348,9 @@
+             OptSliceChain = OptExitStub && !(sc && *sc == '0');
+         }
+         OptNoPrologue = OptFastEntry && !getenv("MELONDS_JIT_NOENTRYX26");
++        ReadPinEnv();
++        if (!OptFastEntry)
++            PinMask[0] = PinMask[1] = 0;   // (the prologue the pins live in is FASTENTRY's)
+         OptKeepFlags = !old && !getenv("MELONDS_JIT_NOKEEPFLAGS");
+         // LOOPREGS only with MELONDS_JIT_LOOPREGS=1: on an RG DS Plus, HeartGold (USA) goes to a black screen at its
+         // first overworld frame with it (frame 1200 of tools/device/hgquick.sh's walk), and fine with it off alone.
+@@ -379,6 +382,17 @@
+         }
+     }
+ 
++    // PINREGS: RetStub, 32 words at a fixed place (FillRetStub writes it for the masks; ARM_Ret when none pinned)
++    {
++        AlignCode16();
++        RetStubRW = GetWriteableRWPtr();
++        RetStubRX = (u8*)GetRXPtr();
++        for (int i = 0; i < 32; i++)
++            Write32(0xD503201F);
++        // (the stubs embed RetLoop: with the variable set at all, even to 0, every way back takes the stub, so an
++        // in-run A/B that flips the mask at a block cache reset keeps the same ways)
++        RetLoop = getenv("MELONDS_JIT_PINREGS") ? (const void*)RetStubRX : (const void*)ARM_Ret;
++    }
+     for (int i = 0; i < 3; i++)
+     {
+         JumpToFuncs9[i] = Gen_JumpTo9(i);
+@@ -585,25 +599,8 @@
+ 
+     SetCodeBase((u8*)GetRWPtr(), (u8*)GetRXPtr());
+ 
+-    // DynExit's code base, now that it is known
+-    for (int num = 0; num < 2; num++)
+-    for (int c = 0; c < 2; c++)
+-    {
+-        // (+ the entry prologue's size: a linked entry skips it)
+-        const u64 base = (u64)(uintptr_t)GetRXBase() + EntrySkip[num];
+-        u32* p = DynExitBase[num][c];
+-        if (DynExitLiteral)
+-        {
+-            memcpy(p, &base, 8);   // (data: the stub loads it)
+-            if (DynExitBaseA[num][c])
+-                memcpy(DynExitBaseA[num][c], &base, 8);
+-            continue;
+-        }
+-        p[0] = 0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 17;                       // movz x17, #.., lsl #0
+-        for (int hw = 1; hw < 4; hw++)
+-            p[hw] = 0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 17;  // movk x17, #.., lsl #16*hw
+-        FlushIcacheSection((u8*)p, (u8*)(p + 4));
+-    }
++    // DynExit's code base, now that it is known; PINREGS' homes, prologue size and RetStub (FillDynExitBases)
++    SetupPins();
+ 
+     LinkBlocks = !getenv("MELONDS_JIT_NOLINK");
+     if (getenv("MELONDS_JIT_PERFMAP"))
+@@ -965,7 +962,7 @@
+ {
+     if (!LinkBlocks)
+     {
+-        QuickTailCall(X0, ARM_Ret);
++        QuickTailCall(X0, RetLoop);
+         return;
+     }
+ 
+@@ -1023,7 +1020,7 @@
+         MOVP2R(X16, slotRX);
+         MOVP2R(X17, &melonds_jit_link[0]);
+         STP(INDEX_SIGNED, X16, RCPU, X17, 0);
+-        QuickTailCall(X16, ARM_Ret);
++        QuickTailCall(X16, RetLoop);
+         if (OptDynCold)
+         {
+             SetJumpTarget(toMissWay);   // (a B from the block to here: the emitter's distance is in its RW view)
+@@ -1123,7 +1120,7 @@
+             RegCache.PrepareExit();
+         MOVI2R(W0, knownR15);
+         STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
+-        QuickTailCall(X16, ARM_Ret);
++        QuickTailCall(X16, RetLoop);
+     }
+ 
+     // the link path: ask ARM_Dispatch to link the slot to the block the loop dispatches next, then back to it
+@@ -1139,7 +1136,7 @@
+     MOVP2R(X16, slotRX);
+     MOVP2R(X17, &melonds_jit_link[0]);
+     STP(INDEX_SIGNED, X16, RCPU, X17, 0);
+-    QuickTailCall(X16, ARM_Ret);
++    QuickTailCall(X16, RetLoop);
+     FlushIcacheSection(linkPath, (u8*)GetRXPtr());   // (the far region's code isn't in CompileBlock's flush)
+     SwapCodeRegion();
+ }
+@@ -1204,7 +1201,7 @@
+         RET();
+         if (pad)
+             Write32(0xD503201F);
+-        const u64 ret = (u64)(uintptr_t)ARM_Ret;
++        const u64 ret = (u64)(uintptr_t)RetLoop;
+         Write32((u32)ret);
+         Write32((u32)(ret >> 32));
+     };
+@@ -1219,7 +1216,7 @@
+         RET();
+         SetJumpTarget(stop);
+         SetJumpTarget(late);
+-        MOVP2R(X30, (void*)ARM_Ret);
++        MOVP2R(X30, (void*)RetLoop);
+         RET();
+     }
+     else
+@@ -1357,7 +1354,7 @@
+         SetJumpTarget(stop);
+         SetJumpTarget(outside);
+         SetJumpTarget(miss);
+-        QuickTailCall(X16, ARM_Ret);
++        QuickTailCall(X16, RetLoop);
+         if (lit)
+         {
+             if (((uintptr_t)GetRXPtr()) & 7)
+@@ -1389,7 +1386,7 @@
+     if (!(LoopMode && self))
+     {
+         // (the stores the block's end makes: its RegCache.Flush, or in LoopMode PrepareExit)
+-        BitSet16 dirty(RegCache.DirtyRegs);
++        BitSet16 dirty(RegCache.DirtyRegs & ~RegCache.PinnedRegs);
+         for (int reg : dirty)
+             SaveReg(reg, RegCache.Mapping[reg]);
+     }
+@@ -1454,11 +1451,159 @@
+     // The entry the runtime dispatches to: x26 = the CPU's fast memory base, in EntrySkip[Num] bytes (the same for
+     // all its blocks). Exits that go straight on into a block (link slots, DynExit) enter past it: x26 is
+     // callee-saved and only blocks of the same CPU set it, so it still holds the base there.
+-    const u64 base = (u64)(uintptr_t)(Num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
+-    Write32(0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 26);                          // movz x26, #.., lsl #0
+-    for (int hw = 1; hw < 4; hw++)
+-        if ((base >> (16 * hw)) & 0xFFFF)
+-            Write32(0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 26);   // movk x26, #.., lsl #16*hw
++    if (!OptNoPrologue)
++    {
++        const u64 base = (u64)(uintptr_t)(Num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
++        Write32(0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 26);                          // movz x26, #.., lsl #0
++        for (int hw = 1; hw < 4; hw++)
++            if ((base >> (16 * hw)) & 0xFFFF)
++                Write32(0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 26);   // movk x26, #.., lsl #16*hw
++    }
++    // PINREGS: the pinned registers from memory (the loop's way in; linked entries skip this)
++    Comp_PinnedSync(false);
++}
++
++bool Compiler::ReadPinEnv()
++{
++    u32 m[2] = {0, 0};
++    const char* e9 = getenv("MELONDS_JIT_PINREGS");
++    const char* e7 = getenv("MELONDS_JIT_PINREGS7");
++    if (e9)
++        m[0] = (u32)strtoul(e9, nullptr, 16) & 0x7FFF;
++    m[1] = e7 ? ((u32)strtoul(e7, nullptr, 16) & 0x7FFF) : m[0];
++    // at most 7 (w19-w25): the lowest bits win
++    for (int num = 0; num < 2; num++)
++        while (__builtin_popcount(m[num]) > 7)
++            m[num] &= ~(1u << (31 - __builtin_clz(m[num])));
++    const bool changed = m[0] != PinMask[0] || m[1] != PinMask[1];
++    PinMask[0] = m[0];
++    PinMask[1] = m[1];
++    return changed;
++}
++
++void Compiler::SetupPins()
++{
++    for (int num = 0; num < 2; num++)
++    {
++        int next = W19;
++        for (int reg = 0; reg < 16; reg++)
++        {
++            PinHome[num][reg] = INVALID_REG;
++            if (PinMask[num] & (1u << reg))
++                PinHome[num][reg] = (ARM64Reg)next++;
++        }
++        // the prologue: FASTENTRY's x26 (OptFastEntry && !OptNoPrologue), then the pinned loads (pairs of
++        // neighbouring registers in one LDP)
++        const u64 base = (u64)(uintptr_t)(num == 0 ? NDS.JIT.Memory.FastMem9Start : NDS.JIT.Memory.FastMem7Start);
++        u32 n = 0;
++        if (OptFastEntry && !OptNoPrologue)
++        {
++            n = 1;
++            for (int hw = 1; hw < 4; hw++)
++                n += ((base >> (16 * hw)) & 0xFFFF) != 0;
++        }
++        for (u32 bits = PinMask[num]; bits; n++)
++        {
++            const int reg = __builtin_ctz(bits);
++            bits &= ~(1u << reg);
++            if (reg < 14 && (bits & (1u << (reg + 1))))
++                bits &= ~(1u << (reg + 1));
++        }
++        EntrySkip[num] = OptFastEntry ? 4 * n : 0;
++    }
++    FillRetStub();
++    FillDynExitBases();
++}
++
++void Compiler::Comp_PinnedSync(bool store)
++{
++    for (u32 bits = PinMask[Num]; bits;)
++    {
++        const int reg = __builtin_ctz(bits);
++        bits &= ~(1u << reg);
++        const ARM64Reg a = PinHome[Num][reg];
++        if (reg < 14 && (bits & (1u << (reg + 1))))
++        {
++            bits &= ~(1u << (reg + 1));
++            const ARM64Reg b = PinHome[Num][reg + 1];
++            if (store)
++                STP(INDEX_SIGNED, a, b, RCPU, offsetof(ARM, R) + reg * 4);
++            else
++                LDP(INDEX_SIGNED, a, b, RCPU, offsetof(ARM, R) + reg * 4);
++        }
++        else if (store)
++            STR(INDEX_UNSIGNED, a, RCPU, offsetof(ARM, R) + reg * 4);
++        else
++            LDR(INDEX_UNSIGNED, a, RCPU, offsetof(ARM, R) + reg * 4);
++    }
++}
++
++void Compiler::FillRetStub()
++{
++    // RetStub: the CPU's pinned registers (RCPU says which CPU: the ARM9's and the ARM7's masks are the same set of
++    // host registers only when the masks are equal, so with two different masks the stub tells them apart by
++    // RCPU's Num), then ARM_Ret through x16 (ARM_Ret may be out of a B's reach)
++    NDS.JIT.JitEnableWrite();
++    const ptrdiff_t saved = GetCodeOffset();
++    SetCodePtrUnsafe(RetStubRW - RWBase());
++    const u32 savedNum = Num;
++    FixupBranch other;
++    const bool two = PinMask[0] != PinMask[1];
++    if (two)
++    {
++        LDR(INDEX_UNSIGNED, W16, RCPU, offsetof(ARM, Num));
++        other = CBNZ(W16);
++    }
++    Num = 0;
++    Comp_PinnedSync(true);
++    auto tail = [&]()
++    {
++        const bool pad = ((uintptr_t)GetRXPtr() + 8) & 7;
++        Write32(0x58000000 | ((pad ? 3 : 2) << 5) | 16);   // ldr x16, <the literal below>
++        BR(X16);
++        if (pad)
++            Write32(0xD503201F);
++        const u64 ret = (u64)(uintptr_t)ARM_Ret;
++        Write32((u32)ret);
++        Write32((u32)(ret >> 32));
++    };
++    tail();
++    if (two)
++    {
++        SetJumpTarget(other);
++        Num = 1;
++        Comp_PinnedSync(true);
++        tail();
++    }
++    Num = savedNum;
++    assert(GetWriteableRWPtr() <= RetStubRW + 128);
++    SetCodePtrUnsafe(saved);
++    FlushIcacheSection(RetStubRX, RetStubRX + 128);
++    NDS.JIT.JitEnableExecute();
++}
++
++void Compiler::FillDynExitBases()
++{
++    NDS.JIT.JitEnableWrite();
++    for (int num = 0; num < 2; num++)
++    for (int c = 0; c < 2; c++)
++    {
++        // (+ the entry prologue's size: a linked entry skips it)
++        const u64 base = (u64)(uintptr_t)GetRXBase() + EntrySkip[num];
++        u32* p = DynExitBase[num][c];
++        if (DynExitLiteral)
++        {
++            memcpy(p, &base, 8);   // (data: the stub loads it)
++            if (DynExitBaseA[num][c])
++                memcpy(DynExitBaseA[num][c], &base, 8);
++            continue;
++        }
++        p[0] = 0xD2800000 | ((u32)(base & 0xFFFF) << 5) | 17;                       // movz x17, #.., lsl #0
++        for (int hw = 1; hw < 4; hw++)
++            p[hw] = 0xF2800000 | (hw << 21) | ((u32)((base >> (16 * hw)) & 0xFFFF) << 5) | 17;  // movk x17, #.., lsl #16*hw
++        FlushIcacheSection((u8*)p, (u8*)(p + 4));
++    }
++    NDS.JIT.JitEnableExecute();
+ }
+ 
+ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+@@ -1546,13 +1691,15 @@
+     CurCPU = cpu;
+     ConstantCycles = 0;
+     RegCache = RegisterCache<Compiler, ARM64Reg>(this, instrs, instrsCount, true);
++    for (int reg : BitSet16(PinMask[Num]))
++        RegCache.Pin(reg, PinHome[Num][reg]);
+     CPSRDirty = false;
+     InvalidateHostFlags();
+ 
+     KnownCodeValid = false;
+     if (OptFastEntry)
+     {
+-        if (!OptNoPrologue)
++        if (!OptNoPrologue || PinMask[Num])
+             Comp_EntryPrologue();
+     }
+     else if (hasMemInstr)
+@@ -1569,7 +1716,7 @@
+             used |= instrs[i].Info.SrcRegs | instrs[i].Info.DstRegs;
+             written |= instrs[i].Info.DstRegs;
+         }
+-        for (int reg : BitSet16(used & 0x7FFF))
++        for (int reg : BitSet16(used & 0x7FFF & ~PinMask[Num]))
+             RegCache.LoadRegister(reg, true);
+         RegCache.DirtyRegs = written & 0x7FFF;
+         // a callee-saved host register left free: the Timestamp's address for the loop's check
+@@ -1659,6 +1806,7 @@
+             SaveCycles();
+             SaveCPSR();
+             RegCache.Flush();
++            Comp_PinnedSync(true);    // (PINREGS: the interpreter reads and writes R[] in memory)
+             KnownCodeValid = false;   // (the interpreter may jump)
+             R15Stored = true;
+         }
+@@ -1784,6 +1932,7 @@
+         {
+             LoadCycles();
+             LoadCPSR();
++            Comp_PinnedSync(false);
+         }
+     }
+ 
+@@ -1854,6 +2003,9 @@
+ 
+ void Compiler::Reset()
+ {
++    // (only when the stubs were made to go through RetStub: the variable was set, even to 0, when they were)
++    if (OptFastEntry && RetLoop == RetStubRX && ReadPinEnv())
++        SetupPins();
+     LoadStorePatches.clear();
+     LinkSlots.clear();
+     LinkedTo.clear();

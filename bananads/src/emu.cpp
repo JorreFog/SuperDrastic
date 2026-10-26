@@ -411,6 +411,14 @@ bool Emu::load_rom(const std::string& path) {
         else if (v == "off") setenv("MELONDS_JIT_NOENTRYX26", "1", 1);
     }
 
+    // jit.pinregs=<hex mask of r0-r14>|off: sets MELONDS_JIT_PINREGS (melonDS patch 0300: the masked guest registers
+    // keep a fixed host register across linked blocks; read as the JIT compiler is created; at most 7; default off)
+    {
+        const std::string v = cfg_.str("jit.pinregs", "");
+        if (v == "off") unsetenv("MELONDS_JIT_PINREGS");
+        else if (!v.empty()) setenv("MELONDS_JIT_PINREGS", v.c_str(), 1);
+    }
+
     // jit.dyncold=on|off: off sets MELONDS_JIT_NODYNCOLD=1, on unsets it (melonDS patch 0041: a return's per-site
     // cached exit keeps its miss way in the JIT's far region; default on)
     {
