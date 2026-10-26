@@ -403,6 +403,15 @@ bool Emu::load_rom(const std::string& path) {
         else if (v == "off") setenv("MELONDS_JIT_SLICECHAIN", "0", 1);
     }
 
+    // jit.pints=on|off sets MELONDS_JIT_PINTS (melonDS patch 0320: the ARM9's Timestamp, Target and cycles stay in
+    // host registers through linked blocks, an exit's check is one compare and branch; exact), read as the JIT
+    // compiler is created; unset, the environment decides (default off)
+    {
+        const std::string v = cfg_.str("jit.pints", "");
+        if (v == "on") setenv("MELONDS_JIT_PINTS", "1", 1);
+        else if (v == "off") setenv("MELONDS_JIT_PINTS", "0", 1);
+    }
+
     // jit.entry_x26=on|off: off sets MELONDS_JIT_NOENTRYX26=1, on unsets it (melonDS patch 0040: ARM_Dispatch sets the
     // fast memory base in x26, so blocks have no entry prologue; read as the JIT compiler is created; default on)
     {

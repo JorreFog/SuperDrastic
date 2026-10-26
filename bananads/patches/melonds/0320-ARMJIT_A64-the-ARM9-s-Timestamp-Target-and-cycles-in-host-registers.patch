@@ -1,0 +1,989 @@
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index f62e3b7..6343599 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -55,6 +55,7 @@ using Platform::LogLevel;
+ static_assert(offsetof(ARM, CPSR) == ARM_CPSR_offset, "");
+ static_assert(offsetof(ARM, Cycles) == ARM_Cycles_offset, "");
+ static_assert(offsetof(ARM, StopExecution) == ARM_StopExecution_offset, "");
++static_assert(offsetof(ARM, Num) == ARM_Num_offset, "");
+ 
+ 
+ #define JIT_DEBUGPRINT(msg, ...)
+diff --git a/src/ARMJIT_A64/ARMJIT_Branch.cpp b/src/ARMJIT_A64/ARMJIT_Branch.cpp
+index 37a549d..341b795 100644
+--- a/src/ARMJIT_A64/ARMJIT_Branch.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Branch.cpp
+@@ -183,7 +183,7 @@ void Compiler::Comp_JumpTo(u32 addr, bool forceNonConstantCycles)
+     else if ((Thumb || CurInstr.Cond() >= 0xE) && !forceNonConstantCycles)
+         ConstantCycles += cycles;
+     else
+-        ADD(RCycles, RCycles, cycles);
++        CycAdd(cycles);
+ }
+ 
+ 
+@@ -201,8 +201,9 @@ bool Compiler::Comp_KnownCodeStore(u64 value)
+     return false;
+ }
+ 
+-void* Compiler::Gen_JumpTo9(int kind)
++void* Compiler::Gen_JumpTo9(int kind, bool pinned)
+ {
++    // (pinned: PINTS, patch 0320: the cycles count down in RCycles)
+     AlignCode16();
+     void* res = GetRXPtr();
+ 
+@@ -237,7 +238,10 @@ void* Compiler::Gen_JumpTo9(int kind)
+         STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARMv5, R[15]));
+ 
+         ADD(W1, W1, W1);
+-        ADD(RCycles, RCycles, W1);
++        if (pinned)
++            SUB(RCycles, RCycles, W1);
++        else
++            ADD(RCycles, RCycles, W1);
+         RET();
+     }
+ 
+@@ -259,7 +263,10 @@ void* Compiler::Gen_JumpTo9(int kind)
+         ADD(W2, W1, W1);
+         TSTI2R(W0, 0x2);
+         CSEL(W1, W1, W2, CC_EQ);
+-        ADD(RCycles, RCycles, W1);
++        if (pinned)
++            SUB(RCycles, RCycles, W1);
++        else
++            ADD(RCycles, RCycles, W1);
+         RET();
+     }
+ 
+@@ -339,7 +346,7 @@ void Compiler::Comp_JumpTo(Arm64Gen::ARM64Reg addr, bool switchThumb, bool resto
+         if (switchThumb)
+             CPSRDirty = true;
+         MOV(W0, addr);
+-        BL((Num ? JumpToFuncs7 : JumpToFuncs9)[switchThumb ? 0 : (Thumb + 1)]);
++        BL((Num ? JumpToFuncs7 : (Pinned() ? JumpToFuncs9P : JumpToFuncs9))[switchThumb ? 0 : (Thumb + 1)]);
+         LastJumpViaFunc = OptDynAddr;   // (W4: the next block's address)
+     }
+     else
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 2c9e442..78467d6 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -37,6 +37,12 @@ extern "C" void ARM_Ret();
+ // when the slot is set)
+ extern "C" uint64_t melonds_jit_link[2];
+ uint64_t melonds_jit_link[2] = {0, 0};
++// PINTS (patch 0320): &NDS.ARM9Timestamp while the ARM9's blocks are compiled with it pinned (ARM_Dispatch), else 0
++extern "C" uint64_t* melonds_jit_ts9;
++uint64_t* melonds_jit_ts9 = nullptr;
++// the switch: MELONDS_JIT_PINTS (-1: not read yet); set and followed by a block cache reset for an in-run A/B
++extern "C" int melonds_jit_pints;
++int melonds_jit_pints = -1;
+ 
+ namespace melonDS
+ {
+@@ -143,7 +149,7 @@ void Compiler::A_Comp_MCRNop()
+     for (int reg : BitSet16(RegCache.LoadedRegs))
+         LoadReg(reg, RegCache.Mapping[reg]);
+     if (constCycles)
+-        SUB(RCycles, RCycles, cycles);
++        CycAdd(-cycles);
+     B(backRX);
+     FlushIcacheSection(farRX, (u8*)GetRXPtr());   // (the far region's code isn't in CompileBlock's flush)
+     SwapCodeRegion();
+@@ -368,6 +374,20 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         FlagsWatch = OptLazyFlags;
+         OptFoldExit = OptCondExit && !getenv("MELONDS_JIT_NOFOLDEXIT") && !getenv("MELONDS_JIT_NOLINK");
+         OptCP15Nop = !old && !getenv("MELONDS_JIT_NOCP15NOP");
++        // PINTS (patch 0320): needs the exit stubs and linking
++        if (melonds_jit_pints < 0)
++            melonds_jit_pints = getenv("MELONDS_JIT_PINTS") && atoi(getenv("MELONDS_JIT_PINTS")) ? 1 : 0;
++        PinTsOK = OptExitStub && !getenv("MELONDS_JIT_NOLINK");
++        OptPinTs = PinTsOK && melonds_jit_pints > 0;
++        melonds_jit_ts9 = OptPinTs ? &NDS.ARM9Timestamp : nullptr;
++        {
++            const intptr_t d = (intptr_t)&NDS.ARM9Timestamp - (intptr_t)&NDS.ARM9;
++            const intptr_t lo = d & 0xFFF;
++            const intptr_t hi = (d - lo) >> 12;
++            PinTsShort = hi > -4096 && hi < 4096;
++            PinTsHi = (s32)hi;
++            PinTsOff = PinTsShort ? (u32)lo : 0;
++        }
+         // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
+         for (int num = 0; num < 2; num++)
+         {
+@@ -383,9 +403,11 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+     {
+         JumpToFuncs9[i] = Gen_JumpTo9(i);
+         JumpToFuncs7[i] = Gen_JumpTo7(i);
++        JumpToFuncs9P[i] = Gen_JumpTo9(i, true);
+     }
+     Gen_ExitStubs(0);
+     Gen_ExitStubs(1);
++    Gen_ExitStubsPinned();
+ 
+     /*
+         W4 - whether the register was written to
+@@ -476,8 +498,11 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+     const BitSet32 patchSaved = OptKeepFlags ? BitSet32({16, 30}) | CallerSavedPushRegs : BitSet32({30}) | CallerSavedPushRegs;
+     for (int consoleType = 0; consoleType < 2; consoleType++)
+     {
+-        for (int num = 0; num < 2; num++)
++        for (int numIdx = 0; numIdx < 3; numIdx++)
+         {
++            // ([2]: the ARM9 with PINTS: Timestamp to memory before the call, x18/w28 again after it)
++            const int num = numIdx == 2 ? 0 : numIdx;
++            const bool pinned = numIdx == 2;
+             for (int size = 0; size < 3; size++)
+             {
+                 for (int reg = 0; reg < 32; reg++)
+@@ -485,7 +510,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+                     if (!(reg == W4 || (reg >= W8 && reg <= W15) || (reg >= W19 && reg <= W25)))
+                         continue;
+                     ARM64Reg rdMapped = (ARM64Reg)reg;
+-                    PatchedStoreFuncs[consoleType][num][size][reg] = GetRXPtr();
++                    PatchedStoreFuncs[consoleType][numIdx][size][reg] = GetRXPtr();
+                     if (num == 0)
+                     {
+                         MOV(X1, RCPU);
+@@ -497,6 +522,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+                     }
+                     if (OptKeepFlags)
+                         MRS(X16, FIELD_NZCV);   // (the host's flags survive the call: they may hold the guest's)
++                    if (pinned)
++                        EmitPinCallBefore();
+                     ABI_PushRegisters(patchSaved);
+                     if (consoleType == 0)
+                     {
+@@ -524,17 +551,21 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+                     }
+                     
+                     ABI_PopRegisters(patchSaved);
++                    if (pinned)
++                        EmitPinCallAfter();
+                     if (OptKeepFlags)
+                         _MSR(FIELD_NZCV, X16);
+                     RET();
+ 
+                     for (int signextend = 0; signextend < 2; signextend++)
+                     {
+-                        PatchedLoadFuncs[consoleType][num][size][signextend][reg] = GetRXPtr();
++                        PatchedLoadFuncs[consoleType][numIdx][size][signextend][reg] = GetRXPtr();
+                         if (num == 0)
+                             MOV(X1, RCPU);
+                         if (OptKeepFlags)
+                             MRS(X16, FIELD_NZCV);
++                        if (pinned)
++                            EmitPinCallBefore();
+                         ABI_PushRegisters(patchSaved);
+                         if (consoleType == 0)
+                         {
+@@ -561,6 +592,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+                             }
+                         }
+                         ABI_PopRegisters(patchSaved);
++                        if (pinned)
++                            EmitPinCallAfter();
+                         if (OptKeepFlags)
+                             _MSR(FIELD_NZCV, X16);
+                         if (size == 32)
+@@ -585,14 +618,16 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+ 
+     SetCodeBase((u8*)GetRWPtr(), (u8*)GetRXPtr());
+ 
+-    // DynExit's code base, now that it is known
+-    for (int num = 0; num < 2; num++)
++    // DynExit's code base, now that it is known ([2]: the pinned ARM9's stubs, literals)
++    for (int num = 0; num < 3; num++)
+     for (int c = 0; c < 2; c++)
+     {
+         // (+ the entry prologue's size: a linked entry skips it)
+-        const u64 base = (u64)(uintptr_t)GetRXBase() + EntrySkip[num];
++        const u64 base = (u64)(uintptr_t)GetRXBase() + EntrySkip[num == 2 ? 0 : num];
+         u32* p = DynExitBase[num][c];
+-        if (DynExitLiteral)
++        if (num == 2 && !p)
++            continue;
++        if (DynExitLiteral || num == 2)
+         {
+             memcpy(p, &base, 8);   // (data: the stub loads it)
+             if (DynExitBaseA[num][c])
+@@ -660,14 +695,131 @@ Compiler::~Compiler()
+ 
+ void Compiler::LoadCycles()
+ {
++    if (Pinned())
++    {
++        // (after a C call that may have added to Cycles, changed the Target or set StopExecution: x18 again, and
++        // w28 = x18 - x25 - Cycles)
++        EmitPinTsAddr(X17);
++        LDR(INDEX_UNSIGNED, X2, X17, PinTsOff + 8);
++        SUB(X2, X2, 1);
++        LDR(INDEX_UNSIGNED, W1, RCPU, offsetof(ARM, StopExecution));
++        FixupBranch clear = CBZ(W1);
++        SUB(X2, X25, 0x400, true);
++        SetJumpTarget(clear);
++        LDR(INDEX_UNSIGNED, W1, RCPU, offsetof(ARM, Cycles));
++        SUB(X17, X2, X25);
++        SUB(RCycles, W17, W1);
++        MOV(X18, X2);
++        return;
++    }
+     LDR(INDEX_UNSIGNED, RCycles, RCPU, offsetof(ARM, Cycles));
+ }
+ 
+ void Compiler::SaveCycles()
+ {
++    if (Pinned())
++    {
++        // Timestamp and the cycles charged since the last exit (x18 - x25 - w28) to memory
++        EmitPinCallBefore();
++        SUB(X17, X18, X25);
++        SUB(W17, W17, RCycles);
++        STR(INDEX_UNSIGNED, W17, RCPU, offsetof(ARM, Cycles));
++        return;
++    }
+     STR(INDEX_UNSIGNED, RCycles, RCPU, offsetof(ARM, Cycles));
+ }
+ 
++void Compiler::EmitPinTsAddr(ARM64Reg reg)
++{
++    if (!PinTsShort)
++        MOVP2R(reg, &NDS.ARM9Timestamp);
++    else if (PinTsHi >= 0)
++        ADD(reg, RCPU, (u32)PinTsHi, true);
++    else
++        SUB(reg, RCPU, (u32)-PinTsHi, true);
++}
++
++void Compiler::EmitPinCallBefore()
++{
++    EmitPinTsAddr(X17);
++    STR(INDEX_UNSIGNED, X25, X17, PinTsOff);
++}
++
++void Compiler::EmitPinCallAfter()
++{
++    // x18' = Target - 1, or the fold; w28 += x18' - x18 (the cycles charged so far stay counted); no flags touched
++    EmitPinTsAddr(X17);
++    LDR(INDEX_UNSIGNED, X2, X17, PinTsOff + 8);
++    SUB(X2, X2, 1);
++    LDR(INDEX_UNSIGNED, W1, RCPU, offsetof(ARM, StopExecution));
++    FixupBranch clear = CBZ(W1);
++    SUB(X2, X25, 0x400, true);
++    SetJumpTarget(clear);
++    SUB(X1, X2, X18);
++    ADD(RCycles, RCycles, W1);
++    MOV(X18, X2);
++}
++
++void Compiler::PinFoldStop()
++{
++    SUB(X17, X25, 0x400, true);
++    SUB(X16, X17, X18);
++    ADD(RCycles, RCycles, W16);
++    MOV(X18, X17);
++}
++
++void Compiler::PinRetSync(bool checked)
++{
++    EmitPinCallBefore();
++    if (checked)
++        MOVI2R(RCycles, 0);
++    else
++    {
++        SUB(X17, X18, X25);
++        SUB(RCycles, W17, RCycles);
++    }
++}
++
++void Compiler::SubSxtw(ARM64Reg rd, ARM64Reg rn, ARM64Reg wm)
++{
++    Write32(0xCB200000 | ((u32)DecodeReg(wm) << 16) | (6 << 13) | ((u32)DecodeReg(rn) << 5) | (u32)DecodeReg(rd));
++}
++
++FixupBranch Compiler::PinChecksHot()
++{
++    FixupBranch slow = TBNZ(RCycles, 31);
++    SubSxtw(X25, X18, RCycles);   // Timestamp += Cycles
++    return slow;
++}
++
++void Compiler::PinChecksSlow(FixupBranch slow, FixupBranch& stop)
++{
++    SetJumpTarget(slow);
++    LDR(INDEX_UNSIGNED, W17, RCPU, offsetof(ARM, StopExecution));
++    stop = CBNZ(W17);
++    SubSxtw(X25, X18, RCycles);
++}
++
++void Compiler::CycAdd(s32 cycles)
++{
++    if (cycles == 0)
++        return;
++    if (Pinned())
++        cycles = -cycles;
++    if (cycles > 0)
++        ADD(RCycles, RCycles, cycles);
++    else
++        SUB(RCycles, RCycles, -cycles);
++}
++
++void Compiler::CycAdd(ARM64Reg w)
++{
++    if (Pinned())
++        SUB(RCycles, RCycles, w);
++    else
++        ADD(RCycles, RCycles, w);
++}
++
+ void Compiler::LoadReg(int reg, ARM64Reg nativeReg)
+ {
+     if (reg == 15)
+@@ -856,6 +1008,8 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+     {
+         MOVI2R(W0, 1);
+         STRB(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, IdleLoop));
++        if (Pinned())
++            PinFoldStop();
+     }
+ 
+     if ((CurInstr.BranchFlags & branch_FollowCondNotTaken && taken)
+@@ -864,7 +1018,7 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+         RegCache.PrepareExit();
+ 
+         if (ConstantCycles)
+-            ADD(RCycles, RCycles, ConstantCycles);
++            CycAdd(ConstantCycles);
+         if (taken)
+             Comp_Exit(LastJumpKnown, LastJumpR15, LastJumpThumb, LastJumpKnown && JumpR15Deferred);
+         else
+@@ -988,7 +1142,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         }
+         CMP(W4, W1);
+         FixupBranch miss = B(CC_NEQ);
+-        BL(ExitCheck[Num][c]);
++        BL(ExitCheck[StubIdx()][c]);
+         u8* slot = GetWriteableRWPtr();
+         u8* slotRX = (u8*)GetRXPtr();
+         SwapCodeRegion();
+@@ -1005,9 +1159,9 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         {
+             CMP(W1, 2);
+             FixupBranch learn = B(CC_EQ);
+-            B(DynExitA[Num][c]);
++            B(DynExitA[StubIdx()][c]);
+             SetJumpTarget(learn);
+-            BL(ExitCheck[Num][c]);
++            BL(ExitCheck[StubIdx()][c]);
+             B(learnPath);
+         };
+         FixupBranch toMissWay;
+@@ -1020,6 +1174,8 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         // the learn path (the slot's until linked, and the first miss's): link the slot to the block the loop
+         // dispatches next
+         SwapCodeRegion();
++        if (Pinned())
++            PinRetSync(true);   // (after ExitCheck: Timestamp is up to date, Cycles 0)
+         MOVP2R(X16, slotRX);
+         MOVP2R(X17, &melonds_jit_link[0]);
+         STP(INDEX_SIGNED, X16, RCPU, X17, 0);
+@@ -1036,7 +1192,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+ 
+     if (!known)
+     {
+-        B((LastJumpViaFunc ? DynExitA : DynExit)[Num][c]);
++        B((LastJumpViaFunc ? DynExitA : DynExit)[StubIdx()][c]);
+         return;
+     }
+ 
+@@ -1054,9 +1210,17 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+             ORR(RCPSR, RCPSR, W17);
+         }
+     };
+-    FixupBranch stop, late;
++    FixupBranch stop, late, pinSlow;
+     const u8* resume = nullptr;   // (a self loop's way round after the late check: SLICECHAIN goes on there)
+-    if (selfLoop)
++    if (selfLoop && Pinned())
++    {
++        // PINTS: the check is one TBNZ; its late way is past the slot
++        pinSlow = PinChecksHot();
++        resume = (const u8*)GetRXPtr();
++        if (c && !ExitLazyLoop)
++            STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
++    }
++    else if (selfLoop)
+     {
+         LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
+         stop = CBNZ(W0);
+@@ -1087,9 +1251,9 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         // the checks (ExitCheck), then the slot: a B to its link path in the far region, until ARM_Dispatch links
+         // it. With storeR15, ExitCheckPC first stores the R15 in the word after the slot.
+         if (ExitFlagsInStub)
+-            BL(storeR15 ? ExitCheckPCF[Num] : ExitCheckF[Num]);   // (c is 1: CPSRDirty, Comp_Exit)
++            BL(storeR15 ? ExitCheckPCF[StubIdx()] : ExitCheckF[StubIdx()]);   // (c is 1: CPSRDirty, Comp_Exit)
+         else
+-            BL(storeR15 ? ExitCheckPC[Num][c] : ExitCheck[Num][c]);
++            BL(storeR15 ? ExitCheckPC[StubIdx()][c] : ExitCheck[StubIdx()][c]);
+     }
+     u8* slot = GetWriteableRWPtr();
+     u8* slotRX = (u8*)GetRXPtr();
+@@ -1107,17 +1271,37 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         const u8* entry = LoopMode ? LoopBodyRX : BlockStartRX + EntrySkip[Num];
+         *(u32*)slot = 0x14000000 | ((u32)((entry - slotRX) / 4) & 0x3FFFFFF);
+         LinkedTo[(u32)(BlockStartRX - GetRXBase())].push_back((u32)(slotRX - GetRXBase()));
+-        if (Num == 0 && SliceChainStub && !LoopMode)
++        if (Pinned())
++        {
++            // PINTS: the late way (Timestamp += Cycles; SLICECHAIN may go round again) and the stop way, each
++            // with its Timestamp/Cycles stores, then the common way back to the loop
++            FixupBranch pinStop;
++            PinChecksSlow(pinSlow, pinStop);
++            if (SliceChainStubP && !LoopMode)
++            {
++                BL(SliceChainStubP);
++                CBNZ(W0, resume);
++            }
++            PinRetSync(true);
++            FixupBranch join = B();
++            SetJumpTarget(pinStop);
++            PinRetSync(false);
++            SetJumpTarget(join);
++        }
++        else if (Num == 0 && SliceChainStub && !LoopMode)
+         {
+             // SLICECHAIN: the slice has ended; round the loop again when the slice loop would only keep time
+             // (nothing is in host registers here but RCPSR, RCycles and the base: callee-saved)
+             SetJumpTarget(late);
+             BL(SliceChainStub);
+             CBNZ(W0, resume);
++            SetJumpTarget(stop);
+         }
+         else
++        {
+             SetJumpTarget(late);
+-        SetJumpTarget(stop);
++            SetJumpTarget(stop);
++        }
+         flagsOut();
+         if (LoopMode)
+             RegCache.PrepareExit();
+@@ -1136,6 +1320,8 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         MOVI2R(W0, knownR15);   // (not stored on the way here)
+         STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
+     }
++    if (Pinned())
++        PinRetSync(true);   // (past the checks: Timestamp is up to date, Cycles 0)
+     MOVP2R(X16, slotRX);
+     MOVP2R(X17, &melonds_jit_link[0]);
+     STP(INDEX_SIGNED, X16, RCPU, X17, 0);
+@@ -1376,6 +1562,163 @@ void Compiler::Gen_ExitStubs(int num)
+     }
+ }
+ 
++void Compiler::Gen_ExitStubsPinned()
++{
++    // PINTS (patch 0320): the ARM9's exit stubs with Timestamp/Target/cycles in x25/x18/w28 (the convention:
++    // ARMJIT_Compiler.h). The hot way through an exit is one TBNZ (not taken) and one SUB. The late way (w28 < 0:
++    // Timestamp + Cycles >= Target, or StopExecution folded in) reads StopExecution and does what ExitCheck's did,
++    // then stores Timestamp and Cycles for the loop. Same layout as Gen_ExitStubs(0), at index 2.
++    const int idx = 2;
++    const bool chain = OptSliceChain;   // (OptExitStub holds: PinTsOK)
++    auto callChain = [&]()
++    {
++        // Timestamp to memory (SliceChain9 reads it), the call (x0 = &NDS and x16 = SliceChain9 from literals), then
++        // x18 and w28 from the Target it set (a new slice: no cycles charged yet). x4 and x30 kept round it.
++        STP(INDEX_PRE, X4, X30, SP, -16);
++        EmitPinCallBefore();
++        const bool pad = ((uintptr_t)GetRXPtr() + 16) & 7;
++        Write32(0x10000000 | ((pad ? 5 : 4) << 5) | 16);   // adr x16, <the literals below>
++        LDP(INDEX_SIGNED, X0, X16, X16, 0);
++        BLR(X16);
++        FixupBranch over = B();
++        if (pad)
++            Write32(0xD503201F);
++        const u64 lits[2] = {(u64)(uintptr_t)&NDS, (u64)(uintptr_t)&melonDS::NDS::SliceChain9};
++        for (u64 v : lits)
++        {
++            Write32((u32)v);
++            Write32((u32)(v >> 32));
++        }
++        SetJumpTarget(over);
++        EmitPinTsAddr(X17);
++        LDR(INDEX_UNSIGNED, X18, X17, PinTsOff + 8);
++        SUB(X18, X18, 1);
++        SUB(X17, X18, X25);
++        MOV(RCycles, W17);
++        LDP(INDEX_POST, X4, X30, SP, 16);
++    };
++    auto retToLoop = [&]()
++    {
++        const bool pad = ((uintptr_t)GetRXPtr() + 8) & 7;
++        Write32(0x58000000 | ((pad ? 3 : 2) << 5) | 30);   // ldr x30, <the literal below>
++        RET();
++        if (pad)
++            Write32(0xD503201F);
++        const u64 ret = (u64)(uintptr_t)ARM_Ret;
++        Write32((u32)ret);
++        Write32((u32)(ret >> 32));
++    };
++
++    StubsStart[4] = GetRXPtr();
++    for (int c = 1; c >= 0; c--)
++    {
++        if (c && OptFlagStub)
++        {
++            ExitCheckPCF[idx] = GetRXPtr();
++            MRS(X17, FIELD_NZCV);
++            ANDI2R(RCPSR, RCPSR, 0x0FFFFFFF);
++            ORR(RCPSR, RCPSR, W17);
++        }
++        ExitCheckPC[idx][c] = GetRXPtr();
++        LDR(INDEX_UNSIGNED, W0, X30, 4);
++        STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++        ExitCheck[idx][c] = GetRXPtr();
++        FixupBranch slow = PinChecksHot();
++        if (c)
++            STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));   // (the next block reads it from memory)
++        RET();
++        FixupBranch stop;
++        PinChecksSlow(slow, stop);
++        if (chain)
++        {
++            callChain();
++            FixupBranch out = CBZ(W0);
++            if (c)
++                STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
++            RET();
++            SetJumpTarget(out);
++        }
++        PinRetSync(true);
++        retToLoop();
++        SetJumpTarget(stop);
++        PinRetSync(false);
++        retToLoop();
++    }
++    if (chain)
++    {
++        // for a self loop's late way (a BL from the block, Timestamp already += Cycles: x30 is its way back)
++        SliceChainStubP = GetRXPtr();
++        callChain();
++        RET();
++    }
++    if (OptFlagStub)
++    {
++        ExitCheckF[idx] = GetRXPtr();
++        MRS(X17, FIELD_NZCV);
++        ANDI2R(RCPSR, RCPSR, 0x0FFFFFFF);
++        ORR(RCPSR, RCPSR, W17);
++        B(ExitCheck[idx][1]);
++    }
++
++    // DynExit / DynExitA (as Gen_ExitStubs's OptExitStub form, the ARM9's)
++    StubsStart[5] = GetRXPtr();
++    for (int a = 0; a < (OptDynAddr ? 2 : 1); a++)
++    for (int c = 1; c >= 0; c--)
++    {
++        (a ? DynExitA : DynExit)[idx][c] = GetRXPtr();
++        FixupBranch slow = PinChecksHot();
++        const u8* resume = (const u8*)GetRXPtr();
++        if (c)
++            STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
++        if (!a)
++        {
++            LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++            UBFX(W1, RCPSR, 5, 1);
++        }
++        if (a)
++            ANDI2R(W0, W4, ~1);   // (R15 - (Thumb ? 2 : 4), as the JumpTo function left it, | 1 for Thumb)
++        else
++        {
++            SUB(W0, W0, 4);
++            ADD(W0, W0, W1, ArithOption(W1, ST_LSL, 1));
++        }
++        LDP(INDEX_SIGNED, W16, W1, RCPU, offsetof(ARM, FastBlockLookupStart));
++        SUB(W17, W0, W16);
++        CMP(W17, W1);
++        FixupBranch outside = B(CC_HS);
++        LDR(INDEX_UNSIGNED, X16, RCPU, offsetof(ARM, FastBlockLookup));
++        LSR(W17, W17, 1);
++        LDR(X16, X16, ArithOption(X17, true));
++        CMP(X0, X16, ArithOption(X16, ST_LSR, 32));
++        FixupBranch miss = B(CC_NEQ);
++        u32* lit = (u32*)GetWriteableRWPtr();
++        Write32(0x58000000 | 17);   // ldr x17, <literal>: the blocks' code base, offset set below
++        ADD(X16, X17, W16, ArithOption(W16));   // + the entry's offset (uxtw)
++        BR(X16);
++        FixupBranch stop;
++        PinChecksSlow(slow, stop);
++        if (chain)
++        {
++            callChain();
++            CBNZ(W0, resume);
++        }
++        SetJumpTarget(outside);
++        SetJumpTarget(miss);
++        PinRetSync(true);
++        QuickTailCall(X16, ARM_Ret);
++        SetJumpTarget(stop);
++        PinRetSync(false);
++        QuickTailCall(X16, ARM_Ret);
++        if (((uintptr_t)GetRXPtr()) & 7)
++            Write32(0xD503201F);
++        u32*& base = (a ? DynExitBaseA : DynExitBase)[idx][c];
++        base = (u32*)GetWriteableRWPtr();
++        *lit |= (u32)(((u8*)base - (u8*)lit) / 4) << 5;
++        Write32(0);
++        Write32(0);
++    }
++}
++
+ void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
+ {
+     // A conditional immediate branch ending the block (FoldCondExit), its taken way: what the block's end does
+@@ -1394,7 +1737,7 @@ void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
+             SaveReg(reg, RegCache.Mapping[reg]);
+     }
+     if (total)
+-        ADD(RCycles, RCycles, total);
++        CycAdd(total);
+     Comp_Exit(true, LastJumpR15, LastJumpThumb, JumpR15Deferred);
+ }
+ 
+@@ -1546,6 +1889,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+     CurCPU = cpu;
+     ConstantCycles = 0;
+     RegCache = RegisterCache<Compiler, ARM64Reg>(this, instrs, instrsCount, true);
++    if (Pinned())
++    {
++        // PINTS: x25 holds the Timestamp
++        RegCache.NativeRegsUsed |= 1u << W25;
++        RegCache.NativeRegsLimit = RegisterCache<Compiler, ARM64Reg>::NativeRegsAvailable - 1;
++    }
+     CPSRDirty = false;
+     InvalidateHostFlags();
+ 
+@@ -1574,7 +1923,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         RegCache.DirtyRegs = written & 0x7FFF;
+         // a callee-saved host register left free: the Timestamp's address for the loop's check
+         LoopTsReg = INVALID_REG;
+-        for (int r = W25; r >= W19 && !LoopNoTs; r--)
++        for (int r = W25; r >= W19 && !LoopNoTs && !Pinned(); r--)
+             if (!(RegCache.NativeRegsUsed & (1u << r)))
+             {
+                 LoopTsReg = EncodeRegTo64((ARM64Reg)r);
+@@ -1798,7 +2147,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         else
+             RegCache.Flush();
+         if (ConstantCycles)
+-            ADD(RCycles, RCycles, ConstantCycles);
++            CycAdd(ConstantCycles);
+         Comp_Exit(true, R15, Thumb, LastNotTakenR15Deferred);
+     }
+     else
+@@ -1807,7 +2156,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         RegCache.Flush();
+ 
+     if (ConstantCycles)
+-        ADD(RCycles, RCycles, ConstantCycles);
++        CycAdd(ConstantCycles);
+     {
+         // the block's own end: on to the next instruction, or where its last instruction jumped (when constant)
+         const FetchedInstr& last = instrs[instrsCount - 1];
+@@ -1854,6 +2203,9 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+ 
+ void Compiler::Reset()
+ {
++    // PINTS: the switch may have been flipped (an in-run A/B): the blocks compiled from here on follow it
++    OptPinTs = PinTsOK && melonds_jit_pints > 0;
++    melonds_jit_ts9 = OptPinTs ? &NDS.ARM9Timestamp : nullptr;
+     LoadStorePatches.clear();
+     LinkSlots.clear();
+     LinkedTo.clear();
+@@ -1894,7 +2246,7 @@ void Compiler::Comp_AddCycles_C(bool forceNonConstant)
+     if (forceNonConstant)
+         ConstantCycles += cycles;
+     else if (!Thumb && CurInstr.Cond() < 0xE)
+-        ADD(RCycles, RCycles, cycles);
++        CycAdd(cycles);
+     else
+         ConstantCycles += cycles;   // (an unconditional instruction's: added with the block's others)
+ }
+@@ -1910,7 +2262,7 @@ void Compiler::Comp_AddCycles_CI(u32 numI)
+     if (Thumb || CurInstr.Cond() == 0xE)
+         ConstantCycles += cycles;
+     else
+-        ADD(RCycles, RCycles, cycles);
++        CycAdd(cycles);
+ }
+ 
+ void Compiler::Comp_AddCycles_CI(u32 c, ARM64Reg numI, ArithOption shift)
+@@ -1921,11 +2273,11 @@ void Compiler::Comp_AddCycles_CI(u32 c, ARM64Reg numI, ArithOption shift)
+         NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
+         : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles)) + c;
+ 
+-    ADD(RCycles, RCycles, cycles);
++    CycAdd(cycles);
+     if (Thumb || CurInstr.Cond() >= 0xE)
+         ConstantCycles += cycles;
+     else
+-        ADD(RCycles, RCycles, cycles);
++        CycAdd(cycles);
+ }
+ 
+ void Compiler::Comp_AddCycles_CDI()
+@@ -1962,7 +2314,7 @@ void Compiler::Comp_AddCycles_CDI()
+         }
+         
+         if (!Thumb && CurInstr.Cond() < 0xE)
+-            ADD(RCycles, RCycles, cycles);
++            CycAdd(cycles);
+         else
+             ConstantCycles += cycles;
+     }
+@@ -2006,7 +2358,7 @@ void Compiler::Comp_AddCycles_CD()
+     }
+ 
+     if ((!Thumb && CurInstr.Cond() < 0xE) && IrregularCycles)
+-        ADD(RCycles, RCycles, cycles);
++        CycAdd((s32)cycles);
+     else
+         ConstantCycles += cycles;
+ }
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index b271d40..3ec2334 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -232,7 +232,7 @@ public:
+     void Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags);
+ 
+     // 0 = switch mode, 1 = stay arm, 2 = stay thumb
+-    void* Gen_JumpTo9(int kind);
++    void* Gen_JumpTo9(int kind, bool pinned = false);
+     void* Gen_JumpTo7(int kind);
+ 
+     void Comp_BranchSpecialBehaviour(bool taken);
+@@ -246,19 +246,54 @@ public:
+     void Comp_Exit(bool known, u32 knownR15, bool thumbAfter, bool storeR15 = false);
+     void Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool storeR15);
+     void Gen_ExitStubs(int num);
++    void Gen_ExitStubsPinned();
++    // PINTS (BananaDS patch 0320, MELONDS_JIT_PINTS=1 / jit.pints, read again at every Reset so one binary can A/B):
++    // the ARM9's Timestamp, Target and cycles stay in host registers through linked blocks:
++    //   x25 = ARM9Timestamp as of the last exit (callee-saved, kept out of the register cache for pinned blocks)
++    //   x18 = ARM9Target - 1, or x25 - 2^22 once StopExecution is set (the fold; caller-saved and unused by the JIT
++    //         otherwise: loaded again after every C call, since C may change the Target or StopExecution)
++    //   w28 = x18 - x25 - the cycles charged since the last exit: every charge is a SUB, and an exit's check is
++    //         `tbnz w28, #31` (Timestamp + Cycles >= Target, or the fold) then `sub x25, x18, w28, sxtw`
++    //         (Timestamp += Cycles). Nothing is loaded or stored on the way into the next block.
++    // Memory sees the same values at the same points as before: Timestamp is stored before every C call (C reads it:
++    // GetSysClockCycles, ScheduleEvent) and on every way back to the loop, with Cycles (0 after a check, else the
++    // charged ones); the late/stop ways do what ExitCheck did. ARM_Dispatch (ARMJIT_Linkage.S) loads the three from
++    // memory through melonds_jit_ts9. The stubs' third index [2] is the pinned ARM9 (StubIdx); the ARM7 is untouched.
++    bool OptPinTs = false;
++    bool PinTsOK = false;         // the code generation it needs (OptExitStub, linking) is on
++    bool Pinned() const { return OptPinTs && Num == 0; }
++    int StubIdx() const { return Pinned() ? 2 : Num; }
++    bool PinTsShort = false;      // &ARM9Timestamp is RCPU + (PinTsHi << 12) + PinTsOff: one ADD/SUB instead of MOVP2R
++    s32 PinTsHi = 0;
++    u32 PinTsOff = 0;
++    void EmitPinTsAddr(Arm64Gen::ARM64Reg reg);   // reg = &ARM9Timestamp - PinTsOff
++    void EmitPinCallBefore();     // Timestamp to memory (x17)
++    void EmitPinCallAfter();      // x18 and w28 from the Target and StopExecution again (x17, x1, x2; keeps w0, NZCV)
++    void PinCallBefore() { if (Pinned()) EmitPinCallBefore(); }
++    void PinCallAfter() { if (Pinned()) EmitPinCallAfter(); }
++    void PinFoldStop();           // this block set StopExecution (IdleLoop): the fold into x18/w28 (x16, x17)
++    void PinRetSync(bool checked);   // before ARM_Ret: Timestamp to memory, w28 = Cycles (0 after a check) (x17)
++    Arm64Gen::FixupBranch PinChecksHot();   // tbnz w28,#31 (to PinChecksSlow); Timestamp += Cycles. Clobbers nothing else
++    void PinChecksSlow(Arm64Gen::FixupBranch slow, Arm64Gen::FixupBranch& stop);   // StopExecution -> stop (nothing
++                                  // changed); else Timestamp += Cycles and on (the late way: the slice has ended) (w17)
++    void SubSxtw(Arm64Gen::ARM64Reg rd, Arm64Gen::ARM64Reg rn, Arm64Gen::ARM64Reg wm);   // sub xd, xn, wm, sxtw
++    void CycAdd(s32 cycles);      // RCycles += cycles (-= when pinned)
++    void CycAdd(Arm64Gen::ARM64Reg w);
++    void* JumpToFuncs9P[3] = {};
++    const void* SliceChainStubP = nullptr;
+     // [num][1]: the stubs store the CPSR before going on into the next block; [num][0] (OptExitStub, for exits
+     // whose block left RCPSR as it is in memory) don't
+-    void* ExitCheck[2][2] = {};
+-    void* ExitCheckPC[2][2] = {};
++    void* ExitCheck[3][2] = {};
++    void* ExitCheckPC[3][2] = {};
+     // FLAGSTUB (patch 0042): the same with the pending flags (PendingFlags) put in RCPSR first, as FlushFlags would,
+     // then on into ExitCheckPC/ExitCheck with the CPSR store
+-    void* ExitCheckF[2] = {};
+-    void* ExitCheckPCF[2] = {};
++    void* ExitCheckF[3] = {};
++    void* ExitCheckPCF[3] = {};
+     bool ExitFlagsInStub = false; // (Comp_Exit to Comp_ExitTo: the exit's stub puts the pending flags in RCPSR)
+-    void* DynExit[2][2] = {};
+-    u32* DynExitBase[2][2] = {};
+-    void* DynExitA[2][2] = {};    // (OptDynAddr: DynExit with the next block's address in W4, from a JumpTo function)
+-    u32* DynExitBaseA[2][2] = {};
++    void* DynExit[3][2] = {};
++    u32* DynExitBase[3][2] = {};
++    void* DynExitA[3][2] = {};    // (OptDynAddr: DynExit with the next block's address in W4, from a JumpTo function)
++    u32* DynExitBaseA[3][2] = {};
+     bool OptDynAddr = true;       // NODYNADDR: the JumpTo functions leave the address in W4 and an exit after one
+                                   // looks the block up from it (DynExitA)
+     bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
+@@ -268,7 +303,7 @@ public:
+     bool OptDynCold = true;       // NODYNCOLD (patch 0041): that exit's miss way (another target, the first time) in the
+                                   // far region: 16 bytes less in the block
+                                   // in a word after a link slot it links to that block, like a known exit's
+-    const void* StubsStart[4] = {};   // ExitCheck9, DynExit9, ExitCheck7, DynExit7 (for the perf map)
++    const void* StubsStart[6] = {};   // ExitCheck9, DynExit9, ExitCheck7, DynExit7, the pinned ARM9's two (for the perf map)
+     bool DynExitLiteral = false;  // DynExitBase is a u64 literal (OptExitStub), not four MOVZ/MOVK to fill in
+     bool JumpR15Deferred = false; // this instruction's constant jump left storing R15 to its exit (OptExitPC)
+     bool ExitR15Deferrable = false;       // ... which it may (CompileBlock decides per instruction)
+@@ -411,8 +446,8 @@ public:
+     void* JumpToFuncs7[3];
+ 
+     // [Console Type][Num][Size][Sign Extend][Output register]
+-    void* PatchedLoadFuncs[2][2][3][2][32];
+-    void* PatchedStoreFuncs[2][2][3][32];
++    void* PatchedLoadFuncs[2][3][3][2][32];    // ([Num] 2: the pinned ARM9)
++    void* PatchedStoreFuncs[2][3][3][32];
+ };
+ 
+ }
+diff --git a/src/ARMJIT_A64/ARMJIT_Linkage.S b/src/ARMJIT_A64/ARMJIT_Linkage.S
+index 5ad1311..800da37 100644
+--- a/src/ARMJIT_A64/ARMJIT_Linkage.S
++++ b/src/ARMJIT_A64/ARMJIT_Linkage.S
+@@ -62,6 +62,24 @@ ARM_Dispatch:
+     ldr RCycles, [RCPU, ARM_Cycles_offset]
+     ldr RCPSR, [RCPU, ARM_CPSR_offset]
+ 
++#ifndef __APPLE__
++    // PINTS (patch 0320): while melonds_jit_ts9 is set (&ARM9Timestamp), an ARM9 block runs with x25 = Timestamp,
++    // x18 = Target - 1 (or Timestamp - 2^22 while StopExecution is set) and w28 = x18 - x25 - Cycles (counting down)
++    adrp x2, melonds_jit_ts9
++    ldr x2, [x2, :lo12:melonds_jit_ts9]
++    cbz x2, 2f
++    ldr w3, [RCPU, ARM_Num_offset]
++    cbnz w3, 2f
++    ldp x25, x18, [x2]
++    sub x18, x18, #1
++    ldr w3, [RCPU, ARM_StopExecution_offset]
++    cbz w3, 3f
++    sub x18, x25, #0x400, lsl #12
++3:
++    sub x3, x18, x25
++    sub RCycles, w3, RCycles
++2:
++#endif
+     br x1
+ 
+ .p2align 4,,15
+diff --git a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+index df5131b..6f2890b 100644
+--- a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
++++ b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+@@ -212,8 +212,8 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+ 
+         assert((rdMapped >= W8 && rdMapped <= W15) || (rdMapped >= W19 && rdMapped <= W25) || rdMapped == W4);
+         patch.PatchFunc = flags & memop_Store
+-            ? PatchedStoreFuncs[NDS.ConsoleType][Num][__builtin_ctz(size) - 3][rdMapped]
+-            : PatchedLoadFuncs[NDS.ConsoleType][Num][__builtin_ctz(size) - 3][!!(flags & memop_SignExtend)][rdMapped];
++            ? PatchedStoreFuncs[NDS.ConsoleType][StubIdx()][__builtin_ctz(size) - 3][rdMapped]
++            : PatchedLoadFuncs[NDS.ConsoleType][StubIdx()][__builtin_ctz(size) - 3][!!(flags & memop_SignExtend)][rdMapped];
+ 
+         patch.AddrReg = addrReg;
+ 
+@@ -254,7 +254,9 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+         {
+             if (flags & memop_Store)
+                 MOV(W1, rdMapped);
++            PinCallBefore();
+             QuickCallFunction(X2, (void (*)())func);
++            PinCallAfter();
+ 
+             PopRegs(false, false);
+ 
+@@ -281,6 +283,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+             if (Num == 0)
+             {
+                 MOV(X1, RCPU);
++                PinCallBefore();
+                 if (flags & memop_Store)
+                 {
+                     MOV(W2, rdMapped);
+@@ -335,6 +338,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+                     }
+                 }
+             }
++            PinCallAfter();
+ 
+             PopRegs(false, false);
+ 
+@@ -709,6 +713,7 @@ s32 Compiler::Comp_MemAccessBlock(int rn, BitSet16 regs, bool store, bool preinc
+     if (Num == 0)
+     {
+         MOV(X3, RCPU);
++        PinCallBefore();
+         switch ((u32)store * 2 | NDS.ConsoleType)
+         {
+         case 0: QuickCallFunction(X4, SlowBlockTransfer9<false, 0>); break;
+@@ -727,6 +732,7 @@ s32 Compiler::Comp_MemAccessBlock(int rn, BitSet16 regs, bool store, bool preinc
+         case 3: QuickCallFunction(X4, SlowBlockTransfer7<true, 1>); break;
+         }
+     }
++    PinCallAfter();
+ 
+     PopRegs(false, false);
+ 
+diff --git a/src/ARMJIT_RegisterCache.h b/src/ARMJIT_RegisterCache.h
+index 6c1d89f..c0ff58f 100644
+--- a/src/ARMJIT_RegisterCache.h
++++ b/src/ARMJIT_RegisterCache.h
+@@ -68,7 +68,7 @@ public:
+     void LoadRegister(int reg, bool loadValue)
+     {
+         assert(Mapping[reg] == -1);
+-        for (int i = 0; i < NativeRegsAvailable; i++)
++        for (int i = 0; i < NativeRegsLimit; i++)
+         {
+             Reg nativeReg = NativeRegAllocOrder[i];
+             if (!(NativeRegsUsed & (1 << nativeReg)))
+@@ -154,7 +154,7 @@ public:
+         {
+             int neededCount = needToBeLoaded.Count();
+             BitSet16 loadedSet(LoadedRegs);
+-            while (loadedSet.Count() + neededCount > NativeRegsAvailable)
++            while (loadedSet.Count() + neededCount > NativeRegsLimit)
+             {
+                 int leastReg = -1;
+                 int rank = 1000;
+@@ -183,9 +183,9 @@ public:
+         {
+             BitSet16 loadedSet(LoadedRegs);
+             BitSet16 loadRegs(instr.Info.NotStrictlyNeeded & futureNeeded & ~LoadedRegs);
+-            if (loadRegs && loadedSet.Count() < NativeRegsAvailable)
++            if (loadRegs && loadedSet.Count() < NativeRegsLimit)
+             {
+-                int left = NativeRegsAvailable - loadedSet.Count();
++                int left = NativeRegsLimit - loadedSet.Count();
+                 for (int reg : loadRegs)
+                 {
+                     if (left-- == 0)
+@@ -207,6 +207,7 @@ public:
+ 
+     u16 LiteralsLoaded = 0;
+     u32 NativeRegsUsed = 0;
++    int NativeRegsLimit = NativeRegsAvailable;   // (PINTS, patch 0320: a block may keep host registers out of the pool)
+     u16 LoadedRegs = 0;
+     u16 DirtyRegs = 0;
+ 
+diff --git a/src/ARMJIT_x64/ARMJIT_Offsets.h b/src/ARMJIT_x64/ARMJIT_Offsets.h
+index 1b80e07..4da5f47 100644
+--- a/src/ARMJIT_x64/ARMJIT_Offsets.h
++++ b/src/ARMJIT_x64/ARMJIT_Offsets.h
+@@ -18,4 +18,5 @@
+ 
+ #define ARM_CPSR_offset 0x64
+ #define ARM_Cycles_offset 0xc
++#define ARM_Num_offset 0x8
+ #define ARM_StopExecution_offset 0x10
