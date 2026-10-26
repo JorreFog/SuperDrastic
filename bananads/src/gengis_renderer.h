@@ -58,7 +58,7 @@ public:
     bool VbConvOnly = false;
     static int KeySkip;  // render.gengis_keyskip (3x, 4x): render.gengis_reuse's keys only now and then while nothing is reusable
     unsigned ReuseMiss = 0, KeyFrames = 0;
-    static int Units;  // render.gengis_units: 4x sub-bins as work units (default on)
+    static int Units;  // render.gengis_units: 4x sub-bins as work units (default 2: 16-line bins)
     static int Lazy;  // render.gengis_lazy (gx.c); -1: at 3x and 4x
     static int Verify;  // render.gengis_verify: every rendered bin rendered again on the reference paths (gx_ref) and compared
     std::atomic<uint64_t> VerBins{0}, VerBad{0}, VerNewNs{0}, VerRefNs{0};

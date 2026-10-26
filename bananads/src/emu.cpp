@@ -1145,7 +1145,7 @@ bool Emu::load_rom(const std::string& path) {
         GengisRenderer3D::HrNeon = (int)cfg_.num("render.gengis_hrneon", -1);
         GengisRenderer3D::Verify = (int)cfg_.num("render.gengis_verify", 0);
         GengisRenderer3D::Lazy = (int)cfg_.num("render.gengis_lazy", 0);
-        GengisRenderer3D::Units = (int)cfg_.num("render.gengis_units", 1);
+        GengisRenderer3D::Units = (int)cfg_.num("render.gengis_units", 2);
         GengisRenderer3D::KeySkip = (int)cfg_.num("render.gengis_keyskip", 1);
         GengisRenderer3D::VbWait = (int)cfg_.num("render.gengis_vbwait", -1);
         GengisRenderer3D::Crc = (int)cfg_.num("render.gengis_crc", 0);
