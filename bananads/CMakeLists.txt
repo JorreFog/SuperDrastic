@@ -45,6 +45,16 @@ if(BANANADS_LTO)
     add_compile_options(-flto=auto)
     add_link_options(-flto=auto)
 endif()
+# The hot functions first in .text (BANANADS_TEXT_ORDER, a GNU ld --section-ordering-file listing them hottest first, made
+# from device profiles by tools/hotorder.py): the emulator thread's hot code on ~40 4 KB pages instead of ~120, so fewer
+# iTLB and L3 misses, which cost the most at 4x when the render threads stream through the shared L3. The same code,
+# only placed elsewhere (a function's own instructions don't change: every branch between functions is a bl/b with
+# its offset); off (empty) builds as before.
+set(BANANADS_TEXT_ORDER "${CMAKE_CURRENT_SOURCE_DIR}/text-order.ld" CACHE STRING "GNU ld section ordering file for the hot functions (empty: off)")
+if(BANANADS_TEXT_ORDER AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    add_compile_options(-ffunction-sections)
+    add_link_options(-ffunction-sections "-Wl,--section-ordering-file=${BANANADS_TEXT_ORDER}")
+endif()
 
 set(BUILD_QT_SDL OFF CACHE BOOL "" FORCE)
 set(ENABLE_OGLRENDERER OFF CACHE BOOL "" FORCE)
