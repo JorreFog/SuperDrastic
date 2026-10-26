@@ -93,12 +93,14 @@ public:
     // framebuffers become 512x384 (GetFramebuffers); everything else is drawn at 1x and doubled.
     typedef const u32* (*QuarterFn)(void* ctx, u32 line, int q);
     typedef bool (*QuarterRowsFn)(void* ctx);  // true: the quarters are the 3D frame's own rows (render.3d_share)
-    void SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows = nullptr);
+    // render.scale=3/4 (experimental): S*S "quarters" (q: row S * line + q / S, its pixels S k + q % S), 768x576 or
+    // 1024x768 framebuffers
+    void SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows = nullptr, int scale = 2);
     // render.3d_wait2d: a quarter's row without waiting, the render drawing it, and a wait for it (the 2D thread's)
     typedef unsigned (*RowsGenFn)(void* ctx);
     typedef void (*WaitRowsFn)(void* ctx, u32 line, unsigned gen);
     void SetHiresRows(QuarterFn row, RowsGenFn gen, WaitRowsFn wait) { Drain2D(); QuarterRow = row; RowsGen = gen; WaitRows = wait; }
-    int Scale() const { return Quarter ? 2 : 1; }
+    int Scale() const { return Quarter ? Sc : 1; }
     bool GetFramebuffers(void** top, void** bottom) override;
     // The frontend's own buffers for the next frame (frontend=kms: the scanout buffers themselves, so nothing is
     // copied): a screen at Scale() each, rows packed (256 or 512 pixels), only ever written, line by line. Set between
@@ -123,9 +125,11 @@ private:
     // a DS line into the framebuffer at either scale (at 2x dst is two rows of 512)
     u32* LineDst(int screen, u32 line);
     void EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display);
+    void EmitAN(u32* dst, u32 dispcnt, u16 brightness, const u16* display);  // 3x, 4x
     void EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src = nullptr);
     void Fill(u32* dst, u32 val);
     QuarterFn Quarter = nullptr;
+    int Sc = 2, NQ = 4;  // with Quarter: the scale and its quarters (Sc * Sc)
     QuarterRowsFn QuarterRows = nullptr;
     QuarterFn QuarterRow = nullptr;
     RowsGenFn RowsGen = nullptr;
@@ -158,14 +162,14 @@ private:
         u32* DstB;
         u64 LogEndScan;             // (merged) the copy log up to here is applied before the scanline is drawn
         u64 LogEnd;                 // the copy log up to here is applied before the job (its sprite line) is drawn
-        const u32* Q3D[4];          // where the drawing reads the 3D layer's line: Line3D's, or the 3D frame's rows (render.3d_share)
+        const u32* Q3D[16];          // where the drawing reads the 3D layer's line: Line3D's, or the 3D frame's rows (render.3d_share)
         u32 (*Line3D)[256];         // the 3D layer's line, when unit A's DISPCNT enables 3D (2x: its quarters)
         u16* Display;
         Banana2DRegs Regs[2];
         Banana2DRegs SRegs[2];      // (merged) the sprite line's
     };
     enum : u8 { ScanBit = 1, SpriteBit = 2 };
-    std::unique_ptr<u32[]> JobLine3D;   // [NumJobs][4][256]
+    std::unique_ptr<u32[]> JobLine3D;   // [NumJobs][NQ][256]
     std::unique_ptr<u16[]> JobDisplay;  // [NumJobs][256]
     // render.2d_merge (default on): one job per line pair (above), the head published to the 2D thread only when it
     // is woken (Kick): a store-release per job waited for the job's stores (1% of the emulator's thread)

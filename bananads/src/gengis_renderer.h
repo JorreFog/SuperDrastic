@@ -33,7 +33,7 @@ public:
     void RenderFrame() override;
     void FinishRendering() override;
     void RestartFrame() override {}
-    melonDS::u32* GetLine(int line) override;  // at 2x: quarter 0 of the line
+    melonDS::u32* GetLine(int line) override;  // at 2x (3x): quarter 0 of the line
     int Scale() const { return Scale_; }
     // the game's DISP3DCNT bits the picture may use (render.edge_marking, render.fog): the others are cleared
     // before the rasterizer sees them
@@ -81,6 +81,7 @@ public:
     // render's: those go into the other buffer). The emulator's thread then waits for the frame only at VBlank.
     const melonDS::u32* QuarterRow(int line, int q) const {
         if (line >= GX_H) line = GX_H - 1;
+        if (Scale_ >= 3) return Out + (Scale_ * line + q / Scale_) * Scale_ * GX_W + (q % Scale_) * GX_W;  // (3x, 4x: 9, 16)
         return Scale_ == 2 ? Out + (2 * line + (q >> 1)) * 2 * GX_W + (q & 1) * GX_W : Out + line * GX_W;
     }
     void WaitRows(int line, unsigned gen);
@@ -129,9 +130,11 @@ private:
     int Scale_;
     // two frames' rows, alternated by each frame rendered: a frame's stay as they are through the next frame's
     // rendering, so the 2D thread can read them (QuarterRows) until the frame's end without a wait at the next start
-    alignas(64) uint32_t OutBuf[2][GX_H * GX_W * 4];  // 1x: GX_H lines of GX_W; 2x: gx2_render_bin's rows
-    uint32_t* Out = OutBuf[0];                         // the frame being rendered or shown
-    alignas(16) uint32_t Scrolled[4][GX_W];
+    // (64-byte aligned, Scale_^2 * GX_H * GX_W each: 1x GX_H lines of GX_W; 2x gx2_render_bin's rows; 3x gx3's)
+    uint32_t* OutBuf[2] = {};
+    uint32_t* Out = nullptr;                           // the frame being rendered or shown
+    size_t OutWords() const { return (size_t)GX_H * GX_W * Scale_ * Scale_; }
+    alignas(16) uint32_t Scrolled[16][GX_W];
 
     // the frame's bins: claimed by the workers (and by the emulator's thread while it waits for one)
     std::atomic<unsigned> Next{GX_NBINS};
@@ -157,14 +160,14 @@ private:
 // and after one: its copies of VRAM made again (GPU::DoSavestate clears the VRAM flats without dirty bits)
 inline void Drain2D(melonDS::SoftRenderer*) {}
 inline void Resync2D(melonDS::SoftRenderer*) {}
-// render.scale=2: the 2D side composites the four quarters (only the Banana 2D engine; the caller makes sure)
+// render.scale=2 (3): the 2D side composites the four (nine) quarters (only the Banana 2D engine; the caller makes sure)
 inline void SetHires(melonDS::SoftRenderer*, GengisRenderer3D*, int) {}
 #ifdef BANANADS_2D
 inline void Drain2D(melonDS::BananaRenderer* r) { r->Drain2D(); }
 inline void Resync2D(melonDS::BananaRenderer* r) { r->Resync2D(); }
 inline void SetHires(melonDS::BananaRenderer* r, GengisRenderer3D* g, int scale) {
-    if (scale == 2) {
-        r->SetHires(&GengisRenderer3D::QuarterFn, g, &GengisRenderer3D::QuarterRowsFn);
+    if (scale >= 2) {
+        r->SetHires(&GengisRenderer3D::QuarterFn, g, &GengisRenderer3D::QuarterRowsFn, scale);
         r->SetHiresRows(&GengisRenderer3D::QuarterRowFn, &GengisRenderer3D::RowsGenFn, &GengisRenderer3D::WaitRowsFn);
     }
 }

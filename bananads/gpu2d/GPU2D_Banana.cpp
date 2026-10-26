@@ -2879,7 +2879,7 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
     // 2x: the layers above, then the compositing once for each of the 3D layer's four lines (quarter 0 into dst,
     // the others into HiOut), as DraStic composites its 2x frame's quarters
     CompositeTo(dst);
-    for (int q = 1; q < 4; q++)
+    for (int q = 1; q < HiN; q++)
     {
         Line3D = q3d[q];
         if (!Raw3D)
@@ -2890,7 +2890,7 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
         CompositeTo(HiOut[q - 1]);
     }
     Line3D = line3d;
-    HiLines = 4;
+    HiLines = HiN;
 }
 
 // the layers drawn by DrawScanlineFrom composited into dst, with the colour effects

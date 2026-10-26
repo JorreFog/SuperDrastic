@@ -72,7 +72,7 @@ K = dict(recip=0x00, recip_u=0x08, tex=0x10, pal=0x18, pid24=0x20, bytes=0x30, K
 # pipeline's 48-line bins use 0x100), HR = the hi-res kernel set: buffer strides from kargs instead of DraStic's
 # context layout (line 0x800 bytes, attributes at +0x10000, ids at +0x20000 with 0x200 per line, owners 0x400)
 SPS, HR, PFX = 0xb0, False, "rast_kern_"
-FRAME = 784             # the stack frame: [sp,#256] holds a line's pass masks (512 pixels; 768 in the hi-res set)
+FRAME = 784             # the stack frame: [sp,#256] holds a line's pass masks (512 pixels; 1024 in the hi-res set)
 def span_layout(stride):
     global SPS, SP
     SPS = stride
@@ -1635,7 +1635,7 @@ def all_kernels():
         for F in range(2):
             for B in range(2 if T else 1): kernel_shade(T, F, B)
 all_kernels()                                       # DraStic's layout (the exact 2x path)
-span_layout(0x100); HR = True; PFX = "rast_kern_h"; FRAME = 1040  # the hi-res pipeline (hr.c): lines of 768
+span_layout(0x100); HR = True; PFX = "rast_kern_h"; FRAME = 1296  # the hi-res pipeline (hr.c): lines of 768; 1024 at render.scale=4 (256 + 1024 pass-mask bytes + 16)
 all_kernels()
 e(".section .rodata")
 e(".balign 16")
