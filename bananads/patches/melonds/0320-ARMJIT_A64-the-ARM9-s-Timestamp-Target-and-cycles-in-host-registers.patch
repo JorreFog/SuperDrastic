@@ -68,7 +68,7 @@ index 37a549d..341b795 100644
      }
      else
 diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-index 2c9e442..78467d6 100644
+index 2c9e442..7ab5331 100644
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 @@ -37,6 +37,12 @@ extern "C" void ARM_Ret();
@@ -210,7 +210,21 @@ index 2c9e442..78467d6 100644
          {
              memcpy(p, &base, 8);   // (data: the stub loads it)
              if (DynExitBaseA[num][c])
-@@ -660,14 +695,131 @@ Compiler::~Compiler()
+@@ -619,9 +654,10 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         // banked register and patched memory functions
+         const u8* order[] = {(u8*)JumpToFuncs9[0], (u8*)JumpToFuncs7[0], (u8*)JumpToFuncs9[1],
+             (u8*)JumpToFuncs7[1], (u8*)JumpToFuncs9[2], (u8*)JumpToFuncs7[2], (u8*)StubsStart[0], (u8*)StubsStart[1],
+-            (u8*)StubsStart[2], (u8*)StubsStart[3], (u8*)ReadBanked, GetRXBase()};
+-        const u32 ids[] = {0xe900, 0xe700, 0xe901, 0xe701, 0xe902, 0xe702, 0xec00, 0xed00, 0xec01, 0xed01, 0xeb00};
+-        for (int i = 0; i < 11; i++)
++            (u8*)StubsStart[2], (u8*)StubsStart[3], (u8*)StubsStart[4], (u8*)StubsStart[5], (u8*)ReadBanked, GetRXBase()};
++        // (ec02/ed02: the pinned ARM9's, PINTS; its JumpTo twins are in e902's range)
++        const u32 ids[] = {0xe900, 0xe700, 0xe901, 0xe701, 0xe902, 0xe702, 0xec00, 0xed00, 0xec01, 0xed01, 0xec02, 0xed02, 0xeb00};
++        for (int i = 0; i < 13; i++)
+             DumpBlock("stub", ids[i], order[i], order[i + 1]);
+     }
+ }
+@@ -660,14 +696,131 @@ Compiler::~Compiler()
  
  void Compiler::LoadCycles()
  {
@@ -342,7 +356,7 @@ index 2c9e442..78467d6 100644
  void Compiler::LoadReg(int reg, ARM64Reg nativeReg)
  {
      if (reg == 15)
-@@ -856,6 +1008,8 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+@@ -856,6 +1009,8 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
      {
          MOVI2R(W0, 1);
          STRB(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, IdleLoop));
@@ -351,7 +365,7 @@ index 2c9e442..78467d6 100644
      }
  
      if ((CurInstr.BranchFlags & branch_FollowCondNotTaken && taken)
-@@ -864,7 +1018,7 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+@@ -864,7 +1019,7 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
          RegCache.PrepareExit();
  
          if (ConstantCycles)
@@ -360,7 +374,7 @@ index 2c9e442..78467d6 100644
          if (taken)
              Comp_Exit(LastJumpKnown, LastJumpR15, LastJumpThumb, LastJumpKnown && JumpR15Deferred);
          else
-@@ -988,7 +1142,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -988,7 +1143,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
          }
          CMP(W4, W1);
          FixupBranch miss = B(CC_NEQ);
@@ -369,7 +383,7 @@ index 2c9e442..78467d6 100644
          u8* slot = GetWriteableRWPtr();
          u8* slotRX = (u8*)GetRXPtr();
          SwapCodeRegion();
-@@ -1005,9 +1159,9 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1005,9 +1160,9 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
          {
              CMP(W1, 2);
              FixupBranch learn = B(CC_EQ);
@@ -381,7 +395,7 @@ index 2c9e442..78467d6 100644
              B(learnPath);
          };
          FixupBranch toMissWay;
-@@ -1020,6 +1174,8 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1020,6 +1175,8 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
          // the learn path (the slot's until linked, and the first miss's): link the slot to the block the loop
          // dispatches next
          SwapCodeRegion();
@@ -390,7 +404,7 @@ index 2c9e442..78467d6 100644
          MOVP2R(X16, slotRX);
          MOVP2R(X17, &melonds_jit_link[0]);
          STP(INDEX_SIGNED, X16, RCPU, X17, 0);
-@@ -1036,7 +1192,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1036,7 +1193,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
  
      if (!known)
      {
@@ -399,7 +413,7 @@ index 2c9e442..78467d6 100644
          return;
      }
  
-@@ -1054,9 +1210,17 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1054,9 +1211,17 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
              ORR(RCPSR, RCPSR, W17);
          }
      };
@@ -419,7 +433,7 @@ index 2c9e442..78467d6 100644
      {
          LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
          stop = CBNZ(W0);
-@@ -1087,9 +1251,9 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1087,9 +1252,9 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
          // the checks (ExitCheck), then the slot: a B to its link path in the far region, until ARM_Dispatch links
          // it. With storeR15, ExitCheckPC first stores the R15 in the word after the slot.
          if (ExitFlagsInStub)
@@ -431,7 +445,7 @@ index 2c9e442..78467d6 100644
      }
      u8* slot = GetWriteableRWPtr();
      u8* slotRX = (u8*)GetRXPtr();
-@@ -1107,17 +1271,37 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1107,17 +1272,37 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
          const u8* entry = LoopMode ? LoopBodyRX : BlockStartRX + EntrySkip[Num];
          *(u32*)slot = 0x14000000 | ((u32)((entry - slotRX) / 4) & 0x3FFFFFF);
          LinkedTo[(u32)(BlockStartRX - GetRXBase())].push_back((u32)(slotRX - GetRXBase()));
@@ -471,7 +485,7 @@ index 2c9e442..78467d6 100644
          flagsOut();
          if (LoopMode)
              RegCache.PrepareExit();
-@@ -1136,6 +1320,8 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1136,6 +1321,8 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
          MOVI2R(W0, knownR15);   // (not stored on the way here)
          STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
      }
@@ -480,7 +494,7 @@ index 2c9e442..78467d6 100644
      MOVP2R(X16, slotRX);
      MOVP2R(X17, &melonds_jit_link[0]);
      STP(INDEX_SIGNED, X16, RCPU, X17, 0);
-@@ -1376,6 +1562,163 @@ void Compiler::Gen_ExitStubs(int num)
+@@ -1376,6 +1563,163 @@ void Compiler::Gen_ExitStubs(int num)
      }
  }
  
@@ -644,7 +658,7 @@ index 2c9e442..78467d6 100644
  void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
  {
      // A conditional immediate branch ending the block (FoldCondExit), its taken way: what the block's end does
-@@ -1394,7 +1737,7 @@ void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
+@@ -1394,7 +1738,7 @@ void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
              SaveReg(reg, RegCache.Mapping[reg]);
      }
      if (total)
@@ -653,7 +667,7 @@ index 2c9e442..78467d6 100644
      Comp_Exit(true, LastJumpR15, LastJumpThumb, JumpR15Deferred);
  }
  
-@@ -1546,6 +1889,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1546,6 +1890,12 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
      CurCPU = cpu;
      ConstantCycles = 0;
      RegCache = RegisterCache<Compiler, ARM64Reg>(this, instrs, instrsCount, true);
@@ -666,7 +680,7 @@ index 2c9e442..78467d6 100644
      CPSRDirty = false;
      InvalidateHostFlags();
  
-@@ -1574,7 +1923,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1574,7 +1924,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
          RegCache.DirtyRegs = written & 0x7FFF;
          // a callee-saved host register left free: the Timestamp's address for the loop's check
          LoopTsReg = INVALID_REG;
@@ -675,7 +689,7 @@ index 2c9e442..78467d6 100644
              if (!(RegCache.NativeRegsUsed & (1u << r)))
              {
                  LoopTsReg = EncodeRegTo64((ARM64Reg)r);
-@@ -1798,7 +2147,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1798,7 +2148,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
          else
              RegCache.Flush();
          if (ConstantCycles)
@@ -684,7 +698,7 @@ index 2c9e442..78467d6 100644
          Comp_Exit(true, R15, Thumb, LastNotTakenR15Deferred);
      }
      else
-@@ -1807,7 +2156,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1807,7 +2157,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
          RegCache.Flush();
  
      if (ConstantCycles)
@@ -693,7 +707,7 @@ index 2c9e442..78467d6 100644
      {
          // the block's own end: on to the next instruction, or where its last instruction jumped (when constant)
          const FetchedInstr& last = instrs[instrsCount - 1];
-@@ -1854,6 +2203,9 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+@@ -1854,6 +2204,9 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
  
  void Compiler::Reset()
  {
@@ -703,7 +717,7 @@ index 2c9e442..78467d6 100644
      LoadStorePatches.clear();
      LinkSlots.clear();
      LinkedTo.clear();
-@@ -1894,7 +2246,7 @@ void Compiler::Comp_AddCycles_C(bool forceNonConstant)
+@@ -1894,7 +2247,7 @@ void Compiler::Comp_AddCycles_C(bool forceNonConstant)
      if (forceNonConstant)
          ConstantCycles += cycles;
      else if (!Thumb && CurInstr.Cond() < 0xE)
@@ -712,7 +726,7 @@ index 2c9e442..78467d6 100644
      else
          ConstantCycles += cycles;   // (an unconditional instruction's: added with the block's others)
  }
-@@ -1910,7 +2262,7 @@ void Compiler::Comp_AddCycles_CI(u32 numI)
+@@ -1910,7 +2263,7 @@ void Compiler::Comp_AddCycles_CI(u32 numI)
      if (Thumb || CurInstr.Cond() == 0xE)
          ConstantCycles += cycles;
      else
@@ -721,7 +735,7 @@ index 2c9e442..78467d6 100644
  }
  
  void Compiler::Comp_AddCycles_CI(u32 c, ARM64Reg numI, ArithOption shift)
-@@ -1921,11 +2273,11 @@ void Compiler::Comp_AddCycles_CI(u32 c, ARM64Reg numI, ArithOption shift)
+@@ -1921,11 +2274,11 @@ void Compiler::Comp_AddCycles_CI(u32 c, ARM64Reg numI, ArithOption shift)
          NDS.ARM7MemTimings[CurInstr.CodeCycles][Thumb ? 0 : 2]
          : ((R15 & 0x2) ? 0 : CurInstr.CodeCycles)) + c;
  
@@ -735,7 +749,7 @@ index 2c9e442..78467d6 100644
  }
  
  void Compiler::Comp_AddCycles_CDI()
-@@ -1962,7 +2314,7 @@ void Compiler::Comp_AddCycles_CDI()
+@@ -1962,7 +2315,7 @@ void Compiler::Comp_AddCycles_CDI()
          }
          
          if (!Thumb && CurInstr.Cond() < 0xE)
@@ -744,7 +758,7 @@ index 2c9e442..78467d6 100644
          else
              ConstantCycles += cycles;
      }
-@@ -2006,7 +2358,7 @@ void Compiler::Comp_AddCycles_CD()
+@@ -2006,7 +2359,7 @@ void Compiler::Comp_AddCycles_CD()
      }
  
      if ((!Thumb && CurInstr.Cond() < 0xE) && IrregularCycles)
@@ -936,7 +950,7 @@ index df5131b..6f2890b 100644
      PopRegs(false, false);
  
 diff --git a/src/ARMJIT_RegisterCache.h b/src/ARMJIT_RegisterCache.h
-index 6c1d89f..c0ff58f 100644
+index 6c1d89f..6279829 100644
 --- a/src/ARMJIT_RegisterCache.h
 +++ b/src/ARMJIT_RegisterCache.h
 @@ -68,7 +68,7 @@ public:
@@ -944,7 +958,7 @@ index 6c1d89f..c0ff58f 100644
      {
          assert(Mapping[reg] == -1);
 -        for (int i = 0; i < NativeRegsAvailable; i++)
-+        for (int i = 0; i < NativeRegsLimit; i++)
++        for (int i = 0; i < NativeRegsAvailable; i++)   // (all of the order: NativeRegsLimit counts the free ones)
          {
              Reg nativeReg = NativeRegAllocOrder[i];
              if (!(NativeRegsUsed & (1 << nativeReg)))
