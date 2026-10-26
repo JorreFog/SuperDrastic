@@ -955,15 +955,31 @@ const u32* BananaRenderer::DrawBCached(Job& job, BananaRenderer2D& b)
     memset(&cur, 0, sizeof(cur));
     cur.Epoch = b.CacheEpoch;
     cur.Valid = 1;
-    cur.GenScan = GenB;
-    cur.Spr = SprKeyB;
+    cur.GenScan = SnapKeys ? GenBNoObj : GenB;
+    if (!SnapKeys) cur.Spr = SprKeyB;
     cur.Regs = job.Regs[1];
     // (OBJ mosaic rewrites the whole sprite line in place as the line is drawn: such lines are always drawn)
-    if (!job.Regs[1].OBJMosaicSize[0] && memcmp(&cur, &k, sizeof(cur)) == 0)
+    if (!job.Regs[1].OBJMosaicSize[0] && memcmp(&cur, &k, sizeof(cur)) == 0 &&
+        (!SnapKeys || b.SprSnapSame(SnapB[job.Line])))
     {
         b.ScanlineState(job.Regs[1]);
         StatSkipped++;
+        if (Banana2DVerify && SnapKeys)
+        {
+            // (render.2d_verify: the line drawn anyway, against the cached one)
+            alignas(16) u32 ref[256];
+            b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0], nullptr, ref);
+            Banana2DVerifyCount(3, memcmp(ref, dst, sizeof(ref)) == 0);
+        }
         return dst;
+    }
+    if (SnapKeys) b.SprSnapStore(SnapB[job.Line]);
+    if (k.Epoch != cur.Epoch || !k.Valid) StatMiss[0]++;
+    else
+    {
+        if (k.GenScan != cur.GenScan) StatMiss[1]++;
+        if (memcmp(&k.Spr, &cur.Spr, sizeof(cur.Spr))) StatMiss[2]++;
+        if (memcmp(&k.Regs, &cur.Regs, sizeof(cur.Regs))) StatMiss[3]++;
     }
     b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0], nullptr, dst);
     memcpy(&k, &cur, sizeof(k));
@@ -1153,6 +1169,12 @@ void BananaRenderer::SetThreaded2D(bool on)
     }
     if (Skipping)
         memset(KeysB.get(), 0, 192 * sizeof(LineKey));  // (Valid 0: nothing cached)
+    SnapKeys = Skipping && OutSkipOn && Sc >= 3 && Banana2DFast;
+    if (SnapKeys)
+    {
+        if (!SnapB) SnapB = std::make_unique<BananaRenderer2D::SprSnap[]>(192);
+        for (int i = 0; i < 192; i++) SnapB[i].Valid = 0;
+    }
     OutSkipping = Skipping && OutSkipOn;
     if (OutSkipping && !OutSlots)
     {
@@ -1194,6 +1216,14 @@ void BananaRenderer::StopWorker()
                   "log, %llu waits for the thread (capture, full ring or log), %llu of unit B's lines from its cache (render.2d_skip)\n",
                   (unsigned long long)StatJobs, (unsigned long long)StatInPlace, StatLogBytes / 1048576.0,
                   (unsigned long long)StatWaits, (unsigned long long)StatSkipped);
+    if (Skipping)
+        Platform::Log(Platform::LogLevel::Info, "[2d] unit B lines drawn: new/epoch %llu, memory %llu, sprite line %llu, "
+                      "registers %llu (overlap); memory changes by region: BG %llu OBJ %llu BGext %llu OBJext %llu pal %llu "
+                      "OAM %llu\n", (unsigned long long)StatMiss[0], (unsigned long long)StatMiss[1],
+                      (unsigned long long)StatMiss[2], (unsigned long long)StatMiss[3],
+                      (unsigned long long)StatGenRegion[0], (unsigned long long)StatGenRegion[1],
+                      (unsigned long long)StatGenRegion[2], (unsigned long long)StatGenRegion[3],
+                      (unsigned long long)StatGenRegion[4], (unsigned long long)StatGenRegion[5]);
     if (OutSkipping)
         Platform::Log(Platform::LogLevel::Info, "[2d] %llu of unit B's lines already in the frontend's buffer, not written "
                       "again (render.2d_out_skip)\n", (unsigned long long)StatOutSkipped);
@@ -1264,7 +1294,12 @@ void BananaRenderer::ApplyLog(u64 end)
         const u8* src = &Log[pos + sizeof(LogRecord)];
         // (render.2d_skip: a record that changes unit B's copies)
         if (Skipping && static_cast<BananaRenderer2D&>(*Rend2D_B).InCopies(r.Dst) && memcmp(r.Dst, src, r.Len))
+        {
             GenB++;
+            int rg = static_cast<BananaRenderer2D&>(*Rend2D_B).CopyRegion(r.Dst);
+            if (rg >= 0) StatGenRegion[rg]++;
+            if (rg != 1 && rg != 5) GenBNoObj++;   // (OBJ VRAM and OAM: only sprite lines read them)
+        }
         memcpy(r.Dst, src, r.Len);
         rd += sizeof(LogRecord) + ((r.Len + 15) & ~15ull);
     }

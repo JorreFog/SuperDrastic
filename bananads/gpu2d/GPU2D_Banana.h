@@ -118,7 +118,12 @@ public:
     void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d, const u32* const* q3d = nullptr,
                           u32* dstOverride = nullptr);
     void ScanlineState(const Banana2DRegs& regs);  // render.2d_skip: DrawScanlineFrom's state, without drawing
-    bool InCopies(const void* p) const;           // p is in this engine's copies of GPU memory (UseCopies, OAMCopy)
+    bool InCopies(const void* p) const;
+    int CopyRegion(const void* p) const;
+    // render.2d_skip at 3x/4x (fast paths): what a scanline reads of the sprite line drawn before it, kept per line
+    struct SprSnap { u32 Num; u32 XMin, XMax; u32 Valid; alignas(16) u8 Win[256]; alignas(16) u8 Attr[256]; alignas(16) u32 Line[256]; };
+    bool SprSnapSame(const SprSnap& s) const;
+    void SprSnapStore(SprSnap& s) const;   // 0 BG VRAM, 1 OBJ VRAM, 2 BG ext pal, 3 OBJ ext pal, 4 palette, 5 OAM, -1 none           // p is in this engine's copies of GPU memory (UseCopies, OAMCopy)
     u32 CacheEpoch = 0;   // render.2d_skip: changed whenever the copies or the drawing state are made anew
     void DrawScanlineHires(u32 line, const u32* const* q3d);   // DrawScanline at 2x
     int HiLines = 1;

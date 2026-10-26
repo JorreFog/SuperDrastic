@@ -134,7 +134,7 @@ bool Banana2DVerify = false;
 static std::atomic<u64> VerifyN[4], VerifyBad[4];
 void Banana2DVerifyCount(int what, bool same)
 {
-    static const char* const names[4] = { "raw3d-win", "emit-a", "emit-b", "other" };
+    static const char* const names[4] = { "raw3d-win", "emit-a", "emit-b", "b-cache" };
     u64 n = ++VerifyN[what];
     if (!same) VerifyBad[what]++;
     if (!same && VerifyBad[what] <= 4)
@@ -2895,6 +2895,48 @@ void BananaRenderer2D::ScanlineState(const Banana2DRegs& regs)
     if (R.OBJExtChanged) ObjExtValid = false;
     if (R.PalBG || R.PalOBJ)
         UpdatePalettes(R.PalBG, R.PalOBJ, R.PalBGStale);
+}
+
+// the sprite line's buffers as the next scanline reads them: the count, the extent (OBJLine and OBJTransAttr are 0
+// outside it with render.2d_fast), the extent's pixels and attributes, the OBJ window
+bool BananaRenderer2D::SprSnapSame(const SprSnap& s) const
+{
+    if (!s.Valid || s.Num != (u32)NumSprites || s.XMin != (u32)ObjXMin || s.XMax != (u32)ObjXMax)
+        return false;
+    if (memcmp(s.Win, OBJWindow, 256))
+        return false;
+    if (ObjXMax > ObjXMin)
+    {
+        if (memcmp(&s.Line[ObjXMin], &OBJLine[ObjXMin], (ObjXMax - ObjXMin) * 4)) return false;
+        if (memcmp(&s.Attr[ObjXMin], &OBJTransAttr[ObjXMin], ObjXMax - ObjXMin)) return false;
+    }
+    return true;
+}
+
+void BananaRenderer2D::SprSnapStore(SprSnap& s) const
+{
+    s.Num = NumSprites;
+    s.XMin = ObjXMin;
+    s.XMax = ObjXMax;
+    memcpy(s.Win, OBJWindow, 256);
+    if (ObjXMax > ObjXMin)
+    {
+        memcpy(&s.Line[ObjXMin], &OBJLine[ObjXMin], (ObjXMax - ObjXMin) * 4);
+        memcpy(&s.Attr[ObjXMin], &OBJTransAttr[ObjXMin], ObjXMax - ObjXMin);
+    }
+    s.Valid = 1;
+}
+
+int BananaRenderer2D::CopyRegion(const void* p) const
+{
+    const u8* b = (const u8*)p;
+    if (b >= (const u8*)OAMCopy && b < (const u8*)OAMCopy + sizeof(OAMCopy)) return 5;
+    if (!CopyMem || b < CopyMem.get() || b >= CopyMem.get() + CopyMemSize) return -1;
+    if (b >= PalMem) return 4;
+    if (b >= OBJExtMem) return 3;
+    if (b >= BGExtMem) return 2;
+    if (b >= OBJVRAM) return 1;
+    return 0;
 }
 
 bool BananaRenderer2D::InCopies(const void* p) const

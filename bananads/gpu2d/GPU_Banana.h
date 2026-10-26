@@ -196,6 +196,13 @@ private:
     SprKey SprKeyB;                     // the last sprite line unit B drew
     u64 GenB = 0;                       // records of the copy log that changed unit B's copies
     u64 StatSkipped = 0;
+    // at 3x/4x with render.2d_fast (SnapKeys): the key counts memory changes but OAM and OBJ VRAM (GenBNoObj), and the
+    // sprite line is compared by what it drew (SnapB, BananaRenderer2D::SprSnap) instead of its inputs: a sprite
+    // moved on one line no longer redraws all of them (Mario Kart DS's map: 82% of its lines were drawn again)
+    bool SnapKeys = false;
+    u64 GenBNoObj = 0;
+    std::unique_ptr<BananaRenderer2D::SprSnap[]> SnapB;   // [192]
+    u64 StatMiss[4] = {}, StatGenRegion[6] = {};   // (render.2d_skip: why lines were drawn; GenB by region)
     const u32* DrawBCached(Job& job, BananaRenderer2D& b);
     // render.2d_out_skip (default on; at 3x/4x with render.2d_skip, drawing into the frontend's buffers): unit B's line
     // isn't written again into a buffer whose row already holds it. Per buffer (the frontend's slots, up to 8) and
