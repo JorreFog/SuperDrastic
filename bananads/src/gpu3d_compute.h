@@ -39,6 +39,8 @@ public:
 
     static int WorkTiles;  // render.gpu3d_worktiles: work tiles per screen tile the GPU buffers hold (8)
     static int Hires;      // render.gpu3d_hires: melonDS's high-resolution vertex coordinates (0)
+    static int Prof;       // render.gpu3d_prof: glFinish after each pass, times in the stats line (slow: measurement only)
+    unsigned LastVariants = 0;
     static int Stats;      // render.gpu3d_stats: a [gpu3d] line every N rendered frames (0: off)
 
     // the Banana 2D engine's interface (as GengisRenderer3D's)

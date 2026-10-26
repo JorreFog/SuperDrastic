@@ -23,9 +23,15 @@
 
 namespace bananads {
 
+static uint64_t NowNs();
 int ComputeGpuRenderer3D::WorkTiles = 8;
 int ComputeGpuRenderer3D::Hires = 0;
 int ComputeGpuRenderer3D::Stats = 0;
+int ComputeGpuRenderer3D::Prof = 0;
+static uint64_t PhaseNs[8];
+static int PhaseN;
+static uint64_t PhaseT;
+static void Phase(int i) { if (!ComputeGpuRenderer3D::Prof) return; glFinish(); uint64_t t = NowNs(); if (i >= 0) PhaseNs[i] += t - PhaseT; PhaseT = t; }
 
 static uint64_t NowNs() {
     timespec t;
@@ -354,6 +360,13 @@ bool ComputeGpuRenderer3D::GLInit() {
     glGenBuffers(1, &g.MetaUniformMemory);
     glBindBuffer(GL_UNIFORM_BUFFER, g.MetaUniformMemory);
     glBufferData(GL_UNIFORM_BUFFER, sizeof(Gpu3DJob::Meta), nullptr, GL_DYNAMIC_DRAW);
+    glGenBuffers(1, &g.DivTableMemory);
+    {
+        u32 t[256 * 1];
+        for (int i = 0; i < 256; i++) t[i] = ComputeRendererShaders::DivStartTable[i];
+        glBindBuffer(GL_UNIFORM_BUFFER, g.DivTableMemory);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof t, t, GL_STATIC_DRAW);
+    }
     glGenSamplers(9, g.Samplers);
     for (u32 jj = 0; jj < 3; jj++)
         for (u32 i = 0; i < 3; i++) {
@@ -460,6 +473,14 @@ void ComputeGpuRenderer3D::Thread() {
                      "%.0f work tiles (of %d), %lu textures decoded, %d polys\n",
                      stN, stCpu / 1e6 / stN, stGpu / 1e6 / stN, stRead / 1e6 / stN, stMaxAll / 1e6, (double)stWork / stN,
                      g.MaxWorkTiles, g.Decoded, j.npolys);
+                if (Prof && PhaseN) {
+                    std::string f;
+                    for (int k = 0; k < 6; k++) { char b[32]; snprintf(b, sizeof b, " %.2f", PhaseNs[k] / 1e6 / PhaseN); f += b; PhaseNs[k] = 0; }
+                    char fq[32] = "";
+                    if (FILE* q = fopen("/sys/class/devfreq/fde60000.gpu/cur_freq", "r")) { if (!fgets(fq, sizeof fq, q)) fq[0] = 0; fclose(q); }
+                    GLOG("[gpu3d-prof] ms/frame: spans%s (bin, sort, raster, depthblend, final in order after spans); variants %u; GPU Hz %s", f.c_str(), LastVariants, fq);
+                    PhaseN = 0;
+                }
                 stCpu = stGpu = stRead = stMaxAll = stWork = 0;
                 stN = 0;
                 g.Decoded = 0;
@@ -810,6 +831,7 @@ void ComputeGpuRenderer3D::GLFrame(Gpu3DJob& jb) {
     const u32 dispcnt = jb.dispcnt;
     Gpu3DJob::Meta meta = jb.meta;
     meta.NumVariants = numVariants;
+    LastVariants = numVariants;
     // the snapshot and the flat VRAM are no longer read: the emulator's thread may go on to the next frame
     {
         std::lock_guard<std::mutex> l(M);
@@ -835,7 +857,9 @@ void ComputeGpuRenderer3D::GLFrame(Gpu3DJob& jb) {
     glBindBuffer(GL_UNIFORM_BUFFER, g.MetaUniformMemory);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof meta, &meta);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, g.MetaUniformMemory);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 1, g.DivTableMemory);
 
+    Phase(-1);
     glUseProgram(g.ShaderClearCoarseBinMask);
     glDispatchCompute(g.TilesPerLine * g.TileLines / g.ClearCoarseBinMaskLocalSize, 1, 1);
     if (numYSpans > 0) {
@@ -844,9 +868,11 @@ void ComputeGpuRenderer3D::GLFrame(Gpu3DJob& jb) {
         glUseProgram(g.ShaderInterpXSpans[wbuffer]);
         glDispatchCompute((numSetupIndices + 31) / 32, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+        Phase(0);
         glUseProgram(g.ShaderBinCombined);
         glDispatchCompute((npolys + 31) / 32, g.ScreenWidth / g.CoarseTileW, g.ScreenHeight / g.CoarseTileH);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+        Phase(1);
         glUseProgram(g.ShaderCalculateWorkListOffset);
         glDispatchCompute((numVariants + 31) / 32, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
@@ -854,6 +880,7 @@ void ComputeGpuRenderer3D::GLFrame(Gpu3DJob& jb) {
         glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, g.BinResultMemory);
         glDispatchComputeIndirect(offsetof(Gpu3DGL::BinResultHeader, SortWorkWorkCount));
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+        Phase(2);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D_ARRAY, g.DummyCapture);
         glActiveTexture(GL_TEXTURE2);
@@ -894,6 +921,7 @@ void ComputeGpuRenderer3D::GLFrame(Gpu3DJob& jb) {
         }
     }
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    Phase(3);
     glBindSampler(0, 0);
     glBindSampler(1, 0);
     glActiveTexture(GL_TEXTURE0);
@@ -905,6 +933,7 @@ void ComputeGpuRenderer3D::GLFrame(Gpu3DJob& jb) {
     glUseProgram(g.ShaderDepthBlend[wbuffer]);
     glDispatchCompute(g.ScreenWidth / g.TileSize, g.ScreenHeight / g.TileSize, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    Phase(4);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, g.OutMemory);
     u32 fp = 0;
     if (dispcnt & (1 << 4)) fp |= 4;
@@ -913,6 +942,8 @@ void ComputeGpuRenderer3D::GLFrame(Gpu3DJob& jb) {
     glUseProgram(g.ShaderFinalPass[fp]);
     glDispatchCompute(g.ScreenWidth / 32, g.ScreenHeight, 1);
     glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    Phase(5);
+    PhaseN++;
     glFlush();
 }
 

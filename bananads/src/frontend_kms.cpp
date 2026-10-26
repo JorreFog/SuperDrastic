@@ -1562,6 +1562,12 @@ int run_kms(Emu& emu, const Config& cfg) {
         // the same, byte for byte (shader.c)
         shader_fast = cfg.flag("kms.shader_fast", true) ? 1 : 0;
         dp.gpu_floor_mhz = cfg.num("kms.gpu_floor_mhz", -1);
+        // render.gpu3d: the GPU draws the 3D layer: its clock held at kms.gpu_floor_mhz (auto: 800, the top; the
+        // devfreq governor is powersave on BananaOS, i.e. the floor is the clock)
+        if (emu.gpu3d()) {
+            if (dp.gpu_floor_mhz < 0) dp.gpu_floor_mhz = 800;
+            dp.gpu_floor(true);
+        }
         clear_first = cfg.flag("kms.shader_clear", true) ? 1 : 0;
     }
     // kms.commit_thread (Display::committer): blocking commits on a real-time thread of their own. auto (the default):

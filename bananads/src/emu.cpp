@@ -1115,6 +1115,18 @@ bool Emu::load_rom(const std::string& path) {
         ComputeGpuRenderer3D::WorkTiles = (int)cfg_.num("render.gpu3d_worktiles", 8);
         ComputeGpuRenderer3D::Hires = (int)cfg_.num("render.gpu3d_hires", 0);
         ComputeGpuRenderer3D::Stats = (int)cfg_.num("render.gpu3d_stats", 0);
+        ComputeGpuRenderer3D::Prof = (int)cfg_.num("render.gpu3d_prof", 0);
+        {   // render.gpu3d_env (a measurement aid): NAME=value,NAME=value set before the GL driver loads (Mesa debug)
+            const std::string e = cfg_.str("render.gpu3d_env", "");
+            for (size_t i = 0; i < e.size();) {
+                size_t k = e.find(',', i);
+                if (k == std::string::npos) k = e.size();
+                const std::string kv = e.substr(i, k - i);
+                const size_t eq = kv.find('=');
+                if (eq != std::string::npos) setenv(kv.substr(0, eq).c_str(), kv.substr(eq + 1).c_str(), 1);
+                i = k + 1;
+            }
+        }
         auto r = std::make_unique<ComputeBananaRenderer>(*nds_, scale);
         if (r->Ok()) {
             nds_->SetRenderer(std::move(r));

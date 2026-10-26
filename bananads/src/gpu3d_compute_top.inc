@@ -123,7 +123,7 @@ struct Gpu3DGL {
     GLuint ShaderClearCoarseBinMask, ShaderClearIndirectWorkCount, ShaderCalculateWorkListOffset, ShaderSortWork;
     GLuint ShaderFinalPass[8];
     GLuint YSpanIndicesMemory, YSpanSetupMemory, XSpanSetupMemory, BinResultMemory, RenderPolygonMemory, WorkDescMemory;
-    GLuint TileMemory[3], FinalTileMemory, OutMemory, MetaUniformMemory;
+    GLuint TileMemory[3], FinalTileMemory, OutMemory, MetaUniformMemory, DivTableMemory;
     GLuint Samplers[9];
     GLuint ClearBitmapTex[2];
     GLuint DummyCapture;
