@@ -606,6 +606,20 @@ RTC 24k, `StartScanline` 29k). None of this is measured on the device; qemu coun
 - Expected on the device: ~1.2% of the thread is these paths, -60..70% of it: **+0.6..0.8%**.
   `EXTRA="--set jit.wram7fast=off"` against plain.
 
+### One 2D job per line, unit B's unchanged lines cached, the 2x output in one pass (`render.2d_merge`, `render.2d_skip`; 2026-10-26 night run, P7; no melonDS patch)
+
+- `render.2d_merge`: `BananaRenderer::Submit`'s store-release per job was 0.93% of the emulator's thread in
+  HeartGold's grass bench (P1's profile: 1.0% on the instruction after the `stlr`, waiting for the job's stores into a
+  2.5 MB ring). Now the scanline and the sprite line `StartHBlank` prepares after it are one job, the head is published
+  when the 2D thread is woken, and the job is ~0.5 KB: Submit 0.07%. `render.2d_skip`: unit B (HeartGold's static touch
+  menu) draws into a 192-line cache; a line is drawn again only when one of its inputs changed (the registers with
+  `Prepare*`'s flags, the sprite line before it, the copy log's records that change unit B's copies byte for byte, the
+  engine's epoch): 99.4% of unit B's lines come from the cache. 2x output: `WriteZip`/`WriteDouble` fuse WriteLine with
+  the row interleave/doubling (byte-exact under qemu on 40k random lines).
+- Device (PIN=1 FF=1 30 s, alternated): FF throughput unchanged within noise (base 112.9-114.4, P7 112.1-113.6
+  emulated/s); `bananads-2d` 34.3% -> 25.3% of a core, the emulator's CPU per frame -1.3%. A saving of CPU and heat,
+  not of FF speed: the emulator's thread is bound by its own work (JIT, geometry, scheduler).
+
 ### The 2D job ring's counters on cache lines of their own (`render.2d_ring`, default `split`; no melonDS patch)
 
 - On the device `BananaRenderer::Submit` is 0.54% of the thread for 383 jobs a frame: ~420 cycles a call for ~10
