@@ -1166,6 +1166,7 @@ bool Emu::load_rom(const std::string& path) {
     // render.2d_skip (on): with the 2D thread, unit B's lines whose registers and memory are as when last drawn come
     // from a line cache instead of being drawn again (the copy log's records compared byte for byte). Same pictures
     if (banana2d) banana_->SetSkip(cfg_.flag("render.2d_skip", true));
+    if (banana2d) banana_->SetOutSkip(cfg_.flag("render.2d_out_skip", true));
     // render.2d_test_delay (tests only, default 0): the 2D thread sleeps this many microseconds after each job, so that
     // it falls behind and the job ring and the copy log fill: the checks then reach their full paths
     if (banana2d) banana_->SetTestDelay((u32)cfg_.num("render.2d_test_delay", 0));
@@ -1403,6 +1404,13 @@ void Emu::wait_frame(uint32_t fence) const {
 #endif
 }
 
+void Emu::output_touched(const void* buf) {
+#ifdef BANANADS_2D
+    if (banana_) banana_->OutputTouched(buf);
+#else
+    (void)buf;
+#endif
+}
 bool Emu::draw_into(uint32_t* top, uint32_t* bottom) {
 #ifdef BANANADS_2D
     if (!banana_) return false;

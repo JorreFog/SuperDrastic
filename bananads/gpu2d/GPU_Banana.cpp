@@ -88,7 +88,10 @@ void BananaRenderer::SetOutput(u32* top, u32* bottom)
     // the frontend's buffers going away (null): with render.2d_lazy the 2D thread may still be drawing the last
     // frame into them, so it finishes first (a quit without the resume state's drain wrote into unmapped memory)
     if (!top)
+    {
         Drain2D();
+        if (OutSkipping) OutReset();   // (the 2D thread is idle: drained)
+    }
     Out[0] = top;
     Out[1] = bottom;
     if (!top)
@@ -761,6 +764,9 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
     job.Kind = ScanBit;
     job.DstA = LineDst(GPU.ScreenSwap ? 0 : 1, line);
     job.DstB = LineDst(GPU.ScreenSwap ? 1 : 0, line);
+    job.BaseA = Out[GPU.ScreenSwap ? 0 : 1];
+    job.BaseB = Out[GPU.ScreenSwap ? 1 : 0];
+    job.Row = line;
     job.ScreensEnabled = GPU.ScreensEnabled;
 
     // the position used for drawing operations is based on VCOUNT
@@ -961,7 +967,83 @@ const u32* BananaRenderer::DrawBCached(Job& job, BananaRenderer2D& b)
     }
     b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0], nullptr, dst);
     memcpy(&k, &cur, sizeof(k));
+    if (VerB) VerB[job.Line] = ++VerCtr;
     return dst;
+}
+
+// ---- render.2d_out_skip (the 2D thread, but OutputTouched) ----
+
+void BananaRenderer::OutReset()
+{
+    if (!OutSlots)
+        return;
+    for (int i = 0; i < 8; i++)
+    {
+        OutSlots[i].Base = nullptr;
+        OutSlots[i].Seen = OutSlots[i].Touch.load(std::memory_order_acquire);
+        memset(OutSlots[i].K, 0, sizeof(OutSlots[i].K));
+    }
+    OutNext = 0;
+}
+
+BananaRenderer::OutSlot* BananaRenderer::FindOut(u32* base, bool make)
+{
+    for (int i = 0; i < 8; i++)
+        if (OutSlots[i].Base == base)
+            return &OutSlots[i];
+    if (!make)
+        return nullptr;
+    OutSlot* s = &OutSlots[OutNext++ & 7];   // (more buffers than 8: the oldest forgotten, its rows drawn again)
+    s->Base = base;
+    s->Seen = s->Touch.load(std::memory_order_acquire);
+    memset(s->K, 0, sizeof(s->K));
+    return s;
+}
+
+void BananaRenderer::OutForget(u32* base, u32 row)
+{
+    if (!OutSkipping || Sc < 3 || !base || row >= 192)
+        return;
+    if (OutSlot* s = FindOut(base, false))
+        s->K[row].Valid = 0;
+}
+
+// true: unit B's line is already in the buffer's row (written from the same cached line, brightness and display bit,
+// with nothing else written there since): EmitB isn't needed. Else the key is recorded for the EmitB that follows
+bool BananaRenderer::OutSkipB(const Job& job, const u32* srcB)
+{
+    if (!OutSkipping || Sc < 3 || !job.BaseB || job.Row >= 192)
+        return false;
+    OutSlot* s = FindOut(job.BaseB, true);
+    u32 t = s->Touch.load(std::memory_order_acquire);
+    if (t != s->Seen)
+    {
+        memset(s->K, 0, sizeof(s->K));
+        s->Seen = t;
+    }
+    OutKey& k = s->K[job.Row];
+    if (!srcB || job.Row != job.Line)
+    {
+        k.Valid = 0;
+        return false;
+    }
+    OutKey cur{ VerB[job.Line], job.BrightnessB, (u8)((job.Regs[1].DispCnt >> 16) & 1), 1 };
+    if (k.Valid && k.Ver == cur.Ver && k.Bright == cur.Bright && k.On == cur.On)
+    {
+        StatOutSkipped++;
+        return true;
+    }
+    k = cur;
+    return false;
+}
+
+void BananaRenderer::OutputTouched(const void* base)
+{
+    if (!OutSlots)
+        return;
+    for (int i = 0; i < 8; i++)
+        if ((const void*)OutSlots[i].Base == base)
+            OutSlots[i].Touch.fetch_add(1, std::memory_order_acq_rel);
 }
 
 void BananaRenderer::ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRenderer2D& b, bool doA)
@@ -976,20 +1058,33 @@ void BananaRenderer::ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRender
         else
             b.DrawScanlineFrom(job.Line, job.Regs[1], job.Q3D[0]);
 
+        OutForget(job.BaseA, job.Row);   // (unit A's row, drawn here or on the emulator's thread)
         if (job.ScreensEnabled)
         {
             if (doA) EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
-            EmitB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB, srcB);
+            if (!OutSkipB(job, srcB))
+                EmitB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB, srcB);
+            else if (Banana2DVerify)
+            {
+                // (render.2d_verify: the row as EmitB would write it, against what the buffer holds)
+                static thread_local std::unique_ptr<u32[]> ref;
+                if (!ref) ref = std::make_unique<u32[]>(256 * 16);
+                EmitB(ref.get(), job.Regs[1].DispCnt, job.BrightnessB, srcB);
+                Banana2DVerifyCount(2, memcmp(ref.get(), job.DstB, 256 * NQ * sizeof(u32)) == 0);
+            }
         }
         else
         {
             if (doA) Fill(job.DstA, 0xFF000000);
+            OutForget(job.BaseB, job.Row);
             Fill(job.DstB, 0xFF000000);
         }
     }
     else
     {
         u32 c = job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000;
+        OutForget(job.BaseA, job.Row);
+        OutForget(job.BaseB, job.Row);
         if (doA) Fill(job.DstA, c);
         Fill(job.DstB, c);
     }
@@ -1058,6 +1153,17 @@ void BananaRenderer::SetThreaded2D(bool on)
     }
     if (Skipping)
         memset(KeysB.get(), 0, 192 * sizeof(LineKey));  // (Valid 0: nothing cached)
+    OutSkipping = Skipping && OutSkipOn;
+    if (OutSkipping && !OutSlots)
+    {
+        OutSlots = std::make_unique<OutSlot[]>(8);
+        VerB = std::make_unique<u64[]>(192);
+    }
+    if (OutSkipping)
+    {
+        OutReset();
+        memset(VerB.get(), 0, 192 * sizeof(u64));
+    }
     memset(&SprKeyB, 0, sizeof(SprKeyB));
     KickPending = false;
     Quit = false;
@@ -1088,6 +1194,10 @@ void BananaRenderer::StopWorker()
                   "log, %llu waits for the thread (capture, full ring or log), %llu of unit B's lines from its cache (render.2d_skip)\n",
                   (unsigned long long)StatJobs, (unsigned long long)StatInPlace, StatLogBytes / 1048576.0,
                   (unsigned long long)StatWaits, (unsigned long long)StatSkipped);
+    if (OutSkipping)
+        Platform::Log(Platform::LogLevel::Info, "[2d] %llu of unit B's lines already in the frontend's buffer, not written "
+                      "again (render.2d_out_skip)\n", (unsigned long long)StatOutSkipped);
+    OutSkipping = false;
 }
 
 // the emulator's thread: a copy for the line being prepared, applied by Execute before it is drawn

@@ -82,6 +82,7 @@ public:
     // The same jobs in the same order, so the same pictures. Takes effect when the 2D thread starts.
     void SetSplitRing(bool on) { SplitRing = on; }
     void SetMerge(bool on) { Merge = on; }
+    void SetOutSkip(bool on) { OutSkipOn = on; }  // render.2d_out_skip; takes effect when the 2D thread starts
     void SetSkip(bool on) { SkipLines = on; }  // render.2d_skip; takes effect when the 2D thread starts  // render.2d_merge; takes effect when the 2D thread starts
     // render.2d_test_delay (tests only): the 2D thread sleeps this many microseconds after each job, so that it falls
     // behind and the ring and the log fill (their full paths are rare otherwise). The same pictures, slower.
@@ -107,6 +108,9 @@ public:
     // frames; that frame's lines all go there, and GetFramebuffers returns them once it is finished. Null, null: the
     // renderer's own framebuffers again (the last frame drawn elsewhere is forgotten).
     void SetOutput(u32* top, u32* bottom);
+    // render.2d_out_skip: the frontend wrote into one of SetOutput's buffers (an overlay, a copied frame, a new buffer):
+    // its rows are drawn again in full. Any thread
+    void OutputTouched(const void* base);
 
     bool Drain2D();   // wait until the 2D thread has drawn every line handed to it (false: it already had)
     // render.2d_fence_wait: the waits for the 2D thread (a frame's fence, a drain, a full ring or log) block on a
@@ -160,6 +164,9 @@ private:
         unsigned RowsGen;
         u32* DstA;
         u32* DstB;
+        u32* BaseA;                 // render.2d_out_skip: the frontend's buffers DstA/DstB are in (Out; null: not drawing
+        u32* BaseB;                 // into them) and the DS line's row in them
+        u32 Row;
         u64 LogEndScan;             // (merged) the copy log up to here is applied before the scanline is drawn
         u64 LogEnd;                 // the copy log up to here is applied before the job (its sprite line) is drawn
         const u32* Q3D[16];          // where the drawing reads the 3D layer's line: Line3D's, or the 3D frame's rows (render.3d_share)
@@ -190,6 +197,22 @@ private:
     u64 GenB = 0;                       // records of the copy log that changed unit B's copies
     u64 StatSkipped = 0;
     const u32* DrawBCached(Job& job, BananaRenderer2D& b);
+    // render.2d_out_skip (default on; at 3x/4x with render.2d_skip, drawing into the frontend's buffers): unit B's line
+    // isn't written again into a buffer whose row already holds it. Per buffer (the frontend's slots, up to 8) and
+    // row: the cached line's version (VerB, new each time DrawBCached draws the line), brightness and display bit it
+    // was written with. Unit A's writes, Fill and the frontend's own (OutputTouched) make a row/buffer unknown again
+    bool OutSkipOn = true, OutSkipping = false;
+    struct OutKey { u64 Ver; u16 Bright; u8 On; u8 Valid; };
+    struct OutSlot { u32* Base = nullptr; std::atomic<u32> Touch{0}; u32 Seen = 0; OutKey K[192]; };
+    std::unique_ptr<OutSlot[]> OutSlots;   // [8]
+    u32 OutNext = 0;
+    std::unique_ptr<u64[]> VerB;           // [192]
+    u64 VerCtr = 0;
+    u64 StatOutSkipped = 0;
+    OutSlot* FindOut(u32* base, bool make);
+    bool OutSkipB(const Job& job, const u32* srcB);
+    void OutForget(u32* base, u32 row);
+    void OutReset();
     // a whole frame's jobs (192 lines and 191 sprite lines): the emulator's thread doesn't wait for a 2D thread that
     // lags within the frame, which catches up in VBlank (drained at the frame's end, SwapBuffers)
     static constexpr u32 NumJobs = 512;
