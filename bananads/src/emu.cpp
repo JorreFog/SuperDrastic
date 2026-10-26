@@ -1,6 +1,9 @@
 #include "emu.h"
 #ifdef BANANADS_GENGIS
 #include "gengis_renderer.h"
+#ifdef BANANADS_GPU3D
+#include "gpu3d_compute.h"
+#endif
 #endif
 
 #include <sys/stat.h>
@@ -1103,6 +1106,27 @@ bool Emu::load_rom(const std::string& path) {
 #ifdef BANANADS_GENGIS
     // render.renderer: gengis (the default: Gengis Engine, SuperDrastic's rasterizer, on render.gengis_threads
     // threads) or soft (melonDS's software renderer, render.threaded)
+    // render.gpu3d: compute (experimental, default off) draws the 3D layer on the GPU at render.scale 3 and 4
+    // (gpu3d_compute.h: melonDS's compute renderer on GLES 3.1), with the Banana 2D engine; Gengis otherwise or when
+    // the GPU can't be used. The presenter's shader is then off (kms.shader none: the GPU does the 3D instead)
+    gpu3d_ = false;
+#if defined(BANANADS_2D) && defined(BANANADS_GPU3D)
+    if (cfg_.str("render.gpu3d", "off") == "compute" && banana2d && scale >= 3) {
+        ComputeGpuRenderer3D::WorkTiles = (int)cfg_.num("render.gpu3d_worktiles", 8);
+        ComputeGpuRenderer3D::Hires = (int)cfg_.num("render.gpu3d_hires", 0);
+        ComputeGpuRenderer3D::Stats = (int)cfg_.num("render.gpu3d_stats", 0);
+        auto r = std::make_unique<ComputeBananaRenderer>(*nds_, scale);
+        if (r->Ok()) {
+            nds_->SetRenderer(std::move(r));
+            scale_ = scale;
+            gpu3d_ = true;
+            Log(LogLevel::Info, "[gpu3d] 3D on the GPU (compute) at %dx\n", scale);
+        } else
+            Log(LogLevel::Warn, "[gpu3d] the GPU renderer didn't start: Gengis Engine instead\n");
+    }
+    if (gpu3d_) {
+    } else
+#endif
     if (cfg_.str("render.renderer", "gengis") == "gengis") {
         const int threads = (int)cfg_.num("render.gengis_threads", 3);
         const bool defer = cfg_.flag("render.gengis_defer", false);

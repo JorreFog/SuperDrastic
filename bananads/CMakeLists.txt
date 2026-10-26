@@ -246,6 +246,11 @@ if(DRM_FOUND AND BANANADS_KMS)
     target_sources(bananads PRIVATE src/frontend_kms.cpp src/cpugov.cpp src/menu.c src/lang.c src/shader.c src/cheats.cpp src/screenshot.cpp)
     target_link_libraries(bananads PRIVATE PkgConfig::DRM)
     target_compile_definitions(bananads PRIVATE BANANADS_KMS=1)
+    if(BANANADS_GENGIS AND BANANADS_2D)
+        # render.gpu3d=compute: the GLES 3.1 compute renderer (EGL/GLES loaded at run time)
+        target_sources(bananads PRIVATE src/gpu3d_compute.cpp)
+        target_compile_definitions(bananads PRIVATE BANANADS_GPU3D=1)
+    endif()
     # RetroAchievements (src/ra.c): SuperDrastic's rcheevos (../src/third_party/rcheevos, the same repository), a
     # library of its own so its C keeps its own warnings; libcurl is dlopen()ed at run time
     set(RC ${CMAKE_CURRENT_SOURCE_DIR}/../src/third_party/rcheevos)

@@ -64,7 +64,8 @@ public:
     // 256x192 XRGB8888 each (times scale() both ways), valid until the next run_frame().
     const uint32_t* top() const;
     const uint32_t* bottom() const;
-    int scale() const { return scale_; }  // render.scale: 1, or 2 with Gengis Engine and the Banana 2D engine
+    int scale() const { return scale_; }
+    bool gpu3d() const { return gpu3d_; }  // render.gpu3d: the 3D layer drawn on the GPU  // render.scale: 1, or 2 with Gengis Engine and the Banana 2D engine
     // The next frames drawn straight into these instead (frontend=kms: the scanout buffers), a screen at scale() each
     // with rows packed, only ever written; top() and bottom() then return them once the frame is finished. Set
     // between frames. False when the renderer can't (only the Banana 2D engine's can); null, null: back to its own.
@@ -164,6 +165,7 @@ private:
     bool shut_ = false;  // shutdown() done
     bool local_ = false;
     int scale_ = 1;
+    bool gpu3d_ = false;
     melonDS::BananaRenderer* banana_ = nullptr;  // the renderer, when it's the Banana 2D engine's
     std::unique_ptr<uint8_t[]> save_copy_;
     uint32_t save_len_ = 0;
