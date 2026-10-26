@@ -45,12 +45,21 @@ if(BANANADS_LTO)
     add_compile_options(-flto=auto)
     add_link_options(-flto=auto)
 endif()
+# PGO (BANANADS_PGO_DIR, default off; WIP, M6/MK4x): GCC -fprofile-use with gcda collected on the panels by a
+# -fprofile-generate build (see docs/PERF.md "PGO"). The gcda names carry the object paths and the checksums the source
+# paths, so the use build must be configured in the SAME obj dir (and melonDS tree) as the instrumented one.
+set(BANANADS_PGO_DIR "" CACHE STRING "directory of .gcda from an instrumented run (empty: off)")
+if(BANANADS_PGO_DIR)
+    add_compile_options(-fprofile-use=${BANANADS_PGO_DIR} -fprofile-correction -fprofile-partial-training -Wno-missing-profile)
+    add_link_options(-fprofile-use=${BANANADS_PGO_DIR} -fprofile-correction -fprofile-partial-training -Wno-missing-profile)
+endif()
 # The hot functions first in .text (BANANADS_TEXT_ORDER, a GNU ld --section-ordering-file listing them hottest first, made
 # from device profiles by tools/hotorder.py): the emulator thread's hot code on ~40 4 KB pages instead of ~120, so fewer
 # iTLB and L3 misses, which cost the most at 4x when the render threads stream through the shared L3. The same code,
 # only placed elsewhere (a function's own instructions don't change: every branch between functions is a bl/b with
 # its offset); off (empty) builds as before.
-set(BANANADS_TEXT_ORDER "${CMAKE_CURRENT_SOURCE_DIR}/text-order.ld" CACHE STRING "GNU ld section ordering file for the hot functions (empty: off)")
+# M6 measured it on the MKDS race (4x, pure emulation): within noise (iTLB -5..-11%, L1I unchanged): default off.
+set(BANANADS_TEXT_ORDER "" CACHE STRING "GNU ld section ordering file for the hot functions (e.g. text-order.ld; empty: off)")
 if(BANANADS_TEXT_ORDER AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
     add_compile_options(-ffunction-sections)
     add_link_options(-ffunction-sections "-Wl,--section-ordering-file=${BANANADS_TEXT_ORDER}")

@@ -1385,3 +1385,17 @@ audio test j4-ntpc1 PASS, tap identical over 67 s. Device in-run A/B (PIN=1 FF=1
 frames): median 124.0 -> 124.4 and 125.0 -> 126.0, mean 122.1/121.9 and 124.1 -> 124.5: within noise (~+0.3%).
 It also lets these loops be LOOPREGS (LoopMode) loops once `LoopBlock` stops refusing FollowCondTaken (experiment
 0363, `MELONDS_JIT_LOOPFCT=1`, debug: with LOOPREGS on, in-run A/B median 125.0 -> 126.0).
+
+## MKDS at 4x: the emulator thread (2026-10-26, MK4x, M6; WIP, nothing default on)
+
+- Same race frames at 2x vs 4x (prof.pmu): the emu thread 20.5M cycles/frame (IPC 0.45) vs 38.0M (IPC 0.34); with
+  `render.gengis_help=0` (no bins on the emu thread) still 32.6M (IPC 0.32) for +1.2M instructions: the emulation
+  itself runs ~1.5x slower at 4x from shared-L3/DRAM contention with the render threads (L1I ~13.5 misses/1000
+  instructions). Bins drawn on the emu thread: ~15% of it at 4x.
+- `BANANADS_TEXT_ORDER` (hot functions first, tools/hotorder.py + text-order.ld): within noise. Off.
+- PGO (`BANANADS_PGO_DIR`): instrumented build (`-fprofile-generate=/tmp/bdpgo -fprofile-update=single`) run on the
+  panels with `BANANADS_QUIT_FAST=off` (the gcda are written at exit): MKDS race 4x + 2x + HG grass, 40 s each; use
+  build `-fprofile-use -fprofile-correction -fprofile-partial-training`. MKDS race 4x none, PIN=1, one pair:
+  42.03 -> 44.73 fps (lost 521 -> 473), emu thread 38.7M -> 36.6M cycles/frame; the emulated sound tap identical
+  over the common length (32 s). Not yet gated (HG audiotest, j6-regress) and not reproducible in Buildroot yet
+  (gcda names/checksums tied to the obj dir and melonDS tree paths: needs -fprofile-prefix-path or a fixed path).
