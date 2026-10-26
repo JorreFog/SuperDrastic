@@ -1,0 +1,353 @@
+diff --git a/src/ARM.cpp b/src/ARM.cpp
+index 22195ff..99188fa 100644
+--- a/src/ARM.cpp
++++ b/src/ARM.cpp
+@@ -31,6 +31,10 @@
+ 
+ namespace melonDS
+ {
++#ifdef MELONDS_J3STATS
++extern u64 J3ExitStats[64];
++extern bool J3Stats;
++#endif
+ using Platform::Log;
+ using Platform::LogLevel;
+ 
+@@ -669,6 +673,9 @@ void ARMv5::Execute()
+                 ARM_Dispatch(this, block, NDS.JIT.Memory.FastMemStart(0));
+             else
+                 NDS.JIT.CompileBlock(this);
++#ifdef MELONDS_J3STATS
++            if (J3Stats) J3ExitStats[28 + 32 * 0]++;
++#endif
+ 
+             if (StopExecution)
+             {
+@@ -810,6 +817,9 @@ void ARMv4::Execute()
+                 ARM_Dispatch(this, block, NDS.JIT.Memory.FastMemStart(1));
+             else
+                 NDS.JIT.CompileBlock(this);
++#ifdef MELONDS_J3STATS
++            if (J3Stats) J3ExitStats[28 + 32 * 1]++;
++#endif
+ 
+             if (StopExecution)
+             {
+diff --git a/src/ARMJIT_A64/ARMJIT_ALU.cpp b/src/ARMJIT_A64/ARMJIT_ALU.cpp
+index 4b1ca1f..113683b 100644
+--- a/src/ARMJIT_A64/ARMJIT_ALU.cpp
++++ b/src/ARMJIT_A64/ARMJIT_ALU.cpp
+@@ -590,7 +590,10 @@ void Compiler::A_Comp_ALUMovOp()
+     }
+ 
+     if (CurInstr.Info.Branches())
++    {
++        J3JumpKind = 3;
+         Comp_JumpTo(rd, true, S);
++    }
+ }
+ 
+ void Compiler::A_Comp_ALUTriOp()
+@@ -613,7 +616,10 @@ void Compiler::A_Comp_ALUTriOp()
+         Comp_Arithmetic(op, S, rd, rn, op2);
+ 
+     if (CurInstr.Info.Branches())
++    {
++        J3JumpKind = 3;
+         Comp_JumpTo(rd, true, S);
++    }
+ }
+ 
+ void Compiler::A_Comp_Clz()
+@@ -961,6 +967,7 @@ void Compiler::T_Comp_ALU_HiReg()
+ 
+     if (rd == 15)
+     {
++        J3JumpKind = 3;
+         Comp_JumpTo(rdMapped, false, false);
+     }
+ }
+diff --git a/src/ARMJIT_A64/ARMJIT_Branch.cpp b/src/ARMJIT_A64/ARMJIT_Branch.cpp
+index 37a549d..c5bf145 100644
+--- a/src/ARMJIT_A64/ARMJIT_Branch.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Branch.cpp
+@@ -30,6 +30,7 @@ namespace melonDS
+ template <typename T>
+ void JumpToTrampoline(T* cpu, u32 addr, bool changeCPSR)
+ {
++    if (J3Stats) J3ExitStats[24 + 32 * cpu->Num]++;
+     cpu->JumpTo(addr, changeCPSR);
+ }
+ 
+@@ -334,6 +335,7 @@ void Compiler::Comp_JumpTo(Arm64Gen::ARM64Reg addr, bool switchThumb, bool resto
+     KnownCodeValid = false;   // (the run-time jump stores them)
+     R15Stored = true;         // (and R15)
+ 
++    J3RestoreJump = restoreCPSR;
+     if (!restoreCPSR)
+     {
+         if (switchThumb)
+@@ -396,6 +398,7 @@ void Compiler::A_Comp_BranchImm()
+ void Compiler::A_Comp_BranchXchangeReg()
+ {
+     ARM64Reg rn = MapReg(CurInstr.A_Reg(0));
++    J3JumpKind = 0;
+     MOV(W0, rn);
+     if ((CurInstr.Instr & 0xF0) == 0x30) // BLX_reg
+         MOVI2R(MapReg(14), R15 - 4);
+@@ -441,6 +444,7 @@ void Compiler::T_Comp_B()
+ void Compiler::T_Comp_BranchXchangeReg()
+ {
+     bool link = CurInstr.Instr & (1 << 7);
++    J3JumpKind = 0;
+ 
+     if (link)
+     {
+@@ -473,6 +477,7 @@ void Compiler::T_Comp_BL_LONG_2()
+     s32 offset = (CurInstr.Instr & 0x7FF) << 1;
+     ADD(W0, lr, offset);
+     MOVI2R(lr, (R15 - 2) | 1);
++    J3JumpKind = 4;
+     Comp_JumpTo(W0, Num == 0 && !(CurInstr.Instr & (1 << 12)));
+ }
+ 
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 2c9e442..7652ba9 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -40,6 +40,20 @@ uint64_t melonds_jit_link[2] = {0, 0};
+ 
+ namespace melonDS
+ {
++// J3 EXITSTATS (debug, MELONDS_JIT_EXITSTATS=1): ARM9 exits counted by kind (see NDS.cpp's dump for the names)
++u64 J3ExitStats[64] = {};
++bool J3Stats = getenv("MELONDS_JIT_EXITSTATS") && atoi(getenv("MELONDS_JIT_EXITSTATS"));
++
++void Compiler::J3Count(int k, ARM64Reg a, ARM64Reg b)
++{
++    // (leaves NZCV as it is)
++    if (!J3Stats)
++        return;
++    MOVP2R(EncodeRegTo64(a), &J3ExitStats[k + 32 * Num]);
++    LDR(INDEX_UNSIGNED, EncodeRegTo64(b), EncodeRegTo64(a), 0);
++    ADD(EncodeRegTo64(b), EncodeRegTo64(b), 1);
++    STR(INDEX_UNSIGNED, EncodeRegTo64(b), EncodeRegTo64(a), 0);
++}
+ 
+ /*
+ 
+@@ -972,6 +986,16 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+     // RCPSR as in memory (nothing in this block changed it: CPSR is in memory at every block's entry) needs no store
+     const int c = (OptExitStub && !CPSRDirty) ? 0 : 1;
+ 
++    if (J3Stats)
++    {
++        if (known)
++            J3Count(storeR15 && !R15Stored && knownR15 == BlockEntryR15 && thumbAfter == Thumb && OptSelfLoop ? 1 : 0);
++        else if (LastJumpViaFunc)
++            J3Count(2 + J3JumpKind);
++        else
++            J3Count(J3RestoreJump ? 7 : 8);
++    }
++
+     if (!known && LastJumpViaFunc && OptDynCache)
+     {
+         // DYNCACHE: the target's key (address | T, in W4) against the one this exit learnt; the same: ExitCheck and
+@@ -988,6 +1012,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         }
+         CMP(W4, W1);
+         FixupBranch miss = B(CC_NEQ);
++        J3Count(10);
+         BL(ExitCheck[Num][c]);
+         u8* slot = GetWriteableRWPtr();
+         u8* slotRX = (u8*)GetRXPtr();
+@@ -1005,8 +1030,10 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         {
+             CMP(W1, 2);
+             FixupBranch learn = B(CC_EQ);
++            J3Count(11);
+             B(DynExitA[Num][c]);
+             SetJumpTarget(learn);
++            J3Count(12);
+             BL(ExitCheck[Num][c]);
+             B(learnPath);
+         };
+@@ -1346,6 +1373,7 @@ void Compiler::Gen_ExitStubs(int num)
+             for (int i = 0; i < 4; i++)
+                 Write32(0xD503201F);
+         }
++        J3Count(a ? 14 : 13, X0, X1);   // (DynExit's lookup found the block)
+         ADD(X16, X17, W16, ArithOption(W16));   // + the entry's offset (uxtw)
+         BR(X16);
+         SetJumpTarget(late);
+@@ -1355,8 +1383,22 @@ void Compiler::Gen_ExitStubs(int num)
+             CBNZ(W0, resume);
+         }
+         SetJumpTarget(stop);
+-        SetJumpTarget(outside);
+-        SetJumpTarget(miss);
++        if (J3Stats)
++        {
++            FixupBranch j = B();
++            SetJumpTarget(outside);
++            J3Count(a ? 17 : 15, X0, X1);
++            FixupBranch j2 = B();
++            SetJumpTarget(miss);
++            J3Count(a ? 18 : 16, X0, X1);
++            SetJumpTarget(j);
++            SetJumpTarget(j2);
++        }
++        else
++        {
++            SetJumpTarget(outside);
++            SetJumpTarget(miss);
++        }
+         QuickTailCall(X16, ARM_Ret);
+         if (lit)
+         {
+@@ -1471,6 +1513,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+     if (it->second.lit)
+     {
+         // a DYNCACHE slot: it learns the key of the block it goes to, the one the loop dispatches now
++        if (J3Stats) J3ExitStats[29 + 32 * cpu->Num]++;
+         if (it->second.num != cpu->Num)
+             return;
+         const bool thumb = cpu->CPSR & 0x20;
+@@ -1488,6 +1531,7 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+     u32* slot = (u32*)(RWBase() + off);
+     *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
+     NDS.JIT.JitEnableExecute();
++    if (J3Stats) J3ExitStats[30 + 32 * cpu->Num]++;
+     FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
+     LinkedTo[(u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
+ }
+@@ -1515,6 +1559,7 @@ extern "C" void melonds_jit_link_pending(ARM* cpu, u8* entry)
+     u8* slot = (u8*)(uintptr_t)melonds_jit_link[0];
+     ARM* from = (ARM*)(uintptr_t)melonds_jit_link[1];
+     melonds_jit_link[0] = 0;
++    if (J3Stats) J3ExitStats[31 + 32 * cpu->Num]++;
+     if (from == cpu)
+         cpu->NDS.JIT.JITCompiler.Link(slot, cpu, entry);
+ }
+@@ -1594,6 +1639,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+         LastJumpKnown = false;
+         JumpR15Deferred = false;
+         LastJumpViaFunc = false;
++        J3RestoreJump = false;
+ 
+         CompileFunc comp = Thumb
+             ? T_Comp[CurInstr.Info.Kind]
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index b271d40..f79b90a 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -34,6 +34,9 @@
+ 
+ namespace melonDS
+ {
++extern u64 J3ExitStats[64];
++extern bool J3Stats;
++
+ class ARMJIT;
+ const Arm64Gen::ARM64Reg RMemBase = Arm64Gen::X26;
+ const Arm64Gen::ARM64Reg RCPSR = Arm64Gen::W27;
+@@ -262,6 +265,9 @@ public:
+     bool OptDynAddr = true;       // NODYNADDR: the JumpTo functions leave the address in W4 and an exit after one
+                                   // looks the block up from it (DynExitA)
+     bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
++    int J3JumpKind = 0;           // (J3 EXITSTATS: the indirect jump's kind, 0 BX, 1 LDM/POP, 2 LDR, 3 ALU, 4 BL_LONG_2)
++    bool J3RestoreJump = false;   // (J3 EXITSTATS: the jump went through C++ JumpTo with restoreCPSR)
++    void J3Count(int k, Arm64Gen::ARM64Reg a = Arm64Gen::X16, Arm64Gen::ARM64Reg b = Arm64Gen::X17);
+     bool OptDynCache = true;      // NODYNCACHE: such an exit keeps the last target it went to (its key: address | T)
+     bool OptFlagStub = true;      // NOFLAGSTUB (patch 0042): an exit through ExitCheck/ExitCheckPC with flags pending leaves
+                                   // putting them in RCPSR to the stub (ExitCheckF/ExitCheckPCF): 12 bytes less per exit
+diff --git a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+index df5131b..d8f0db9 100644
+--- a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
++++ b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+@@ -354,6 +354,7 @@ void Compiler::Comp_MemAccess(int rd, int rn, Op2 offset, int size, int flags)
+     {
+         if (size < 32)
+             Log(LogLevel::Debug, "LDR size < 32 branching?\n");
++        J3JumpKind = 2;
+         Comp_JumpTo(rdMapped, Num == 0, false);
+     }
+ }
+@@ -809,6 +810,7 @@ s32 Compiler::Comp_MemAccessBlock(int rn, BitSet16 regs, bool store, bool preinc
+     if (!store && regs[15])
+     {
+         ARM64Reg mapped = MapReg(15);
++        J3JumpKind = 1;
+         Comp_JumpTo(mapped, Num == 0, usermode);
+     }
+ 
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 5ead02b..3040651 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -47,6 +47,16 @@
+ 
+ namespace melonDS
+ {
++#ifdef JIT_ENABLED
++// J3 EXITSTATS (debug): the dispatch loop's counters only in a build with -DMELONDS_J3STATS=1
++#ifdef MELONDS_J3STATS
++#define J3STATS_ON 1
++#else
++#define J3STATS_ON 0
++#endif
++extern u64 J3ExitStats[64];   // (ARMJIT_Compiler.cpp)
++extern bool J3Stats;
++#endif
+ using namespace Platform;
+ 
+ // kMaxIterationCycles (64) is now NDS::SliceShort/SliceIdle (SetSlice). An event due less than
+@@ -1228,6 +1238,24 @@ u32 NDS::RunFrame()
+     // In the context of TASes, frame count is traditionally the primary measure of emulated time,
+     // so it needs to be tracked even if NDS is powered off.
+     NumFrames++;
++#ifdef JIT_ENABLED
++    if (J3STATS_ON && J3Stats && NumFrames % 300 == 0)
++    {
++        // J3 EXITSTATS: ARM9 exits per frame by kind over the last 300 frames
++        for (int n = 0; n < 2; n++)
++        {
++        u64* c = J3ExitStats + 32 * n;
++        Log(LogLevel::Info, "[j3stats] ARM%d per frame: known %.0f selfloop %.0f | ind BX %.0f POP/LDM %.0f LDRpc %.0f ALUpc %.0f "
++            "BL2 %.0f | restoreCPSR %.0f otherdyn %.0f | dyncache hit %.0f miss %.0f learn %.0f | DynExit found %.0f "
++            "outside %.0f miss %.0f | DynExitA found %.0f outside %.0f miss %.0f | loop: returns %.0f compiles %.0f stop %.0f "
++            "irq %.0f maskedirq %.0f halted %.0f idle %.0f JumpToC %.0f slowloop %.0f | linkpending %.0f dynlink %.0f linked %.0f\n", n ? 7 : 9,
++            c[0]/300., c[1]/300., c[2]/300., c[3]/300., c[4]/300., c[5]/300., c[6]/300., c[7]/300., c[8]/300.,
++            c[10]/300., c[11]/300., c[12]/300., c[13]/300., c[15]/300., c[16]/300., c[14]/300., c[17]/300., c[18]/300.,
++            c[20]/300., c[21]/300., c[22]/300., c[23]/300., c[25]/300., c[26]/300., c[27]/300., c[24]/300., c[28]/300., c[31]/300., c[29]/300., c[30]/300.);
++        }
++        memset(J3ExitStats, 0, sizeof(J3ExitStats));
++    }
++#endif
+     if (LagFrameFlag)
+         NumLagFrames++;
+ 
+@@ -1431,10 +1459,23 @@ template <u32 num, typename CPU>
+         if (entry >> 32 == (instrAddr | num)) [[likely]]
+             ARM_Dispatch(&cpu, (JitBlockEntry)(rxBase + (u32)entry), nds.JIT.Memory.FastMemStart(num));
+         else
++        {
++            if (J3STATS_ON && J3Stats) J3ExitStats[21 + 32 * num]++;
+             nds.JIT.CompileBlock(&cpu);
++        }
++        if (J3STATS_ON && J3Stats) J3ExitStats[20 + 32 * num]++;
+ 
+         if (cpu.StopExecution)
+         {
++            if (J3STATS_ON && J3Stats)
++            {
++                u64* c = J3ExitStats + 32 * num;
++                c[22]++;
++                if (cpu.IRQ && !(cpu.CPSR & 0x80)) c[23]++;
++                if (cpu.StopExecution == 0x100 && (cpu.CPSR & 0x80)) c[25]++;   // (only a masked IRQ)
++                if (cpu.Halted) c[26]++;
++                if (cpu.IdleLoop) c[27]++;
++            }
+             // this order is crucial otherwise idle loops waiting for an IRQ won't function
+             if (cpu.IRQ)
+                 cpu.TriggerIRQ();

@@ -1,0 +1,132 @@
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 707f0c6..74b896d 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -50,12 +50,18 @@ bool J3Stats = getenv("MELONDS_JIT_EXITSTATS") && atoi(getenv("MELONDS_JIT_EXITS
+ // while Timestamp < Target, which the stub does too (the same checks, the same block through the same lookup/link).
+ u8 J3StopMask = !getenv("MELONDS_JIT_NOSTOPMASK");
+ 
++// J3 REGIONSTUB (patch 0342, MELONDS_JIT_NOREGIONSTUB=1 off; a byte read on DynExit's outside way only): a DynExit
++// whose target is outside the CPU's lookup region does the loop's region step itself (NDS.cpp JitStubRegion: the
++// RegionPair/RegionTrio swap, else SetupExecutableRegion) and its lookup, instead of returning to the loop for both
++u8 J3RegionStub = !getenv("MELONDS_JIT_NOREGIONSTUB");
++u32 JitStubRegion(NDS* nds, u32 num, u32 instrAddr);
++
+ void Compiler::J3Count(int k, ARM64Reg a, ARM64Reg b)
+ {
+     // (leaves NZCV as it is)
+     if (!J3Stats)
+         return;
+-    MOVP2R(EncodeRegTo64(a), &J3ExitStats[k + 32 * Num]);
++    MOVP2R(EncodeRegTo64(a), &J3ExitStats[k + 32 * (J3StubNum >= 0 ? J3StubNum : Num)]);
+     LDR(INDEX_UNSIGNED, EncodeRegTo64(b), EncodeRegTo64(a), 0);
+     ADD(EncodeRegTo64(b), EncodeRegTo64(b), 1);
+     STR(INDEX_UNSIGNED, EncodeRegTo64(b), EncodeRegTo64(a), 0);
+@@ -1258,6 +1264,7 @@ void Compiler::Gen_ExitStubs(int num)
+         Write32((u32)(ret >> 32));
+     };
+ 
++    J3StubNum = num;
+     StubsStart[num * 2] = GetRXPtr();
+     if (!OptExitStub)
+     {
+@@ -1376,6 +1383,7 @@ void Compiler::Gen_ExitStubs(int num)
+             CMP(W17, W16);
+             outside = B(CC_HS);
+         }
++        const u8* lookupAt = (const u8*)GetRXPtr();   // (J3 REGIONSTUB goes on here)
+         LDR(INDEX_UNSIGNED, X16, RCPU, offsetof(ARM, FastBlockLookup));
+         LSR(W17, W17, 1);
+         LDR(X16, X16, ArithOption(X17, true));
+@@ -1411,6 +1419,33 @@ void Compiler::Gen_ExitStubs(int num)
+             CBNZ(W0, resume);
+         }
+         SetJumpTarget(toLoop);
++        if (OptExitStub)
++        {
++            // J3 REGIONSTUB: outside the region (W0 = the instruction address, x4 DynExitA's): the loop's region
++            // step, then the lookup as the loop makes it (after a successful step without a range check: the loop
++            // makes none either). The step failed: back to the loop, which tries it again and logs, as before.
++            FixupBranch j0 = B();
++            SetJumpTarget(outside);
++            MOVP2R(X16, &J3RegionStub);
++            LDRB(INDEX_UNSIGNED, W16, X16, 0);
++            FixupBranch off = CBZ(W16);
++            STP(INDEX_PRE, X0, X4, SP, -16);
++            MOV(W2, W0);
++            MOVI2R(W1, num);
++            MOVP2R(X0, &NDS);
++            QuickCallFunction(X16, JitStubRegion);
++            MOV(W16, W0);
++            LDP(INDEX_POST, X0, X4, SP, 16);
++            FixupBranch failed = CBZ(W16);
++            J3Count(a ? 19 : 9, X1, X17);   // (J3 EXITSTATS: a region step here)
++            LDR(INDEX_UNSIGNED, W16, RCPU, offsetof(ARM, FastBlockLookupStart));
++            SUB(W17, W0, W16);
++            B(lookupAt);
++            SetJumpTarget(off);
++            SetJumpTarget(failed);
++            outside = B();   // (for the stats below)
++            SetJumpTarget(j0);
++        }
+         if (J3Stats)
+         {
+             FixupBranch j = B();
+@@ -1443,7 +1478,7 @@ void Compiler::Gen_ExitStubs(int num)
+     {
+         DynExit[num][0] = DynExit[num][1];
+         DynExitBase[num][0] = DynExitBase[num][1];
+-    }
++    }    J3StubNum = -1;
+ }
+ 
+ void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index f79b90a..ed987ac 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -267,6 +267,7 @@ public:
+     bool LastJumpViaFunc = false; // the instruction being compiled jumped through a JumpTo function
+     int J3JumpKind = 0;           // (J3 EXITSTATS: the indirect jump's kind, 0 BX, 1 LDM/POP, 2 LDR, 3 ALU, 4 BL_LONG_2)
+     bool J3RestoreJump = false;   // (J3 EXITSTATS: the jump went through C++ JumpTo with restoreCPSR)
++    int J3StubNum = -1;           // (J3 EXITSTATS: the CPU of the stubs being generated)
+     void J3Count(int k, Arm64Gen::ARM64Reg a = Arm64Gen::X16, Arm64Gen::ARM64Reg b = Arm64Gen::X17);
+     bool OptDynCache = true;      // NODYNCACHE: such an exit keeps the last target it went to (its key: address | T)
+     bool OptFlagStub = true;      // NOFLAGSTUB (patch 0042): an exit through ExitCheck/ExitCheckPC with flags pending leaves
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 3040651..619726b 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -1247,10 +1247,10 @@ u32 NDS::RunFrame()
+         u64* c = J3ExitStats + 32 * n;
+         Log(LogLevel::Info, "[j3stats] ARM%d per frame: known %.0f selfloop %.0f | ind BX %.0f POP/LDM %.0f LDRpc %.0f ALUpc %.0f "
+             "BL2 %.0f | restoreCPSR %.0f otherdyn %.0f | dyncache hit %.0f miss %.0f learn %.0f | DynExit found %.0f "
+-            "outside %.0f miss %.0f | DynExitA found %.0f outside %.0f miss %.0f | loop: returns %.0f compiles %.0f stop %.0f "
++            "outside %.0f miss %.0f | DynExitA found %.0f outside %.0f miss %.0f | regionstep %.0f %.0f | loop: returns %.0f compiles %.0f stop %.0f "
+             "irq %.0f maskedirq %.0f halted %.0f idle %.0f JumpToC %.0f slowloop %.0f | linkpending %.0f dynlink %.0f linked %.0f\n", n ? 7 : 9,
+             c[0]/300., c[1]/300., c[2]/300., c[3]/300., c[4]/300., c[5]/300., c[6]/300., c[7]/300., c[8]/300.,
+-            c[10]/300., c[11]/300., c[12]/300., c[13]/300., c[15]/300., c[16]/300., c[14]/300., c[17]/300., c[18]/300.,
++            c[10]/300., c[11]/300., c[12]/300., c[13]/300., c[15]/300., c[16]/300., c[14]/300., c[17]/300., c[18]/300., c[9]/300., c[19]/300.,
+             c[20]/300., c[21]/300., c[22]/300., c[23]/300., c[25]/300., c[26]/300., c[27]/300., c[24]/300., c[28]/300., c[31]/300., c[29]/300., c[30]/300.);
+         }
+         memset(J3ExitStats, 0, sizeof(J3ExitStats));
+@@ -1429,6 +1429,19 @@ bool NDS::SwapCodeRegionTrio(u32 num, u32 instrAddr) noexcept
+     return num == 0 ? SwapCodeRegion3<0>(*this, ARM9, instrAddr) : SwapCodeRegion3<1>(*this, ARM7, instrAddr);
+ }
+ 
++// J3 REGIONSTUB (patch 0342): ExecuteJITInline's region step below for DynExit (ARMJIT_Compiler.cpp), whose target
++// is outside the CPU's lookup region: 1 when the region now is the target's (then the stub looks the block up as the
++// loop would), 0 when both failed (then the stub returns to the loop, which tries the same again)
++u32 JitStubRegion(NDS* nds, u32 num, u32 instrAddr)
++{
++    NDS& n = *nds;
++    if (num == 0)
++        return (n.RegionPair && (n.RegionTrio ? SwapCodeRegion3<0>(n, n.ARM9, instrAddr) : SwapCodeRegion<0>(n, n.ARM9, instrAddr)))
++            || SetupExecutableRegionFor<0>(n, n.ARM9, instrAddr);
++    return (n.RegionPair && (n.RegionTrio ? SwapCodeRegion3<1>(n, n.ARM7, instrAddr) : SwapCodeRegion<1>(n, n.ARM7, instrAddr)))
++        || SetupExecutableRegionFor<1>(n, n.ARM7, instrAddr);
++}
++
+ // ARMv5/ARMv4::Execute<JIT>'s block loop and its end, for a CPU that isn't halted (FastLoop)
+ template <u32 num, typename CPU>
+ [[gnu::always_inline]] static inline void ExecuteJITInline(NDS& nds, CPU& cpu, u64& timestamp, u64& target, u8* const rxBase)

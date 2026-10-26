@@ -1,0 +1,52 @@
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 619726b..82622b6 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -55,6 +55,7 @@ namespace melonDS
+ #define J3STATS_ON 0
+ #endif
+ extern u64 J3ExitStats[64];   // (ARMJIT_Compiler.cpp)
++extern u8 J3StopMask, J3RegionStub, J3Dyn2, J3DynImm;
+ extern bool J3Stats;
+ #endif
+ using namespace Platform;
+@@ -1239,6 +1240,30 @@ u32 NDS::RunFrame()
+     // so it needs to be tracked even if NDS is powered off.
+     NumFrames++;
+ #ifdef JIT_ENABLED
++#ifdef MELONDS_J3AB
++    {
++        // J3 in-run A/B (debug builds only): MELONDS_J3AB=<frames>, MELONDS_J3ABMASK=<switch bits on in mode 1>
++        // (1 STOPMASK, 2 REGIONSTUB, 4 DYN2, 8 DYNIMM: those two with a JIT reset): mode 0 = all of them off, mode 1 = those on; flipped every <frames> frames
++        static const int abN = getenv("MELONDS_J3AB") ? atoi(getenv("MELONDS_J3AB")) : 0;
++        static const int abMask = getenv("MELONDS_J3ABMASK") ? atoi(getenv("MELONDS_J3ABMASK")) : 3;
++        static int abMode = 1;
++        if (abN > 0 && NumFrames % abN == 0)
++        {
++            abMode ^= 1;
++            static const int abBase = getenv("MELONDS_J3ABBASE") ? atoi(getenv("MELONDS_J3ABBASE")) : 0;   // (on in both)
++            const int m = (abMode ? abMask : 0) | abBase;
++            J3StopMask = m & 1;
++            J3RegionStub = (m >> 1) & 1;
++            if (((abMask | abBase) & 12) && (J3Dyn2 != ((m >> 2) & 1) || J3DynImm != ((m >> 3) & 1)))
++            {
++                J3Dyn2 = (m >> 2) & 1;
++                J3DynImm = (m >> 3) & 1;
++                JIT.ResetBlockCache();
++            }
++            Log(LogLevel::Info, "[gengis] ab mode %d\n", abMode);
++        }
++    }
++#endif
+     if (J3STATS_ON && J3Stats && NumFrames % 300 == 0)
+     {
+         // J3 EXITSTATS: ARM9 exits per frame by kind over the last 300 frames
+@@ -1248,7 +1273,7 @@ u32 NDS::RunFrame()
+         Log(LogLevel::Info, "[j3stats] ARM%d per frame: known %.0f selfloop %.0f | ind BX %.0f POP/LDM %.0f LDRpc %.0f ALUpc %.0f "
+             "BL2 %.0f | restoreCPSR %.0f otherdyn %.0f | dyncache hit %.0f miss %.0f learn %.0f | DynExit found %.0f "
+             "outside %.0f miss %.0f | DynExitA found %.0f outside %.0f miss %.0f | regionstep %.0f %.0f | loop: returns %.0f compiles %.0f stop %.0f "
+-            "irq %.0f maskedirq %.0f halted %.0f idle %.0f JumpToC %.0f slowloop %.0f | linkpending %.0f dynlink %.0f linked %.0f\n", n ? 7 : 9,
++            "irq %.0f maskedirq %.0f halted %.0f idle %.0f JumpToC %.0f slowloop %.0f | linkpending %.0f dyn2hit %.0f linked %.0f\n", n ? 7 : 9,
+             c[0]/300., c[1]/300., c[2]/300., c[3]/300., c[4]/300., c[5]/300., c[6]/300., c[7]/300., c[8]/300.,
+             c[10]/300., c[11]/300., c[12]/300., c[13]/300., c[15]/300., c[16]/300., c[14]/300., c[17]/300., c[18]/300., c[9]/300., c[19]/300.,
+             c[20]/300., c[21]/300., c[22]/300., c[23]/300., c[25]/300., c[26]/300., c[27]/300., c[24]/300., c[28]/300., c[31]/300., c[29]/300., c[30]/300.);

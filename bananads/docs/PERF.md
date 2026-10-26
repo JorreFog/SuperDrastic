@@ -1314,3 +1314,24 @@ Device, in-run A/B (PIN=1 FF=1, 90 s, the mask flipped every 240 frames with a b
 (paired +3.5 fps, on above the preceding off in 17 of 21 pairs). On-panel audio test: PASS, tap identical to the
 base over 67 s, 60.00 fps 0 lost (200f: j1-pin1; 300f: j1-pin2). What is left at a block boundary is the exit stub
 (StopExecution, Timestamp += Cycles against Target, the CPSR store) and the flags' move into RCPSR: patches 0320+.
+
+## JIT exits and dispatch (2026-10-26 JIT round, J3)
+
+Counted with the debug patch 0340 (`MELONDS_JIT_EXITSTATS=1` in a `-DMELONDS_J3STATS=1` build; per-frame log line
+`[j3stats]`), HeartGold's grass bench, per frame, ARM9: 19.5k known (linked) exits, 0.7k self loops, 11.8k indirect
+through the JumpTo functions (BX 7.9k, POP/LDM pc 3.4k, LDR pc 0.4k), 0.42k restoreCPSR jumps (C++ JumpTo), 0.63k other
+dynamic exits. 4.9k returns to the C++ loop: 1.75k StopExecution, of which 1.25k only an IRQ the CPU has masked (every
+exit in the IRQ handler before it acknowledges IF); 0.59k a dynamic exit leaving the lookup region; ~2.1k slice ends
+that SliceChain can't continue. DYNCACHE: 8.4k hits, 3.2k misses.
+
+- **0341 STOPMASK**: ExitCheck/DynExit stubs that find StopExecution == the IRQ byte alone with CPSR.I set go on with
+  their checks. The loop would only call TriggerIRQ (returns: masked), then add the cycles and run the next block.
+- **0342 REGIONSTUB**: DynExit/DynExitA outside the lookup region call `JitStubRegion` (the loop's own region step:
+  RegionPair/RegionTrio swap, else SetupExecutableRegion) and look the block up; a failed step returns as before.
+  0341+0342: ARM9 returns to the loop 4.9k -> 3.3k/frame (ARM7 1.16k -> 1.01k).
+- **0343 DYN2**: an ARM9 DYNCACHE exit's miss way (far region) checks and learns a second target before DynExitA:
+  DynExitA lookups 3.0k -> 2.0k/frame.
+- **0344 DYNIMM**: the DYNCACHE key as movz/movk w1 (Link patches both) instead of a literal load from the code line.
+All four: `jit.exits` (SETTINGS.md); runtime bytes (0341/0342) and compile-time flags (0343/0344) for in-run A/B
+(debug patch 0349, `-DMELONDS_J3AB=1`: `MELONDS_J3AB=<frames>`, `MELONDS_J3ABMASK`, `MELONDS_J3ABBASE`).
+Speed: see reports/jit-J3.md (a loop round trip turned out to cost only ~50 cycles: the gains are small).

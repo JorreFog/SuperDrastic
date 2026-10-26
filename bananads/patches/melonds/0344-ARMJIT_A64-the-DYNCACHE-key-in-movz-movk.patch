@@ -1,0 +1,91 @@
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 3a7866d..ee25973 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -57,6 +57,8 @@ u8 J3RegionStub = !getenv("MELONDS_JIT_NOREGIONSTUB");
+ // J3 DYN2 (patch 0343, MELONDS_JIT_NODYN2=1 off; read when a block is compiled): an ARM9 DYNCACHE exit learns a
+ // second target on its miss way
+ u8 J3Dyn2 = !getenv("MELONDS_JIT_NODYN2");
++// J3 DYNIMM (patch 0344, MELONDS_JIT_NODYNIMM=1 off; read when a block is compiled): the DYNCACHE key as movz/movk
++u8 J3DynImm = !getenv("MELONDS_JIT_NODYNIMM");
+ u32 JitStubRegion(NDS* nds, u32 num, u32 instrAddr);
+ 
+ void Compiler::J3Count(int k, ARM64Reg a, ARM64Reg b)
+@@ -397,6 +399,11 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         FlagsWatch = OptLazyFlags;
+         OptFoldExit = OptCondExit && !getenv("MELONDS_JIT_NOFOLDEXIT") && !getenv("MELONDS_JIT_NOLINK");
+         OptCP15Nop = !old && !getenv("MELONDS_JIT_NOCP15NOP");
++        // J3 (patches 0341-0344): read again here, after the frontend's settings (static init is too early for them)
++        J3StopMask = !old && !getenv("MELONDS_JIT_NOSTOPMASK");
++        J3RegionStub = !old && !getenv("MELONDS_JIT_NOREGIONSTUB");
++        J3Dyn2 = !old && !getenv("MELONDS_JIT_NODYN2");
++        J3DynImm = !old && !getenv("MELONDS_JIT_NODYNIMM");
+         // the entry prologue: MOVZ, and a MOVK for each other non-zero halfword of the CPU's fast memory base
+         for (int num = 0; num < 2; num++)
+         {
+@@ -1019,6 +1026,16 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         u32* litRW = nullptr;
+         u8* litRX = nullptr;
+         FixupBranch learnt;
++        const bool imm = J3DynImm;
++        if (imm)
++        {
++            // J3 DYNIMM (patch 0344): the key in the code as movz/movk w1 (Link patches the two), so the hot way
++            // reads no data from the code's own cache line
++            litRX = (u8*)GetRXPtr();
++            Write32(0x52800000 | (2 << 5) | 1);   // movz w1, #2
++            Write32(0x72A00000 | 1);              // movk w1, #0, lsl #16
++        }
++        else
+         {
+             // ldr w1, <key>: the key word comes after the slot, below
+             litRW = (u32*)GetWriteableRWPtr();
+@@ -1036,8 +1053,13 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         SwapCodeRegion();
+         B(learnPath);
+         u8* keyRX = (u8*)GetRXPtr();
+-        Write32(2);   // (no key has bit 1 set without bit 0: a Thumb key has bit 0, an ARM one neither)
+-        *litRW |= (u32)((keyRX - litRX) / 4) << 5;
++        if (imm)
++            keyRX = litRX;   // (LinkSlots' lit: the movz, flagged by bit 31)
++        else
++        {
++            Write32(2);   // (no key has bit 1 set without bit 0: a Thumb key has bit 0, an ARM one neither)
++            *litRW |= (u32)((keyRX - litRX) / 4) << 5;
++        }
+         SetJumpTarget(miss);
+         // the miss's way (another target, or the first time): with DYNCOLD (patch 0041) in the far region after the
+         // learn path, through a B here: 4 bytes in the block instead of 20
+@@ -1057,7 +1079,7 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+             toMissWay = B();
+         else
+             missWay();
+-        LinkSlots[(u32)(slotRX - GetRXBase())] = {*(u32*)slot, 0, Num, (u32)(keyRX - GetRXBase())};
++        LinkSlots[(u32)(slotRX - GetRXBase())] = {*(u32*)slot, 0, Num, (u32)(keyRX - GetRXBase()) | (imm ? 0x80000000u : 0)};
+ 
+         // the learn path (the slot's until linked, and the first miss's): link the slot to the block the loop
+         // dispatches next
+@@ -1624,8 +1646,21 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+         const bool thumb = cpu->CPSR & 0x20;
+         const u32 key = (cpu->R[15] - (thumb ? 2 : 4)) | (thumb ? 1 : 0);
+         NDS.JIT.JitEnableWrite();
+-        *(u32*)(RWBase() + it->second.lit) = key;
+-        NDS.JIT.JitEnableExecute();
++        if (it->second.lit & 0x80000000u)
++        {
++            // J3 DYNIMM: movz w1, #lo; movk w1, #hi, lsl #16
++            const u32 o = it->second.lit & 0x7FFFFFFFu;
++            u32* p = (u32*)(RWBase() + o);
++            p[0] = 0x52800000 | ((key & 0xFFFF) << 5) | 1;
++            p[1] = 0x72A00000 | ((key >> 16) << 5) | 1;
++            NDS.JIT.JitEnableExecute();
++            FlushIcacheSection(GetRXBase() + o, GetRXBase() + o + 8);
++        }
++        else
++        {
++            *(u32*)(RWBase() + it->second.lit) = key;
++            NDS.JIT.JitEnableExecute();
++        }
+     }
+     else if (it->second.r15 != cpu->R[15] || it->second.num != (cpu->Num | ((cpu->CPSR & 0x20) ? 2u : 0u)))
+         return;

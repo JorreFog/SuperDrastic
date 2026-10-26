@@ -1,0 +1,88 @@
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 7652ba9..707f0c6 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -43,6 +43,12 @@ namespace melonDS
+ // J3 EXITSTATS (debug, MELONDS_JIT_EXITSTATS=1): ARM9 exits counted by kind (see NDS.cpp's dump for the names)
+ u64 J3ExitStats[64] = {};
+ bool J3Stats = getenv("MELONDS_JIT_EXITSTATS") && atoi(getenv("MELONDS_JIT_EXITSTATS"));
++// J3 STOPMASK (patch 0341, MELONDS_JIT_NOSTOPMASK=1 off; a byte the exit stubs read on their stop way only, so an
++// in-run A/B can flip it): an exit stub that finds StopExecution set only by IRQ (no Halted/IdleLoop) while the CPU's
++// CPSR has the I bit set goes on as if it were clear. That is what the loop would do: TriggerIRQ returns at once for
++// a masked IRQ, nothing else in its StopExecution branch applies, and it then adds the cycles and runs the next block
++// while Timestamp < Target, which the stub does too (the same checks, the same block through the same lookup/link).
++u8 J3StopMask = !getenv("MELONDS_JIT_NOSTOPMASK");
+ 
+ void Compiler::J3Count(int k, ARM64Reg a, ARM64Reg b)
+ {
+@@ -1180,10 +1186,12 @@ void Compiler::Gen_ExitStubs(int num)
+     u64* ts = num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp;   // its Target is the next u64
+ 
+     // the shared part: Timestamp += Cycles, Cycles = 0, to *stop/*late when the loop has to take over
++    const u8* stopCont = nullptr;   // (J3 STOPMASK: where the checks go on after the stop test)
+     auto checks = [&](FixupBranch& stop, FixupBranch& late)
+     {
+         LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
+         stop = CBNZ(W0);
++        stopCont = (const u8*)GetRXPtr();
+         MOVP2R(X16, ts);
+         LDP(INDEX_SIGNED, X17, X0, X16, 0);
+         if (OptExitStub)
+@@ -1223,6 +1231,20 @@ void Compiler::Gen_ExitStubs(int num)
+         SetJumpTarget(over);
+         LDP(INDEX_POST, X4, X30, SP, 16);
+     };
++    // J3 STOPMASK, at a stub's stop target (W0 = StopExecution; x16/x17 are free there): only a masked IRQ, back to
++    // the checks. Off: straight on to the stop way.
++    auto stopMask = [&]()
++    {
++        const u8* cont = stopCont;
++        MOVP2R(X16, &J3StopMask);
++        LDRB(INDEX_UNSIGNED, W16, X16, 0);
++        FixupBranch off = CBZ(W16);
++        FixupBranch notMasked = TBZ(RCPSR, 7);
++        CMP(W0, 0x100);
++        B(CC_EQ, cont);
++        SetJumpTarget(off);
++        SetJumpTarget(notMasked);
++    };
+     // back to the loop from a BL'd stub: x30 = ARM_Ret from a literal, and a return there
+     auto retToLoop = [&]()
+     {
+@@ -1271,6 +1293,9 @@ void Compiler::Gen_ExitStubs(int num)
+             if (c)
+                 STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));   // (the next block reads it from memory)
+             RET();
++            SetJumpTarget(stop);
++            stopMask();
++            FixupBranch toLoop = B();
+             SetJumpTarget(late);
+             if (chain)
+             {
+@@ -1281,7 +1306,7 @@ void Compiler::Gen_ExitStubs(int num)
+                 RET();
+                 SetJumpTarget(out);
+             }
+-            SetJumpTarget(stop);
++            SetJumpTarget(toLoop);
+             retToLoop();
+         }
+         if (chain)
+@@ -1376,13 +1401,16 @@ void Compiler::Gen_ExitStubs(int num)
+         J3Count(a ? 14 : 13, X0, X1);   // (DynExit's lookup found the block)
+         ADD(X16, X17, W16, ArithOption(W16));   // + the entry's offset (uxtw)
+         BR(X16);
++        SetJumpTarget(stop);
++        stopMask();
++        FixupBranch toLoop = B();
+         SetJumpTarget(late);
+         if (chain)
+         {
+             callChain();
+             CBNZ(W0, resume);
+         }
+-        SetJumpTarget(stop);
++        SetJumpTarget(toLoop);
+         if (J3Stats)
+         {
+             FixupBranch j = B();

@@ -1,0 +1,71 @@
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 74b896d..3a7866d 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -54,6 +54,9 @@ u8 J3StopMask = !getenv("MELONDS_JIT_NOSTOPMASK");
+ // whose target is outside the CPU's lookup region does the loop's region step itself (NDS.cpp JitStubRegion: the
+ // RegionPair/RegionTrio swap, else SetupExecutableRegion) and its lookup, instead of returning to the loop for both
+ u8 J3RegionStub = !getenv("MELONDS_JIT_NOREGIONSTUB");
++// J3 DYN2 (patch 0343, MELONDS_JIT_NODYN2=1 off; read when a block is compiled): an ARM9 DYNCACHE exit learns a
++// second target on its miss way
++u8 J3Dyn2 = !getenv("MELONDS_JIT_NODYN2");
+ u32 JitStubRegion(NDS* nds, u32 num, u32 instrAddr);
+ 
+ void Compiler::J3Count(int k, ARM64Reg a, ARM64Reg b)
+@@ -1063,7 +1066,47 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         MOVP2R(X17, &melonds_jit_link[0]);
+         STP(INDEX_SIGNED, X16, RCPU, X17, 0);
+         QuickTailCall(X16, ARM_Ret);
+-        if (OptDynCold)
++        if (OptDynCold && J3Dyn2 && Num == 0)
++        {
++            // J3 DYN2 (patch 0343): a second learnt target (key2 + slot2) on the miss way, before DynExitA: the
++            // same as the first (ExitCheck, then slot2, linked by the loop's Link to the block it dispatches after
++            // slot2's own learn path, which learns key2), only further from the block
++            SetJumpTarget(toMissWay);
++            CMP(W1, 2);
++            FixupBranch learn = B(CC_EQ);
++            u32* lit2RW = (u32*)GetWriteableRWPtr();
++            u8* lit2RX = (u8*)GetRXPtr();
++            Write32(0x18000000 | 1);   // ldr w1, <key2>
++            CMP(W4, W1);
++            FixupBranch miss2 = B(CC_NEQ);
++            J3Count(29);   // (J3 EXITSTATS: a second-target hit)
++            BL(ExitCheck[Num][c]);
++            u8* slot2 = GetWriteableRWPtr();
++            u8* slot2RX = (u8*)GetRXPtr();
++            FixupBranch toLearn2 = B();
++            u8* key2RX = (u8*)GetRXPtr();
++            Write32(2);
++            *lit2RW |= (u32)((key2RX - lit2RX) / 4) << 5;
++            SetJumpTarget(miss2);
++            CMP(W1, 2);
++            FixupBranch learn2 = B(CC_EQ);
++            J3Count(11);
++            B(DynExitA[Num][c]);
++            SetJumpTarget(learn);
++            J3Count(12);
++            BL(ExitCheck[Num][c]);
++            B(learnPath);
++            SetJumpTarget(learn2);
++            BL(ExitCheck[Num][c]);
++            SetJumpTarget(toLearn2);
++            // slot2's learn path
++            MOVP2R(X16, slot2RX);
++            MOVP2R(X17, &melonds_jit_link[0]);
++            STP(INDEX_SIGNED, X16, RCPU, X17, 0);
++            QuickTailCall(X16, ARM_Ret);
++            LinkSlots[(u32)(slot2RX - GetRXBase())] = {*(u32*)slot2, 0, Num, (u32)(key2RX - GetRXBase())};
++        }
++        else if (OptDynCold)
+         {
+             SetJumpTarget(toMissWay);   // (a B from the block to here: the emitter's distance is in its RW view)
+             missWay();
+@@ -1576,7 +1619,6 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+     if (it->second.lit)
+     {
+         // a DYNCACHE slot: it learns the key of the block it goes to, the one the loop dispatches now
+-        if (J3Stats) J3ExitStats[29 + 32 * cpu->Num]++;
+         if (it->second.num != cpu->Num)
+             return;
+         const bool thumb = cpu->CPSR & 0x20;

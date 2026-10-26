@@ -430,6 +430,17 @@ bool Emu::load_rom(const std::string& path) {
         else if (v == "off") setenv("MELONDS_JIT_NODYNCOLD", "1", 1);
     }
 
+    // jit.exits=on|off (melonDS 0341-0344, J3; default on): off sets MELONDS_JIT_NOSTOPMASK, NOREGIONSTUB, NODYN2 and
+    // NODYNIMM (each also on its own), on unsets them
+    {
+        const std::string v = cfg_.str("jit.exits", "");
+        for (const char* e : {"MELONDS_JIT_NOSTOPMASK", "MELONDS_JIT_NOREGIONSTUB", "MELONDS_JIT_NODYN2", "MELONDS_JIT_NODYNIMM"})
+        {
+            if (v == "on") unsetenv(e);
+            else if (v == "off") setenv(e, "1", 1);
+        }
+    }
+
     // jit.flagstub=on|off: off sets MELONDS_JIT_NOFLAGSTUB=1, on unsets it (melonDS patch 0042: an exit's stub puts the
     // pending guest flags in RCPSR instead of three instructions in every block). Default off: no check sees a
     // mistake in ExitCheckPCF's flags (the test ROMs nor Mario Kart DS's race start, docs/PERF.md)
