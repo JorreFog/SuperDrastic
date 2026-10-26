@@ -1222,6 +1222,14 @@ void BananaRenderer::OutputTouched(const void* base)
             OutSlots[i].Touch.fetch_add(1, std::memory_order_acq_rel);
 }
 
+void BananaRenderer::OutputTouchedAll()
+{
+    if (!OutSlots)
+        return;
+    for (int i = 0; i < 8; i++)
+        OutSlots[i].Touch.fetch_add(1, std::memory_order_acq_rel);
+}
+
 void BananaRenderer::ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRenderer2D& b, bool doA)
 {
     if (job.Line < 192)

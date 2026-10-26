@@ -69,7 +69,8 @@ public:
     // a frame's pictures waits for its fence first (FrameFence after run_frame; GetFramebuffers waits by itself).
     void SetLazyFrames(bool on) { Drain2D(); LazyFrames = on; }
     // kms.grid_cpu (GPU2D_Banana.h BananaSetGrid4): changed with the 2D thread drained, between frames
-    void SetGrid4(const unsigned char (*lut)[256]) { Drain2D(); BananaSetGrid4(lut); }
+    // (render.2d_out_skip: every slot's rows were written with the old grid: all drawn again)
+    void SetGrid4(const unsigned char (*lut)[256]) { Drain2D(); BananaSetGrid4(lut); OutputTouchedAll(); }
     // render.2d_kick: wake the 2D thread every this many jobs (1-NumJobs; it is also woken at VBlank, at the swap
     // and before any wait for it, so the pictures don't depend on it)
     void SetNice(int n) { Nice = n; }  // sched.2d_nice: the 2D thread's nice value (0: the default)
@@ -113,6 +114,7 @@ public:
     // render.2d_out_skip: the frontend wrote into one of SetOutput's buffers (an overlay, a copied frame, a new buffer):
     // its rows are drawn again in full. Any thread
     void OutputTouched(const void* base);
+    void OutputTouchedAll();   // every buffer: as OutputTouched for each
 
     bool Drain2D();   // wait until the 2D thread has drawn every line handed to it (false: it already had)
     // render.2d_fence_wait: the waits for the 2D thread (a frame's fence, a drain, a full ring or log) block on a
