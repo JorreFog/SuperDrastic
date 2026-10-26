@@ -1270,3 +1270,47 @@ All three are code placement only (the same code, in the same order): exact.
 Device (PIN=1 FF=1 60 s, HG grass, alternated with integ 9): i9 125.9 / 125.7 / 124.9 / 126.1 emulated/s;
 0220+0221 126.8 / 126.4; +0222 126.6 / 125.2. About +0.5%, below the ~2% noise floor: kept because it is exact and
 smaller code, not as a measured win. On-panel audio test (0220-0222): PASS, tap identical to the base over 67 s.
+
+## PINREGS: guest registers kept in host registers across linked blocks (2026-10-26 JIT round, J1; patch 0300)
+
+melonDS's AArch64 JIT allocates host registers per block: a block loads the guest registers it uses from `cpu->R[]`
+at its entry (its first use) and stores the ones it wrote at every exit; a linked exit then goes straight into the
+next block, which loads them again. HeartGold's grass area: ~29k ARM9 block entries a frame of ~7.5 guest
+instructions each (J4's counts), so those loads and stores are a large share of the compiled code.
+
+`jit.pinregs=<hex mask of r0-r14>` (`MELONDS_JIT_PINREGS`; `MELONDS_JIT_PINREGS7` for the ARM7, else the same mask; at
+most 7; default off) gives the masked guest registers fixed homes in the callee-saved w19-w25 (w19 upward, in register
+order) that they keep across linked blocks:
+- The register cache pins them: in their host register from the block's start, never unloaded, never stored by an
+  exit (`Flush`, `PrepareExit`, the folded conditional exit); their host registers are reserved.
+- The loop's way in (`ARM_Dispatch` to the block's entry) loads them in the block's entry prologue (patch 0007's
+  FASTENTRY slot, `EntrySkip`, LDP pairs); linked exits, DynExit (its code-base literal includes `EntrySkip`) and self
+  loops enter past the prologue with the registers live.
+- Every way back to the loop goes through `RetLoop`: a JIT stub (`RetStub`) that stores the CPU's pinned registers
+  (by `RCPU`'s `Num` when the two masks differ) and goes on to `ARM_Ret`. With the variable unset `RetLoop` is
+  `ARM_Ret` and the stubs and blocks are byte-identical to before.
+- C that reads or writes `R[0-14]` has them stored before and loaded after: the interpreter fallbacks (`Comp_PinnedSync`
+  round the call; the MCRNop far path's store loop includes them), `UpdateModeTrampoline` and `JumpToTrampoline`
+  (`PushRegs`/`PopRegs` store and reload the hi registers; a pinned one is stored, not unloaded). Checked not to touch
+  `R[0-14]`: `SlowRead/Write9/7` and the patched fast-memory functions (callee-saved registers survive them; the only
+  reader is `NocashPrint`'s register dump, log text only), `SlowBlockTransfer` (a stack buffer), `ReadBanked`/
+  `WriteBanked` (the `R_xxx` banks only), `SliceChain9` (timekeeping), `TriggerIRQ`/halts (in the loop, after
+  `ARM_Ret`), savestates and run-ahead snapshots (between frames).
+- `Reset()` re-reads the variables (only when the stubs were made to go through `RetStub`) and refills `RetStub`,
+  `EntrySkip` and DynExit's bases, so an in-run A/B can flip the mask at a block cache reset.
+Exact by construction: every reader of a guest register sees the value it would have seen (memory is brought up to
+date before any C that reads it and reloaded after any C that writes it); no cycle changes.
+
+Which registers (HeartGold's grass, RG DS Plus): the guest registers' loads and stores at block boundaries, weighted
+by J4's per-block entry counts (the 60 hottest ARM9 blocks = 67% of the ~29k entries a frame; a `MELONDS_JIT_PERFMAP`
+code dump, `tools` in the night run's reports/J1data/regweight.py), per 100 entries: r0 98, r2 79, r1 68, r3 53,
+r13 42, r12 39, r14 32, r4 31, r5 27, r6 22, r8 12, the rest ~5 each (~5.2 accesses per entry of 7.5 guest
+instructions). `200f` (r0-r3, r13) covers 65% of them, `300f` (+r12, the default) 72%, `700f` (+r14) 79%. Only the
+callee-saved w19-w25 can be homes (a caller-saved one would cost 8 extra stores and loads at every explicit
+slow-memory call, ~10k a frame: net negative), and w25 is reserved for the cycle-state work (patch 0320), so 300f is
+the practical best; pinning all 15 would be ~1.5x the 200f gain.
+Device, in-run A/B (PIN=1 FF=1, 90 s, the mask flipped every 240 frames with a block cache reset, 21 pairs):
+`200f` off 112.85 / on 115.71 emulated/s = **+2.5%** (paired +2.9 fps); `300f` off 112.78 / on 116.20 = **+3.0%**
+(paired +3.5 fps, on above the preceding off in 17 of 21 pairs). On-panel audio test: PASS, tap identical to the
+base over 67 s, 60.00 fps 0 lost (200f: j1-pin1; 300f: j1-pin2). What is left at a block boundary is the exit stub
+(StopExecution, Timestamp += Cycles against Target, the CPSR store) and the flags' move into RCPSR: patches 0320+.

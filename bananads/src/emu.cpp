@@ -412,9 +412,12 @@ bool Emu::load_rom(const std::string& path) {
     }
 
     // jit.pinregs=<hex mask of r0-r14>|off: sets MELONDS_JIT_PINREGS (melonDS patch 0300: the masked guest registers
-    // keep a fixed host register across linked blocks; read as the JIT compiler is created; at most 7; default off)
+    // keep a fixed host register across linked blocks; read as the JIT compiler is created; at most 7 and only
+    // w19-w24 in practice; default 300f = r0-r3, r12, r13: the heaviest at block boundaries in HeartGold, +3% at FF;
+    // off with jit.codegen=old, whose blocks have no entry prologue to load them in)
     {
-        const std::string v = cfg_.str("jit.pinregs", "");
+        std::string v = cfg_.str("jit.pinregs", "300f");
+        if (cfg_.str("jit.codegen", "new") == "old") v = "off";
         if (v == "off") unsetenv("MELONDS_JIT_PINREGS");
         else if (!v.empty()) setenv("MELONDS_JIT_PINREGS", v.c_str(), 1);
     }

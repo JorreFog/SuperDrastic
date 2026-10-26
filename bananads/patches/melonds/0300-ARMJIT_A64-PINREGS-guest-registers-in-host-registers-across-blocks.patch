@@ -152,7 +152,7 @@ no cycle changes.
          OptKeepFlags = !old && !getenv("MELONDS_JIT_NOKEEPFLAGS");
          // LOOPREGS only with MELONDS_JIT_LOOPREGS=1: on an RG DS Plus, HeartGold (USA) goes to a black screen at its
          // first overworld frame with it (frame 1200 of tools/device/hgquick.sh's walk), and fine with it off alone.
-@@ -379,6 +382,17 @@
+@@ -379,6 +382,19 @@
          }
      }
  
@@ -166,11 +166,13 @@ no cycle changes.
 +        // (the stubs embed RetLoop: with the variable set at all, even to 0, every way back takes the stub, so an
 +        // in-run A/B that flips the mask at a block cache reset keeps the same ways)
 +        RetLoop = getenv("MELONDS_JIT_PINREGS") ? (const void*)RetStubRX : (const void*)ARM_Ret;
++        if (PinMask[0] | PinMask[1])
++            Log(LogLevel::Info, "[jit] pinregs: ARM9 mask %04x, ARM7 mask %04x (w19 up)\n", PinMask[0], PinMask[1]);
 +    }
      for (int i = 0; i < 3; i++)
      {
          JumpToFuncs9[i] = Gen_JumpTo9(i);
-@@ -585,25 +599,8 @@
+@@ -585,25 +601,8 @@
  
      SetCodeBase((u8*)GetRWPtr(), (u8*)GetRXPtr());
  
@@ -198,7 +200,7 @@ no cycle changes.
  
      LinkBlocks = !getenv("MELONDS_JIT_NOLINK");
      if (getenv("MELONDS_JIT_PERFMAP"))
-@@ -965,7 +962,7 @@
+@@ -965,7 +964,7 @@
  {
      if (!LinkBlocks)
      {
@@ -207,7 +209,7 @@ no cycle changes.
          return;
      }
  
-@@ -1023,7 +1020,7 @@
+@@ -1023,7 +1022,7 @@
          MOVP2R(X16, slotRX);
          MOVP2R(X17, &melonds_jit_link[0]);
          STP(INDEX_SIGNED, X16, RCPU, X17, 0);
@@ -216,7 +218,7 @@ no cycle changes.
          if (OptDynCold)
          {
              SetJumpTarget(toMissWay);   // (a B from the block to here: the emitter's distance is in its RW view)
-@@ -1123,7 +1120,7 @@
+@@ -1123,7 +1122,7 @@
              RegCache.PrepareExit();
          MOVI2R(W0, knownR15);
          STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
@@ -225,7 +227,7 @@ no cycle changes.
      }
  
      // the link path: ask ARM_Dispatch to link the slot to the block the loop dispatches next, then back to it
-@@ -1139,7 +1136,7 @@
+@@ -1139,7 +1138,7 @@
      MOVP2R(X16, slotRX);
      MOVP2R(X17, &melonds_jit_link[0]);
      STP(INDEX_SIGNED, X16, RCPU, X17, 0);
@@ -234,7 +236,7 @@ no cycle changes.
      FlushIcacheSection(linkPath, (u8*)GetRXPtr());   // (the far region's code isn't in CompileBlock's flush)
      SwapCodeRegion();
  }
-@@ -1204,7 +1201,7 @@
+@@ -1204,7 +1203,7 @@
          RET();
          if (pad)
              Write32(0xD503201F);
@@ -243,7 +245,7 @@ no cycle changes.
          Write32((u32)ret);
          Write32((u32)(ret >> 32));
      };
-@@ -1219,7 +1216,7 @@
+@@ -1219,7 +1218,7 @@
          RET();
          SetJumpTarget(stop);
          SetJumpTarget(late);
@@ -252,7 +254,7 @@ no cycle changes.
          RET();
      }
      else
-@@ -1357,7 +1354,7 @@
+@@ -1357,7 +1356,7 @@
          SetJumpTarget(stop);
          SetJumpTarget(outside);
          SetJumpTarget(miss);
@@ -261,7 +263,7 @@ no cycle changes.
          if (lit)
          {
              if (((uintptr_t)GetRXPtr()) & 7)
-@@ -1389,7 +1386,7 @@
+@@ -1389,7 +1388,7 @@
      if (!(LoopMode && self))
      {
          // (the stores the block's end makes: its RegCache.Flush, or in LoopMode PrepareExit)
@@ -270,7 +272,7 @@ no cycle changes.
          for (int reg : dirty)
              SaveReg(reg, RegCache.Mapping[reg]);
      }
-@@ -1454,11 +1451,159 @@
+@@ -1454,11 +1453,159 @@
      // The entry the runtime dispatches to: x26 = the CPU's fast memory base, in EntrySkip[Num] bytes (the same for
      // all its blocks). Exits that go straight on into a block (link slots, DynExit) enter past it: x26 is
      // callee-saved and only blocks of the same CPU set it, so it still holds the base there.
@@ -435,7 +437,7 @@ no cycle changes.
  }
  
  void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
-@@ -1546,13 +1691,15 @@
+@@ -1546,13 +1693,15 @@
      CurCPU = cpu;
      ConstantCycles = 0;
      RegCache = RegisterCache<Compiler, ARM64Reg>(this, instrs, instrsCount, true);
@@ -452,7 +454,7 @@ no cycle changes.
              Comp_EntryPrologue();
      }
      else if (hasMemInstr)
-@@ -1569,7 +1716,7 @@
+@@ -1569,7 +1718,7 @@
              used |= instrs[i].Info.SrcRegs | instrs[i].Info.DstRegs;
              written |= instrs[i].Info.DstRegs;
          }
@@ -461,7 +463,7 @@ no cycle changes.
              RegCache.LoadRegister(reg, true);
          RegCache.DirtyRegs = written & 0x7FFF;
          // a callee-saved host register left free: the Timestamp's address for the loop's check
-@@ -1659,6 +1806,7 @@
+@@ -1659,6 +1808,7 @@
              SaveCycles();
              SaveCPSR();
              RegCache.Flush();
@@ -469,7 +471,7 @@ no cycle changes.
              KnownCodeValid = false;   // (the interpreter may jump)
              R15Stored = true;
          }
-@@ -1784,6 +1932,7 @@
+@@ -1784,6 +1934,7 @@
          {
              LoadCycles();
              LoadCPSR();
@@ -477,7 +479,7 @@ no cycle changes.
          }
      }
  
-@@ -1854,6 +2003,9 @@
+@@ -1854,6 +2005,9 @@
  
  void Compiler::Reset()
  {
