@@ -129,6 +129,7 @@ private:
     std::optional<melonDS::DSi_NAND::NANDImage> setup_nand(const std::array<uint8_t, 0x10000>& arm7i);
     void check_secure_area();
     void export_dsi_saves();
+    uint64_t debug_pc_ = 0;
     const melonDS::NDSCart::CartCommon* dsi_cart_ = nullptr;  // (the game's, while make_dsi runs)
     bool dsi_nand_ = false;  // the NAND's working copy is in
     uint32_t dsi_title_cat_ = 0, dsi_title_id_ = 0;

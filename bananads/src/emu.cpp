@@ -945,6 +945,7 @@ bool Emu::load_rom(const std::string& path) {
     start_mark("reset");
     nds_->SetupDirectBoot(game_ + ".nds");
     start_mark("direct boot");
+    debug_pc_ = (uint64_t)std::max(0L, cfg_.num("debug.pc", 0));
     if (dsi_) {
         if (!dsi_nand_) {  // no NAND for melonDS to take the DSi's settings from: the ones a DSi would hand the game
             const auto t = dsi_settings(cfg_);
@@ -1115,6 +1116,41 @@ void Emu::run_frame() {
     if (prof_) prof_->frame(frames_run_);  // prof.hz: on the emulator's thread, whichever runs the frames
     frames_run_++;
     nds_->RunFrame();
+    if (debug_pc_ && frames_run_ % debug_pc_ == 0) {  // debug.pc=N: where both CPUs are, every N frames
+        Log(LogLevel::Info, "[debug] frame %llu: ARM9 pc %08x lr %08x cpsr %08x halted %d | ARM7 pc %08x lr %08x "
+            "cpsr %08x halted %d | POWCNT1 %04x IE %08x IF %08x\n", (unsigned long long)frames_run_,
+            nds_->ARM9.R[15], nds_->ARM9.R[14], nds_->ARM9.CPSR, nds_->ARM9.Halted, nds_->ARM7.R[15],
+            nds_->ARM7.R[14], nds_->ARM7.CPSR, nds_->ARM7.Halted, nds_->PowerControl9, nds_->IE[0], nds_->IF[0]);
+        // debug.dump = "c:addr:len,...": memory as CPU c (7 or 9) reads it, once, at the third report
+        if (frames_run_ == 3 * (long)debug_pc_) {
+            std::string spec = cfg_.str("debug.dump", "");
+            size_t at = 0;
+            while (at < spec.size()) {
+                size_t e = spec.find(',', at);
+                if (e == std::string::npos) e = spec.size();
+                unsigned c = 0, a = 0, n = 0;
+                char tok[16] = {};
+                if (sscanf(spec.substr(at, e - at).c_str(), "%u:%15[^:]:%x", &c, tok, &n) == 3) {
+                    a = !strcmp(tok, "sp") ? (c == 7 ? nds_->ARM7.R[13] : nds_->ARM9.R[13]) : (unsigned)strtoul(tok, nullptr, 16);
+                    a &= ~3u;
+                }
+                if (n)
+                    for (unsigned i = 0; i < n; i += 16) {
+                        u32 w[4];
+                        for (int k = 0; k < 4; k++)
+                            w[k] = c == 7 ? nds_->ARM7Read32(a + i + 4 * k) : nds_->ARM9Read32(a + i + 4 * k);
+                        Log(LogLevel::Info, "[dump%u] %08x: %08x %08x %08x %08x\n", c, a + i, w[0], w[1], w[2], w[3]);
+                    }
+                at = e + 1;
+            }
+            Log(LogLevel::Info, "[debug] ARM9 r0-r7 %08x %08x %08x %08x %08x %08x %08x %08x sp %08x\n", nds_->ARM9.R[0],
+                nds_->ARM9.R[1], nds_->ARM9.R[2], nds_->ARM9.R[3], nds_->ARM9.R[4], nds_->ARM9.R[5], nds_->ARM9.R[6],
+                nds_->ARM9.R[7], nds_->ARM9.R[13]);
+            Log(LogLevel::Info, "[debug] ARM7 r0-r7 %08x %08x %08x %08x %08x %08x %08x %08x\n", nds_->ARM7.R[0],
+                nds_->ARM7.R[1], nds_->ARM7.R[2], nds_->ARM7.R[3], nds_->ARM7.R[4], nds_->ARM7.R[5], nds_->ARM7.R[6],
+                nds_->ARM7.R[7]);
+        }
+    }
     if (const uint32_t b = nds_->GPU.GPU3D.CurRAMBank; b != bank3d_) {  // the 3D swapped at this VBlank
         bank3d_ = b;
         swaps3d_.fetch_add(1, std::memory_order_relaxed);
