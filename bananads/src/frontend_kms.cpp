@@ -184,6 +184,7 @@ struct Display {
     bool has_fence[NB] = {};
     uint32_t fence[NB] = {};
     std::function<void(uint32_t)> wait2d;
+    std::function<void(const void*)> touched;   // render.2d_out_skip: we wrote into a buffer the emulator draws into
     std::deque<int> queue;    // frames waiting, oldest first
     // kms.shader: each frame drawn through a fragment shader (SuperDrastic's) into panel-sized buffers, shown 1:1
     std::string shader_name;
@@ -316,6 +317,7 @@ struct Display {
         if (p == MAP_FAILED) return false;
         b.map = (uint8_t*)p;
         memset(b.map, 0, c.size);  // black (the borders of a CPU-scaled picture stay so)
+        if (touched) touched(b.map);
         return true;
     }
     void freebuf(Buf& b) {
@@ -619,6 +621,7 @@ struct Display {
         const uint32_t* src[2] = {top, bot};
         for (int i = 0; i < 2; i++) {
             Buf& b = buf[i][s];
+            if (touched) touched(b.map);
             if (hw) {
                 for (int y = 0; y < fh; y++) memcpy(b.map + (size_t)y * b.pitch, src[i] + (size_t)y * fw, fw * 4);
                 continue;
@@ -707,7 +710,10 @@ struct Display {
     // through it with the game: the grid over them, the DS's colours, scaled with the picture), else over the frame.
     // The shader's pass has finished here (shader_draw's glFinish with the second panel).
     void overlay(const Buf* b) {
-        if (b && b->map) bmenu_overlay((uint32_t*)b->map, (int)(b->pitch / 4), (int)b->w, (int)b->h);
+        if (b && b->map) {
+            bmenu_overlay((uint32_t*)b->map, (int)(b->pitch / 4), (int)b->w, (int)b->h);
+            if (touched) touched(b->map);
+        }
     }
     // kms.commit_thread: the commits made blocking, on a thread of their own at SCHED_FIFO. A nonblocking commit
     // programs the display in a kernel worker (an ordinary-priority kworker): with every core busy at 4x (the Gengis
@@ -1564,6 +1570,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         dp.cthread_start();
         Log(LogLevel::Info, "[kms] commits on a thread of their own (blocking, SCHED_FIFO 6)\n");
     }
+    dp.touched = [&emu](const void* p) { emu.output_touched(p); };
     dp.direct = dp.packed() && emu.draw_into(dp.map(0, 1), dp.map(1, 1));  // (each frame is given its own slot)
     // render.2d_lazy (on): drawing straight into the slots, the 2D thread may finish a frame while the emulator runs the
     // next one; the presenter waits for it instead (Display::wait2d)
@@ -1844,7 +1851,10 @@ int run_kms(Emu& emu, const Config& cfg) {
                                             [&] { if (!dp.direct) dp.write(s, emu.top(), emu.bottom()); });
                 if (!shown_ahead && dp.direct) {  // (it couldn't: the real frame's picture, from the scratch buffers)
                     emu.set_lazy_2d(false);
-                    for (int i = 0; i < 2; i++) memcpy(dp.map(i, s), ra_scratch[i].data(), ra_scratch[i].size() * 4);
+                    for (int i = 0; i < 2; i++) {
+                        memcpy(dp.map(i, s), ra_scratch[i].data(), ra_scratch[i].size() * 4);
+                        emu.output_touched(dp.map(i, s));
+                    }
                     if (dp.wait2d) emu.set_lazy_2d(true);
                 }
                 const long long t_end = now_us();

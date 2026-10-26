@@ -34,6 +34,10 @@ namespace melonDS
 // render.2d_fast (default on): the NEON paths of the Banana 2D engine (output stage, 16-colour text BGs, direct-colour
 // bitmaps) and the sprite line's partial clears. Off: the portable code they replace. The same pixels either way.
 extern bool Banana2DFast;
+// render.2d_verify (tests): each fast path at 3x/4x checked against the reference path on the same line, mismatches
+// counted and logged (Banana2DVerifyLog); slow, same pictures
+extern bool Banana2DVerify;
+void Banana2DVerifyCount(int what, bool same);
 extern bool Banana3DShare;
 extern bool BananaHiresShown;  // render.2d_hires_shown: unit A's 2x quarters 1-3 composited only when its display mode shows them (BananaRenderer2D)
 extern bool BananaCapNeedA;  // render.cap_unit_a: unit A drawn on the emulator's thread only while display capture reads its 2D output (BananaRenderer)
@@ -114,7 +118,12 @@ public:
     void DrawScanlineFrom(u32 line, const Banana2DRegs& regs, const u32* line3d, const u32* const* q3d = nullptr,
                           u32* dstOverride = nullptr);
     void ScanlineState(const Banana2DRegs& regs);  // render.2d_skip: DrawScanlineFrom's state, without drawing
-    bool InCopies(const void* p) const;           // p is in this engine's copies of GPU memory (UseCopies, OAMCopy)
+    bool InCopies(const void* p) const;
+    int CopyRegion(const void* p) const;
+    // render.2d_skip at 3x/4x (fast paths): what a scanline reads of the sprite line drawn before it, kept per line
+    struct SprSnap { u32 Num; u32 XMin, XMax; u32 Valid; alignas(16) u8 Win[256]; alignas(16) u8 Attr[256]; alignas(16) u32 Line[256]; };
+    bool SprSnapSame(const SprSnap& s) const;
+    void SprSnapStore(SprSnap& s) const;   // 0 BG VRAM, 1 OBJ VRAM, 2 BG ext pal, 3 OBJ ext pal, 4 palette, 5 OAM, -1 none           // p is in this engine's copies of GPU memory (UseCopies, OAMCopy)
     u32 CacheEpoch = 0;   // render.2d_skip: changed whenever the copies or the drawing state are made anew
     void DrawScanlineHires(u32 line, const u32* const* q3d);   // DrawScanline at 2x
     int HiLines = 1;
@@ -177,6 +186,7 @@ private:
     alignas(16) u32 OBJColor[256];      // resolved sprite colours for the current line, 0 = none
     alignas(16) u32 OBJPrio[256];
     alignas(16) u8  WindowMask[256];
+    alignas(16) u32 Win3D[256];         // Raw3D with windows: WindowMask's BG0 bit (0/1), the 3D step's mask
     alignas(16) u32 TopLine[256];
     alignas(16) u32 SecondLine[256];
     alignas(16) u32 BackdropLine[256];
@@ -235,6 +245,8 @@ private:
     void CalcWindowMask();
     void ApplyWindowEdges(const u8* coords, u8& active, u8 cnt);
     void ApplyWindow(u32* line, u8 bit);
+    void MakeWin3D();
+    void VerifyRaw3D(const u32* dst, const u32* const* q3d, bool allq0);
     static void ApplyMosaicX(u32* line, u32 size);
 
     void DrawBG_3D();
@@ -261,6 +273,16 @@ private:
     template<bool window> void DrawSprite_Normal(u32 num, u32 width, u32 height, s32 xpos, s32 ypos);
 
     void Composite(u32* outTop, u32* outSecond, bool needSecond);
+    // 3x/4x, the 3D layer read raw (render.2d_fast): the layers under and over the 3D step composited once a line
+    // (PrepareSplit), then each quarter is its 3D line between them (CompositeSplit): the same top/second pixels
+    int PrepareSplit();   // 1: split ready; 0: no split; 2: the 3D step is under a full layer (quarters all alike)
+    void CompositeSplit(u32* outTop, u32* outSecond, bool needSecond);
+    bool SplitReady = false, SplitSecond = false;
+    const u32* SplitWin = nullptr;
+    alignas(16) u32 BelowTop[256];
+    alignas(16) u32 BelowSec[256];
+    alignas(16) u32 AboveTop[256];
+    alignas(16) u32 AboveSec[256];
     void CompositeTo(u32* dst);
     template<bool up> void BrightnessPass(u32* dst);
     template<u32 effect> void EffectsPass(u32* dst);

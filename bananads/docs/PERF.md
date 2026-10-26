@@ -1385,3 +1385,22 @@ audio test j4-ntpc1 PASS, tap identical over 67 s. Device in-run A/B (PIN=1 FF=1
 frames): median 124.0 -> 124.4 and 125.0 -> 126.0, mean 122.1/121.9 and 124.1 -> 124.5: within noise (~+0.3%).
 It also lets these loops be LOOPREGS (LoopMode) loops once `LoopBlock` stops refusing FollowCondTaken (experiment
 0363, `MELONDS_JIT_LOOPFCT=1`, debug: with LOOPREGS on, in-run A/B median 125.0 -> 126.0).
+
+### The 2D engine at 3x/4x: raw 3D under windows, split compositing, unit B rows not rewritten, sprite-content keys (`render.2d_out_skip`; 2026-10-26 MK4x, M3; no melonDS patch)
+Mario Kart DS at 4x (shader None, the 2D engine drawing straight into the 1024x768 scanout buffers): the 2D thread
+(`bananads-2d`) was 72% of a core in the title demo, ~35% of it Gengis bins it helps with. Its own part by line
+(perf, -g1): `DrawBG_3D` 11.4% + `ApplyWindow` 3.2% (MKDS has windows on, which kept the compositor's raw-3D path
+off: 2 scalar passes per quarter, 32 per DS line at 4x), `WriteRepN<4>` 9% (the bottom screen's 16 KB per line),
+`WriteZipN<4>` 2.5%, compositing/effects ~6%.
+- The raw 3D step under windows (all scales): the window's BG0 bit as a 0/1 line (`Win3D`), given to the 3D step as
+  Composite's existing priority-line mask. Same pixels (the reference path gives 0 where the window hides BG0).
+- 3x/4x: the steps under and over the 3D step composited once a line (`PrepareSplit`: Below/Above top and second),
+  each quarter is its 3D line between them (`CompositeSplit`); a full layer over the 3D one: quarter 0 repeated.
+- `render.2d_out_skip` (3x/4x): a unit B line from the line cache isn't written again into a scanout buffer whose row
+  holds it (per buffer and row: line version, brightness, display bit; the frontend's own writes call
+  `Emu::output_touched`).
+- 3x/4x `render.2d_skip` key: OAM / OBJ VRAM changes no longer redraw every unit B line; the sprite line is compared
+  by what it drew. (MKDS race: 82% of the bottom lines missed the cache, 1238 of 1249 memory changes were OAM.)
+- Store forms checked on the Plus (microbench, malloc and a DRM dumb buffer): `vst4` replicate/zip are as fast as or
+  faster than dup/trn + `st1`; the output stores stay.
+`render.2d_verify` (tests) recomputes each fast path the reference way on the device: 0 differing lines in every run.

@@ -20,6 +20,8 @@
 
 #include <string.h>
 #include "GPU2D_Banana.h"
+#include <atomic>
+#include "Platform.h"
 #include "GPU_ColorOp.h"
 
 // ---- four-lane SIMD, just what the compositor needs ------------------------------------------------
@@ -126,6 +128,21 @@ namespace melonDS
 {
 
 bool Banana2DFast = true;
+bool Banana2DVerify = false;
+
+// render.2d_verify's counters: per check, lines checked and lines that differed; a log line every 2^16 checks
+static std::atomic<u64> VerifyN[4], VerifyBad[4];
+void Banana2DVerifyCount(int what, bool same)
+{
+    static const char* const names[4] = { "raw3d-win", "emit-a", "emit-b", "b-cache" };
+    u64 n = ++VerifyN[what];
+    if (!same) VerifyBad[what]++;
+    if (!same && VerifyBad[what] <= 4)
+        Platform::Log(Platform::LogLevel::Warn, "[2d-verify] %s: line DIFFERS (check %llu)\n", names[what], (unsigned long long)n);
+    if (!(n & 0xFFFF))
+        Platform::Log(Platform::LogLevel::Info, "[2d-verify] %s: %llu lines checked, %llu differ\n", names[what],
+                      (unsigned long long)n, (unsigned long long)VerifyBad[what].load());
+}
 bool Banana3DShare = true;
 bool Banana3DWait2D = true;
 bool BananaCapNeedA = false;
@@ -505,6 +522,26 @@ void BananaRenderer2D::CalcWindowMask()
 
     if (dispcnt & (1<<13))
         ApplyWindowEdges(R.Win0Coords, R.Win0Active, R.WinCnt[0]);
+}
+
+// Win3D: 1 where the window mask lets BG0 through, else 0 (the raw 3D step's mask in Composite: its prio line)
+void BananaRenderer2D::MakeWin3D()
+{
+#ifdef BANANA_NEON
+    const uint8x16_t one = vdupq_n_u8(1);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint8x16_t b = vandq_u8(vld1q_u8(&WindowMask[i]), one);
+        uint16x8_t lo = vmovl_u8(vget_low_u8(b)), hi = vmovl_high_u8(b);
+        vst1q_u32(&Win3D[i], vmovl_u16(vget_low_u16(lo)));
+        vst1q_u32(&Win3D[i + 4], vmovl_high_u16(lo));
+        vst1q_u32(&Win3D[i + 8], vmovl_u16(vget_low_u16(hi)));
+        vst1q_u32(&Win3D[i + 12], vmovl_high_u16(hi));
+    }
+#else
+    for (int i = 0; i < 256; i++)
+        Win3D[i] = WindowMask[i] & 1;
+#endif
 }
 
 void BananaRenderer2D::ApplyWindow(u32* line, u8 bit)
@@ -2298,6 +2335,11 @@ static void CompositeN(const CompStep* steps, const u32* startLine, bool onBackd
 
 void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
 {
+    if (SplitReady)
+    {
+        CompositeSplit(outTop, outSecond, needSecond);
+        return;
+    }
     // painter's order, back to front: for each priority 3..0, BG3, BG2, BG1, BG0 of that priority,
     // then the sprites of that priority (the same order as melonDS)
     CompStep steps[8];
@@ -2315,7 +2357,8 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
             if ((LayerDrawn & (1<<bg)) && ((R.BGCnt[bg] & 0x3) == p))
             {
                 bool raw = (bg == 0) && Raw3D;
-                steps[n] = { raw ? Line3D : BGLine(bg), nullptr, 0, 0, raw };
+                // (the raw 3D step under windows: masked by Win3D, as ApplyWindow would have cleared BGLine(0))
+                steps[n] = { raw ? Line3D : BGLine(bg), raw && WindowsOn ? Win3D : nullptr, 1, 1, raw };
                 full[n] = (LayerFull >> bg) & 1;
                 n++;
             }
@@ -2362,6 +2405,113 @@ void BananaRenderer2D::Composite(u32* outTop, u32* outSecond, bool needSecond)
     BANANA_COMP(4) BANANA_COMP(5) BANANA_COMP(6) BANANA_COMP(7) BANANA_COMP(8)   // at most 4 BGs + 4 OBJ steps
     default: break;
 #undef BANANA_COMP
+    }
+}
+
+static void CompositeAny(int n, bool needSecond, const CompStep* s, const u32* startLine, bool onBackdrop, u32* outTop,
+                         u32* outSecond)
+{
+    switch (n)
+    {
+#define BANANA_COMP2(N) case N: \
+        if (needSecond) CompositeN<N, true, false>(s, startLine, onBackdrop, outTop, outSecond); \
+        else            CompositeN<N, false, false>(s, startLine, onBackdrop, outTop, outSecond); \
+        break;
+    BANANA_COMP2(0) BANANA_COMP2(1) BANANA_COMP2(2) BANANA_COMP2(3)
+    BANANA_COMP2(4) BANANA_COMP2(5) BANANA_COMP2(6) BANANA_COMP2(7) BANANA_COMP2(8)
+    default: break;
+#undef BANANA_COMP2
+    }
+}
+
+// the steps Composite would take this line (as it builds them), split at the raw 3D step: the steps under it (from
+// the start layer) into BelowTop/BelowSec, the steps over it painted onto 0 (no layer: opaque pixels are never 0)
+// into AboveTop (0: none over) and AboveSec (0: fewer than two)
+int BananaRenderer2D::PrepareSplit()
+{
+    SplitReady = false;
+    u32 blendCnt = R.BlendCnt;
+    u32 effect = (blendCnt >> 6) & 0x3;
+    bool secondTargets = (blendCnt & 0x3F00) != 0;
+    bool possible = secondTargets || ((effect >= 2) && (blendCnt & 0x3F));
+    bool needSecond = possible && secondTargets;
+
+    CompStep steps[8];
+    u8 full[8];
+    int n = 0;
+    const u32* objprio = !(OBJPrioPresent & (OBJPrioPresent - 1)) ? nullptr : OBJLine;
+    for (int p = 3; p >= 0; p--)
+    {
+        for (int bg = 3; bg >= 0; bg--)
+        {
+            if ((LayerDrawn & (1<<bg)) && ((R.BGCnt[bg] & 0x3) == p))
+            {
+                bool raw = (bg == 0) && Raw3D;
+                steps[n] = { raw ? Line3D : BGLine(bg), raw && WindowsOn ? Win3D : nullptr, 1, 1, raw };
+                full[n] = (LayerFull >> bg) & 1;
+                n++;
+            }
+        }
+        if (OBJPrioPresent & (1<<p))
+        {
+            steps[n] = { OBJColor, objprio, (u32)p << 16, OBJ_BGPrioMask, false };
+            full[n] = 0;
+            n++;
+        }
+    }
+    int start = 0, wanted = needSecond ? 2 : 1, found = 0;
+    const u32* startLine = BackdropLine;
+    for (int k = n - 1; k >= 0; k--)
+    {
+        if (full[k] && ++found == wanted)
+        {
+            start = k + 1;
+            startLine = steps[k].line;
+            break;
+        }
+    }
+    int j = -1;
+    for (int k = start; k < n; k++)
+        if (steps[k].raw3d) j = k;
+    if (j < 0)
+    {
+        for (int k = 0; k < n; k++)
+            if (steps[k].raw3d) return 2;   // (under the start layer: no quarter shows through)
+        return 0;
+    }
+    const bool onBackdrop = startLine == BackdropLine;
+    CompositeAny(j - start, needSecond, steps + start, startLine, onBackdrop, BelowTop, BelowSec);
+    static const u32 zero[4] = {};
+    CompositeAny(n - j - 1, true, steps + j + 1, zero, true, AboveTop, AboveSec);
+    SplitWin = steps[j].prio;
+    SplitSecond = needSecond;
+    SplitReady = true;
+    return 1;
+}
+
+// one quarter (Line3D) between the layers PrepareSplit composited: the same as CompositeLoop over all the steps
+void BananaRenderer2D::CompositeSplit(u32* outTop, u32* outSecond, bool needSecond)
+{
+    const u32* l3 = Line3D;
+    const u32* win = SplitWin;
+    const V4 flagbyte = VDup(0xFF000000), d3 = VDup(0x40000000), one = VDup(1);
+    for (int i = 0; i < 256; i += 4)
+    {
+        V4 c = VLoad(l3 + i);
+        V4 m = VNonZero(VAnd(c, flagbyte));
+        if (win) m = VAnd(m, VEq(VAnd(VLoad(win + i), one), one));
+        c = VOr(c, d3);
+        V4 tb = VLoad(BelowTop + i);
+        V4 t1 = VSel(m, c, tb);
+        V4 at = VLoad(AboveTop + i);
+        V4 ha = VNonZero(at);
+        VStore(outTop + i, VSel(ha, at, t1));
+        if (needSecond)
+        {
+            V4 s1 = VSel(m, tb, VLoad(BelowSec + i));
+            V4 as = VLoad(AboveSec + i);
+            VStore(outSecond + i, VSel(ha, VSel(VNonZero(as), as, t1), s1));
+        }
     }
 }
 
@@ -2747,6 +2897,48 @@ void BananaRenderer2D::ScanlineState(const Banana2DRegs& regs)
         UpdatePalettes(R.PalBG, R.PalOBJ, R.PalBGStale);
 }
 
+// the sprite line's buffers as the next scanline reads them: the count, the extent (OBJLine and OBJTransAttr are 0
+// outside it with render.2d_fast), the extent's pixels and attributes, the OBJ window
+bool BananaRenderer2D::SprSnapSame(const SprSnap& s) const
+{
+    if (!s.Valid || s.Num != (u32)NumSprites || s.XMin != (u32)ObjXMin || s.XMax != (u32)ObjXMax)
+        return false;
+    if (memcmp(s.Win, OBJWindow, 256))
+        return false;
+    if (ObjXMax > ObjXMin)
+    {
+        if (memcmp(&s.Line[ObjXMin], &OBJLine[ObjXMin], (ObjXMax - ObjXMin) * 4)) return false;
+        if (memcmp(&s.Attr[ObjXMin], &OBJTransAttr[ObjXMin], ObjXMax - ObjXMin)) return false;
+    }
+    return true;
+}
+
+void BananaRenderer2D::SprSnapStore(SprSnap& s) const
+{
+    s.Num = NumSprites;
+    s.XMin = ObjXMin;
+    s.XMax = ObjXMax;
+    memcpy(s.Win, OBJWindow, 256);
+    if (ObjXMax > ObjXMin)
+    {
+        memcpy(&s.Line[ObjXMin], &OBJLine[ObjXMin], (ObjXMax - ObjXMin) * 4);
+        memcpy(&s.Attr[ObjXMin], &OBJTransAttr[ObjXMin], ObjXMax - ObjXMin);
+    }
+    s.Valid = 1;
+}
+
+int BananaRenderer2D::CopyRegion(const void* p) const
+{
+    const u8* b = (const u8*)p;
+    if (b >= (const u8*)OAMCopy && b < (const u8*)OAMCopy + sizeof(OAMCopy)) return 5;
+    if (!CopyMem || b < CopyMem.get() || b >= CopyMem.get() + CopyMemSize) return -1;
+    if (b >= PalMem) return 4;
+    if (b >= OBJExtMem) return 3;
+    if (b >= BGExtMem) return 2;
+    if (b >= OBJVRAM) return 1;
+    return 0;
+}
+
 bool BananaRenderer2D::InCopies(const void* p) const
 {
     const u8* b = (const u8*)p;
@@ -2827,9 +3019,15 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
         switch (type[bg])
         {
         case T_3D:
-            // with no window to apply, the compositor converts the 3D line itself (one pass less)
-            if (Banana2DFast && !WindowsOn) Raw3D = true;
-            else                            DrawBG_3D();
+            // the compositor converts the 3D line itself (one pass less; per 3D line at 2x/3x/4x), with windows
+            // through Win3D (ApplyWindow's BG0 bit, as the 3D step's mask: the same pixels)
+            if (Banana2DFast)
+            {
+                Raw3D = true;
+                if (WindowsOn) MakeWin3D();
+            }
+            else
+                DrawBG_3D();
             LayerDrawn |= (1<<bg);
             drew3d = true;
             break;
@@ -2854,7 +3052,7 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
         if (type[bg] != T_3D && (bgcnt & (1<<6)) && bgmosaic > 0)
             ApplyMosaicX(L, bgmosaic);
 
-        if (WindowsOn)
+        if (WindowsOn && !(type[bg] == T_3D && Raw3D))
             ApplyWindow(L, 1 << bg);
     }
     if (WindowsOn)
@@ -2874,10 +3072,27 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
     if (!q3d || !drew3d || (BananaHiresShown && ((R.DispCnt >> 16) & 0x3) != 1))
     {
         CompositeTo(dst);
+        if (Banana2DVerify && Raw3D && WindowsOn)
+        {
+            const u32* one[2] = { line3d, nullptr };
+            VerifyRaw3D(dst, one, false);
+        }
         return;
     }
     // 2x: the layers above, then the compositing once for each of the 3D layer's four lines (quarter 0 into dst,
     // the others into HiOut), as DraStic composites its 2x frame's quarters
+    if (HiN > 4 && Raw3D && Banana2DFast)
+    {
+        // 3x/4x: the other layers composited once (PrepareSplit), each quarter only its 3D line between them
+        int sp = PrepareSplit();
+        if (sp == 2)
+        {
+            // (a full layer covers the 3D one: every quarter's picture is quarter 0's, which EmitAN repeats)
+            CompositeTo(dst);
+            if (Banana2DVerify) VerifyRaw3D(dst, q3d, true);
+            return;
+        }
+    }
     CompositeTo(dst);
     for (int q = 1; q < HiN; q++)
     {
@@ -2891,6 +3106,31 @@ void BananaRenderer2D::DrawScanlineFrom(u32 line, const Banana2DRegs& regs, cons
     }
     Line3D = line3d;
     HiLines = HiN;
+    bool split = SplitReady;
+    SplitReady = false;
+    if (Banana2DVerify && Raw3D && (WindowsOn || split)) VerifyRaw3D(dst, q3d, false);
+}
+
+// render.2d_verify: the line's quarters composited again the reference way (DrawBG_3D + ApplyWindow into BGLine(0),
+// not the raw 3D step with Win3D) and compared (BGLine(0) isn't read again this line: Raw3D)
+void BananaRenderer2D::VerifyRaw3D(const u32* dst, const u32* const* q3d, bool allq0)
+{
+    alignas(16) u32 ref[256];
+    Raw3D = false;
+    SplitReady = false;
+    bool same = true;
+    for (int q = 0; q < HiN; q++)
+    {
+        Line3D = q3d[q];
+        DrawBG_3D();
+        if (WindowsOn) ApplyWindow(BGLine(0), 1);
+        CompositeTo(ref);
+        same &= memcmp(ref, (q && !allq0) ? HiOut[q - 1] : dst, sizeof(ref)) == 0;
+        if (!q3d[1]) break;
+    }
+    Raw3D = true;
+    Line3D = q3d[0];
+    Banana2DVerifyCount(0, same);
 }
 
 // the layers drawn by DrawScanlineFrom composited into dst, with the colour effects

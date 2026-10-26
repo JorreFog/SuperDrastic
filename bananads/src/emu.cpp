@@ -1081,6 +1081,7 @@ bool Emu::load_rom(const std::string& path) {
     const bool banana2d = cfg_.str("render.2d", "banana") == "banana";
     // render.2d_fast: the Banana 2D engine's NEON paths (on, the default) or the portable code (off); same pixels
     melonDS::Banana2DFast = cfg_.flag("render.2d_fast", true);
+    melonDS::Banana2DVerify = cfg_.flag("render.2d_verify", false);
     // render.3d_share: at 2x the 2D thread reads Gengis's rows of the 3D frame instead of a 4 KB copy a line (on)
     melonDS::Banana3DShare = cfg_.flag("render.3d_share", true);
     // render.3d_wait2d: with render.3d_share, the 2D thread waits for the 3D rows, not the emulator's thread (on)
@@ -1175,6 +1176,7 @@ bool Emu::load_rom(const std::string& path) {
     // render.2d_skip (on): with the 2D thread, unit B's lines whose registers and memory are as when last drawn come
     // from a line cache instead of being drawn again (the copy log's records compared byte for byte). Same pictures
     if (banana2d) banana_->SetSkip(cfg_.flag("render.2d_skip", true));
+    if (banana2d) banana_->SetOutSkip(cfg_.flag("render.2d_out_skip", true));
     // render.2d_test_delay (tests only, default 0): the 2D thread sleeps this many microseconds after each job, so that
     // it falls behind and the job ring and the copy log fill: the checks then reach their full paths
     if (banana2d) banana_->SetTestDelay((u32)cfg_.num("render.2d_test_delay", 0));
@@ -1412,6 +1414,13 @@ void Emu::wait_frame(uint32_t fence) const {
 #endif
 }
 
+void Emu::output_touched(const void* buf) {
+#ifdef BANANADS_2D
+    if (banana_) banana_->OutputTouched(buf);
+#else
+    (void)buf;
+#endif
+}
 bool Emu::draw_into(uint32_t* top, uint32_t* bottom) {
 #ifdef BANANADS_2D
     if (!banana_) return false;
