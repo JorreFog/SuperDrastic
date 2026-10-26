@@ -34,6 +34,13 @@ namespace melonDS
 // render.2d_fast (default on): the NEON paths of the Banana 2D engine (output stage, 16-colour text BGs, direct-colour
 // bitmaps) and the sprite line's partial clears. Off: the portable code they replace. The same pixels either way.
 extern bool Banana2DFast;
+// kms.grid_cpu: the LCD grid of ds-grid-2x at render.scale=4 (1:1 on the RG DS Plus's 1024x768) applied as the 2D
+// engine writes its 4x output, instead of a GPU pass: lut[0][v] for a cell pixel, lut[1][v] for a grid-line pixel
+// (the last column or row of each DS pixel's 4x4 cell), v an output byte (R, G or B). Built from the GPU's own output
+// of the shader (shader.c shader_grid4_lut), so the bytes are the shader's. null: off. Set only between frames with the
+// 2D thread drained
+void BananaSetGrid4(const unsigned char (*lut)[256]);
+bool BananaGrid4On();
 extern bool Banana3DShare;
 extern bool BananaHiresShown;  // render.2d_hires_shown: unit A's 2x quarters 1-3 composited only when its display mode shows them (BananaRenderer2D)
 extern bool BananaCapNeedA;  // render.cap_unit_a: unit A drawn on the emulator's thread only while display capture reads its 2D output (BananaRenderer)

@@ -73,6 +73,8 @@ public:
     // thread after it returns. frame_fence() right after run_frame(), then wait_frame(fence) (any thread) before
     // reading the pictures drawn into draw_into's buffers; false: nothing to wait for
     bool set_lazy_2d(bool on);
+    // kms.grid_cpu: the LCD grid table for the Banana 2D engine's 4x output (null: off); between frames, emulator's thread
+    bool set_grid4(const unsigned char (*lut)[256]);
     bool frame_fence(uint32_t& fence) const;
     void wait_frame(uint32_t fence) const;
 

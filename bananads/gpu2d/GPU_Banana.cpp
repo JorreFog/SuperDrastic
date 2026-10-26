@@ -127,6 +127,31 @@ static inline uint8x16_t Expand6(uint8x16_t c)
     uint8x16_t t = vshlq_n_u8(c, 2);
     return vsriq_n_u8(t, t, 6);
 }
+#endif
+
+// kms.grid_cpu (GPU2D_Banana.h): the grid's byte tables, for 8-bit output bytes and for the 6-bit channels the NEON
+// paths hold before Expand6 (Grid6[c][v] = Grid8[c][Expand6(v)])
+static bool Grid4 = false;
+alignas(16) static u8 Grid8[2][256];
+alignas(16) static u8 Grid6[2][64];
+static bool Grid4SelfTest();
+void BananaSetGrid4(const unsigned char (*lut)[256])
+{
+    Grid4 = false;
+    if (!lut) return;
+    for (int c = 0; c < 2; c++)
+    {
+        for (int v = 0; v < 256; v++) Grid8[c][v] = lut[c][v];
+        for (int v = 0; v < 64; v++) Grid6[c][v] = lut[c][(v << 2) | (v >> 4)];
+    }
+    Grid4 = Grid4SelfTest();
+}
+bool BananaGrid4On() { return Grid4; }
+static inline u32 GridPx(u32 p, int c)
+{
+    return (p & 0xFF000000u) | (u32)Grid8[c][(p >> 16) & 0xFF] << 16 | (u32)Grid8[c][(p >> 8) & 0xFF] << 8 | Grid8[c][p & 0xFF];
+}
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
 
 template<int mode>
 static inline uint8x16_t Bright6(uint8x16_t c, uint8x8_t f)
@@ -383,6 +408,113 @@ static void WriteRepN(u32* dst, const u32* src, u16 brightness)
     else                          WriteRepNNeon<0, N>(dst, src, 0);
 }
 
+// kms.grid_cpu at 4x: as Load16, the 6-bit channels looked up in a grid table (Grid6[c]) instead of Expand6
+template<int mode>
+static inline uint32x4x4_t Load16G(const u32* src, uint8x8_t f, const uint8x16x4_t& t)
+{
+    uint8x16x4_t s = vld4q_u8((const u8*)src);
+    uint8x16_t r = s.val[0], g = s.val[1], b = s.val[2];
+    if (mode)
+    {
+        r = Bright6<mode>(r, f); g = Bright6<mode>(g, f); b = Bright6<mode>(b, f);
+    }
+    return Pixels16(vqtbl4q_u8(t, r), vqtbl4q_u8(t, g), vqtbl4q_u8(t, b));
+}
+// WriteZipNNeon<mode, 4> with the grid: row `line` (the cell's last row) all grid line, else pixel 3 of each 4
+template<int mode>
+static void WriteZip4GNeon(u32* dst, const u32* const* src, u32 factor, bool line)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    const uint8x16x4_t tc = vld1q_u8_x4(Grid6[line ? 1 : 0]), tl = vld1q_u8_x4(Grid6[1]);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint32x4x4_t p[4];
+        for (int n = 0; n < 3; n++) p[n] = Load16G<mode>(src[n] + i, f, tc);
+        p[3] = Load16G<mode>(src[3] + i, f, tl);
+        for (int k = 0; k < 4; k++)
+        {
+            uint32x4x4_t z = {{ p[0].val[k], p[1].val[k], p[2].val[k], p[3].val[k] }};
+            vst4q_u32(dst + 4 * i + 16 * k, z);
+        }
+    }
+}
+// WriteRepNNeon<mode, 4> with the grid
+template<int mode>
+static void WriteRep4GNeon(u32* dst, const u32* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    const uint8x16x4_t tc = vld1q_u8_x4(Grid6[0]), tl = vld1q_u8_x4(Grid6[1]);
+    for (int i = 0; i < 256; i += 16)
+    {
+        const uint32x4x4_t c = Load16G<mode>(src + i, f, tc), l = Load16G<mode>(src + i, f, tl);
+        for (int k = 0; k < 4; k++)
+        {
+            uint32x4x4_t z = {{ c.val[k], c.val[k], c.val[k], l.val[k] }};
+            for (int r = 0; r < 3; r++) vst4q_u32(dst + 1024 * r + 4 * i + 16 * k, z);
+            uint32x4x4_t w = {{ l.val[k], l.val[k], l.val[k], l.val[k] }};
+            vst4q_u32(dst + 1024 * 3 + 4 * i + 16 * k, w);
+        }
+    }
+}
+static void WriteZip4G(u32* dst, const u32* const* src, u16 brightness, bool line)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteZip4GNeon<1>(dst, src, factor, line);
+    else if (mode == 2 && factor) WriteZip4GNeon<2>(dst, src, factor, line);
+    else                          WriteZip4GNeon<0>(dst, src, 0, line);
+}
+static void WriteRep4G(u32* dst, const u32* src, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteRep4GNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteRep4GNeon<2>(dst, src, factor);
+    else                          WriteRep4GNeon<0>(dst, src, 0);
+}
+
+// kms.grid_cpu's check when it is turned on: the NEON grid writers give, byte for byte, the ungridded writers' output
+// with the tables applied to each byte by place (GridPx: the tables as shader_grid4_lut proved them against the GPU),
+// for every 6-bit level in every channel and lane, with and without master brightness. False: the grid stays off
+static bool Grid4SelfTest()
+{
+    alignas(16) static u32 src[4][256], a[4 * 1024], b[4 * 1024];
+    const u32* sp[4] = {src[0], src[1], src[2], src[3]};
+    u32 seed = 12345;
+    const u16 bright[3] = {0, 0x4008, 0x8005};
+    for (int round = 0; round < 8; round++)
+    {
+        for (int n = 0; n < 4; n++)
+            for (int i = 0; i < 256; i++)
+            {
+                seed = seed * 1103515245u + 12345u;
+                const u32 v = (u32)(i + 64 * round + 16 * n) & 63;   // (every level in every lane and line)
+                src[n][i] = v | ((v * 5 + 7) & 63) << 8 | ((v * 11 + 3) & 63) << 16 | (seed >> 8 & 0xFF) << 24;
+            }
+        for (u16 br : bright)
+        {
+            const bool g = Grid4;
+            for (int r = 0; r < 4; r++)
+            {
+                Grid4 = false;
+                WriteZipN<4>(a + 1024 * r, sp, br);
+                for (int x = 0; x < 1024; x++) a[1024 * r + x] = GridPx(a[1024 * r + x], r == 3 || (x & 3) == 3);
+                Grid4 = g;
+                WriteZip4G(b + 1024 * r, sp, br, r == 3);
+            }
+            if (memcmp(a, b, sizeof a)) return false;
+            WriteRepN<4>(a, src[round & 3], br);
+            for (int y = 0; y < 4; y++)
+                for (int x = 0; x < 1024; x++) a[1024 * y + x] = GridPx(a[1024 * y + x], y == 3 || (x & 3) == 3);
+            WriteRep4G(b, src[round & 3], br);
+            if (memcmp(a, b, sizeof a)) return false;
+        }
+    }
+    return true;
+}
+
 // display modes 2 and 3: the conversion to the 18-bit format fused with WriteLine
 static void OutputDisplayNeon(u32* dst, const u16* display, u16 brightness)
 {
@@ -393,6 +525,8 @@ static void OutputDisplayNeon(u32* dst, const u16* display, u16 brightness)
     else if (mode == 2 && factor) OutputDisplayNeonT<2>(dst, display, factor);
     else                          OutputDisplayNeonT<0>(dst, display, 0);
 }
+#else
+static bool Grid4SelfTest() { return true; }   // (the portable paths apply the tables byte by byte: GridPx)
 #endif
 
 // master brightness and colour expansion in one pass
@@ -522,6 +656,16 @@ static void ZipLine(u32* dst, const u32* even, const u32* odd)
 // 3x, 4x: a 256-pixel line with each pixel n times, on n rows of 256 n
 static void RepLine(u32* dst, const u32* src, int n)
 {
+    if (n == 4 && Grid4)   // kms.grid_cpu
+    {
+        for (int i = 0; i < 256; i++)
+        {
+            const u32 c = GridPx(src[i], 0), l = GridPx(src[i], 1);
+            for (int r = 0; r < 4; r++)
+                for (int k = 0; k < 4; k++) dst[1024 * r + 4 * i + k] = (r == 3 || k == 3) ? l : c;
+        }
+        return;
+    }
     for (int i = 0; i < 256; i++)
         for (int r = 0; r < n; r++)
             for (int c = 0; c < n; c++)
@@ -529,8 +673,14 @@ static void RepLine(u32* dst, const u32* src, int n)
 }
 
 // 3x, 4x: a row of 256 n pixels from its pixels nk + c (src[c])
-static void ZipNLine(u32* dst, const u32* const* src, int n)
+static void ZipNLine(u32* dst, const u32* const* src, int n, bool line = false)
 {
+    if (n == 4 && Grid4)   // kms.grid_cpu (line: the cell's last row)
+    {
+        for (int i = 0; i < 256; i++)
+            for (int c = 0; c < 4; c++) dst[4 * i + c] = GridPx(src[c][i], line || c == 3 ? 1 : 0);
+        return;
+    }
     for (int i = 0; i < 256; i++)
         for (int c = 0; c < n; c++)
             dst[n * i + c] = src[c][i];
@@ -547,6 +697,7 @@ void BananaRenderer::EmitAN(u32* dst, u32 dispcnt, u16 brightness, const u16* di
         if (a.HiLines == 1)
         {
             if (Sc == 3) WriteRepN<3>(dst, Output2D[0], brightness);
+            else if (Grid4) WriteRep4G(dst, Output2D[0], brightness);
             else         WriteRepN<4>(dst, Output2D[0], brightness);
             return;
         }
@@ -556,6 +707,7 @@ void BananaRenderer::EmitAN(u32* dst, u32 dispcnt, u16 brightness, const u16* di
         for (int r = 0; r < Sc; r++)
         {
             if (Sc == 3) WriteZipN<3>(dst + w * r, src + 3 * r, brightness);
+            else if (Grid4) WriteZip4G(dst + w * r, src + 4 * r, brightness, r == 3);
             else         WriteZipN<4>(dst + w * r, src + 4 * r, brightness);
         }
         return;
@@ -575,7 +727,7 @@ void BananaRenderer::EmitAN(u32* dst, u32 dispcnt, u16 brightness, const u16* di
         src[k] = q[k];
     }
     for (int r = 0; r < Sc; r++)
-        ZipNLine(dst + w * r, src + Sc * r, Sc);
+        ZipNLine(dst + w * r, src + Sc * r, Sc, r == Sc - 1);
 }
 
 // unit A's line: at 2x its four composited quarters when the line showed the 3D layer (HiLines 4), else doubled
@@ -630,6 +782,7 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
     if (Banana2DFast && ((dispcnt >> 16) & 0x1))
     {
         if (Sc == 3) WriteRepN<3>(dst, src ? src : Output2D[1], brightness);
+        else if (Sc == 4 && Grid4) WriteRep4G(dst, src ? src : Output2D[1], brightness);
         else if (Sc == 4) WriteRepN<4>(dst, src ? src : Output2D[1], brightness);
         else WriteDouble(dst, src ? src : Output2D[1], brightness);
         return;
@@ -643,6 +796,13 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
 
 void BananaRenderer::Fill(u32* dst, u32 val)
 {
+    if (Quarter && NQ == 16 && Grid4)   // kms.grid_cpu: a 4x line is 4 rows of 1024
+    {
+        const u32 c = GridPx(val, 0), l = GridPx(val, 1);
+        for (int y = 0; y < 4; y++)
+            for (int x = 0; x < 1024; x++) dst[1024 * y + x] = (y == 3 || (x & 3) == 3) ? l : c;
+        return;
+    }
     for (int k = 0; k < (Quarter ? NQ : 1); k++)
         FillLine(dst + 256 * k, val);
 }
