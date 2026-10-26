@@ -36,6 +36,7 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     gx_hrneon = HrNeon < 0 ? Scale_ >= 3 : HrNeon != 0;
     gx_lazy = Lazy < 0 ? Scale_ >= 3 : Lazy != 0;
     Sub = Scale_ == 4 && Units ? 2 : 1;
+    VbConvOnly = VbWait < 0 ? Scale_ >= 3 : VbWait == 0;
     NU = GX_NBINS * Sub;
     Next.store(NU);
     gx_init();
@@ -474,6 +475,7 @@ int GengisRenderer3D::Verify = 0;
 int GengisRenderer3D::Lazy = 0;
 int GengisRenderer3D::Units = 1;
 int GengisRenderer3D::KeySkip = 1;
+int GengisRenderer3D::VbWait = -1;
 int GengisRenderer3D::TexInval = 1;
 int GengisRenderer3D::Zva = 1;
 int GengisRenderer3D::Trim = 1;
@@ -700,7 +702,19 @@ void GengisRenderer3D::RenderFrame() {
     if (Threads.empty()) WaitAll();
 }
 
-void GengisRenderer3D::FinishRendering() { WaitAll(); }
+// VBlank (GPU.cpp: before GPU3D::VBlank swaps the polygon lists and latches the next frame's registers). The bins
+// read only the frame's own copies once it is converted (Polys, Frame, the decoded textures, gx_begin_frame's
+// blocks); the texture VRAM copies and the texture cache change only in RenderFrame, after its WaitAll. So
+// render.gengis_vbwait=0 (default at 3x and 4x) waits here for the conversion alone (doing it when no render thread
+// has started it), and the bins may run on until the next frame's start at line 215 (or the 2D thread's row waits)
+void GengisRenderer3D::FinishRendering() {
+    if (!VbConvOnly) { WaitAll(); return; }
+    while (Converted.load(std::memory_order_acquire) != 2) {
+        if (Converted.load(std::memory_order_acquire) == 0 && RenderOne(true)) continue;   // (converts, then draws one)
+        std::unique_lock<std::mutex> l(M);
+        ConvDone.wait_for(l, std::chrono::milliseconds(1), [&] { return Converted.load(std::memory_order_acquire) == 2; });
+    }
+}
 
 // render.gengis_stats=N: a line every N rendered frames, per rendered frame: the bins' CPU time (all threads), the
 // slowest bin, the conversion (polygons + textures) and its texture decoding, the polygons, the textures decoded,

@@ -32,6 +32,7 @@ public:
     void Reset() override;
     void RenderFrame() override;
     void FinishRendering() override;
+    void FinishAll() { WaitAll(); }  // (every bin of the frame, whatever render.gengis_vbwait: before a savestate)
     void RestartFrame() override {}
     melonDS::u32* GetLine(int line) override;  // at 2x (3x): quarter 0 of the line
     int Scale() const { return Scale_; }
@@ -51,6 +52,8 @@ public:
     static int Zva;  // render.gengis_zva: dc zva before the clear's and the 2x output's stores (same bytes)
     static int TexInval;  // render.gengis_texinval: 1 (blocks) drops only the textures whose VRAM changed, 0 all
     static int HrNeon;  // render.gengis_hrneon: decal/toon/highlight polygons on NEON batches (hrneon.c); -1: at 3x and 4x
+    static int VbWait;  // render.gengis_vbwait: 1 VBlank waits for all bins, 0 for the conversion only; -1: 0 at 3x and 4x
+    bool VbConvOnly = false;
     static int KeySkip;  // render.gengis_keyskip (3x, 4x): render.gengis_reuse's keys only now and then while nothing is reusable
     unsigned ReuseMiss = 0, KeyFrames = 0;
     static int Units;  // render.gengis_units: 4x sub-bins as work units (default on)
@@ -198,7 +201,7 @@ public:
     }
     void PreSavestate() override {
         Drain2D(this);
-        this->Rend3D->FinishRendering();
+        static_cast<GengisRenderer3D*>(this->Rend3D.get())->FinishAll();   // (all bins, whatever render.gengis_vbwait)
     }
     void PostSavestate() override { Resync2D(this); }
     void SetRenderSettings(melonDS::RendererSettings&) override {}
