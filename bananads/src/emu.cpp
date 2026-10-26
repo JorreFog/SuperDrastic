@@ -450,6 +450,15 @@ bool Emu::load_rom(const std::string& path) {
         else if (v == "off") setenv("MELONDS_JIT_NOFLAGSTUB", "1", 1);
     }
 
+    // jit.loopregs=on|off: on sets MELONDS_JIT_LOOPREGS=1, off unsets it, unset leaves the environment as it is (melonDS
+    // 0007's LOOPREGS: a block that loops back to its own start keeps its guest registers in host registers round the
+    // loop; 0381 fixed its HeartGold hang, 0382 lets loops with a branch followed when taken in)
+    {
+        const std::string v = cfg_.str("jit.loopregs", "");
+        if (v == "on") setenv("MELONDS_JIT_LOOPREGS", "1", 1);
+        else if (v == "off") unsetenv("MELONDS_JIT_LOOPREGS");
+    }
+
     // jit.hugepages=on|off sets MELONDS_JIT_HUGEPAGE (melonDS patch 0085: the JIT's code memory aligned to 2 MB and
     // madvise(MADV_HUGEPAGE)'d, for the A55's TLBs; decided as the first JIT starts; unset, on). Emulation doesn't
     // change. The JIT's first reset logs "[jit] code memory at ..., N kB on huge pages"

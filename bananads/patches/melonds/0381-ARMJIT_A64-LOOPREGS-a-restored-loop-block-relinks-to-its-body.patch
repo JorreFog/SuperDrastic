@@ -1,0 +1,90 @@
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 07:18:01 +0100
+Subject: [PATCH] ARMJIT_A64: LOOPREGS: a restored LoopMode block's self loop relinks to its body
+
+LOOPREGS's bug (the HeartGold hang, docs/PERF.md): a LoopMode block's self loop
+goes round to its body, past the entry's guest register loads, with the
+registers live in host registers and their memory copies left stale. When the
+block is retired (its code overwritten) its self-loop slot is unlinked; when the
+same code comes back at the same address, ARMJIT restores the old block
+(RestoreCandidates) and the slot's link path asks ARM_Dispatch to link it
+again. Link linked every slot to the block's entry, so the restored loop went
+round through the entry, reloading the stale memory copies each time: it only
+made progress at slice ends (the way out stores them), i.e. hung. Link now
+links a LoopMode self slot to its own block's body (LinkSlot.loopStart/loopBody).
+MELONDS_JIT_LOOPRELINKOLD=1 restores the old behaviour (to show the hang).
+---
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -364,6 +364,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         LoopNoSigned = getenv("MELONDS_JIT_NOLOOPSIGNED");
+         LoopNoLazy = LoopNoSigned || getenv("MELONDS_JIT_NOLOOPLAZY");
+         LoopNoXfer = getenv("MELONDS_JIT_NOLOOPXFER");
++        // (patch 0381's fix off, to show the hang: MELONDS_JIT_LOOPRELINKOLD=1)
++        LoopRelinkOld = getenv("MELONDS_JIT_LOOPRELINKOLD") && atoi(getenv("MELONDS_JIT_LOOPRELINKOLD"));
+         OptLazyFlags = OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
+         OptFlagStub = OptExitStub && OptLazyFlags && !getenv("MELONDS_JIT_NOFLAGSTUB");
+         FlagsWatch = OptLazyFlags;
+@@ -1108,6 +1110,19 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         // the entry's register loads, with the registers where they are
+         const u8* entry = LoopMode ? LoopBodyRX : BlockStartRX + EntrySkip[Num];
+         *(u32*)slot = 0x14000000 | ((u32)((entry - slotRX) / 4) & 0x3FFFFFF);
++        if (LoopMode)
++        {
++            // (patch 0381) Link must put this slot back on the body, not the entry, when the block is retired and
++            // restored (RestoreCandidates: same code at the same address, e.g. an overlay loaded again): the
++            // entry reloads the guest registers from memory, which the way round doesn't keep up to date, so
++            // the loop would go round with the registers of its last way out, forever (HeartGold's boot hang)
++            auto& ls = LinkSlots[(u32)(slotRX - GetRXBase())];
++            if (!LoopRelinkOld)
++            {
++                ls.loopStart = (u32)(BlockStartRX - GetRXBase());
++                ls.loopBody = (u32)(LoopBodyRX - GetRXBase());
++            }
++        }
+         LinkedTo[(u32)(BlockStartRX - GetRXBase())].push_back((u32)(slotRX - GetRXBase()));
+         if (Num == 0 && SliceChainStub && !LoopMode)
+         {
+@@ -1506,6 +1521,8 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+     }
+     else if (it->second.r15 != cpu->R[15] || it->second.num != (cpu->Num | ((cpu->CPSR & 0x20) ? 2u : 0u)))
+         return;
++    if (it->second.loopBody && (u32)(entry - EntrySkip[cpu->Num] - GetRXBase()) == it->second.loopStart)
++        entry = GetRXBase() + it->second.loopBody;   // (a LoopMode block's own self loop: round to its body, 0381)
+     const s64 d = ((s64)(entry - GetRXBase()) - (s64)off) / 4;
+     if (d < -(1 << 25) || d >= (1 << 25))
+         return;
+@@ -1514,7 +1531,8 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+     *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
+     NDS.JIT.JitEnableExecute();
+     FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
+-    LinkedTo[(u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
++    LinkedTo[it->second.loopBody && (u32)(entry - GetRXBase()) == it->second.loopBody ? it->second.loopStart
++        : (u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
+ }
+ 
+ void Compiler::UnlinkBlock(JitBlockEntry entry)
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -278,8 +278,11 @@ public:
+     bool LastJumpKnown = false;   // the instruction being compiled jumped to a constant address (Comp_JumpTo(u32))
+     u32 LastJumpR15 = 0;
+     bool LastJumpThumb = false;
+-    struct LinkSlot { u32 orig; u32 r15; u32 num; u32 lit = 0; };   // num: the CPU's, | 2 when the target is Thumb
+-                                                              // code; lit: a DYNCACHE slot's key word, 0 otherwise
++    struct LinkSlot { u32 orig; u32 r15; u32 num; u32 lit = 0; u32 loopStart = 0, loopBody = 0; };
++                                                              // num: the CPU's, | 2 when the target is Thumb
++                                                              // code; lit: a DYNCACHE slot's key word, 0 otherwise;
++                                                              // loopStart/loopBody: a LoopMode self loop's block entry
++                                                              // and the body it goes round to (patch 0381), else 0
+     std::unordered_map<u32, LinkSlot> LinkSlots;              // a slot's offset in code memory -> its link path's B
+     std::unordered_map<u32, std::vector<u32>> LinkedTo;       // a block's entry offset -> the slots that jump to it
+     bool LinkBlocks = true;       // MELONDS_JIT_NOLINK=1: every exit goes back to the loop, as melonDS's does
+@@ -306,6 +309,7 @@ public:
+     bool OptLoopRegs = false;     // LOOPREGS=1 (off by default): a block that loops back to its own start keeps the guest registers
+                                   // it uses in host registers round the loop (LoopMode)
+     bool LoopNoTs = false, LoopNoSigned = false, LoopNoLazy = false, LoopNoXfer = false;   // (LOOPREGS's parts)
++    bool LoopRelinkOld = false;   // MELONDS_JIT_LOOPRELINKOLD=1: patch 0381 off (a restored LoopMode block relinks to its entry)
+     bool LoopMode = false;        // the block being compiled does (LoopBlock decides)
+     u8* LoopBodyRX = nullptr;     // ... where its loop goes back to: past the entry's loads
+     bool LoopBlock(FetchedInstr instrs[], int instrsCount);

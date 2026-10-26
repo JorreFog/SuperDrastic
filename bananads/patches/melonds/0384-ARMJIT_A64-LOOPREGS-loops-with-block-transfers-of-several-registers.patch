@@ -1,0 +1,78 @@
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 08:29:44 +0100
+Subject: [PATCH] ARMJIT_A64: LOOPREGS: loops with block transfers of several registers
+
+LoopMode (LOOPREGS) takes self loops with block transfers of several registers
+(Thumb PUSH/POP/LDMIA/STMIA, ARM LDM/STM; never PC, never a load of the base,
+no S bit): Comp_MemAccessBlock with every register loaded, as it handles
+loaded registers outside LoopMode; its slow call (no fast path) unloads no
+register in LoopMode (they stay loaded round the loop). LazySafe keeps pending
+flags over a Thumb block transfer in LoopMode only for one register (the
+block transfer's slow call doesn't keep NZCV). HeartGold bench: 020d3644A
+(stmia r1!, 8 registers, ~1.1% of ARM9 block entries), 02204404T (memcpy by
+ldmia/stmia pairs). MELONDS_JIT_NOLOOPMULTI=1: off.
+---
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -366,6 +366,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         LoopNoXfer = getenv("MELONDS_JIT_NOLOOPXFER");
+         // (patch 0382: LoopMode for loops with a conditional branch followed when taken; MELONDS_JIT_NOLOOPFOLLOW=1 off)
+         LoopNoFollow = getenv("MELONDS_JIT_NOLOOPFOLLOW") && atoi(getenv("MELONDS_JIT_NOLOOPFOLLOW"));
++        // (patch 0384: LoopMode with block transfers of several registers; MELONDS_JIT_NOLOOPMULTI=1 off)
++        LoopNoMulti = getenv("MELONDS_JIT_NOLOOPMULTI") && atoi(getenv("MELONDS_JIT_NOLOOPMULTI"));
+         // (patch 0381's fix off, to show the hang: MELONDS_JIT_LOOPRELINKOLD=1)
+         LoopRelinkOld = getenv("MELONDS_JIT_LOOPRELINKOLD") && atoi(getenv("MELONDS_JIT_LOOPRELINKOLD"));
+         OptLazyFlags = OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
+@@ -956,7 +958,10 @@ bool Compiler::LazySafe(const FetchedInstr& in)
+             return true;
+         if (LoopMode && !LoopNoXfer && (k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP || k == ARMInstrInfo::tk_LDMIA
+             || k == ARMInstrInfo::tk_STMIA))
+-            return true;   // (in a LoopMode block only one register, not PC: a single access, LoopBlock)
++            // (in a LoopMode block one register, not PC, is a single access, LoopBlock; several (0384) are a block
++            // transfer, whose slow call doesn't keep NZCV)
++            return __builtin_popcount((in.Instr & 0xFF) | (((k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP)
++                && (in.Instr & 0x100)) ? 0x100 : 0)) == 1;
+         return k < ARMInstrInfo::tk_PUSH && !(in.Info.ReadFlags & 0xF);
+     }
+     if ((k == ARMInstrInfo::ak_B || k == ARMInstrInfo::ak_BL) && in.Cond() != 0xF)
+@@ -1493,10 +1498,17 @@ bool Compiler::LoopBlockWhy(FetchedInstr instrs[], int instrsCount, int& why)
+         // single access (both ways it is loaded: the instruction's own register)
+         const bool armSingle = !Thumb && !LoopNoXfer && __builtin_popcount(in.Instr & 0xFFFF) == 1
+             && !(in.Instr & (1 << 15)) && !(in.Instr & (1 << 22)) && !(in.Instr & (1 << ((in.Instr >> 16) & 0xF)));
++        // (patch 0384) a block transfer of several registers (no PC: refused above): Comp_MemAccessBlock with every
++        // register loaded, its slow call unloading none in LoopMode; not a load of its own base, no user-mode registers
++        const bool multi = !LoopNoXfer && !LoopNoMulti && (Thumb
++            ? (k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP || k == ARMInstrInfo::tk_STMIA
++                || (k == ARMInstrInfo::tk_LDMIA && !(in.Instr & (1 << ((in.Instr >> 8) & 7)))))
++            : ((k == ARMInstrInfo::ak_LDM || k == ARMInstrInfo::ak_STM) && !(in.Instr & (1 << 22))
++                && !(in.Instr & (1 << ((in.Instr >> 16) & 0xF)))));
+         if (Thumb ? (((k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP || k == ARMInstrInfo::tk_LDMIA
+-                || k == ARMInstrInfo::tk_STMIA) && !(single && !(in.Info.DstRegs & (1 << 15))))
++                || k == ARMInstrInfo::tk_STMIA) && !(single && !(in.Info.DstRegs & (1 << 15))) && !multi)
+                 || k == ARMInstrInfo::tk_BL_LONG_1 || k == ARMInstrInfo::tk_BL_LONG_2)
+-            : (((k == ARMInstrInfo::ak_LDM || k == ARMInstrInfo::ak_STM) && !armSingle) || k == ARMInstrInfo::ak_MSR_IMM
++            : (((k == ARMInstrInfo::ak_LDM || k == ARMInstrInfo::ak_STM) && !armSingle && !multi) || k == ARMInstrInfo::ak_MSR_IMM
+                 || k == ARMInstrInfo::ak_MSR_REG || k == ARMInstrInfo::ak_MRS || k == ARMInstrInfo::ak_BLX_IMM))
+             return why = 70 + i, false;
+     }
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -310,6 +310,7 @@ public:
+                                   // it uses in host registers round the loop (LoopMode)
+     bool LoopNoTs = false, LoopNoSigned = false, LoopNoLazy = false, LoopNoXfer = false;   // (LOOPREGS's parts)
+     bool LoopNoFollow = false;    // MELONDS_JIT_NOLOOPFOLLOW=1: patch 0382 off (no LoopMode with a branch followed when taken)
++    bool LoopNoMulti = false;     // MELONDS_JIT_NOLOOPMULTI=1: patch 0384 off
+     bool LoopR15Back = false;     // (0382: the LoopMode block being compiled stores R15 on its way round)
+     bool LoopRelinkOld = false;   // MELONDS_JIT_LOOPRELINKOLD=1: patch 0381 off (a restored LoopMode block relinks to its entry)
+     bool LoopMode = false;        // the block being compiled does (LoopBlock decides)
+--- a/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
++++ b/src/ARMJIT_A64/ARMJIT_LoadStore.cpp
+@@ -701,7 +701,7 @@ s32 Compiler::Comp_MemAccessBlock(int rn, BitSet16 regs, bool store, bool preinc
+         }
+     }
+ 
+-    PushRegs(false, false, !compileFastPath);
++    PushRegs(false, false, !compileFastPath && !LoopMode);   // (0384: LoopMode unloads no register)
+ 
+     ADD(X1, SP, 0);
+     MOVI2R(W2, regsCount);

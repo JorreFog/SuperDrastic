@@ -449,6 +449,23 @@ Later rounds the same night (all exact, same toggles; qemu-count unless said):
   a different host speed into a different picture). Not covered by the tests: a loop whose own block is invalidated
   while it runs.
 
+- **The LOOPREGS hang: found and fixed (2026-10-26, JIT round J5, patch 0381).** A LoopMode block's self loop goes
+  round to its body, past the entry's guest register loads, with the registers live only in host registers. When the
+  block's code is overwritten, RetireJitBlock unlinks its slots (the self loop's too) and keeps the block in
+  RestoreCandidates; when the same code comes back at the same address (HeartGold's overworld load does this) the
+  block is restored and its self slot's link path asks `Link` to link it again - and `Link` linked every slot to the
+  block's entry. Each way round then reloaded the registers from their stale memory copies: progress only at slice
+  ends, i.e. a hang. The bench state never invalidates code, so it never showed there; the test ROMs never restore a
+  block. Panel repro (vanilla HeartGold (USA), cold boot from a copy of its save, Continue): with
+  `MELONDS_JIT_LOOPRELINKOLD=1` black screens from the overworld load on, without it the overworld as with LOOPREGS
+  off. `Link` now sends a LoopMode block's own self slot to its body (LinkSlot.loopStart/loopBody).
+  0382 lets HeartGold's hottest loops in (a conditional B followed when taken: its R15 store stays, the way round puts
+  the entry's back; ARM LDM/STM of one register: the single access it is outside LoopMode): 332 of 382 compiled self
+  loops in LoopMode on the boot (206 before); with J4's 0361 (the branch's R15 stored by its not-taken exit) the way
+  round has no R15 store at all. 0384: loops with block transfers of several registers (no PC, not a load of the base;
+  the slow call unloads nothing in LoopMode). In-run A/B on the bench (PIN=1 FF=1, flip + JIT reset every 240 frames, 2 x 90 s): 0381+0382 on vs off
+  +2.31% / +2.35% (paired +2.7 fps of ~115). Audio gate: tap identical (LOOPREGS=1).
+
 Left, by agent: the geometry's FIFO ring buffer (savestates hold both FIFOs) and its vertex copies; rotscale
 sprites and OBJ mosaic, skipping unchanged lines in 2D; the mix's per-sample tail and batched ARM9 DMA for VRAM.
 
@@ -1335,6 +1352,7 @@ that SliceChain can't continue. DYNCACHE: 8.4k hits, 3.2k misses.
 All four: `jit.exits` (SETTINGS.md); runtime bytes (0341/0342) and compile-time flags (0343/0344) for in-run A/B
 (debug patch 0349, `-DMELONDS_J3AB=1`: `MELONDS_J3AB=<frames>`, `MELONDS_J3ABMASK`, `MELONDS_J3ABBASE`).
 Speed: see reports/jit-J3.md (a loop round trip turned out to cost only ~50 cycles: the gains are small).
+
 
 ## JIT round J4 (2026-10-26): where the ARM9's block exits are, and self loops with a branch followed when taken
 

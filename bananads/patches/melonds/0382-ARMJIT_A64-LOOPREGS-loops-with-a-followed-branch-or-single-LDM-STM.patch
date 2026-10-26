@@ -1,0 +1,114 @@
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 07:43:18 +0100
+Subject: [PATCH] ARMJIT_A64: LOOPREGS: loops with a branch followed when taken, ARM single-register LDM/STM
+
+More self loops in LoopMode (LOOPREGS). HeartGold's hottest loops (021f9292T,
+021f9624T search loops, 020d35f4A/020cfde8A GX/copy loops: ~40% of the ARM9's
+block entries on the bench) were all refused:
+- a conditional B followed when taken inside the loop: it stores its R15 first
+  (for the way not taken, an exit), which turned off the inline self loop
+  (R15Stored). In LoopMode that store no longer counts; the way round stores
+  the entry's R15 again (what the plain self loop's ExitCheckPC does), so R15
+  in memory is the same at every point. MELONDS_JIT_NOLOOPFOLLOW=1: off.
+- an ARM LDM/STM of one register (not PC, not the base, no S bit): the same
+  single access Comp_MemAccessBlock makes for it outside LoopMode (the register
+  is the instruction's own, loaded either way). MELONDS_JIT_NOLOOPXFER=1 now
+  turns off the Thumb and the ARM cases.
+---
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -364,6 +364,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         LoopNoSigned = getenv("MELONDS_JIT_NOLOOPSIGNED");
+         LoopNoLazy = LoopNoSigned || getenv("MELONDS_JIT_NOLOOPLAZY");
+         LoopNoXfer = getenv("MELONDS_JIT_NOLOOPXFER");
++        // (patch 0382: LoopMode for loops with a conditional branch followed when taken; MELONDS_JIT_NOLOOPFOLLOW=1 off)
++        LoopNoFollow = getenv("MELONDS_JIT_NOLOOPFOLLOW") && atoi(getenv("MELONDS_JIT_NOLOOPFOLLOW"));
+         // (patch 0381's fix off, to show the hang: MELONDS_JIT_LOOPRELINKOLD=1)
+         LoopRelinkOld = getenv("MELONDS_JIT_LOOPRELINKOLD") && atoi(getenv("MELONDS_JIT_LOOPRELINKOLD"));
+         OptLazyFlags = OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
+@@ -1085,6 +1087,11 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+         resume = (const u8*)GetRXPtr();
+         if (c && !ExitLazyLoop)
+             STR(INDEX_UNSIGNED, RCPSR, RCPU, offsetof(ARM, CPSR));
++        if (LoopMode && LoopR15Back)
++        {
++            MOVI2R(W0, knownR15);   // (0382: R15 in memory as at the block's entry)
++            STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
++        }
+     }
+     else
+     {
+@@ -1468,20 +1475,28 @@ bool Compiler::LoopBlockWhy(FetchedInstr instrs[], int instrsCount, int& why)
+     {
+         const FetchedInstr& in = instrs[i];
+         const u16 k = in.Info.Kind;
+-        if (!CanCompile(Thumb, k) || (in.BranchFlags & branch_FollowCondTaken))
+-            return why = 10 + i, false;
+         const bool immBranch = Thumb ? (k == ARMInstrInfo::tk_BCOND || k == ARMInstrInfo::tk_B)
+             : ((k == ARMInstrInfo::ak_B || k == ARMInstrInfo::ak_BL) && in.Cond() != 0xF);
++        // (patch 0382) a conditional B followed when taken: its R15 store (for the way not taken, an exit) stays;
++        // the way round puts the entry's R15 back, as the ExitCheckPC of the plain self loop would
++        const bool followOk = !LoopNoFollow && i < instrsCount - 1 && (Thumb ? k == ARMInstrInfo::tk_BCOND
++            : (k == ARMInstrInfo::ak_B && in.Cond() < 0xE));
++        if (!CanCompile(Thumb, k) || ((in.BranchFlags & branch_FollowCondTaken) && !followOk))
++            return why = 10 + i, false;
+         if (((in.Info.SrcRegs | in.Info.DstRegs) & (1 << 15)) && !immBranch)
+             return why = 40 + i, false;
+         // (a Thumb block transfer of one register, PC not among them, is a single access when the register is
+         // loaded, as all are here: Comp_MemAccessBlock's first case)
+         const bool single = Thumb && !LoopNoXfer && __builtin_popcount((in.Instr & 0xFF)
+             | (((k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP) && (in.Instr & 0x100)) ? 0x100 : 0)) == 1;
++        // (patch 0382) an ARM LDM/STM of one register, not PC, not the base, no user-mode registers: the same
++        // single access (both ways it is loaded: the instruction's own register)
++        const bool armSingle = !Thumb && !LoopNoXfer && __builtin_popcount(in.Instr & 0xFFFF) == 1
++            && !(in.Instr & (1 << 15)) && !(in.Instr & (1 << 22)) && !(in.Instr & (1 << ((in.Instr >> 16) & 0xF)));
+         if (Thumb ? (((k == ARMInstrInfo::tk_PUSH || k == ARMInstrInfo::tk_POP || k == ARMInstrInfo::tk_LDMIA
+                 || k == ARMInstrInfo::tk_STMIA) && !(single && !(in.Info.DstRegs & (1 << 15))))
+                 || k == ARMInstrInfo::tk_BL_LONG_1 || k == ARMInstrInfo::tk_BL_LONG_2)
+-            : (k == ARMInstrInfo::ak_LDM || k == ARMInstrInfo::ak_STM || k == ARMInstrInfo::ak_MSR_IMM
++            : (((k == ARMInstrInfo::ak_LDM || k == ARMInstrInfo::ak_STM) && !armSingle) || k == ARMInstrInfo::ak_MSR_IMM
+                 || k == ARMInstrInfo::ak_MSR_REG || k == ARMInstrInfo::ak_MRS || k == ARMInstrInfo::ak_BLX_IMM))
+             return why = 70 + i, false;
+     }
+@@ -1580,6 +1595,7 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+     BlockStartRX = (u8*)res;
+     BlockEntryR15 = instrs[0].Addr + (thumb ? 2 : 4);
+     R15Stored = false;
++    LoopR15Back = false;
+     PendingFlags = false;
+     LoopFlagsWritten = 0;
+     LoopFlagsEarlyRead = false;
+@@ -1689,7 +1705,10 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+             {
+                 MOVI2R(W0, R15);
+                 STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
+-                R15Stored = true;
++                if (LoopMode && !isLast && comp && (CurInstr.BranchFlags & branch_FollowCondTaken) && !LoopNoFollow)
++                    LoopR15Back = true;   // (0382: the way round stores the entry's R15 again)
++                else
++                    R15Stored = true;
+             }
+             if (comp == NULL)
+             {
+@@ -1839,7 +1858,10 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+ 
+     if (LoopMode && !(JumpR15Deferred && LastJumpKnown && !R15Stored && LastJumpR15 == BlockEntryR15
+         && LastJumpThumb == Thumb))
++    {
+         LoopMode = false;   // (not the loop LoopBlock expected after all: an ordinary end, all stored below)
++        R15Stored |= LoopR15Back;   // (0382: then a followed branch's R15 store counts again)
++    }
+     if (FoldActive)
+     {
+         // not taken (the taken way's exit is in the branch, Comp_FoldTakenExit)
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -309,6 +309,8 @@ public:
+     bool OptLoopRegs = false;     // LOOPREGS=1 (off by default): a block that loops back to its own start keeps the guest registers
+                                   // it uses in host registers round the loop (LoopMode)
+     bool LoopNoTs = false, LoopNoSigned = false, LoopNoLazy = false, LoopNoXfer = false;   // (LOOPREGS's parts)
++    bool LoopNoFollow = false;    // MELONDS_JIT_NOLOOPFOLLOW=1: patch 0382 off (no LoopMode with a branch followed when taken)
++    bool LoopR15Back = false;     // (0382: the LoopMode block being compiled stores R15 on its way round)
+     bool LoopRelinkOld = false;   // MELONDS_JIT_LOOPRELINKOLD=1: patch 0381 off (a restored LoopMode block relinks to its entry)
+     bool LoopMode = false;        // the block being compiled does (LoopBlock decides)
+     u8* LoopBodyRX = nullptr;     // ... where its loop goes back to: past the entry's loads

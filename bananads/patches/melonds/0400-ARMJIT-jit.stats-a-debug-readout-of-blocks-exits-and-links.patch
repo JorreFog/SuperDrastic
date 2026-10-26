@@ -55,7 +55,7 @@ diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnig
  
      {
          // patch 0007's code generation improvements: MELONDS_JIT_OLDCODEGEN=1 turns all of them off, or one
-@@ -1163,6 +1165,8 @@
+@@ -1172,6 +1174,8 @@
      const u8* resume = nullptr;   // (a self loop's way round after the late check: SLICECHAIN goes on there)
      if (selfLoop)
      {
@@ -64,7 +64,7 @@ diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnig
          LDR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, StopExecution));
          stop = CBNZ(W0);
          ARM64Reg ts = LoopMode && LoopTsReg != INVALID_REG ? LoopTsReg : X16;
-@@ -1249,6 +1253,17 @@
+@@ -1276,6 +1280,17 @@
      SwapCodeRegion();
  }
  
@@ -82,7 +82,7 @@ diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnig
  void Compiler::Gen_ExitStubs(int num)
  {
      // ExitCheck (a BL from an exit with a known target): what ARMv5/ARMv4::Execute's loop does after a block.
-@@ -1335,12 +1350,14 @@
+@@ -1362,12 +1377,14 @@
      if (!OptExitStub)
      {
          ExitCheck[num][0] = ExitCheck[num][1] = GetRXPtr();
@@ -97,7 +97,7 @@ diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnig
          MOVP2R(X30, (void*)RetLoop);
          RET();
      }
-@@ -1360,7 +1377,17 @@
+@@ -1387,7 +1404,17 @@
              ExitCheckPC[num][c] = GetRXPtr();
              LDR(INDEX_UNSIGNED, W0, X30, 4);
              STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
@@ -116,7 +116,7 @@ diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnig
              FixupBranch stop, late;
              checks(stop, late);
              if (c)
-@@ -1380,6 +1407,7 @@
+@@ -1407,6 +1434,7 @@
                  SetJumpTarget(out);
              }
              SetJumpTarget(toLoop);
@@ -124,7 +124,7 @@ diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnig
              retToLoop();
          }
          if (chain)
-@@ -1411,6 +1439,7 @@
+@@ -1438,6 +1466,7 @@
      for (int c = 1; c >= (OptExitStub ? 0 : 1); c--)
      {
          (a ? DynExitA : DynExit)[num][c] = GetRXPtr();
@@ -132,7 +132,7 @@ diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnig
          FixupBranch stop, late;
          checks(stop, late);
          const u8* resume = (const u8*)GetRXPtr();
-@@ -1528,6 +1557,7 @@
+@@ -1555,6 +1584,7 @@
              SetJumpTarget(outside);
              SetJumpTarget(miss);
          }
@@ -140,15 +140,15 @@ diff -ruN '--exclude=.git' a/src/ARMJIT_A64/ARMJIT_Compiler.cpp /home/joar/bdnig
          QuickTailCall(X16, RetLoop);
          if (lit)
          {
-@@ -1822,6 +1852,7 @@
+@@ -1889,6 +1919,7 @@
      NDS.JIT.JitEnableExecute();
      if (J3Stats) J3ExitStats[30 + 32 * cpu->Num]++;
      FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
 +    JitStatInc(JS_Linked);
-     LinkedTo[(u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
+     LinkedTo[it->second.loopBody && (u32)(entry - GetRXBase()) == it->second.loopBody ? it->second.loopStart
+         : (u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
  }
- 
-@@ -1849,6 +1880,7 @@
+@@ -1917,6 +1948,7 @@
      ARM* from = (ARM*)(uintptr_t)melonds_jit_link[1];
      melonds_jit_link[0] = 0;
      if (J3Stats) J3ExitStats[31 + 32 * cpu->Num]++;

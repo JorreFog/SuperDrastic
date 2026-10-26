@@ -1,0 +1,100 @@
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 07:14:25 +0100
+Subject: [PATCH] ARMJIT_A64: MELONDS_JIT_LOOPLOG, self loops and LoopBlock's verdict
+
+MELONDS_JIT_LOOPLOG=1 logs every self loop the A64 JIT compiles (address, length,
+whether LOOPREGS's LoopBlock takes it or which instruction stops it, the
+instruction words). Debug only: no code changes when unset.
+---
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -1402,12 +1402,30 @@ void Compiler::Comp_FoldTakenExit(bool notTakenCycles)
+ 
+ bool Compiler::LoopBlock(FetchedInstr instrs[], int instrsCount)
+ {
++    // (patch 0380, MELONDS_JIT_LOOPLOG=1: every compiled self loop logged once per compile with LoopBlock's verdict)
++    static const bool loopLog = getenv("MELONDS_JIT_LOOPLOG") && atoi(getenv("MELONDS_JIT_LOOPLOG"));
++    int why = -1;
++    const bool ok = LoopBlockWhy(instrs, instrsCount, why) && OptLoopRegs;   // (why: whether it would be)
++    if (loopLog && why != 0)
++    {
++        char buf[600]; int o = 0;
++        for (int i = 0; i < instrsCount && o < 540; i++)
++            o += snprintf(buf + o, sizeof(buf) - o, " %0*x", Thumb ? 4 : 8, instrs[i].Instr & (Thumb ? 0xFFFF : 0xFFFFFFFF));
++        Log(LogLevel::Info, "[loop] %d %08x%c n=%d %s why=%d:%s\n", Num ? 7 : 9, instrs[0].Addr, Thumb ? 'T' : 'A',
++            instrsCount, ok ? "LOOPMODE" : "plain", why, buf);
++    }
++    return ok;
++}
++
++bool Compiler::LoopBlockWhy(FetchedInstr instrs[], int instrsCount, int& why)
++{
++    // why: 0 not a self loop, 1 it qualifies, 2 no linking, 10+i instruction i not compiled/followed, 40+i R15 operand,
++    // 70+i a block transfer or MSR/MRS/BLX/BL pair, 100 a followed last branch
++    why = 2;
+     // LoopMode: the block ends in an immediate branch back to its own start (the self loop exit, inline), and
+     // nothing in it unloads guest registers or needs R15 in one: compiled instructions only (no interpreter), no
+     // block transfers, MSR/MRS or jumps through registers, no R15 operand, no branch followed when taken (its
+     // R15 store); single memory accesses keep their registers loaded round a slow call (PushRegs, no unloading)
+-    if (!OptLoopRegs || !LinkBlocks)
+-        return false;
+     const FetchedInstr& last = instrs[instrsCount - 1];
+     u32 target;
+     if (Thumb)
+@@ -1417,26 +1435,30 @@ bool Compiler::LoopBlock(FetchedInstr instrs[], int instrsCount)
+         else if (last.Info.Kind == ARMInstrInfo::tk_B)
+             target = last.Addr + 4 + ((s32)((last.Instr & 0x7FF) << 21) >> 20);
+         else
+-            return false;
++            return why = 0, false;
+     }
+     else
+     {
+         if ((last.Info.Kind != ARMInstrInfo::ak_B && last.Info.Kind != ARMInstrInfo::ak_BL) || last.Cond() == 0xF)
+-            return false;
++            return why = 0, false;
+         target = last.Addr + 8 + ((s32)(last.Instr << 8) >> 6);
+     }
+-    if (target != instrs[0].Addr || (last.BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken)))
++    if (target != instrs[0].Addr)
++        return why = 0, false;
++    if (!LinkBlocks)
+         return false;
++    if (last.BranchFlags & (branch_FollowCondTaken | branch_FollowCondNotTaken))
++        return why = 100, false;
+     for (int i = 0; i < instrsCount; i++)
+     {
+         const FetchedInstr& in = instrs[i];
+         const u16 k = in.Info.Kind;
+         if (!CanCompile(Thumb, k) || (in.BranchFlags & branch_FollowCondTaken))
+-            return false;
++            return why = 10 + i, false;
+         const bool immBranch = Thumb ? (k == ARMInstrInfo::tk_BCOND || k == ARMInstrInfo::tk_B)
+             : ((k == ARMInstrInfo::ak_B || k == ARMInstrInfo::ak_BL) && in.Cond() != 0xF);
+         if (((in.Info.SrcRegs | in.Info.DstRegs) & (1 << 15)) && !immBranch)
+-            return false;
++            return why = 40 + i, false;
+         // (a Thumb block transfer of one register, PC not among them, is a single access when the register is
+         // loaded, as all are here: Comp_MemAccessBlock's first case)
+         const bool single = Thumb && !LoopNoXfer && __builtin_popcount((in.Instr & 0xFF)
+@@ -1446,8 +1468,9 @@ bool Compiler::LoopBlock(FetchedInstr instrs[], int instrsCount)
+                 || k == ARMInstrInfo::tk_BL_LONG_1 || k == ARMInstrInfo::tk_BL_LONG_2)
+             : (k == ARMInstrInfo::ak_LDM || k == ARMInstrInfo::ak_STM || k == ARMInstrInfo::ak_MSR_IMM
+                 || k == ARMInstrInfo::ak_MSR_REG || k == ARMInstrInfo::ak_MRS || k == ARMInstrInfo::ak_BLX_IMM))
+-            return false;
++            return why = 70 + i, false;
+     }
++    why = 1;
+     return true;
+ }
+ 
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -309,6 +309,7 @@ public:
+     bool LoopMode = false;        // the block being compiled does (LoopBlock decides)
+     u8* LoopBodyRX = nullptr;     // ... where its loop goes back to: past the entry's loads
+     bool LoopBlock(FetchedInstr instrs[], int instrsCount);
++    bool LoopBlockWhy(FetchedInstr instrs[], int instrsCount, int& why);
+     bool OptCP15Nop = true;       // NOCP15NOP (patch 0086): an ARM9 MCR to a CP15 cache or write buffer operation that
+                                   // CP15Write ignores (clean/invalidate a data cache line, drain the write buffer...)
+                                   // compiled to its cycles, with the interpreter's call kept for user mode
