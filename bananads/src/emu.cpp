@@ -454,7 +454,7 @@ bool Emu::load_rom(const std::string& path) {
     // 0007's LOOPREGS: a block that loops back to its own start keeps its guest registers in host registers round the
     // loop; 0381 fixed its HeartGold hang, 0382 lets loops with a branch followed when taken in)
     {
-        const std::string v = cfg_.str("jit.loopregs", "");
+        const std::string v = cfg_.str("jit.loopregs", getenv("MELONDS_JIT_LOOPREGS") ? "" : "on");   // (default on: J6 gate 2026-10-26)
         if (v == "on") setenv("MELONDS_JIT_LOOPREGS", "1", 1);
         else if (v == "off") unsetenv("MELONDS_JIT_LOOPREGS");
     }
