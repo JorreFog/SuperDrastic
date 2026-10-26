@@ -53,6 +53,7 @@ typedef struct {
 } gx_frame;
 
 void gx_init(void);
+void gx_tex_minalpha_store(uint8_t *tex);   /* fused.c: a decoded texture entry's lowest alpha, into its bytes 0x20-0x21 */
 /* the frame's state the pixel pipeline reads from its own places; before any thread renders a bin of the frame */
 void gx_begin_frame(const gx_frame *f);
 /* render bin `bin` of the frame into out (GX_BL lines of GX_W pixels, melonDS's 3D layer format) */

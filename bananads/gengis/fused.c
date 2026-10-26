@@ -270,7 +270,17 @@ static unsigned tex_min_alpha_scan(const poly_t *P) {
 
 /* cap: a direct or compressed texture of more texels that this frame has not scanned yet is not scanned (returns 0,
  * "can fail"): for the one-pass kernels' flag a scan of a large texture can cost more than the alpha tests it saves */
+/* render.gengis_hrneon's companion: the lowest alpha of a texture entry, found once when it is decoded (byte 0x21 = 1
+ * marks it; 0x20 the value) instead of by each render thread every frame; also for the large direct textures the
+ * per-frame scan skips (cap), whose alpha test then is skipped too when it cannot fail (the same bits) */
+void gx_tex_minalpha_store(uint8_t *tex) {
+    poly_t P;
+    P.tex = tex; P.paletted = tex[0x4a]; P.tw = U16(tex, 0x40); P.th = U16(tex, 0x42);
+    P.texels32 = (const uint32_t *)PTR(tex, 0x10); P.pal = (const uint32_t *)PTR(tex, 0x18);
+    tex[0x20] = (uint8_t)tex_min_alpha_scan(&P); tex[0x21] = 1;
+}
 static unsigned tex_min_alpha(const poly_t *P, unsigned cap) {
+    if (P->tex[0x21] && gx_hrneon && !gx_ref) return P->tex[0x20];
     unsigned h = (unsigned)((uintptr_t)P->tex >> 4) & (TEXINFO_N - 1);
     int scan = P->paletted || (unsigned)P->tw * P->th <= cap;
     for (unsigned n = 0; n < TEXINFO_N; n++, h = (h + 1) & (TEXINFO_N - 1)) {

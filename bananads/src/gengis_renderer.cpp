@@ -239,6 +239,7 @@ const gx_texture* GengisRenderer3D::GetTexture(uint32_t texparam, uint32_t texpa
         }
         if (!serial) serial = ++TexSerial;
         memcpy(e->t.pad0, &serial, sizeof serial);
+        if (Scale_ >= 3) gx_tex_minalpha_store((uint8_t*)&e->t);   // (fused.c's tex_min_alpha: once per decode)
         if (Stats) { StDecNs += ThreadNs() - d0; StDecoded++; StDecTexels += (uint64_t)e->t.width * e->t.height; }
     }
     return &e->t;
