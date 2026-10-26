@@ -1,6 +1,7 @@
 #include "emu.h"
 #ifdef BANANADS_GENGIS
 #include "gengis_renderer.h"
+#include "gpu3d_host.h"
 #endif
 
 #include <sys/stat.h>
@@ -1140,7 +1141,27 @@ bool Emu::load_rom(const std::string& path) {
         // round 3D models; distance fog)
         GengisRenderer3D::SetEffects(cfg_.flag("render.edge_marking", true), cfg_.flag("render.fog", true));
 #ifdef BANANADS_2D
-        if (banana2d) {
+        // render.gpu3d (experimental, off): gl (melonDS's OpenGL renderer on GLES 3.1) or compute draws the 3D layer
+        // on the GPU, at render.scale 3 and 4 only (gpu3d_host.h); Gengis Engine when the GPU path can't start
+        const std::string g3 = cfg_.str("render.gpu3d", "off");
+        if (banana2d && scale >= 3 && (g3 == "gl" || g3 == "compute")) {
+            GpuRenderer3D::Stats = (int)cfg_.num("render.gpu3d_stats", 0);
+            auto be = g3 == "gl" ? MakeGl3DBackend(nds_->GPU.GPU3D) : MakeCompute3DBackend(nds_->GPU.GPU3D);
+            std::unique_ptr<GpuRenderer3D> r;
+            if (be) {
+                r = std::make_unique<GpuRenderer3D>(nds_->GPU.GPU3D, std::move(be), scale);
+                if (!r->Ok()) r.reset();
+            }
+            if (r) {
+                nds_->SetRenderer(std::make_unique<GpuBananaRenderer>(*nds_, std::move(r), scale));
+                scale_ = scale;
+                gpu3d_ = true;
+                Log(LogLevel::Info, "[emu] render.gpu3d=%s: the 3D layer on the GPU at %dx\n", g3.c_str(), scale);
+            } else
+                Log(LogLevel::Warn, "[emu] render.gpu3d=%s could not start: Gengis Engine\n", g3.c_str());
+        }
+        if (gpu3d_) {
+        } else if (banana2d) {
             nds_->SetRenderer(std::make_unique<GengisBananaRenderer>(*nds_, threads, defer, scale));
             scale_ = scale;
         } else

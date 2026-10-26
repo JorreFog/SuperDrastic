@@ -1555,7 +1555,8 @@ int run_kms(Emu& emu, const Config& cfg) {
     // kms.shader: a fragment shader's name (SuperDrastic's: ds-grid, ds-crisp, ds-fsr... from DSFLIP_SHADER_DIR), or
     // none: the display plane scales the frames (the default)
     {
-        const std::string sh = cfg.str("kms.shader", "none");
+        // (render.gpu3d: no shader pass while the GPU draws the 3D layer: experimental, the GPU's time is the 3D's)
+        const std::string sh = emu.gpu3d() ? std::string("none") : cfg.str("kms.shader", "none");
         if (sh != "none" && sh != "bilinear" && !sh.empty()) dp.shader_name = sh;
         // kms.shader_fast (on): a shader's faster built-in twin (ds-grid-2x at 4x), used once it drew a test picture
         // the same, byte for byte (shader.c)

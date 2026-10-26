@@ -244,6 +244,10 @@ elseif(BANANADS_KMS)
 endif()
 if(DRM_FOUND AND BANANADS_KMS)
     target_sources(bananads PRIVATE src/frontend_kms.cpp src/cpugov.cpp src/menu.c src/lang.c src/shader.c src/cheats.cpp src/screenshot.cpp)
+    # render.gpu3d (gpu3d_host.cpp, gl3d_backend.cpp): GLES 3.1 through dlopen()ed EGL, headers only at build time
+    if(BANANADS_GENGIS AND BANANADS_2D)
+        target_sources(bananads PRIVATE src/gpu3d_host.cpp src/gl3d_backend.cpp)
+    endif()
     target_link_libraries(bananads PRIVATE PkgConfig::DRM)
     target_compile_definitions(bananads PRIVATE BANANADS_KMS=1)
     # RetroAchievements (src/ra.c): SuperDrastic's rcheevos (../src/third_party/rcheevos, the same repository), a
