@@ -677,9 +677,9 @@ bool Emu::load_rom(const std::string& path) {
 #endif
     // render.scale: 2 renders the 3D layer at 2x and gives 512x384 screens (Gengis Engine with the Banana 2D engine;
     // otherwise 1x)
-    // (3: 768x576, experimental, the same way with nine quarters)
+    // (3: 768x576, 4: 1024x768, experimental, the same way with nine or sixteen quarters)
     const long scale_cfg = cfg_.num("render.scale", 1);
-    const int scale = scale_cfg == 2 || scale_cfg == 3 ? (int)scale_cfg : 1;
+    const int scale = scale_cfg >= 2 && scale_cfg <= 4 ? (int)scale_cfg : 1;
     scale_ = 1;
 #ifdef BANANADS_GENGIS
     // render.renderer: gengis (the default: Gengis Engine, SuperDrastic's rasterizer, on render.gengis_threads

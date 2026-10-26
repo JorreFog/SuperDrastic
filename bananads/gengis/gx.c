@@ -31,6 +31,8 @@
 #define gx_render_bin gx2_render_bin
 #elif GX_SCALE == 3
 #define gx_render_bin gx3_render_bin
+#elif GX_SCALE == 4
+#define gx_render_bin gx4_render_bin
 #endif
 #include "gx.h"
 /* this pipeline's frame: GX_NBINS bins of GX_BL lines of GX_W pixels */
@@ -39,8 +41,16 @@
 #undef GX_BL
 #define GX_W (256 * GX_SCALE)
 #define GX_H (192 * GX_SCALE)
-#define GX_BL (16 * GX_SCALE)
-_Static_assert(GX_H / GX_BL == GX_NBINS, "the bins");
+/* GX_SUB: the bins a frame bin is rendered as, one after the other (4x: two of 32 lines, so that a bin's context of
+ * GX_BL + 2 lines fits the walker's and the kernels' 64-line span arrays, the 64-bit shadow line mask and defer.c's
+ * owner buffer; 64 + 2 lines would not) */
+#if GX_SCALE == 4
+#define GX_SUB 2
+#else
+#define GX_SUB 1
+#endif
+#define GX_BL (16 * GX_SCALE / GX_SUB)
+_Static_assert(GX_H / GX_BL == (192 / 16) * GX_SUB, "the bins");  /* (GX_NBINS expands with this file's GX_H, GX_BL) */
 
 _Static_assert(offsetof(gx_texture, texels) == 0x10 && offsetof(gx_texture, palette) == 0x18 &&
                offsetof(gx_texture, width) == 0x40 && offsetof(gx_texture, height) == 0x42 &&
@@ -279,7 +289,12 @@ static const uint32_t *gx_resolve(gx_t *H, const gx_frame *f) {
 }
 
 /* ---- a bin ---- */
-void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
+#if GX_SUB > 1
+static void gx_render_sub(const gx_frame *f, unsigned bin, uint32_t *out)
+#else
+void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
+#endif
+{
     gx_t *H = gx_get();
     if (H->gen != f->gen) { f_begin_frame(); H->gen = f->gen; }     /* (the texture entries are the frame's) */
     U64(H->ctx, GX_HDR) = (uint64_t)(uintptr_t)gx_sys; U64(H->ctx, GX_HDR + 8) = (uint64_t)(uintptr_t)gx_geom;
@@ -329,6 +344,16 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     const uint32x4_t m = vdupq_n_u32(0x1f3f3f3f);
 #if GX_SCALE == 1
     for (int i = 0; i < GX_BL * GX_W; i += 4) vst1q_u32(out + i, vandq_u32(vld1q_u32(res + i), m));
+#elif GX_SCALE == 4
+    /* each row as its pixels 4k, 4k + 1, 4k + 2, 4k + 3: the 2D compositor's sixteen 256-pixel lines of a DS line */
+    for (int l = 0; l < GX_BL; l++) {
+        const uint32_t *r = res + l * GX_W;
+        uint32_t *o0 = out + l * GX_W;
+        for (int i = 0; i < GX_W; i += 16) {
+            const uint32x4x4_t v = vld4q_u32(r + i);
+            for (int k = 0; k < 4; k++) vst1q_u32(o0 + k * (GX_W / 4) + i / 4, vandq_u32(v.val[k], m));
+        }
+    }
 #elif GX_SCALE == 3
     /* each row as its pixels 3k, then 3k + 1, then 3k + 2: the 2D compositor's nine 256-pixel lines of a DS line */
     for (int l = 0; l < GX_BL; l++) {
@@ -364,6 +389,13 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     }
 #endif
 }
+
+#if GX_SUB > 1
+/* a frame bin: its GX_SUB bins in turn */
+void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
+    for (unsigned s = 0; s < GX_SUB; s++) gx_render_sub(f, bin * GX_SUB + s, out + s * GX_BL * GX_W);
+}
+#endif
 
 #if GX_SCALE == 1
 /* fused.c's stage-by-stage path for shadow polygons at 2x (b0.c, DraStic's scratch buffers): the 1x layout is a

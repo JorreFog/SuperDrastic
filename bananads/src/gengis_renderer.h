@@ -81,7 +81,7 @@ public:
     // render's: those go into the other buffer). The emulator's thread then waits for the frame only at VBlank.
     const melonDS::u32* QuarterRow(int line, int q) const {
         if (line >= GX_H) line = GX_H - 1;
-        if (Scale_ == 3) return Out + (3 * line + q / 3) * 3 * GX_W + (q % 3) * GX_W;  // (3x: nine "quarters")
+        if (Scale_ >= 3) return Out + (Scale_ * line + q / Scale_) * Scale_ * GX_W + (q % Scale_) * GX_W;  // (3x, 4x: 9, 16)
         return Scale_ == 2 ? Out + (2 * line + (q >> 1)) * 2 * GX_W + (q & 1) * GX_W : Out + line * GX_W;
     }
     void WaitRows(int line, unsigned gen);
@@ -134,7 +134,7 @@ private:
     uint32_t* OutBuf[2] = {};
     uint32_t* Out = nullptr;                           // the frame being rendered or shown
     size_t OutWords() const { return (size_t)GX_H * GX_W * Scale_ * Scale_; }
-    alignas(16) uint32_t Scrolled[9][GX_W];
+    alignas(16) uint32_t Scrolled[16][GX_W];
 
     // the frame's bins: claimed by the workers (and by the emulator's thread while it waits for one)
     std::atomic<unsigned> Next{GX_NBINS};

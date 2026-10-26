@@ -118,8 +118,8 @@ public:
     u32 CacheEpoch = 0;   // render.2d_skip: changed whenever the copies or the drawing state are made anew
     void DrawScanlineHires(u32 line, const u32* const* q3d);   // DrawScanline at 2x
     int HiLines = 1;
-    int HiN = 4;    // the quarters a hi-res line has: 4 at 2x, 9 at 3x (BananaRenderer::SetHires)
-    alignas(16) u32 HiOut[8][256];
+    int HiN = 4;    // the quarters a hi-res line has: 4 at 2x, 9 at 3x, 16 at 4x (BananaRenderer::SetHires)
+    alignas(16) u32 HiOut[15][256];
     void DrawSpritesFrom(u32 line, const Banana2DRegs& regs);
 
     typedef void (*CopyFn)(void* ctx, void* dst, const void* src, u32 len);

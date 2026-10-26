@@ -29,7 +29,7 @@ static inline uint64_t MonoNs() {
 }
 
 GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defer, int scale)
-    : Renderer3D(gpu3D), Scale_(scale == 2 || scale == 3 ? scale : 1) {
+    : Renderer3D(gpu3D), Scale_(scale >= 2 && scale <= 4 ? scale : 1) {
     gx_zva = Zva;
     gx_stats = Stats != 0;
     gx_trim = Trim;
@@ -286,10 +286,10 @@ void GengisRenderer3D::Convert() {
                 const unsigned vi = (p->VTop + k) % n;
                 if (p->Vertices[vi]->HiresPosition[1] >> 3 < p->Vertices[top]->HiresPosition[1] >> 3) top = vi;
             }
-        else if (Scale_ == 3)  // (3x: the same with floor(3 y))
+        else if (Scale_ >= 3)  // (3x, 4x: the same with floor(3 y), floor(4 y))
             for (unsigned k = 1; k < n; k++) {
                 const unsigned vi = (p->VTop + k) % n;
-                if ((p->Vertices[vi]->HiresPosition[1] * 3) >> 4 < (p->Vertices[top]->HiresPosition[1] * 3) >> 4) top = vi;
+                if ((p->Vertices[vi]->HiresPosition[1] * Scale_) >> 4 < (p->Vertices[top]->HiresPosition[1] * Scale_) >> 4) top = vi;
             }
         for (unsigned k = 0; k < n; k++) {
             const unsigned vi = (top + k) % n;
@@ -297,9 +297,9 @@ void GengisRenderer3D::Convert() {
             uint8_t* r = g.vtx[k];
             const int32_t w = p->WBuffer ? p->FinalZ[vi] : p->FinalW[vi];
             // at 2x the position from melonDS's sub-pixel one (4 fraction bits): floor(2 x), as 1x is floor(x)
-            // (3x, experimental: floor(3 x) and floor(3 y) likewise)
-            const uint16_t x = (uint16_t)(Scale_ == 2 ? v->HiresPosition[0] >> 3 : Scale_ == 3 ? (v->HiresPosition[0] * 3) >> 4 : v->FinalPosition[0]);
-            const uint16_t y = (uint16_t)(Scale_ == 2 ? v->HiresPosition[1] >> 3 : Scale_ == 3 ? (v->HiresPosition[1] * 3) >> 4 : v->FinalPosition[1]);
+            // (3x, 4x, experimental: floor(3 x), floor(4 x) likewise)
+            const uint16_t x = (uint16_t)(Scale_ == 2 ? v->HiresPosition[0] >> 3 : Scale_ >= 3 ? (v->HiresPosition[0] * Scale_) >> 4 : v->FinalPosition[0]);
+            const uint16_t y = (uint16_t)(Scale_ == 2 ? v->HiresPosition[1] >> 3 : Scale_ >= 3 ? (v->HiresPosition[1] * Scale_) >> 4 : v->FinalPosition[1]);
             const uint16_t z = (uint16_t)(p->FinalZ[vi] >> 9);
             const uint16_t c = (uint16_t)((v->FinalColor[0] >> 4) | (v->FinalColor[1] >> 4) << 5 | (v->FinalColor[2] >> 4) << 10);
             memcpy(r + 0, &w, 4);
@@ -482,6 +482,7 @@ bool GengisRenderer3D::RenderOne(bool emu) {
         const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_;
         if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * n);
         else if (Scale_ == 3) gx3_render_bin(&Frame, b, Out + b * n);
+        else if (Scale_ == 4) gx4_render_bin(&Frame, b, Out + b * n);
         else gx_render_bin(&Frame, b, Out + b * n);
         StReused.fetch_add(1, std::memory_order_relaxed);
         if (memcmp(Out + b * n, LastOut + b * n, n * sizeof(uint32_t))) {
@@ -491,6 +492,7 @@ bool GengisRenderer3D::RenderOne(bool emu) {
     }
     else if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 4);
     else if (Scale_ == 3) gx3_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 9);
+    else if (Scale_ == 4) gx4_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 16);
     else gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);
     if (Stats) {
         StPxOpa.fetch_add(gx_px_opa, std::memory_order_relaxed); StPxTrl.fetch_add(gx_px_trl, std::memory_order_relaxed);
