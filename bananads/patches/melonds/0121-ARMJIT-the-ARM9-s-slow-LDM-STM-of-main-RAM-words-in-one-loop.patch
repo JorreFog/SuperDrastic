@@ -1,0 +1,88 @@
+From ff39f6ee8a2c888959a27987cea589b10798477a Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Mon, 26 Oct 2026 00:48:44 +0100
+Subject: [PATCH] ARMJIT: the ARM9's slow LDM/STM of main RAM words in one loop
+
+An LDM/STM site that once faulted (a page holding code, or the same site used
+for IO) stays a SlowBlockTransfer9 call, and its main RAM words then went one
+out-of-line IOFastRead9/IOFastWrite9 call each. HeartGold: ~243 LDMs (12k
+words) and ~122 STMs (5.2k words) of main RAM a frame this way
+(MELONDS_IOSTATS); IOFastRead9<u32> 1.5% and IOFastWrite9<u32> 1.1% of the
+emulator's thread, SlowBlockTransfer9Body 1.9%.
+
+Now a block whose words are all in main RAM (both ends at 0x02, above
+ITCMSize, neither end in the DTCM, which is at least 4 KB and aligned, so it
+can't lie inside a 64-byte block without holding an end) takes IOFastRead9/
+IOFastWrite9's main RAM case per word in one loop: the same loads, the same
+CheckAndInvalidate before each store, in the same order. The JIT charges the
+cycles in the compiled code, so timing can't change. Exact.
+jit.ldm_mainram (ARMJIT::SetMainRAMBlock), default on.
+---
+ src/ARMJIT.cpp | 30 ++++++++++++++++++++++++++++++
+ src/ARMJIT.h   |  2 ++
+ 2 files changed, 32 insertions(+)
+
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 21bd6f5..45180ed 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -612,6 +612,10 @@ void SlowWrite7(u32 addr, u32 val)
+     SlowWrite7Impl<T, ConsoleType>(addr, val);
+ }
+ 
++// jit.ldm_mainram (patch 0121, ARMJIT::SetMainRAMBlock): SlowBlockTransfer9's main RAM blocks in one loop
++static bool MainRAMBlock = true;
++void ARMJIT::SetMainRAMBlock(bool on) noexcept { MainRAMBlock = on; }
++
+ template <bool Write, int ConsoleType>
+ [[gnu::noinline]] static void SlowBlockTransfer9Body(u32 addr, u64* data, u32 num, ARMv5* cpu);
+ 
+@@ -696,6 +700,32 @@ template <bool Write, int ConsoleType>
+             }
+         }
+     }
++    if (ConsoleType == 0 && MainRAMBlock && (IOFastRoutes & iofast_MainRAM) && num && (addr >> 24) == 0x02
++        && ((addr + (num - 1) * 4) >> 24) == 0x02 && addr >= cpu->ITCMSize && (~cpu->DTCMMask) >= 0x3F
++        && (addr & cpu->DTCMMask) != cpu->DTCMBase && ((addr + (num - 1) * 4) & cpu->DTCMMask) != cpu->DTCMBase)
++    {
++        // jit.ldm_mainram (patch 0121): every word in main RAM and clear of the TCMs (above ITCMSize; the DTCM, at
++        // least 4 KB and aligned, can't lie inside a 64-byte block without holding one of its ends): IOFastRead9/
++        // IOFastWrite9's main RAM case per word, in the same order, without a call per word
++        melonDS::NDS& nds = cpu->NDS;
++        u8* const ram = nds.MainRAM;
++        const u32 mask = nds.MainRAMMask;
++        if (Write)
++        {
++            for (u32 i = 0; i < num; i++, addr += 4)
++            {
++                nds.JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(addr);
++                *(u32*)&ram[addr & mask] = (u32)data[i];
++            }
++            return;
++        }
++        else
++        {
++            for (u32 i = 0; i < num; i++, addr += 4)
++                data[i] = *(u32*)&ram[addr & mask];
++            return;
++        }
++    }
+     if (ConsoleType == 0 && (IOFastRoutes | (MemFastParts & 3)))
+     {
+         // the same per word as SlowWrite9/SlowRead9 (the TCMs first), with the direct routes
+diff --git a/src/ARMJIT.h b/src/ARMJIT.h
+index efc026a..e49d62f 100644
+--- a/src/ARMJIT.h
++++ b/src/ARMJIT.h
+@@ -97,6 +97,8 @@ public:
+     void SetLiteralOptimizations(bool enabled) noexcept;
+     void SetBranchOptimizations(bool enabled) noexcept;
+     void SetFastMemory(bool enabled) noexcept;
++    // jit.ldm_mainram (BananaDS patch 0121): the ARM9's slow LDM/STM of main RAM words in one loop (exact)
++    static void SetMainRAMBlock(bool on) noexcept;
+ 
+     Compiler JITCompiler;
+     // the code region's executable base: fixed once the compiler is built (GetRXBase isn't inline)
+-- 
+2.56.0
+

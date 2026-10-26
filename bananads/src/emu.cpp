@@ -608,6 +608,12 @@ bool Emu::load_rom(const std::string& path) {
     // jit.lookup_prefetch: a CPU's slice ending in the slice loop prefetches the block-lookup slot of its next PC
     // (melonDS patch 0120; a cache hint, exact, default on)
     nds_->SetLookupPrefetch(cfg_.flag("jit.lookup_prefetch", true));
+    // jit.ldm_mainram: the ARM9's slow-path LDM/STM whose words are all in main RAM in one loop, not one call per word
+    // (melonDS patch 0121; exact, default on)
+    nds_->JIT.SetMainRAMBlock(cfg_.flag("jit.ldm_mainram", true));
+    // jit.divblock: an STM onto the divider's or the square root's parameters starts the unit once, not once per word
+    // (melonDS patch 0122; exact, default on)
+    nds_->DivSqrtBlock = cfg_.flag("jit.divblock", true);
 
     RendererSettings rs{};
     rs.ScaleFactor = 1;

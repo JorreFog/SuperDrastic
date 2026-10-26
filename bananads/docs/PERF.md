@@ -1142,3 +1142,21 @@ environment variable), so it can be A/B'd on the device, and say what to measure
   misses, what `perf stat` would give. With LTO, `NDS::RunFrame`'s slice loop is inlined into its caller: in headless runs it shows as
   `main::{lambda()#1}` (the scheduler/RunFrame share of earlier profiles).
 - Keep runs short, and ask the user before long benchmarks.
+
+## HeartGold's grass area, the CPUs outside the ARM9 JIT (2026-10-26 night run, P3)
+
+Counted on the RG DS Plus (PIN=1 FF=1, debug counters in a never-merged build), per emulated frame: 3,800 slice
+loop iterations plus 2,820 slice ends inside the ARM9's chain (`SliceChain9`); both CPUs halted (`core.halt_skip`)
+25.8% of the time; melonDS's detected idle loops only 0.4% (ARM9) and 0.2% (ARM7) of the time, so skipping wait
+loops has nothing to win here; events: LCD 526, SPU 547, RTC 548, Div 254, Sqrt 288. The ARM9's hottest code is a
+word copy loop written as branch-over-branch (`blt +8; b +8; ldm r0!,{r2}`...), ~3 JIT blocks a word.
+`MELONDS_IOSTATS`: ~243 LDMs (12k words) and ~122 STMs (5.2k words) of main RAM a frame through
+`SlowBlockTransfer9`, each word an out-of-line `IOFastRead9`/`IOFastWrite9` call.
+
+- **0120 `jit.lookup_prefetch`** (default on, exact: a cache hint): when a CPU's slice ends in the slice loop, the
+  lookup-table slot of its next PC is prefetched. The two lookup loads (ARM9, ARM7) were 2.3% of the emulator's
+  thread (~65 / ~145 cycles each: misses in the sparse 8-bytes-per-halfword table). Device, in-run interleaved
+  A/B (240-frame phases): ~+0.5-1% emulated/s.
+- **0121 `jit.ldm_mainram`** (default on, exact): `SlowBlockTransfer9Body` does a block whose words are all in
+  main RAM (both ends at 0x02, above `ITCMSize`, neither end in the DTCM) in one loop: the same loads, and the same
+  `CheckAndInvalidate` before each store, in the same order. The JIT charges the cycles in the compiled code.

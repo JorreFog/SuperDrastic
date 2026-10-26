@@ -1,0 +1,79 @@
+From 6db794c3376d91440f3dd11a505f9625d60fc6b1 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Mon, 26 Oct 2026 01:02:24 +0100
+Subject: [PATCH] NDS: an STM onto the divider's or square root's parameters
+ starts the unit once
+
+HeartGold writes the divider's 4 parameter words and the square root's 2 with
+one STM each, ~243 times a frame. Each word went SlowBlockTransfer9 ->
+IOFastWrite9 -> ARM9IOWrite32's case, and each case called StartDiv/StartSqrt:
+CancelEvent and ScheduleEvent of the same event at the same time (nothing runs
+between the words of one STM, and CurCPU, the ARM9's time and its target are
+the same for each), so only the last call's state is left.
+NDS::WriteDivSqrtBlock (jit.divblock, default on) writes the words in order
+and calls StartDiv/StartSqrt once. Exact: the same registers, the same event
+at the same time, the same ARM9Target. (SchedNext may now hold the event's
+time where it held 0, "to recompute": both give the same next event.)
+---
+ src/ARMJIT.cpp |  3 +++
+ src/NDS.h      | 30 ++++++++++++++++++++++++++++++
+ 2 files changed, 33 insertions(+)
+
+diff --git a/src/ARMJIT.cpp b/src/ARMJIT.cpp
+index 45180ed..f62e3b7 100644
+--- a/src/ARMJIT.cpp
++++ b/src/ARMJIT.cpp
+@@ -689,6 +689,9 @@ template <bool Write, int ConsoleType>
+                     return;
+                 break;
+             }
++            // the divider's or the square root's parameters (jit.divblock, patch 0122): the words, one StartDiv/StartSqrt
++            if (addr >= 0x04000290 && last <= 0x040002BC && nds.WriteDivSqrtBlock(addr, data, num))
++                return;
+             // the GX FIFO (MELONDS_IOFAST's route, word by word: GPU3D::GeometryEnabled can't change in between)
+             if ((flags & slow_MemIO) && (flags & iofast_GX) && addr >= 0x04000400 && last < 0x04000440)
+             {
+diff --git a/src/NDS.h b/src/NDS.h
+index 94c5873..272040e 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -709,6 +709,36 @@ public: // TODO: Encapsulate the rest of these members
+         }
+         return false;
+     }
++    // jit.divblock (BananaDS patch 0122): an STM's words that all fall on the divider's parameters (0x04000290-29F)
++    // or the square root's (0x040002B8-2BF): ARM9IOWrite32's cases for each word in order, with one StartDiv/
++    // StartSqrt at the end instead of one per word (each cancels the event and schedules it again at the same time:
++    // nothing runs between the words, so only the last one's is left). Returns false for any other block
++    bool DivSqrtBlock = true;
++    bool WriteDivSqrtBlock(u32 addr, const u64* data, u32 num) noexcept
++    {
++        const u32 last = addr + (num - 1) * 4;
++        if (!DivSqrtBlock || !num)
++            return false;
++        if (addr >= 0x04000290 && last <= 0x0400029C)
++        {
++            for (u32 i = 0; i < num; i++)
++            {
++                const u32 r = (addr - 0x04000290) / 4 + i;
++                if (r < 2) DivNumerator[r] = (u32)data[i];
++                else DivDenominator[r - 2] = (u32)data[i];
++            }
++            StartDiv();
++            return true;
++        }
++        if (addr >= 0x040002B8 && last <= 0x040002BC)
++        {
++            for (u32 i = 0; i < num; i++)
++                SqrtVal[(addr - 0x040002B8) / 4 + i] = (u32)data[i];
++            StartSqrt();
++            return true;
++        }
++        return false;
++    }
+     template <typename T>
+     bool ARM9IOWriteDirect(u32 addr, T val) noexcept
+     {
+-- 
+2.56.0
+
