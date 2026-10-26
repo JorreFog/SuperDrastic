@@ -24,6 +24,9 @@
 #include <vector>
 
 #include "Args.h"
+#include "DSi.h"
+#include "FreeBIOS.h"
+#include "fatfs/ff.h"
 #include "GPU_Soft.h"
 #ifdef BANANADS_2D
 #include "GPU_Banana.h"
@@ -123,6 +126,7 @@ void Emu::shutdown() {
         nds_->SPU.Tap = nullptr;
     }
     if (nds_) nds_->Stop();
+    export_dsi_saves();
     if (net_) net_->UnregisterInstance(0);
     start_mark("quit: console stopped");
 }
@@ -176,6 +180,335 @@ void Emu::set_clock() {
         nds_->RTC.SetDateTime(fy, fmo, fd, fh, fmi, fs);
     else
         nds_->RTC.SetDateTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec);
+}
+
+// ---- DSi games (DSiWare, DSi-only cartridges) ----
+// A .cia is how the 3DS's eShop shipped DSiWare: certificates, a ticket, the title's metadata (TMD) and the content,
+// the DSi ROM itself. A content the TMD marks encrypted (type bit 0) needs the 3DS's common key to read: not here.
+struct CiaContent {
+    size_t off = 0, len = 0;
+    bool encrypted = false;
+    const uint8_t* tmd = nullptr;  // the TMD's signed part (signature type, signature, header, records)
+    size_t tmd_len = 0;
+};
+static uint32_t be32(const uint8_t* p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
+static uint32_t le32(const uint8_t* p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
+static size_t sig_len(uint32_t type) {  // a signed block's signature and padding after its 4-byte type
+    switch (type) {
+    case 0x10000: case 0x10003: return 0x200 + 0x3C;
+    case 0x10001: case 0x10004: return 0x100 + 0x3C;
+    case 0x10002: case 0x10005: return 0x3C + 0x40;
+    default: return 0;
+    }
+}
+static bool cia_parse(const uint8_t* d, size_t n, CiaContent& c) {
+    if (n < 0x2040 || le32(d) != 0x2020 || (d[4] | d[5]) != 0) return false;
+    auto al = [](uint64_t x) { return (x + 63) & ~(uint64_t)63; };
+    const uint64_t certs = le32(d + 8), tik = le32(d + 12), tmd = le32(d + 16), content = (uint64_t)le32(d + 24) |
+        (uint64_t)le32(d + 28) << 32;
+    const uint64_t o_tik = al(0x2020 + certs), o_tmd = al(o_tik + tik), o_con = al(o_tmd + tmd);
+    if (o_con + content > n || tmd < 0x200) return false;
+    const uint8_t* t = d + o_tmd;
+    const size_t sl = sig_len(be32(t));
+    if (!sl || 4 + sl + 0xC4 > tmd) return false;
+    const uint8_t* h = t + 4 + sl;  // the TMD's header
+    const unsigned count = (unsigned)h[0x9E] << 8 | h[0x9F];
+    const uint8_t* rec = h + 0xC4 + 64 * 0x24;  // (3DS TMD: 64 content info records, then the chunk records)
+    if (!count || rec + 0x30 > t + tmd) return false;
+    c.off = o_con;
+    c.len = (size_t)be32(rec + 12);  // (size is 64-bit; a DSi ROM is far below 4 GB)
+    c.encrypted = (rec[7] & 1) != 0;
+    c.tmd = t;
+    c.tmd_len = tmd;
+    return c.len >= 0x200 && c.off + c.len <= n && be32(rec + 8) == 0;
+}
+
+// the DSi's files, from the folder `bios` (BananaOS: /data/bios), named as melonDS's libretro core names them
+static std::string bios_file(const Config& cfg, const char* key, const char* name) {
+    std::string v = cfg.str(key, "");
+    if (!v.empty()) return v;
+    return cfg.str("bios", "/data/bios") + "/" + name;
+}
+template <size_t N> static bool read_exact(const std::string& path, std::array<u8, N>& out) {
+    std::vector<uint8_t> b;
+    if (!read_file(path, b) || b.size() != N) return false;
+    memcpy(out.data(), b.data(), N);
+    return true;
+}
+
+
+// The DSi: its own BIOS images (dsi_bios9.bin and dsi_bios7.bin, 64 KB each) when both are in the BIOS folder, else
+// melonDS's free DSi BIOS. Booted straight into the game (direct boot), without the DSi's menu, so no DSi firmware or
+// NAND is needed to start one; a DSiWare title's own saves (public.sav, private.sav) live on the NAND, which comes
+// from the user's dsi_nand.bin when there is one (setup_nand).
+std::unique_ptr<NDS> Emu::make_dsi(NDSArgs&& args) {
+    const std::string b9 = bios_file(cfg_, "dsi.bios9", "dsi_bios9.bin");
+    const std::string b7 = bios_file(cfg_, "dsi.bios7", "dsi_bios7.bin");
+    auto a9 = std::make_unique<DSiBIOSImage>();
+    auto a7 = std::make_unique<DSiBIOSImage>();
+    dsi_bios_ = read_exact(b9, *a9) && read_exact(b7, *a7);
+    if (dsi_bios_) {
+        Log(LogLevel::Info, "[dsi] DSi BIOS: %s, %s\n", b9.c_str(), b7.c_str());
+    } else {
+        *a9 = FreeBIOSGetTwlArm9();
+        *a7 = FreeBIOSGetTwlArm7();
+        // A ROM's secure area (its first 2 KB of ARM9 code) as a DSi reads it from the card or the NAND is encrypted
+        // (KEY1); the key's table is in the DSi's ARM9 BIOS at 0x99A0 and in the DS's ARM7 BIOS at 0x30, the same
+        // 0x1048 bytes. The free BIOS has neither: a DS ARM7 BIOS (bios7.bin) lends its table to the free one.
+        std::array<u8, 0x4000> ds7{};
+        const std::string d7 = bios_file(cfg_, "bios7", "bios7.bin");
+        if (read_exact(d7, ds7)) {
+            memcpy(a9->data() + 0x99A0, ds7.data() + 0x30, 0x1048);
+            key1_ = true;
+            Log(LogLevel::Info, "[dsi] free DSi BIOS, the secure area's key from %s\n", d7.c_str());
+        } else {
+            Log(LogLevel::Info, "[dsi] free DSi BIOS (no %s and %s; no %s for the secure area's key)\n", b9.c_str(),
+                b7.c_str(), d7.c_str());
+        }
+    }
+    DSiArgs d{std::move(args), std::move(a9), std::move(a7), std::nullopt, std::nullopt, false};
+    d.NANDImage = setup_nand(*d.ARM7iBIOS);
+    return std::make_unique<DSi>(std::move(d), this);
+}
+
+// DSiWare keeps its saves on the DSi's NAND (title/<category>/<id>/data/public.sav, private.sav), so with the DSi's
+// own BIOS (the NAND's keys come from it) and the user's dsi_nand.bin, BananaDS runs the game on a working copy of
+// that NAND (never on the user's file: <data>/dsi/nand.bin, copied once), with the title installed into it, and the
+// saves as files beside the other saves (<game>.public.sav, <game>.private.sav): put in at the start when newer than
+// the copy, written out at quit.
+static void nand_ids(const u8* rom, u32& cat, u32& id) {
+    id = le32(rom + 0x230);
+    cat = le32(rom + 0x234);
+}
+
+// a DSi TMD (melonDS's DSi_TMD::TitleMetadata) for the title: from the .cia's (3DS layout: the same signature and
+// header, then 64 content info records and 0x30-byte content records) when there is one, else from the ROM's header
+static void make_tmd(DSi_TMD::TitleMetadata& t, const std::vector<uint8_t>& cia, const u8* rom, size_t romlen) {
+    memset(&t, 0, sizeof t);
+    t.SignatureType = 0x04000100;  // (0x10004 big-endian, as on the NAND)
+    u32 cat, id;
+    nand_ids(rom, cat, id);
+    u32 content_id = 0, version = (u32)rom[0x1E];
+    if (cia.size() >= 4 + 0x13C + 0xC4 + 0x900 + 0x30 && sig_len(be32(cia.data())) == 0x13C) {
+        memcpy(&t, cia.data(), std::min(sizeof t - sizeof t.Contents, cia.size()));
+        const uint8_t* rec = cia.data() + 4 + 0x13C + 0xC4 + 0x900;
+        content_id = be32(rec);
+        version = (u32)cia[4 + 0x13C + 0x9C] << 8 | cia[4 + 0x13C + 0x9D];
+    }
+    const u8 tid[8] = {(u8)(cat >> 24), (u8)(cat >> 16), (u8)(cat >> 8), (u8)cat,
+                       (u8)(id >> 24), (u8)(id >> 16), (u8)(id >> 8), (u8)id};
+    memcpy(t.TitleId, tid, 8);  // the DSi's title id (a .cia carries the 3DS's 00048004 for it)
+    const u32 pub = le32(rom + 0x238), prv = le32(rom + 0x23C);
+    const u8 sz[8] = {(u8)(pub >> 24), (u8)(pub >> 16), (u8)(pub >> 8), (u8)pub,
+                      (u8)(prv >> 24), (u8)(prv >> 16), (u8)(prv >> 8), (u8)prv};
+    memcpy(t.PublicSaveSize, sz, 4);
+    memcpy(t.PrivateSaveSize, sz + 4, 4);
+    t.TitleVersion = (u16)((version >> 8 & 0xFF) | (version & 0xFF) << 8);
+    t.NumberOfContents = 0x0100;  // 1, big-endian
+    const u8 cid[4] = {(u8)(content_id >> 24), (u8)(content_id >> 16), (u8)(content_id >> 8), (u8)content_id};
+    memcpy(t.Contents.ContentId, cid, 4);
+    t.Contents.ContentType[1] = 1;
+    const uint64_t n = romlen;
+    for (int i = 0; i < 8; i++) t.Contents.ContentSize[i] = (u8)(n >> (56 - 8 * i));
+}
+
+static time_t mtime_of(const std::string& p) {
+    struct stat st{};
+    return stat(p.c_str(), &st) == 0 ? st.st_mtime : 0;
+}
+
+// The DSi's settings as its menu keeps them (shared1/TWLCFG0.dat; at 0x02000400 for a game a DSi starts): English
+// (or firmware.language), the nickname, the touch screen's calibration as melonDS writes it
+static DSi_NAND::DSiFirmwareSystemSettings dsi_settings(const Config& cfg) {
+    DSi_NAND::DSiFirmwareSystemSettings t{};
+    t.Version = 1;
+    t.ConfigFlags = 0x0100000F;  // (the settings were made, the EULA agreed to, wireless on)
+    t.CountryCode = 49;          // (the USA; only the menu reads it)
+    long lang = cfg.num("firmware.language", 1);
+    if (lang < 0 || lang > 5) lang = 1;
+    t.Language = static_cast<Firmware::Language>(lang);
+    t.RTCYear = 26;
+    t.EULAVersion = 1;
+    t.SystemMenuFreeTitleSlots = 39;
+    t.TouchCalibrationADC1 = {0, 0};
+    t.TouchCalibrationPixel1 = {0, 0};
+    t.TouchCalibrationADC2 = {255 << 4, 191 << 4};
+    t.TouchCalibrationPixel2 = {255, 191};
+    t.FavoriteColor = 6;
+    t.BirthdayMonth = 1;
+    t.BirthdayDay = 1;
+    const std::string nick = cfg.str("firmware.nickname", "BananaDS");
+    for (size_t i = 0; i < nick.size() && i < 10; i++) t.Nickname[i] = (char16_t)(unsigned char)nick[i];
+    t.UpdateHash();
+    return t;
+}
+
+// BananaDS's own NAND, for DSiWare saves when the user has no dsi_nand.bin: a blank one made here (no file from a
+// DSi in it): melonDS's NAND crypto with an invented console id and eMMC CID (the FAT's key comes from those, not from
+// a BIOS), an MBR and one FAT16 partition (fatfs' f_mkfs, through melonDS's NAND layer), the folders a DSi has, and
+// the settings files. Titles are installed into it as with the user's.
+static bool make_nand(const std::string& path, const u8* es_keyY, const Config& cfg) {
+    const long mb = std::clamp(cfg.num("dsi.nand_mb", 64), 16L, 240L);
+    const off_t size = (off_t)mb << 20;
+    {
+        FILE* f = fopen((path + ".tmp").c_str(), "wb");
+        if (!f) return false;
+        u8 foot[0x40] = {};
+        memcpy(foot, "DSi eMMC CID/CPU", 16);
+        static const u8 cid[16] = {0x42, 0x41, 0x4E, 0x41, 0x4E, 0x41, 0x44, 0x53, 0x01, 0x00, 0x00, 0x00, 0x15, 0x01, 0x00, 0x00};
+        memcpy(foot + 16, cid, 16);
+        const uint64_t console_id = 0x08A15E0042414E41ull;  // (an invented one, in a DSi's range)
+        memcpy(foot + 32, &console_id, 8);
+        const bool ok = ftruncate(fileno(f), size) == 0 && fseeko(f, size, SEEK_SET) == 0 && fwrite(foot, 1, sizeof foot, f) == sizeof foot;
+        if (fclose(f) != 0 || !ok) {
+            unlink((path + ".tmp").c_str());
+            return false;
+        }
+    }
+    bool ok = false;
+    if (Platform::FileHandle* fh = Platform::OpenFile(path + ".tmp", Platform::FileMode::ReadWriteExisting)) {
+        DSi_NAND::NANDImage img(fh, es_keyY);
+        if (img) {
+            DSi_NAND::NANDMount m(img);
+            FF_MKFS_PARM opt{FM_FAT, 2, 0, 0, 0};
+            std::vector<u8> work(0x8000);
+            FRESULT r = f_mkfs("0:", &opt, work.data(), (UINT)work.size());
+            ok = r == FR_OK;
+            if (!ok) Log(LogLevel::Error, "[dsi] the NAND's format failed (%d)\n", (int)r);
+            for (const char* d : {"0:/sys", "0:/title", "0:/ticket", "0:/shared1", "0:/shared2", "0:/tmp", "0:/import",
+                                  "0:/progress", "0:/tmp/es", "0:/sys/log"})
+                if (ok) f_mkdir(d);
+            if (ok) {
+                const auto t = dsi_settings(cfg);
+                std::vector<u8> file(0x4000, 0xFF);
+                memcpy(file.data(), t.Bytes, sizeof t.Bytes);
+                ok = m.ImportFile("0:/shared1/TWLCFG0.dat", file.data(), file.size()) &&
+                     m.ImportFile("0:/shared1/TWLCFG1.dat", file.data(), file.size());
+                std::vector<u8> hw(0x4000, 0);  // (HWINFO_S.dat: a header and the region; melonDS copies a part)
+                m.ImportFile("0:/sys/HWINFO_S.dat", hw.data(), hw.size());
+                DSi_NAND::DSiFirmwareSystemSettings back{};
+                ok = ok && m.ReadUserData(back) && back.Language == t.Language;
+            }
+        }
+    }
+    if (ok) ok = rename((path + ".tmp").c_str(), path.c_str()) == 0;
+    else unlink((path + ".tmp").c_str());
+    Log(ok ? LogLevel::Info : LogLevel::Error, "[dsi] BananaDS's own NAND (%ld MB) at %s: %s\n", mb, path.c_str(),
+        ok ? "made" : "couldn't be made");
+    return ok;
+}
+
+std::optional<DSi_NAND::NANDImage> Emu::setup_nand(const std::array<uint8_t, 0x10000>& arm7i) {
+    const std::string user = bios_file(cfg_, "dsi.nand", "dsi_nand.bin");
+    struct stat st{};
+    const bool have_user = stat(user.c_str(), &st) == 0;
+    const char* data = getenv("BANANADS_DATA");
+    const std::string dir = std::string(data && *data ? data : ".") + "/dsi";
+    // the user's NAND: never run on it, on a working copy (made once); none: BananaDS's own (dsi.own_nand=off: none)
+    const std::string copy = have_user ? cfg_.str("dsi.nand_copy", dir + "/nand.bin") : dir + "/nand-bananads.bin";
+    mkdirs(copy.substr(0, copy.find_last_of('/')));
+    const bool fresh = mtime_of(copy) == 0;
+    if (fresh && have_user) {
+        std::vector<uint8_t> b;
+        if (!read_file(user, b) || !write_file_atomic(copy, b.data(), b.size())) {
+            Log(LogLevel::Error, "[dsi] couldn't copy %s to %s\n", user.c_str(), copy.c_str());
+            return std::nullopt;
+        }
+        Log(LogLevel::Info, "[dsi] working copy of the NAND: %s\n", copy.c_str());
+    } else if (fresh) {
+        if (!cfg_.flag("dsi.own_nand", true)) {
+            Log(LogLevel::Info, "[dsi] no DSi NAND (%s) and dsi.own_nand=off: DSiWare saves won't be kept\n", user.c_str());
+            return std::nullopt;
+        }
+        if (!make_nand(copy, &arm7i[0x8308], cfg_)) return std::nullopt;
+    }
+    Platform::FileHandle* f = Platform::OpenFile(copy, Platform::FileMode::ReadWriteExisting);
+    if (!f) return std::nullopt;
+    DSi_NAND::NANDImage img(f, &arm7i[0x8308]);
+    if (!img) {
+        Log(LogLevel::Error, "[dsi] %s isn't a DSi NAND melonDS can read (no nocash footer)\n", copy.c_str());
+        notice("dsi_nand.bin can't be read", "it needs its nocash footer");
+        return std::nullopt;
+    }
+    if (dsi_cart_) {
+        const u8* rom = dsi_cart_->GetROM();
+        u32 cat, id;
+        nand_ids(rom, cat, id);
+        if (cat == 0x00030004 || cat == 0x00030005 || cat == 0x00030015 || cat == 0x00030017) {  // a NAND title
+            DSi_NAND::NANDMount m(img);
+            if (!m) {
+                Log(LogLevel::Error, "[dsi] the NAND's file system doesn't mount\n");
+                return std::nullopt;
+            }
+            if (!m.TitleExists(cat, id)) {
+                DSi_TMD::TitleMetadata tmd;
+                const size_t len = (size_t)le32(rom + 0x210) ? std::min((size_t)le32(rom + 0x210), (size_t)dsi_cart_->GetROMLength())
+                                                            : (size_t)dsi_cart_->GetROMLength();
+                make_tmd(tmd, cia_tmd_, rom, len);
+                const bool ok = m.ImportTitle(rom, len, tmd, false);
+                Log(ok ? LogLevel::Info : LogLevel::Error, "[dsi] title %08x/%08x into the NAND: %s\n", cat, id,
+                    ok ? "installed" : "failed");
+            }
+            dsi_title_cat_ = cat;
+            dsi_title_id_ = id;
+            const std::string base = save_path_.substr(0, save_path_.size() - 4);
+            const struct { int type; const char* ext; } saves[] = {{DSi_NAND::TitleData_PublicSav, ".public.sav"},
+                                                                {DSi_NAND::TitleData_PrivateSav, ".private.sav"}};
+            for (auto& sv : saves) {
+                const std::string p = base + sv.ext;
+                if ((fresh || mtime_of(p) > mtime_of(copy)) && m.ImportTitleData(cat, id, sv.type, p.c_str()))
+                    Log(LogLevel::Info, "[dsi] save %s into the NAND\n", p.c_str());
+            }
+        }
+    }
+    dsi_nand_ = true;
+    return img;
+}
+
+// at quit: the DSiWare title's saves out of the NAND, beside the other saves
+void Emu::export_dsi_saves() {
+    if (!dsi_nand_ || !dsi_title_id_ || !nds_ || nds_->ConsoleType != 1) return;
+    DSi_NAND::NANDImage* img = static_cast<DSi&>(*nds_).SDMMC.GetNAND();
+    if (!img || !*img) return;
+    DSi_NAND::NANDMount m(*img);
+    if (!m) return;
+    const std::string base = save_path_.substr(0, save_path_.size() - 4);
+    if (m.ExportTitleData(dsi_title_cat_, dsi_title_id_, DSi_NAND::TitleData_PublicSav, (base + ".public.sav").c_str()))
+        Log(LogLevel::Info, "[dsi] save %s.public.sav written\n", base.c_str());
+    m.ExportTitleData(dsi_title_cat_, dsi_title_id_, DSi_NAND::TitleData_PrivateSav, (base + ".private.sav").c_str());
+}
+
+// After the direct boot: was the secure area decrypted? melonDS fills it with 0xE7FFDEFF (undefined instructions)
+// when it wasn't, and the game would stop at its first call into it: say what is missing, on the panels too.
+void Emu::check_secure_area() {
+    NDSCart::CartCommon* cart = nds_->NDSCartSlot.GetCart();
+    if (!cart) return;
+    const NDSHeader& h = cart->GetHeader();
+    if (h.ARM9ROMOffset < 0x4000 || h.ARM9ROMOffset >= 0x8000) return;
+    const u32 a = h.ARM9RAMAddress;
+    if (nds_->ARM9Read32(a + 8) != 0xE7FFDEFF || nds_->ARM9Read32(a + 0x400) != 0xE7FFDEFF) return;
+    secure_missing_ = true;
+    const std::string dir = cfg_.str("bios", "/data/bios");
+    Log(LogLevel::Error, "[dsi] this game's secure area is encrypted and BananaDS has no key for it: put a DS ARM7 BIOS "
+        "(bios7.bin, 16 KB) or the DSi's BIOS (dsi_bios9.bin + dsi_bios7.bin, 64 KB each) in %s/. The game will likely "
+        "stop at a black screen without it\n", dir.c_str());
+    notice("DSi game: needs a BIOS file", ("put bios7.bin in " + dir).c_str());
+}
+
+void Emu::notice(const char* line1, const char* line2) {
+    std::lock_guard<std::mutex> l(notice_mu_);
+    notice1_ = line1;
+    notice2_ = line2 ? line2 : "";
+}
+
+bool Emu::take_notice(std::string& line1, std::string& line2) {
+    std::lock_guard<std::mutex> l(notice_mu_);
+    if (notice1_.empty()) return false;
+    line1.swap(notice1_);
+    line2.swap(notice2_);
+    notice1_.clear();
+    notice2_.clear();
+    return true;
 }
 
 void Emu::restart() {
@@ -253,6 +586,7 @@ bool rom_unmap(uint8_t* p) {
     return false;
 }
 
+
 bool Emu::load_rom(const std::string& path) {
     std::unique_ptr<u8[]> romdata;
     size_t romlen = 0, file_len = 0;
@@ -274,6 +608,37 @@ bool Emu::load_rom(const std::string& path) {
     if (!romdata) {
         Log(LogLevel::Error, "[emu] can't read the ROM %s\n", path.c_str());
         return false;
+    }
+    {   // a .cia (DSiWare from the 3DS's eShop): its content is the DSi ROM, taken out into a buffer of its own
+        CiaContent cia;
+        const size_t have = file_len ? file_len : romlen;
+        if (cia_parse(romdata.get(), have, cia)) {
+            if (cia.encrypted) {
+                notice("This .cia is encrypted", "decrypt it on a 3DS (or a PC tool) first");
+                Log(LogLevel::Error, "[dsi] %s: the .cia's content is encrypted (it needs the 3DS's keys, which BananaDS "
+                    "doesn't have): decrypt the .cia first, or use the title's .nds/.dsi\n", path.c_str());
+                if (rom_unmap(romdata.get())) (void)romdata.release();
+                return false;
+            }
+            size_t len = 0x1000;
+            while (len < cia.len) len <<= 1;  // (a power of two, zero-padded: melonDS keeps the buffer as it is)
+            std::unique_ptr<u8[]> rom(new (std::nothrow) u8[len]());
+            if (!rom) return false;
+            memcpy(rom.get(), romdata.get() + cia.off, cia.len);
+            cia_tmd_.assign(cia.tmd, cia.tmd + cia.tmd_len);
+            if (rom_unmap(romdata.get())) (void)romdata.release();
+            romdata = std::move(rom);
+            romlen = len;
+            Log(LogLevel::Info, "[dsi] .cia: content of %zu bytes at 0x%zx, not encrypted\n", cia.len, cia.off);
+        }
+    }
+    // the console: console = auto (the default: a DSi for a game only a DSi plays, unit code 3 - DSiWare and DSi-only
+    // cartridges; a DS for the rest, DSi-enhanced games included, as they play on a DS), ds or dsi
+    {
+        const u8 unit = romdata[0x12];
+        const std::string want = cfg_.str("console", "auto");
+        dsi_ = want == "dsi" || (want != "ds" && unit == 3);
+        if (dsi_) Log(LogLevel::Info, "[dsi] DSi mode (console=%s, unit code %u)\n", want.c_str(), unit);
     }
     rom_path_ = path;
     game_ = basename_noext(path);
@@ -305,6 +670,7 @@ bool Emu::load_rom(const std::string& path) {
     }
 
     NDSArgs args;  // FreeBIOS and a generated firmware: no BIOS or firmware files needed, as with DraStic
+    if (dsi_) args.Firmware = Firmware(1);  // (a DSi's generated firmware)
     args.OutputSampleRate = 48000.0;
     if (!cfg_.flag("jit", true)) args.JIT = std::nullopt;
 #ifdef BANANADS_JIT
@@ -634,7 +1000,12 @@ bool Emu::load_rom(const std::string& path) {
     setup_local();
     start_mark("wifi");
 
-    nds_ = std::make_unique<NDS>(std::move(args), this);
+    if (dsi_) {
+        dsi_cart_ = cart.get();
+        nds_ = make_dsi(std::move(args));
+        dsi_cart_ = nullptr;
+    }
+    else nds_ = std::make_unique<NDS>(std::move(args), this);
     start_mark("NDS created");
     nds_->SetNDSCart(std::move(cart));
     start_mark("cart in");
@@ -642,6 +1013,14 @@ bool Emu::load_rom(const std::string& path) {
     start_mark("reset");
     nds_->SetupDirectBoot(game_ + ".nds");
     start_mark("direct boot");
+    debug_pc_ = (uint64_t)std::max(0L, cfg_.num("debug.pc", 0));
+    if (dsi_) {
+        if (!dsi_nand_) {  // no NAND for melonDS to take the DSi's settings from: the ones a DSi would hand the game
+            const auto t = dsi_settings(cfg_);
+            for (u32 i = 0; i < 0x128; i += 4) nds_->ARM9Write32(0x02000400 + i, le32(t.Bytes + 0x88 + i));
+        }
+        check_secure_area();
+    }
     setup_slice();
     // core.fast_gxdma / core.fast_spu: exact shortcuts in melonDS's DMA and SPU (patches/melonds/0004), off by
     // default until measured on the handheld
@@ -851,6 +1230,41 @@ void Emu::run_frame() {
     if (prof_) prof_->frame(frames_run_);  // prof.hz: on the emulator's thread, whichever runs the frames
     frames_run_++;
     nds_->RunFrame();
+    if (debug_pc_ && frames_run_ % debug_pc_ == 0) {  // debug.pc=N: where both CPUs are, every N frames
+        Log(LogLevel::Info, "[debug] frame %llu: ARM9 pc %08x lr %08x cpsr %08x halted %d | ARM7 pc %08x lr %08x "
+            "cpsr %08x halted %d | POWCNT1 %04x IE %08x IF %08x\n", (unsigned long long)frames_run_,
+            nds_->ARM9.R[15], nds_->ARM9.R[14], nds_->ARM9.CPSR, nds_->ARM9.Halted, nds_->ARM7.R[15],
+            nds_->ARM7.R[14], nds_->ARM7.CPSR, nds_->ARM7.Halted, nds_->PowerControl9, nds_->IE[0], nds_->IF[0]);
+        // debug.dump = "c:addr:len,...": memory as CPU c (7 or 9) reads it, once, at the third report
+        if (frames_run_ == 3 * (long)debug_pc_) {
+            std::string spec = cfg_.str("debug.dump", "");
+            size_t at = 0;
+            while (at < spec.size()) {
+                size_t e = spec.find(',', at);
+                if (e == std::string::npos) e = spec.size();
+                unsigned c = 0, a = 0, n = 0;
+                char tok[16] = {};
+                if (sscanf(spec.substr(at, e - at).c_str(), "%u:%15[^:]:%x", &c, tok, &n) == 3) {
+                    a = !strcmp(tok, "sp") ? (c == 7 ? nds_->ARM7.R[13] : nds_->ARM9.R[13]) : (unsigned)strtoul(tok, nullptr, 16);
+                    a &= ~3u;
+                }
+                if (n)
+                    for (unsigned i = 0; i < n; i += 16) {
+                        u32 w[4];
+                        for (int k = 0; k < 4; k++)
+                            w[k] = c == 7 ? nds_->ARM7Read32(a + i + 4 * k) : nds_->ARM9Read32(a + i + 4 * k);
+                        Log(LogLevel::Info, "[dump%u] %08x: %08x %08x %08x %08x\n", c, a + i, w[0], w[1], w[2], w[3]);
+                    }
+                at = e + 1;
+            }
+            Log(LogLevel::Info, "[debug] ARM9 r0-r7 %08x %08x %08x %08x %08x %08x %08x %08x sp %08x\n", nds_->ARM9.R[0],
+                nds_->ARM9.R[1], nds_->ARM9.R[2], nds_->ARM9.R[3], nds_->ARM9.R[4], nds_->ARM9.R[5], nds_->ARM9.R[6],
+                nds_->ARM9.R[7], nds_->ARM9.R[13]);
+            Log(LogLevel::Info, "[debug] ARM7 r0-r7 %08x %08x %08x %08x %08x %08x %08x %08x\n", nds_->ARM7.R[0],
+                nds_->ARM7.R[1], nds_->ARM7.R[2], nds_->ARM7.R[3], nds_->ARM7.R[4], nds_->ARM7.R[5], nds_->ARM7.R[6],
+                nds_->ARM7.R[7]);
+        }
+    }
     if (const uint32_t b = nds_->GPU.GPU3D.CurRAMBank; b != bank3d_) {  // the 3D swapped at this VBlank
         bank3d_ = b;
         swaps3d_.fetch_add(1, std::memory_order_relaxed);

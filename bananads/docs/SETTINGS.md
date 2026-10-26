@@ -95,6 +95,15 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `resume.on_start` | `on` | load it when the game starts |
 | `firmware.nickname` | `BananaDS` | the DS's user name (10 characters at most; games and WFC show it) |
 | `firmware.language` | the firmware's | 0 Japanese, 1 English, 2 French, 3 German, 4 Italian, 5 Spanish |
+| `console` | `auto` | the console: `auto` a DSi for a game only a DSi plays (unit code 3 in its header: DSiWare, DSi-only cartridges), a DS for the rest (DSi-enhanced games play as on a DS); `ds`; `dsi` |
+| `bios` | `/data/bios` (`$BANANADS_BIOS`) | the folder of the BIOS files below (none is needed for a DS game) |
+| `dsi.bios9`, `dsi.bios7` | `<bios>/dsi_bios9.bin`, `<bios>/dsi_bios7.bin` | the DSi's own BIOS (64 KB each, both or neither): with them a DSi game runs on them, else on melonDS's free DSi BIOS |
+| `bios7` | `<bios>/bios7.bin` | a DS's ARM7 BIOS (16 KB): with the free DSi BIOS, its KEY1 table decrypts a DSi game's secure area (DSiWare's first 2 KB of code are encrypted; without one of these files such a game stops at a black screen and a notice says so) |
+| `dsi.nand` | `<bios>/dsi_nand.bin` | the user's DSi NAND (with its nocash footer): DSiWare runs on a working copy of it (`dsi.nand_copy`, `<BANANADS_DATA>/dsi/nand.bin`, copied once), the title installed into it |
+| `dsi.own_nand` | `on` | no `dsi.nand`: BananaDS's own blank NAND (`<BANANADS_DATA>/dsi/nand-bananads.bin`, `dsi.nand_mb` MB, default 64; made once, nothing from a DSi in it) keeps DSiWare's saves. `off`: no NAND, no DSiWare saves |
+| (DSiWare saves) | | the title's `public.sav` / `private.sav` from the NAND, written beside the other saves at quit as `<game>.public.sav` / `<game>.private.sav`, and put back into the NAND at the start when newer than it |
+| `debug.pc` | `0` | for bringing up a game that hangs: every this many frames, log both CPUs' PC, LR, CPSR and halt state, POWCNT1, IE and IF (`[debug]` lines) |
+| `debug.dump` | (none) | with `debug.pc`, once at its third report: memory as a CPU reads it, `c:addr:len,...` (c 7 or 9, hex address or `sp`, hex length; `[dump7]`/`[dump9]` lines). Not the TCMs |
 | `rtc.fixed` | none | the DS clock's start, `YYYY-MM-DD HH:MM:SS` (or `T` or `_` for the space), instead of the current time: two runs of a game that seeds its random numbers from the clock then go the same way (for tests) |
 | `wifi.dns` | `kaeru` | `kaeru`, `altwfc`, `wiilink`, an IPv4 address, `system` (the handheld's own DNS) or `off` (no Wi-Fi at all) |
 | `wifi.local` | `off` | `host`, or `join:<the host's address>`: local wireless with another handheld (builds with `BANANADS_LAN`) |
