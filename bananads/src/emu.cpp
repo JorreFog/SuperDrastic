@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sched.h>
 #include <sys/stat.h>
 #include <pthread.h>
 #include <thread>
@@ -45,6 +46,17 @@ using Platform::Log;
 using Platform::LogLevel;
 
 namespace bananads {
+
+int g_emu_core = -1;
+void sched_off_emu_core() {
+    if (g_emu_core < 0) return;
+    cpu_set_t rest;
+    CPU_ZERO(&rest);
+    for (int k = 0; k < std::min(CPU_SETSIZE, (int)sysconf(_SC_NPROCESSORS_CONF)); k++)
+        if (k != g_emu_core) CPU_SET(k, &rest);
+    sched_setaffinity(0, sizeof rest, &rest);
+}
+
 
 static std::string basename_noext(const std::string& p) {
     size_t s = p.find_last_of('/');
@@ -973,6 +985,7 @@ void Emu::flush_save(bool now) {
     if (!save_thr_.joinable() && !save_stop_) {
         save_thr_ = std::thread([this] {
             pthread_setname_np(pthread_self(), "bds-save");
+            sched_off_emu_core();
             save_writer();
         });
     }

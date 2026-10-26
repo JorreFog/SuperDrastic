@@ -1580,12 +1580,20 @@ int run_kms(Emu& emu, const Config& cfg) {
             if (setpriority(PRIO_PROCESS, 0, (int)n)) Log(LogLevel::Warn, "[kms] sched.emu_nice %ld: %s\n", n, strerror(errno));
             else Log(LogLevel::Info, "[kms] the emulator's thread at nice %ld\n", n);
         }
-        if (long c = cfg.num("sched.emu_cpu", -1); c >= 0) {
+        // sched.emu_excl (on): the emulator's thread on a core of its own (sched.emu_cpu, else the last one), every other
+        // thread of ours (the 2D thread, Gengis's, the presenter, sound, threads started later) off it. On the RG DS
+        // Plus's four A55s, HeartGold at fast-forward: 113.7-114.3 emulated/s vs 110.8-110.9 (the emulator's thread 98.8%
+        // busy instead of 96.6%: no more waiting behind a woken 2D/Gengis thread or the SCHED_FIFO presenter)
+        const long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+        long c = cfg.num("sched.emu_cpu", -1);
+        const bool excl = cfg.flag("sched.emu_excl", true) && ncpu >= 4;
+        if (c < 0 && excl) c = ncpu - 1;
+        if (c >= 0) {
             cpu_set_t set; CPU_ZERO(&set); CPU_SET((int)c, &set);
             if (sched_setaffinity(0, sizeof set, &set)) Log(LogLevel::Warn, "[kms] sched.emu_cpu %ld: %s\n", c, strerror(errno));
-            else Log(LogLevel::Info, "[kms] the emulator's thread pinned to cpu%ld\n", c);
-            // sched.emu_excl: every other thread of ours off that core (the 2D thread, Gengis's, the presenter, sound)
-            if (cfg.flag("sched.emu_excl", false)) {
+            else if (!excl) Log(LogLevel::Info, "[kms] the emulator's thread pinned to cpu%ld\n", c);
+            else {
+                g_emu_core = (int)c;
                 const long self = (long)syscall(SYS_gettid);
                 cpu_set_t rest; CPU_ZERO(&rest);
                 for (int k = 0; k < std::min(CPU_SETSIZE, (int)sysconf(_SC_NPROCESSORS_CONF)); k++) if (k != c) CPU_SET(k, &rest);
@@ -1597,7 +1605,7 @@ int run_kms(Emu& emu, const Config& cfg) {
                     }
                     closedir(d);
                 }
-                Log(LogLevel::Info, "[kms] sched.emu_excl: %d other threads off cpu%ld\n", n, c);
+                Log(LogLevel::Info, "[kms] sched.emu_excl: the emulator's thread on cpu%ld, %d other threads off it\n", c, n);
             }
         }
         // kms.pace: display (the default) runs the DS at the panels' refresh (60.002 Hz on the RG DS, 0.3% faster than

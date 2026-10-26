@@ -33,6 +33,11 @@ enum Key : uint32_t {
     KeyR = 1 << 8, KeyL = 1 << 9, KeyX = 1 << 10, KeyY = 1 << 11,
 };
 
+// sched.emu_excl: the core the emulator's thread has to itself (-1: none); a thread it starts later moves itself off
+// that core with sched_off_emu_core() (else it would inherit the emulator's one-core mask)
+extern int g_emu_core;
+void sched_off_emu_core();
+
 class Emu {
 public:
     explicit Emu(const Config& cfg);

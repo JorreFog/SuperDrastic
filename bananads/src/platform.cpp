@@ -141,7 +141,9 @@ void Log(LogLevel level, const char* fmt, ...) {
 // --- threads ---
 
 struct Thread { std::thread t; };
-Thread* Thread_Create(std::function<void()> func) { return new Thread{std::thread(std::move(func))}; }
+Thread* Thread_Create(std::function<void()> func) {
+    return new Thread{std::thread([f = std::move(func)] { bananads::sched_off_emu_core(); f(); })};
+}
 void Thread_Free(Thread* t) {
     if (t->t.joinable()) t->t.detach();
     delete t;

@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <sys/resource.h>
 #include "gengis_renderer.h"
+#include "emu.h"
 
 #include <chrono>
 #include <cstring>
@@ -297,6 +298,7 @@ bool GengisRenderer3D::RenderOne(bool emu) {
 
 void GengisRenderer3D::Worker() {
     pthread_setname_np(pthread_self(), "bds-gengis");  // (else "bananads", summed with the presenter by top -H)
+    bananads::sched_off_emu_core();                     // (sched.emu_excl: never on the emulator's core)
     if (Nice) setpriority(PRIO_PROCESS, 0, Nice);
     unsigned seen = 0;
     for (;;) {
