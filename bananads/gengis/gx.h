@@ -47,6 +47,7 @@ typedef struct {
     uint8_t edge[24];                   /* edge colours: r[8], g[8], b[8] (6 bits) */
     uint8_t toon[96];                   /* toon table: r[32], g[32], b[32] (6 bits) */
     const gx_poly *polys;
+    const uint32_t *yr;                 /* per polygon ytop | ybot << 16 (the bins' overlap tests) */
     unsigned npolys, ntranslucent;      /* the translucent ones last */
     unsigned gen;                       /* the frame's number: the threads' per-frame state */
 } gx_frame;
@@ -64,6 +65,10 @@ static inline uint32_t gx_expand555(uint32_t c) {   /* BGR555 -> r6 | g6 << 8 | 
     return (p << 1) + (((p + 0x1f1f1f) >> 5) & 0x010101);
 }
 extern int gx_defer;                    /* deferred shading of opaque polygons (defer.c) */
+extern int gx_stats;                    /* render.gengis_stats: count the span pixels (per thread: gx_px_*) */
+extern __thread unsigned long gx_px_opa, gx_px_trl, gx_lines;
+extern int gx_trim;                     /* render.gengis_trim: opaque polygons skip the bins' context lines without edge marking */
+extern int gx_zva;                      /* render.gengis_zva: the clear and the 2x output allocate lines with dc zva */
 
 #ifdef __cplusplus
 }
