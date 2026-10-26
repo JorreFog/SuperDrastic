@@ -185,7 +185,7 @@ static void batch_shade(poly_t *P, const uint8_t *bs, unsigned k, unsigned line,
 
 /* the batch routine for this polygon: the assembly kernel for opaque modulate-shaded polygons, else the C NEON one */
 batch_fn *asm_batch_for(poly_t *P) {
-    if (P->mode == 1 || P->mode == 2) return neon_batch_for(P);
+    if (P->mode == 1 || P->mode == 2) { batch_fn *f = hrneon_batch_for(P); return f ? f : neon_batch_for(P); }   /* (hrneon.c) */
     kargs_poly(P);
     if (!P->dmode) { batch_asm_poly(P); return batch_asm; }
     return P->dmode == 1 ? batch_vis : batch_shade;
