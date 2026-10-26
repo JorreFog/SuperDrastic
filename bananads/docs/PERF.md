@@ -1404,3 +1404,7 @@ off: 2 scalar passes per quarter, 32 per DS line at 4x), `WriteRepN<4>` 9% (the 
 - Store forms checked on the Plus (microbench, malloc and a DRM dumb buffer): `vst4` replicate/zip are as fast as or
   faster than dup/trn + `st1`; the output stores stay.
 `render.2d_verify` (tests) recomputes each fast path the reference way on the device: 0 differing lines in every run.
+Numbers (MKDS race state, M1's mkbench, 4x shader None, PIN=1 1992 MHz, 40 s, the same scripted input): base 41.83 /
+41.94 fps with `bananads-2d` 80.1 / 79.0%; raw 3D + out_skip 42.87 / 71.3%; + split 43.29 / 69.2%; + sprite-content
+keys **44.45 fps / 61.3%** (unit B cache hits 52606 -> 153139, rows not rewritten 51648 -> 83636). Audio tap at 4x
+identical to the base 2x tap (M1's mktap gate, 33.7 s); 2x verify run 60.17 fps, 524288 lines 0 differ.
