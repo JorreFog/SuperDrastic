@@ -1557,8 +1557,10 @@ int run_kms(Emu& emu, const Config& cfg) {
         dp.gpu_floor_mhz = cfg.num("kms.gpu_floor_mhz", -1);
         clear_first = cfg.flag("kms.shader_clear", true) ? 1 : 0;
     }
-    // kms.commit_thread (Display::committer): blocking commits on a real-time thread of their own
-    if (cfg.flag("kms.commit_thread", false)) {
+    // kms.commit_thread (Display::committer): blocking commits on a real-time thread of their own. auto (the default):
+    // at render.scale 3 and 4, where every core is busy (2x as before: nonblocking commits from this thread)
+    const std::string ct = cfg.str("kms.commit_thread", "auto");
+    if (ct == "on" || ct == "1" || (ct == "auto" && emu.scale() >= 3)) {
         dp.cthread_start();
         Log(LogLevel::Info, "[kms] commits on a thread of their own (blocking, SCHED_FIFO 6)\n");
     }
