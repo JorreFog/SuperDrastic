@@ -1,0 +1,90 @@
+From 2f808fb70e796566afebcc6598cdbb99e21b28c1 Mon Sep 17 00:00:00 2001
+From: BananaDS <bananads@localhost>
+Date: Sun, 25 Oct 2026 23:54:02 +0100
+Subject: [PATCH] NDS: prefetch the next block-lookup slot at a slice end
+
+When a CPU's slice ends in RunSlicesJIT's loop, its next PC's slot in the
+sparse block-lookup table (8 bytes per halfword: 16 MB for main RAM) is
+prefetched. The lookup at the CPU's next turn, after the other CPU's turn,
+was a cache/TLB miss: on HeartGold the two lookup loads (ARM9 and ARM7) were
+2.3% of the emulator's thread. A hint only, nothing emulated reads it: exact.
+jit.lookup_prefetch (NDS::SetLookupPrefetch), default on.
+---
+ src/NDS.cpp | 20 ++++++++++++++++++++
+ src/NDS.h   |  6 ++++++
+ 2 files changed, 26 insertions(+)
+
+diff --git a/src/NDS.cpp b/src/NDS.cpp
+index 7c52703..fb00bc4 100644
+--- a/src/NDS.cpp
++++ b/src/NDS.cpp
+@@ -1468,6 +1468,17 @@ template <u32 num, typename CPU>
+     }
+ }
+ 
++// LookupPrefetch (exact): ExecuteJITInline's lookup slot for the CPU's current PC, prefetched (a hint: if the PC
++// leaves the region, or the region changes before the lookup, the lookup is as before)
++template <typename CPU>
++[[gnu::always_inline]] static inline void PrefetchLookup(const CPU& cpu)
++{
++    const u32 instrAddr = cpu.R[15] - 4 + ((cpu.CPSR >> 4) & 2);
++    const u32 offset = instrAddr - cpu.FastBlockLookupStart;
++    if (offset < cpu.FastBlockLookupSize)
++        __builtin_prefetch(&cpu.FastBlockLookup[offset / 2]);
++}
++
+ // FastLoop (exact): RunFrame's loop for the JIT, slice for slice what it does with FastSched, with the common
+ // cases inline: NextTarget, a running CPU's Execute (no call per slice; a halted one that nothing interrupts only
+ // takes its time to the target, as Execute does), the timers (FastTimers), GPU3D::Run when the geometry engine is
+@@ -1484,6 +1495,7 @@ void NDS::RunSlicesJIT()
+     GPU3D& gpu3d = *PinAddress(&GPU.GPU3D);
+     char* const sb = PinAddress(reinterpret_cast<char*>(&SysTimestamp));
+     u8* const rxBase = JIT.JitRXBase;
++    const bool prefetch = LookupPrefetch;
+ 
+     // (CancelEvent's "to recompute", from outside RunFrame; inside, RunSystem resolves it)
+     if (SCHED(sb, SchedNext) == 0)
+@@ -1511,7 +1523,11 @@ void NDS::RunSlicesJIT()
+                 }
+             }
+             else if (clean || !arm7.Halted)
++            {
+                 ExecuteJITInline<1>(*this, arm7, ARM7Timestamp, ARM7Target, rxBase);
++                if (prefetch)
++                    PrefetchLookup(arm7);
++            }
+             else
+                 arm7.Execute<CPUExecuteMode::JIT>();
+ 
+@@ -1610,7 +1626,11 @@ void NDS::RunSlicesJIT()
+             }
+         }
+         else if (!arm9.Halted) [[likely]]
++        {
+             ExecuteJITInline<0>(*this, arm9, ARM9Timestamp, ARM9Target, rxBase);
++            if (prefetch)
++                PrefetchLookup(arm9);
++        }
+         else if (arm9.Halted == 1 && !HaltInterrupted(0))
+             ARM9Timestamp = ARM9Target;
+         else
+diff --git a/src/NDS.h b/src/NDS.h
+index 5408c11..94c5873 100644
+--- a/src/NDS.h
++++ b/src/NDS.h
+@@ -326,6 +326,12 @@ public: // TODO: Encapsulate the rest of these members
+ #endif
+     }
+     bool RegionPair = false;
++    // LookupPrefetch (exact, BananaDS patch 0120; RunSlicesJIT): when a CPU's slice ends in the slice loop, the
++    // block-lookup slot of its next PC is prefetched, so the lookup at its next turn (after the other CPU's turn)
++    // doesn't wait on a cache/TLB miss in the sparse lookup table. A hint only: nothing emulated reads it. On by
++    // default (jit.lookup_prefetch)
++    void SetLookupPrefetch(bool on) noexcept { LookupPrefetch = on; }
++    bool LookupPrefetch = true;
+     // BananaDS run-ahead (patch 0091): DoSavestate makes and loads an in-memory snapshot: only the DS's 4 MB of main
+     // RAM (not MainRAMMaxSize's 16), and a load doesn't reset the JIT: it drops the blocks compiled since the
+     // snapshot instead (ARMJIT::TrackNewBlocks before running on from it). Never for a file
+-- 
+2.56.0
+
