@@ -38,6 +38,10 @@ enum Key : uint32_t {
 // sched.emu_excl: the core the emulator's thread has to itself (-1: none); a thread it starts later moves itself off
 // that core with sched_off_emu_core() (else it would inherit the emulator's one-core mask)
 extern int g_emu_core;
+// sched.emu_share (1: Gengis's workers, 2: + the 2D thread): those threads may use the emulator's core too, the
+// emulator's thread at SCHED_FIFO 1 there so it takes the core back the moment it wakes (its pacing sleep is when
+// the 3D frame it started at line 215 is drawn)
+extern int g_emu_share;
 void sched_off_emu_core();
 
 class Emu {
