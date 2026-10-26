@@ -34,6 +34,10 @@ extern const layout_t layout_2x, layout_3x;     /* hdr_off: the context header (
 typedef void batch_fn(poly_t *P, const uint8_t *bs, unsigned k, unsigned line, uint8_t *id0);
 batch_fn *neon_batch_for(const poly_t *P);
 batch_fn *asm_batch_for(poly_t *P);
+/* hrneon.c: decal / toon / highlight batches on the hi-res layouts (0: line_px) */
+batch_fn *hrneon_batch_for(const poly_t *P);
+extern int gx_hrneon;          /* render.gengis_hrneon */
+extern __thread int gx_ref;    /* render.gengis_verify's reference render: the paths before render.gengis_hrneon & co */
 /* the polygon through the pipeline: dmode 0 immediately, 1 the visibility pass of a deferred opaque polygon with
  * index idx (returns whether any pixel passed), 2 its shade pass */
 int f_run_4x(uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0, unsigned nlines,

@@ -308,7 +308,7 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     gx_clear(H, f, lb);
     U32(H->ctx, GX_HDR + 0x10) = 0xffffffffu; U32(H->ctx, GX_HDR + 0x14) = 0;
     U64(H->ctx, GX_HDR + 0x18) = ~0ull;                             /* the shadow line mask: all lines clean */
-    const int defer = gx_defer;
+    const int defer = gx_defer && !gx_ref;
     const unsigned nopa = f->npolys - f->ntranslucent;
     const uint32_t *yr = f->yr;                                     /* ytop | ybot << 16: one cache line a 16 polygons */
     /* the opaque polygons' trim (gx_polygon): with edge marking off, the context line above the bin always (it only
@@ -351,6 +351,15 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     for (int l = 0; l < GX_BL; l++) {
         const uint32_t *r = res + l * GX_W;
         uint32_t *o0 = out + l * GX_W;
+        if (gx_zva && !gx_ref)  /* (the quarters' 64-byte lines allocated without a read, then written: the same bytes) */
+            for (int i = 0; i < GX_W; i += 64) {
+                for (int k = 0; k < 4; k++) GX_ZVA(o0 + k * (GX_W / 4) + i / 4);
+                for (int j = i; j < i + 64; j += 16) {
+                    const uint32x4x4_t v = vld4q_u32(r + j);
+                    for (int k = 0; k < 4; k++) vst1q_u32(o0 + k * (GX_W / 4) + j / 4, vandq_u32(v.val[k], m));
+                }
+            }
+        else
         for (int i = 0; i < GX_W; i += 16) {
             const uint32x4x4_t v = vld4q_u32(r + i);
             for (int k = 0; k < 4; k++) vst1q_u32(o0 + k * (GX_W / 4) + i / 4, vandq_u32(v.val[k], m));

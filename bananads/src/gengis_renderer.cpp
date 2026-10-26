@@ -33,6 +33,7 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     gx_zva = Zva;
     gx_stats = Stats != 0;
     gx_trim = Trim;
+    gx_hrneon = HrNeon < 0 ? Scale_ >= 3 : HrNeon != 0;
     gx_init();
     gx_defer = defer;
     for (auto& o : OutBuf) {
@@ -50,6 +51,10 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
 
 GengisRenderer3D::~GengisRenderer3D() {
     WaitAll();
+    if (Verify)
+        Platform::Log(Platform::LogLevel::Info, "[gengis] verify: %lu bins rendered again on the reference paths, %lu differ (hrneon %d); CPU %.3f ms a bin, reference %.3f\n",
+                      (unsigned long)VerBins.load(), (unsigned long)VerBad.load(), gx_hrneon,
+                      VerNewNs.load() / 1e6 / (VerBins.load() + 1e-9), VerRefNs.load() / 1e6 / (VerBins.load() + 1e-9));
     Platform::Log(Platform::LogLevel::Info, "[gengis] the emulator's thread drew %lu of %lu bins and converted %lu frames; %lu late frames (render.gengis_wake=%d of %zu)\n",
                   EmuBins, AllBins.load(), EmuConverts, LateFrames.load(), Active, Threads.size());
     {
@@ -442,14 +447,24 @@ void GengisRenderer3D::BinKeys() {
 int GengisRenderer3D::Help = 1;
 int GengisRenderer3D::Nice = 0;
 std::vector<int> GengisRenderer3D::AbModes;
+std::vector<int> GengisRenderer3D::OptAb;
 double GengisRenderer3D::AbSecs = 5;
 int GengisRenderer3D::WakeN = 1;
 int GengisRenderer3D::Stats = 0;
+int GengisRenderer3D::HrNeon = -1;
+int GengisRenderer3D::Verify = 0;
 int GengisRenderer3D::TexInval = 1;
 int GengisRenderer3D::Zva = 1;
 int GengisRenderer3D::Trim = 1;
 int GengisRenderer3D::Reuse = 1;
 
+
+void GengisRenderer3D::RenderBin(unsigned b, uint32_t* dst) {
+    if (Scale_ == 2) gx2_render_bin(&Frame, b, dst);
+    else if (Scale_ == 3) gx3_render_bin(&Frame, b, dst);
+    else if (Scale_ == 4) gx4_render_bin(&Frame, b, dst);
+    else gx_render_bin(&Frame, b, dst);
+}
 
 bool GengisRenderer3D::RenderOne(bool emu) {
     const unsigned b = Next.fetch_add(1, std::memory_order_acq_rel);
@@ -490,10 +505,30 @@ bool GengisRenderer3D::RenderOne(bool emu) {
             Platform::Log(Platform::LogLevel::Warn, "[gengis] reuse check: bin %u of frame %u differs\n", b, Frame.gen);
         }
     }
-    else if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 4);
-    else if (Scale_ == 3) gx3_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 9);
-    else if (Scale_ == 4) gx4_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 16);
-    else gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);
+    else if (!Verify) RenderBin(b, Out + b * GX_BL * GX_W * Scale_ * Scale_);
+    else {
+        // render.gengis_verify: the bin again on the reference paths (gx_ref: the code before render.gengis_hrneon
+        // and the later 4x changes) into a scratch buffer, compared with what this render wrote; the two renders'
+        // CPU times summed (in turn first: the second finds the bin's data in the caches)
+        const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_;
+        static thread_local std::vector<uint32_t> ref;
+        ref.resize(n);
+        const bool reffirst = Frame.gen & 1;
+        uint64_t t0 = ThreadNs(), t1 = 0, t2 = 0;
+        if (reffirst) { gx_ref = 1; RenderBin(b, ref.data()); gx_ref = 0; t1 = ThreadNs(); }
+        RenderBin(b, Out + b * n);
+        t2 = ThreadNs();
+        if (!reffirst) { gx_ref = 1; RenderBin(b, ref.data()); gx_ref = 0; t1 = ThreadNs(); VerRefNs += t1 - t2; VerNewNs += t2 - t0; }
+        else { VerRefNs += t1 - t0; VerNewNs += t2 - t1; }
+        VerBins.fetch_add(1, std::memory_order_relaxed);
+        if (memcmp(Out + b * n, ref.data(), n * sizeof(uint32_t))) {
+            size_t i = 0;
+            while (Out[b * n + i] == ref[i]) i++;
+            if (VerBad.fetch_add(1, std::memory_order_relaxed) < 20)
+                Platform::Log(Platform::LogLevel::Warn, "[gengis] verify: bin %u of frame %u differs (word %zu: %08x, reference %08x)\n",
+                              b, Frame.gen, i, Out[b * n + i], ref[i]);
+        }
+    }
     if (Stats) {
         StPxOpa.fetch_add(gx_px_opa, std::memory_order_relaxed); StPxTrl.fetch_add(gx_px_trl, std::memory_order_relaxed);
         StPolyLines.fetch_add(gx_lines, std::memory_order_relaxed);
@@ -603,6 +638,17 @@ void GengisRenderer3D::RenderFrame() {
             Platform::Log(Platform::LogLevel::Info, "[gengis] ab mode %d\n", m);
         }
         if (NoRaster) return;  // (debug: the lines stay the last frame's)
+    }
+    if (!OptAb.empty()) {  // render.gengis_optab (no bin is in flight here: WaitAll)
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= OptNext) {
+            const int m = OptAb[OptIdx++ % OptAb.size()];
+            OptNext = now + std::chrono::milliseconds((long)(AbSecs * 1000));
+            gx_hrneon = m & 1;
+            gx_defer = (m >> 1) & 1;
+            if (Stats) StatsLine();
+            Platform::Log(Platform::LogLevel::Info, "[gengis] optab mode %d\n", m);
+        }
     }
     if (!(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical) return;  // the lines are the last frame's
     if (textureChanged || texPalChanged) {

@@ -1119,8 +1119,18 @@ bool Emu::load_rom(const std::string& path) {
                 i = j + 1;
             }
             GengisRenderer3D::AbSecs = cfg_.num("render.gengis_ab_secs", 5);
+            const std::string oa = cfg_.str("render.gengis_optab", "");
+            GengisRenderer3D::OptAb.clear();
+            for (size_t i = 0; i < oa.size();) {
+                size_t j = oa.find(',', i);
+                if (j == std::string::npos) j = oa.size();
+                if (j > i) GengisRenderer3D::OptAb.push_back(atoi(oa.substr(i, j - i).c_str()));
+                i = j + 1;
+            }
         }
         GengisRenderer3D::Stats = (int)cfg_.num("render.gengis_stats", 0);
+        GengisRenderer3D::HrNeon = (int)cfg_.num("render.gengis_hrneon", -1);
+        GengisRenderer3D::Verify = (int)cfg_.num("render.gengis_verify", 0);
         GengisRenderer3D::TexInval = (int)cfg_.num("render.gengis_texinval", 1);
         GengisRenderer3D::Zva = (int)cfg_.num("render.gengis_zva", 1);
         GengisRenderer3D::Trim = (int)cfg_.num("render.gengis_trim", 1);

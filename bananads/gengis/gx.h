@@ -74,6 +74,8 @@ extern int gx_defer;                    /* deferred shading of opaque polygons (
 extern int gx_stats;                    /* render.gengis_stats: count the span pixels (per thread: gx_px_*) */
 extern __thread unsigned long gx_px_opa, gx_px_trl, gx_lines;
 extern int gx_trim;                     /* render.gengis_trim: opaque polygons skip the bins' context lines without edge marking */
+extern int gx_hrneon;                   /* render.gengis_hrneon: decal/toon/highlight polygons on NEON batches (hrneon.c) */
+extern __thread int gx_ref;             /* render.gengis_verify's reference render (this thread): the paths before the 4x changes */
 extern int gx_zva;                      /* render.gengis_zva: the clear and the 2x output allocate lines with dc zva */
 
 #ifdef __cplusplus
