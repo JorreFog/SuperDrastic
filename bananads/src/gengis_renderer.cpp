@@ -57,6 +57,7 @@ void GengisRenderer3D::Reset() {
     WaitAll();
     Textures.clear();
     Stale.clear();
+    StaleBytes = 0;
     memset(OutBuf, 0, sizeof OutBuf);
     for (auto& k : BinKey) k.clear();
 }
@@ -214,6 +215,7 @@ const gx_texture* GengisRenderer3D::GetTexture(uint32_t texparam, uint32_t texpa
         if (st != Stale.end()) {
             const Texture& o = *st->second;
             if (o.texels == e->texels && o.idx == e->idx && o.pal == e->pal) memcpy(&serial, o.t.pad0, sizeof serial);
+            StaleBytes -= o.texels.size() * 4 + o.idx.size() + o.pal.size() * 4;
             Stale.erase(st);
             if (Stats) StSameTex += serial != 0;
         }
@@ -233,8 +235,11 @@ void GengisRenderer3D::InvalidateTextures(const uint64_t* texdirty, const uint64
         if (tex) for (int i = 0; i < 1024 / 64; i++) hit |= e.texblk[i] & texdirty[i];
         if (pal) for (int i = 0; i < 256 / 64; i++) hit |= e.palblk[i] & paldirty[i];
         if (hit) {
-            if (Stale.size() >= 512) Stale.clear();
-            Stale[it->first] = std::move(it->second);  // (GetTexture compares the next decode with it)
+            // (GetTexture compares the next decode with it; at most 512 entries and ~16 MB of decodes kept)
+            const Texture& t = *it->second;
+            const size_t bytes = t.texels.size() * 4 + t.idx.size() + t.pal.size() * 4;
+            if (Stale.size() >= 512 || StaleBytes + bytes > (16u << 20)) { Stale.clear(); StaleBytes = 0; }
+            if (bytes <= (16u << 20)) { StaleBytes += bytes; Stale[it->first] = std::move(it->second); }
             it = Textures.erase(it);
         } else ++it;
     }
@@ -536,8 +541,8 @@ void GengisRenderer3D::RenderFrame() {
     const bool texPalChanged = GPU.MakeVRAMFlat_TexPalCoherent(texPalDirty);
     if (!(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical) return;  // the lines are the last frame's
     if (textureChanged || texPalChanged) {
-        if (TexInval) InvalidateTextures(textureDirty.Data, texPalDirty.Data, textureChanged, texPalChanged);
-        else Textures.clear();
+        if (TexInval && Textures.size() < 4096) InvalidateTextures(textureDirty.Data, texPalDirty.Data, textureChanged, texPalChanged);
+        else Textures.clear();  // (render.gengis_texinval keeps unused decodes while their VRAM stays: bounded here)
         if (Stats) StClears++;
     }
     if (Stats && StRendered && StRendered % Stats == 0) StatsLine();

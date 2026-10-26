@@ -103,6 +103,7 @@ private:
     uint64_t TexSerial = 0;
     std::atomic<uint64_t> StReused{0}, StReuseBad{0};
     unsigned long StWhy[11] = {}, StSameTex = 0;
+    size_t StaleBytes = 0;
     std::unordered_map<uint64_t, std::unique_ptr<Texture>> Stale;  // dropped decodes (GetTexture's same-content test)
     void InvalidateTextures(const uint64_t* texdirty, const uint64_t* paldirty, bool tex, bool pal);
     std::atomic<uint64_t> StBinNs{0}, StBinMax{0}, StLastNs{0}, StPxOpa{0}, StPxTrl{0}, StPolyLines{0};
