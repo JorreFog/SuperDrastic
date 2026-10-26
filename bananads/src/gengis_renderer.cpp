@@ -409,10 +409,20 @@ bool GengisRenderer3D::RenderOne(bool emu) {
         ConvDone.wait(l, [&] { return Converted.load(std::memory_order_acquire) == 2; });
     }
     const uint64_t b0 = Stats ? ThreadNs() : 0;
-    if (BinReuse[b]) {  // (render.gengis_reuse: the same inputs as the last rendered frame's bin, BinKeys)
+    if (BinReuse[b] && Reuse != 2) {  // (render.gengis_reuse: the same inputs as the last rendered frame's bin, BinKeys)
         const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_;
         memcpy(Out + b * n, LastOut + b * n, n * sizeof(uint32_t));
         if (Stats) StReused.fetch_add(1, std::memory_order_relaxed);
+    }
+    else if (BinReuse[b]) {  // render.gengis_reuse=2: render it, and count the bins that differ from the copy
+        const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_;
+        if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * n);
+        else gx_render_bin(&Frame, b, Out + b * n);
+        StReused.fetch_add(1, std::memory_order_relaxed);
+        if (memcmp(Out + b * n, LastOut + b * n, n * sizeof(uint32_t))) {
+            StReuseBad.fetch_add(1, std::memory_order_relaxed);
+            Platform::Log(Platform::LogLevel::Warn, "[gengis] reuse check: bin %u of frame %u differs\n", b, Frame.gen);
+        }
     }
     else if (Scale_ == 2) gx2_render_bin(&Frame, b, Out + b * GX_BL * GX_W * 4);
     else gx_render_bin(&Frame, b, Out + b * GX_BL * GX_W);
@@ -516,10 +526,10 @@ void GengisRenderer3D::StatsLine() {
     const double n = (double)Stats;
     Platform::Log(Platform::LogLevel::Info,
                   "[gengis-stats] %u rendered of %lu frames: bins %.3f ms/frame (max bin %.3f), convert %.3f ms (decode %.3f ms, "
-                  "%.1f tex %.0f texels), polys %.1f opa %.1f trl, clears %lu, emu wait %.3f ms/frame, d3 %04x, px %.0f opa %.0f trl, %.0f poly-bins, reused %.1f bins\n",
+                  "%.1f tex %.0f texels), polys %.1f opa %.1f trl, clears %lu, emu wait %.3f ms/frame, d3 %04x, px %.0f opa %.0f trl, %.0f poly-bins, reused %.1f bins (checked bad %lu)\n",
                   Stats, StFrames, StBinNs.load() / n / 1e6, StBinMax.load() / 1e6, StConvNs / n / 1e6, StDecNs / n / 1e6,
                   StDecoded / n, StDecTexels / n, StOpa / n, StTrl / n, StClears, StWaitNs / (double)StFrames / 1e6,
-                  (unsigned)Frame.d3, StPxOpa.load() / n, StPxTrl.load() / n, StPolyLines.load() / n, StReused.load() / n);
+                  (unsigned)Frame.d3, StPxOpa.load() / n, StPxTrl.load() / n, StPolyLines.load() / n, StReused.load() / n, (unsigned long)StReuseBad.load());
     StReused = 0;
     StPxOpa = 0; StPxTrl = 0; StPolyLines = 0;
     StBinNs = 0; StBinMax = 0; StConvNs = StDecNs = StDecoded = StDecTexels = StOpa = StTrl = 0;

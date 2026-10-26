@@ -44,7 +44,8 @@ public:
     // 1 (the default) only once a render thread has converted the frame (its polygons and textures, the long part,
     // kept off the emulator's thread), 0 never (it waits); with no render threads it always does
     static int Help;
-    static int Reuse;  // render.gengis_reuse: a bin with the last rendered frame's inputs is copied (BinKeys)
+    static int Reuse;  // render.gengis_reuse: a bin with the last rendered frame's inputs is copied (BinKeys); 2: rendered
+                       // and compared with the copy (a check: [gengis] lines and the stats' "checked bad")
     static int Trim;  // render.gengis_trim: opaque polygons skip the bins' context lines when edge marking is off
     static int Zva;  // render.gengis_zva: dc zva before the clear's and the 2x output's stores (same bytes)
     static int TexInval;  // render.gengis_texinval: 1 (blocks) drops only the textures whose VRAM changed, 0 all
@@ -100,7 +101,7 @@ private:
     bool BinReuse[GX_NBINS] = {};
     uint32_t* LastOut = nullptr;  // the last rendered frame's rows (the other buffer)
     uint64_t TexSerial = 0;
-    std::atomic<uint64_t> StReused{0};
+    std::atomic<uint64_t> StReused{0}, StReuseBad{0};
     void InvalidateTextures(const uint64_t* texdirty, const uint64_t* paldirty, bool tex, bool pal);
     std::atomic<uint64_t> StBinNs{0}, StBinMax{0}, StLastNs{0}, StPxOpa{0}, StPxTrl{0}, StPolyLines{0};
     uint64_t StConvNs = 0, StDecNs = 0, StDecoded = 0, StDecTexels = 0, StOpa = 0, StTrl = 0, StWaitNs = 0, StStartNs = 0;
