@@ -271,7 +271,8 @@ melonDS::u32 GengisRenderer3D::DispMask = ~0u;
 void GengisRenderer3D::Convert() {
     const u32 d3 = GPU3D.RenderDispCnt;
     Polys.clear();
-    std::vector<gx_poly> trl;
+    std::vector<gx_poly>& trl = Trl;
+    trl.clear();
     for (u32 i = 0; i < GPU3D.RenderNumPolygons; i++) {
         const Polygon* p = GPU3D.RenderPolygonRAM[i];
         if (p->Degenerate) continue;

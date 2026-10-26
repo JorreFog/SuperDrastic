@@ -135,7 +135,7 @@ private:
     unsigned long StClears = 0, StFrames = 0, StRendered = 0;
 
     std::unordered_map<uint64_t, std::unique_ptr<Texture>> Textures;
-    std::vector<gx_poly> Polys;
+    std::vector<gx_poly> Polys, Trl;  // (Trl: Convert's translucent ones, kept to keep its capacity)
     std::vector<uint32_t> YRange;  // Frame.yr
     gx_frame Frame{};
     int Scale_;
