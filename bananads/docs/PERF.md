@@ -464,7 +464,11 @@ Later rounds the same night (all exact, same toggles; qemu-count unless said):
   loops in LoopMode on the boot (206 before); with J4's 0361 (the branch's R15 stored by its not-taken exit) the way
   round has no R15 store at all. 0384: loops with block transfers of several registers (no PC, not a load of the base;
   the slow call unloads nothing in LoopMode). In-run A/B on the bench (PIN=1 FF=1, flip + JIT reset every 240 frames, 2 x 90 s): 0381+0382 on vs off
-  +2.31% / +2.35% (paired +2.7 fps of ~115). Audio gate: tap identical (LOOPREGS=1).
+  +2.31% / +2.35% (paired +2.7 fps of ~115); with J4's 0361 in both phases and 0384: +2.29% / +2.36%. 0385: an ARM9
+  LoopMode block stores RegionCodeCycles for its page once at its entry and starts its body with it known (KnownCode),
+  so the taken branches to the same page skip their mov+str every way round (each way round still ends with it in
+  memory; only the interpreter's CodeRead32 reads it, after a JumpTo sets it): +1.33% more (paired +1.6 fps, n22).
+  Audio gate (LOOPREGS=1): tap identical with each of 0382, 0382+0384+0361, +0385.
 
 Left, by agent: the geometry's FIFO ring buffer (savestates hold both FIFOs) and its vertex copies; rotscale
 sprites and OBJ mosaic, skipping unchanged lines in 2D; the mix's per-sample tail and batched ARM9 DMA for VRAM.

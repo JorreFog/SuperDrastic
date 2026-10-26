@@ -1,0 +1,53 @@
+From: Claude <noreply@anthropic.com>
+Date: Mon, 26 Oct 2026 08:59:25 +0100
+Subject: [PATCH] ARMJIT_A64: LOOPREGS: an ARM9 loop's RegionCodeCycles stored once at its entry
+
+An ARM9 LoopMode block stores RegionCodeCycles for its own page once at its
+entry, and the body starts with it known (KnownCode, 0007's CODESTORES): the
+taken branches to the same page (the loop's way back, a followed branch inside
+it) skip their mov+str every way round (HeartGold's 021f9292T: two a way
+round). Each way round still ends with that value in memory (a branch to
+another page clears the knowledge, so the branch back stores it again). Only
+the interpreter's CodeRead32 reads RegionCodeCycles, after a JumpTo that sets
+it. MELONDS_JIT_NOLOOPCODE=1: off.
+---
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -368,6 +368,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         LoopNoFollow = getenv("MELONDS_JIT_NOLOOPFOLLOW") && atoi(getenv("MELONDS_JIT_NOLOOPFOLLOW"));
+         // (patch 0384: LoopMode with block transfers of several registers; MELONDS_JIT_NOLOOPMULTI=1 off)
+         LoopNoMulti = getenv("MELONDS_JIT_NOLOOPMULTI") && atoi(getenv("MELONDS_JIT_NOLOOPMULTI"));
++        // (patch 0385: an ARM9 loop's RegionCodeCycles stored once at its entry; MELONDS_JIT_NOLOOPCODE=1 off)
++        LoopNoCode = getenv("MELONDS_JIT_NOLOOPCODE") && atoi(getenv("MELONDS_JIT_NOLOOPCODE"));
+         // (patch 0381's fix off, to show the hang: MELONDS_JIT_LOOPRELINKOLD=1)
+         LoopRelinkOld = getenv("MELONDS_JIT_LOOPRELINKOLD") && atoi(getenv("MELONDS_JIT_LOOPRELINKOLD"));
+         OptLazyFlags = OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
+@@ -1652,6 +1654,18 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+                 MOVP2R(LoopTsReg, Num ? &NDS.ARM7Timestamp : &NDS.ARM9Timestamp);
+                 break;
+             }
++        if (Num == 0 && OptCodeStores && !LoopNoCode)
++        {
++            // (patch 0385) RegionCodeCycles for the loop's own page stored once here, known from the body's start:
++            // its branches back (and any to the same page) skip their store every way round. Every way round ends
++            // with it in memory (a branch to another page clears the knowledge, so the branch back stores it
++            // again). Only the interpreter's CodeRead32 reads it, after a JumpTo that sets it first.
++            const u32 v = ((ARMv5*)cpu)->MemTimings[instrs[0].Addr >> 12][0];
++            MOVI2R(W0, v);
++            STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARMv5, RegionCodeCycles));
++            KnownCodeValid = true;
++            KnownCodeValue = v;
++        }
+         LoopBodyRX = (u8*)GetRXPtr();
+         if (OptLazyFlags)
+             CPSRDirty = true;   // (the way round may leave RCPSR out of memory: every exit stores it)
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -310,6 +310,7 @@ public:
+                                   // it uses in host registers round the loop (LoopMode)
+     bool LoopNoTs = false, LoopNoSigned = false, LoopNoLazy = false, LoopNoXfer = false;   // (LOOPREGS's parts)
+     bool LoopNoFollow = false;    // MELONDS_JIT_NOLOOPFOLLOW=1: patch 0382 off (no LoopMode with a branch followed when taken)
++    bool LoopNoCode = false;      // MELONDS_JIT_NOLOOPCODE=1: patch 0385 off
+     bool LoopNoMulti = false;     // MELONDS_JIT_NOLOOPMULTI=1: patch 0384 off
+     bool LoopR15Back = false;     // (0382: the LoopMode block being compiled stores R15 on its way round)
+     bool LoopRelinkOld = false;   // MELONDS_JIT_LOOPRELINKOLD=1: patch 0381 off (a restored LoopMode block relinks to its entry)
