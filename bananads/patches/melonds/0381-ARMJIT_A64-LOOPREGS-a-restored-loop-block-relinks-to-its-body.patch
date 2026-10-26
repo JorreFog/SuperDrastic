@@ -14,9 +14,11 @@ made progress at slice ends (the way out stores them), i.e. hung. Link now
 links a LoopMode self slot to its own block's body (LinkSlot.loopStart/loopBody).
 MELONDS_JIT_LOOPRELINKOLD=1 restores the old behaviour (to show the hang).
 ---
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index 927ff2b..68bf0da 100644
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
-@@ -364,6 +364,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+@@ -401,6 +401,8 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
          LoopNoSigned = getenv("MELONDS_JIT_NOLOOPSIGNED");
          LoopNoLazy = LoopNoSigned || getenv("MELONDS_JIT_NOLOOPLAZY");
          LoopNoXfer = getenv("MELONDS_JIT_NOLOOPXFER");
@@ -25,7 +27,7 @@ MELONDS_JIT_LOOPRELINKOLD=1 restores the old behaviour (to show the hang).
          OptLazyFlags = OptKeepFlags && !getenv("MELONDS_JIT_NOLAZYFLAGS");
          OptFlagStub = OptExitStub && OptLazyFlags && !getenv("MELONDS_JIT_NOFLAGSTUB");
          FlagsWatch = OptLazyFlags;
-@@ -1108,6 +1110,19 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
+@@ -1216,6 +1218,19 @@ void Compiler::Comp_ExitTo(bool known, u32 knownR15, bool thumbAfter, bool store
          // the entry's register loads, with the registers where they are
          const u8* entry = LoopMode ? LoopBodyRX : BlockStartRX + EntrySkip[Num];
          *(u32*)slot = 0x14000000 | ((u32)((entry - slotRX) / 4) & 0x3FFFFFF);
@@ -45,7 +47,7 @@ MELONDS_JIT_LOOPRELINKOLD=1 restores the old behaviour (to show the hang).
          LinkedTo[(u32)(BlockStartRX - GetRXBase())].push_back((u32)(slotRX - GetRXBase()));
          if (Num == 0 && SliceChainStub && !LoopMode)
          {
-@@ -1506,6 +1521,8 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
+@@ -1841,6 +1856,8 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
      }
      else if (it->second.r15 != cpu->R[15] || it->second.num != (cpu->Num | ((cpu->CPSR & 0x20) ? 2u : 0u)))
          return;
@@ -54,9 +56,9 @@ MELONDS_JIT_LOOPRELINKOLD=1 restores the old behaviour (to show the hang).
      const s64 d = ((s64)(entry - GetRXBase()) - (s64)off) / 4;
      if (d < -(1 << 25) || d >= (1 << 25))
          return;
-@@ -1514,7 +1531,8 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
-     *slot = 0x14000000 | ((u32)d & 0x3FFFFFF);
+@@ -1850,7 +1867,8 @@ void Compiler::Link(u8* slotRX, ARM* cpu, u8* entry)
      NDS.JIT.JitEnableExecute();
+     if (J3Stats) J3ExitStats[30 + 32 * cpu->Num]++;
      FlushIcacheSection((u8*)slotRX, (u8*)slotRX + 4);
 -    LinkedTo[(u32)(entry - EntrySkip[cpu->Num] - GetRXBase())].push_back(off);   // (keyed by the block's entry)
 +    LinkedTo[it->second.loopBody && (u32)(entry - GetRXBase()) == it->second.loopBody ? it->second.loopStart
@@ -64,9 +66,11 @@ MELONDS_JIT_LOOPRELINKOLD=1 restores the old behaviour (to show the hang).
  }
  
  void Compiler::UnlinkBlock(JitBlockEntry entry)
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index a3115fb..abb7d2b 100644
 --- a/src/ARMJIT_A64/ARMJIT_Compiler.h
 +++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
-@@ -278,8 +278,11 @@ public:
+@@ -286,8 +286,11 @@ public:
      bool LastJumpKnown = false;   // the instruction being compiled jumped to a constant address (Comp_JumpTo(u32))
      u32 LastJumpR15 = 0;
      bool LastJumpThumb = false;
@@ -80,7 +84,7 @@ MELONDS_JIT_LOOPRELINKOLD=1 restores the old behaviour (to show the hang).
      std::unordered_map<u32, LinkSlot> LinkSlots;              // a slot's offset in code memory -> its link path's B
      std::unordered_map<u32, std::vector<u32>> LinkedTo;       // a block's entry offset -> the slots that jump to it
      bool LinkBlocks = true;       // MELONDS_JIT_NOLINK=1: every exit goes back to the loop, as melonDS's does
-@@ -306,6 +309,7 @@ public:
+@@ -314,6 +317,7 @@ public:
      bool OptLoopRegs = false;     // LOOPREGS=1 (off by default): a block that loops back to its own start keeps the guest registers
                                    // it uses in host registers round the loop (LoopMode)
      bool LoopNoTs = false, LoopNoSigned = false, LoopNoLazy = false, LoopNoXfer = false;   // (LOOPREGS's parts)
