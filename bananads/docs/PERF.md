@@ -1108,6 +1108,40 @@ checkpoint's; the `Run` trace (every call's timing state) gives the same hash ov
 and exact-suite.sh as 0080's. Sabotage (`MELONDS_GEOMSAB`, read at creation): (1) no full-ring check and no batch
 wake, so the ring overflows: MK's scene fails (crash, no frames); (2) no drain: the scene fails (crash).
 
+## Gengis's per-pixel cost at 2x, HeartGold's grass area (2026-10-26, night run, agent P6; RG DS Plus panels)
+
+Where the raster runs and what it costs (`render.gengis_stats=120`, PIN=1 FF=1, the user's 2x + ds-grid-2x):
+- All of it is on the three Gengis threads: the emulator's thread drew 0 bins and converted 0 frames, and waited
+  ~0.001 ms a frame at the next frame's start. HeartGold renders 3D on every second frame.
+- 8.0-8.7 ms CPU per rendered frame (the bins, all threads), convert 0.33 ms (texture decode 0.07). 167 opaque and 19
+  translucent polygons, 442K opaque span pixels (2.25 x the 196K-pixel 2x screen), ~36 cycles a pixel all in.
+  DISP3DCNT 0x19 there: fog and edge marking off.
+- Upper bound: no rasterization at all (a debug run, wrong pictures) gave 119.5 against 114.0 emulated/s (+4.8%):
+  the raster reaches the emulator's thread only through the shared cache and DRAM.
+- perf (P1's p1-ff1, worker threads): rast_kern_h04010 (z depth, paletted wrap/wrap, opaque, flat colour) 55%,
+  gx2_render_bin 15% (clear ~6%, 2x output ~5%, the bins' polygon scan ~2%), h03010 6%, h24010 5%, the walker 4.7%,
+  Convert 3.7%. In h04010 ~24% of the samples sit right after the attribute- or colour-word loads (bin context L1
+  misses).
+
+What was done:
+- `render.gengis_reuse` (on): a bin is a pure function of the frame state the rasterizer reads and of the polygons
+  reaching its window (its lines and the context line above and below), in order, with their textures' decodes.
+  Convert keeps each bin's inputs as bytes (the texture pointer replaced by its decode's serial number), and a bin
+  whose inputs equal the last rendered frame's is copied from that frame's rows (the other output buffer: every
+  rendered frame renders or copies all its bins) instead of rasterized. The bench's still camera: 7.2 of 12 bins a
+  frame, bins 8.0 -> 4.2-4.5 ms CPU per rendered frame, the Gengis+presenter threads 58.6% -> 37.5% of a core at FF
+  and 37.8% -> 25.7% at the user's settings; FF emulated/s unchanged (112.9/116.1 vs 113.9/114.1). `=2` renders the
+  bin anyway and compares: ~5,900 bins checked in the bench, 0 differed. It helps whenever the camera stands still
+  (menus, dialogue, standing in the field); a moving camera changes every bin.
+- `render.gengis_trim`, `render.gengis_zva` and a compact ytop|ybot array for the bins' polygon test: together bins
+  8.07 -> 7.85 ms (-2.7%), FF within noise.
+- `render.gengis_texinval`: texture VRAM changes drop only the decodes that read a dirty block (decode was already
+  only 0.07 ms a rendered frame).
+
+Dropped: prfm of the next span line's colour and attribute lines in the kernels (kerngen.py; bins -4%, emulated/s
+-2%: the prefetch traffic costs the emulator's thread more than the raster saves); `render.gengis_defer=on` (106.3
+emulated/s, the Gengis threads 84% against 58%).
+
 ## Measuring
 
 The handheld runs everything; cloud agents can't reach it. Put each change behind a toggle (a setting or an
