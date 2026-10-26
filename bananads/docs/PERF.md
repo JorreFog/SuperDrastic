@@ -1335,3 +1335,25 @@ that SliceChain can't continue. DYNCACHE: 8.4k hits, 3.2k misses.
 All four: `jit.exits` (SETTINGS.md); runtime bytes (0341/0342) and compile-time flags (0343/0344) for in-run A/B
 (debug patch 0349, `-DMELONDS_J3AB=1`: `MELONDS_J3AB=<frames>`, `MELONDS_J3ABMASK`, `MELONDS_J3ABBASE`).
 Speed: see reports/jit-J3.md (a loop round trip turned out to cost only ~50 cycles: the gains are small).
+
+## JIT round J4 (2026-10-26): where the ARM9's block exits are, and self loops with a branch followed when taken
+
+`MELONDS_JIT_BLKCOUNT=N` (melonDS 0360, debug): every ARM9 block counts its entries (4 instructions at its start,
+only with the setting) and every N frames the top 60 blocks are logged with how they end. HeartGold's grass bench:
+28.9k ARM9 block entries a frame, 7.5 guest instructions each. By how the entered block ends: loops back into
+themselves 41% (two loops 22.5%: a Thumb table search at 021f9292, n=7, and the GX FIFO copy loop at 020d35f4, n=6),
+dynamic exits (bx lr, pop {pc}, ldr pc, blx reg) 52.7%, the 32-instruction limit 4.4%, a static branch not followed
+1.0%, an IRQ pending at compile 1.2%. Superblocks (following more branches into one unit) can't change where blocks
+end without changing where the Target is checked, so an exact one keeps a check at every old boundary; only ~5% of
+the entries cross a boundary a superblock could join (static or the size limit): not pursued (~0.3-0.5% at most).
+
+**0361** (`MELONDS_JIT_NONTPC=1` turns it off): a compiled conditional immediate branch that the block follows when
+taken (FollowCondTaken) stored its not-taken exit's R15 on the block's hot path, before the condition; that store
+made R15Stored true, which keeps a loop back to the block's start off the inline self-loop check (SELFLOOP), so
+every round went through `bl ExitCheck` and the slot. Now that exit stores R15 itself from ExitCheckPC's literal.
+HeartGold's hottest loops (~20% of all ARM9 block entries) now go round inline. Exact: the same R15 reaches memory
+before anything reads it (the branch is compiled, its taken way stores none, every way out stores its own); on-panel
+audio test j4-ntpc1 PASS, tap identical over 67 s. Device in-run A/B (PIN=1 FF=1, flip + JIT reset every 240/600
+frames): median 124.0 -> 124.4 and 125.0 -> 126.0, mean 122.1/121.9 and 124.1 -> 124.5: within noise (~+0.3%).
+It also lets these loops be LOOPREGS (LoopMode) loops once `LoopBlock` stops refusing FollowCondTaken (experiment
+0363, `MELONDS_JIT_LOOPFCT=1`, debug: with LOOPREGS on, in-run A/B median 125.0 -> 126.0).

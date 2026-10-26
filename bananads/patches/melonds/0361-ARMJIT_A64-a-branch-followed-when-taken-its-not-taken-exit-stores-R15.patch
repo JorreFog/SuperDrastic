@@ -1,0 +1,57 @@
+Subject: [PATCH] ARMJIT_A64: a branch followed when taken: its not-taken exit stores R15 (MELONDS_JIT_NONTPC=1 off)
+
+See docs/PERF.md "JIT round J4". Exact; lets loops with such a branch take the inline self-loop check.
+---
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.cpp b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+index f5ef58f..6dbc4a0 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.cpp
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.cpp
+@@ -341,6 +341,7 @@ Compiler::Compiler(melonDS::NDS& nds) : Arm64Gen::ARM64XEmitter(), NDS(nds)
+         OptDynCold = OptDynCache && !getenv("MELONDS_JIT_NODYNCOLD");
+         OptExitPC = OptExitStub && !getenv("MELONDS_JIT_NOEXITPC") && !getenv("MELONDS_JIT_NOLINK");   // (ExitCheckPC)
+         OptSelfLoop = OptExitPC && !getenv("MELONDS_JIT_NOSELFLOOP");
++        OptNTPC = OptExitPC && !getenv("MELONDS_JIT_NONTPC");   // (J4 patch 0361)
+         // SLICECHAIN (melonDS patch 0030, BananaDS's jit.slice_chain): MELONDS_JIT_SLICECHAIN=0 turns it off, and so
+         // does the old code generation
+         {
+@@ -868,7 +869,8 @@ void Compiler::Comp_BranchSpecialBehaviour(bool taken)
+         if (taken)
+             Comp_Exit(LastJumpKnown, LastJumpR15, LastJumpThumb, LastJumpKnown && JumpR15Deferred);
+         else
+-            Comp_Exit(true, R15, Thumb);    // not taken: on to the next instruction (its R15 is stored)
++            Comp_Exit(true, R15, Thumb, NotTakenR15Deferred);   // not taken: on to the next instruction (its R15 is
++                                                                // stored, or with 0361 stored by the exit)
+     }
+ }
+ 
+@@ -1643,9 +1645,16 @@ JitBlockEntry Compiler::CompileBlock(ARM* cpu, bool thumb, FetchedInstr instrs[]
+             && (Thumb ? CurInstr.Info.Kind == ARMInstrInfo::tk_BCOND
+                       : (CurInstr.Info.Kind == ARMInstrInfo::ak_B || CurInstr.Info.Kind == ARMInstrInfo::ak_BL));
+         FoldActive = false;
++        // (J4 patch 0361) a compiled conditional immediate branch followed when taken: its not-taken way's exit stores
++        // R15 (the next instruction's, a constant) from ExitCheckPC's literal instead of this store on every way through
++        // the block, so a loop back to the block's start still finds R15 unstored (SELFLOOP); nothing between here and
++        // that exit reads R15 from memory (the branch is compiled, its taken way stores nothing)
++        NotTakenR15Deferred = OptNTPC && LinkBlocks && comp && !isLast && (CurInstr.BranchFlags & branch_FollowCondTaken)
++            && isConditional && (Thumb ? CurInstr.Info.Kind == ARMInstrInfo::tk_BCOND
++                                       : (CurInstr.Info.Kind == ARMInstrInfo::ak_B || CurInstr.Info.Kind == ARMInstrInfo::ak_BL));
+         if (comp == NULL || (CurInstr.BranchFlags & branch_FollowCondTaken) || (isLast && (!CurInstr.Info.Branches() || isConditional)))
+         {
+-            if (!LastNotTakenR15Deferred)
++            if (!LastNotTakenR15Deferred && !NotTakenR15Deferred)
+             {
+                 MOVI2R(W0, R15);
+                 STR(INDEX_UNSIGNED, W0, RCPU, offsetof(ARM, R[15]));
+diff --git a/src/ARMJIT_A64/ARMJIT_Compiler.h b/src/ARMJIT_A64/ARMJIT_Compiler.h
+index faa6f1e..5e38128 100644
+--- a/src/ARMJIT_A64/ARMJIT_Compiler.h
++++ b/src/ARMJIT_A64/ARMJIT_Compiler.h
+@@ -294,6 +294,8 @@ public:
+     bool OptDead = true;          // NODEAD: no dead CLS/CLZ before ARM7 multiplies, ARM9 CodeCycles stores for
+                                   // compiled instructions, or R15 loads for conditional branches
+     bool OptExitStub = true;      // NOEXITSTUB: shorter exit stubs, and no CPSR store when RCPSR is unchanged
++    bool OptNTPC = true;          // (J4 patch 0361) NONTPC: the not-taken exit of a branch followed when taken stores R15 in its exit
++    bool NotTakenR15Deferred = false; // (0361) this instruction's not-taken exit stores R15 itself (ExitCheckPC's literal)
+     bool OptExitPC = true;        // NOEXITPC: a constant exit's R15 stored by the exit stub, from a literal
+     bool OptSelfLoop = true;      // NOSELFLOOP: an exit back to its own block's start does the checks inline
+     bool OptSliceChain = true;    // MELONDS_JIT_SLICECHAIN=0: the ARM9's exits whose slice has ended ask
