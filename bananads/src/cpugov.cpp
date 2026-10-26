@@ -162,7 +162,7 @@ static void mem_load(int scale) {
     mem_path.clear();
     if (!mem_on || mem_rom.empty()) return;
     mkdir(mem_dir.c_str(), 0755);
-    mem_path = mem_dir + "/" + mem_rom + (scale > 1 ? ".2x" : ".1x");
+    mem_path = mem_dir + "/" + mem_rom + (scale > 2 ? ".3x" : scale > 1 ? ".2x" : ".1x");
     std::string said;
     if (FILE* f = fopen(mem_path.c_str(), "r")) {
         int khz, k;

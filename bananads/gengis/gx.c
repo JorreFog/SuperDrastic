@@ -23,12 +23,14 @@
 #include "fused.h"
 #include "fogzero.h"
 #include "spec/edges.h"
-/* GX_SCALE 2 (gx2.c): the same pipeline at 512x384, as gx2_render_bin */
+/* GX_SCALE 2 (gx2.c): the same pipeline at 512x384, as gx2_render_bin; GX_SCALE 3 (gx3.c): 768x576, gx3_render_bin */
 #ifndef GX_SCALE
 #define GX_SCALE 1
 #endif
 #if GX_SCALE == 2
 #define gx_render_bin gx2_render_bin
+#elif GX_SCALE == 3
+#define gx_render_bin gx3_render_bin
 #endif
 #include "gx.h"
 /* this pipeline's frame: GX_NBINS bins of GX_BL lines of GX_W pixels */
@@ -327,6 +329,18 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     const uint32x4_t m = vdupq_n_u32(0x1f3f3f3f);
 #if GX_SCALE == 1
     for (int i = 0; i < GX_BL * GX_W; i += 4) vst1q_u32(out + i, vandq_u32(vld1q_u32(res + i), m));
+#elif GX_SCALE == 3
+    /* each row as its pixels 3k, then 3k + 1, then 3k + 2: the 2D compositor's nine 256-pixel lines of a DS line */
+    for (int l = 0; l < GX_BL; l++) {
+        const uint32_t *r = res + l * GX_W;
+        uint32_t *e = out + l * GX_W, *o = e + GX_W / 3, *t = o + GX_W / 3;
+        for (int i = 0; i < GX_W; i += 12) {
+            const uint32x4x3_t v = vld3q_u32(r + i);
+            vst1q_u32(e + i / 3, vandq_u32(v.val[0], m));
+            vst1q_u32(o + i / 3, vandq_u32(v.val[1], m));
+            vst1q_u32(t + i / 3, vandq_u32(v.val[2], m));
+        }
+    }
 #else
     /* each row as its even pixels, then its odd ones: the 2D compositor's four 256-pixel lines of a DS line */
     for (int l = 0; l < GX_BL; l++) {

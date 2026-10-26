@@ -677,7 +677,9 @@ bool Emu::load_rom(const std::string& path) {
 #endif
     // render.scale: 2 renders the 3D layer at 2x and gives 512x384 screens (Gengis Engine with the Banana 2D engine;
     // otherwise 1x)
-    const int scale = cfg_.num("render.scale", 1) == 2 ? 2 : 1;
+    // (3: 768x576, experimental, the same way with nine quarters)
+    const long scale_cfg = cfg_.num("render.scale", 1);
+    const int scale = scale_cfg == 2 || scale_cfg == 3 ? (int)scale_cfg : 1;
     scale_ = 1;
 #ifdef BANANADS_GENGIS
     // render.renderer: gengis (the default: Gengis Engine, SuperDrastic's rasterizer, on render.gengis_threads
@@ -748,7 +750,7 @@ bool Emu::load_rom(const std::string& path) {
     // render.2d_test_delay (tests only, default 0): the 2D thread sleeps this many microseconds after each job, so that
     // it falls behind and the job ring and the copy log fill: the checks then reach their full paths
     if (banana2d) banana_->SetTestDelay((u32)cfg_.num("render.2d_test_delay", 0));
-    if (banana2d && cfg_.flag("render.2d_thread", scale_ == 2)) banana_->SetThreaded2D(true);
+    if (banana2d && cfg_.flag("render.2d_thread", scale_ >= 2)) banana_->SetThreaded2D(true);
     // render.2d_kick: how many jobs (a frame has 383: 192 lines, 191 sprite lines) go to the 2D thread before it is
     // woken; a wake of the sleeping thread is a futex call on the emulator's thread (16 was the old fixed batch)
     if (banana2d) banana_->SetKickBatch((u32)cfg_.num("render.2d_kick", 64));
@@ -765,7 +767,7 @@ bool Emu::load_rom(const std::string& path) {
     set_clock();
 
     if (scale != scale_)
-        Log(LogLevel::Warn, "[emu] render.scale=2 needs render.renderer=gengis and render.2d=banana: rendering at 1x\n");
+        Log(LogLevel::Warn, "[emu] render.scale=%d needs render.renderer=gengis and render.2d=banana: rendering at 1x\n", scale);
 
     nds_->Start();
     prof_ = Profiler::create(cfg_);
@@ -1073,7 +1075,7 @@ bool Emu::save_state(int slot) {
     if (!write_file_atomic(p, st.Buffer(), st.Length())) return false;
     // Both screens beside it, for the in-game menu's slot pictures (256x384 XRGB8888, top over bottom).
     std::vector<uint32_t> pic(256 * 384);
-    const int s = scale_;  // (at 2x every other pixel of every other row)
+    const int s = scale_;  // (at 2x every other pixel of every other row; 3x every third)
     for (int y = 0; y < 192; y++)
         for (int x = 0; x < 256; x++) {
             pic[y * 256 + x] = top()[(y * 256 * s + x) * s];

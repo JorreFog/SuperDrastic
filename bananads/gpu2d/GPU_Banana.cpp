@@ -48,17 +48,20 @@ BananaRenderer::~BananaRenderer()
     StopWorker();
 }
 
-void BananaRenderer::SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows)
+void BananaRenderer::SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows, int scale)
 {
     Drain2D();
     Quarter = fn;
     QuarterCtx = ctx;
     QuarterRows = rows;
+    Sc = scale == 3 ? 3 : 2;
+    NQ = Sc * Sc;
+    static_cast<BananaRenderer2D&>(*Rend2D_A).HiN = NQ;
     for (auto& b : HiFB)
         for (auto& f : b)
         {
-            f = std::make_unique<u32[]>(512 * 384);
-            memset(f.get(), 0, 512 * 384 * sizeof(u32));
+            f = std::make_unique<u32[]>(256 * 192 * NQ);
+            memset(f.get(), 0, 256 * 192 * NQ * sizeof(u32));
         }
 }
 
@@ -94,8 +97,8 @@ void BananaRenderer::SetOutput(u32* top, u32* bottom)
 
 u32* BananaRenderer::LineDst(int screen, u32 line)
 {
-    if (Out[screen]) return Out[screen] + line * (Quarter ? 1024 : 256);
-    if (Quarter) return &HiFB[BackBuffer][screen][line * 1024];
+    if (Out[screen]) return Out[screen] + line * (Quarter ? 256 * NQ : 256);
+    if (Quarter) return &HiFB[BackBuffer][screen][line * 256 * NQ];
     return &Framebuffer[BackBuffer][screen][line * 256];
 }
 
@@ -280,6 +283,88 @@ static void WriteDouble(u32* dst, const u32* src, u16 brightness)
     else                          WriteDoubleNeon<0>(dst, src, 0);
 }
 
+// ---- 3x (render.scale=3, experimental): a DS line is three rows of 768 pixels ----
+
+// 16 pixels' expanded channel planes as four vectors of BGRA pixels (what vst4q_u8 of b, g, r, 0xFF stores)
+static inline uint32x4x4_t Pixels16(uint8x16_t r, uint8x16_t g, uint8x16_t b)
+{
+    const uint8x16_t ff = vdupq_n_u8(0xFF);
+    uint16x8_t bglo = vreinterpretq_u16_u8(vzip1q_u8(b, g)), bghi = vreinterpretq_u16_u8(vzip2q_u8(b, g));
+    uint16x8_t rflo = vreinterpretq_u16_u8(vzip1q_u8(r, ff)), rfhi = vreinterpretq_u16_u8(vzip2q_u8(r, ff));
+    uint32x4x4_t o;
+    o.val[0] = vreinterpretq_u32_u16(vzip1q_u16(bglo, rflo));
+    o.val[1] = vreinterpretq_u32_u16(vzip2q_u16(bglo, rflo));
+    o.val[2] = vreinterpretq_u32_u16(vzip1q_u16(bghi, rfhi));
+    o.val[3] = vreinterpretq_u32_u16(vzip2q_u16(bghi, rfhi));
+    return o;
+}
+
+template<int mode>
+static inline uint32x4x4_t Load16(const u32* src, uint8x8_t f)
+{
+    uint8x16x4_t s = vld4q_u8((const u8*)src);
+    uint8x16_t r = s.val[0], g = s.val[1], b = s.val[2];
+    if (mode)
+    {
+        r = Bright6<mode>(r, f); g = Bright6<mode>(g, f); b = Bright6<mode>(b, f);
+    }
+    return Pixels16(Expand6(r), Expand6(g), Expand6(b));
+}
+
+// WriteLine of three 256-pixel lines (pixels 3k, 3k + 1, 3k + 2 of a 768-pixel row) and the row from them
+template<int mode>
+static void WriteZip3Neon(u32* dst, const u32* a, const u32* b, const u32* c, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint32x4x4_t pa = Load16<mode>(a + i, f), pb = Load16<mode>(b + i, f), pc = Load16<mode>(c + i, f);
+        for (int k = 0; k < 4; k++)
+        {
+            uint32x4x3_t z = {{ pa.val[k], pb.val[k], pc.val[k] }};
+            vst3q_u32(dst + 3 * i + 12 * k, z);
+        }
+    }
+}
+
+// WriteLine with each pixel three times on three rows
+template<int mode>
+static void WriteTripleNeon(u32* dst, const u32* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint32x4x4_t p = Load16<mode>(src + i, f);
+        for (int k = 0; k < 4; k++)
+        {
+            uint32x4x3_t z = {{ p.val[k], p.val[k], p.val[k] }};
+            vst3q_u32(dst + 3 * i + 12 * k, z);
+            vst3q_u32(dst + 768 + 3 * i + 12 * k, z);
+            vst3q_u32(dst + 1536 + 3 * i + 12 * k, z);
+        }
+    }
+}
+
+static void WriteZip3(u32* dst, const u32* a, const u32* b, const u32* c, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteZip3Neon<1>(dst, a, b, c, factor);
+    else if (mode == 2 && factor) WriteZip3Neon<2>(dst, a, b, c, factor);
+    else                          WriteZip3Neon<0>(dst, a, b, c, 0);
+}
+
+static void WriteTriple(u32* dst, const u32* src, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteTripleNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteTripleNeon<2>(dst, src, factor);
+    else                          WriteTripleNeon<0>(dst, src, 0);
+}
+
 // display modes 2 and 3: the conversion to the 18-bit format fused with WriteLine
 static void OutputDisplayNeon(u32* dst, const u16* display, u16 brightness)
 {
@@ -416,12 +501,67 @@ static void ZipLine(u32* dst, const u32* even, const u32* odd)
 #endif
 }
 
+// 3x: a 256-pixel line with each pixel three times, on three rows of 768
+static void TripleLine(u32* dst, const u32* src)
+{
+    for (int i = 0; i < 256; i++)
+        for (int r = 0; r < 3; r++)
+            dst[768 * r + 3 * i] = dst[768 * r + 3 * i + 1] = dst[768 * r + 3 * i + 2] = src[i];
+}
+
+// 3x: a 768-pixel row from its pixels 3k, 3k + 1 and 3k + 2
+static void Zip3Line(u32* dst, const u32* a, const u32* b, const u32* c)
+{
+    for (int i = 0; i < 256; i++)
+    {
+        dst[3 * i] = a[i];
+        dst[3 * i + 1] = b[i];
+        dst[3 * i + 2] = c[i];
+    }
+}
+
+// unit A's line at 3x: its nine composited quarters (HiLines 9), else tripled
+void BananaRenderer::EmitA3(u32* dst, u32 dispcnt, u16 brightness, const u16* display)
+{
+    auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1)
+    {
+        if (a.HiLines == 1)
+            WriteTriple(dst, Output2D[0], brightness);
+        else
+        {
+            WriteZip3(dst, Output2D[0], a.HiOut[0], a.HiOut[1], brightness);
+            WriteZip3(dst + 768, a.HiOut[2], a.HiOut[3], a.HiOut[4], brightness);
+            WriteZip3(dst + 1536, a.HiOut[5], a.HiOut[6], a.HiOut[7], brightness);
+        }
+        return;
+    }
+#endif
+    alignas(16) u32 q[9][256];
+    OutputLineA(q[0], dispcnt, brightness, display);
+    if (((dispcnt >> 16) & 0x3) != 1 || a.HiLines == 1)
+    {
+        TripleLine(dst, q[0]);
+        return;
+    }
+    for (int k = 1; k < 9; k++)
+        WriteLine(q[k], a.HiOut[k - 1], brightness);
+    for (int r = 0; r < 3; r++)
+        Zip3Line(dst + 768 * r, q[3 * r], q[3 * r + 1], q[3 * r + 2]);
+}
+
 // unit A's line: at 2x its four composited quarters when the line showed the 3D layer (HiLines 4), else doubled
 void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display)
 {
     if (!Quarter)
     {
         OutputLineA(dst, dispcnt, brightness, display);
+        return;
+    }
+    if (Sc == 3)
+    {
+        EmitA3(dst, dispcnt, brightness, display);
         return;
     }
     auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
@@ -462,18 +602,20 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
 #if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
     if (Banana2DFast && ((dispcnt >> 16) & 0x1))
     {
-        WriteDouble(dst, src ? src : Output2D[1], brightness);
+        if (Sc == 3) WriteTriple(dst, src ? src : Output2D[1], brightness);
+        else WriteDouble(dst, src ? src : Output2D[1], brightness);
         return;
     }
 #endif
     alignas(16) u32 t[256];
     OutputLineB(t, dispcnt, brightness, src);
-    DoubleLine(dst, t);
+    if (Sc == 3) TripleLine(dst, t);
+    else DoubleLine(dst, t);
 }
 
 void BananaRenderer::Fill(u32* dst, u32 val)
 {
-    for (int k = 0; k < (Quarter ? 4 : 1); k++)
+    for (int k = 0; k < (Quarter ? NQ : 1); k++)
         FillLine(dst + 256 * k, val);
 }
 
@@ -606,23 +748,23 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
             QuarterRows(QuarterCtx);
         if (!rows)
             line3d = Rend3D->GetLine(line);
-        for (int q = 0; q < 4; q++) job.Q3D[q] = job.Line3D[q];
+        for (int q = 0; q < NQ; q++) job.Q3D[q] = job.Line3D[q];
         // (only read when BG0 is the 3D layer and enabled; render.2d_fast skips the 1 KB copy otherwise)
         if ((GPU.GPU2D_A.DispCnt & (1<<3)) && (!Banana2DFast || (GPU.GPU2D_A.LayerEnable & 1)))
         {
             if (rows)
             {
-                for (int q = 0; q < 4; q++) job.Q3D[q] = QuarterRow(QuarterCtx, line, q);
+                for (int q = 0; q < NQ; q++) job.Q3D[q] = QuarterRow(QuarterCtx, line, q);
                 job.WaitRows = true;
                 job.RowsGen = RowsGen(QuarterCtx);
             }
             else if (Quarter && Banana3DShare && QuarterRows && QuarterRows(QuarterCtx))
             {
                 // render.3d_share: the 3D frame's own rows, not a 4 KB copy
-                for (int q = 0; q < 4; q++) job.Q3D[q] = Quarter(QuarterCtx, line, q);
+                for (int q = 0; q < NQ; q++) job.Q3D[q] = Quarter(QuarterCtx, line, q);
             }
             else if (Quarter)
-                for (int q = 0; q < 4; q++)
+                for (int q = 0; q < NQ; q++)
                     memcpy(job.Line3D[q], Quarter(QuarterCtx, line, q), sizeof(job.Line3D[q]));
             else
                 memcpy(job.Line3D[0], line3d, sizeof(job.Line3D[0]));
@@ -671,8 +813,8 @@ void BananaRenderer::DrawScanlineInPlace(u32 line)
     {
         if (Quarter)
         {
-            const u32* q[4];
-            for (int k = 0; k < 4; k++) q[k] = Quarter(QuarterCtx, line, k);
+            const u32* q[9];
+            for (int k = 0; k < NQ; k++) q[k] = Quarter(QuarterCtx, line, k);
             Output3D = const_cast<u32*>(q[0]);  // (display capture: quarter 0)
             static_cast<BananaRenderer2D&>(*Rend2D_A).DrawScanlineHires(line, q);
         }
@@ -855,11 +997,11 @@ void BananaRenderer::SetThreaded2D(bool on)
     if (!Jobs)
     {
         Jobs = std::make_unique<Job[]>(NumJobs);
-        JobLine3D = std::make_unique<u32[]>(NumJobs * 4 * 256);
+        JobLine3D = std::make_unique<u32[]>(NumJobs * NQ * 256);
         JobDisplay = std::make_unique<u16[]>(NumJobs * 256);
         for (u32 i = 0; i < NumJobs; i++)
         {
-            Jobs[i].Line3D = (u32 (*)[256])&JobLine3D[i * 4 * 256];
+            Jobs[i].Line3D = (u32 (*)[256])&JobLine3D[i * NQ * 256];
             Jobs[i].Display = &JobDisplay[i * 256];
         }
     }
@@ -1159,7 +1301,7 @@ void BananaRenderer::Reset()
     SoftRenderer::Reset();
     for (auto& b : HiFB)
         for (auto& f : b)
-            if (f) memset(f.get(), 0, 512 * 384 * sizeof(u32));
+            if (f) memset(f.get(), 0, 256 * 192 * NQ * sizeof(u32));
     // GPU::Reset clears the VRAM flats next, without dirty bits
     static_cast<BananaRenderer2D&>(*Rend2D_A).Resync();
     static_cast<BananaRenderer2D&>(*Rend2D_B).Resync();
@@ -1184,7 +1326,7 @@ void BananaRenderer::Stop()
     SoftRenderer::Stop();
     for (auto& b : HiFB)
         for (auto& f : b)
-            if (f) memset(f.get(), 0, 512 * 384 * sizeof(u32));
+            if (f) memset(f.get(), 0, 256 * 192 * NQ * sizeof(u32));
 }
 
 void BananaRenderer::PreSavestate()

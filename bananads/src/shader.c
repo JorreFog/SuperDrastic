@@ -304,6 +304,25 @@ static const char *fast_grid2x_fs[] = {
     "    vec3 lin = c.rgb * c.rgb * (line ? K_LINE : K_CELL);\n"
     "    gl_FragColor = vec4(sqrt(min(lin, vec3(1.0))), c.a);\n"
     "}\n",
+    /* (2) render.scale=3 (768x576 frames on 1024x768, experimental): the file's texel, floor(pixel * 3 / 4), fetched
+     * at its centre (twins 0 and 1 fetch the nearest one to the pixel's centre, another texel there), twin 0's light
+     * math. Last, so at 2x (twin 0 passes) nothing changes */
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n"
+    "// dsflip-filter: nearest\n"
+    "varying vec2 v_texcoord;\nuniform sampler2D u_texture;\n"
+    "const float S = 4.0;\nconst float GRID_WIDTH_PX = 1.0;\nconst float GRID_LEVEL = 0.55;\nconst float GRID_COMPENSATE = 0.5;\n"
+    "const float meanAxis = min(GRID_WIDTH_PX / S, 1.0);\n"
+    "const float meanCov = meanAxis + meanAxis - meanAxis * meanAxis;\n"
+    "const float bright = mix(1.0, 1.0 / mix(1.0, GRID_LEVEL, meanCov), GRID_COMPENSATE);\n"
+    "const float K_LINE = mix(1.0, GRID_LEVEL, 1.0) * bright;\n"
+    "const float K_CELL = mix(1.0, GRID_LEVEL, 0.0) * bright;\n"
+    "void main() {\n"
+    "    vec2 t = floor(floor(v_texcoord * vec2(1024.0, 768.0)) * 0.75);\n"
+    "    vec4 c = SWIZ(texture2D(u_texture, (t + 0.5) / vec2(768.0, 576.0)));\n"
+    "    vec2 f = fract(v_texcoord * vec2(256.0, 192.0));\n"
+    "    bool line = max(f.x, f.y) > 0.75;\n"
+    "    gl_FragColor = vec4(min(c.rgb * (line ? sqrt(K_LINE) : sqrt(K_CELL)), vec3(1.0)), c.a);\n"
+    "}\n",
 };
 
 /* on the presenter thread; returns 0 if the shader can't be used (the caller stays zero-copy) */
