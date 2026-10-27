@@ -35,7 +35,7 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     gx_trim = Trim;
     gx_hrneon = HrNeon < 0 ? Scale_ >= 3 : HrNeon != 0;
     gx_lazy = Lazy < 0 ? Scale_ >= 3 : Lazy != 0;
-    Sub = Scale_ == 4 && Units ? (Units == 2 ? 4 : 2) : 1;
+    Sub = Scale_ == 4 && Units ? (Units == 3 ? 8 : Units == 2 ? 4 : 2) : 1;
     VbConvOnly = VbWait < 0 ? Scale_ >= 3 : VbWait == 0;
     NU = GX_NBINS * Sub;
     Next.store(NU);
@@ -473,7 +473,7 @@ int GengisRenderer3D::Stats = 0;
 int GengisRenderer3D::HrNeon = -1;
 int GengisRenderer3D::Verify = 0;
 int GengisRenderer3D::Lazy = 0;
-int GengisRenderer3D::Units = 2;
+int GengisRenderer3D::Units = 3;
 int GengisRenderer3D::KeySkip = 1;
 int GengisRenderer3D::VbWait = -1;
 int GengisRenderer3D::Crc = 0;
@@ -484,7 +484,15 @@ int GengisRenderer3D::Reuse = 1;
 
 
 void GengisRenderer3D::RenderBin(unsigned b, uint32_t* dst) {   // (b: a work unit, a frame bin unless Sub > 1)
-    if (Sub == 4 && !gx_ref) gx4q_render_unit(&Frame, b, dst);
+    if (Sub == 8 && !gx_ref) gx4e_render_unit(&Frame, b, dst);
+    else if (Sub == 8) {   // (render.gengis_verify's reference for an 8-line unit: its 32-line bin's quarter)
+        static thread_local std::vector<uint32_t> h;
+        const size_t n = (size_t)GX_BL * GX_W * 16 / 8;
+        h.resize(4 * n);
+        gx4_render_unit(&Frame, b / 4, h.data());
+        memcpy(dst, h.data() + (b & 3) * n, n * sizeof(uint32_t));
+    }
+    else if (Sub == 4 && !gx_ref) gx4q_render_unit(&Frame, b, dst);
     else if (Sub == 4) {   // (render.gengis_verify's reference for a 16-line unit: its 32-line bin's half)
         static thread_local std::vector<uint32_t> h;
         const size_t n = (size_t)GX_BL * GX_W * 16 / 4;

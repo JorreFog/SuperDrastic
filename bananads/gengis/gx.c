@@ -31,6 +31,8 @@
 #define gx_render_bin gx2_render_bin
 #elif GX_SCALE == 3
 #define gx_render_bin gx3_render_bin
+#elif GX_SCALE == 4 && defined(GX_EIGHTH)
+#define gx_render_bin gx4e_render_bin
 #elif GX_SCALE == 4 && defined(GX_QUARTER)
 #define gx_render_bin gx4q_render_bin
 #elif GX_SCALE == 4
@@ -46,7 +48,9 @@
 /* GX_SUB: the bins a frame bin is rendered as, one after the other (4x: two of 32 lines, so that a bin's context of
  * GX_BL + 2 lines fits the walker's and the kernels' 64-line span arrays, the 64-bit shadow line mask and defer.c's
  * owner buffer; 64 + 2 lines would not) */
-#if GX_SCALE == 4 && defined(GX_QUARTER)
+#if GX_SCALE == 4 && defined(GX_EIGHTH)
+#define GX_SUB 8                            /* (gx4e.c: 8-line bins, render.gengis_units=3) */
+#elif GX_SCALE == 4 && defined(GX_QUARTER)
 #define GX_SUB 4                            /* (gx4q.c: 16-line bins, render.gengis_units=2) */
 #elif GX_SCALE == 4
 #define GX_SUB 2
@@ -379,10 +383,10 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     const unsigned bin_top = hy0 ? hy0 - 1 : 0;
     unsigned bin_bot = hy0 + GX_BL + 1;
     if (bin_bot > GX_H) bin_bot = GX_H;
-#if defined(GX_QUARTER)
-    const unsigned whys0 = hy0 / (2 * GX_BL) * (2 * GX_BL);         /* the 32-line bin's walk window */
+#if defined(GX_QUARTER) || defined(GX_EIGHTH)
+    const unsigned whys0 = hy0 / 32 * 32;                           /* the 32-line bin's walk window */
     const unsigned wtop = whys0 ? whys0 - 1 : 0;
-    const unsigned wbot = whys0 + 2 * GX_BL + 1 > GX_H ? GX_H : whys0 + 2 * GX_BL + 1;
+    const unsigned wbot = whys0 + 32 + 1 > GX_H ? GX_H : whys0 + 32 + 1;
 #else
     const unsigned wtop = bin_top, wbot = bin_bot;
 #endif
@@ -497,7 +501,9 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
 void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
     for (unsigned s = 0; s < GX_SUB; s++) gx_render_sub(f, bin * GX_SUB + s, out + s * GX_BL * GX_W);
 }
-#if GX_SCALE == 4 && defined(GX_QUARTER)
+#if GX_SCALE == 4 && defined(GX_EIGHTH)
+void gx4e_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
+#elif GX_SCALE == 4 && defined(GX_QUARTER)
 void gx4q_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
 #elif GX_SCALE == 4
 void gx4_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }

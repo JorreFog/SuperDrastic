@@ -71,6 +71,8 @@ void gx4_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
 void gx4_render_unit(const gx_frame *f, unsigned unit, uint32_t *out);
 void gx4q_render_unit(const gx_frame *f, unsigned unit, uint32_t *out);   /* (gx4q.c: 16-line units, 48 a frame) */
 void gx4q_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
+void gx4e_render_unit(const gx_frame *f, unsigned unit, uint32_t *out);   /* (gx4e.c: 8-line units, 96 a frame) */
+void gx4e_render_bin(const gx_frame *f, unsigned bin, uint32_t *out);
 static inline uint32_t gx_expand555(uint32_t c) {   /* BGR555 -> r6 | g6 << 8 | b6 << 16 (5 -> 6 as c*2 + (c != 0)) */
     uint32_t p = (c & 0x1f) | ((c >> 5) & 0x1f) << 8 | ((c >> 10) & 0x1f) << 16;
     return (p << 1) + (((p + 0x1f1f1f) >> 5) & 0x010101);

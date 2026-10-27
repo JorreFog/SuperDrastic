@@ -157,7 +157,7 @@ private:
     // waited for as units of their own: NU = GX_NBINS * Sub)
     unsigned Sub = 1, NU = GX_NBINS;
     std::atomic<unsigned> Next{4 * GX_NBINS};
-    std::atomic<unsigned> Done[4 * GX_NBINS];
+    std::atomic<unsigned> Done[8 * GX_NBINS];   // (up to 8 units a frame bin: render.gengis_units=3)
     std::atomic<int> Converted{2};  // the frame's conversion: 0 to do, 1 being done, 2 done
     unsigned Gen = 0;
     std::mutex M;
