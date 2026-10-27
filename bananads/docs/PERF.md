@@ -1424,3 +1424,17 @@ screen pixels), DISP3DCNT 0x1d (no fog, no edge marking); the emulator's thread 
 Dropped: `render.gengis_defer` at 4x (37.7 vs 33.0 ns a span pixel); `render.gengis_lazy` (clear 64 pixels at a time
 when first reached: mkbench 47.76 vs 47.58 fps, bins 41.9 vs 41.7 ms: nothing; kept as an option, off).
 perf stat of the Gengis threads at 4x: IPC 0.41, ~66M L3 misses in 8 s (the A55s' L2D events count the DSU's L3).
+
+## 4x frames as RGB565 (`kms.rgb565`, default `auto`; 2026-10-27, agent RGB565)
+
+At render.scale 4 the two 1024x768 frames the panels scan out directly were XRGB8888: 6 MB a frame written by the
+2D thread and read by the display, in a memory-bandwidth- and heat-bound scene. With `kms.rgb565` they are
+DRM_FORMAT_RGB565 twins of the slots (3 MB). The 4x NEON writers pack the 6-bit channels (red/blue >> 1, green whole:
+a 2D pixel's 5-bit DS colour is kept); every other path packs the 32-bit line. Checks: a self-test at turn-on, and
+`render.2d_verify` compares every line both ways (196608 lines, 0 differ); the emulated sound tap is identical.
+
+MKDS cold boot -> its demo races, 180 s, 4x, shader none, RG DS Plus panels, 8 runs alternating (on, off, off, on) x2:
+on 57.19 / 55.09 / 59.23 / 59.27 fps (mean 57.70, 169 windows < 59), off 53.89 / 57.41 / 55.84 / 57.14 (mean 56.07,
+286 windows < 59). The 2D thread's CPU per frame fell 13% in every run (8.3-8.9 -> 7.2-7.6 ms); max temperature
+68-70 -> 68 C. Heat noise is large (one pair alone is a wash): the window count is the steadier signal.
+Details: ~/bananaos-0.5.0/agent-qa/RGB565.md.
