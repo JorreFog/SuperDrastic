@@ -131,10 +131,10 @@ bool Banana2DFast = true;
 bool Banana2DVerify = false;
 
 // render.2d_verify's counters: per check, lines checked and lines that differed; a log line every 2^16 checks
-static std::atomic<u64> VerifyN[4], VerifyBad[4];
+static std::atomic<u64> VerifyN[5], VerifyBad[5];
 void Banana2DVerifyCount(int what, bool same)
 {
-    static const char* const names[4] = { "raw3d-win", "emit-a", "emit-b", "b-cache" };
+    static const char* const names[5] = { "raw3d-win", "emit-a", "emit-b", "b-cache", "rgb565" };
     u64 n = ++VerifyN[what];
     if (!same) VerifyBad[what]++;
     if (!same && VerifyBad[what] <= 4)

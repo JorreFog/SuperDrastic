@@ -152,7 +152,18 @@ struct Buf {
     uint32_t fb = 0, handle = 0, pitch = 0, w = 0, h = 0;
     uint64_t size = 0;
     uint8_t* map = nullptr;
+    bool r565 = false;   // DRM_FORMAT_RGB565 (kms.rgb565), else XRGB8888
 };
+
+// kms.rgb565: a row of a buffer's pixels as XRGB8888 (as the display expands them), and back
+static void row_to32(const Buf& b, uint32_t y, uint32_t* dst, uint32_t w) {
+    const uint8_t* p = b.map + (size_t)y * b.pitch;
+    if (!b.r565) { memcpy(dst, p, (size_t)w * 4); return; }
+    static thread_local std::vector<uint16_t> t;   // (one read of the slow buffer a row)
+    t.resize(w);
+    memcpy(t.data(), p, (size_t)w * 2);
+    for (uint32_t x = 0; x < w; x++) dst[x] = Emu::px565(t[x]);
+}
 
 struct Panel {
     uint32_t conn = 0, crtc = 0, plane = 0, mode_blob = 0;
@@ -177,6 +188,21 @@ struct Display {
     bool direct = false;      // the emulator draws straight into the buffers (hw, rows packed, the Banana 2D engine)
     int k = 1, ox = 0, oy = 0;  // CPU scaling: the whole-number factor and where the picture sits
     Buf buf[2][NB];
+    // kms.rgb565: each slot's RGB565 twins, made at the first frame drawn into them; is16[s]: slot s's frame is in them
+    // (then shown as it is: no shader pass, as with the grid). rgb565: allowed (render.scale 4, drawn straight in, no
+    // run-ahead); shader_live: the emulator's thread's view of shader_on (a shader: 32-bit frames)
+    Buf buf16[2][NB];
+    bool is16[NB] = {};
+    bool rgb565 = false;
+    std::atomic<bool> shader_live{false};
+    const Buf* slot(int panel, int s) const { return is16[s] ? &buf16[panel][s] : &buf[panel][s]; }
+    bool make16() {
+        for (auto& pb : buf16)
+            for (auto& b : pb)
+                if (!b.map && (!mkbuf(b, fw, fh, true) || b.pitch != (uint32_t)fw * 2)) return false;
+        return true;
+    }
+    uint32_t* map16(int panel, int s) { return (uint32_t*)buf16[panel][s].map; }
     Buf mbuf[2][2];           // the in-game menu's pictures: panel-sized, two a panel (one drawn while one shows)
     int mnext[2] = {0, 0};
     SlotState state[NB] = {};
@@ -298,19 +324,20 @@ struct Display {
         return v;
     }
 
-    bool mkbuf(Buf& b, int w, int h) {
+    bool mkbuf(Buf& b, int w, int h, bool r565 = false) {
         drm_mode_create_dumb c{};
         c.width = w;
         c.height = h;
-        c.bpp = 32;
+        c.bpp = r565 ? 16 : 32;
         if (drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &c)) return false;
         b.handle = c.handle;
         b.pitch = c.pitch;
         b.size = c.size;
         b.w = w;
         b.h = h;
+        b.r565 = r565;
         uint32_t hs[4] = {c.handle}, ps[4] = {c.pitch}, os[4] = {0};
-        if (drmModeAddFB2(fd, w, h, DRM_FORMAT_XRGB8888, hs, ps, os, &b.fb, 0)) return false;
+        if (drmModeAddFB2(fd, w, h, r565 ? DRM_FORMAT_RGB565 : DRM_FORMAT_XRGB8888, hs, ps, os, &b.fb, 0)) return false;
         drm_mode_map_dumb m{};
         m.handle = c.handle;
         if (drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &m)) return false;
@@ -333,6 +360,8 @@ struct Display {
     }
     void freebufs() {
         for (auto& pb : buf)
+            for (auto& b : pb) freebuf(b);
+        for (auto& pb : buf16)
             for (auto& b : pb) freebuf(b);
         for (auto& pb : mbuf)
             for (auto& b : pb) freebuf(b);
@@ -359,19 +388,19 @@ struct Display {
     void show_game() {
         Lock l(mu);
         const int t = swapped ? 1 : 0;   // (what each panel showed; the game's buffers, as swapped, before a first commit)
-        if (scanout >= 0) commit_now(0, 1, scanout_out[0] ? scanout_out[0] : &buf[t][scanout], scanout_out[1] ? scanout_out[1] : &buf[t ^ 1][scanout]);
+        if (scanout >= 0) commit_now(0, 1, scanout_out[0] ? scanout_out[0] : slot(t, scanout), scanout_out[1] ? scanout_out[1] : slot(t ^ 1, scanout));
     }
     // the game's top screen as last shown (through the shader, when one is on: #49), at the panel's size (nearest)
     bool grab_top(uint32_t* dst, int pitch, int w, int h) {
         Lock l(mu);
         if (scanout < 0) return false;
-        const Buf& b = scanout_out[0] ? *scanout_out[0] : buf[0][scanout];
+        const Buf& b = scanout_out[0] ? *scanout_out[0] : *slot(0, scanout);
         if (!b.map || !b.w || !b.h) return false;
         const int sw = (int)b.w, sh = (int)b.h;
         std::vector<uint32_t> row(sw);
         for (int y = 0; y < h; y++) {
             const int sy = y * sh / h;
-            memcpy(row.data(), b.map + (size_t)sy * b.pitch, sw * 4);  // (one read of the slow buffer a row)
+            row_to32(b, sy, row.data(), sw);  // (one read of the slow buffer a row)
             uint32_t* d = (uint32_t*)((uint8_t*)dst + (size_t)y * pitch);
             for (int x = 0; x < w; x++) d[x] = row[x * sw / w] & 0xFFFFFF;
         }
@@ -719,14 +748,30 @@ struct Display {
                 Log(LogLevel::Info, "[kms] grid: drawn by the 2D engine as it writes the 4x frame (kms.grid_cpu), no GPU pass\n");
             }
         }
+        shader_live.store(shader_on, std::memory_order_relaxed);   // (kms.rgb565: 32-bit frames while a shader draws)
     }
     // the achievements' pop-ups and the volume pill (menu.c's bmenu_overlay) over the top panel's picture as it goes
     // to the screen: over the shader's output when there is one (drawn into the DS frame before the shader, they went
     // through it with the game: the grid over them, the DS's colours, scaled with the picture), else over the frame.
     // The shader's pass has finished here (shader_draw's glFinish with the second panel).
     void overlay(const Buf* b) {
-        if (b && b->map) {
+        if (b && b->map && !b->r565) {
             bmenu_overlay((uint32_t*)b->map, (int)(b->pitch / 4), (int)b->w, (int)b->h);
+            if (touched) touched(b->map);
+        } else if (b && b->map && bmenu_overlay(nullptr, (int)b->w, (int)b->w, (int)b->h)) {
+            // kms.rgb565: only when something is to be drawn, the rows it draws into as XRGB8888, drawn over, and
+            // packed back (the 2D engine's packing: the top 5/6/5 bits)
+            const int rows = bmenu_overlay_rows((int)b->w, (int)b->h);
+            static std::vector<uint32_t> t;
+            t.resize((size_t)b->w * rows);
+            for (int y = 0; y < rows; y++) row_to32(*b, y, &t[(size_t)y * b->w], b->w);
+            bmenu_overlay(t.data(), (int)b->w, (int)b->w, rows);
+            for (int y = 0; y < rows; y++) {
+                uint16_t* d = (uint16_t*)(b->map + (size_t)y * b->pitch);
+                const uint32_t* q = &t[(size_t)y * b->w];
+                for (uint32_t x = 0; x < b->w; x++)
+                    d[x] = (uint16_t)(((q[x] >> 8) & 0xF800) | ((q[x] >> 5) & 0x07E0) | ((q[x] >> 3) & 0x001F));
+            }
             if (touched) touched(b->map);
         }
     }
@@ -828,7 +873,7 @@ struct Display {
         const Buf* in[2] = {&t, &b};
         for (int i = 0; i < 2; i++) {
             px[i].resize((size_t)t.w * t.h);
-            for (uint32_t y = 0; y < t.h; y++) memcpy(&px[i][(size_t)y * t.w], in[i]->map + (size_t)y * in[i]->pitch, t.w * 4);
+            for (uint32_t y = 0; y < t.h; y++) row_to32(*in[i], y, &px[i][(size_t)y * t.w], t.w);
         }
         screenshot_save(shot_dir, shot_game, std::move(px[0]), std::move(px[1]), (int)t.w, (int)t.h, [](bool ok, const std::string& name) {
             Log(LogLevel::Info, "[shot] %s: %s\n", ok ? "saved" : "couldn't save", name.c_str());
@@ -846,13 +891,13 @@ struct Display {
         {
             Lock l(mu);
             // without a shader a frame is only taken when it can be committed at once; with one, it is drawn ahead
-            if (queue.empty() || (pending && !(shader_on && !gridded[queue.front()]))) return;
+            if (queue.empty() || (pending && !(shader_on && !gridded[queue.front()] && !is16[queue.front()]))) return;
             // kms.lowlat: a frame goes no sooner than the vblank before the one it aims at has passed: shown a refresh
             // early (it was ready early), the next frame, on time for its own vblank, left that one empty (a repeat
             // after every early frame: the most of v4's 180-280 a minute on the RG DS). The presenter wakes then.
             // With a shader only the commit waits: the frame is drawn through it ahead (10-14 ms a frame on the RG DS
             // Plus: started at the window, it missed the deadline 17 times a minute)
-            if (!(shader_on && !gridded[queue.front()]) && ll_early(queue.front())) return;
+            if (!(shader_on && !gridded[queue.front()] && !is16[queue.front()]) && ll_early(queue.front())) return;
             // the oldest frame, taken off the queue so the emulator can't recycle it while the shader draws it (outside
             // the lock: the emulator's thread never waits for the GPU)
             s = queue.front();
@@ -863,10 +908,12 @@ struct Display {
         }
         if (has_fence[s] && wait2d) wait2d(fence[s]);  // render.2d_lazy: its last lines drawn
         if (!lowlat) { Lock l(mu); if (Trace* x = tr(s)) x->ready = now_us(); }
-        const bool pass = shader_on && !gridded[s];   // (kms.grid_cpu: a frame with the grid in goes as it is)
+        // (kms.grid_cpu: a frame with the grid in goes as it is; kms.rgb565: an RGB565 frame drawn before the shader
+        // came on too)
+        const bool pass = shader_on && !gridded[s] && !is16[s];
         if (!pass) ll_ready(s);
-        if (shot.exchange(false)) take_shot(buf[0][s], buf[1][s]);
-        const Buf* out[2] = {&buf[0][s], &buf[1][s]};
+        if (shot.exchange(false)) take_shot(*slot(0, s), *slot(1, s));
+        const Buf* out[2] = {slot(0, s), slot(1, s)};
         if (gridded[s] && !gpu_dir.empty()) gpu_floor(false);   // (no GPU pass: its clock floor put back)
         if (pass) {
             const long long t0 = now_us();
@@ -1580,6 +1627,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         dp.gpu_floor_mhz = cfg.num("kms.gpu_floor_mhz", -1);
         clear_first = cfg.flag("kms.shader_clear", true) ? 1 : 0;
         dp.grid_cpu = cfg.flag("kms.grid_cpu", true);
+        dp.shader_live = !dp.shader_name.empty();
     }
     // kms.commit_thread (Display::committer): blocking commits on a real-time thread of their own. auto (the default):
     // at render.scale 3 and 4, where every core is busy (2x as before: nonblocking commits from this thread)
@@ -1594,6 +1642,18 @@ int run_kms(Emu& emu, const Config& cfg) {
     // next one; the presenter waits for it instead (Display::wait2d)
     if (dp.direct && cfg.flag("render.2d_lazy", true) && emu.set_lazy_2d(true))
         dp.wait2d = [&emu](uint32_t f) { emu.wait_frame(f); };
+    // kms.rgb565 (auto|on|off): at render.scale 4, drawn straight into the scanout buffers, the frames are RGB565
+    // (half the bytes of XRGB8888 for the 2D engine to write and the display to read: 4x is memory-bound). Not with
+    // a shader (its frames 32-bit as before, also when one is chosen in the menu: RGB565 again when it goes back to
+    // none), not with run-ahead, not at other scales. auto (the default) and on are the same: where it can't, 32-bit
+    {
+        const std::string v = cfg.str("kms.rgb565", "auto");
+        const bool want = v != "off" && v != "0";
+        dp.rgb565 = want && dp.direct && emu.scale() == 4 && !ra_n;
+        if (want && emu.scale() == 4)
+            Log(LogLevel::Info, "[kms] rgb565: %s\n", dp.rgb565 ? "frames drawn as RGB565 (16-bit) while no shader is on" :
+                !dp.direct ? "no (frames copied, not drawn straight in): 32-bit" : "no (run-ahead): 32-bit");
+    }
     Log(LogLevel::Info, "[kms] %s top, %s bottom, %dx%d at %.3f Hz; %dx%d frames %s, scaled by %s\n",
         dp.p[0].name.c_str(), dp.p[1].name.c_str(), dp.W, dp.H, 1e6 / dp.period_us, dp.fw, dp.fh,
         dp.direct ? "drawn straight into the scanout buffers" : "copied into the scanout buffers",
@@ -1813,6 +1873,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         double ra_ms = 0, ra_snap_ms = 0;
         long long ra_t = now_us();
         bool grid_now = false;   // kms.grid_cpu: the 2D engine draws the grid into the frames
+        bool asked16 = false, on16 = false;   // kms.rgb565: asked of the 2D engine, and in effect
         while (run.load(std::memory_order_relaxed) && !g_quit && !emu.stopped()) {
             if (pause_req.load(std::memory_order_acquire)) {  // the menu: at a frame's end, until it closes
                 std::unique_lock<std::mutex> l(pm);
@@ -1880,13 +1941,27 @@ int run_kms(Emu& emu, const Config& cfg) {
                 Log(LogLevel::Info, "[kms] grid in the 2D engine: %s\n", grid_now ? "on (its NEON writers checked against the tables)" :
                     g ? "NOT on (check failed): the GPU pass draws it" : "off");
             }
+            // kms.rgb565: the slot's 16-bit twins while no shader draws (the format switched between frames, as the grid)
+            const bool want16 = dp.rgb565 && !dp.shader_live.load(std::memory_order_relaxed);
+            if (want16 != asked16) {
+                asked16 = want16;
+                if (want16 && !dp.make16()) {
+                    Log(LogLevel::Warn, "[kms] rgb565: couldn't make the 16-bit buffers: 32-bit\n");
+                    dp.rgb565 = false;
+                    asked16 = false;
+                }
+                on16 = emu.set_rgb565(asked16);
+                Log(LogLevel::Info, "[kms] rgb565: %s\n", on16 ? "on" : asked16 ? "NOT on (the 2D engine can't here): 32-bit" : "off (a shader)");
+            }
             const int s = dp.take();
             dp.gridded[s] = grid_now;
+            dp.is16[s] = on16;
             const auto work0 = std::chrono::steady_clock::now();  // (cpugov.tail: the frame's work, to its publish)
             const long long t_start = now_us();
             const bool ahead = ra_n && !ff && t_start >= ra_off_until && emu_frames > 60 && emu.runahead_ok();
             if (dp.direct) {
                 if (ahead && !ra_scratch[0].empty()) emu.draw_into(ra_scratch[0].data(), ra_scratch[1].data());
+                else if (on16) emu.draw_into(dp.map16(0, s), dp.map16(1, s));
                 else emu.draw_into(dp.map(0, s), dp.map(1, s));
             }
             if (!emu_frames++) start_mark("first frame: start");

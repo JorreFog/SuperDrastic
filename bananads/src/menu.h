@@ -71,7 +71,8 @@ int bmenu_run(int start);
 void bmenu_session_start(void);  // the game started: "this session" counts from here
 // a pop-up over the game's top screen (an achievement unlocked...): the frontend calls this with each finished top
 // frame (XRGB8888, pitch in pixels), on the emulator's thread; it draws the current pop-up, if any, into it
-void bmenu_overlay(uint32_t* px, int pitch, int w, int h);
+int bmenu_overlay(uint32_t* px, int pitch, int w, int h);   // 1: something drawn (px NULL: would be)
+int bmenu_overlay_rows(int w, int h);                       // the top rows it draws into, at most
 // the FPS counter in the top panel's corner (drawn by bmenu_overlay): the frames emulated a second x 10, -1 hidden; and
 // the fast-forward speed beside it (0: off, 99: as fast as it goes)
 void bmenu_fps(int fps_x10, int ff);

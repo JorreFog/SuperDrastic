@@ -70,7 +70,7 @@ public:
     void SetLazyFrames(bool on) { Drain2D(); LazyFrames = on; }
     // kms.grid_cpu (GPU2D_Banana.h BananaSetGrid4): changed with the 2D thread drained, between frames
     // (render.2d_out_skip: every slot's rows were written with the old grid: all drawn again)
-    void SetGrid4(const unsigned char (*lut)[256]) { Drain2D(); BananaSetGrid4(lut); OutputTouchedAll(); }
+    void SetGrid4(const unsigned char (*lut)[256]) { Drain2D(); BananaSetGrid4(lut); Recalc16(); OutputTouchedAll(); }
     // render.2d_kick: wake the 2D thread every this many jobs (1-NumJobs; it is also woken at VBlank, at the swap
     // and before any wait for it, so the pictures don't depend on it)
     void SetNice(int n) { Nice = n; }  // sched.2d_nice: the 2D thread's nice value (0: the default)
@@ -111,6 +111,15 @@ public:
     // frames; that frame's lines all go there, and GetFramebuffers returns them once it is finished. Null, null: the
     // renderer's own framebuffers again (the last frame drawn elsewhere is forgotten).
     void SetOutput(u32* top, u32* bottom);
+    // kms.rgb565: SetOutput's buffers take 16-bit RGB565 pixels instead of 32-bit XRGB8888 (rows of 1024 u16) — only
+    // at render.scale 4 without kms.grid_cpu's grid (Out16 says when it is in effect; elsewhere the 32-bit output as
+    // before). The 6-bit channels are truncated to 5 bits for red and blue (green keeps its 6): a 2D pixel's DS colour
+    // (5 bits a channel, the low green bit) is kept exactly; the 3D layer's 6-bit red/blue and master brightness lose
+    // their lowest bit. Checked by a self-test of the NEON writers when it is first turned on (false: stays 32-bit).
+    // Set between frames (drains the 2D thread)
+    bool SetOutputFormat(bool rgb565);
+    bool OutputIs565() const { return Out16; }
+    bool FrontIs565() const { return Front[0] && Front16; }   // GetFramebuffers' pictures are RGB565
     // render.2d_out_skip: the frontend wrote into one of SetOutput's buffers (an overlay, a copied frame, a new buffer):
     // its rows are drawn again in full. Any thread
     void OutputTouched(const void* base);
@@ -132,10 +141,14 @@ private:
     static void FillLine(u32* dst, u32 val);
     // a DS line into the framebuffer at either scale (at 2x dst is two rows of 512)
     u32* LineDst(int screen, u32 line);
-    void EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display);
+    // (p16: dst takes RGB565 pixels, kms.rgb565: the 32-bit writers' output packed, the 4x NEON paths directly)
+    void EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display, bool p16 = false);
+    void EmitA32(u32* dst, u32 dispcnt, u16 brightness, const u16* display);
     void EmitAN(u32* dst, u32 dispcnt, u16 brightness, const u16* display);  // 3x, 4x
-    void EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src = nullptr);
-    void Fill(u32* dst, u32 val);
+    void EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src = nullptr, bool p16 = false);
+    void EmitB32(u32* dst, u32 dispcnt, u16 brightness, const u32* src = nullptr);
+    void Fill(u32* dst, u32 val, bool p16 = false);
+    void Recalc16();
     QuarterFn Quarter = nullptr;
     int Sc = 2, NQ = 4;  // with Quarter: the scale and its quarters (Sc * Sc)
     QuarterRowsFn QuarterRows = nullptr;
@@ -148,6 +161,7 @@ private:
     std::unique_ptr<u32[]> HiFB[2][2];
     u32* Out[2] = {};    // SetOutput's: the frame being drawn goes here
     u32* Front[2] = {};  // the last finished frame's, when it went to SetOutput's
+    bool Want16 = false, Out16 = false, Front16 = false;   // kms.rgb565: asked for, in effect for Out, Front's
 
     // ---- the 2D thread (render.2d_thread) ----
     // A job: a scanline (VCOUNT < 192: both units' snapshots), a sprite line, or (render.2d_merge) both: the scanline
@@ -171,6 +185,7 @@ private:
         u32* BaseA;                 // render.2d_out_skip: the frontend's buffers DstA/DstB are in (Out; null: not drawing
         u32* BaseB;                 // into them) and the DS line's row in them
         u32 Row;
+        bool Px16;                  // kms.rgb565: DstA/DstB take RGB565 pixels (Out16 when the job was made)
         u64 LogEndScan;             // (merged) the copy log up to here is applied before the scanline is drawn
         u64 LogEnd;                 // the copy log up to here is applied before the job (its sprite line) is drawn
         const u32* Q3D[16];          // where the drawing reads the 3D layer's line: Line3D's, or the 3D frame's rows (render.3d_share)

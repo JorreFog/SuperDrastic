@@ -1415,6 +1415,22 @@ bool Emu::set_grid4(const unsigned char (*lut)[256]) {
     return false;
 #endif
 }
+bool Emu::set_rgb565(bool on) {
+#ifdef BANANADS_2D
+    if (!banana_) return false;
+    return banana_->SetOutputFormat(on);
+#else
+    (void)on;
+    return false;
+#endif
+}
+bool Emu::frame_565() const {
+#ifdef BANANADS_2D
+    return banana_ && banana_->FrontIs565();
+#else
+    return false;
+#endif
+}
 bool Emu::set_lazy_2d(bool on) {
 #ifdef BANANADS_2D
     if (!banana_) return false;
@@ -1575,10 +1591,13 @@ bool Emu::save_state(int slot) {
     // Both screens beside it, for the in-game menu's slot pictures (256x384 XRGB8888, top over bottom).
     std::vector<uint32_t> pic(256 * 384);
     const int s = scale_;  // (at 2x every other pixel of every other row; 3x every third)
+    const bool p16 = frame_565();   // (kms.rgb565: the 4x pictures are RGB565)
+    const uint16_t *t16 = (const uint16_t*)top(), *b16 = (const uint16_t*)bottom();
     for (int y = 0; y < 192; y++)
         for (int x = 0; x < 256; x++) {
-            pic[y * 256 + x] = top()[(y * 256 * s + x) * s];
-            pic[(192 + y) * 256 + x] = bottom()[(y * 256 * s + x) * s];
+            const size_t i = (size_t)(y * 256 * s + x) * s;
+            pic[y * 256 + x] = p16 ? px565(t16[i]) : top()[i];
+            pic[(192 + y) * 256 + x] = p16 ? px565(b16[i]) : bottom()[i];
         }
     write_file_atomic(p + ".pic", pic.data(), pic.size() * 4);
     Log(LogLevel::Info, "[emu] state saved: %s\n", p.c_str());

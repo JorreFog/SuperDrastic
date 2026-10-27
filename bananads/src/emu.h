@@ -81,6 +81,15 @@ public:
     bool set_lazy_2d(bool on);
     // kms.grid_cpu: the LCD grid table for the Banana 2D engine's 4x output (null: off); between frames, emulator's thread
     bool set_grid4(const unsigned char (*lut)[256]);
+    // kms.rgb565: draw_into's buffers take RGB565 pixels (rows of 2 bytes) from the next frame on; true when they will
+    // (render.scale 4, the Banana 2D engine, no grid, its self-test passed). Between frames, emulator's thread
+    bool set_rgb565(bool on);
+    // the pictures top()/bottom() return are RGB565 (uint16_t, as set_rgb565); pixel(): one of them as XRGB8888
+    bool frame_565() const;
+    static uint32_t px565(uint16_t c) {   // (as the display expands 5/6 bits to 8: the top bits repeated)
+        const uint32_t r = c >> 11, g = (c >> 5) & 63, b = c & 31;
+        return 0xFF000000u | ((r << 3 | r >> 2) << 16) | ((g << 2 | g >> 4) << 8) | (b << 3 | b >> 2);
+    }
     bool frame_fence(uint32_t& fence) const;
     void wait_frame(uint32_t fence) const;
 

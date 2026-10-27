@@ -1528,12 +1528,19 @@ static int ov_slide(long long t, long long from, long long until, int rows) {
     float e = (float)m / OV_SLIDE_MS; e = 1 - (1 - e) * (1 - e);
     return (int)((1 - e) * rows + 0.5f);
 }
-void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
+/* the rows bmenu_overlay can draw into (the strip; the FPS counter and the pill sit inside it) */
+int bmenu_overlay_rows(int w, int h) {
+    int strip = (int)lroundf(72 * (w / 640.0f));
+    return strip > h ? h : strip;
+}
+/* px NULL: nothing drawn, only whether something would be (the pop-ups' state moves on as with a picture) */
+int bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
+    int drew = 0;
     long long t = now_ms();
     float sc = w / 640.0f;
     int strip = (int)lroundf(72 * sc);
     if (strip > h) strip = h;
-    if (!fonts_ready()) return;
+    if (!fonts_ready()) return 0;
     if (of_val >= 0) {   /* the FPS counter, under the pop-ups and the pill */
         if (of_val != of_built || of_ff != of_built_ff || w != of_for_w || of_game != of_built_game) {
             canvas probe = { 0, w, strip, sc }, *c = &probe;
@@ -1541,7 +1548,7 @@ void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
             if (!ov_make(&OF, of_ff ? S(210) + (wide ? S(70) : 0) : wide ? S(188) : S(118), S(34), S(6), S(6), sc, ov_draw_fps)) of_val = -1;
             of_built = of_val; of_built_ff = of_ff; of_for_w = w; of_built_game = of_game;
         }
-        if (of_val >= 0) ov_blit(&OF, px, pitch, h, 0);
+        if (of_val >= 0) { if (px) ov_blit(&OF, px, pitch, h, 0); drew = 1; }
     }
     if (w != ov_for_w) { ov_for_w = w; ov_built_pct = -2; if (op_on && !ov_make(&OP, w, strip, 0, 0, sc, ov_draw_popup)) op_on = 0; }
     ov_osd(t);
@@ -1560,11 +1567,12 @@ void bmenu_overlay(uint32_t *px, int pitch, int w, int h) {
         if (ov_pct != ov_built_pct || ov_kind != ov_built_kind) {
             canvas probe = { 0, w, strip, sc }, *c = &probe;
             int pw = S(310), ph = S(42);
-            if (!ov_make(&OV, pw, ph, (w - pw) / 2, S(4), sc, ov_draw_level)) { ov_on = 0; return; }
+            if (!ov_make(&OV, pw, ph, (w - pw) / 2, S(4), sc, ov_draw_level)) { ov_on = 0; return drew; }
             ov_built_pct = ov_pct; ov_built_kind = ov_kind;
         }
-        ov_blit(&OV, px, pitch, h, ov_slide(t, ov_from, ov_until, OV.y + OV.h));
-        return;
+        if (px) ov_blit(&OV, px, pitch, h, ov_slide(t, ov_from, ov_until, OV.y + OV.h));
+        return 1;
     }
-    if (op_on) ov_blit(&OP, px, pitch, h, ov_slide(t, op_from, op_until, strip));
+    if (op_on) { if (px) ov_blit(&OP, px, pitch, h, ov_slide(t, op_from, op_until, strip)); drew = 1; }
+    return drew;
 }

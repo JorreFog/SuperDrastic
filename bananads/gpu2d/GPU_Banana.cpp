@@ -63,6 +63,7 @@ void BananaRenderer::SetHires(QuarterFn fn, void* ctx, QuarterRowsFn rows, int s
             f = std::make_unique<u32[]>(256 * 192 * NQ);
             memset(f.get(), 0, 256 * 192 * NQ * sizeof(u32));
         }
+    Recalc16();
 }
 
 bool BananaRenderer::GetFramebuffers(void** top, void** bottom)
@@ -96,10 +97,40 @@ void BananaRenderer::SetOutput(u32* top, u32* bottom)
     Out[1] = bottom;
     if (!top)
         Front[0] = Front[1] = nullptr;
+    Recalc16();
+}
+
+void BananaRenderer::Recalc16()
+{
+    Out16 = Want16 && Quarter && Sc == 4 && !BananaGrid4On() && Out[0];
+}
+
+static bool Rgb565SelfTest();
+bool BananaRenderer::SetOutputFormat(bool rgb565)
+{
+    Drain2D();   // (the jobs made for the old format drawn first: each carries its own, but not mixed in a buffer)
+    if (rgb565 && !Want16)
+    {
+        static int ok = -1;
+        if (ok < 0)
+        {
+            ok = Rgb565SelfTest() ? 1 : 0;
+            Platform::Log(ok ? Platform::LogLevel::Info : Platform::LogLevel::Warn,
+                "[2d] kms.rgb565: the RGB565 writers %s\n", ok ? "agree with the 32-bit ones, packed (every level, lane, brightness)" :
+                "DISAGREE with the 32-bit ones: 32-bit output");
+        }
+        if (!ok) rgb565 = false;
+    }
+    if (rgb565 != Want16)
+        OutputTouchedAll();   // (render.2d_out_skip: the rows the other format left are drawn again)
+    Want16 = rgb565;
+    Recalc16();
+    return Want16 && Quarter && Sc == 4 && !BananaGrid4On();
 }
 
 u32* BananaRenderer::LineDst(int screen, u32 line)
 {
+    if (Out[screen] && Out16) return (u32*)((u16*)Out[screen] + line * 256 * NQ);   // (kms.rgb565)
     if (Out[screen]) return Out[screen] + line * (Quarter ? 256 * NQ : 256);
     if (Quarter) return &HiFB[BackBuffer][screen][line * 256 * NQ];
     return &Framebuffer[BackBuffer][screen][line * 256];
@@ -113,6 +144,17 @@ static inline u32 Expand(u32 c)
     u32 b = (c >> 14) & 0xFC;
     c = r | g | b;
     return c | ((c & 0xC0C0C0) >> 6) | 0xFF000000;
+}
+
+// kms.rgb565: a 32-bit output pixel as RGB565 (the top 5/6/5 bits of its bytes; of an expanded 6-bit channel c:
+// red, blue c >> 1, green c)
+static inline u16 Pack565(u32 p)
+{
+    return (u16)(((p >> 8) & 0xF800) | ((p >> 5) & 0x07E0) | ((p >> 3) & 0x001F));
+}
+static void PackRow565(u16* dst, const u32* src, int n)
+{
+    for (int i = 0; i < n; i++) dst[i] = Pack565(src[i]);
 }
 
 void BananaRenderer::FillLine(u32* dst, u32 val)
@@ -478,6 +520,88 @@ static void WriteRep4G(u32* dst, const u32* src, u16 brightness)
     else                          WriteRep4GNeon<0>(dst, src, 0);
 }
 
+// ---- kms.rgb565 at 4x: the same writers, RGB565 out ----
+// 16 pixels' 6-bit channel planes as RGB565: red and blue truncated to 5 bits (c >> 1), green whole. A 2D colour's
+// red and blue are 5 bits shifted up (Conv15, Planes15: the low bit 0), so they come back exactly; the 3D layer's and
+// master brightness's lowest red/blue bit is dropped (the same as packing the 32-bit output's bytes: r8 >> 3 = c >> 1,
+// g8 >> 2 = c, Pack565). Rounding instead would need a saturation and moves those odd levels up instead of down: no
+// more exact, and the two directions are the same distance from the 6-bit level (+-4 of 255)
+static inline uint16x8x2_t Pack16(uint8x16_t r, uint8x16_t g, uint8x16_t b)
+{
+    const uint8x16_t m = vdupq_n_u8(0x3F);
+    r = vandq_u8(r, m); g = vandq_u8(g, m); b = vandq_u8(b, m);
+    const uint8x16_t lo = vorrq_u8(vshrq_n_u8(b, 1), vshlq_n_u8(g, 5));                 // ggg bbbbb
+    const uint8x16_t hi = vsliq_n_u8(vshrq_n_u8(g, 3), vshrq_n_u8(r, 1), 3);           // rrrrr ggg
+    uint16x8x2_t o;
+    o.val[0] = vreinterpretq_u16_u8(vzip1q_u8(lo, hi));
+    o.val[1] = vreinterpretq_u16_u8(vzip2q_u8(lo, hi));
+    return o;
+}
+
+template<int mode>
+static inline uint16x8x2_t Load16P(const u32* src, uint8x8_t f)
+{
+    uint8x16x4_t s = vld4q_u8((const u8*)src);
+    uint8x16_t r = s.val[0], g = s.val[1], b = s.val[2];
+    if (mode)
+    {
+        r = Bright6<mode>(r, f); g = Bright6<mode>(g, f); b = Bright6<mode>(b, f);
+    }
+    return Pack16(r, g, b);
+}
+
+// WriteZipNNeon<mode, 4> to RGB565: a row of 1024 from pixels 4k .. 4k + 3 (src[0..3])
+template<int mode>
+static void WriteZip4PNeon(u16* dst, const u32* const* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint16x8x2_t p[4];
+        for (int n = 0; n < 4; n++) p[n] = Load16P<mode>(src[n] + i, f);
+        for (int h = 0; h < 2; h++)
+        {
+            uint16x8x4_t z = {{ p[0].val[h], p[1].val[h], p[2].val[h], p[3].val[h] }};
+            vst4q_u16(dst + 4 * i + 32 * h, z);
+        }
+    }
+}
+
+// WriteRepNNeon<mode, 4> to RGB565: each pixel 4 times on 4 rows of 1024
+template<int mode>
+static void WriteRep4PNeon(u16* dst, const u32* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        const uint16x8x2_t p = Load16P<mode>(src + i, f);
+        for (int h = 0; h < 2; h++)
+        {
+            uint16x8x4_t z = {{ p.val[h], p.val[h], p.val[h], p.val[h] }};
+            for (int r = 0; r < 4; r++) vst4q_u16(dst + 1024 * r + 4 * i + 32 * h, z);
+        }
+    }
+}
+
+static void WriteZip4P(u16* dst, const u32* const* src, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteZip4PNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteZip4PNeon<2>(dst, src, factor);
+    else                          WriteZip4PNeon<0>(dst, src, 0);
+}
+static void WriteRep4P(u16* dst, const u32* src, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteRep4PNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteRep4PNeon<2>(dst, src, factor);
+    else                          WriteRep4PNeon<0>(dst, src, 0);
+}
+
 // kms.grid_cpu's check when it is turned on: the NEON grid writers give, byte for byte, the ungridded writers' output
 // with the tables applied to each byte by place (GridPx: the tables as shader_grid4_lut proved them against the GPU),
 // for every 6-bit level in every channel and lane, with and without master brightness. False: the grid stays off
@@ -518,6 +642,49 @@ static bool Grid4SelfTest()
     return true;
 }
 
+// kms.rgb565's check when it is turned on: the RGB565 writers give the 32-bit writers' output packed (Pack565), for
+// every 6-bit level in every channel, lane and line, with junk in the channels' top bits and the flag byte, in every
+// master brightness mode at several factors. False: the output stays 32-bit
+static bool Rgb565SelfTest()
+{
+    alignas(16) static u32 src[4][256], a[4 * 1024];
+    alignas(16) static u16 b[4 * 1024], c[4 * 1024];
+    const u32* sp[4] = {src[0], src[1], src[2], src[3]};
+    const bool g = Grid4;
+    Grid4 = false;
+    bool ok = true;
+    u32 seed = 54321;
+    for (int round = 0; round < 8 && ok; round++)
+    {
+        for (int n = 0; n < 4; n++)
+            for (int i = 0; i < 256; i++)
+            {
+                seed = seed * 1103515245u + 12345u;
+                const u32 v = (u32)(i + 64 * round + 16 * n) & 63;
+                const u32 junk = round & 1 ? (seed >> 4 & 0xC0C0C0) : 0;
+                src[n][i] = (v | ((v * 5 + 7) & 63) << 8 | ((v * 11 + 3) & 63) << 16 | junk) | (seed >> 8 & 0xFF) << 24;
+            }
+        for (u32 mode = 0; mode < 4 && ok; mode++)
+            for (u32 f : {0u, 1u, 7u, 8u, 15u, 16u, 31u})
+            {
+                const u16 br = (u16)(mode << 14 | f);
+                for (int r = 0; r < 4; r++)
+                {
+                    WriteZipN<4>(a + 1024 * r, sp, br);
+                    WriteZip4P(b + 1024 * r, sp, br);
+                }
+                PackRow565(c, a, 4 * 1024);
+                if (memcmp(b, c, sizeof b)) { ok = false; break; }
+                WriteRepN<4>(a, src[round & 3], br);
+                WriteRep4P(b, src[round & 3], br);
+                PackRow565(c, a, 4 * 1024);
+                if (memcmp(b, c, sizeof b)) { ok = false; break; }
+            }
+    }
+    Grid4 = g;
+    return ok;
+}
+
 // display modes 2 and 3: the conversion to the 18-bit format fused with WriteLine
 static void OutputDisplayNeon(u32* dst, const u16* display, u16 brightness)
 {
@@ -530,6 +697,7 @@ static void OutputDisplayNeon(u32* dst, const u16* display, u16 brightness)
 }
 #else
 static bool Grid4SelfTest() { return true; }   // (the portable paths apply the tables byte by byte: GridPx)
+static bool Rgb565SelfTest() { return true; }  // (the portable paths pack the 32-bit output: Pack565)
 #endif
 
 // master brightness and colour expansion in one pass
@@ -733,8 +901,60 @@ void BananaRenderer::EmitAN(u32* dst, u32 dispcnt, u16 brightness, const u16* di
         ZipNLine(dst + w * r, src + Sc * r, Sc, r == Sc - 1);
 }
 
+// kms.rgb565 (p16, render.scale 4 only): dst takes RGB565 pixels: the NEON writers pack them directly, everything
+// else is the 32-bit line packed (Pack565: the same pixels)
+void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display, bool p16)
+{
+    if (!p16)
+    {
+        EmitA32(dst, dispcnt, brightness, display);
+        return;
+    }
+    u16* d = (u16*)dst;
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1)
+    {
+        auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
+        if (a.HiLines == 1)
+        {
+            WriteRep4P(d, Output2D[0], brightness);
+            return;
+        }
+        const u32* src[16];
+        src[0] = Output2D[0];
+        for (int k = 1; k < 16; k++) src[k] = a.HiOut[k - 1];
+        for (int r = 0; r < 4; r++)
+            WriteZip4P(d + 1024 * r, src + 4 * r, brightness);
+        return;
+    }
+#endif
+    alignas(16) u32 t[4 * 1024];
+    EmitA32(t, dispcnt, brightness, display);
+    PackRow565(d, t, 4 * 1024);
+}
+
+void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src, bool p16)
+{
+    if (!p16)
+    {
+        EmitB32(dst, dispcnt, brightness, src);
+        return;
+    }
+    u16* d = (u16*)dst;
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    if (Banana2DFast && ((dispcnt >> 16) & 0x1))
+    {
+        WriteRep4P(d, src ? src : Output2D[1], brightness);
+        return;
+    }
+#endif
+    alignas(16) u32 t[4 * 1024];
+    EmitB32(t, dispcnt, brightness, src);
+    PackRow565(d, t, 4 * 1024);
+}
+
 // unit A's line: at 2x its four composited quarters when the line showed the 3D layer (HiLines 4), else doubled
-void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* display)
+void BananaRenderer::EmitA32(u32* dst, u32 dispcnt, u16 brightness, const u16* display)
 {
     if (!Quarter)
     {
@@ -774,7 +994,7 @@ void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* dis
     ZipLine(dst + 512, q[2], q[3]);
 }
 
-void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src)
+void BananaRenderer::EmitB32(u32* dst, u32 dispcnt, u16 brightness, const u32* src)
 {
     if (!Quarter)
     {
@@ -797,8 +1017,15 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
     else DoubleLine(dst, t);
 }
 
-void BananaRenderer::Fill(u32* dst, u32 val)
+void BananaRenderer::Fill(u32* dst, u32 val, bool p16)
 {
+    if (p16)   // kms.rgb565 (4x): 4 rows of 1024
+    {
+        const u16 v = Pack565(val);
+        u16* d = (u16*)dst;
+        for (int i = 0; i < 4 * 1024; i++) d[i] = v;
+        return;
+    }
     if (Quarter && NQ == 16 && Grid4)   // kms.grid_cpu: a 4x line is 4 rows of 1024
     {
         const u32 c = GridPx(val, 0), l = GridPx(val, 1);
@@ -864,14 +1091,14 @@ void BananaRenderer::DrawScanline(u32 line)
         {
             static_cast<BananaRenderer2D&>(*Rend2D_A).DrawScanlineFrom(job.Line, job.Regs[0], job.Q3D[0], Quarter ? job.Q3D : nullptr);
             if (job.ScreensEnabled)
-                EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
+                EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr, job.Px16);
             else
-                Fill(job.DstA, 0xFF000000);
+                Fill(job.DstA, 0xFF000000, job.Px16);
             Output3D = line3d;
             DoCapture(job.Line);
         }
         else
-            Fill(job.DstA, job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000);
+            Fill(job.DstA, job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000, job.Px16);
     }
     else if (GPU.CaptureEnable && job.Line < CaptureHeight())
     {
@@ -927,6 +1154,7 @@ void BananaRenderer::PrepareScanlineJob(Job& job, u32 line, u32*& line3d)
     job.BaseA = Out[GPU.ScreenSwap ? 0 : 1];
     job.BaseB = Out[GPU.ScreenSwap ? 1 : 0];
     job.Row = line;
+    job.Px16 = Out16;
     job.ScreensEnabled = GPU.ScreensEnabled;
 
     // the position used for drawing operations is based on VCOUNT
@@ -1021,13 +1249,13 @@ void BananaRenderer::DrawScanlineInPlace(u32 line)
 
         if (GPU.ScreensEnabled)
         {
-            EmitA(dstA, GPU.GPU2D_A.DispCnt, GPU.MasterBrightnessA, DisplaySource(GPU, line));
-            EmitB(dstB, GPU.GPU2D_B.DispCnt, GPU.MasterBrightnessB);
+            EmitA(dstA, GPU.GPU2D_A.DispCnt, GPU.MasterBrightnessA, DisplaySource(GPU, line), Out16);
+            EmitB(dstB, GPU.GPU2D_B.DispCnt, GPU.MasterBrightnessB, nullptr, Out16);
         }
         else
         {
-            Fill(dstA, 0xFF000000);
-            Fill(dstB, 0xFF000000);
+            Fill(dstA, 0xFF000000, Out16);
+            Fill(dstB, 0xFF000000, Out16);
         }
 
         if (GPU.CaptureEnable)
@@ -1037,8 +1265,8 @@ void BananaRenderer::DrawScanlineInPlace(u32 line)
     {
         // scanlines outside VCOUNT 0..191 are white (black if the screens are off)
         u32 c = GPU.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000;
-        Fill(dstA, c);
-        Fill(dstB, c);
+        Fill(dstA, c, Out16);
+        Fill(dstB, c, Out16);
     }
 }
 
@@ -1245,23 +1473,48 @@ void BananaRenderer::ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRender
         OutForget(job.BaseA, job.Row);   // (unit A's row, drawn here or on the emulator's thread)
         if (job.ScreensEnabled)
         {
-            if (doA) EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
+            if (doA)
+            {
+                EmitA(job.DstA, job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr, job.Px16);
+                if (Banana2DVerify && job.Px16)
+                {
+                    // (render.2d_verify with kms.rgb565: the line as the 32-bit writers make it, packed, against the
+                    // RGB565 one in the buffer)
+                    static thread_local std::unique_ptr<u32[]> r32;
+                    static thread_local std::unique_ptr<u16[]> r16;
+                    if (!r32) { r32 = std::make_unique<u32[]>(4 * 1024); r16 = std::make_unique<u16[]>(4 * 1024); }
+                    EmitA32(r32.get(), job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
+                    PackRow565(r16.get(), r32.get(), 4 * 1024);
+                    Banana2DVerifyCount(4, memcmp(r16.get(), job.DstA, 4 * 1024 * sizeof(u16)) == 0);
+                }
+            }
             if (!OutSkipB(job, srcB))
-                EmitB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB, srcB);
+            {
+                EmitB(job.DstB, job.Regs[1].DispCnt, job.BrightnessB, srcB, job.Px16);
+                if (Banana2DVerify && job.Px16)
+                {
+                    static thread_local std::unique_ptr<u32[]> r32;
+                    static thread_local std::unique_ptr<u16[]> r16;
+                    if (!r32) { r32 = std::make_unique<u32[]>(4 * 1024); r16 = std::make_unique<u16[]>(4 * 1024); }
+                    EmitB32(r32.get(), job.Regs[1].DispCnt, job.BrightnessB, srcB);
+                    PackRow565(r16.get(), r32.get(), 4 * 1024);
+                    Banana2DVerifyCount(4, memcmp(r16.get(), job.DstB, 4 * 1024 * sizeof(u16)) == 0);
+                }
+            }
             else if (Banana2DVerify)
             {
                 // (render.2d_verify: the row as EmitB would write it, against what the buffer holds)
                 static thread_local std::unique_ptr<u32[]> ref;
                 if (!ref) ref = std::make_unique<u32[]>(256 * 16);
-                EmitB(ref.get(), job.Regs[1].DispCnt, job.BrightnessB, srcB);
-                Banana2DVerifyCount(2, memcmp(ref.get(), job.DstB, 256 * NQ * sizeof(u32)) == 0);
+                EmitB(ref.get(), job.Regs[1].DispCnt, job.BrightnessB, srcB, job.Px16);
+                Banana2DVerifyCount(2, memcmp(ref.get(), job.DstB, 256 * NQ * (job.Px16 ? sizeof(u16) : sizeof(u32))) == 0);
             }
         }
         else
         {
-            if (doA) Fill(job.DstA, 0xFF000000);
+            if (doA) Fill(job.DstA, 0xFF000000, job.Px16);
             OutForget(job.BaseB, job.Row);
-            Fill(job.DstB, 0xFF000000);
+            Fill(job.DstB, 0xFF000000, job.Px16);
         }
     }
     else
@@ -1269,8 +1522,8 @@ void BananaRenderer::ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRender
         u32 c = job.ScreensEnabled ? 0xFFFFFFFF : 0xFF000000;
         OutForget(job.BaseA, job.Row);
         OutForget(job.BaseB, job.Row);
-        if (doA) Fill(job.DstA, c);
-        Fill(job.DstB, c);
+        if (doA) Fill(job.DstA, c, job.Px16);
+        Fill(job.DstB, c, job.Px16);
     }
 }
 
@@ -1633,6 +1886,7 @@ void BananaRenderer::SwapBuffers()
     }
     Front[0] = Out[0];
     Front[1] = Out[1];
+    Front16 = Out16;
     SoftRenderer::SwapBuffers();
 }
 
