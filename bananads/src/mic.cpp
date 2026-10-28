@@ -103,6 +103,12 @@ int Mic::read(int16_t* out, int max) {
     int got = 0;
     {
         std::lock_guard<std::mutex> l(mu_);
+        // At most kMaxLag samples between the mic and the game: older ones are dropped. The capture runs from the
+        // start (the gate learns the room for 5 s) while the game reads nothing yet, and afterwards the game reads
+        // as fast as the mic records, so that first pile stayed: the ring (1.37 s) filled, and every game heard
+        // the mic ~1.3 s late (measured on the RG DS Plus in Phantom Hourglass; BananaOS #14's "delay")
+        const size_t lag = (wr_ + ring_.size() - rd_) % ring_.size();
+        if (lag > (size_t)kMaxLag) rd_ = (wr_ + ring_.size() - kMaxLag) % ring_.size();
         while (got < max && rd_ != wr_) {
             out[got++] = ring_[rd_];
             rd_ = (rd_ + 1) % ring_.size();

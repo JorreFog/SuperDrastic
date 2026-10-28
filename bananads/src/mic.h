@@ -31,6 +31,7 @@ struct MicTuning {
 class Mic {
 public:
     static constexpr double kDSRate = 47743.4659091;  // the rate melonDS's mic reads at
+    static constexpr int kMaxLag = 4096;  // the most samples queued for the game (~86 ms: a capture block and some)
 
     explicit Mic(const MicTuning& t = MicTuning()) : t_(t), ring_(1 << 16) {}
 
@@ -38,6 +39,10 @@ public:
     void push(const int16_t* pcm, int n, int rate);  // capture: any rate, mono
     void note_output(const int16_t* pcm, int n);      // what went to the speakers (stereo interleaved is fine)
     int read(int16_t* out, int max);                  // emulator: up to max samples at kDSRate
+    int backlog() {  // samples queued for the game (its lag behind the mic, at kDSRate)
+        std::lock_guard<std::mutex> l(mu_);
+        return (int)((wr_ + ring_.size() - rd_) % ring_.size());
+    }
 
     // The in-game menu's "Blow" (and a hotkey): the game hears a blow for ms milliseconds, mic or not.
     void blow(int ms) { blow_left_.store((int)(ms * kDSRate / 1000)); }

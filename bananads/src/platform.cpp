@@ -279,7 +279,9 @@ int Mic_ReadInput(s16* data, int maxlength, void* userdata) {
     mic_reads += n;
     const auto now = std::chrono::steady_clock::now();
     if (now - mic_since >= std::chrono::seconds(5)) {
-        Log(LogLevel::Info, "[mic] 5 s: %d samples to the game, loudest %.3f\n", mic_reads, mic_peak / 32768.0);
+        const int lag = Emu::from(userdata)->mic().backlog();  // how far behind the mic the game hears
+        Log(LogLevel::Info, "[mic] 5 s: %d samples to the game, loudest %.3f, %.0f ms behind\n", mic_reads,
+            mic_peak / 32768.0, lag * 1000.0 / bananads::Mic::kDSRate);
         mic_peak = mic_reads = 0;
         mic_since = now;
     }

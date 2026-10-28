@@ -162,10 +162,23 @@ static void test_mic() {
         MicTuning t;
         t.threshold = 0;
         m.set_tuning(t);
+        std::vector<int16_t> in(1024, 1000), got(60000);
+        int n = 0;
+        for (int i = 0; i < 43; i++) {  // a second, read as it comes (as the emulator does)
+            m.push(in.data(), (int)in.size(), 44100);
+            n += m.read(got.data(), (int)got.size());
+        }
+        CHECK(std::abs(n - (int)(44032 * Mic::kDSRate / 44100)) < 64);
+    }
+    {
+        Mic m;  // a second recorded while the game reads nothing: it then gets the newest kMaxLag samples, not
+        MicTuning t;  // the whole second late
+        t.threshold = 0;
+        m.set_tuning(t);
         std::vector<int16_t> in(44100, 1000), got(60000);
         m.push(in.data(), (int)in.size(), 44100);
-        int n = m.read(got.data(), (int)got.size());
-        CHECK(std::abs(n - (int)(44032 * Mic::kDSRate / 44100)) < 64);  // the last partial block waits
+        CHECK(m.read(got.data(), (int)got.size()) == Mic::kMaxLag);
+        CHECK(m.read(got.data(), (int)got.size()) == 0);
     }
 }
 
