@@ -40,6 +40,7 @@ struct Alsa {
     bool servo;        // audio.servo: the rate servo (below)
     bool stretch;      // audio.stretch: the servo stretches time (pitch kept), not the resampler's rate
     int servo_target;  // audio.servo_target: the SPU backlog it holds, in frames
+    int first_prime;   // the backlog the sound first waits for (kms.lowlat: twice the target, below)
     bool stats;        // audio.stats: a line every 10 s (short chunks, the servo's range)
     std::string dump;  // audio.dump: <path>.in.raw (the game's sound) and <path>.out.raw (what ALSA plays), 48 kHz s16 stereo
     bool mic_idle;     // mic.idle_stop: the capture stopped while nothing listens (below)
@@ -126,6 +127,7 @@ static void out_thread(Alsa* a) {
     long win_made = 0;
     int win_spu = 0;
     bool primed = false;  // the buffer filled to its target once since the sound started (or came back from a pause)
+    bool ever_primed = false;
     Stretch st;
     std::vector<int16_t> fresh(4096 * 2);
     FILE* dump_in = a->dump.empty() ? nullptr : fopen((a->dump + ".in.raw").c_str(), "wb");
@@ -170,7 +172,7 @@ static void out_thread(Alsa* a) {
             if (dump_in && pulled > 0) fwrite(fresh.data(), 4, pulled, dump_in);
             backlog += st.pending() - Stretch::kLookahead;
             // at the start and after a pause: silence until the buffer is full, then it plays
-            if (!primed && a->servo && backlog >= a->servo_target) primed = true;
+            if (!primed && a->servo && backlog >= (ever_primed ? a->servo_target : a->first_prime)) primed = ever_primed = true;
             got = primed || !a->servo ? st.pull(buf.data(), chunk, tempo) : 0;
         } else {
             got = pulled = a->emu->audio(buf.data(), chunk);
@@ -377,6 +379,12 @@ Alsa* alsa_start(Emu& emu, const Config& cfg) {
     a->stretch = a->servo && cfg.flag("audio.stretch", true);
     // 60 ms with the stretch (a short stall plays through untouched), 16 ms for the old servo
     a->servo_target = std::max(256, (int)cfg.num("audio.servo_target", a->stretch ? 2880 : 768));
+    // kms.lowlat: the sound starts once twice the target is made (60 ms more at the start, trimmed by the rate servo's
+    // +0.5% over ~12 s). The start's frames run unevenly (the panels taken over, the shader made and checked at the
+    // first frame: 20-33 ms frames on the RG DS Plus), and with low latency nothing runs ahead to cover them: the
+    // backlog started at the target ran dry within half a second in every Mario Kart DS resume there, and the servo
+    // stretched the tempo to 0.87-0.92 for ~1 s
+    a->first_prime = cfg.str("kms.lowlat", "off") != "off" ? 2 * a->servo_target : a->servo_target;
     a->stats = cfg.flag("audio.stats", false);
     a->close_child = cfg.flag("audio.close_child", true);
     a->mic_idle = cfg.flag("mic.idle_stop", true);
