@@ -8,7 +8,7 @@
 // counted by the frontend's emulator thread: each whole frame once, stalls left out) and the frames emulated. Any
 // late frame, or under 58.5 emulated frames a second over the last second while the game runs: one step up at once
 // (two for three late frames or more), and the clock it was at is banned for 2 min (doubling per further strike, up
-// to 30 min), remembered per game and scale in <cpugov.dir>/<rom>.<1x|2x>. Clean (no late frame, full speed) for
+// to 30 min), remembered per game and scale in <cpugov.dir>/<rom>.<1x|2x> (kms.lowlat: <rom>.<..>.lowlat). Clean (no late frame, full speed) for
 // DOWN_AFTER windows in a row: one step down, unless that clock is banned. Two minutes clean at a clock or lower
 // forgive it one strike. A savestate boosts to the top clock while it is written (cpugov_boost).
 //
@@ -54,7 +54,11 @@ static bool use_repeats = true;  // cpugov.repeats
 // (at most the last ~10 s), scaled to the lower clock, stays under this many frames (16.67 ms). Golden Sun: Dark
 // Dawn's town alternates 26-29 ms and 11 ms frames on the RG DS Plus at 1992 MHz: the panels show every frame there
 // (the queue evens out one late frame), but a step down made each heavy frame miss its refresh. 0: no check
+// With kms.lowlat on the default is 0.8 (13.3 ms): there's no queue to even a heavy frame out, and every step down
+// whose heavy frames went over the lead showed as repeats and struck the clock (Golden Sun: Dark Dawn on the RG DS
+// Plus: 1608 MHz late within 2 s, 1800 late, then 1992; Mario Kart DS late at 1416 there and at 1104 on the RG DS)
 static double tail_limit = 1.4;
+static std::string mem_tag;  // kms.lowlat: ".lowlat" after the memory's file name (its own clocks, its own strikes)
 // cpugov.sum_limit (cores; auto: 3.3 at render.scale 3 and 4, off at 1x/2x): at 4x the frame is drawn by every thread
 // together (Gengis's workers, the 2D thread, the emulator's), so the busiest thread alone doesn't say whether a lower
 // clock fits: all of BananaDS's threads' load in the clean windows, scaled to the lower clock, has to stay under this
@@ -173,7 +177,7 @@ static void mem_load(int scale) {
     mem_path.clear();
     if (!mem_on || mem_rom.empty()) return;
     mkdir(mem_dir.c_str(), 0755);
-    mem_path = mem_dir + "/" + mem_rom + (scale > 3 ? ".4x" : scale > 2 ? ".3x" : scale > 1 ? ".2x" : ".1x");
+    mem_path = mem_dir + "/" + mem_rom + (scale > 3 ? ".4x" : scale > 2 ? ".3x" : scale > 1 ? ".2x" : ".1x") + mem_tag;
     std::string said;
     if (FILE* f = fopen(mem_path.c_str(), "r")) {
         int khz, k;
@@ -464,7 +468,9 @@ void cpugov_start(const Config& cfg, GovFeed* feed) {
     window_ms = std::max(10, (int)cfg.num("cpugov.window_ms", 250));
     mem_on = cfg.flag("cpugov.memory", true);
     use_repeats = cfg.flag("cpugov.repeats", true);
-    tail_limit = atof(cfg.str("cpugov.tail", "1.4").c_str());
+    const bool lowlat = cfg.str("kms.lowlat", "off") != "off";
+    tail_limit = atof(cfg.str("cpugov.tail", lowlat ? "0.8" : "1.4").c_str());
+    mem_tag = lowlat ? ".lowlat" : "";
     sum_cfg = cfg.str("cpugov.sum_limit", "auto");
     std::string gov = rd_str(pol("scaling_governor").c_str());
     if (gov != "performance") {
