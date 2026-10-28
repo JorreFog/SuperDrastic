@@ -318,14 +318,19 @@ static int pacing_latch = 1, tfd = -1;
  *    deadline, latch_hi()); one that arrives after it waits for the next cycle's deadline, where a newer frame that
  *    came meanwhile replaces it (committing it at once would make the next, on-time frame wait behind its flip, and
  *    every frame after it: a refresh more latency for good);
- *  - DSFLIP_LOWLAT_ALIGN (on): DraStic is held in its present until its next frame, started then, will just make the
+ *  - DSFLIP_LOWLAT_ALIGN=1 (off by default, see lowlat_align): DraStic is held in its present until its next frame, started then, will just make the
  *    next deadline (the frame's measured time from that release, a decaying maximum, plus a pad that grows on a missed
  *    vblank). DraStic reads its buttons when it starts a frame, so they're read as late as the panels allow. The hold
  *    lets DraStic go early while its sound runs short (as the queue's hold: audio_floor_us) and never holds while it
  *    isn't paced by its sound (fast-forward).
  * Frames that come unevenly (2x) show as drops and repeats that the queue would have hidden: the price of no queue. */
 static int pacing_lowlat;               /* DSFLIP_LOWLAT=1 */
-static int lowlat_align = 1;            /* DSFLIP_LOWLAT_ALIGN=0: no hold (only the queue and the latch out) */
+/* DSFLIP_LOWLAT_ALIGN=1: the hold (below). Off by default since 0.5.0: DraStic keeps only ~25 ms of sound ahead of
+ * the pump at its present (15 at least), the hold wanted 13-19 ms on average, and the sound's floor (8-25 ms) cut
+ * nearly every hold short: the frame came after its deadline anyway and waited a refresh more, and the next hold
+ * aimed past that. Mario Kart DS on the RG DS: 6-17 repeats and 26-28 drops a minute with it, 2 and 4 without,
+ * for ~5 ms less present -> screen (26 vs 33 ms; off: 53) */
+static int lowlat_align = 0;
 static volatile int lowlat_ff;          /* DraStic's fast-forward is on (its control toggled it: see lowlat_saw_event) */
 static int ff_button = -1;              /* DraStic's FAST_FORWARD control, a joystick button (resume.c), -1 if none */
 static long long ll_work;               /* DraStic's time from a release to its next present (us), decaying maximum */
@@ -336,6 +341,7 @@ static unsigned long ll_fseq;           /* presents so far (dbuf.fseq: which pre
 static long long fs_tp[64];             /* each present's time (us), by fseq % 64: present -> on screen, any mode */
 static long long st_p2s_sum, st_p2s_max; static int st_p2s_n;
 static int st_ll_ahead;                 /* holds that waited a refresh more for a frame still waiting ahead */
+static long long st_ll_snd_sum, st_ll_snd_min = 1LL << 40, st_ll_floor_sum, st_ll_want_sum; static int st_ll_snd_n, st_ll_want_n;   /* (the [lowlat] line: DraStic's sound at a hold, the floor, the hold wanted) */
 static int st_ll_hold, st_ll_cut, st_ll_late, st_ll_skip; static long long st_ll_hold_us, st_ll_lead_sum; static int st_ll_lead_n;
 static long long vbl_ref;               /* a recent top-panel vblank (flip timestamp, CLOCK_MONOTONIC us) */
 static double period = 16666.7;         /* measured refresh period, us */
@@ -915,6 +921,10 @@ static void *presenter(void *a) {
                     st_ll_hold ? st_ll_hold_us / 1000.0 / st_ll_hold : 0.0, st_ll_ahead, st_ll_cut, st_ll_skip, ll_work / 1000.0,
                     (ll_pad + (shader_on ? ll_shade : 0)) / 1000.0, lowlat_ff ? ", fast-forward on" : "");
                 st_ll_hold = st_ll_cut = st_ll_late = st_ll_skip = st_ll_lead_n = st_ll_ahead = 0; st_ll_hold_us = st_ll_lead_sum = 0;
+                if (st_ll_snd_n) LOG("[lowlat] DraStic's sound ahead at its present: %.1f ms on average, %.1f at least; the floor %.1f ms; a hold wanted %.1f ms on average (%d)\n",
+                                     st_ll_snd_sum / 1000.0 / st_ll_snd_n, st_ll_snd_min / 1000.0, st_ll_floor_sum / 1000.0 / st_ll_snd_n,
+                                     st_ll_want_n ? st_ll_want_sum / 1000.0 / st_ll_want_n : 0.0, st_ll_want_n);
+                st_ll_snd_n = st_ll_want_n = 0; st_ll_snd_sum = st_ll_floor_sum = st_ll_want_sum = 0; st_ll_snd_min = 1LL << 40;
                 if (!st_miss && ll_pad > 500) ll_pad = fmax(500, ll_pad - 250);   /* back after a clean 10 s */
             }
             if (st_p2s_n) LOG("[latency] DraStic's present -> on screen: %.1f ms on average, %.1f at most (%d frames)\n",
@@ -1425,7 +1435,7 @@ __attribute__((constructor)) static void init(void) {
              * of latency */
             pacing_lowlat = 1; pacing_latch = 1; queue_depth = 1; queue_wait_us = 0;
             { const char *lq = getenv("DSFLIP_LOWLAT_QUEUE"); if (lq && *lq) queue_depth = atoi(lq) < 0 ? 0 : atoi(lq) > 2 ? 2 : atoi(lq); }
-            const char *al = getenv("DSFLIP_LOWLAT_ALIGN"); if (al && *al == '0') lowlat_align = 0;
+            const char *al = getenv("DSFLIP_LOWLAT_ALIGN"); if (al && *al) lowlat_align = *al == '1';
             ff_button = resume_control_button("FAST_FORWARD");
             /* the sound a little closer too: the pump's ring at 1024 frames (23 ms) instead of 1536, ALSA's buffer
              * 20 ms instead of 30 (unless set). And DraStic keeps 60 ms of sound made ahead instead of its 35: the hold
@@ -1720,10 +1730,12 @@ static void lowlat_hold(long long tp, unsigned long mine) {
     unlock(&mu);
     long long lead = audio_drastic_lead_us();
     if (!learned || lowlat_ff || lead >= 120000) { if (learned) st_ll_skip++; return; }
+    st_ll_snd_n++; st_ll_snd_sum += lead; if (lead < st_ll_snd_min) st_ll_snd_min = lead; st_ll_floor_sum += audio_floor_us();
     /* this frame's own deadline (the first at or after it came), then the next cycle's */
     double own = (double)tp - ph + hi + (ph > hi ? per : 0) + ahead * per;
     long long target = (long long)(own + per - pad) - work, now = now_us();
     if (target <= now) { ll_release = now; return; }       /* no time to spare: on at once (and a sample) */
+    st_ll_want_sum += target - now; st_ll_want_n++;
     long long left = lead - (long long)audio_floor_us();   /* until its sound would run short */
     if (left <= 0) { st_ll_cut++; return; }                 /* (no sample: it may wait for its sound now) */
     long long until = target, cut = 0;
