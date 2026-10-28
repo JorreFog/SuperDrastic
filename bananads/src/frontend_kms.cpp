@@ -292,7 +292,15 @@ struct Display {
     std::atomic<long long> extra_us{0};
     // kms.lowlat_trace=<file>: each frame's times (us, CLOCK_MONOTONIC) in a ring, written at the quit: started,
     // published, aimed deadline, taken by the presenter, ready, committed, on screen (the pair's first flip event)
-    struct Trace { long long start, pub, aim, take, ready, commit, flip, ftop, fbot; };
+    struct Trace { long long start, pub, aim, take, ready, commit, flip, ftop, fbot; int ab, tempo, ra; };
+    int ra_now = 0;                      // (the trace) the frame being published was run this many frames ahead
+#ifdef BANANADS_ALSA
+    static int trace_ab() { return g_audio_backlog.load(std::memory_order_relaxed); }
+    static int trace_tempo() { return g_audio_tempo.load(std::memory_order_relaxed); }
+#else
+    static int trace_ab() { return 0; }
+    static int trace_tempo() { return 1000; }
+#endif
     std::vector<Trace> trace;
     unsigned long seq_next = 0, seq[NB] = {};
     Trace* tr(int s) { return trace.empty() ? nullptr : &trace[seq[s] % trace.size()]; }
@@ -684,7 +692,7 @@ struct Display {
                 const long long t = now_us();
                 if (t - start > 0 && t - start < 3 * (long long)period_us) decay_max(emu_us, t - start);
                 seq[s] = seq_next++;
-                if (Trace* x = tr(s)) *x = Trace{start, t, aim, 0, 0, 0, 0, 0, 0};
+                if (Trace* x = tr(s)) *x = Trace{start, t, aim, 0, 0, 0, 0, 0, 0, trace_ab(), trace_tempo(), ra_now};
             }
             has_fence[s] = fenced;
             fence[s] = f;
@@ -2006,6 +2014,7 @@ int run_kms(Emu& emu, const Config& cfg) {
             uint32_t fence = 0;
             const bool fenced = emu.frame_fence(fence);
             feed.frame_time(std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - work0).count());
+            dp.ra_now = shown_ahead ? ra_n : 0;
             dp.publish(s, depth, fenced, fence, lowlat || !dp.trace.empty() ? t_start : 0, lowlat && !ff ? aim : 0, aim_slips);
             // kms.lowlat: the next frame aimed at the next deadline, started its measured time (the emulator's + the
             // presenter's, + kms.lowlat_pad_us; at most two refreshes) before it, or at once if that has passed. Never
@@ -2359,11 +2368,11 @@ int run_kms(Emu& emu, const Config& cfg) {
     start_mark("quit: 2d");
     if (!dp.trace.empty()) {  // kms.lowlat_trace: the frames' times, oldest first
         if (FILE* f = fopen(cfg.str("kms.lowlat_trace", "").c_str(), "w")) {
-            fprintf(f, "# seq start pub aim take ready commit flip ftop fbot (us, CLOCK_MONOTONIC; 0: not reached)\n");
+            fprintf(f, "# seq start pub aim take ready commit flip ftop fbot (us, CLOCK_MONOTONIC; 0: not reached) audio_backlog tempo_x1000 ahead\n");
             const unsigned long n = dp.trace.size(), first = dp.seq_next > n ? dp.seq_next - n : 0;
             for (unsigned long q = first; q < dp.seq_next; q++) {
                 const Display::Trace& x = dp.trace[q % n];
-                fprintf(f, "%lu %lld %lld %lld %lld %lld %lld %lld %lld %lld\n", q, x.start, x.pub, x.aim, x.take, x.ready, x.commit, x.flip, x.ftop, x.fbot);
+                fprintf(f, "%lu %lld %lld %lld %lld %lld %lld %lld %lld %lld %d %d %d\n", q, x.start, x.pub, x.aim, x.take, x.ready, x.commit, x.flip, x.ftop, x.fbot, x.ab, x.tempo, x.ra);
             }
             fclose(f);
         }

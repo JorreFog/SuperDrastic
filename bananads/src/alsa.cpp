@@ -27,6 +27,7 @@ using melonDS::Platform::LogLevel;
 namespace bananads {
 
 static std::mutex g_open_mu;
+std::atomic<int> g_audio_backlog{0}, g_audio_tempo{1000};
 
 struct Alsa {
     Emu* emu;
@@ -184,7 +185,7 @@ static void out_thread(Alsa* a) {
             if (dry > 8) primed = false;
             // (sampled every 5 ms, a chunk's time: partial writes below make pulls more frequent while it's short)
             const bool tick = now - last_tick_us >= 5333;
-            if (tick) { last_tick_us = now; hist[hn++ % 6] = backlog; }
+            if (tick) { last_tick_us = now; hist[hn++ % 6] = backlog; g_audio_backlog.store(backlog, std::memory_order_relaxed); g_audio_tempo.store((int)std::lround(tempo * 1000), std::memory_order_relaxed); }
             // the game's speed: what the SPU made (taken out, plus its buffer's growth) against what full speed makes
             if (hold) {
                 win_us = 0;
