@@ -248,6 +248,7 @@ struct Display {
     std::atomic<long long> emu_us{0};    // the emulator's thread's time for a frame (us), a decaying maximum
     std::atomic<long long> pres_us{0};   // the presenter's: taken -> ready for the panels (us), a decaying maximum
     long long first_ev = 0;              // the first flip event of the commit in flight
+    long long commit_us = 0;             // when the commit in flight was made
     long long commit_aim = 0;            // the deadline the commit in flight aimed at, if it went before it (0: none)
     long ll_late = 0, ll_miss = 0, ll_n = 0;  // statistics: frames after their deadline, commits that missed it, on time
     long ll_behind = 0;                  // ...frames shown after the vblank they aimed at (refreshes)
@@ -270,6 +271,15 @@ struct Display {
         // between the pair's two flip events the committed frame is on screen already (at the first one's vblank):
         // counted as waiting, the next frame was aimed a refresh too late (a repeat each time, 16-27 a minute)
         if (pending == 1 && committed >= 0) { n--; shown = std::max(shown, first_ev ? first_ev : vbl_top); }
+        // ...and so it is once the vblank after its commit has passed, before the flip events have come (they come
+        // ~0.1-0.5 ms after the vblank): a frame published in that gap counted the one on screen as waiting and was
+        // aimed a refresh later, a repeat and a frame of sound lost each time (RG DS, Mario Kart DS: 5 of 6 repeats
+        // a minute, the sound's backlog run dry and stretched to 0.90). (A commit 1 ms before a vblank makes it.)
+        else if (pending == 2 && committed >= 0 && commit_us && vbl_top) {
+            const double k = std::ceil((double)(commit_us + 1000 - vbl_top) / period_us);   // (the top's grid; the
+            const long long v = vbl_top + (long long)(std::max(1.0, k) * period_us + std::min(0.0, bot_off));  // earlier panel's)
+            if (now >= v) { n--; shown = std::max(shown, v); }
+        }
         if (n <= 0 || !shown) return 0;
         const double k = std::ceil((double)(now - vbl_top) / period_us);   // the next vblank after now
         const long long next_vbl = vbl_top + (long long)(std::max(1.0, k) * period_us);
@@ -867,6 +877,7 @@ struct Display {
         committed_out[1] = out[1];
         pending = 2;
         const long long t = now_us();
+        commit_us = t;
         commit_aim = t <= aim_us[s] ? aim_us[s] : 0;   // (one after its deadline is a late frame, not a missed commit)
         if (Trace* x = tr(s)) x->commit = t;
         return true;
