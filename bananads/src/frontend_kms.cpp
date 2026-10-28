@@ -1881,15 +1881,22 @@ int run_kms(Emu& emu, const Config& cfg) {
         long long aim = 0;
         long aim_slips = 0, aim_slips_next = 0;  // Display::slip_total as the aim was made
         const long long pad = std::max(0L, cfg.num("kms.lowlat_pad_us", 1000));
-        // run-ahead: the real frame's picture goes here (direct drawing), the frame ahead's into the slot; off for a
-        // while (5, 10, 20, then 60 s) when it doesn't fit the refresh: 20 of the last 32 frames over it
+        // run-ahead: the real frame's picture goes here (direct drawing), the frame ahead's into the slot. It runs
+        // only while it fits the refresh: the frame's own time (a decaying maximum, measured every frame, ahead or
+        // not) times 1 + n, plus the snapshot's save and load, under 85% of a refresh. A frame that then takes more
+        // than 90% of one, twice in four: off for a while (5, 10, 20, then 60 s; back to 5 after a clean minute).
+        // Before: tried until 20 of the last 32 frames were over a refresh, each try a burst of ~20 repeats (Mario
+        // Kart DS on the RG DS: 30-48 ms frames, 107 repeats a minute, the sound stretched down to 0.78)
         std::vector<uint32_t> ra_scratch[2];
         if (ra_n && dp.direct)
             for (auto& v : ra_scratch) v.assign((size_t)dp.fw * dp.fh, 0);
-        uint32_t ra_over = 0;            // the last 32 frames: over the refresh (a bit each)
-        long long ra_off_until = 0, ra_backoff = 5000000;
-        long ra_frames = 0, ra_suspends = 0;
+        uint32_t ra_over = 0;            // the last frames run ahead: over 90% of the refresh (a bit each)
+        long long ra_off_until = 0, ra_backoff = 5000000, ra_clean_since = 0;
+        long ra_frames = 0, ra_suspends = 0, ra_unfit = 0, ra_measured = 0;
         double ra_ms = 0, ra_snap_ms = 0;
+        double ra_plain = 0;             // the frame's own time (ms, run_frame alone), a decaying maximum (~2 s)
+        double ra_snap = 0;              // the snapshot's save + load (ms), a decaying maximum (0 until measured)
+        bool ra_said_unfit = false;
         long long ra_t = now_us();
         bool grid_now = false;   // kms.grid_cpu: the 2D engine draws the grid into the frames
         bool asked16 = false, on16 = false;   // kms.rgb565: asked of the 2D engine, and in effect
@@ -1977,7 +1984,18 @@ int run_kms(Emu& emu, const Config& cfg) {
             dp.is16[s] = on16;
             const auto work0 = std::chrono::steady_clock::now();  // (cpugov.tail: the frame's work, to its publish)
             const long long t_start = now_us();
-            const bool ahead = ra_n && !ff && t_start >= ra_off_until && emu_frames > 60 && emu.runahead_ok();
+            bool ahead = ra_n && !ff && t_start >= ra_off_until && emu_frames > 60 && emu.runahead_ok();
+            if (ahead && ra_plain * (1 + ra_n) + ra_snap > dp.period_us * 0.00085) {
+                // (predicted not to fit: not tried; looked at again in 2 s)
+                ahead = false;
+                ra_off_until = t_start + 2000000;
+                ra_unfit++;
+                if (!ra_said_unfit) {
+                    ra_said_unfit = true;
+                    Log(LogLevel::Info, "[runahead] off here: a frame %.1f ms x %d + the snapshot %.1f ms is over 85%% of the refresh\n",
+                        ra_plain, 1 + ra_n, ra_snap);
+                }
+            }
             if (dp.direct) {
                 if (ahead && !ra_scratch[0].empty()) emu.draw_into(ra_scratch[0].data(), ra_scratch[1].data());
                 else if (on16) emu.draw_into(dp.map16(0, s), dp.map16(1, s));
@@ -1985,6 +2003,10 @@ int run_kms(Emu& emu, const Config& cfg) {
             }
             if (!emu_frames++) start_mark("first frame: start");
             emu.run_frame();
+            if (ra_n && emu_frames > 60) {   // (not the load's first frames; a stall isn't a frame's cost)
+                const double w = (now_us() - t_start) / 1000.0;
+                if (w < dp.period_us * 0.003) ra_plain = std::max(w, ra_plain * 0.995);
+            }
             if (emu_frames == 1) start_mark("first frame: emulated");
             ra_frame();  // RetroAchievements: this frame's memory (its pop-ups are drawn by the presenter)
             bool shown_ahead = false;
@@ -2001,18 +2023,27 @@ int run_kms(Emu& emu, const Config& cfg) {
                     if (dp.wait2d) emu.set_lazy_2d(true);
                 }
                 const long long t_end = now_us();
-                ra_over = ra_over << 1 | (t_end - t_start > (long long)(dp.period_us * 0.95));
-                if (shown_ahead) { ra_frames++; ra_ms += (t_end - t_start) / 1000.0; ra_snap_ms += emu.runahead_save_ms() + emu.runahead_load_ms(); }
-                if (__builtin_popcount(ra_over) >= 20) {
+                const bool over = t_end - t_start > (long long)(dp.period_us * 0.9);
+                ra_over = ra_over << 1 | over;
+                if (shown_ahead) {
+                    const double sn = emu.runahead_save_ms() + emu.runahead_load_ms();
+                    if (ra_measured++) ra_snap = std::max(sn, ra_snap * 0.995);   // (the first one allocates: 2-3x)
+                    ra_frames++; ra_ms += (t_end - t_start) / 1000.0; ra_snap_ms += sn;
+                }
+                if (over) ra_clean_since = 0;
+                else if (!ra_clean_since) ra_clean_since = t_end;
+                else if (t_end - ra_clean_since > 60000000) ra_backoff = 5000000;
+                if (__builtin_popcount(ra_over & 0xF) >= 2) {
                     ra_off_until = t_end + ra_backoff;
                     Log(LogLevel::Warn, "[runahead] doesn't fit the refresh here (%.1f ms a frame of %.1f): off for %lld s\n",
                         (t_end - t_start) / 1000.0, dp.period_us / 1000.0, ra_backoff / 1000000);
                     ra_backoff = std::min(60000000LL, ra_backoff * 2);
                     ra_over = 0;
                     ra_suspends++;
+                    ra_said_unfit = false;
                 } else if (t_end - ra_t >= 10000000 && ra_frames) {  // (a line every 10 s)
-                    Log(LogLevel::Info, "[runahead] %ld frames run %d ahead in %.0f s, %.1f ms a frame (%.1f the snapshot), %ld times off\n",
-                        ra_frames, ra_n, (t_end - ra_t) / 1e6, ra_ms / ra_frames, ra_snap_ms / ra_frames, ra_suspends);
+                    Log(LogLevel::Info, "[runahead] %ld frames run %d ahead in %.0f s, %.1f ms a frame (%.1f the snapshot), %ld times off, %ld frames not tried\n",
+                        ra_frames, ra_n, (t_end - ra_t) / 1e6, ra_ms / ra_frames, ra_snap_ms / ra_frames, ra_suspends, ra_unfit);
                     ra_frames = 0; ra_ms = ra_snap_ms = 0; ra_t = t_end;
                 }
             } else if (ra_n && ra_off_until && t_start >= ra_off_until) {
