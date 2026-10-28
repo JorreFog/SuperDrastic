@@ -3,6 +3,8 @@
 #include "gengis_renderer.h"
 #endif
 
+#include <dirent.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -235,11 +237,40 @@ static bool cia_parse(const uint8_t* d, size_t n, CiaContent& c) {
     return c.len >= 0x200 && c.off + c.len <= n && be32(rec + 8) == 0;
 }
 
-// the DSi's files, from the folder `bios` (BananaOS: /data/bios), named as melonDS's libretro core names them
-static std::string bios_file(const Config& cfg, const char* key, const char* name) {
+// a file in `dir` whose name is one of `names`, in any case ("DSI_bios9.bin" is "dsi_bios9.bin"), or "" when none
+static std::string find_named(const std::string& dir, std::initializer_list<const char*> names) {
+    DIR* d = opendir(dir.c_str());
+    if (!d) return "";
+    std::string hit;
+    while (dirent* e = readdir(d)) {
+        for (const char* n : names)
+            if (strcasecmp(e->d_name, n) == 0) hit = dir + "/" + e->d_name;
+        if (!hit.empty()) break;
+    }
+    closedir(d);
+    return hit;
+}
+
+// the DSi's files, from the folder `bios` (BananaOS: /data/bios), named as melonDS's libretro core names them, or as
+// the dumps and other emulators name them (DSi_bios9.bin, bios9i.bin, biosdsi9.rom), in any case, in that folder or
+// a folder inside it (a dump unpacked as it came: bios/DSi BIOS/DSI_bios9.bin). Users put them there under those
+// names and BananaDS, which looked for the one lowercase name only, ran the free BIOS: a white screen. None found:
+// the first name, so the log says what was looked for
+static std::string bios_file(const Config& cfg, const char* key, std::initializer_list<const char*> names) {
     std::string v = cfg.str(key, "");
     if (!v.empty()) return v;
-    return cfg.str("bios", "/data/bios") + "/" + name;
+    const std::string dir = cfg.str("bios", "/data/bios");
+    std::string hit = find_named(dir, names);
+    if (DIR* d = hit.empty() ? opendir(dir.c_str()) : nullptr) {
+        while (dirent* e = readdir(d)) {
+            if (e->d_name[0] == '.') continue;
+            const std::string sub = dir + "/" + e->d_name;
+            struct stat st{};
+            if (stat(sub.c_str(), &st) == 0 && S_ISDIR(st.st_mode) && !(hit = find_named(sub, names)).empty()) break;
+        }
+        closedir(d);
+    }
+    return hit.empty() ? dir + "/" + *names.begin() : hit;
 }
 template <size_t N> static bool read_exact(const std::string& path, std::array<u8, N>& out) {
     std::vector<uint8_t> b;
@@ -254,8 +285,8 @@ template <size_t N> static bool read_exact(const std::string& path, std::array<u
 // NAND is needed to start one; a DSiWare title's own saves (public.sav, private.sav) live on the NAND, which comes
 // from the user's dsi_nand.bin when there is one (setup_nand).
 std::unique_ptr<NDS> Emu::make_dsi(NDSArgs&& args) {
-    const std::string b9 = bios_file(cfg_, "dsi.bios9", "dsi_bios9.bin");
-    const std::string b7 = bios_file(cfg_, "dsi.bios7", "dsi_bios7.bin");
+    const std::string b9 = bios_file(cfg_, "dsi.bios9", {"dsi_bios9.bin", "bios9i.bin", "biosdsi9.rom", "dsi_bios9.rom"});
+    const std::string b7 = bios_file(cfg_, "dsi.bios7", {"dsi_bios7.bin", "bios7i.bin", "biosdsi7.rom", "dsi_bios7.rom"});
     auto a9 = std::make_unique<DSiBIOSImage>();
     auto a7 = std::make_unique<DSiBIOSImage>();
     dsi_bios_ = read_exact(b9, *a9) && read_exact(b7, *a7);
@@ -268,7 +299,7 @@ std::unique_ptr<NDS> Emu::make_dsi(NDSArgs&& args) {
         // (KEY1); the key's table is in the DSi's ARM9 BIOS at 0x99A0 and in the DS's ARM7 BIOS at 0x30, the same
         // 0x1048 bytes. The free BIOS has neither: a DS ARM7 BIOS (bios7.bin) lends its table to the free one.
         std::array<u8, 0x4000> ds7{};
-        const std::string d7 = bios_file(cfg_, "bios7", "bios7.bin");
+        const std::string d7 = bios_file(cfg_, "bios7", {"bios7.bin", "biosnds7.rom", "bios7.rom"});
         if (read_exact(d7, ds7)) {
             memcpy(a9->data() + 0x99A0, ds7.data() + 0x30, 0x1048);
             key1_ = true;
@@ -411,7 +442,7 @@ static bool make_nand(const std::string& path, const u8* es_keyY, const Config& 
 }
 
 std::optional<DSi_NAND::NANDImage> Emu::setup_nand(const std::array<uint8_t, 0x10000>& arm7i) {
-    const std::string user = bios_file(cfg_, "dsi.nand", "dsi_nand.bin");
+    const std::string user = bios_file(cfg_, "dsi.nand", {"dsi_nand.bin", "nand.bin", "dsi_nand.rom"});
     struct stat st{};
     const bool have_user = stat(user.c_str(), &st) == 0;
     const char* data = getenv("BANANADS_DATA");
@@ -474,6 +505,7 @@ std::optional<DSi_NAND::NANDImage> Emu::setup_nand(const std::array<uint8_t, 0x1
         }
     }
     dsi_nand_ = true;
+    dsi_user_nand_ = have_user;
     return img;
 }
 
@@ -490,6 +522,31 @@ void Emu::export_dsi_saves() {
     m.ExportTitleData(dsi_title_cat_, dsi_title_id_, DSi_NAND::TitleData_PrivateSav, (base + ".private.sav").c_str());
 }
 
+// Without the user's NAND, the DSi's region and languages (HWINFO_S.dat, which melonDS's direct boot copies to
+// 0x02FFFD68) were zeros: region Japan, no language, so a European DSiWare title (3D Space Tank, game code KDXV)
+// came up in Japanese. They are the ones a DSi of the game's own region has (the last letter of its game code,
+// GBATEK's "DSi Regions"); the user's NAND keeps its own
+void Emu::set_dsi_region() {
+    NDSCart::CartCommon* cart = nds_->NDSCartSlot.GetCart();
+    if (!cart) return;
+    using L = DSi_NAND::DSiSupportedLanguageMask;
+    using R = DSi_NAND::ConsoleRegion;
+    R region = R::USA;
+    u32 langs = L::AmericaLanguages;
+    switch (cart->GetHeader().GameCode[3]) {
+    case 'J': region = R::Japan; langs = L::JapanLanguages; break;
+    case 'P': case 'V': case 'D': case 'F': case 'H': case 'I': case 'S': case 'X': case 'Y': case 'Z':
+        region = R::Europe; langs = L::EuropeLanguages; break;
+    case 'U': region = R::Australia; langs = L::AustraliaLanguages; break;
+    case 'C': region = R::China; langs = L::ChinaLanguages; break;
+    case 'K': region = R::Korea; langs = L::KoreaLanguages; break;
+    default: break;  // E (USA), O (worldwide), anything else
+    }
+    nds_->ARM9Write32(0x02FFFD68, langs);
+    nds_->ARM9Write8(0x02FFFD70, (u8)region);
+    Log(LogLevel::Info, "[dsi] region %d, languages 0x%02x (from the game code)\n", (int)region, langs);
+}
+
 // After the direct boot: was the secure area decrypted? melonDS fills it with 0xE7FFDEFF (undefined instructions)
 // when it wasn't, and the game would stop at its first call into it: say what is missing, on the panels too.
 void Emu::check_secure_area() {
@@ -504,7 +561,7 @@ void Emu::check_secure_area() {
     Log(LogLevel::Error, "[dsi] this game's secure area is encrypted and BananaDS has no key for it: put a DS ARM7 BIOS "
         "(bios7.bin, 16 KB) or the DSi's BIOS (dsi_bios9.bin + dsi_bios7.bin, 64 KB each) in %s/. The game will likely "
         "stop at a black screen without it\n", dir.c_str());
-    notice("DSi game: needs a BIOS file", ("put bios7.bin in " + dir).c_str());
+    notice("DSi game: needs a BIOS file", ("put dsi_bios9.bin + dsi_bios7.bin in " + dir).c_str());
 }
 
 void Emu::notice(const char* line1, const char* line2) {
@@ -1031,6 +1088,7 @@ bool Emu::load_rom(const std::string& path) {
             const auto t = dsi_settings(cfg_);
             for (u32 i = 0; i < 0x128; i += 4) nds_->ARM9Write32(0x02000400 + i, le32(t.Bytes + 0x88 + i));
         }
+        if (!dsi_user_nand_) set_dsi_region();
         check_secure_area();
     }
     setup_slice();

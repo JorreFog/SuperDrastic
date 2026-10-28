@@ -150,6 +150,7 @@ private:
     std::unique_ptr<melonDS::NDS> make_dsi(melonDS::NDSArgs&& args);
     std::optional<melonDS::DSi_NAND::NANDImage> setup_nand(const std::array<uint8_t, 0x10000>& arm7i);
     void check_secure_area();
+    void set_dsi_region();
     void export_dsi_saves();
     uint64_t debug_pc_ = 0;
     const melonDS::NDSCart::CartCommon* dsi_cart_ = nullptr;  // (the game's, while make_dsi runs)
@@ -157,6 +158,7 @@ private:
     uint32_t dsi_title_cat_ = 0, dsi_title_id_ = 0;
     bool dsi_ = false;       // a DSi, not a DS
     bool dsi_bios_ = false;  // the DSi's own BIOS images, not the free ones
+    bool dsi_user_nand_ = false;  // the NAND is a copy of the user's dsi_nand.bin (keeps its own region)
     bool key1_ = false;      // the free BIOS got the secure area's key from a DS bios7.bin
     bool secure_missing_ = false;
     std::vector<uint8_t> cia_tmd_;  // a .cia's title metadata (3DS format), for a NAND import
