@@ -612,8 +612,16 @@ static void status_bar(canvas *c) {
         fill(c, bx + S(2), by + S(2), bx + bw - S(2), by + bh - S(2), C_DARK, 1.0f);
         fill(c, bx + bw, by + S(4), bx + bw + S(3), by + bh - S(4), C_LIGHT, 1.0f);
         int lv = (bw - S(6)) * (pct > 100 ? 100 : pct) / 100;
-        fill(c, bx + S(3), by + S(3), bx + S(3) + lv, by + bh - S(3), pct <= 15 && !chg ? C_REDL : C_LIGHT, 1.0f);
-        if (chg) text(c, &F_MED, "+", bx + bw + S(8), S(12), S(18), C_LIGHT, 0, 0);
+        fill(c, bx + S(3), by + S(3), bx + S(3) + lv, by + bh - S(3), chg ? C_BLUE : pct <= 15 ? C_REDL : C_LIGHT, 1.0f);
+        if (chg) {      /* on the charger: the level in banana yellow and banana-ui's bolt over it (RndsUI.cpp's BOLT), light
+                         * with a dark edge left and right so it reads over the level and over the empty part alike (#35) */
+            static const int BOLT[8][2] = { { 4, 2 }, { 3, 2 }, { 2, 2 }, { 1, 5 }, { 3, 2 }, { 2, 2 }, { 1, 2 }, { 0, 2 } };   /* x, length per row */
+            for (int r = 0; r < 8; r++) {
+                int y0 = by + S(3 + r), y1 = by + S(4 + r), x0 = bx + S(8 + BOLT[r][0]);
+                fill(c, x0 - S(1), y0, x0 + S(BOLT[r][1] + 1), y1, C_DARK, 1.0f);
+                fill(c, x0, y0, x0 + S(BOLT[r][1]), y1, C_LIGHT, 1.0f);
+            }
+        }
     }
     char tm[32]; time_t t = time(0); struct tm lt; localtime_r(&t, &lt); strftime(tm, sizeof tm, "%m/%d %H:%M", &lt);
     text_raw(c, &F_MED, tm, c->w - S(22), S(12), S(18), C_LIGHT, 0, 2);
@@ -1340,6 +1348,9 @@ int bmenu_run(int start) {
             for (int i = 0; i < 2; i++) { int v = bl_pm(i); if (v > 0) { sum += v; n++; } }
             int b = n ? (sum / n + 5) / 10 : bri;
             if (b - bri >= 3 || bri - b >= 3) { bri = brightness_get(); dirty_bot = 1; } } }
+        /* a charger plugged in or out while the menu is open: the bolt within a second, not at the clock's next redraw */
+        { static long long ct; static int chg_was = -1; if (now_ms() - ct >= 1000 && H.battery) { ct = now_ms(); int ch = 0; H.battery(H.ctx, &ch);
+            if (chg_was >= 0 && ch != chg_was) dirty_top = 1; chg_was = ch; } }
         if (now_ms() - clock_t0 >= 15000) { clock_t0 = now_ms(); if (scr == SC_MAIN || scr == SC_SET || scr == SC_QUIT || scr == SC_QUIT_NOSAVE) dirty_top = 1; }   /* the clock */
         /* RetroAchievements finishes its login and the game's lookup 10-15 s after a start: a menu opened before that
          * had no achievements on its top screen until it was opened again. Looked at twice a second while open. */

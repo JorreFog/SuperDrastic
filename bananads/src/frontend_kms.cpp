@@ -1388,11 +1388,23 @@ static int mh_battery(void*, int* charging) {
     }
     *charging = !strncmp(st, "Charging", 8) || !strncmp(st, "Full", 4);
     // a charger plugged in counts as charging, as in BananaOS's menu: the rk817's gauge can say "Discharging" while it
-    // charges (the menu's "+" was missing then, #35)
-    if (FILE* f = fopen("/sys/class/power_supply/charger/online", "r")) {
-        int on = 0;
-        if (fscanf(f, "%d", &on) == 1 && on) *charging = 1;
-        fclose(f);
+    // charges (the menu's bolt was missing then, #35). Any supply that isn't the battery and is online, as banana-ui's
+    // Library::power() looks: the charger isn't always called "charger"
+    if (DIR* d = opendir("/sys/class/power_supply")) {
+        while (dirent* e = readdir(d)) {
+            if (e->d_name[0] == '.') continue;
+            char p[300], t[32] = "";
+            snprintf(p, sizeof p, "/sys/class/power_supply/%s/type", e->d_name);
+            if (FILE* f = fopen(p, "r")) { if (!fgets(t, sizeof t, f)) t[0] = 0; fclose(f); }
+            if (!strncmp(t, "Battery", 7)) continue;
+            snprintf(p, sizeof p, "/sys/class/power_supply/%s/online", e->d_name);
+            if (FILE* f = fopen(p, "r")) {
+                int on = 0;
+                if (fscanf(f, "%d", &on) == 1 && on) *charging = 1;
+                fclose(f);
+            }
+        }
+        closedir(d);
     }
     return pct;
 }
