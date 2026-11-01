@@ -168,6 +168,8 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
 | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |
 | `DSFLIP_FALLBACK` | 1 | 0 = don't run DraStic without SuperDrastic when it can't take the display |
+| `DSFLIP_HELPER_DOOR` | 1 | 0 = DraStic's four helper threads start the way DraStic starts them: before the locks they wait on exist. DraStic r2.5.2.2 calls `pthread_create` first and initialises the thread's two mutexes and two condition variables after it; a helper that is already waiting by then never gets its first hand-off, and the game shows no frame (or stops at its first 3D frame). With the door a helper waits for its creator's second `pthread_cond_init`, 2 s at most; the log has a line per helper |
+| `DSFLIP_HELPER_RACE` | off | Milliseconds DraStic's main thread sleeps right after starting each of those helpers. With `DSFLIP_HELPER_DOOR=0` the game then freezes at every start; with the door nothing changes (tests the door on a handheld) |
 
 **Shaders** are GLSL ES 1.0 fragment shaders with the inputs DraStic's stock shaders use (`u_texture`,
 `u_texture_size`, `u_output_size`, `v_texcoord`; see the top of `src/shader.c`). A shader that draws the DS screen
