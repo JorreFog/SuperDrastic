@@ -8,6 +8,10 @@ Own code (GPL-3.0). `python3 build.py` (clang, ld.lld, llvm-objcopy) writes `out
 | `dsreal-L1..L10.nds` | load levels (L5 = realistic; L10 reaches ~1,500 stored polygons / ~5,400 vertices and lags in the game itself) |
 | `dsreal-race/-action/-town.nds` | one scene forever (profiles of a scene) |
 
+`DSREAL_OUTDIR=out-v2 python3 build.py` is **v2** (afcef05: the race gets MKDS-like 4x fill: a ground plane, mountains and
+dust behind every kart; used for all 4x work), `DSREAL_PROBE=1` builds `out-probe/` with the universal companion's
+probe block at 0x023F0000. v1 = the sources before afcef05 (`out/`, used for the 2x/3x A/Bs of 2026-11-01).
+
 Each has a `.phases.tsv` beside it (stress-run.sh / summarize.py): race 25 s, action 20 s, town 25 s (70 s a loop).
 
 ## Scenes (level 5, emulated numbers from the ROM's own counters on the status line)
@@ -28,7 +32,7 @@ ITCM, game logic in Thumb, script VM (branchy dispatch), DIV/SQRT units, card re
 At each scene's end a 32-byte record goes to the save (EEPROM, `<rom>.sav`): loop, scene, frames, a hash of 4 display
 captures of engine A (frames 150/450/... of the scene), the game-state hash, the ARM7 driver's hash, the ARM9 load
 (average %) and the lag frames. `savdump.py a.sav [b.sav]` prints them / compares two runs (SAME/DIFF). Pictures and
-state are the same in every loop of one build; the ARM7 hash depends on the loop (timer phase), so compare runs
+state are the same in every loop of one build (DraStic takes the EEPROM writes as FLASH: savdump.py finds the shifted records); the ARM7 hash depends on the loop (timer phase), so compare runs
 loop by loop. Captures are 1x (quarter 0 of hi-res lines), so they catch emulation differences and part of the
 3D layer; the hi-res output itself is checked with BananaDS's render.gengis_verify / render.2d_verify, and the
 emulation with audio.tap.

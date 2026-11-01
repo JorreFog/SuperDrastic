@@ -9,7 +9,8 @@ Needs clang + ld.lld + llvm-objcopy (armv5te ARM9 mostly Thumb with ARM hot path
 import math, os, random, struct, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "out"); os.makedirs(OUT, exist_ok=True)
+PROBE = os.environ.get("DSREAL_PROBE") == "1"   # the companion probe block (out-probe/)
+OUT = os.path.join(HERE, os.environ.get("DSREAL_OUTDIR") or ("out-probe" if PROBE else "out")); os.makedirs(OUT, exist_ok=True)
 def fx(v): return int(round(v * 4096))
 
 # ---- tables.h ----
@@ -46,6 +47,7 @@ T9 = ["--target=armv5te-none-eabi", "-mfloat-abi=soft"]
 T7 = ["--target=armv4t-none-eabi", "-mfloat-abi=soft"]
 def run(cmd): subprocess.run(cmd, check=True, cwd=HERE)
 def cc(src, obj, tgt, thumb=True, extra=()):
+    if PROBE and src.endswith(".c"): extra = (*extra, "-DDSREAL_PROBE=1")
     run(["clang", *tgt, "-mthumb" if thumb else "-marm", *(CF if src.endswith(".c") else []), *extra, "-c", src, "-o", os.path.join(OUT, obj)])
     return os.path.join(OUT, obj)
 LD9 = """ENTRY(_start)
@@ -161,7 +163,7 @@ def adpcm_stream(nbytes):
 DATA = {0x080000: ovl[0], 0x088000: ovl[1]}
 for s in range(4): DATA[0x090000 + s * 0x10000] = texset(s)
 for n in range(32): DATA[0x0D0000 + n * 0x2000] = chunk(n)
-cache = os.path.join(OUT, "stream.adpcm")
+cache = os.path.join(HERE, "out", "stream.adpcm")
 if not os.path.exists(cache): open(cache, "wb").write(adpcm_stream(0x40000))
 DATA[0x110000] = open(cache, "rb").read()
 ROMSIZE = 0x200000

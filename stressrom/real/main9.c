@@ -128,6 +128,14 @@ int main(void) {
             s->vblank(scene_frame);
             if (scene_frame % 300 == 152) crc_pic = hash_words(crc_pic, (const volatile u32 *)VRAM_LCDC(3), 256 * 192 / 2);
             if ((scene_frame & 15) == 0) status_line(s->name);
+#ifdef DSREAL_PROBE
+            {   /* the universal companion's probe block (COMPANION-SPEC.md section 7): "BNPROBE1", frame, scene, phase,
+                 * the last scene checksum, 12 x 0xA5 at 0x023F0000 */
+                volatile u32 *pb = (volatile u32 *)0x023F0000;
+                pb[0] = 0x52504E42; pb[1] = 0x3145424F; pb[2] = vbl_count; pb[3] = si | (scene_frame / 300) << 16;
+                pb[4] = recs[si].crc_state; pb[5] = 0xA5A5A5A5; pb[6] = 0xA5A5A5A5; pb[7] = 0xA5A5A5A5;
+            }
+#endif
         }
         arm7_hash_ok = 0; fifo_send(5u << 28);
         while (!arm7_hash_ok) wait_vblank();
