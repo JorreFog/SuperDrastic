@@ -388,7 +388,7 @@ void GengisRenderer3D::Convert() {
     // render.gengis_keyskip: while no bin was reusable for 32 rendered frames (a moving camera: a race), the keys are
     // built on 2 frames of every 16 only (enough to see the scene stop); a frame without keys reuses nothing and
     // leaves no keys for the next one to match
-    if (KeySkip && Scale_ >= 3 && ReuseMiss > 32 && (KeyFrames++ & 15) > 1) {
+    if (KeySkip && Scale_ >= (KeySkip == 2 ? 2 : 3) && ReuseMiss > 32 && (KeyFrames++ & 15) > 1) {   // (2: at 2x too)
         for (unsigned b = 0; b < GX_NBINS; b++) { BinKey[b].clear(); BinReuse[b] = false; }
         ReuseMiss++;
     } else {
