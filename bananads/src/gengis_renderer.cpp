@@ -33,7 +33,7 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     gx_zva = Zva;
     gx_stats = Stats != 0;
     gx_trim = Trim;
-    gx_hrneon = HrNeon < 0 ? Scale_ >= 3 : HrNeon != 0;
+    gx_hrneon = HrNeon < 0 ? Scale_ >= 2 : HrNeon != 0;   // (2x too since 2026-11-01: dsreal v3's shadow volumes, -16% Gengis)
     gx_lazy = Lazy < 0 ? Scale_ >= 3 : Lazy != 0;
     // render.gengis_units: 4x 1 = 32-line halves, 2 = units of 4 DS lines, 3 = of 2 DS lines; at 3x (UnitsLow,
     // render.gengis_units_low: 0 = whole bins, as before) 2 and 3 the same (gx3q/gx3e)
