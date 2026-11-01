@@ -1455,3 +1455,16 @@ sound tap compared; runs in `~/stress-runs/dsreal*`.
   game loses frames itself on every emulator. dsreal's ohg scene, RG DS, 2x: 908 of 2,408 frames lost at 67 MHz in
   BananaDS (78 in DraStic, whose ARM9 timing is cheaper), **6 with `core.arm9_mhz=133`** (melonDS's ARM9ClockShift 2:
   the same game-state hash, emulator CPU +25%). `core.idle_stats` shows the ARM9's halted share in a real game.
+  In the owner's own Origin HeartGold (Plus, 2x, a route from the owner's state, no input), `render.gengis_stats`
+  counts the game's 3D frames: **300 of 600 at 67 MHz (30 fps in the game), 300 of 300 at 133 MHz (60)**.
+- **RGB565 at 3x** (`auto` now): dsreal, pinned 1608 MHz, RG DS and Plus: all-core CPU -2..12% in every scene, the
+  2D thread -10..16%; render.2d_verify 0 of 917,504 lines differ. **At 2x** (`on` only): neutral within the 5% the two
+  base runs differ by (2x isn't bandwidth-bound); exact (0 of 1,507,328 lines differ).
+- **Gengis units at 3x** (`render.gengis_units_low`, opt-in): 16-line units (`2`) -11..12% CPU in the 3D race (Gengis
+  100 -> 85% of a core on the Plus), -4..6% in the town; 8-line (`3`) mixed. Not exact: 470 of 59,864 units differ (the
+  batches' translucent id quirk at unit edges; dsreal has much more translucency than MKDS). At 2x they broke (the 2x
+  3d_share rows take whole bins): 3x only.
+- Tried, no gain at 2x (Plus, pinned 1104, two pairs): `render.gengis_keyskip=2` (the reuse keys' skip at 2x),
+  `render.gengis_vbwait=0`, `render.gengis_hrneon=1` (dsreal v1 had no shadow polygons; v3 adds MKDS-like shadow volumes).
+- 2x regression, RG DS, user settings: the integration build 109/77/107% CPU (race/action/town) vs 111/79/110%, scene
+  checksums and sound tap identical.
