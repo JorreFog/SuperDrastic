@@ -1669,7 +1669,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         const std::string v = cfg.str("kms.rgb565", "auto");
         const bool want = v != "off" && v != "0";
         // (on: also at render.scale 3, whose RGB565 writers are the same as 4x's; auto: 4x only)
-        const bool at = emu.scale() == 4 || (emu.scale() == 3 && (v == "on" || v == "1"));
+        const bool at = emu.scale() == 4 || ((emu.scale() == 3 || emu.scale() == 2) && (v == "on" || v == "1"));
         dp.rgb565 = want && dp.direct && at && !ra_n;
         dp.rgb565_grid = v == "on" || v == "1";   // (on: with kms.grid_cpu's grid too, its colours packed to 5/6/5 bits)
         if (want && at)

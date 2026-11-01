@@ -102,7 +102,7 @@ void BananaRenderer::SetOutput(u32* top, u32* bottom)
 
 void BananaRenderer::Recalc16()
 {
-    Out16 = Want16 && Quarter && Sc >= 3 && Out[0];   // (kms.grid_cpu's grid: the 32-bit writers, packed)
+    Out16 = Want16 && Quarter && Out[0];   // (kms.grid_cpu's grid: the 32-bit writers, packed)
 }
 
 static bool Rgb565SelfTest();
@@ -125,7 +125,7 @@ bool BananaRenderer::SetOutputFormat(bool rgb565)
         OutputTouchedAll();   // (render.2d_out_skip: the rows the other format left are drawn again)
     Want16 = rgb565;
     Recalc16();
-    return Want16 && Quarter && Sc >= 3;
+    return Want16 && Quarter;
 }
 
 u32* BananaRenderer::LineDst(int screen, u32 line)
@@ -624,6 +624,55 @@ static void WriteRep3PNeon(u16* dst, const u32* src, u32 factor)
         }
     }
 }
+// 2x (render.scale 2): a row of 512 from even/odd pixels, and each pixel twice on 2 rows of 512
+template<int mode>
+static void WriteZip2PNeon(u16* dst, const u32* even, const u32* odd, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        const uint16x8x2_t e = Load16P<mode>(even + i, f), o = Load16P<mode>(odd + i, f);
+        for (int h = 0; h < 2; h++)
+        {
+            uint16x8x2_t z = {{ e.val[h], o.val[h] }};
+            vst2q_u16(dst + 2 * i + 16 * h, z);
+        }
+    }
+}
+template<int mode>
+static void WriteDouble2PNeon(u16* dst, const u32* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        const uint16x8x2_t p = Load16P<mode>(src + i, f);
+        for (int h = 0; h < 2; h++)
+        {
+            uint16x8x2_t z = {{ p.val[h], p.val[h] }};
+            vst2q_u16(dst + 2 * i + 16 * h, z);
+            vst2q_u16(dst + 512 + 2 * i + 16 * h, z);
+        }
+    }
+}
+static void WriteZip2P(u16* dst, const u32* even, const u32* odd, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteZip2PNeon<1>(dst, even, odd, factor);
+    else if (mode == 2 && factor) WriteZip2PNeon<2>(dst, even, odd, factor);
+    else                          WriteZip2PNeon<0>(dst, even, odd, 0);
+}
+static void WriteDouble2P(u16* dst, const u32* src, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteDouble2PNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteDouble2PNeon<2>(dst, src, factor);
+    else                          WriteDouble2PNeon<0>(dst, src, 0);
+}
+
 static void WriteZip3P(u16* dst, const u32* const* src, u16 brightness)
 {
     u32 mode = brightness >> 14;
@@ -746,6 +795,14 @@ static bool Rgb565SelfTest()
                 }
                 PackRow565(c, a, 3 * 768);
                 if (memcmp(b, c, 3 * 768 * sizeof(u16))) { ok = false; break; }
+                WriteZip(a, src[0], src[1], br); WriteZip(a + 512, src[2], src[3], br);   // (2x)
+                WriteZip2P(b, src[0], src[1], br); WriteZip2P(b + 512, src[2], src[3], br);
+                PackRow565(c, a, 1024);
+                if (memcmp(b, c, 1024 * sizeof(u16))) { ok = false; break; }
+                WriteDouble(a, src[round & 3], br);
+                WriteDouble2P(b, src[round & 3], br);
+                PackRow565(c, a, 1024);
+                if (memcmp(b, c, 1024 * sizeof(u16))) { ok = false; break; }
                 WriteRepN<3>(a, src[round & 3], br);
                 WriteRep3P(b, src[round & 3], br);
                 PackRow565(c, a, 3 * 768);
@@ -986,6 +1043,12 @@ void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* dis
     if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1 && !Grid4)   // (the grid: the 32-bit writers, packed)
     {
         auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
+        if (Sc == 2)   // (2x: the four quarters as two zipped rows, or doubled)
+        {
+            if (a.HiLines == 1) WriteDouble2P(d, Output2D[0], brightness);
+            else { WriteZip2P(d, Output2D[0], a.HiOut[0], brightness); WriteZip2P(d + 512, a.HiOut[1], a.HiOut[2], brightness); }
+            return;
+        }
         if (a.HiLines == 1)
         {
             if (Sc == 3) WriteRep3P(d, Output2D[0], brightness);
@@ -1018,6 +1081,7 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
     if (Banana2DFast && ((dispcnt >> 16) & 0x1) && !Grid4)
     {
         if (Sc == 3) WriteRep3P(d, src ? src : Output2D[1], brightness);
+        else if (Sc == 2) WriteDouble2P(d, src ? src : Output2D[1], brightness);
         else WriteRep4P(d, src ? src : Output2D[1], brightness);
         return;
     }
