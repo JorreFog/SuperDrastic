@@ -580,8 +580,22 @@ bool Emu::take_notice(std::string& line1, std::string& line2) {
     return true;
 }
 
+// core.arm9_mhz: 133 runs a DS game's ARM9 at the DSi's clock (melonDS's ARM9ClockShift 2, as DSi mode sets it): a game
+// that loses frames on a DS because its ARM9 runs out of time (Origin HeartGold's 60 fps overworld in towns, whose
+// authors suggest a DSi's CPU speed) keeps its frames. Not a DS's timing: per game, where it helps. After Reset (which
+// sets the shift) and before SetupDirectBoot (whose protection-unit update takes the region timings from it)
+void Emu::arm9_clock() {
+    if (dsi_) return;
+    const long mhz = cfg_.num("core.arm9_mhz", 67);
+    if (mhz >= 100) {
+        nds_->ARM9ClockShift = 2;
+        Log(LogLevel::Info, "[emu] core.arm9_mhz: the ARM9 at 133 MHz (the DSi's clock)\n");
+    }
+}
+
 void Emu::restart() {
     nds_->Reset();
+    arm9_clock();
     nds_->SetupDirectBoot(game_ + ".nds");
     set_clock();
     nds_->Start();
@@ -1080,6 +1094,7 @@ bool Emu::load_rom(const std::string& path) {
     start_mark("cart in");
     nds_->Reset();
     start_mark("reset");
+    arm9_clock();
     nds_->SetupDirectBoot(game_ + ".nds");
     start_mark("direct boot");
     debug_pc_ = (uint64_t)std::max(0L, cfg_.num("debug.pc", 0));
