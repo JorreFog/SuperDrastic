@@ -143,6 +143,8 @@ public:
     static Emu* from(void* userdata) { return static_cast<Emu*>(userdata); }
 
 private:
+    unsigned idle_stats_ = 0, idle_busy_ = 0;   // core.idle_stats
+    uint64_t idle_last_ = 0, idle_sum_ = 0;
     void setup_wifi();
     void setup_local();
     void flush_save(bool now);
