@@ -17,7 +17,8 @@ static u8 chunk[3][3][0x2000] __attribute__((aligned(4)));  /* the 3x3 map chunk
 static u8 colmap[32 * 32];
 static s32 pl_x, pl_z, pl_dir, cam_x, cam_z, nnpc, ntree, door_t, fade, ovl_cur, tex_cur, blk_x, blk_z, loads;
 static u32 text_tiles[2][28][16] __attribute__((aligned(4)));   /* 2 lines x 28 cells x (2 tiles of 4bpp 8x8) */
-static u32 msg_pos, msg_n, vmh;
+static u32 msg_pos, msg_n, vmh, ohg, glyph_reads;
+static u8 glyph_buf[0x200] __attribute__((aligned(4)));
 static u16 oamb[128 * 4] __attribute__((aligned(4)));
 static u16 npc_up[4][128] __attribute__((aligned(4)));
 static const char *const msgs[4] = { "WELCOME TO NEW BARK TOWN. THE WIND BLOWS", "PROF. ELM IS LOOKING FOR YOU. GO AND SEE",
@@ -84,10 +85,10 @@ static void town_enter(void) {
     texset_load(1); tex_cur = 1;
     overlay_load(0); ovl_cur = 0;
     build();
-    nnpc = 1 + (s32)level * 3; if (nnpc > MAXN) nnpc = MAXN;
+    nnpc = 1 + (s32)level * (ohg ? 8 : 3); if (nnpc > MAXN) nnpc = MAXN;
     ntree = (s32)level * 4;
     for (int i = 0; i < MAXN; i++) npc[i] = (npc_t){ (s32)(rnd() % 32) << 12, (s32)(rnd() % 32) << 12, 0, 0, (s32)(rnd() & 3), 0, 0, i };
-    pl_x = 16 << 12; pl_z = 16 << 12; pl_dir = 0; blk_x = 0; blk_z = 0; door_t = 0; fade = 0; msg_pos = 0; msg_n = 0; loads = 0;
+    pl_x = 16 << 12; pl_z = 16 << 12; pl_dir = 0; blk_x = 0; blk_z = 0; door_t = 0; fade = 0; msg_pos = 0; msg_n = 0; loads = 0; glyph_reads = 0;
     load_chunks(1); vm_init(2, 0x3333); vm_init(3, 0x4444); vmh = 0;
     DISP3DCNT = 1 | (1 << 3) | (1 << 4);
     CLEAR_COLOR = RGB(8, 12, 8) | (31u << 16) | (63u << 24); CLEAR_DEPTH = 0x7FFF; VIEWPORT = 0 | (0 << 8) | (255u << 16) | (191u << 24);
@@ -160,7 +161,12 @@ static void draw(u32 f) {
         npc_t *n = &npc[i];
         MTX_PUSH = 0; gx_trans((n->x - (16 << 12)) * 3 / 2 + (cbx * BLK * BLKU), 0, (n->z - (16 << 12)) * 3 / 2 + (cbz * BLK * BLKU));
         TEX_PARAM = texparam(TEX_NPC + (u32)((n->anim >> 3) & 7) * 256, 3, 1, 2, 1u << 29);
-        GX_COLOR = 0x7FFF; gx_send(g_bill); MTX_POP = 1;
+        GX_COLOR = 0x7FFF; gx_send(g_bill);
+        if (ohg) {                                           /* Origin HG: a water reflection under each (flipped, translucent) */
+            POLY_ATTR = 0xC0 | (12 << 16) | (9 << 24); MTX_SCALE = 4096; MTX_SCALE = (u32)-4096; MTX_SCALE = 4096;
+            gx_send(g_bill); POLY_ATTR = 0xC0 | (31 << 16) | (3 << 24);
+        }
+        MTX_POP = 1;
     }
     TEX_PARAM = texparam(TEX_TREE, 1, 2, 3, 0); PLTT_BASE = PAL_TREE >> 4;
     for (int i = 0; i < ntree; i++) {
@@ -169,6 +175,10 @@ static void draw(u32 f) {
     }
     TEX_PARAM = texparam(TEX_NPC + ((f >> 3) & 1) * 256, 3, 1, 2, 1u << 29); PLTT_BASE = PAL_NPC >> 4;
     MTX_PUSH = 0; gx_trans((pl_x >> 1) * 2, 0, (pl_z >> 1) * 2); gx_send(g_bill); MTX_POP = 1;
+    if (ohg) {                                               /* the following Pokemon, a step behind */
+        TEX_PARAM = texparam(TEX_NPC + (4 + ((f >> 3) & 3)) * 256, 3, 1, 2, 1u << 29);
+        MTX_PUSH = 0; gx_trans((pl_x >> 1) * 2 - FX(1.5), 0, (pl_z >> 1) * 2 - FX(1.5)); MTX_SCALE = 3 << 11; MTX_SCALE = 3 << 11; MTX_SCALE = 3 << 11; gx_send(g_bill); MTX_POP = 1;
+    }
 }
 
 static void town_frame(u32 f) {
@@ -177,12 +187,16 @@ static void town_frame(u32 f) {
     OVL->npc_update(npc, nnpc, f, colmap);
     vmh ^= vm_run(2, (int)level * 900, chunk[1][1]) ^ vm_run(3, (int)level * 500, colmap);
     prof[0] = timer_now() - t0;
-    if (f % 180 == 0) { msg_n = (msg_n + 1) & 3; msg_pos = 0; for (int l = 0; l < 2; l++) for (int c = 0; c < 28; c++) render_glyph(l, c, ' '); }
-    if ((f & 1) && msg_pos < 56) {                           /* print a character every other frame */
+    if (f % (ohg ? 90 : 180) == 0) { msg_n = (msg_n + 1) & 3; msg_pos = 0; for (int l = 0; l < 2; l++) for (int c = 0; c < 28; c++) render_glyph(l, c, ' '); }
+    /* the text printer: vanilla one glyph every other frame; Origin HG's FAST up to three a frame, each glyph's font
+     * data read lazily from the card (the hack's NARC_ReadFromAbsOffset per glyph: 7-9 of a glyph's 9-12 lines) */
+    for (int k = 0, n = ohg ? 3 : ((f & 1) ? 1 : 0); k < n && msg_pos < 56; k++) {
         const char *s = msgs[msg_n]; u32 p = msg_pos++; char ch = p < 40 ? s[p] : ' ';
+        if (ohg) { card_read(glyph_buf, ROM_MAP((u32)ch & 31) + ((u32)ch & 0xF) * 0x200, 0x200); glyph_reads++; }
         render_glyph((int)(p / 28), (int)(p % 28), ch);
         if (ch != ' ' && (p & 3) == 0) fifo_send((3u << 28) | 12 | (64 << 8) | (30 << 16));
     }
+    if (ohg && f % 1500 >= 600) vmh ^= vm_run(2, (int)level * 2200, chunk[1][1]);   /* the busy town: more scripts run */
     for (int i = 0; i < 4; i++) {                            /* this frame's NPC animation frames to upload */
         int k = (int)((f + (u32)i) % 8);
         for (int w = 0; w < 128; w++) npc_up[i][w] = (u16)(0x1111 * (u32)((w + k * 3 + i) & 15) ^ (u16)(f << 4));
@@ -230,3 +244,12 @@ static u32 town_hash(void) {
 }
 
 const scene_t scene_town = { "TOWN", town_enter, town_frame, town_vblank, town_leave, town_hash, 1 };
+/* "ohg": Origin HeartGold's overworld (its FAQ / hardware notes, docs: originheartgold.github.io): the hack runs the
+ * overworld at 60 fps, busier towns (more characters on screen, a following Pokemon, reflections), FAST text (three
+ * glyphs a frame, a card read each); on a DS's 67 MHz ARM9 the busy part loses frames inside the game ("slowdown,
+ * sound crackle ... the hack's 60 fps overworld: suggest DSi mode"). Its first 10 s are the route (the town's load),
+ * the rest the busy town (more script work): the ROM's lag counter shows the game's own lost frames */
+static void ohg_enter(void) { ohg = 1; town_enter(); }
+static void ohg_leave(void) { town_leave(); ohg = 0; }
+static u32 ohg_hash(void) { return town_hash() ^ glyph_reads; }
+const scene_t scene_ohg = { "OHG", ohg_enter, town_frame, town_vblank, ohg_leave, ohg_hash, 1 };

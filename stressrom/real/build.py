@@ -172,7 +172,7 @@ def crc16(data, crc=0xFFFF):
         for _ in range(8): crc = (crc >> 1) ^ 0xA001 if crc & 1 else crc >> 1
     return crc
 
-SCENES = [("race", 1500), ("action", 1200), ("town", 1500)]
+SCENES = [("race", 1500), ("action", 1200), ("town", 1500), ("ohg", 1500)]
 FPS = 59.8261
 def rom(name, mode, scene, level, loops=12):
     a9 = bytearray(arm9)

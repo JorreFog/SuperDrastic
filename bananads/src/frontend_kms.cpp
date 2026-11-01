@@ -193,7 +193,7 @@ struct Display {
     // run-ahead); shader_live: the emulator's thread's view of shader_on (a shader: 32-bit frames)
     Buf buf16[2][NB];
     bool is16[NB] = {};
-    bool rgb565 = false;
+    bool rgb565 = false, rgb565_grid = false;
     std::atomic<bool> shader_live{false};
     const Buf* slot(int panel, int s) const { return is16[s] ? &buf16[panel][s] : &buf[panel][s]; }
     bool make16() {
@@ -1680,8 +1680,11 @@ int run_kms(Emu& emu, const Config& cfg) {
     {
         const std::string v = cfg.str("kms.rgb565", "auto");
         const bool want = v != "off" && v != "0";
-        dp.rgb565 = want && dp.direct && emu.scale() == 4 && !ra_n;
-        if (want && emu.scale() == 4)
+        // (on: also at render.scale 3, whose RGB565 writers are the same as 4x's; auto: 4x only)
+        const bool at = emu.scale() == 4 || ((emu.scale() == 3 || emu.scale() == 2) && (v == "on" || v == "1"));
+        dp.rgb565 = want && dp.direct && at && !ra_n;
+        dp.rgb565_grid = v == "on" || v == "1";   // (on: with kms.grid_cpu's grid too, its colours packed to 5/6/5 bits)
+        if (want && at)
             Log(LogLevel::Info, "[kms] rgb565: %s\n", dp.rgb565 ? "frames drawn as RGB565 (16-bit) while no shader is on" :
                 !dp.direct ? "no (frames copied, not drawn straight in): 32-bit" : "no (run-ahead): 32-bit");
     }
@@ -1980,7 +1983,8 @@ int run_kms(Emu& emu, const Config& cfg) {
                     g ? "NOT on (check failed): the GPU pass draws it" : "off");
             }
             // kms.rgb565: the slot's 16-bit twins while no shader draws (the format switched between frames, as the grid)
-            const bool want16 = dp.rgb565 && !dp.shader_live.load(std::memory_order_relaxed);
+            // (with kms.grid_cpu's grid in the 2D engine the frames go as they are, no GPU pass: 16-bit too)
+            const bool want16 = dp.rgb565 && (!dp.shader_live.load(std::memory_order_relaxed) || (grid_now && dp.rgb565_grid));
             if (want16 != asked16) {
                 asked16 = want16;
                 if (want16 && !dp.make16()) {
