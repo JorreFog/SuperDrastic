@@ -5,6 +5,7 @@
 #include "companion.h"
 #include "emu.h"
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <string>
@@ -44,10 +45,11 @@ static void write_game_id(const bananads::Emu& emu, const char* saves, const cha
     rename(tmp.c_str(), GAME_ID);
 }
 
-void companion_start(const bananads::Emu& emu, const char* saves, const char* states) {
+void companion_start(const bananads::Emu& emu, const char* saves, const char* states, const char* path) {
     struct stat st;
     if (stat("/run/banana", &st) == 0) write_game_id(emu, saves, states);
-    if (bcomp_attach(&prod, nullptr) != 0) return;
+    // banana-ui's BANANA_COMPANION, else companion.path (tests: bananads.env passes only BANANADS_* keys)
+    if (bcomp_attach(&prod, getenv("BANANA_COMPANION") || !path || !*path ? nullptr : path) != 0) return;
     bcomp_set_info(&prod, "nds", "BananaDS 0.1.0 (melonDS)", "BananaDS");
     // systems/nds.json: main RAM (RA 0x0000000), the ARM9's DTCM (RA 0x1000000; the export's start is RA's, the real
     // base is the game's CP15 choice)

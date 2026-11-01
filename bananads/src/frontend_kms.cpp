@@ -1799,7 +1799,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         ra_init(&rh, emu.rom_path().c_str());
         start_mark("ra init");
     }
-    companion_start(emu, getenv("BANANADS_SAVE_DIR"), getenv("BANANADS_STATE_DIR"));   // (the universal companion)
+    companion_start(emu, getenv("BANANADS_SAVE_DIR"), getenv("BANANADS_STATE_DIR"), cfg.str("companion.path", "").c_str());   // (the universal companion)
 
     if (cfg.str("prof.thread", "emu") == "present") prof_target_this_thread();   // (this thread presents)
     std::thread emu_thread([&] {
