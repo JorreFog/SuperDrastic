@@ -1668,8 +1668,10 @@ int run_kms(Emu& emu, const Config& cfg) {
     {
         const std::string v = cfg.str("kms.rgb565", "auto");
         const bool want = v != "off" && v != "0";
-        dp.rgb565 = want && dp.direct && emu.scale() == 4 && !ra_n;
-        if (want && emu.scale() == 4)
+        // (on: also at render.scale 3, whose RGB565 writers are the same as 4x's; auto: 4x only)
+        const bool at = emu.scale() == 4 || (emu.scale() == 3 && (v == "on" || v == "1"));
+        dp.rgb565 = want && dp.direct && at && !ra_n;
+        if (want && at)
             Log(LogLevel::Info, "[kms] rgb565: %s\n", dp.rgb565 ? "frames drawn as RGB565 (16-bit) while no shader is on" :
                 !dp.direct ? "no (frames copied, not drawn straight in): 32-bit" : "no (run-ahead): 32-bit");
     }

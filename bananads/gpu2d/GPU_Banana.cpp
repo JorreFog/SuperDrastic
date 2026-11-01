@@ -102,7 +102,7 @@ void BananaRenderer::SetOutput(u32* top, u32* bottom)
 
 void BananaRenderer::Recalc16()
 {
-    Out16 = Want16 && Quarter && Sc == 4 && !BananaGrid4On() && Out[0];
+    Out16 = Want16 && Quarter && Sc >= 3 && !BananaGrid4On() && Out[0];
 }
 
 static bool Rgb565SelfTest();
@@ -125,7 +125,7 @@ bool BananaRenderer::SetOutputFormat(bool rgb565)
         OutputTouchedAll();   // (render.2d_out_skip: the rows the other format left are drawn again)
     Want16 = rgb565;
     Recalc16();
-    return Want16 && Quarter && Sc == 4 && !BananaGrid4On();
+    return Want16 && Quarter && Sc >= 3 && !BananaGrid4On();
 }
 
 u32* BananaRenderer::LineDst(int screen, u32 line)
@@ -583,6 +583,55 @@ static void WriteRep4PNeon(u16* dst, const u32* src, u32 factor)
     }
 }
 
+// the same at 3x (render.scale 3): a row of 768 from pixels 3k .. 3k + 2, and each pixel 3 times on 3 rows of 768
+template<int mode>
+static void WriteZip3PNeon(u16* dst, const u32* const* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint16x8x2_t p[3];
+        for (int n = 0; n < 3; n++) p[n] = Load16P<mode>(src[n] + i, f);
+        for (int h = 0; h < 2; h++)
+        {
+            uint16x8x3_t z = {{ p[0].val[h], p[1].val[h], p[2].val[h] }};
+            vst3q_u16(dst + 3 * i + 24 * h, z);
+        }
+    }
+}
+template<int mode>
+static void WriteRep3PNeon(u16* dst, const u32* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    for (int i = 0; i < 256; i += 16)
+    {
+        const uint16x8x2_t p = Load16P<mode>(src + i, f);
+        for (int h = 0; h < 2; h++)
+        {
+            uint16x8x3_t z = {{ p.val[h], p.val[h], p.val[h] }};
+            for (int r = 0; r < 3; r++) vst3q_u16(dst + 768 * r + 3 * i + 24 * h, z);
+        }
+    }
+}
+static void WriteZip3P(u16* dst, const u32* const* src, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteZip3PNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteZip3PNeon<2>(dst, src, factor);
+    else                          WriteZip3PNeon<0>(dst, src, 0);
+}
+static void WriteRep3P(u16* dst, const u32* src, u16 brightness)
+{
+    u32 mode = brightness >> 14;
+    u32 factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteRep3PNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteRep3PNeon<2>(dst, src, factor);
+    else                          WriteRep3PNeon<0>(dst, src, 0);
+}
+
 static void WriteZip4P(u16* dst, const u32* const* src, u16 brightness)
 {
     u32 mode = brightness >> 14;
@@ -679,6 +728,17 @@ static bool Rgb565SelfTest()
                 WriteRep4P(b, src[round & 3], br);
                 PackRow565(c, a, 4 * 1024);
                 if (memcmp(b, c, sizeof b)) { ok = false; break; }
+                for (int r = 0; r < 3; r++)   // (3x)
+                {
+                    WriteZipN<3>(a + 768 * r, sp + (r & 1), br);
+                    WriteZip3P(b + 768 * r, sp + (r & 1), br);
+                }
+                PackRow565(c, a, 3 * 768);
+                if (memcmp(b, c, 3 * 768 * sizeof(u16))) { ok = false; break; }
+                WriteRepN<3>(a, src[round & 3], br);
+                WriteRep3P(b, src[round & 3], br);
+                PackRow565(c, a, 3 * 768);
+                if (memcmp(b, c, 3 * 768 * sizeof(u16))) { ok = false; break; }
             }
     }
     Grid4 = g;
@@ -917,20 +977,22 @@ void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* dis
         auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
         if (a.HiLines == 1)
         {
-            WriteRep4P(d, Output2D[0], brightness);
+            if (Sc == 3) WriteRep3P(d, Output2D[0], brightness);
+            else WriteRep4P(d, Output2D[0], brightness);
             return;
         }
         const u32* src[16];
         src[0] = Output2D[0];
-        for (int k = 1; k < 16; k++) src[k] = a.HiOut[k - 1];
-        for (int r = 0; r < 4; r++)
-            WriteZip4P(d + 1024 * r, src + 4 * r, brightness);
+        for (int k = 1; k < NQ; k++) src[k] = a.HiOut[k - 1];
+        for (int r = 0; r < Sc; r++)
+            if (Sc == 3) WriteZip3P(d + 768 * r, src + 3 * r, brightness);
+            else WriteZip4P(d + 1024 * r, src + 4 * r, brightness);
         return;
     }
 #endif
     alignas(16) u32 t[4 * 1024];
     EmitA32(t, dispcnt, brightness, display);
-    PackRow565(d, t, 4 * 1024);
+    PackRow565(d, t, 256 * NQ);
 }
 
 void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src, bool p16)
@@ -944,13 +1006,14 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
 #if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
     if (Banana2DFast && ((dispcnt >> 16) & 0x1))
     {
-        WriteRep4P(d, src ? src : Output2D[1], brightness);
+        if (Sc == 3) WriteRep3P(d, src ? src : Output2D[1], brightness);
+        else WriteRep4P(d, src ? src : Output2D[1], brightness);
         return;
     }
 #endif
     alignas(16) u32 t[4 * 1024];
     EmitB32(t, dispcnt, brightness, src);
-    PackRow565(d, t, 4 * 1024);
+    PackRow565(d, t, 256 * NQ);
 }
 
 // unit A's line: at 2x its four composited quarters when the line showed the 3D layer (HiLines 4), else doubled
@@ -1019,11 +1082,11 @@ void BananaRenderer::EmitB32(u32* dst, u32 dispcnt, u16 brightness, const u32* s
 
 void BananaRenderer::Fill(u32* dst, u32 val, bool p16)
 {
-    if (p16)   // kms.rgb565 (4x): 4 rows of 1024
+    if (p16)   // kms.rgb565 (3x, 4x): Sc rows of 256 * Sc
     {
         const u16 v = Pack565(val);
         u16* d = (u16*)dst;
-        for (int i = 0; i < 4 * 1024; i++) d[i] = v;
+        for (int i = 0; i < 256 * NQ; i++) d[i] = v;
         return;
     }
     if (Quarter && NQ == 16 && Grid4)   // kms.grid_cpu: a 4x line is 4 rows of 1024
@@ -1484,8 +1547,8 @@ void BananaRenderer::ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRender
                     static thread_local std::unique_ptr<u16[]> r16;
                     if (!r32) { r32 = std::make_unique<u32[]>(4 * 1024); r16 = std::make_unique<u16[]>(4 * 1024); }
                     EmitA32(r32.get(), job.Regs[0].DispCnt, job.BrightnessA, job.HasDisplay ? job.Display : nullptr);
-                    PackRow565(r16.get(), r32.get(), 4 * 1024);
-                    Banana2DVerifyCount(4, memcmp(r16.get(), job.DstA, 4 * 1024 * sizeof(u16)) == 0);
+                    PackRow565(r16.get(), r32.get(), 256 * NQ);
+                    Banana2DVerifyCount(4, memcmp(r16.get(), job.DstA, 256 * NQ * sizeof(u16)) == 0);
                 }
             }
             if (!OutSkipB(job, srcB))
@@ -1497,8 +1560,8 @@ void BananaRenderer::ExecuteScanline(Job& job, BananaRenderer2D& a, BananaRender
                     static thread_local std::unique_ptr<u16[]> r16;
                     if (!r32) { r32 = std::make_unique<u32[]>(4 * 1024); r16 = std::make_unique<u16[]>(4 * 1024); }
                     EmitB32(r32.get(), job.Regs[1].DispCnt, job.BrightnessB, srcB);
-                    PackRow565(r16.get(), r32.get(), 4 * 1024);
-                    Banana2DVerifyCount(4, memcmp(r16.get(), job.DstB, 4 * 1024 * sizeof(u16)) == 0);
+                    PackRow565(r16.get(), r32.get(), 256 * NQ);
+                    Banana2DVerifyCount(4, memcmp(r16.get(), job.DstB, 256 * NQ * sizeof(u16)) == 0);
                 }
             }
             else if (Banana2DVerify)
