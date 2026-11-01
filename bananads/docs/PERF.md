@@ -1460,10 +1460,14 @@ sound tap compared; runs in `~/stress-runs/dsreal*`.
 - **RGB565 at 3x** (`auto` now): dsreal, pinned 1608 MHz, RG DS and Plus: all-core CPU -2..12% in every scene, the
   2D thread -10..16%; render.2d_verify 0 of 917,504 lines differ. **At 2x** (`on` only): neutral within the 5% the two
   base runs differ by (2x isn't bandwidth-bound); exact (0 of 1,507,328 lines differ).
-- **Gengis units at 3x** (`render.gengis_units_low`, opt-in): 16-line units (`2`) -11..12% CPU in the 3D race (Gengis
-  100 -> 85% of a core on the Plus), -4..6% in the town; 8-line (`3`) mixed. Not exact: 470 of 59,864 units differ (the
-  batches' translucent id quirk at unit edges; dsreal has much more translucency than MKDS). At 2x they broke (the 2x
-  3d_share rows take whole bins): 3x only.
+- **Gengis units at 3x** (`render.gengis_units_low`, now `2` by default): 12-row units (4 DS lines). First NOT exact
+  (470 of 59,864 units differed): the hi-res batches (up to 4096 pixels) started at different lines in a unit than in
+  its whole bin, and a translucent batch's flat colour (its first line's) and the 5-mod-8 id quirk follow the batch.
+  Now a translucent batch also ends at every unit's top line, in the units and in the whole-bin reference alike, and
+  render.gengis_verify finds 0 differing units (dsreal v1 =2 0/59,864, =3 0/89,016; dsreal v3 race =2 0/55,748, =3
+  0/64,360; MKDS from boot =2 0/50,832). dsreal v3 race at 3x, pinned 1416 MHz, ABAB: **Plus 57.2-57.5 fps (14 of 24
+  windows slow), 334-336% CPU -> 59.8-60.0 fps (0-8 slow), 276-282%**; RG DS 281 -> 249% (both 60 fps); `3` (6-row units) only
+  -1..-9%. At 2x the units broke (the 2x 3d_share rows take whole bins): 3x only.
 - Tried, no gain at 2x (Plus, pinned 1104, two pairs): `render.gengis_keyskip=2` (the reuse keys' skip at 2x),
   `render.gengis_vbwait=0`, `render.gengis_hrneon=1` (dsreal v1 had no shadow polygons; v3 adds MKDS-like shadow volumes).
 - 2x regression, RG DS, user settings: the integration build 109/77/107% CPU (race/action/town) vs 111/79/110%, scene
