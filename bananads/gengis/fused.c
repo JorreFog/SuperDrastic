@@ -433,6 +433,13 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
         unsigned first = i;
         i = one ? one : batch_end((const uint8_t *)cnt, i + 1, nlines, n, bmax);
         one = 0;
+        /* 3x units (render.gengis_units_low): a translucent batch ends at every unit's top line, in the units and in
+         * their whole bins alike, so that the id quirk and the batch's pass are the same in both: the units are
+         * exact (a batch from a unit's context line above ends before the unit's first line) */
+        if (gx_brk && (flags & 1)) {
+            const unsigned y = (unsigned)(gx_brk_lb + (int)(line0 + first)), lim = first + gx_brk - y % gx_brk;
+            if (i > lim) i = lim;
+        }
         unsigned k = i - first, line = line0 + first;
         uint8_t *bs = spans + 4 * first;
         if (0) {        } else if (flags & 1) {

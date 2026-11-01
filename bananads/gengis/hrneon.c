@@ -23,6 +23,9 @@
 
 int gx_hrneon = 1;                      /* render.gengis_hrneon (gengis_renderer.cpp sets it per scale) */
 __thread int gx_ref;                    /* render.gengis_verify's reference render: the old paths */
+int gx_brk3;                            /* 3x units' lines (gengis_renderer.cpp; 0: whole bins): the batch breaks */
+__thread unsigned gx_brk;               /* this bin's break period in lines (gx.c: gx_brk3 at 3x, else 0) */
+__thread int gx_brk_lb;                 /* the frame line of this bin's context line 0 */
 
 static const float iota8f[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 static const uint32_t iota8u[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };

@@ -91,6 +91,8 @@ extern int gx_stats;                    /* render.gengis_stats: count the span p
 extern __thread unsigned long gx_px_opa, gx_px_trl, gx_lines;
 extern int gx_trim;                     /* render.gengis_trim: opaque polygons skip the bins' context lines without edge marking */
 extern int gx_lazy;                     /* render.gengis_lazy: the bin context cleared 64 pixels at a time when a polygon reaches them */
+extern int gx_brk3;            /* render.gengis_units_low's unit lines at 3x (0: off): translucent batches end there */
+extern __thread unsigned gx_brk; extern __thread int gx_brk_lb;
 extern int gx_hrneon;                   /* render.gengis_hrneon: decal/toon/highlight polygons on NEON batches (hrneon.c) */
 extern __thread int gx_ref;             /* render.gengis_verify's reference render (this thread): the paths before the 4x changes */
 extern int gx_zva;                      /* render.gengis_zva: the clear and the 2x output allocate lines with dc zva */

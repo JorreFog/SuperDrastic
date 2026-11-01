@@ -40,6 +40,7 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     Sub = Scale_ == 4 && Units ? (Units == 3 ? 8 : Units == 2 ? 4 : 2)
         : Scale_ == 3 && UnitsLow >= 2 ? (UnitsLow == 3 ? 8 : 4) : 1;   // (not 2x: the 2x paths (render.3d_share's rows)
           // take whole bins: units there crashed on the Plus, 2026-11-01)
+    gx_brk3 = Scale_ == 3 && Sub > 1 ? 48 / (int)Sub : 0;   // (the units' lines: 12, 6)
     VbConvOnly = VbWait < 0 ? Scale_ >= 3 : VbWait == 0;
     NU = GX_NBINS * Sub;
     Next.store(NU);

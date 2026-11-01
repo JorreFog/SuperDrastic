@@ -388,6 +388,11 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     U64(H->ctx, GX_HDR) = (uint64_t)(uintptr_t)gx_sys; U64(H->ctx, GX_HDR + 8) = (uint64_t)(uintptr_t)gx_geom;
     const unsigned hy0 = bin * GX_BL;
     const int lb = (int)hy0 - 1;                                    /* context line l is frame line lb + l */
+#if GX_SCALE == 3
+    gx_brk = (unsigned)gx_brk3; gx_brk_lb = lb;
+#else
+    gx_brk = 0;
+#endif
     const unsigned bin_top = hy0 ? hy0 - 1 : 0;
     unsigned bin_bot = hy0 + GX_BL + 1;
     if (bin_bot > GX_H) bin_bot = GX_H;
