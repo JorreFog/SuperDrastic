@@ -41,6 +41,29 @@ else()
     set(BANANADS_LTO_DEFAULT OFF)
 endif()
 option(BANANADS_LTO "Link-time optimization" ${BANANADS_LTO_DEFAULT})
+# PGO (GCC): BANANADS_PGO = auto (the default: use the profiles in pgo/ when there are any and the compiler is GCC for
+# aarch64) | use | generate | off. The profiles come from a -fprofile-generate build run through the dsreal stress ROM
+# on a handheld's panels (stressrom/real; docs/PERF.md "PGO"); -fprofile-prefix-path makes their names relative to the
+# build folder, so a Buildroot build elsewhere finds them. They match this source: after code changes, train again
+# (a function whose code changed just goes without its profile: -Wno-coverage-mismatch).
+set(BANANADS_PGO "auto" CACHE STRING "auto | use | generate | off")
+set(BANANADS_PGO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pgo" CACHE STRING "the .gcda directory (generate: where the handheld writes them)")
+set(_pgo "${BANANADS_PGO}")
+if(_pgo STREQUAL "auto")
+    file(GLOB _gcda "${BANANADS_PGO_DIR}/*.gcda")
+    if(_gcda AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+        set(_pgo "use")
+    endif()
+endif()
+if(_pgo STREQUAL "generate")
+    add_compile_options(-fprofile-generate=${BANANADS_PGO_DIR} -fprofile-update=prefer-atomic -fprofile-prefix-path=${CMAKE_BINARY_DIR})
+    add_link_options(-fprofile-generate=${BANANADS_PGO_DIR} -fprofile-update=prefer-atomic)
+elseif(_pgo STREQUAL "use")
+    message(STATUS "BananaDS: PGO with the profiles in ${BANANADS_PGO_DIR}")
+    add_compile_options(-fprofile-use=${BANANADS_PGO_DIR} -fprofile-prefix-path=${CMAKE_BINARY_DIR} -fprofile-correction
+        -fprofile-partial-training -Wno-missing-profile -Wno-coverage-mismatch)
+    add_link_options(-fprofile-use=${BANANADS_PGO_DIR} -fprofile-correction -fprofile-partial-training)
+endif()
 if(BANANADS_LTO)
     add_compile_options(-flto=auto)
     add_link_options(-flto=auto)
