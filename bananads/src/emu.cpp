@@ -580,8 +580,22 @@ bool Emu::take_notice(std::string& line1, std::string& line2) {
     return true;
 }
 
+// core.arm9_mhz: 133 runs a DS game's ARM9 at the DSi's clock (melonDS's ARM9ClockShift 2, as DSi mode sets it): a game
+// that loses frames on a DS because its ARM9 runs out of time (Origin HeartGold's 60 fps overworld in towns, whose
+// authors suggest a DSi's CPU speed) keeps its frames. Not a DS's timing: per game, where it helps. After Reset (which
+// sets the shift) and before SetupDirectBoot (whose protection-unit update takes the region timings from it)
+void Emu::arm9_clock() {
+    if (dsi_) return;
+    const long mhz = cfg_.num("core.arm9_mhz", 67);
+    if (mhz >= 100) {
+        nds_->ARM9ClockShift = 2;
+        Log(LogLevel::Info, "[emu] core.arm9_mhz: the ARM9 at 133 MHz (the DSi's clock)\n");
+    }
+}
+
 void Emu::restart() {
     nds_->Reset();
+    arm9_clock();
     nds_->SetupDirectBoot(game_ + ".nds");
     set_clock();
     nds_->Start();
@@ -1080,9 +1094,11 @@ bool Emu::load_rom(const std::string& path) {
     start_mark("cart in");
     nds_->Reset();
     start_mark("reset");
+    arm9_clock();
     nds_->SetupDirectBoot(game_ + ".nds");
     start_mark("direct boot");
     debug_pc_ = (uint64_t)std::max(0L, cfg_.num("debug.pc", 0));
+    idle_stats_ = (unsigned)std::max(0L, cfg_.num("core.idle_stats", 0));
     if (dsi_) {
         if (!dsi_nand_) {  // no NAND for melonDS to take the DSi's settings from: the ones a DSi would hand the game
             const auto t = dsi_settings(cfg_);
@@ -1318,6 +1334,18 @@ void Emu::run_frame() {
     if (prof_) prof_->frame(frames_run_);  // prof.hz: on the emulator's thread, whichever runs the frames
     frames_run_++;
     nds_->RunFrame();
+    if (idle_stats_) {   // core.idle_stats=N: the ARM9's halted share, and the frames it never halted in (a game that
+                         // overruns its frame: its own lost frames, the same on every emulator)
+        const uint64_t idle = nds_->ARM9IdleCycles, d = idle - idle_last_;
+        idle_last_ = idle;
+        const uint64_t frame = 560190ull << nds_->ARM9ClockShift;   // (263 lines of 2130 cycles)
+        idle_sum_ += d; if (d < frame / 100) idle_busy_++;
+        if (frames_run_ % idle_stats_ == 0) {
+            Log(LogLevel::Info, "[emu] ARM9 idle %.1f%%, frames it never halted in: %u of %u (ARM9 at %d MHz)\n",
+                100.0 * idle_sum_ / ((double)frame * idle_stats_), idle_busy_, idle_stats_, nds_->ARM9ClockShift == 2 ? 133 : 67);
+            idle_sum_ = 0; idle_busy_ = 0;
+        }
+    }
     if (debug_pc_ && frames_run_ % debug_pc_ == 0) {  // debug.pc=N: where both CPUs are, every N frames
         Log(LogLevel::Info, "[debug] frame %llu: ARM9 pc %08x lr %08x cpsr %08x halted %d | ARM7 pc %08x lr %08x "
             "cpsr %08x halted %d | POWCNT1 %04x IE %08x IF %08x\n", (unsigned long long)frames_run_,

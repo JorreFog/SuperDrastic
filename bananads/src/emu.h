@@ -83,6 +83,7 @@ public:
     bool set_grid4(const unsigned char (*lut)[256]);
     // kms.rgb565: draw_into's buffers take RGB565 pixels (rows of 2 bytes) from the next frame on; true when they will
     // (render.scale 4, the Banana 2D engine, no grid, its self-test passed). Between frames, emulator's thread
+    void arm9_clock();   // core.arm9_mhz (emu.cpp)
     bool set_rgb565(bool on);
     // the pictures top()/bottom() return are RGB565 (uint16_t, as set_rgb565); pixel(): one of them as XRGB8888
     bool frame_565() const;
@@ -142,6 +143,8 @@ public:
     static Emu* from(void* userdata) { return static_cast<Emu*>(userdata); }
 
 private:
+    unsigned idle_stats_ = 0, idle_busy_ = 0;   // core.idle_stats
+    uint64_t idle_last_ = 0, idle_sum_ = 0;
     void setup_wifi();
     void setup_local();
     void flush_save(bool now);
