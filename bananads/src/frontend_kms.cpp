@@ -75,6 +75,7 @@
 #include "menu.h"
 #include "prof.h"
 #include "ra.h"
+#include "companion.h"
 
 using melonDS::Platform::Log;
 using melonDS::Platform::LogLevel;
@@ -1813,6 +1814,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         ra_init(&rh, emu.rom_path().c_str());
         start_mark("ra init");
     }
+    companion_start(emu, getenv("BANANADS_SAVE_DIR"), getenv("BANANADS_STATE_DIR"), cfg.str("companion.path", "").c_str());   // (the universal companion)
 
     if (cfg.str("prof.thread", "emu") == "present") prof_target_this_thread();   // (this thread presents)
     std::thread emu_thread([&] {
@@ -2025,6 +2027,7 @@ int run_kms(Emu& emu, const Config& cfg) {
             }
             if (emu_frames == 1) start_mark("first frame: emulated");
             ra_frame();  // RetroAchievements: this frame's memory (its pop-ups are drawn by the presenter)
+            companion_frame((uint64_t)emu_frames);
             bool shown_ahead = false;
             if (ahead) {
                 // run-ahead: the frame(s) ahead with the same buttons, the last one's picture into the slot, undone
@@ -2441,6 +2444,7 @@ int run_kms(Emu& emu, const Config& cfg) {
     ::close(g_wake);
     start_mark("quit: display closed");
     g_wake = -1;
+    companion_stop();
     return 0;
 }
 
