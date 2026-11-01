@@ -10,7 +10,7 @@ import math, os, random, struct, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROBE = os.environ.get("DSREAL_PROBE") == "1"   # the companion probe block (out-probe/)
-OUT = os.path.join(HERE, "out-probe" if PROBE else "out"); os.makedirs(OUT, exist_ok=True)
+OUT = os.path.join(HERE, os.environ.get("DSREAL_OUTDIR") or ("out-probe" if PROBE else "out")); os.makedirs(OUT, exist_ok=True)
 def fx(v): return int(round(v * 4096))
 
 # ---- tables.h ----

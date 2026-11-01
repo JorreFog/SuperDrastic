@@ -17,8 +17,8 @@ static part_t part[MAXP];
 static s32 seg_x[NSEG], seg_z[NSEG], seg_h[NSEG];
 static s32 tree_x[MAXT], tree_z[MAXT], box_x[MAXH], box_z[MAXH];
 static s32 nk, nvis, ntree, npart, nbox, nhouse, cam_x, cam_z, cam_h;
-static u32 dlbuf[12000];
-static dl_t dl_road, dl_kart, dl_tree, dl_box, dl_part, dl_house, dl_sky, dl_shadow;
+static u32 dlbuf[14000];
+static dl_t dl_road, dl_kart, dl_tree, dl_box, dl_part, dl_house, dl_sky, dl_shadow, dl_ground, dl_mount, dl_dust;
 static u32 hits, laps, lapt, vmh;
 static s32 ctri[NSEG][8];
 static s32 ncol, nvm;
@@ -171,7 +171,47 @@ static void build_meshes(void) {
         dl_cmd(G_COLOR, 1, RGB(10, 18, 31)); vtx16(c0, FX(-1), s0); vtx16(c1, FX(-1), s1);
         dl_cmd(G_COLOR, 1, RGB(24, 28, 31)); vtx16(c1, FX(5), s1); vtx16(c0, FX(5), s0);
     }
-    dl_sky = dl_finish();
+    dl_sky = dl_finish(); b += dl_sky.n;
+
+    /* fill (v2, 4x calibration: MKDS's 4x race draws 1.3-2.9 M opaque + up to 1.2 M translucent span pixels a frame
+     * on 786 K screen pixels, PERF.md "Gengis at 4x"): the ground under the course, mountains, dust behind the karts */
+    dl_start(b);
+    dl_cmd(G_POLYATTR, 1, 0xC0 | (31 << 16) | (8 << 24) | (1u << 15));
+    dl_cmd(G_TEXPARAM, 1, texparam(TEX_GRASS, 3, 3, 3, 3 << 16)); dl_cmd(G_PLTT, 1, PAL_GRASS >> 4); dl_cmd(G_COLOR, 1, RGB(20, 28, 18));
+    dl_cmd(G_BEGIN, 1, 1);
+    for (int j = -2; j < 2; j++) for (int i = -2; i < 2; i++) {
+        s32 x0 = i * FX(1.9), z0 = j * FX(1.9), x1 = x0 + FX(1.9), z1 = z0 + FX(1.9);
+        dl_cmd(G_TEXCOORD, 1, tc(0, 0)); dl_cmd(G_VTXXZ, 1, ((u32)x0 & 0xFFFF) | ((u32)z0 << 16));
+        dl_cmd(G_TEXCOORD, 1, tc(0, 256)); dl_cmd(G_VTXXZ, 1, ((u32)x0 & 0xFFFF) | ((u32)z1 << 16));
+        dl_cmd(G_TEXCOORD, 1, tc(256, 256)); dl_cmd(G_VTXXZ, 1, ((u32)x1 & 0xFFFF) | ((u32)z1 << 16));
+        dl_cmd(G_TEXCOORD, 1, tc(256, 0)); dl_cmd(G_VTXXZ, 1, ((u32)x1 & 0xFFFF) | ((u32)z0 << 16));
+    }
+    dl_ground = dl_finish(); b += dl_ground.n;
+    dl_start(b);                                             /* mountains: 8 4x4-compressed quads in a ring */
+    dl_cmd(G_POLYATTR, 1, 0xC0 | (31 << 16) | (9 << 24));
+    dl_cmd(G_TEXPARAM, 1, texparam(TEX_C4X4, 5, 4, 4, 3 << 16)); dl_cmd(G_PLTT, 1, PAL_C4X4 >> 4); dl_cmd(G_COLOR, 1, RGB(18, 20, 24));
+    dl_cmd(G_BEGIN, 1, 1);
+    for (int k = 0; k < 8; k++) {
+        s32 a0 = k * 128, a1 = a0 + 128;
+        s32 c0 = cs(a0) * 6, s0 = sn(a0) * 6, c1 = cs(a1) * 6, s1 = sn(a1) * 6;
+        dl_cmd(G_TEXCOORD, 1, tc(0, 128)); vtx16(c0, FX(-0.5), s0);
+        dl_cmd(G_TEXCOORD, 1, tc(128, 128)); vtx16(c1, FX(-0.5), s1);
+        dl_cmd(G_TEXCOORD, 1, tc(128, 0)); vtx16(c1, (FX(2.5) + (k & 1) * 4096), s1);
+        dl_cmd(G_TEXCOORD, 1, tc(0, 0)); vtx16(c0, (FX(2.5) + (k & 1) * 4096), s0);
+    }
+    dl_mount = dl_finish(); b += dl_mount.n;
+    dl_start(b);                                             /* dust: two crossed translucent quads behind a kart */
+    dl_cmd(G_POLYATTR, 1, 0xC0 | (9 << 16) | (10 << 24));
+    dl_cmd(G_TEXPARAM, 1, texparam(TEX_SMOKE, 1, 2, 2, 0)); dl_cmd(G_PLTT, 1, PAL_SMOKE >> 4); dl_cmd(G_COLOR, 1, RGB(26, 24, 20));
+    dl_cmd(G_BEGIN, 1, 1);
+    for (int k = 0; k < 2; k++) {
+        dl_cmd(G_TEXCOORD, 1, tc(0, 32)); vtx16(k ? 0 : FX(-1.6), 0, k ? FX(0.6) : FX(1.6));
+        dl_cmd(G_TEXCOORD, 1, tc(32, 32)); vtx16(k ? 0 : FX(1.6), 0, k ? FX(3.4) : FX(1.6));
+        dl_cmd(G_TEXCOORD, 1, tc(32, 0)); vtx16(k ? 0 : FX(1.6), FX(1.8), k ? FX(3.4) : FX(1.6));
+        dl_cmd(G_TEXCOORD, 1, tc(0, 0)); vtx16(k ? 0 : FX(-1.6), FX(1.8), k ? FX(0.6) : FX(1.6));
+    }
+    dl_cmd(G_COLOR, 1, 0x7FFF);
+    dl_dust = dl_finish();
 }
 
 static void race_enter(void) {
@@ -325,6 +365,15 @@ static void draw3d(u32 f) {
         GX_COLOR = (u32)RGB(20 + (p->life & 7), 20, 20); gx_send(dl_part); MTX_POP = 1;
     }
     MTX_PUSH = 0; gx_trans(cam_x, 0, cam_z); MTX_SCALE = 4 << 12; MTX_SCALE = 4 << 12; MTX_SCALE = 4 << 12; gx_send(dl_sky); MTX_POP = 1;
+    /* the fill set (level 3 and up): ground (x8 scale: 30 units around the camera), mountains (x4), dust behind karts */
+    if (level >= 3) {
+        MTX_PUSH = 0; gx_trans(cam_x, FX(-0.03), cam_z); MTX_SCALE = 8 << 12; MTX_SCALE = 1 << 12; MTX_SCALE = 8 << 12; gx_send(dl_ground); MTX_POP = 1;
+        MTX_PUSH = 0; gx_trans(cam_x, 0, cam_z); MTX_SCALE = 4 << 12; MTX_SCALE = 4 << 12; MTX_SCALE = 4 << 12; gx_send(dl_mount); MTX_POP = 1;
+        for (int k = 0; k < nk; k++) {
+            kart_t *K = &kart[k];
+            MTX_PUSH = 0; gx_trans(K->x, 0, K->z); gx_rot_y(-(K->h + 256)); gx_send(dl_dust); MTX_POP = 1;
+        }
+    }
 }
 
 static void race_frame(u32 f) {
@@ -338,7 +387,7 @@ static void race_frame(u32 f) {
     hud_rot += 37;
     for (int i = 0; i < 128; i++) { oam[i * 4] = 0x0200; oamb[i * 4] = 0x0200; }  /* hidden */
     oam[0] = 8 | (1 << 8) | (1 << 9); oam[1] = (u16)(200 | (2 << 14)); oam[2] = 0;              /* item box 32x32 affine double */
-    oam[4] = 120 | (1 << 8) | (1 << 9) | (3 << 14 & 0); oam[5] = (u16)(8 | (3 << 14) | (1 << 9)); oam[6] = 16;  /* place 64x64 */
+    oam[4] = 120 | (1 << 8) | (1 << 9) | (3 << 14 & 0); oam[5] = (u16)(8 | (2 << 14) | (1 << 9)); oam[6] = 16;  /* place 64x64 */
     for (int i = 0; i < 10; i++) { oam[(4 + i) * 4] = 176; oam[(4 + i) * 4 + 1] = (u16)(8 + i * 10); oam[(4 + i) * 4 + 2] = (u16)(32 + (i & 3)); }
     for (int k = 0; k < nk; k++) {                           /* course map icons */
         s32 x = 128 + (kart[k].x >> 13), y = 96 + (kart[k].z >> 13);
