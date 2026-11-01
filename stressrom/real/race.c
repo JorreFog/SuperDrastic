@@ -152,12 +152,21 @@ static void build_meshes(void) {
     dl_cmd(G_COLOR, 1, 0x7FFF);
     dl_house = dl_finish(); b += dl_house.n;
 
-    /* kart shadow: translucent black quad on the road */
+    /* kart shadow (v3): a shadow volume as MKDS draws its kart shadows (PERF.md "Gengis at 4x": the shadow polygons'
+     * path): a box through the road drawn twice, the mask pass (polygon mode 3, id 0, back faces: the stencil where
+     * it is behind the road) and the shadow pass (id 7, front faces: black where the stencil is set) */
     dl_start(b);
-    dl_cmd(G_POLYATTR, 1, 0xC0 | (14 << 16) | (6 << 24));
     dl_cmd(G_TEXPARAM, 1, 0); dl_cmd(G_COLOR, 1, 0);
-    dl_cmd(G_BEGIN, 1, 1);
-    vtx16(FX(-0.8), FX(0.02), FX(-1.2)); vtx16(FX(0.8), FX(0.02), FX(-1.2)); vtx16(FX(0.8), FX(0.02), FX(1.2)); vtx16(FX(-0.8), FX(0.02), FX(1.2));
+    for (int pass = 0; pass < 2; pass++) {
+        dl_cmd(G_POLYATTR, 1, (3 << 4) | (pass ? 0x80 : 0x40) | (16 << 16) | ((pass ? 7u : 0u) << 24));
+        static const s8 bf[6][4][3] = {
+            {{0,0,1},{1,0,1},{1,1,1},{0,1,1}}, {{1,0,0},{0,0,0},{0,1,0},{1,1,0}}, {{0,1,1},{1,1,1},{1,1,0},{0,1,0}},
+            {{0,0,0},{1,0,0},{1,0,1},{0,0,1}}, {{1,0,1},{1,0,0},{1,1,0},{1,1,1}}, {{0,0,0},{0,0,1},{0,1,1},{0,1,0}} };
+        dl_cmd(G_BEGIN, 1, 1);
+        for (int f = 0; f < 6; f++)
+            for (int k = 0; k < 4; k++)
+                vtx16(bf[f][k][0] ? FX(0.8) : FX(-0.8), bf[f][k][1] ? FX(0.4) : FX(-0.4), bf[f][k][2] ? FX(1.2) : FX(-1.2));
+    }
     dl_cmd(G_COLOR, 1, 0x7FFF);
     dl_shadow = dl_finish(); b += dl_shadow.n;
 
