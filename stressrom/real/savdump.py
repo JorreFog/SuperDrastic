@@ -9,6 +9,12 @@ def recs(path):
         m, ls, fr, cp, cs, a7, load, lag = struct.unpack_from("<8I", d, i * 32)
         if m != 0x43455252: continue
         out[(ls >> 8, ls & 0xFF)] = (fr, cp, cs, a7, load, lag)
+    if not out:   # DraStic takes the EEPROM writes as FLASH (3-byte addresses): each record's first byte is lost
+        i = d.find(b"REC")
+        while i >= 0:
+            m, ls, fr, cp, cs, a7, load, lag = struct.unpack("<8I", b"R" + d[i:i + 31])
+            if 0 < fr <= 4000: out[(ls >> 8, ls & 0xFF)] = (fr, cp, cs, a7, load, lag)
+            i = d.find(b"REC", i + 3)
     return out
 a = recs(sys.argv[1]); b = recs(sys.argv[2]) if len(sys.argv) > 2 else None
 for k in sorted(a):
