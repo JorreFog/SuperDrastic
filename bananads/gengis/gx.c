@@ -488,7 +488,8 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     for (int l = 0; l < GX_BL; l++) {
         const uint32_t *r = res + l * GX_W;
         uint32_t *e = out + l * GX_W, *o = e + GX_W / 2;
-        if (gx_zva)         /* (out's rows are 64-byte aligned: OutBuf; gx_clear says why) */
+        if (gx_zva && !gx_ref)   /* (out's rows are 64-byte aligned: OutBuf; gx_clear says why. Not render.gengis_verify's
+                                  * reference: its scratch buffer isn't, and dc zva zeroed the 64 bytes around it: a crash) */
             for (int i = 0; i < GX_W; i += 32) {
                 GX_ZVA(e + i / 2); GX_ZVA(o + i / 2);
                 for (int j = i; j < i + 32; j += 8) {
