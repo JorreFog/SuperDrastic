@@ -1438,3 +1438,20 @@ on 57.19 / 55.09 / 59.23 / 59.27 fps (mean 57.70, 169 windows < 59), off 53.89 /
 286 windows < 59). The 2D thread's CPU per frame fell 13% in every run (8.3-8.9 -> 7.2-7.6 ms); max temperature
 68-70 -> 68 C. Heat noise is large (one pair alone is a wash): the window count is the steadier signal.
 Details: ~/bananaos-0.5.0/agent-qa/RGB565.md.
+
+## The overnight run of 2026-11-01 (agent ds): dsreal, every win at every scale, Origin HeartGold
+
+The stress ROM: `stressrom/real` (dsreal, README + CALIBRATION there): race (MKDS-like; v2 adds the 4x fill),
+2D action on both screens, an HG-like town, and Origin HeartGold's overworld pattern; per-scene checksums (display
+captures, game state, the ARM7 driver) and the ARM9's load and lost frames written to the save (`savdump.py`).
+All A/Bs below: the same device, pinned clocks (cpugov.min_khz = max_khz), alternating, the ROM's checksums and the
+sound tap compared; runs in `~/stress-runs/dsreal*`.
+
+- **RGB565 frames with kms.grid_cpu's grid at 4x** (the RG DS Plus with ds-grid-2x): NEON grid writers straight to
+  RGB565 (`Load16GP`; a first version that packed the 32-bit grid lines afterwards cost the 2D thread +5..17 points
+  and was dropped). v2, 4x, pinned 1416 MHz, two pairs: race 56.76/57.23 vs 56.27/56.70 fps, 1-s windows < 59.5
+  21/20 vs 25/25 of 39, the 2D thread -6..-11% in every scene; exact (checksums, tap). Default on (`auto`).
+- **Origin HeartGold:** its 60 fps overworld overruns a DS's 67 MHz ARM9 in busy towns (the hack's own notes), so the
+  game loses frames itself on every emulator. dsreal's ohg scene, RG DS, 2x: 908 of 2,408 frames lost at 67 MHz in
+  BananaDS (78 in DraStic, whose ARM9 timing is cheaper), **6 with `core.arm9_mhz=133`** (melonDS's ARM9ClockShift 2:
+  the same game-state hash, emulator CPU +25%). `core.idle_stats` shows the ARM9's halted share in a real game.
