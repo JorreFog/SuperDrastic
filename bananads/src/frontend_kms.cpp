@@ -1682,7 +1682,9 @@ int run_kms(Emu& emu, const Config& cfg) {
         const std::string v = cfg.str("kms.rgb565", "auto");
         const bool want = v != "off" && v != "0";
         // (on: also at render.scale 3, whose RGB565 writers are the same as 4x's; auto: 4x only)
-        const bool at = emu.scale() == 4 || ((emu.scale() == 3 || emu.scale() == 2) && (v == "on" || v == "1"));
+        // (auto: 3x and 4x; dsreal at 3x, RG DS and Plus, pinned 1608 MHz: every scene's CPU -2..12%, the 2D thread
+        // -10..16%, render.2d_verify 0 of 917,504 lines differ. 2x: on only)
+        const bool at = emu.scale() >= 3 || (emu.scale() == 2 && (v == "on" || v == "1"));
         dp.rgb565 = want && dp.direct && at && !ra_n;
         // (with kms.grid_cpu's grid too, auto and on: the grid's colours packed to 5/6/5 bits, the rule the 3D layer has;
         // dsreal v2 at 4x on the Plus, ds-grid-2x, pinned 1416 MHz, two pairs: race 56.76/57.23 vs 56.27/56.70 fps,
