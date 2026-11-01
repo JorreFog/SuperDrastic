@@ -35,7 +35,10 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     gx_trim = Trim;
     gx_hrneon = HrNeon < 0 ? Scale_ >= 3 : HrNeon != 0;
     gx_lazy = Lazy < 0 ? Scale_ >= 3 : Lazy != 0;
-    Sub = Scale_ == 4 && Units ? (Units == 3 ? 8 : Units == 2 ? 4 : 2) : 1;
+    // render.gengis_units: 4x 1 = 32-line halves, 2 = units of 4 DS lines, 3 = of 2 DS lines; at 3x and 2x (UnitsLow,
+    // render.gengis_units_low: 0 = whole bins, as before) 2 and 3 the same (gx3q/gx3e, gx2q/gx2e)
+    Sub = Scale_ == 4 && Units ? (Units == 3 ? 8 : Units == 2 ? 4 : 2)
+        : (Scale_ == 3 || Scale_ == 2) && UnitsLow >= 2 ? (UnitsLow == 3 ? 8 : 4) : 1;
     VbConvOnly = VbWait < 0 ? Scale_ >= 3 : VbWait == 0;
     NU = GX_NBINS * Sub;
     Next.store(NU);
@@ -474,6 +477,7 @@ int GengisRenderer3D::HrNeon = -1;
 int GengisRenderer3D::Verify = 0;
 int GengisRenderer3D::Lazy = 0;
 int GengisRenderer3D::Units = 3;
+int GengisRenderer3D::UnitsLow = 0;
 int GengisRenderer3D::KeySkip = 1;
 int GengisRenderer3D::VbWait = -1;
 int GengisRenderer3D::Crc = 0;
@@ -484,6 +488,19 @@ int GengisRenderer3D::Reuse = 1;
 
 
 void GengisRenderer3D::RenderBin(unsigned b, uint32_t* dst) {   // (b: a work unit, a frame bin unless Sub > 1)
+    if (Sub > 1 && Scale_ < 4) {   // 3x, 2x units; render.gengis_verify's reference: the unit's part of its whole bin
+        if (!gx_ref) {
+            if (Scale_ == 3) (Sub == 8 ? gx3e_render_unit : gx3q_render_unit)(&Frame, b, dst);
+            else (Sub == 8 ? gx2e_render_unit : gx2q_render_unit)(&Frame, b, dst);
+            return;
+        }
+        static thread_local std::vector<uint32_t> h;
+        const size_t n = (size_t)GX_BL * GX_W * Scale_ * Scale_ / Sub;
+        h.resize(Sub * n);
+        (Scale_ == 3 ? gx3_render_bin : gx2_render_bin)(&Frame, b / Sub, h.data());
+        memcpy(dst, h.data() + (b % Sub) * n, n * sizeof(uint32_t));
+        return;
+    }
     if (Sub == 8 && !gx_ref) gx4e_render_unit(&Frame, b, dst);
     else if (Sub == 8) {   // (render.gengis_verify's reference for an 8-line unit: its 32-line bin's quarter)
         static thread_local std::vector<uint32_t> h;
