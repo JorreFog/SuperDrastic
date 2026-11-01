@@ -6,9 +6,9 @@
 #include "game.h"
 
 u32 scene_frame, level, prof[4];
-static const scene_t *const scenes[] = { &scene_race, &scene_action, &scene_town };
-#define NSCENES 3
-static const u16 scene_frames[NSCENES] = { 1500, 1200, 1500 };    /* 25 s, 20 s, 25 s at 60 fps (phase table) */
+static const scene_t *const scenes[] = { &scene_race, &scene_action, &scene_town, &scene_ohg };
+#define NSCENES 4
+static const u16 scene_frames[NSCENES] = { 1500, 1200, 1500, 1500 };    /* 25 s, 20 s, 25 s at 60 fps (phase table) */
 
 typedef struct { u32 magic, loop_scene, frames, crc_pic, crc_state, arm7, load_avg, lag_max; } rec_t;   /* 32 bytes */
 static rec_t rec, recs[NSCENES];
