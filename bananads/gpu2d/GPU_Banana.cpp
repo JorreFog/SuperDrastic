@@ -102,7 +102,7 @@ void BananaRenderer::SetOutput(u32* top, u32* bottom)
 
 void BananaRenderer::Recalc16()
 {
-    Out16 = Want16 && Quarter && Sc >= 3 && !BananaGrid4On() && Out[0];
+    Out16 = Want16 && Quarter && Sc >= 3 && Out[0];   // (kms.grid_cpu's grid: the 32-bit writers, packed)
 }
 
 static bool Rgb565SelfTest();
@@ -125,7 +125,7 @@ bool BananaRenderer::SetOutputFormat(bool rgb565)
         OutputTouchedAll();   // (render.2d_out_skip: the rows the other format left are drawn again)
     Want16 = rgb565;
     Recalc16();
-    return Want16 && Quarter && Sc >= 3 && !BananaGrid4On();
+    return Want16 && Quarter && Sc >= 3;
 }
 
 u32* BananaRenderer::LineDst(int screen, u32 line)
@@ -154,7 +154,18 @@ static inline u16 Pack565(u32 p)
 }
 static void PackRow565(u16* dst, const u32* src, int n)
 {
-    for (int i = 0; i < n; i++) dst[i] = Pack565(src[i]);
+    int i = 0;
+#if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    for (; i + 16 <= n; i += 16)   // (the same bits as Pack565: r8 & 0xF8, g8 >> 2, b8 >> 3)
+    {
+        const uint8x16x4_t v = vld4q_u8((const u8*)(src + i));   // b g r x planes
+        uint8x16x2_t o;
+        o.val[0] = vorrq_u8(vshlq_n_u8(vshrq_n_u8(v.val[1], 2), 5), vshrq_n_u8(v.val[0], 3));
+        o.val[1] = vorrq_u8(vandq_u8(v.val[2], vdupq_n_u8(0xF8)), vshrq_n_u8(v.val[1], 5));
+        vst2q_u8((u8*)(dst + i), o);
+    }
+#endif
+    for (; i < n; i++) dst[i] = Pack565(src[i]);
 }
 
 void BananaRenderer::FillLine(u32* dst, u32 val)
@@ -972,7 +983,7 @@ void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* dis
     }
     u16* d = (u16*)dst;
 #if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
-    if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1)
+    if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1 && !Grid4)   // (the grid: the 32-bit writers, packed)
     {
         auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
         if (a.HiLines == 1)
@@ -1004,7 +1015,7 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
     }
     u16* d = (u16*)dst;
 #if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
-    if (Banana2DFast && ((dispcnt >> 16) & 0x1))
+    if (Banana2DFast && ((dispcnt >> 16) & 0x1) && !Grid4)
     {
         if (Sc == 3) WriteRep3P(d, src ? src : Output2D[1], brightness);
         else WriteRep4P(d, src ? src : Output2D[1], brightness);
@@ -1082,6 +1093,13 @@ void BananaRenderer::EmitB32(u32* dst, u32 dispcnt, u16 brightness, const u32* s
 
 void BananaRenderer::Fill(u32* dst, u32 val, bool p16)
 {
+    if (p16 && Quarter && NQ == 16 && Grid4)   // kms.rgb565 with kms.grid_cpu: the 32-bit grid line, packed
+    {
+        alignas(16) u32 t[4 * 1024];
+        Fill(t, val, false);
+        PackRow565((u16*)dst, t, 4 * 1024);
+        return;
+    }
     if (p16)   // kms.rgb565 (3x, 4x): Sc rows of 256 * Sc
     {
         const u16 v = Pack565(val);
