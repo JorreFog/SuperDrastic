@@ -1,6 +1,6 @@
 diff --color -ru a/src/NDS.cpp b/src/NDS.cpp
 --- a/src/NDS.cpp	2026-11-01 03:05:06.448810965 +0100
-+++ b/src/NDS.cpp	2026-11-01 03:05:06.489482979 +0100
++++ b/src/NDS.cpp	2026-11-01 03:07:53.240056658 +0100
 @@ -1543,6 +1543,7 @@
                  if ((cpu.Halted == 1 || cpu.IdleLoop) && timestamp < target)
                  {
@@ -9,7 +9,15 @@ diff --color -ru a/src/NDS.cpp b/src/NDS.cpp
                      timestamp = target;
                  }
                  cpu.IdleLoop = 0;
-@@ -1711,7 +1712,10 @@
+@@ -1671,6 +1672,7 @@
+             if (t != sys)
+             {
+                 ARM9Target = t << ARM9ClockShift;
++                if (ARM9Target > ARM9Timestamp) ARM9IdleCycles += ARM9Target - ARM9Timestamp;
+                 ARM9Timestamp = ARM9Target;
+                 gpu3d.Timestamp = t;
+                 if (ARM7Timestamp < t)
+@@ -1711,7 +1713,10 @@
                  PrefetchLookup(arm9);
          }
          else if (arm9.Halted == 1 && !HaltInterrupted(0))
