@@ -1,0 +1,72 @@
+NDSCart: core.card_fast, the ROM transfer delays shifted right by NDSCartSlot::XferShift (0: as before)
+
+diff --color -ru a/src/NDSCart.cpp b/src/NDSCart.cpp
+--- a/src/NDSCart.cpp	2026-11-01 14:56:34.958991298 +0100
++++ b/src/NDSCart.cpp	2026-11-01 14:56:34.970669421 +0100
+@@ -17,6 +17,7 @@
+ */
+ 
+ #include <string.h>
++#include <algorithm>
+ #include <inttypes.h>
+ #include <assert.h>
+ #include "NDS.h"
+@@ -821,9 +822,9 @@
+     if (!(ROMCnt & (1<<30)))
+     {
+         if (datasize == 0)
+-            Parent.NDS.ScheduleEvent(ROMTransferEvent, false, xfercycle * cmddelay, ROMTransfer_End, 0);
++            Parent.NDS.ScheduleEvent(ROMTransferEvent, false, std::max<u32>(1, (xfercycle * cmddelay) >> NDSCartSlot::XferShift), ROMTransfer_End, 0);
+         else
+-            Parent.NDS.ScheduleEvent(ROMTransferEvent, false, xfercycle * (cmddelay + 4), ROMTransfer_ReceiveData, 0);
++            Parent.NDS.ScheduleEvent(ROMTransferEvent, false, std::max<u32>(1, (xfercycle * (cmddelay + 4)) >> NDSCartSlot::XferShift), ROMTransfer_ReceiveData, 0);
+     }
+     else
+     {
+@@ -844,9 +845,9 @@
+         RaiseDRQ();
+ 
+         if (datasize == 0)
+-            Parent.NDS.ScheduleEvent(ROMTransferEvent, false, xfercycle * cmddelay, ROMTransfer_End, 0);
++            Parent.NDS.ScheduleEvent(ROMTransferEvent, false, std::max<u32>(1, (xfercycle * cmddelay) >> NDSCartSlot::XferShift), ROMTransfer_End, 0);
+         else
+-            Parent.NDS.ScheduleEvent(ROMTransferEvent, false, xfercycle * cmddelay, ROMTransfer_SendData, 0);
++            Parent.NDS.ScheduleEvent(ROMTransferEvent, false, std::max<u32>(1, (xfercycle * cmddelay) >> NDSCartSlot::XferShift), ROMTransfer_SendData, 0);
+     }
+ }
+ 
+@@ -893,7 +894,7 @@
+     if (!(ROMTransferPos & 0x1FF))
+         delay += ((ROMCnt >> 16) & 0x3F);
+ 
+-    Parent.NDS.ScheduleEvent(ROMTransferEvent, false, xfercycle * delay, ROMTransfer_ReceiveData, 0);
++    Parent.NDS.ScheduleEvent(ROMTransferEvent, false, std::max<u32>(1, (xfercycle * delay) >> NDSCartSlot::XferShift), ROMTransfer_ReceiveData, 0);
+ }
+ 
+ void NDSCartSlot::Interface::ROMSendData(u32 param)
+@@ -937,10 +938,10 @@
+         if (!(ROMTransferPos & 0x1FF))
+             delay += ((ROMCnt >> 16) & 0x3F);
+ 
+-        Parent.NDS.ScheduleEvent(ROMTransferEvent, false, xfercycle * delay, ROMTransfer_SendData, 0);
++        Parent.NDS.ScheduleEvent(ROMTransferEvent, false, std::max<u32>(1, (xfercycle * delay) >> NDSCartSlot::XferShift), ROMTransfer_SendData, 0);
+     }
+     else
+-        Parent.NDS.ScheduleEvent(ROMTransferEvent, false, xfercycle * delay, ROMTransfer_End, 0);
++        Parent.NDS.ScheduleEvent(ROMTransferEvent, false, std::max<u32>(1, (xfercycle * delay) >> NDSCartSlot::XferShift), ROMTransfer_End, 0);
+ }
+ 
+ void NDSCartSlot::Interface::ROMEndTransfer(u32 param)
+diff --color -ru a/src/NDSCart.h b/src/NDSCart.h
+--- a/src/NDSCart.h	2026-11-01 14:56:34.959027136 +0100
++++ b/src/NDSCart.h	2026-11-01 14:56:34.970425337 +0100
+@@ -66,6 +66,9 @@
+ class NDSCartSlot
+ {
+ public:
++    // BananaDS core.card_fast: the ROM transfer delays (command, gaps, words) shifted right by this (0: a DS card's)
++    inline static u32 XferShift = 0;
++public:
+     explicit NDSCartSlot(melonDS::NDS& nds, u32 num, std::unique_ptr<CartCommon>&& rom = nullptr) noexcept;
+     ~NDSCartSlot() noexcept;
+     void Reset() noexcept;

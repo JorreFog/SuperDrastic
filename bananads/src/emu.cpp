@@ -586,6 +586,13 @@ bool Emu::take_notice(std::string& line1, std::string& line2) {
 // sets the shift) and before SetupDirectBoot (whose protection-unit update takes the region timings from it)
 void Emu::arm9_clock() {
     if (dsi_) return;
+    // core.card_fast: N > 0 shortens the game card's ROM transfer delays 2^N times (patches/melonds/0420). Not a DS's
+    // timing: a game that reads its data while it plays loses fewer of its own frames (Origin HeartGold at 133 MHz
+    // never halted for 7-10 frames at each area border, 7-8 at 266 MHz, 4-5 with the card 8x faster: half of it is the
+    // card's time). run-bananads sets 3 with the "dsi" timing
+    const long cf = cfg_.num("core.card_fast", 0);
+    melonDS::NDSCart::NDSCartSlot::XferShift = cf > 0 && cf < 8 ? (melonDS::u32)cf : 0;
+    if (cf > 0) Log(LogLevel::Info, "[emu] core.card_fast: ROM transfers %ld times faster\n", 1L << cf);
     const long mhz = cfg_.num("core.arm9_mhz", 67);
     if (mhz >= 100) {
         nds_->ARM9ClockShift = 2;
@@ -1342,7 +1349,7 @@ void Emu::run_frame() {
         idle_sum_ += d; if (d < frame / 100) idle_busy_++;
         if (frames_run_ % idle_stats_ == 0) {
             Log(LogLevel::Info, "[emu] ARM9 idle %.1f%%, frames it never halted in: %u of %u (ARM9 at %d MHz)\n",
-                100.0 * idle_sum_ / ((double)frame * idle_stats_), idle_busy_, idle_stats_, nds_->ARM9ClockShift == 2 ? 133 : 67);
+                100.0 * idle_sum_ / ((double)frame * idle_stats_), idle_busy_, idle_stats_, 67 << (nds_->ARM9ClockShift - 1));
             idle_sum_ = 0; idle_busy_ = 0;
         }
     }
