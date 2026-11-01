@@ -35,10 +35,11 @@ GengisRenderer3D::GengisRenderer3D(melonDS::GPU3D& gpu3D, int threads, bool defe
     gx_trim = Trim;
     gx_hrneon = HrNeon < 0 ? Scale_ >= 3 : HrNeon != 0;
     gx_lazy = Lazy < 0 ? Scale_ >= 3 : Lazy != 0;
-    // render.gengis_units: 4x 1 = 32-line halves, 2 = units of 4 DS lines, 3 = of 2 DS lines; at 3x and 2x (UnitsLow,
-    // render.gengis_units_low: 0 = whole bins, as before) 2 and 3 the same (gx3q/gx3e, gx2q/gx2e)
+    // render.gengis_units: 4x 1 = 32-line halves, 2 = units of 4 DS lines, 3 = of 2 DS lines; at 3x (UnitsLow,
+    // render.gengis_units_low: 0 = whole bins, as before) 2 and 3 the same (gx3q/gx3e)
     Sub = Scale_ == 4 && Units ? (Units == 3 ? 8 : Units == 2 ? 4 : 2)
-        : (Scale_ == 3 || Scale_ == 2) && UnitsLow >= 2 ? (UnitsLow == 3 ? 8 : 4) : 1;
+        : Scale_ == 3 && UnitsLow >= 2 ? (UnitsLow == 3 ? 8 : 4) : 1;   // (not 2x: the 2x paths (render.3d_share's rows)
+          // take whole bins: units there crashed on the Plus, 2026-11-01)
     VbConvOnly = VbWait < 0 ? Scale_ >= 3 : VbWait == 0;
     NU = GX_NBINS * Sub;
     Next.store(NU);
