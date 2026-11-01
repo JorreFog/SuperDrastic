@@ -512,6 +512,74 @@ static void WriteRep4GNeon(u32* dst, const u32* src, u32 factor)
         }
     }
 }
+// kms.rgb565 with the grid: Load16G's bytes packed (as Pack565 packs the 32-bit output: r8 & 0xF8, g8 >> 2, b8 >> 3)
+template<int mode>
+static inline uint16x8x2_t Load16GP(const u32* src, uint8x8_t f, const uint8x16x4_t& t)
+{
+    uint8x16x4_t s = vld4q_u8((const u8*)src);
+    uint8x16_t r = s.val[0], g = s.val[1], b = s.val[2];
+    if (mode)
+    {
+        r = Bright6<mode>(r, f); g = Bright6<mode>(g, f); b = Bright6<mode>(b, f);
+    }
+    r = vqtbl4q_u8(t, r); g = vqtbl4q_u8(t, g); b = vqtbl4q_u8(t, b);
+    const uint8x16_t lo = vorrq_u8(vshlq_n_u8(vshrq_n_u8(g, 2), 5), vshrq_n_u8(b, 3));
+    const uint8x16_t hi = vorrq_u8(vandq_u8(r, vdupq_n_u8(0xF8)), vshrq_n_u8(g, 5));
+    uint16x8x2_t o;
+    o.val[0] = vreinterpretq_u16_u8(vzip1q_u8(lo, hi));
+    o.val[1] = vreinterpretq_u16_u8(vzip2q_u8(lo, hi));
+    return o;
+}
+template<int mode>
+static void WriteZip4GPNeon(u16* dst, const u32* const* src, u32 factor, bool line)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    const uint8x16x4_t tc = vld1q_u8_x4(Grid6[line ? 1 : 0]), tl = vld1q_u8_x4(Grid6[1]);
+    for (int i = 0; i < 256; i += 16)
+    {
+        uint16x8x2_t p[4];
+        for (int n = 0; n < 3; n++) p[n] = Load16GP<mode>(src[n] + i, f, tc);
+        p[3] = Load16GP<mode>(src[3] + i, f, tl);
+        for (int h = 0; h < 2; h++)
+        {
+            uint16x8x4_t z = {{ p[0].val[h], p[1].val[h], p[2].val[h], p[3].val[h] }};
+            vst4q_u16(dst + 4 * i + 32 * h, z);
+        }
+    }
+}
+template<int mode>
+static void WriteRep4GPNeon(u16* dst, const u32* src, u32 factor)
+{
+    uint8x8_t f = vdup_n_u8((u8)factor);
+    const uint8x16x4_t tc = vld1q_u8_x4(Grid6[0]), tl = vld1q_u8_x4(Grid6[1]);
+    for (int i = 0; i < 256; i += 16)
+    {
+        const uint16x8x2_t c = Load16GP<mode>(src + i, f, tc), l = Load16GP<mode>(src + i, f, tl);
+        for (int h = 0; h < 2; h++)
+        {
+            uint16x8x4_t z = {{ c.val[h], c.val[h], c.val[h], l.val[h] }};
+            for (int r = 0; r < 3; r++) vst4q_u16(dst + 1024 * r + 4 * i + 32 * h, z);
+            uint16x8x4_t w = {{ l.val[h], l.val[h], l.val[h], l.val[h] }};
+            vst4q_u16(dst + 1024 * 3 + 4 * i + 32 * h, w);
+        }
+    }
+}
+static void WriteZip4GP(u16* dst, const u32* const* src, u16 brightness, bool line)
+{
+    u32 mode = brightness >> 14, factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteZip4GPNeon<1>(dst, src, factor, line);
+    else if (mode == 2 && factor) WriteZip4GPNeon<2>(dst, src, factor, line);
+    else                          WriteZip4GPNeon<0>(dst, src, 0, line);
+}
+static void WriteRep4GP(u16* dst, const u32* src, u16 brightness)
+{
+    u32 mode = brightness >> 14, factor = brightness & 0x1F;
+    if (factor > 16) factor = 16;
+    if (mode == 1 && factor)      WriteRep4GPNeon<1>(dst, src, factor);
+    else if (mode == 2 && factor) WriteRep4GPNeon<2>(dst, src, factor);
+    else                          WriteRep4GPNeon<0>(dst, src, 0);
+}
 static void WriteZip4G(u32* dst, const u32* const* src, u16 brightness, bool line)
 {
     u32 mode = brightness >> 14;
@@ -809,6 +877,24 @@ static bool Rgb565SelfTest()
                 if (memcmp(b, c, 3 * 768 * sizeof(u16))) { ok = false; break; }
             }
     }
+    // the grid's RGB565 writers against the 32-bit grid writers packed (with the tables there are now)
+    for (int round = 0; round < 2 && ok; round++)
+        for (u32 mode = 0; mode < 4 && ok; mode++)
+            for (u32 f : {0u, 8u, 16u})
+            {
+                const u16 br = (u16)(mode << 14 | f);
+                for (int r = 0; r < 4; r++)
+                {
+                    WriteZip4G(a + 1024 * r, sp, br, r == 3);
+                    WriteZip4GP(b + 1024 * r, sp, br, r == 3);
+                }
+                PackRow565(c, a, 4 * 1024);
+                if (memcmp(b, c, sizeof b)) { ok = false; break; }
+                WriteRep4G(a, src[round], br);
+                WriteRep4GP(b, src[round], br);
+                PackRow565(c, a, 4 * 1024);
+                if (memcmp(b, c, sizeof b)) { ok = false; break; }
+            }
     Grid4 = g;
     return ok;
 }
@@ -1040,7 +1126,17 @@ void BananaRenderer::EmitA(u32* dst, u32 dispcnt, u16 brightness, const u16* dis
     }
     u16* d = (u16*)dst;
 #if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
-    if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1 && !Grid4)   // (the grid: the 32-bit writers, packed)
+    if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1 && Grid4 && Sc == 4)   // (kms.grid_cpu's grid, packed)
+    {
+        auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
+        if (a.HiLines == 1) { WriteRep4GP(d, Output2D[0], brightness); return; }
+        const u32* src[16];
+        src[0] = Output2D[0];
+        for (int k = 1; k < 16; k++) src[k] = a.HiOut[k - 1];
+        for (int r = 0; r < 4; r++) WriteZip4GP(d + 1024 * r, src + 4 * r, brightness, r == 3);
+        return;
+    }
+    if (Banana2DFast && ((dispcnt >> 16) & 0x3) == 1 && !Grid4)
     {
         auto& a = static_cast<BananaRenderer2D&>(*Rend2D_A);
         if (Sc == 2)   // (2x: the four quarters as two zipped rows, or doubled)
@@ -1078,6 +1174,11 @@ void BananaRenderer::EmitB(u32* dst, u32 dispcnt, u16 brightness, const u32* src
     }
     u16* d = (u16*)dst;
 #if defined(__aarch64__) && !defined(BANANA_NO_SIMD)
+    if (Banana2DFast && ((dispcnt >> 16) & 0x1) && Grid4 && Sc == 4)
+    {
+        WriteRep4GP(d, src ? src : Output2D[1], brightness);
+        return;
+    }
     if (Banana2DFast && ((dispcnt >> 16) & 0x1) && !Grid4)
     {
         if (Sc == 3) WriteRep3P(d, src ? src : Output2D[1], brightness);
