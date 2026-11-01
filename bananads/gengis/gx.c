@@ -27,8 +27,16 @@
 #ifndef GX_SCALE
 #define GX_SCALE 1
 #endif
-#if GX_SCALE == 2
+#if GX_SCALE == 2 && defined(GX_EIGHTH)
+#define gx_render_bin gx2e_render_bin
+#elif GX_SCALE == 2 && defined(GX_QUARTER)
+#define gx_render_bin gx2q_render_bin
+#elif GX_SCALE == 2
 #define gx_render_bin gx2_render_bin
+#elif GX_SCALE == 3 && defined(GX_EIGHTH)
+#define gx_render_bin gx3e_render_bin
+#elif GX_SCALE == 3 && defined(GX_QUARTER)
+#define gx_render_bin gx3q_render_bin
 #elif GX_SCALE == 3
 #define gx_render_bin gx3_render_bin
 #elif GX_SCALE == 4 && defined(GX_EIGHTH)
@@ -48,10 +56,10 @@
 /* GX_SUB: the bins a frame bin is rendered as, one after the other (4x: two of 32 lines, so that a bin's context of
  * GX_BL + 2 lines fits the walker's and the kernels' 64-line span arrays, the 64-bit shadow line mask and defer.c's
  * owner buffer; 64 + 2 lines would not) */
-#if GX_SCALE == 4 && defined(GX_EIGHTH)
-#define GX_SUB 8                            /* (gx4e.c: 8-line bins, render.gengis_units=3) */
-#elif GX_SCALE == 4 && defined(GX_QUARTER)
-#define GX_SUB 4                            /* (gx4q.c: 16-line bins, render.gengis_units=2) */
+#if defined(GX_EIGHTH)
+#define GX_SUB 8                            /* (gx4e.c: 8-line bins, render.gengis_units=3; gx3e.c 6, gx2e.c 4: 2 DS lines) */
+#elif defined(GX_QUARTER)
+#define GX_SUB 4                            /* (gx4q.c: 16-line bins, render.gengis_units=2; gx3q.c 12, gx2q.c 8: 4 DS lines) */
 #elif GX_SCALE == 4
 #define GX_SUB 2
 #else
@@ -384,9 +392,12 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out)
     unsigned bin_bot = hy0 + GX_BL + 1;
     if (bin_bot > GX_H) bin_bot = GX_H;
 #if defined(GX_QUARTER) || defined(GX_EIGHTH)
-    const unsigned whys0 = hy0 / 32 * 32;                           /* the 32-line bin's walk window */
+    /* the walk window: the 32-line bin's at 4x, the whole frame bin's at 3x (48 lines) and 2x (32): the spans are the
+     * unsplit bins' */
+#define GX_WB (GX_SCALE == 4 ? 32 : 16 * GX_SCALE)
+    const unsigned whys0 = hy0 / GX_WB * GX_WB;
     const unsigned wtop = whys0 ? whys0 - 1 : 0;
-    const unsigned wbot = whys0 + 32 + 1 > GX_H ? GX_H : whys0 + 32 + 1;
+    const unsigned wbot = whys0 + GX_WB + 1 > GX_H ? GX_H : whys0 + GX_WB + 1;
 #else
     const unsigned wtop = bin_top, wbot = bin_bot;
 #endif
@@ -505,6 +516,14 @@ void gx_render_bin(const gx_frame *f, unsigned bin, uint32_t *out) {
 void gx4e_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
 #elif GX_SCALE == 4 && defined(GX_QUARTER)
 void gx4q_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
+#elif GX_SCALE == 3 && defined(GX_EIGHTH)
+void gx3e_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
+#elif GX_SCALE == 3 && defined(GX_QUARTER)
+void gx3q_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
+#elif GX_SCALE == 2 && defined(GX_EIGHTH)
+void gx2e_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
+#elif GX_SCALE == 2 && defined(GX_QUARTER)
+void gx2q_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
 #elif GX_SCALE == 4
 void gx4_render_unit(const gx_frame *f, unsigned unit, uint32_t *out) { gx_render_sub(f, unit, out); }
 #endif
