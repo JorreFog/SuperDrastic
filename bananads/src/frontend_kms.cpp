@@ -408,7 +408,26 @@ struct Display {
     // written, and every commit carries the plane's state (shown where the DS bottom screen is, or off). Blended into
     // the frames instead (comp_icon) where there is none: that reads the icon's rows of an uncached scanout buffer,
     // measured at 117 us a frame on the RG DS at 2x and 240-450 us for the Plus's 84x89 icon at 4x.
-    struct IconPlane { bool on = false; uint32_t crtc = 0, fb = 0; int x = 0, y = 0, w = 0, h = 0, sw = 0, sh = 0; };
+    struct IconPlane {
+        bool on = false; uint32_t crtc = 0, fb = 0; int x = 0, y = 0, w = 0, h = 0, sw = 0, sh = 0;
+        bool operator==(const IconPlane& o) const {
+            return on == o.on && (!on || (crtc == o.crtc && fb == o.fb && x == o.x && y == o.y && w == o.w && h == o.h && sw == o.sw && sh == o.sh));
+        }
+    };
+    // (mu held) the plane's state as the last commit that went through set it: a commit carries the plane only when
+    // it changes (with it in every commit the presenter thread took ~0.5% more of a core on the RG DS)
+    IconPlane ip_sent;
+    bool ip_known = false;
+    bool icon_changed() const { return iplane && (!ip_known || !(ip == ip_sent)); }
+    // (mu held) a commit with the icon's plane in it was refused: never again (a game frame mustn't wait on the
+    // icon): the plane is turned off and the icon blended into the frames from now on (comp_icon)
+    bool ip_bad = false;
+    void icon_refused(int e) {
+        if (!ip_bad) Log(LogLevel::Warn, "[companion] the icon's plane refused a commit (%s): the icon is blended into the frames from now on\n", strerror(e));
+        ip_bad = true;
+        ip_known = false;
+        ip = IconPlane();
+    }
     uint32_t iplane = 0, ip_fb = 0, ip_crtc = 0, ip_sx = 0, ip_sy = 0, ip_sw = 0, ip_sh = 0, ip_cx = 0, ip_cy = 0, ip_cw = 0, ip_ch = 0;
     Buf ibuf[2];
     int ishow = -1;              // the buffer with the icon now
@@ -467,7 +486,7 @@ struct Display {
     void icon_plane_update() {
         if (!iplane) return;
         IconPlane q;
-        if (comp.icon_shown() && !comp_showing() && !menu_up) {
+        if (comp.icon_shown() && !comp_showing() && !menu_up && !ip_bad) {
             int x, y;
             const OvlPic* ic = comp.icon_for(W, H, &x, &y);   // (the panel's own pixels: the painter's size, 1:1)
             if (ic && ic->w <= (int)ibuf[0].w && ic->h <= (int)ibuf[0].h) {
@@ -494,6 +513,10 @@ struct Display {
             }
         }
         Lock l(mu);
+        if (ip_bad) q = IconPlane();
+        // to the other panel (F + SELECT) in two commits: off, then on there. In one, the VOP2 refused the move
+        // (EINVAL on the RG DS Plus: every frame's commit failed while the screens were swapped)
+        if (q.on && ip_known && ip_sent.on && ip_sent.crtc != q.crtc) q = IconPlane();
         ip = q;
     }
     // (mu held) an icon buffer on a panel, or about to be
@@ -509,9 +532,9 @@ struct Display {
         ip = IconPlane();
         drmModeAtomicReq* r = drmModeAtomicAlloc();
         add_icon(r, ip);
-        drmModeAtomicCommit(fd, r, 0, nullptr);
+        ip_known = drmModeAtomicCommit(fd, r, 0, nullptr) == 0;
         drmModeAtomicFree(r);
-        ip_committed = ip_scanout = ip;
+        ip_committed = ip_scanout = ip_sent = ip;
     }
     bool comp_open(const char* path) {
         if (!comp.attach(path, W, H)) return false;
@@ -580,7 +603,7 @@ struct Display {
     }
     // the icon over a frame's DS bottom screen (b: the bottom output of slot s: its own buffer, or the shader's)
     void comp_icon(const Buf* b, int s) {
-        if (!comp.on() || iplane || !b || !b->map) return;
+        if (!comp.on() || (iplane && !ip_bad) || !b || !b->map) return;
         const bool own = b == &buf[1][s] || b == &buf16[1][s];   // (the emulator's: drawn into, rows skipped)
         if (own && iconed[s]) return;
         int x, y;
@@ -1022,6 +1045,7 @@ struct Display {
     bool creq = false, cquit = false;
     const Buf* cout_[2] = {nullptr, nullptr};
     IconPlane cip_;   // (the companion's icon plane, with cout_)
+    bool cip_send_ = false;
     void committer() {
         sched_param sp{};
         sp.sched_priority = 6;   // (above the presenter's 5, below the sound's 10; it sleeps in the kernel almost always)
@@ -1030,6 +1054,7 @@ struct Display {
         for (;;) {
             const Buf* o[2];
             IconPlane q;
+            bool send_icon = false;
             {
                 std::unique_lock<std::mutex> l(cm);
                 ccv.wait(l, [&] { return creq || cquit; });
@@ -1038,15 +1063,26 @@ struct Display {
                 o[1] = cout_[1];
                 q = cip_;
                 creq = false;
+                send_icon = cip_send_;
             }
             drmModeAtomicReq* r = drmModeAtomicAlloc();
             for (int i = 0; i < 2; i++) add_plane(r, p[i], *o[i]);
-            add_icon(r, q);
-            const int ret = drmModeAtomicCommit(fd, r, DRM_MODE_PAGE_FLIP_EVENT, this);
+            if (send_icon) add_icon(r, q);
+            int ret = drmModeAtomicCommit(fd, r, DRM_MODE_PAGE_FLIP_EVENT, this);
             drmModeAtomicFree(r);
+            if (ret && send_icon) {   // the icon's plane refused: the frame goes without it (icon_refused)
+                const int e = errno;
+                r = drmModeAtomicAlloc();
+                for (int i = 0; i < 2; i++) add_plane(r, p[i], *o[i]);
+                ret = drmModeAtomicCommit(fd, r, DRM_MODE_PAGE_FLIP_EVENT, this);
+                drmModeAtomicFree(r);
+                Lock l(mu);
+                icon_refused(e);
+            }
             if (ret) {   // (the frame back at the head of the queue, as a nonblocking commit's failure leaves it)
                 Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
                 Lock l(mu);
+                ip_known = false;   // (the plane's state is the kernel's last one: sent again with the next commit)
                 if (committed >= 0) {
                     state[committed] = QUEUED;
                     queue.push_front(committed);
@@ -1081,15 +1117,33 @@ struct Display {
                 cout_[0] = out[0];
                 cout_[1] = out[1];
                 cip_ = ip;
+                cip_send_ = icon_changed();
                 creq = true;
             }
             ccv.notify_one();
         } else {
             drmModeAtomicReq* r = drmModeAtomicAlloc();
             for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
-            add_icon(r, ip);
+            const bool with_icon = icon_changed();
+            if (with_icon) add_icon(r, ip);
             int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
             drmModeAtomicFree(r);
+            if (ret && with_icon && errno != EBUSY) {   // the icon's plane refused: the frame goes without it
+                icon_refused(errno);
+                r = drmModeAtomicAlloc();
+                for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
+                ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
+                drmModeAtomicFree(r);
+                if (!ret) {
+                    committed = s;
+                    committed_out[0] = out[0];
+                    committed_out[1] = out[1];
+                    pending = 2;
+                    commit_us = now_us();
+                    commit_aim = commit_us <= aim_us[s] ? aim_us[s] : 0;
+                    return true;
+                }
+            }
             if (ret) {
                 if (errno != EBUSY) Log(LogLevel::Warn, "[kms] commit failed: %s\n", strerror(errno));
                 return false;
@@ -1099,6 +1153,8 @@ struct Display {
         committed_out[0] = out[0];
         committed_out[1] = out[1];
         ip_committed = ip;
+        ip_sent = ip;
+        ip_known = true;
         pending = 2;
         const long long t = now_us();
         commit_us = t;
