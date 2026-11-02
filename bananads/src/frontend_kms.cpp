@@ -1012,6 +1012,14 @@ struct Display {
     // to the screen: over the shader's output when there is one (drawn into the DS frame before the shader, they went
     // through it with the game: the grid over them, the DS's colours, scaled with the picture), else over the frame.
     // The shader's pass has finished here (shader_draw's glFinish with the second panel).
+    // where the pop-ups go: the top panel's picture, unless that is the companion's (open while the screens are
+    // swapped): its two buffers are banana-ui's picture, copied in only where it changed, so a pop-up drawn there
+    // stayed as trails (the sliding "Screens swapped" notice left ~100 rows of bands on it). Then the other panel's
+    // game picture, drawn afresh each frame, takes it.
+    const Buf* pop_target(const Buf* const* out) const {
+        const bool comp0 = out[0] == &cbuf[0] || out[0] == &cbuf[1];
+        return comp0 ? out[1] : out[0];
+    }
     void overlay(const Buf* b) {
         if (b && b->map && !b->r565) {
             bmenu_overlay((uint32_t*)b->map, (int)(b->pitch / 4), (int)b->w, (int)b->h);
@@ -1240,7 +1248,7 @@ struct Display {
             }
             ll_ready(s);
             if (swapped) std::swap(out[0], out[1]);  // (F + SELECT: each DS screen on the other panel)
-            overlay(out[0]);
+            overlay(pop_target(out));
             ready = s;
             ready_out[0] = out[0];
             ready_out[1] = out[1];
@@ -1250,7 +1258,7 @@ struct Display {
         if (cs) out[1] = &cbuf[cshow];
         else comp_icon(out[1], s);
         if (swapped) std::swap(out[0], out[1]);
-        overlay(out[0]);
+        overlay(pop_target(out));
         if (!commit(s, out)) {
             Lock l(mu);
             state[s] = QUEUED;  // back at the head of the queue: tried again at the next wake-up
