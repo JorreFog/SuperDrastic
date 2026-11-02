@@ -77,6 +77,7 @@
 #include "ra.h"
 #include "companion.h"
 #include "compoverlay.h"
+#include "pacephase.h"
 
 using melonDS::Platform::Log;
 using melonDS::Platform::LogLevel;
@@ -250,6 +251,16 @@ struct Display {
     long long take_us[NB] = {};          // when the presenter took the slot's frame off the queue
     std::atomic<long long> emu_us{0};    // the emulator's thread's time for a frame (us), a decaying maximum
     std::atomic<long long> pres_us{0};   // the presenter's: taken -> ready for the panels (us), a decaying maximum
+    // kms.pace_phase (on): with a shader, the GPU's pass for a frame starts at a flip and takes ~7 ms of the refresh
+    // at 3x on the RG DS Plus, reading and writing ~10 MB. The emulator's frames are paced by a timer of their own at
+    // the panels' rate, so where they fell in the refresh was wherever the first one started, for the whole game: when
+    // that was in the pass, the emulator's and the 2D thread's work waited on memory the GPU kept busy (dsreal at
+    // 1992 MHz: the 2D thread 33-36% of a core instead of 27-29%, the same work). The frames now end 3 ms before a
+    // vblank (pacephase.h): one that fits the refresh after the pass runs while the GPU is idle. Below: the top
+    // panel's last vblank (flip timestamp, CLOCK_MONOTONIC us; 0 none yet), and where the pass ends after it (us, a
+    // decaying max; 0: no pass this frame, nothing to steer for)
+    std::atomic<long long> pl_vbl{0};
+    std::atomic<long long> pl_pass{0};
     long long first_ev = 0;              // the first flip event of the commit in flight
     long long commit_us = 0;             // when the commit in flight was made
     long long commit_aim = 0;            // the deadline the commit in flight aimed at, if it went before it (0: none)
@@ -1210,7 +1221,10 @@ struct Display {
         // (kms.grid_cpu: a frame with the grid in goes as it is; kms.rgb565: an RGB565 frame drawn before the shader
         // came on too)
         const bool pass = shader_on && !gridded[s] && !is16[s];
-        if (!pass) ll_ready(s);
+        if (!pass) {
+            ll_ready(s);
+            pl_pass.store(0, std::memory_order_relaxed);   // (kms.pace_phase: no pass to keep clear of)
+        }
         if (shot.exchange(false)) take_shot(*slot(0, s), *slot(1, s));
         const Buf* out[2] = {slot(0, s), slot(1, s)};
         if (gridded[s] && !gpu_dir.empty()) gpu_floor(false);   // (no GPU pass: its clock floor put back)
@@ -1225,7 +1239,11 @@ struct Display {
             }
             if (cs) out[1] = &cbuf[cshow];
             else comp_icon(out[1], s);
-            const long long dt = now_us() - t0;
+            const long long t1 = now_us(), dt = t1 - t0;
+            if (const long long v = pl_vbl.load(std::memory_order_relaxed)) {   // (kms.pace_phase: where the pass ended)
+                const long long e = t1 - v;
+                if (e > 0 && e < (long long)period_us) decay_max(pl_pass, e);
+            }
             shader_us += dt;
             shader_n++;
             if (dt > shader_max_us) shader_max_us = dt;
@@ -1323,6 +1341,7 @@ struct Display {
     }
     void flipped(long long t, long long kt = 0, unsigned crtc = 0) {
         Lock l(mu);
+        if (kt && crtc == p[0].crtc) pl_vbl.store(kt, std::memory_order_relaxed);   // (kms.pace_phase)
         if (lowlat && kt) {              // the panels' vblanks, for kms.lowlat's deadlines
             if (crtc == p[0].crtc) {
                 if (vbl_top) {           // the refresh period, measured (the mode's is the nominal one)
@@ -1892,6 +1911,9 @@ int run_kms(Emu& emu, const Config& cfg) {
     // replace it
     const std::string ll = cfg.str("kms.lowlat", "off");
     const bool lowlat = ll != "off";
+    // kms.pace_phase (on): the frames done 3 ms before a vblank while a shader draws them (Display::pl_pass);
+    // kms.lowlat aims its own
+    const bool pace_phase = !lowlat && cfg.flag("kms.pace_phase", true);
     const int ra_n = (int)std::clamp(cfg.num("runahead", ll == "runahead1" ? 1 : ll == "runahead2" ? 2 : 0), 0L, 2L);
     const int depth = lowlat ? 3 : std::clamp((int)cfg.num("kms.queue", 2), 1, 3);
     const long every = cfg.num("kms.stats", 0);
@@ -2192,6 +2214,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         Pacer pace(feed, period);
         int touched = -1, ff = 0;
         long emu_frames = 0;
+        long pl_moves = 0;   // kms.pace_phase: times the schedule was moved
         const std::vector<KmsPress> script = kms_parse_input(cfg.str("kms.input", ""));
         long script_end = 0;
         for (const KmsPress& p : script) script_end = std::max(script_end, p.at + p.len);
@@ -2421,8 +2444,28 @@ int run_kms(Emu& emu, const Config& cfg) {
                     pace.wait_until(std::chrono::steady_clock::time_point(std::chrono::microseconds(start)));
                 } else aim = 0;
             } else aim = 0;
+            if (!aimed && pace_phase && pace_display && !ff && emu_frames % 60 == 0) {
+                // kms.pace_phase, once a second: where in the refresh the next frame starts, against where it
+                // should (pacephase.h: done 3 ms before a vblank, by the 90th percentile of the last 120
+                // frames' times, so a frame that fits after the shader's pass runs while the GPU is idle). Moved
+                // when that's over 1 ms off: the pacer runs at the panels' rate, so it stays there until the
+                // frames' times change
+                const long long v = dp.pl_vbl.load(std::memory_order_relaxed), pass = dp.pl_pass.load(std::memory_order_relaxed);
+                const double fr = pace_phase_frame(feed.frame_ms, GovFeed::NFT, feed.nframe_ms.load(std::memory_order_acquire), 120);
+                if (v && pass && fr > 0 && emu_frames >= 180 && !feed.catching.load(std::memory_order_relaxed)) {
+                    const double per = dp.period_us;
+                    const long long due = std::chrono::duration_cast<std::chrono::microseconds>(pace.next_due().time_since_epoch()).count();
+                    double want = 0;
+                    if (const double m = pace_phase_move(due, v, per, fr, &want)) {
+                        pace.shift(std::chrono::microseconds(std::llround(m)));
+                        if (!pl_moves++) Log(LogLevel::Info, "[kms] pace phase: the frames start %.1f ms after the top panel's vblank (a frame takes %.1f, the shader's pass ends %.1f after it): moved %+.1f ms\n",
+                                             want / 1000.0, fr / 1000.0, pass / 1000.0, m / 1000.0);
+                    }
+                }
+            }
             if (!aimed) pace.wait();  // (and the governor's signal: the frames it fell behind)
         }
+        if (pl_moves) Log(LogLevel::Info, "[kms] pace phase: the frames' schedule moved %ld times\n", pl_moves);
         run = false;
         pcv.notify_all();
         wake();  // the presenter

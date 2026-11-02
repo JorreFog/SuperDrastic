@@ -45,6 +45,10 @@ public:
     // kms.lowlat: the next frame is due at `next` (the frontend aims each frame at a vblank), counted as wait() counts
     void wait_until(std::chrono::steady_clock::time_point next) { due_ = next - period_; wait(); }
     void set_speed(int times);  // fast-forward: the frames due this many times as often (1: the normal rate)
+    // kms.pace_phase: when the next frame is due (wait() sleeps until then), and the schedule moved by d from it on
+    // (the period stays: a frame once d sooner or later, then every period as before)
+    std::chrono::steady_clock::time_point next_due() const { return due_ + period_; }
+    void shift(std::chrono::nanoseconds d) { due_ += d; }
 
 private:
     GovFeed& feed_;

@@ -310,6 +310,11 @@ add_executable(bananads-stretch-test tests/stretch_test.cpp src/stretch.cpp)
 target_include_directories(bananads-stretch-test PRIVATE src)
 add_test(NAME stretch COMMAND bananads-stretch-test)
 
+# kms.pace_phase's arithmetic (src/pacephase.h): where the emulator's frames start in the refresh.
+add_executable(bananads-pacephase-test tests/pacephase_test.cpp)
+target_include_directories(bananads-pacephase-test PRIVATE src)
+add_test(NAME pacephase COMMAND bananads-pacephase-test)
+
 # The companion overlay's presenter against a painter made with bovl.c (tests/compoverlay_test.cpp).
 add_executable(bananads-compoverlay-test tests/compoverlay_test.cpp src/compoverlay.cpp src/third_party/bcomp/bovl.c)
 target_include_directories(bananads-compoverlay-test PRIVATE src)
