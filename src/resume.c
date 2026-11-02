@@ -43,6 +43,10 @@ static long long release_at;                          /* the frame to release it
 static int btn_save = -1, btn_load = -1;
 static int joy_id = -1;                               /* the SDL instance id of DraStic's joystick */
 static int pq[4], pqn;                                /* presses waiting for the one before to be released */
+/* button/axis/hat events the in-game menu has to hand DraStic after it closes (menu.c). A press queue of its own,
+ * delivered before the save/load presses: the menu swallows SDL events while it is up. */
+static struct { uint32_t type; uint8_t a, c; int16_t v; } sq[80];
+static int sq_r, sq_w;
 /* the in-game menu's save and load (menu.c): the slot file DraStic renames its save to goes to m_save_to, and its
  * slot lookups during a load read m_load_from */
 static char m_save_to[600], m_load_from[600], m_load_next[600], m_msg[96], m_msg2[160];
@@ -156,8 +160,34 @@ void *SDL_JoystickOpen(int i) {
     return j;
 }
 
+/* buttons whose held-ness changed between was and now. btn[i] is the button, down[i] is 1 pressed / 0 released. */
+int resume_hold_edges(uint64_t was, uint64_t now, unsigned char *btn, unsigned char *down, int max) {
+    int n = 0;
+    if (!btn || !down || max <= 0) return 0;
+    for (int b = 0; b < 64 && n < max; b++) {
+        unsigned w = (unsigned)((was >> b) & 1u), d = (unsigned)((now >> b) & 1u);
+        if (w == d) continue;
+        btn[n] = (unsigned char)b; down[n] = (unsigned char)d; n++;
+    }
+    return n;
+}
+static void sq_push(uint32_t type, int a, int c, int v) {
+    int next = (sq_w + 1) % (int)(sizeof sq / sizeof sq[0]);
+    if (next == sq_r) { dsflip_log("[menu] input sync queue full\n"); return; }
+    sq[sq_w].type = type; sq[sq_w].a = (uint8_t)a; sq[sq_w].c = (uint8_t)c; sq[sq_w].v = (int16_t)v;
+    sq_w = next;
+}
 /* SDL_PollEvent (dsflip.c) asks this first: a pressed or released control button, as SDL delivers them */
 int resume_poll(void *ev) {
+    if (sq_r != sq_w) {                               /* a release (or axis/hat) the menu owed DraStic */
+        uint32_t type = sq[sq_r].type; uint8_t a = sq[sq_r].a, c = sq[sq_r].c; int16_t v = sq[sq_r].v;
+        sq_r = (sq_r + 1) % (int)(sizeof sq / sizeof sq[0]);
+        uint8_t *e = ev; memset(e, 0, 56);
+        int32_t which = joy_id >= 0 ? joy_id : 0;
+        memcpy(e, &type, 4); memcpy(e + 8, &which, 4); e[12] = a;
+        if (type == 0x600) memcpy(e + 16, &v, 2); else e[13] = c;   /* hat value, or button state */
+        return 1;
+    }
     int b = -1, down = 0;
     if (btn_press < 0 && pqn) { btn_press = pq[0]; memmove(pq, pq + 1, (size_t)--pqn * sizeof pq[0]); }
     if (btn_release >= 0) {              /* one button at a time: the next press waits for this release */
@@ -196,6 +226,24 @@ void resume_saw_event(const void *ev) {
     if (!combo) combo_since = 0;
     else if (!combo_since) combo_since = now_ms();
 }
+
+/* the in-game menu (menu.c) reads this when it opens and puts the held set back when it closes */
+uint64_t resume_buttons_held(void) { return held_btns; }
+/* DraStic only learns of releases it is shown. now is the set still held; anything in held_btns but not now
+ * gets a button-up. A button pressed only to drive the menu is not in now (the caller masks with the set from
+ * open), so it is not handed to the game. */
+int resume_sync_buttons(uint64_t now) {
+    unsigned char btn[64], down[64];
+    int n = resume_hold_edges(held_btns, now, btn, down, 64);
+    for (int i = 0; i < n; i++) sq_push(down[i] ? 0x603u : 0x604u, btn[i], down[i], 0);
+    held_btns = now;
+    { int held = exit_combo && btn_start >= 0 && (held_btns >> btn_start & 1) &&
+          ((btn_select >= 0 && (held_btns >> btn_select & 1)) || (btn_menu >= 0 && (held_btns >> btn_menu & 1)));
+      if (!held) combo_since = 0; }
+    return n;
+}
+void resume_sync_axis(int axis, int value) { if (axis >= 0 && axis < 16) sq_push(0x600, axis, 0, value); }
+void resume_sync_hat(int hat, int value) { if (hat >= 0 && hat < 4) sq_push(0x602, hat, value, 0); }
 
 /* ---- quitting with a save ---- */
 static void *save_thread(void *a) {
