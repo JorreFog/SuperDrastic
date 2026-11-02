@@ -5,7 +5,9 @@
 // Bottom panel: six tiles (Resume, Save, Load, Quick settings, DraStic menu, Quit game), then a page for each.
 // Top panel: the game's last frame, dimmed, under a card with the game, this session's play time, the last save and
 // RetroAchievements progress; while a save slot is picked, that slot's picture instead. D-pad, left stick and touch
-// all work; A picks, B goes back, the menu button (or START) closes it.
+// all work; A picks, B goes back, the menu button (or START) closes it. A button or stick held when the menu opens
+// is released to DraStic when it closes, if the player let go while it was up (DraStic is stuck in SDL_PollEvent
+// and never sees that release). A press that only drove the menu is not passed on.
 //
 // Saving and loading press DraStic's own save/load state controls once the menu has closed (resume.c), with the
 // slot file renamed or looked up for the slot picked here. A load first saves the current game to an undo file, so a
@@ -70,6 +72,11 @@ void resume_press(int b);
 int resume_quit(void);
 int resume_on(void);
 int resume_quit_pending(void);
+uint64_t resume_buttons_held(void);
+int resume_sync_buttons(uint64_t now);
+void resume_sync_axis(int axis, int value);
+void resume_sync_hat(int hat, int value);
+void dsflip_stylus_lift(void);
 
 static long long now_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
 
@@ -1009,6 +1016,7 @@ int menu_touch_event(int down_change, int down, int x, int y, int xmax, int ymax
         if (touch_swallow) { if (down_change && !down) touch_swallow = 0; return 1; }   /* a touch from the menu, still down */
         return 0;
     }
+    if (down_change && !down) dsflip_stylus_lift();   /* the finger came up while DraStic was not reading events */
     if (down_change && down) {
         pthread_mutex_lock(&tm_);
         if (tqn < 16) { tq[tqn][0] = x * pw[1] / (xmax + 1); tq[tqn][1] = y * ph[1] / (ymax + 1); tqn++; }
@@ -1021,9 +1029,27 @@ int menu_touch_event(int down_change, int down, int x, int y, int xmax, int ymax
 static int is_menu_btn(int b) { return b >= 0 && (b == btn_menu[0] || b == btn_menu[1]); }
 static int held_dir, rep_dx, rep_dy; static long long rep_next;
 static int axis_dir[2];
+/* joystick state DraStic already had when the menu opened, and what it became while the menu ate the events */
+static uint64_t joy_was, joy_now;
+static int16_t axis_last[8]; static uint8_t axis_dirty[8];
+static uint8_t hat_last[4], hat_dirty[4];
+static void note_joy(const uint8_t *e) {
+    uint32_t type; memcpy(&type, e, 4);
+    if (type == 0x603 || type == 0x604) {
+        int b = e[12];
+        if ((unsigned)b < 64) { if (type == 0x603) joy_now |= 1ULL << b; else joy_now &= ~(1ULL << b); }
+    } else if (type == 0x600) {
+        int ax = e[12]; int16_t v; memcpy(&v, e + 16, 2);
+        if ((unsigned)ax < 8) { axis_last[ax] = v; axis_dirty[ax] = 1; }
+    } else if (type == 0x602) {
+        int hat = e[12];
+        if ((unsigned)hat < 4) { hat_last[hat] = e[13]; hat_dirty[hat] = 1; }
+    }
+}
 static void dir_press(int dx, int dy) { nav(dx, dy); held_dir = 1; rep_dx = dx; rep_dy = dy; rep_next = now_ms() + 380; }
 static void dir_release(void) { held_dir = 0; }
 static void handle_sdl(const uint8_t *e) {
+    note_joy(e);
     uint32_t type; memcpy(&type, e, 4);
     if (type == 0x603 || type == 0x604) {           /* SDL_JOYBUTTONDOWN / UP */
         int b = e[12], down = type == 0x603;
@@ -1066,6 +1092,8 @@ static void menu_run(int start) {
     audio_mic_quiet(1);             /* the real mic presses nothing while the game is paused */
     cpugov_boost(800);
     open_ = 1; scr = SC_MAIN; sel_main = 0; held_dir = 0; axis_dir[0] = axis_dir[1] = 0; tqn = 0;
+    joy_was = joy_now = resume_buttons_held();
+    memset(axis_dirty, 0, sizeof axis_dirty); memset(hat_dirty, 0, sizeof hat_dirty);
     bri_changed = 0; make_rows();
     scan_slots(0);
     load_recent();
@@ -1093,6 +1121,11 @@ static void menu_run(int start) {
         if (open_) redraw();
         usleep(8000);
     }
+    { uint8_t left[64]; while (poll_real(left)) note_joy(left); }   /* a release queued as the menu closed */
+    { int n = resume_sync_buttons(joy_was & joy_now), ax = 0, ht = 0;
+      for (int i = 0; i < 8; i++) if (axis_dirty[i]) { resume_sync_axis(i, axis_last[i]); ax++; }
+      for (int i = 0; i < 4; i++) if (hat_dirty[i]) { resume_sync_hat(i, hat_last[i]); ht++; }
+      if (n || ax || ht) dsflip_log("[menu] synced input: %d buttons, %d axes, %d hats\n", n, ax, ht); }
     if (bri_changed) want(-1, bri);
     if (mic_until) dsflip_mic_key(1);
     SDL_PauseAudio(0);

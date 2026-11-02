@@ -883,11 +883,19 @@ static void dsflip_key(int scancode, int down) {
     push_ev(&e);
 }
 void dsflip_mic_key(int down) { dsflip_key(71, down); }
+static int sty_x = -1, sty_y = -1, sty_btn;   /* sty_btn: DraStic was sent a stylus-down and not the matching up */
+/* the in-game menu swallowed the finger-up (menu.c): DraStic still has the stylus down */
+void dsflip_stylus_lift(void) {
+    if (!sty_btn) return;
+    sdl_ev e; memset(&e, 0, sizeof e);
+    e.b.type = 0x402; e.b.ts = SDL_GetTicks(); e.b.win = window ? SDL_GetWindowID(window) : 1;
+    e.b.button = 1; e.b.state = 0; e.b.clicks = 1; e.b.x = sty_x < 0 ? 0 : sty_x; e.b.y = sty_y < 0 ? 0 : sty_y;
+    push_ev(&e); sty_btn = 0;
+}
 /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
  * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
  * first pin it to (0,0) with a large negative move, then move to the target: no drift can accumulate. */
-static int sty_x = -1, sty_y = -1;
 static void stylus_move(int tx, int ty, int down, int resync) {
     sdl_ev e; uint32_t wid = window ? SDL_GetWindowID(window) : 1, ts = SDL_GetTicks();
     if (resync || sty_x < 0) {
@@ -939,7 +947,7 @@ static void touch_emit(int down_change, int down, int x, int y, int xmax, int ym
         memset(&e, 0, sizeof e);
         e.b.type = down ? 0x401 : 0x402; e.b.ts = ts; e.b.win = wid; e.b.button = 1; e.b.state = down ? 1 : 0; e.b.clicks = 1;
         e.b.x = lx; e.b.y = ly;
-        push_ev(&e);
+        push_ev(&e); sty_btn = down ? 1 : 0;
     }
     st_touch++;
 }
