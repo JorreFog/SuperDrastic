@@ -1646,6 +1646,8 @@ BananaRenderer::OutSlot* BananaRenderer::FindOut(u32* base, bool make)
     OutSlot* s = &OutSlots[OutNext++ & 7];   // (more buffers than 8: the oldest forgotten, its rows drawn again)
     s->Base = base;
     s->Seen = s->Touch.load(std::memory_order_acquire);
+    s->RowSeen = s->RowTouch.load(std::memory_order_acquire);
+    for (auto& m : s->Rows) m.store(0, std::memory_order_relaxed);
     memset(s->K, 0, sizeof(s->K));
     return s;
 }
@@ -1671,6 +1673,14 @@ bool BananaRenderer::OutSkipB(const Job& job, const u32* srcB)
         memset(s->K, 0, sizeof(s->K));
         s->Seen = t;
     }
+    u32 rt = s->RowTouch.load(std::memory_order_acquire);
+    if (rt != s->RowSeen)
+    {
+        s->RowSeen = rt;
+        for (u32 w = 0; w < 3; w++)
+            for (u64 m = s->Rows[w].exchange(0, std::memory_order_acq_rel); m; m &= m - 1)
+                s->K[w * 64 + __builtin_ctzll(m)].Valid = 0;
+    }
     OutKey& k = s->K[job.Row];
     if (!srcB || job.Row != job.Line)
     {
@@ -1694,6 +1704,21 @@ void BananaRenderer::OutputTouched(const void* base)
     for (int i = 0; i < 8; i++)
         if ((const void*)OutSlots[i].Base == base)
             OutSlots[i].Touch.fetch_add(1, std::memory_order_acq_rel);
+}
+
+void BananaRenderer::OutputTouchedRows(const void* base, u32 row0, u32 row1)
+{
+    if (!OutSlots || row0 >= row1)
+        return;
+    if (row1 > 192)
+        row1 = 192;
+    for (int i = 0; i < 8; i++)
+        if ((const void*)OutSlots[i].Base == base)
+        {
+            for (u32 r = row0; r < row1; r++)
+                OutSlots[i].Rows[r >> 6].fetch_or(1ull << (r & 63), std::memory_order_relaxed);
+            OutSlots[i].RowTouch.fetch_add(1, std::memory_order_acq_rel);
+        }
 }
 
 void BananaRenderer::OutputTouchedAll()

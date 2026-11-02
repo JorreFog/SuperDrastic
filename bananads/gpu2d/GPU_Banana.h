@@ -124,6 +124,9 @@ public:
     // its rows are drawn again in full. Any thread
     void OutputTouched(const void* base);
     void OutputTouchedAll();   // every buffer: as OutputTouched for each
+    // ...only rows [row0, row1) of it (DS lines, 0..192): the companion overlay's icon, blended into the bottom
+    // screen's frame on its way to the panel. Its rows are written again the next time, the rest still skipped
+    void OutputTouchedRows(const void* base, u32 row0, u32 row1);
 
     bool Drain2D();   // wait until the 2D thread has drawn every line handed to it (false: it already had)
     // render.2d_fence_wait: the waits for the 2D thread (a frame's fence, a drain, a full ring or log) block on a
@@ -229,7 +232,9 @@ private:
     // was written with. Unit A's writes, Fill and the frontend's own (OutputTouched) make a row/buffer unknown again
     bool OutSkipOn = true, OutSkipping = false;
     struct OutKey { u64 Ver; u16 Bright; u8 On; u8 Valid; };
-    struct OutSlot { u32* Base = nullptr; std::atomic<u32> Touch{0}; u32 Seen = 0; OutKey K[192]; };
+    // (RowTouch/Rows: OutputTouchedRows' rows, a bit per DS line, taken by the 2D thread when RowTouch moved on)
+    struct OutSlot { u32* Base = nullptr; std::atomic<u32> Touch{0}; u32 Seen = 0; OutKey K[192];
+                     std::atomic<u32> RowTouch{0}; u32 RowSeen = 0; std::atomic<u64> Rows[3]{}; };
     std::unique_ptr<OutSlot[]> OutSlots;   // [8]
     u32 OutNext = 0;
     std::unique_ptr<u64[]> VerB;           // [192]

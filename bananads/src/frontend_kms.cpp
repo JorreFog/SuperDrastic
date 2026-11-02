@@ -76,6 +76,7 @@
 #include "prof.h"
 #include "ra.h"
 #include "companion.h"
+#include "compoverlay.h"
 
 using melonDS::Platform::Log;
 using melonDS::Platform::LogLevel;
@@ -213,6 +214,7 @@ struct Display {
     uint32_t fence[NB] = {};
     std::function<void(uint32_t)> wait2d;
     std::function<void(const void*)> touched;   // render.2d_out_skip: we wrote into a buffer the emulator draws into
+    std::function<void(const void*, int, int)> touched_rows;   // ...only these DS lines of it (the overlay's icon)
     std::deque<int> queue;    // frames waiting, oldest first
     // kms.shader: each frame drawn through a fragment shader (SuperDrastic's) into panel-sized buffers, shown 1:1
     std::string shader_name;
@@ -343,7 +345,7 @@ struct Display {
         return v;
     }
 
-    bool mkbuf(Buf& b, int w, int h, bool r565 = false) {
+    bool mkbuf(Buf& b, int w, int h, bool r565 = false, bool argb = false) {
         drm_mode_create_dumb c{};
         c.width = w;
         c.height = h;
@@ -356,7 +358,7 @@ struct Display {
         b.h = h;
         b.r565 = r565;
         uint32_t hs[4] = {c.handle}, ps[4] = {c.pitch}, os[4] = {0};
-        if (drmModeAddFB2(fd, w, h, r565 ? DRM_FORMAT_RGB565 : DRM_FORMAT_XRGB8888, hs, ps, os, &b.fb, 0)) return false;
+        if (drmModeAddFB2(fd, w, h, r565 ? DRM_FORMAT_RGB565 : argb ? DRM_FORMAT_ARGB8888 : DRM_FORMAT_XRGB8888, hs, ps, os, &b.fb, 0)) return false;
         drm_mode_map_dumb m{};
         m.handle = c.handle;
         if (drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &m)) return false;
@@ -384,6 +386,218 @@ struct Display {
             for (auto& b : pb) freebuf(b);
         for (auto& pb : mbuf)
             for (auto& b : pb) freebuf(b);
+        for (auto& b : cbuf) freebuf(b);
+        for (auto& b : ibuf) freebuf(b);
+    }
+
+    // ---- the companion overlay (compoverlay.h): banana-ui's picture on the panel the DS's bottom screen is on while
+    // it is open, its icon blended over the game's bottom screen while it is closed. The picture goes into one of two
+    // buffers of its own (its size, RGB565; the plane scales it to the panel) only when the painter has a new one, by
+    // what changed since the one that buffer holds; the commits then take that buffer instead of the bottom frame (and
+    // a shader's pass for the bottom screen is skipped). Below on the presenter's thread, as the commits.
+    CompOverlay comp;
+    bool cfg_icon_plane = true;  // companion.icon_plane (on): the icon on a spare display plane when there is one
+    Buf cbuf[2];
+    uint64_t chas[2] = {0, 0};   // the painter's frame each holds (0: nothing)
+    int cshow = -1;              // the buffer with the newest picture (-1: none yet)
+    uint32_t cshow_seq = 0;      // ...and the open it was painted for (the picture of an earlier open isn't shown)
+    bool iconed[NB] = {};        // slot s's bottom frame has the icon in (a frame committed again isn't blended twice)
+    bool comp_showing() const { return comp.is_open() && cshow >= 0 && cshow_seq == comp.open_seq(); }
+    // The icon on a display plane of its own where there is a spare one (the RG DS Plus has four overlay planes either
+    // panel can use, ARGB8888, premultiplied blending, above the primaries): no pixel of the game's frames is read or
+    // written, and every commit carries the plane's state (shown where the DS bottom screen is, or off). Blended into
+    // the frames instead (comp_icon) where there is none: that reads the icon's rows of an uncached scanout buffer,
+    // measured at 117 us a frame on the RG DS at 2x and 240-450 us for the Plus's 84x89 icon at 4x.
+    struct IconPlane { bool on = false; uint32_t crtc = 0, fb = 0; int x = 0, y = 0, w = 0, h = 0, sw = 0, sh = 0; };
+    uint32_t iplane = 0, ip_fb = 0, ip_crtc = 0, ip_sx = 0, ip_sy = 0, ip_sw = 0, ip_sh = 0, ip_cx = 0, ip_cy = 0, ip_cw = 0, ip_ch = 0;
+    Buf ibuf[2];
+    int ishow = -1;              // the buffer with the icon now
+    uint32_t iseq = 0;           // the painter's icon it holds (CompOverlay's icon_seq)
+    IconPlane ip;                // (mu held) what the next commit sets the plane to
+    bool menu_up = false;        // the in-game menu is on the panels: no icon over it
+    void add_icon(drmModeAtomicReq* r, const IconPlane& q) {
+        if (!iplane) return;
+        drmModeAtomicAddProperty(r, iplane, ip_fb, q.on ? q.fb : 0);
+        drmModeAtomicAddProperty(r, iplane, ip_crtc, q.on ? q.crtc : 0);
+        if (!q.on) return;
+        drmModeAtomicAddProperty(r, iplane, ip_sx, 0);
+        drmModeAtomicAddProperty(r, iplane, ip_sy, 0);
+        drmModeAtomicAddProperty(r, iplane, ip_sw, (uint64_t)q.sw << 16);
+        drmModeAtomicAddProperty(r, iplane, ip_sh, (uint64_t)q.sh << 16);
+        drmModeAtomicAddProperty(r, iplane, ip_cx, (uint64_t)(int64_t)q.x);
+        drmModeAtomicAddProperty(r, iplane, ip_cy, (uint64_t)(int64_t)q.y);
+        drmModeAtomicAddProperty(r, iplane, ip_cw, (uint64_t)q.w);
+        drmModeAtomicAddProperty(r, iplane, ip_ch, (uint64_t)q.h);
+    }
+    // a spare overlay plane both panels can use, with ARGB8888, that takes an icon on either panel (a test commit each)
+    void icon_plane_find() {
+        drmModePlaneRes* pres = drmModeGetPlaneResources(fd);
+        const uint32_t both = (1u << p[0].crtc_idx) | (1u << p[1].crtc_idx);
+        for (uint32_t j = 0; pres && j < pres->count_planes && !iplane; j++) {
+            const uint32_t id = pres->planes[j];
+            if (id == p[0].plane || id == p[1].plane) continue;
+            drmModePlane* pl = drmModeGetPlane(fd, id);
+            bool argb = false;
+            for (uint32_t f = 0; pl && f < pl->count_formats; f++) argb = argb || pl->formats[f] == DRM_FORMAT_ARGB8888;
+            const bool ok = pl && argb && (pl->possible_crtcs & both) == both &&
+                            propval(id, DRM_MODE_OBJECT_PLANE, "type") == DRM_PLANE_TYPE_OVERLAY;
+            drmModeFreePlane(pl);
+            if (!ok) continue;
+            const uint32_t o = DRM_MODE_OBJECT_PLANE;
+            iplane = id;
+            ip_fb = prop(id, o, "FB_ID"); ip_crtc = prop(id, o, "CRTC_ID");
+            ip_sx = prop(id, o, "SRC_X"); ip_sy = prop(id, o, "SRC_Y"); ip_sw = prop(id, o, "SRC_W"); ip_sh = prop(id, o, "SRC_H");
+            ip_cx = prop(id, o, "CRTC_X"); ip_cy = prop(id, o, "CRTC_Y"); ip_cw = prop(id, o, "CRTC_W"); ip_ch = prop(id, o, "CRTC_H");
+            bool test = ip_fb && ip_crtc && ip_cw && ip_ch;
+            for (int i = 0; i < 2 && test; i++) {
+                IconPlane q;
+                q.on = true; q.crtc = p[i].crtc; q.fb = ibuf[0].fb;
+                q.x = W - 64; q.y = H - 64; q.w = q.h = 48; q.sw = q.sh = 48;
+                drmModeAtomicReq* r = drmModeAtomicAlloc();
+                add_icon(r, q);
+                test = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_TEST_ONLY, nullptr) == 0;
+                drmModeAtomicFree(r);
+            }
+            if (!test) iplane = 0;
+        }
+        drmModeFreePlaneResources(pres);
+    }
+    // (presenter's thread) what the plane shows from the next commit on: the icon (a new picture of it into the buffer
+    // not on the panel), where the DS bottom screen is, or nothing while the picture or the menu is up
+    void icon_plane_update() {
+        if (!iplane) return;
+        IconPlane q;
+        if (comp.icon_shown() && !comp_showing() && !menu_up) {
+            int x, y;
+            const OvlPic* ic = comp.icon_for(W, H, &x, &y);   // (the panel's own pixels: the painter's size, 1:1)
+            if (ic && ic->w <= (int)ibuf[0].w && ic->h <= (int)ibuf[0].h) {
+                if (ishow < 0 || iseq != comp.icon_seq()) {
+                    const int t = ishow < 0 ? 0 : ishow ^ 1;
+                    {
+                        Lock l(mu);
+                        if (busy_icon(ibuf[t].fb)) return;   // (the other one still on a panel: next wake-up)
+                    }
+                    for (int yy = 0; yy < (int)ibuf[t].h; yy++) {
+                        uint32_t* d = (uint32_t*)(ibuf[t].map + (size_t)yy * ibuf[t].pitch);
+                        if (yy < ic->h) {
+                            memcpy(d, &ic->px[(size_t)yy * ic->w], (size_t)ic->w * 4);
+                            memset(d + ic->w, 0, (ibuf[t].w - ic->w) * 4);
+                        } else memset(d, 0, ibuf[t].w * 4);
+                    }
+                    ishow = t;
+                    iseq = comp.icon_seq();
+                }
+                q.on = true;
+                q.crtc = p[swapped ? 0 : 1].crtc;
+                q.fb = ibuf[ishow].fb;
+                q.x = x; q.y = y; q.w = ic->w; q.h = ic->h; q.sw = ic->w; q.sh = ic->h;
+            }
+        }
+        Lock l(mu);
+        ip = q;
+    }
+    // (mu held) an icon buffer on a panel, or about to be
+    IconPlane ip_committed, ip_scanout;
+    bool busy_icon(uint32_t fb) const {
+        return (ip_committed.on && ip_committed.fb == fb) || (ip_scanout.on && ip_scanout.fb == fb) || (ip.on && ip.fb == fb);
+    }
+    // the in-game menu takes the panels: the icon off at once (a blocking commit), back with the game's next frame
+    void icon_plane_menu(bool up) {
+        menu_up = up;
+        if (!iplane || !up) return;
+        Lock l(mu);
+        ip = IconPlane();
+        drmModeAtomicReq* r = drmModeAtomicAlloc();
+        add_icon(r, ip);
+        drmModeAtomicCommit(fd, r, 0, nullptr);
+        drmModeAtomicFree(r);
+        ip_committed = ip_scanout = ip;
+    }
+    bool comp_open(const char* path) {
+        if (!comp.attach(path, W, H)) return false;
+        const int pw = comp.pic_w(), ph = comp.pic_h();
+        // RGB565, else XRGB8888 (converted as copied), each tried on both panels' planes (F + SELECT swaps them)
+        for (int f = 0; f < 2 && !cbuf[0].map; f++) {
+            bool ok = mkbuf(cbuf[0], pw, ph, f == 0) && mkbuf(cbuf[1], pw, ph, f == 0);
+            for (int i = 0; i < 2 && ok; i++) {
+                drmModeAtomicReq* r = drmModeAtomicAlloc();
+                add_plane(r, p[i], cbuf[0]);
+                ok = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_TEST_ONLY, nullptr) == 0;
+                drmModeAtomicFree(r);
+            }
+            if (!ok) {
+                freebuf(cbuf[0]);
+                freebuf(cbuf[1]);
+            }
+        }
+        if (!cbuf[0].map) {
+            Log(LogLevel::Warn, "[companion] overlay: the panels can't show a %dx%d picture: off\n", pw, ph);
+            comp.detach();
+            return false;
+        }
+        comp.ready(true);
+        if (cfg_icon_plane && mkbuf(ibuf[0], BOVL_ICON_MAX, BOVL_ICON_MAX, false, true) && mkbuf(ibuf[1], BOVL_ICON_MAX, BOVL_ICON_MAX, false, true))
+            icon_plane_find();
+        if (!iplane) { freebuf(ibuf[0]); freebuf(ibuf[1]); }
+        Log(LogLevel::Info, "[companion] overlay: banana-ui's %dx%d picture (%s) on the DS bottom screen's panel when its "
+            "icon is tapped; the icon %s\n", pw, ph, cbuf[0].r565 ? "RGB565" : "XRGB8888",
+            iplane ? "on a display plane of its own" : "blended into the frames (no spare plane)");
+        return true;
+    }
+    // where the DS's bottom screen is on its panel (the icon goes in its corner)
+    OvlRect comp_view() {
+        int v[4];
+        if (shader_on && shader_viewport(v, W, H)) return OvlRect{v[0], v[1], v[2], v[3]};
+        if (!hw) return OvlRect{ox, oy, fw * k, fh * k};
+        return OvlRect{0, 0, W, H};
+    }
+    // (mu held) b is on a panel, committed, or drawn ahead to be
+    bool busy(const Buf* b) const {
+        for (int i = 0; i < 2; i++)
+            if (scanout_out[i] == b || committed_out[i] == b || ready_out[i] == b) return true;
+        return false;
+    }
+    // each wake-up, before commit_next: the painter's icon and requests, and its newest picture into the buffer that
+    // isn't in use
+    void comp_service() {
+        if (!comp.on()) return;
+        comp.service(comp_view());
+        icon_plane_update();
+        if (!comp.is_open()) return;
+        const int t = cshow < 0 ? 0 : cshow ^ 1;
+        {
+            Lock l(mu);
+            if (busy(&cbuf[t])) return;   // (the other one still on the panel: next wake-up)
+        }
+        bovl_slot h;
+        if (!comp.claim(cshow < 0 ? 0 : chas[cshow], &h)) return;
+        comp.copy_into(cbuf[t].map, (int)cbuf[t].pitch, cbuf[t].r565, chas[t], h);
+        comp.done();
+        chas[t] = h.frame;
+        cshow = t;
+        cshow_seq = h.open_seq;
+        comp.frames_shown++;
+    }
+    // the icon over a frame's DS bottom screen (b: the bottom output of slot s: its own buffer, or the shader's)
+    void comp_icon(const Buf* b, int s) {
+        if (!comp.on() || iplane || !b || !b->map) return;
+        const bool own = b == &buf[1][s] || b == &buf16[1][s];   // (the emulator's: drawn into, rows skipped)
+        if (own && iconed[s]) return;
+        int x, y;
+        const OvlPic* ic = comp.icon_for((int)b->w, (int)b->h, &x, &y);
+        if (!ic) return;
+        const long long t0 = now_us();
+        if (b->r565) ovl_blend565(b->map, (int)b->pitch, (int)b->w, (int)b->h, *ic, x, y);
+        else ovl_blend32(b->map, (int)b->pitch, (int)b->w, (int)b->h, *ic, x, y);
+        if (own) {
+            iconed[s] = true;
+            int r0, r1;
+            ovl_ds_rows(y, ic->h, (int)b->h, &r0, &r1);
+            if (direct && touched_rows) touched_rows(b->map, r0, r1);
+            else if (touched) touched(b->map);
+        }
+        comp.icon_draws++;
+        comp.icon_ns += (uint64_t)(now_us() - t0) * 1000;
     }
 
     // ---- the in-game menu: its pictures straight onto the panels, then the game's frame back ----
@@ -638,6 +852,7 @@ struct Display {
         for (int s = 0; s < NB; s++)
             if (state[s] == FREE) {
                 state[s] = WRITING;
+                iconed[s] = false;
                 return s;
             }
         // (can't happen: NB covers every state at once) the oldest waiting frame makes room
@@ -645,6 +860,7 @@ struct Display {
         queue.pop_front();
         dropped++;
         state[s] = WRITING;
+        iconed[s] = false;
         return s;
     }
     // the emulator draws a frame straight into slot s (Emu::draw_into), rows packed as it wants them
@@ -805,6 +1021,7 @@ struct Display {
     std::condition_variable ccv;
     bool creq = false, cquit = false;
     const Buf* cout_[2] = {nullptr, nullptr};
+    IconPlane cip_;   // (the companion's icon plane, with cout_)
     void committer() {
         sched_param sp{};
         sp.sched_priority = 6;   // (above the presenter's 5, below the sound's 10; it sleeps in the kernel almost always)
@@ -812,16 +1029,19 @@ struct Display {
         pthread_setname_np(pthread_self(), "bds-commit");
         for (;;) {
             const Buf* o[2];
+            IconPlane q;
             {
                 std::unique_lock<std::mutex> l(cm);
                 ccv.wait(l, [&] { return creq || cquit; });
                 if (cquit) return;
                 o[0] = cout_[0];
                 o[1] = cout_[1];
+                q = cip_;
                 creq = false;
             }
             drmModeAtomicReq* r = drmModeAtomicAlloc();
             for (int i = 0; i < 2; i++) add_plane(r, p[i], *o[i]);
+            add_icon(r, q);
             const int ret = drmModeAtomicCommit(fd, r, DRM_MODE_PAGE_FLIP_EVENT, this);
             drmModeAtomicFree(r);
             if (ret) {   // (the frame back at the head of the queue, as a nonblocking commit's failure leaves it)
@@ -860,12 +1080,14 @@ struct Display {
                 std::lock_guard<std::mutex> c(cm);
                 cout_[0] = out[0];
                 cout_[1] = out[1];
+                cip_ = ip;
                 creq = true;
             }
             ccv.notify_one();
         } else {
             drmModeAtomicReq* r = drmModeAtomicAlloc();
             for (int i = 0; i < 2; i++) add_plane(r, p[i], *out[i]);
+            add_icon(r, ip);
             int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
             drmModeAtomicFree(r);
             if (ret) {
@@ -876,6 +1098,7 @@ struct Display {
         committed = s;
         committed_out[0] = out[0];
         committed_out[1] = out[1];
+        ip_committed = ip;
         pending = 2;
         const long long t = now_us();
         commit_us = t;
@@ -935,13 +1158,17 @@ struct Display {
         if (shot.exchange(false)) take_shot(*slot(0, s), *slot(1, s));
         const Buf* out[2] = {slot(0, s), slot(1, s)};
         if (gridded[s] && !gpu_dir.empty()) gpu_floor(false);   // (no GPU pass: its clock floor put back)
+        // the companion overlay: its picture on the bottom screen's panel while open, else its icon over the frame
+        const bool cs = comp_showing();
         if (pass) {
             const long long t0 = now_us();
-            for (int i = 0; i < 2; i++) {
+            for (int i = 0; i < (cs ? 1 : 2); i++) {   // (open: no pass for the bottom screen, the picture goes there)
                 const Buf& a = buf[i][s];
                 Buf& d = sbuf[i][snext];
-                if (shader_draw(a.handle, a.w, a.h, a.pitch, a.fb, d.handle, d.w, d.h, d.pitch, d.fb, i == 1) == 0) out[i] = &d;
+                if (shader_draw(a.handle, a.w, a.h, a.pitch, a.fb, d.handle, d.w, d.h, d.pitch, d.fb, i == 1 || cs) == 0) out[i] = &d;
             }
+            if (cs) out[1] = &cbuf[cshow];
+            else comp_icon(out[1], s);
             const long long dt = now_us() - t0;
             shader_us += dt;
             shader_n++;
@@ -964,6 +1191,8 @@ struct Display {
             if (!ll_early(s) && commit(s, out)) ready = -1;  // the flip had already come
             return;
         }
+        if (cs) out[1] = &cbuf[cshow];
+        else comp_icon(out[1], s);
         if (swapped) std::swap(out[0], out[1]);
         overlay(out[0]);
         if (!commit(s, out)) {
@@ -1086,6 +1315,7 @@ struct Display {
         scanout = committed;
         scanout_out[0] = committed_out[0];
         scanout_out[1] = committed_out[1];
+        ip_scanout = ip_committed;
         state[scanout] = SCANOUT;
         committed = -1;
         shown++;
@@ -1669,6 +1899,7 @@ int run_kms(Emu& emu, const Config& cfg) {
         Log(LogLevel::Info, "[kms] commits on a thread of their own (blocking, SCHED_FIFO 6)\n");
     }
     dp.touched = [&emu](const void* p) { emu.output_touched(p); };
+    dp.touched_rows = [&emu](const void* p, int a, int b) { emu.output_touched_rows(p, a, b); };
     dp.direct = dp.packed() && emu.draw_into(dp.map(0, 1), dp.map(1, 1));  // (each frame is given its own slot)
     // render.2d_lazy (on): drawing straight into the slots, the 2D thread may finish a frame while the emulator runs the
     // next one; the presenter waits for it instead (Display::wait2d)
@@ -1821,6 +2052,17 @@ int run_kms(Emu& emu, const Config& cfg) {
         start_mark("ra init");
     }
     companion_start(emu, getenv("BANANADS_SAVE_DIR"), getenv("BANANADS_STATE_DIR"), cfg.str("companion.path", "").c_str());   // (the universal companion)
+    // the companion overlay (compoverlay.h): banana-ui's BANANA_COMPANION_OVERLAY, else companion.overlay_path (tests);
+    // companion.overlay=off: not attached. companion.taps=<file>: test taps ("x y" a line: a tap at that panel pixel;
+    // "down|move|up x y" for drags), taken as the touchscreen's would be and the file removed (no hands needed)
+    if (cfg.flag("companion.overlay", true)) {
+        dp.cfg_icon_plane = cfg.flag("companion.icon_plane", true);
+        const char* ep = getenv(BOVL_ENV);
+        const std::string op = cfg.str("companion.overlay_path", "");
+        dp.comp_open(ep && *ep ? ep : op.empty() ? nullptr : op.c_str());
+    }
+    const std::string comp_taps = cfg.str("companion.taps", "");
+    bool comp_was_open = false;
 
     if (cfg.str("prof.thread", "emu") == "present") prof_target_this_thread();   // (this thread presents)
     std::thread emu_thread([&] {
@@ -2175,8 +2417,10 @@ int run_kms(Emu& emu, const Config& cfg) {
         mh.quit = false;
         mh.nosave = false;
         mh.q.clear();
+        dp.icon_plane_menu(true);
         bmenu_run(start);
         dp.show_game();
+        dp.icon_plane_menu(false);
         keys = 0;
         hot = false;
         home_down = false;
@@ -2222,6 +2466,32 @@ int run_kms(Emu& emu, const Config& cfg) {
             (void)r;
         }
         if (pfd[0].revents & POLLIN) drmHandleEvent(dp.fd, &ev);
+        if (dp.comp.on()) {
+            dp.comp_service();
+            if (!comp_taps.empty() && access(comp_taps.c_str(), F_OK) == 0) {   // (companion.taps: test taps)
+                std::ifstream f(comp_taps);
+                unlink(comp_taps.c_str());
+                for (std::string w; f >> w;) {
+                    int x = 0, y = 0;
+                    if (w == "down" || w == "move" || w == "up") f >> x >> y;
+                    else { x = atoi(w.c_str()); f >> y; }
+                    const uint32_t ms = (uint32_t)(now_us() / 1000);
+                    bool took;
+                    if (w == "down" || w == "move") took = dp.comp.touch(true, x, y, ms);
+                    else if (w == "up") took = dp.comp.touch(false, x, y, ms);
+                    else took = dp.comp.touch(true, x, y, ms) | dp.comp.touch(false, x, y, ms);
+                    Log(LogLevel::Info, "[companion] test %s %d,%d: %s\n", w.c_str(), x, y, took ? "the overlay's" : "the game's (not given to it)");
+                }
+            }
+            if (dp.comp.release_game) {
+                dp.comp.release_game = false;
+                in_touch = -1;
+            }
+            if (dp.comp.is_open() != comp_was_open) {
+                comp_was_open = !comp_was_open;
+                Log(LogLevel::Info, "[companion] overlay %s\n", comp_was_open ? "open: banana-ui's picture on the bottom screen's panel" : "closed: the game's bottom screen");
+            }
+        }
         dp.commit_next();
         feed.frames = dp.made.load();
         feed.repeats = dp.repeats;  // (cpugov.repeats; flipped() counts them on this thread)
@@ -2245,6 +2515,20 @@ int run_kms(Emu& emu, const Config& cfg) {
                                 if (d.was) in_touch = -1;          // (a press held across F + SELECT: let go)
                                 d.was = false;
                                 continue;
+                            }
+                            if (dp.comp.on()) {   // the companion overlay: its icon, and every touch while it is open
+                                const int px = d.maxx > d.minx ? (int)((int64_t)(d.x - d.minx) * dp.W / (d.maxx - d.minx + 1)) : d.x;
+                                const int py = d.maxy > d.miny ? (int)((int64_t)(d.y - d.miny) * dp.H / (d.maxy - d.miny + 1)) : d.y;
+                                const bool took = dp.comp.touch(d.down, px, py, (uint32_t)(now_us() / 1000));
+                                if (dp.comp.release_game) {
+                                    dp.comp.release_game = false;
+                                    in_touch = -1;
+                                }
+                                if (took) {
+                                    if (d.down && !d.was) Log(LogLevel::Info, "[touch] down at %d,%d on the panel: the companion overlay's\n", px, py);
+                                    d.was = d.down;
+                                    continue;
+                                }
                             }
                             if (d.down) {
                                 // the panel's pixel, then the DS's: where the bottom picture is on the panel
@@ -2398,6 +2682,11 @@ int run_kms(Emu& emu, const Config& cfg) {
                     dp.shader_us / 1000.0 / dp.shader_n, dp.shader_max_us / 1000.0);
             dp.shader_us = dp.shader_max_us = 0;
             dp.shader_n = 0;
+            if (dp.comp.on())
+                Log(LogLevel::Info, "[companion] overlay %s: icon blended %llu times (%.1f us each), %llu pictures copied (%.1f KB, %.2f ms each)\n",
+                    dp.comp.is_open() ? "open" : "closed", (unsigned long long)dp.comp.icon_draws,
+                    dp.comp.icon_draws ? dp.comp.icon_ns / 1000.0 / dp.comp.icon_draws : 0.0, (unsigned long long)dp.comp.copies,
+                    dp.comp.copies ? dp.comp.copy_bytes / 1024.0 / dp.comp.copies : 0.0, dp.comp.copies ? dp.comp.copy_ns / 1e6 / dp.comp.copies : 0.0);
             shown_mark = s;
             made_mark = dp.made;
             drop_mark = dp.dropped;
@@ -2443,6 +2732,14 @@ int run_kms(Emu& emu, const Config& cfg) {
             }
             fclose(f);
         }
+    }
+    if (dp.comp.on()) {
+        Log(LogLevel::Info, "[companion] overlay: opened/closed %llu times; icon blended %llu times (%.1f us each); %llu "
+            "pictures copied (%.1f MB, %.2f ms each)\n", (unsigned long long)dp.comp.toggles, (unsigned long long)dp.comp.icon_draws,
+            dp.comp.icon_draws ? dp.comp.icon_ns / 1000.0 / dp.comp.icon_draws : 0.0, (unsigned long long)dp.comp.copies,
+            dp.comp.copy_bytes / 1048576.0, dp.comp.copies ? dp.comp.copy_ns / 1e6 / dp.comp.copies : 0.0);
+        dp.icon_plane_menu(true);   // (the icon's plane off before the menu takes the panels back)
+        dp.comp.detach();
     }
     emu.draw_into(nullptr, nullptr);  // (the buffers go with the device)
     start_mark("quit: draw_into");

@@ -1558,6 +1558,13 @@ void Emu::output_touched(const void* buf) {
     (void)buf;
 #endif
 }
+void Emu::output_touched_rows(const void* buf, int row0, int row1) {
+#ifdef BANANADS_2D
+    if (banana_ && row0 >= 0 && row1 > row0) banana_->OutputTouchedRows(buf, (uint32_t)row0, (uint32_t)row1);
+#else
+    (void)buf, (void)row0, (void)row1;
+#endif
+}
 bool Emu::draw_into(uint32_t* top, uint32_t* bottom) {
 #ifdef BANANADS_2D
     if (!banana_) return false;

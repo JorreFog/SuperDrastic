@@ -281,6 +281,8 @@ if(DRM_FOUND AND BANANADS_KMS)
     target_sources(bananads PRIVATE src/ra.c)
     # the universal companion's producer (src/companion.cpp; bcomp.c from ~/banana-emu/common, the spec's owner's)
     target_sources(bananads PRIVATE src/companion.cpp src/third_party/bcomp/bcomp.c)
+    # the companion overlay's presenter (src/compoverlay.cpp; bovl.c from common, COMPANION-SPEC section 10)
+    target_sources(bananads PRIVATE src/compoverlay.cpp src/third_party/bcomp/bovl.c)
     target_link_libraries(bananads PRIVATE rcheevos ${CMAKE_DL_LIBS})
 endif()
 if(BANANADS_ALSA)
@@ -307,6 +309,11 @@ add_test(NAME cpugov COMMAND bananads-cpugov-test ${CMAKE_CURRENT_BINARY_DIR}/cp
 add_executable(bananads-stretch-test tests/stretch_test.cpp src/stretch.cpp)
 target_include_directories(bananads-stretch-test PRIVATE src)
 add_test(NAME stretch COMMAND bananads-stretch-test)
+
+# The companion overlay's presenter against a painter made with bovl.c (tests/compoverlay_test.cpp).
+add_executable(bananads-compoverlay-test tests/compoverlay_test.cpp src/compoverlay.cpp src/third_party/bcomp/bovl.c)
+target_include_directories(bananads-compoverlay-test PRIVATE src)
+add_test(NAME compoverlay COMMAND bananads-compoverlay-test)
 
 # BananaJIT's encoder against LLVM's assembler (runs on any host: it only encodes).
 add_executable(bananads-jit-encodings tests/jit_encodings.cpp)
