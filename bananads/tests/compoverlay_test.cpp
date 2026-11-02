@@ -70,6 +70,10 @@ static void test_placement_and_touch() {
     CHECK(next_touch(s, &tail, BOVL_TOUCH_MOVE, 120, 210));
     CHECK(next_touch(s, &tail, BOVL_TOUCH_UP, 120, 210));   // (where it last was)
     CHECK(!bovl_touch_next(s, &tail, &t, nullptr));
+    // the slop is for a finger aiming at the small icon over the game: while open, what is around the icon's own place
+    // is the painter's page (its Back to game button may be smaller than the slop), so a press there is the page's
+    CHECK(o.touch(true, 588, 430, 34) && o.touch(false, 588, 430, 35) && o.is_open());
+    CHECK(next_touch(s, &tail, BOVL_TOUCH_DOWN, 588, 430) && next_touch(s, &tail, BOVL_TOUCH_UP, 588, 430));
     // Back to game sits where the icon was: a tap there closes
     CHECK(o.touch(true, 600, 440, 40) && !o.is_open() && !bovl_is_open(s));
     CHECK(o.touch(false, 600, 440, 41));
@@ -91,6 +95,13 @@ static void test_placement_and_touch() {
     CHECK(o.service(OvlRect{64, 48, 512, 384}));
     CHECK(o.icon_panel().x == 64 + 512 - 4 - 44 && o.icon_panel().y == 48 + 384 - 4 - 44);
     CHECK(s->view_rect.x == 64 && s->view_rect.w == 512);
+    // the top-right corner (where banana-ui puts it: the games keep Back/Cancel in the bottom-right one)
+    bovl_set_icon(s, ic.data(), 44, 44, 1, 0, BOVL_CORNER_TR, 4, 6);
+    CHECK(o.service(panel));
+    CHECK(o.icon_panel().x == 640 - 4 - 44 && o.icon_panel().y == 4);
+    CHECK(o.touch(true, 590, 52, 63) && o.is_open() && o.touch(false, 590, 52, 64));   // (the slop's corner, closed)
+    CHECK(o.touch(true, 610, 20, 65) && !o.is_open() && o.touch(false, 610, 20, 66));  // (the icon's place, open)
+    CHECK(o.service(OvlRect{64, 48, 512, 384}));
     // the icon turned off: not drawn, taps there are the game's
     bovl_set_icon(s, nullptr, 44, 44, 0, 0, BOVL_CORNER_BR, 4, 6);
     CHECK(o.service(panel) && !o.icon_shown());

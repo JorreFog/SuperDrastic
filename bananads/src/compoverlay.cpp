@@ -225,7 +225,9 @@ bool CompOverlay::touch(bool down, int px, int py, uint32_t ms) {
     const int x = to_pic_x(px), y = to_pic_y(py);
     if (down && !down_) {   // a press begins
         down_ = true;
-        if ((icon_shown() || open_) && hit_.in(px, py)) {   // the icon (or Back to game, in its place): open/close
+        // the icon with its slop around it (a finger aiming at a small picture over the game) opens; while open, the
+        // icon's own place (Back to game) closes: what is around it is the painter's page then
+        if ((icon_shown() && !open_ && hit_.in(px, py)) || (open_ && icon_.in(px, py))) {
             swallow_ = true;
             set_open(!open_);
             return true;
