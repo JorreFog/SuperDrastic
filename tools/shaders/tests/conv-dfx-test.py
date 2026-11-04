@@ -29,5 +29,9 @@ for f in sorted(os.listdir(os.path.join(ROOT, 'shaders'))):
     if not f.endswith('.frag'): continue
     for d in re.findall(r'#define\s+SCREEN_RES_SCALE\s+(.*)', open(os.path.join(ROOT, 'shaders', f)).read()):
         check(d.strip() == '(DSF_TS.z / 256.0)', 'shaders/%s: SCREEN_RES_SCALE %s' % (f, d.strip()))
+# Retro tiles: fade() takes a distance, so pos has to be without its sign once dir has it (with it, one half of each tile
+# came out up to 4x too bright: BananaLinux, the owner's "looks really bad" on the RG DS)
+rt = open(os.path.join(ROOT, 'shaders', 'nnddss-retro-tiles.frag'), encoding='utf-8', errors='surrogateescape').read()
+check(re.search(r'vec2 dir = sign\(pos\);\s*pos = abs\(pos\);', rt) is not None, 'nnddss-retro-tiles.frag: pos keeps its sign after dir')
 print('conv-dfx-test: all passed' if not fails else 'conv-dfx-test: %d failed' % fails)
 sys.exit(1 if fails else 0)

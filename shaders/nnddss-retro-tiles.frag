@@ -91,6 +91,7 @@ void dsf_frag() {
     // ç·ç ææè®¡ç®
     vec2 pos = fract(vTexCoord * DSF_TS.zw / SCREEN_RES_SCALE) - vec2(0.5);
     vec2 dir = sign(pos);
+    pos = abs(pos);
     vec2 g1 = dir * vec2(DSF_TS.x, 0.0);  // 1/w step
     vec2 g2 = dir * vec2(0.0, DSF_TS.y);  // 1/h step
 
