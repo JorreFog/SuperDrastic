@@ -1,0 +1,38 @@
+From: JorreFog <JorreFog@users.noreply.github.com>
+Subject: [PATCH] CP15: the ARM9 region timings saturate at a byte (core.arm9_mhz past the DSi clock)
+
+At ARM9ClockShift 4 and up, bus costs shifted into the u8 table wrapped round to next to nothing.
+---
+--- a/src/CP15.cpp
++++ b/src/CP15.cpp
+@@ -314,6 +314,8 @@
+     // (the same bytes as before, a 4-byte store per entry: written byte by byte through u8s, which may alias anything,
+     // every entry loaded the clock shift and the bus timings again; 1M entries for a whole rebuild took ~12 ms on an A55)
+     const u32 shift = NDS.ARM9ClockShift;
++    // (a byte each: past the DSi's clock - core.arm9_mhz - a slow bus's cost would wrap round to next to nothing)
++    const auto cost = [shift](u8 c) { const u32 v = (u32)c << shift; return (u8)(v > 0xFF ? 0xFF : v); };
+     for (u32 i = addrstart; i < addrend; i++)
+     {
+         const u8 pu = PU_Map[i];
+@@ -323,7 +325,7 @@
+         if (pu & 0x40)
+             t[0] = 0xFF;//kCodeCacheTiming;
+         else
+-            t[0] = bustimings[2] << shift;
++            t[0] = cost(bustimings[2]);
+ 
+         if (pu & 0x10)
+         {
+@@ -333,9 +335,9 @@
+         }
+         else
+         {
+-            t[1] = bustimings[0] << shift;
+-            t[2] = bustimings[2] << shift;
+-            t[3] = bustimings[3] << shift;
++            t[1] = cost(bustimings[0]);
++            t[2] = cost(bustimings[2]);
++            t[3] = cost(bustimings[3]);
+         }
+         memcpy(MemTimings[i], t, 4);
+     }

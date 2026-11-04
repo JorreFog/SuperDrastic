@@ -594,7 +594,12 @@ void Emu::arm9_clock() {
     melonDS::NDSCart::NDSCartSlot::XferShift = cf > 0 && cf < 8 ? (melonDS::u32)cf : 0;
     if (cf > 0) Log(LogLevel::Info, "[emu] core.card_fast: ROM transfers %ld times faster\n", 1L << cf);
     const long mhz = cfg_.num("core.arm9_mhz", 67);
-    if (mhz >= 100) {
+    if (mhz >= 200) {
+        // (past the DSi's, doubling: Origin HeartGold's towns at 133 MHz still lose 1-3 frames a second, ARM9 idle ~12%)
+        const melonDS::u32 shift = mhz >= 1600 ? 6 : mhz >= 800 ? 5 : mhz >= 400 ? 4 : 3;
+        nds_->ARM9ClockShift = shift;
+        Log(LogLevel::Info, "[emu] core.arm9_mhz: the ARM9 at %ld MHz (past the DSi's clock)\n", (33513982L << shift) / 1000000);
+    } else if (mhz >= 100) {
         nds_->ARM9ClockShift = 2;
         Log(LogLevel::Info, "[emu] core.arm9_mhz: the ARM9 at 133 MHz (the DSi's clock)\n");
     }
