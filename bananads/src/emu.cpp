@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -794,7 +795,19 @@ bool Emu::load_rom(const std::string& path) {
 #endif
 
     auto& hdr = args.Firmware.GetHeader();
-    auto mac = wifi_mac();
+    // the DS's MAC, one per handheld and kept (wifi.h choose_wifi_mac), and the Nintendo WFC settings the game saved
+    // last time (wifi.wfc_settings, melonDS's wfcsettings.bin): without them the game makes a new WFC ID (a new
+    // friend code) at the first connection of every session
+    {
+        const std::string wfc = cfg_.str("wifi.wfc_settings", "wfcsettings.bin");
+        wfc_path_ = wfc == "off" ? "" : Platform::GetLocalFilePath(wfc);
+    }
+    const std::string mac_file_set = cfg_.str("wifi.mac_file", "wifi-mac");
+    const WifiMac wm = choose_wifi_mac(cfg_.str("wifi.mac", ""),
+                                       mac_file_set == "off" ? "" : Platform::GetLocalFilePath(mac_file_set),
+                                       wfc_path_);
+    const auto mac = wm.mac;
+    Log(LogLevel::Info, "[wifi] the DS's MAC: %s (%s)\n", format_mac(mac).c_str(), wm.source.c_str());
     memcpy(hdr.MacAddr.data(), mac.data(), 6);
     auto& user = args.Firmware.GetEffectiveUserData();
     std::string nick = cfg_.str("firmware.nickname", "BananaDS");
@@ -802,7 +815,25 @@ bool Emu::load_rom(const std::string& path) {
     for (size_t i = 0; i < user.NameLength; i++) user.Nickname[i] = (char16_t)(unsigned char)nick[i];
     long lang = cfg_.num("firmware.language", -1);  // 0 ja, 1 en, 2 fr, 3 de, 4 it, 5 es
     if (lang >= 0 && lang <= 5) user.Settings = (u16)((user.Settings & ~7) | lang);
+    if (!wfc_path_.empty()) {
+        const int r = wfc_settings_load(args.Firmware, wfc_path_);
+        if (r > 0) {
+            bool id = false;
+            for (const auto& ap : args.Firmware.GetAccessPoints())
+                for (u8 b : ap.NintendoWFCID) id |= b != 0;
+            Log(LogLevel::Info, "[wifi] WFC settings loaded from %s (%s)\n", wfc_path_.c_str(),
+                id ? "with a Nintendo WFC ID" : "no Nintendo WFC ID yet");
+        } else if (r == 0)
+            Log(LogLevel::Info, "[wifi] no WFC settings saved yet (%s): the game makes them at its first WFC "
+                "connection\n", wfc_path_.c_str());
+    }
     args.Firmware.UpdateChecksums();
+    wfc_last_.clear();
+    if (!wfc_path_.empty() && !wfc_settings_get(args.Firmware, wfc_last_)) {
+        Log(LogLevel::Warn, "[wifi] the generated firmware's access points aren't where they should be: the WFC "
+            "settings won't be kept\n");
+        wfc_path_.clear();
+    }
 
     // jit.iofast=on|off sets MELONDS_IOFAST (melonDS patch 0005: the JIT slow paths' direct routes for main RAM,
     // the GX FIFO and IE/IF/IME/DISPSTAT/VCOUNT/KEYINPUT), which the NDS reads as it's created; unset, the
@@ -1480,6 +1511,18 @@ bool Emu::run_ahead(int n, const std::function<void()>& before_last, const std::
     ra_save_ms_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
     ra_load_ms_ = std::chrono::duration<double, std::milli>(clk::now() - t2).count();
     return true;
+}
+
+void Emu::write_firmware(const melonDS::Firmware& fw) {
+    if (wfc_path_.empty() || hidden_) return;  // (a frame run ahead: written again when it runs for real)
+    if (fw.GetHeader().Identifier != GENERATED_FIRMWARE_IDENTIFIER) return;  // (a real firmware isn't ours to keep)
+    std::vector<uint8_t> now;
+    if (!wfc_settings_get(fw, now) || now == wfc_last_) return;
+    if (write_file_durable(wfc_path_, now.data(), now.size())) {
+        wfc_last_ = std::move(now);
+        Log(LogLevel::Info, "[wifi] WFC settings saved to %s\n", wfc_path_.c_str());
+    } else
+        Log(LogLevel::Warn, "[wifi] couldn't save the WFC settings to %s (%s)\n", wfc_path_.c_str(), strerror(errno));
 }
 
 void Emu::set_cheats(std::vector<melonDS::ARCode> codes) { nds_->AREngine.Cheats = std::move(codes); }
