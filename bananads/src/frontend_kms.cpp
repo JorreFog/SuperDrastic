@@ -66,6 +66,7 @@
 
 #include "Platform.h"
 #include "cpugov.h"
+#include "ffspeed.h"
 #include "frontend.h"
 #ifdef BANANADS_GENGIS
 #include "gengis_renderer.h"
@@ -1828,8 +1829,7 @@ static void opts_init(const Config& cfg, Display& dp) {
     o.edge = cfg.flag("render.edge_marking", true);
     o.fog = cfg.flag("render.fog", true);
     o.fps = cfg.flag("kms.fps", false);
-    const long ff = cfg.num("kms.ff_speed", 2);
-    o.ff_speed = ff == 3 ? 3 : ff > 3 ? 99 : 2;
+    o.ff_speed = ff_speed_of(cfg.str("kms.ff_speed", "2"));  // (ffspeed.h: "max" too, as save_opt writes it)
 }
 static const int ff_speeds[4] = {0, 2, 3, 99};  // the menu's Fast-forward values: Off, 2x, 3x, Max
 static void save_opt(const char* key, const std::string& v) {
