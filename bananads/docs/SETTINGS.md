@@ -125,7 +125,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `rtc.fixed` | none | the DS clock's start, `YYYY-MM-DD HH:MM:SS` (or `T` or `_` for the space), instead of the current time: two runs of a game that seeds its random numbers from the clock then go the same way (for tests) |
 | `wifi.dns` | `kaeru` | `kaeru`, `altwfc`, `wiilink`, an IPv4 address, `system` (the handheld's own DNS) or `off` (no Wi-Fi at all) |
 | `wifi.mac` | (none) | the DS's MAC (`00:09:bf:12:34:56`), over the saved one (not saved itself) |
-| `wifi.mac_file` | `wifi-mac` | where the DS's MAC is kept (under `BANANADS_DATA`; `off`: not kept). Made once (from the eMMC's CID, else wlan0's MAC, else at random; the old 00:09:BF:11:22:33 if WFC settings were saved before it) and never changed |
+| `wifi.mac_file` | `wifi-mac` | where the DS's MAC is kept (under `BANANADS_DATA`; `off`: not kept). Made once (from the eMMC's CID, else wlan0's MAC, else at random; the old 00:09:BF:11:22:33 if WFC settings were saved before it) and never changed. So deleting it while keeping `wfc_settings` brings back the shared 00:09:BF:11:22:33 (the case meant for settings saved before this file existed); to get a MAC of the handheld's own again, delete both (the game then makes a new WFC ID) |
 | `wifi.wfc_settings` | `wfcsettings.bin` | where the Nintendo WFC settings the game writes (its WFC ID) are kept between sessions, melonDS's 2304-byte file (under `BANANADS_DATA`; `off`: not kept, a new WFC ID every session) |
 | `wifi.local` | `off` | `host`, or `join:<the host's address>`: local wireless with another handheld (builds with `BANANADS_LAN`) |
 | `wifi.local_players` | `4` | how many can join a host |
