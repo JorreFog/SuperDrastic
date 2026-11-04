@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "config.h"
+#include "ffspeed.h"
 #include "mic.h"
 #include "wifi.h"
 
@@ -182,11 +183,23 @@ static void test_mic() {
     }
 }
 
+// kms.ff_speed as the in-game menu saves it ("max" for Max) and as numbers (BananaLinux: Max came back as 2x)
+static void test_ff_speed() {
+    CHECK(ff_speed_of("max") == 99);
+    CHECK(ff_speed_of("3") == 3);
+    CHECK(ff_speed_of("2") == 2);
+    CHECK(ff_speed_of("99") == 99);
+    CHECK(ff_speed_of("4") == 99);
+    CHECK(ff_speed_of("") == 2);
+    CHECK(ff_speed_of("fast") == 2);
+}
+
 int main() {
     test_config();
     test_wifi_names();
     test_dns_frames();
     test_mic();
+    test_ff_speed();
     if (fails) {
         fprintf(stderr, "%d check(s) failed\n", fails);
         return 1;
