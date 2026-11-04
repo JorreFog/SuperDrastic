@@ -37,14 +37,15 @@ vcode = re.sub(r'\ba_texture_coordinate\b', 'v_texcoord', vcode)
 vcode = re.sub(r'\ba_vertex_coordinate\b', '(v_texcoord * 2.0 - 1.0)', vcode)
 fcode = strip_decls(fs, False)
 fcode = re.sub(r'\bvoid\s+main\s*\(\s*(void)?\s*\)', 'void dsf_frag()', fcode)
-# the screen scale some shaders fix at 1.0 (NNDDSS's Dot: 2.0 at 2x): from the frame's size instead
+# the screen scale some shaders fix at 1.0 (NNDDSS's Dot: 2.0 at 2x): from the frame's size instead (DSF_TS.z, the
+# width: .x is 1/w, and u_texture_size.x here was renamed to that below; the scale came out ~1/65536, BananaLinux #76)
 pre_all = vh + '\n' + hd + '\n' + inc
-pre_all = re.sub(r'#define\s+SCREEN_RES_SCALE\s+[0-9.]+', '#define SCREEN_RES_SCALE (u_texture_size.x / 256.0)', pre_all)
-vcode = re.sub(r'#define\s+SCREEN_RES_SCALE\s+[0-9.]+', '#define SCREEN_RES_SCALE (u_texture_size.x / 256.0)', vcode)
+pre_all = re.sub(r'#define\s+SCREEN_RES_SCALE\s+[0-9.]+', '#define SCREEN_RES_SCALE (DSF_TS.z / 256.0)', pre_all)
+vcode = re.sub(r'#define\s+SCREEN_RES_SCALE\s+[0-9.]+', '#define SCREEN_RES_SCALE (DSF_TS.z / 256.0)', vcode)
 vcode = re.sub(r'const\s+float\s+screen_res_scale\s*=\s*SCREEN_RES_SCALE\s*;', '#define screen_res_scale SCREEN_RES_SCALE', vcode)
 fhead = re.sub(r'#if GL_ES\s*\n\s*(#ifdef GL_FRAGMENT_PRECISION_HIGH.*?#endif|precision \w+ float;)\s*\n#endif', '', fh, flags=re.S)
 body = pre_all + '\n' + vcode + '\n' + fhead + '\n' + hd + '\n' + fcode
-body = re.sub(r'#define\s+SCREEN_RES_SCALE\s+[0-9.]+', '#define SCREEN_RES_SCALE (u_texture_size.x / 256.0)', body)
+body = re.sub(r'#define\s+SCREEN_RES_SCALE\s+[0-9.]+', '#define SCREEN_RES_SCALE (DSF_TS.z / 256.0)', body)
 body = re.sub(r'^\s*uniform\s+[^;]*;\s*$', '', body, flags=re.M)   # DraStic's built-ins and samplers: ours
 body = re.sub(r'^\s*precision\s+\w+\s+\w+\s*;\s*$', '', body, flags=re.M)
 body = re.sub(r'\bu_texture_size\b', 'DSF_TS', body)

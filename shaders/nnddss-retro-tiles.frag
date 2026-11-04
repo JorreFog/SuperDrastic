@@ -12,7 +12,7 @@ uniform vec2 u_texture_size;
 uniform vec2 u_output_size;
 #define DSF_TS vec4(1.0 / u_texture_size, u_texture_size)
 
-#define SCREEN_RES_SCALE (DSF_TS.x / 256.0)
+#define SCREEN_RES_SCALE (DSF_TS.z / 256.0)
 
 #if GL_ES
 
@@ -58,7 +58,7 @@ void dsf_vert()
     vTexCoord = middle + diff * scale;  // å±ä¸­å¹¶ç¼©æ¾çº¹çåæ 
 }
 
-#define SCREEN_RES_SCALE (DSF_TS.x / 256.0)
+#define SCREEN_RES_SCALE (DSF_TS.z / 256.0)
 
 #if GL_ES
 
