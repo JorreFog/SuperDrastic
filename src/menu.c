@@ -51,6 +51,7 @@ void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 void cpugov_boost(int ms);
 void SDL_PauseAudio(int on);
+int SDL_PushEvent(void *event);
 /* audio.c */
 void audio_mute(int on);
 int audio_ui_load(int id, const int16_t *pcm, int frames, int rate, int ch);
@@ -66,6 +67,8 @@ int resume_control_button(const char *name);
 int resume_menu_save(const char *path, const char *msg, const char *msg2);
 int resume_menu_load(const char *path, const char *backup, const char *msg, const char *msg2);
 int resume_menu_busy(void);
+FILE *resume_fopen_direct(const char *p, const char *m);
+int resume_copy_sdl_quit(const void *ev, void *dst, int n);
 void resume_press(int b);
 int resume_quit(void);
 int resume_on(void);
@@ -337,7 +340,10 @@ static uint16_t *read_pic(const char *path) {
         *(void **)&z_init = dlsym(h, "inflateInit_"); *(void **)&z_inflate = dlsym(h, "inflate"); *(void **)&z_end = dlsym(h, "inflateEnd");
         if (!z_init || !z_inflate || !z_end) { z_init = 0; return 0; }
     }
-    FILE *f = fopen(path, "rb"); if (!f) return 0;
+    /* libc's fopen. resume.c's fopen sends every slot file to the resume state while that state is loading,
+     * and scan_slots keeps a picture until the slot's mtime changes, so a menu opened in those seconds showed
+     * the resume picture on every slot (SuperDrastic #4). */
+    FILE *f = resume_fopen_direct(path, "rb"); if (!f) return 0;
     uint8_t hdr[0x44], in[32768]; uint16_t *out = 0;
     if (fread(hdr, 1, sizeof hdr, f) == sizeof hdr && !memcmp(hdr, "DraStic-SaveState", 17) && (out = malloc(PIC_BYTES))) {
         zs_t z; memset(&z, 0, sizeof z);
@@ -1025,6 +1031,13 @@ static void dir_press(int dx, int dy) { nav(dx, dy); held_dir = 1; rep_dx = dx; 
 static void dir_release(void) { held_dir = 0; }
 static void handle_sdl(const uint8_t *e) {
     uint32_t type; memcpy(&type, e, 4);
+    uint8_t q[64];
+    if (resume_copy_sdl_quit(e, q, (int)sizeof q)) { /* SDL_QUIT (SIGTERM: killall, a shutdown). Hand it back. */
+        dsflip_log("[menu] quit asked while open: closing, DraStic quits\n");
+        close_menu();
+        SDL_PushEvent(q);
+        return;
+    }
     if (type == 0x603 || type == 0x604) {           /* SDL_JOYBUTTONDOWN / UP */
         int b = e[12], down = type == 0x603;
         if (!down) { if (b == b_up || b == b_down || b == b_left || b == b_right) dir_release(); return; }
