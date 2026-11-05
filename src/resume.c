@@ -85,6 +85,24 @@ static const char *redirect_load(const char *p, const char *call) {
     if (!load_redirects++) dsflip_log("[resume] loading the resume state instead of %s\n", strrchr(p, '/') ? strrchr(p, '/') + 1 : p);
     return resume_path;
 }
+/* menu.c reads a slot's picture itself. The fopen below is redirected for the whole resume load, so that read
+ * uses libc's fopen: otherwise every slot shows the resume state's picture (SuperDrastic #4). */
+FILE *resume_fopen_direct(const char *p, const char *m) {
+    static FILE *(*libc)(const char *, const char *);
+    if (!libc) *(void **)&libc = dlsym(RTLD_NEXT, "fopen");
+    return libc ? libc(p, m) : 0;
+}
+/* SDL_QUIT is 0x100. The in-game menu polls with the real SDL_PollEvent, so a SIGTERM (killall, shutdown) becomes
+ * an event only the menu sees. 1 and a copy of the event: the menu closes and pushes that copy back to DraStic. */
+int resume_copy_sdl_quit(const void *ev, void *dst, int n) {
+    uint32_t type;
+    if (!ev || !dst || n < 56) return 0;
+    memcpy(&type, ev, 4);
+    if (type != 0x100) return 0;
+    memset(dst, 0, (size_t)n);
+    memcpy(dst, ev, 56);
+    return 1;
+}
 int rename(const char *a, const char *b) {
     NEXT(int, "rename", const char *, const char *);
     if (trace && b && strstr(b, ".dss")) dsflip_log("[resume] rename %s -> %s\n", a, b);
