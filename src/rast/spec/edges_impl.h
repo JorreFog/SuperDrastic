@@ -12,6 +12,7 @@
 #include <arm_neon.h>
 #include <stdint.h>
 #include <string.h>
+#include "edges_recip.h"
 
 #pragma STDC FP_CONTRACT OFF
 
@@ -21,9 +22,11 @@ static inline void wr16(uint8_t *p, uint32_t v) { uint16_t t = (uint16_t)v; memc
 static inline void wr32(uint8_t *p, uint32_t v) { memcpy(p, &v, 4); }
 static inline void wrf(uint8_t *p, float v) { memcpy(p, &v, 4); }
 
+#ifndef EDGES_RECIP_MAX
+#define EDGES_RECIP_MAX 512   /* DraStic's table is 0 past 512; the 2x walker must match it */
+#endif
 EDGES_LINKAGE uint32_t EDGES_FN(edges_reciprocal)(int32_t i) {
-    if (i >= 1 && i <= 512) return (uint32_t)(0x3fffffffu + (uint32_t)i) / (uint32_t)i;
-    return 0;   /* 0 and 513..1023 are zero in DraStic; outside 0..1023 DraStic reads past the table */
+    return edges_reciprocal_at(i, EDGES_RECIP_MAX);
 }
 
 /* ---------------------------------------------------------------------------------------------------------------- */
