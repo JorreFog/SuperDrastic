@@ -43,6 +43,9 @@
 #define EDGES_ARR  0x100
 #define EDGES_XMAX HR_W
 #define EDGES_LINKAGE static
+/* DraStic's reciprocal table is 0 for a run longer than 512. A 3x edge across the 192-line view is 576,
+ * and with a 0 step the edge is vertical at its top vertex, in every bin. Vertex y is a u16. */
+#define EDGES_RECIP_MAX 65535
 #include "spec/edges_impl.h"
 
 #define U8(p, o)  (*(uint8_t *)((uint8_t *)(p) + (o)))
