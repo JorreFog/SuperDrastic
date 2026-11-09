@@ -18,7 +18,7 @@
 #include "mic.h"
 #include "prof.h"
 
-namespace melonDS { class NDS; class Net; class BananaRenderer; }
+namespace melonDS { class NDS; class Net; class BananaRenderer; class Firmware; }
 
 namespace bananads {
 // with log.time: "[start] <what>" in the log, the start of a game timed step by step (platform.cpp)
@@ -113,6 +113,8 @@ public:
     bool runahead_ok() const;
     bool run_ahead(int n, const std::function<void()>& before_last, const std::function<void()>& after_last);
     bool hidden() const { return hidden_; }
+    // the game wrote the firmware (Platform::WriteFirmware): the WFC settings out to wifi.wfc_settings if changed
+    void write_firmware(const melonDS::Firmware& fw);
     double runahead_save_ms() const { return ra_save_ms_; }  // the last snapshot's save and load, ms
     double runahead_load_ms() const { return ra_load_ms_; }
     size_t runahead_bytes() const { return ra_len_; }
@@ -205,6 +207,8 @@ private:
     std::vector<uint8_t> ra_buf_;
     size_t ra_len_ = 0;
     bool hidden_ = false, ra_broken_ = false;
+    std::string wfc_path_;             // wifi.wfc_settings: where the WFC settings are kept ("" off)
+    std::vector<uint8_t> wfc_last_;    // the settings as last loaded or saved (a write that changes nothing: no file)
     bool ra_soft_threaded_ = false;  // render.renderer=soft with render.threaded: no run-ahead (emu.cpp)
     uint32_t ra_captures_ = 0;   // GPU::CaptureFrames when last seen
     long ra_capture_at_ = -100000;  // frames_run_ then
