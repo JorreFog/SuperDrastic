@@ -13,12 +13,12 @@ uniform vec2 u_output_size;
 #define DSF_TS vec4(1.0 / u_texture_size, u_texture_size)
 
 // screen resolution scale (2.0 for current High-Resolution 3D Rendering)
-#define SCREEN_RES_SCALE (DSF_TS.x / 256.0)
+#define SCREEN_RES_SCALE (DSF_TS.z / 256.0)
 // dot softness in texels; 0 enables the fast path (single texel fetch)
 #define SOFT 0
 
 #ifndef SCREEN_RES_SCALE
-#define SCREEN_RES_SCALE (DSF_TS.x / 256.0)
+#define SCREEN_RES_SCALE (DSF_TS.z / 256.0)
 #endif
 
 #ifndef SOFT
