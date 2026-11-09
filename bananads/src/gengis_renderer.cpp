@@ -374,7 +374,10 @@ void GengisRenderer3D::Convert() {
         Frame.fog_table[32 + i] = (uint8_t)(int8_t)(d1 - d0);
     }
     Frame.fog_color = gx_expand555(GPU3D.RenderFogColor & 0x7FFF) | ((GPU3D.RenderFogColor >> 16) & 0x1F) << 24;
-    Frame.fog_offset = GPU3D.RenderFogOffset;
+    // (gx.h's FOG_OFFSET: the register's 15 bits. melonDS keeps RenderFogOffset as FogOffset * 0x200, the 24-bit depth
+    // scale, and gx.c took its low 15 bits: the fog started at (offset & 0x3f) << 9, near the camera, and Black 2's
+    // Chargestone Cave, offset 0x7faf with black fog, came out all black)
+    Frame.fog_offset = GPU3D.RenderFogOffset >> 9;
     for (int i = 0; i < 8; i++) {
         const uint32_t e = gx_expand555(GPU3D.RenderEdgeTable[i]);
         Frame.edge[i] = (uint8_t)e;

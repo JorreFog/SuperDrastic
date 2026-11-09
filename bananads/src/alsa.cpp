@@ -126,6 +126,7 @@ static void out_thread(Alsa* a) {
     int64_t win_us = 0;
     long win_made = 0;
     int win_spu = 0;
+    bool was_muted = false, refill = false;  // (refill: fast-forward's queue dropped, silent until primed again)
     bool primed = false;  // the buffer filled to its target once since the sound started (or came back from a pause)
     bool ever_primed = false;
     Stretch st;
@@ -158,6 +159,25 @@ static void out_thread(Alsa* a) {
                 if (!pcm) return;
             }
         }
+        // fast-forward over (the mute let go, kms.ff_mute): what is still queued was made at its speed, and the SPU's
+        // ring dropped its oldest samples all along (it fills twice as fast as this plays), so the ~60 ms left in it and
+        // in the stretch buffer are pieces cut apart: played as the sound faded back in, a crackle (BananaLinux #159).
+        // They go, and the sound starts again from the game's fresh samples once the buffer is full (silent until then)
+        const bool muted = a->mute.load(std::memory_order_relaxed);
+        if (was_muted && !muted && a->stretch && a->servo) {
+            for (int left = a->emu->audio_backlog(); left > 0;) {
+                const int g = a->emu->audio(fresh.data(), std::min(left, (int)fresh.size() / 2));
+                if (g <= 0) break;
+                left -= g;
+            }
+            st.reset();
+            primed = false;
+            refill = true;
+            hn = 0;
+            last[0] = last[1] = 0;
+        }
+        was_muted = muted;
+        if (refill && primed) refill = false;
         int backlog = a->servo || a->stats ? a->emu->audio_backlog() : 0;
         const int spu_backlog = backlog;
         int got, pulled;
@@ -279,7 +299,7 @@ static void out_thread(Alsa* a) {
             }
         }
         // muted (fast-forward): faded over ~5 ms each way, so neither end clicks
-        const float target = a->mute.load(std::memory_order_relaxed) ? 0.f : 1.f;
+        const float target = a->mute.load(std::memory_order_relaxed) || refill ? 0.f : 1.f;
         if (gain != target || target == 0.f)
             for (int i = 0; i < n; i++) {
                 gain = target > gain ? std::min(target, gain + 1.f / 240) : std::max(target, gain - 1.f / 240);
