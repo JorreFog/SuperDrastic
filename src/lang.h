@@ -29,6 +29,13 @@ void lang_keep(const char *s);
 int lang_cjk(int cp);
 int lang_break_between(int prev, int cp);
 
+/* BananaLinux's settings (/data/banana/settings.conf, "key = value"; BANANA_SETTINGS: another file, for tests): key's
+ * value into out, 1 if the file has it (0: no file, no such line, or an empty value; out is left as it was) */
+int banana_setting(const char *key, char *out, int n);
+/* Settings > Display & sound > Menu sounds (the "sounds" line): 0 when it is "off", else 1 (the default, as banana-ui
+ * has it). The in-game menus' clicks follow it (issue #229) */
+int banana_menu_sounds(void);
+
 #if defined(__GNUC__)
 #pragma GCC visibility pop
 #endif

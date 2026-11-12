@@ -14,4 +14,5 @@ Test and measurement tools, run on the device unless noted.
 | `shaders.sh`, `shbench.sh` | GPU time per shader on real frames (run `shaders.sh` on a PC with `RGDS_SSH`/`RGDS_HOST`; it pushes `build/shtest`, `shaders/` and `shbench.sh` to the device) |
 | `gen-color-shaders.py` | Writes `ds-crisp-color` and `ds-grid-color` from `ds-crisp` and `ds-grid` (on a PC) |
 | `resume-keep-test.c` | Host test: a quit-save leaves the previous resume file until the new one replaces it (`clang -O2 -o /tmp/resume-keep-test tools/resume-keep-test.c src/resume.c -ldl -lpthread`) |
+| `menu-sounds-test.c` | Host test (BananaOS issue #229): the in-game menu plays no clicks while Settings > Menu sounds is off (`cc -O1 -Isrc -Isrc/third_party/stb -o /tmp/menu-sounds-test tools/menu-sounds-test.c src/menu.c src/lang.c -ldl -lpthread -lm`) |
 | `dev/` | The scripts used while bringing SuperDrastic up on the RG DS under ROCKNIX (they assume its paths) |

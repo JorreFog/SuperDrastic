@@ -628,7 +628,9 @@ static void load_wav(int id, const char *path) {
     if (n && audio_ui_load(id, pcm, (int)n, rate, ch) == 0) snd_ok[id] = 1;
     free(pcm);
 }
-static void play(int id) { if (snd_ok[id]) audio_ui_play(id); }
+/* BananaOS's Settings > Menu sounds off: none here either (issue #229; read at every opening, lang.c) */
+static int snd_on = 1;
+static void play(int id) { if (snd_on && snd_ok[id]) audio_ui_play(id); }
 
 /* ---------- state ---------- */
 enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_QUIT_NOSAVE, SC_KEYS };
@@ -677,8 +679,9 @@ static int setup(void) {
     }
     const char *snd[SND_N] = { "scroll.wav", "select.wav", "back.wav" };
     for (int k = 0; k < SND_N; k++) {
-        char p[300];
-        snprintf(p, sizeof p, "/usr/share/banana/rnds/sounds/%s", snd[k]);
+        char p[300]; const char *dir = getenv("DSFLIP_MENU_SOUNDS");   /* (another folder: tests) */
+        p[0] = 0; if (dir && *dir) snprintf(p, sizeof p, "%s/%s", dir, snd[k]);
+        if (!p[0] || access(p, R_OK)) snprintf(p, sizeof p, "/usr/share/banana/rnds/sounds/%s", snd[k]);
         if (access(p, R_OK)) snprintf(p, sizeof p, "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/sounds/%s", snd[k]);
         if (access(p, R_OK)) snprintf(p, sizeof p, "/storage/.config/emulationstation/themes/rocknixds-pixel-light/rnds/sounds/%s", snd[k]);
         load_wav(k, p);
@@ -1413,6 +1416,7 @@ static void handle_sdl(const uint8_t *e) {
 
 static void menu_run(int start) {
     if (!setup()) { enabled = 0; return; }
+    snd_on = banana_menu_sounds();
     static int (*poll_real)(void *);
     if (!poll_real) poll_real = (int (*)(void *))dlsym(RTLD_NEXT, "SDL_PollEvent");
     if (!gbase[0]) game_info();
