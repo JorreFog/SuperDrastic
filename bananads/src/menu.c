@@ -522,7 +522,9 @@ static void load_wav(int id, const char *path) {
     if (n && H.sound_load) { H.sound_load(H.ctx, id, pcm, (int)n, rate, ch); snd_ok[id] = 1; }
     free(pcm);
 }
-static void play(int id) { if (snd_ok[id] && H.sound_play) H.sound_play(H.ctx, id); }
+/* BananaOS's Settings > Menu sounds off: none here either (issue #229; read at every opening, lang.c) */
+static int snd_on = 1;
+static void play(int id) { if (snd_on && snd_ok[id] && H.sound_play) H.sound_play(H.ctx, id); }
 
 /* ---------- state ---------- */
 enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC, SC_RESTART, SC_CHEAT, SC_QUIT_NOSAVE, SC_KEYS };
@@ -551,7 +553,7 @@ static int fonts_ready(void) {   /* the menu's and the pop-ups' fonts, loaded on
     const char *const med[] = { getenv("BANANADS_MENU_FONT"), "/usr/share/banana/rnds/fonts/PixelifySans-Medium.ttf",
         "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
-    const char *const reg[] = { "/usr/share/banana/rnds/fonts/PixelifySans-Regular.ttf",
+    const char *const reg[] = { "/usr/share/banana/rnds/fonts/PixelifySans-Regular.ttf", getenv("BANANADS_MENU_FONT"),
         "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf" };
     static int lang_done;
@@ -564,7 +566,7 @@ static int fonts_ready(void) {   /* the menu's and the pop-ups' fonts, loaded on
             mlog("[menu] language %s, translated by %s\n", lang_name(), lang_by());
         }
     }
-    return font_load(&F_MED, med, 5) && font_load(&F_REG, reg, 4);
+    return font_load(&F_MED, med, 5) && font_load(&F_REG, reg, 5);
 }
 static int setup(void) {
     if (inited) return inited > 0;
@@ -579,8 +581,9 @@ static int setup(void) {
     if (!fonts_ready()) { mlog("[menu] no font\n"); return 0; }
     const char *snd[SND_N] = { "scroll.wav", "select.wav", "back.wav" };
     for (int k = 0; k < SND_N; k++) {
-        char p[300];
-        snprintf(p, sizeof p, "/usr/share/banana/rnds/sounds/%s", snd[k]);
+        char p[300]; const char *dir = getenv("BANANADS_MENU_SOUNDS");   /* (another folder: tests) */
+        p[0] = 0; if (dir && *dir) snprintf(p, sizeof p, "%s/%s", dir, snd[k]);
+        if (!p[0] || access(p, R_OK)) snprintf(p, sizeof p, "/usr/share/banana/rnds/sounds/%s", snd[k]);
         if (access(p, R_OK)) snprintf(p, sizeof p, "/storage/.config/emulationstation/themes/rocknixds-pixel-dark/rnds/sounds/%s", snd[k]);
         load_wav(k, p);
     }
@@ -1321,6 +1324,7 @@ void bmenu_session_start(void) { session_t0 = now_ms(); }
 
 int bmenu_run(int start) {
     if (!setup()) return 0;
+    snd_on = banana_menu_sounds();
     if (!gbase[0]) game_info();
     mlog("[menu] open\n");
     boost(800);

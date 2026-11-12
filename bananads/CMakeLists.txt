@@ -320,6 +320,13 @@ add_executable(bananads-compoverlay-test tests/compoverlay_test.cpp src/compover
 target_include_directories(bananads-compoverlay-test PRIVATE src)
 add_test(NAME compoverlay COMMAND bananads-compoverlay-test)
 
+# The in-game menu's clicks follow BananaOS's Settings > Menu sounds (tests/menu_sounds_test.c, issue #229).
+add_executable(bananads-menu-sounds-test tests/menu_sounds_test.c src/menu.c src/lang.c)
+target_include_directories(bananads-menu-sounds-test PRIVATE src)
+target_link_libraries(bananads-menu-sounds-test PRIVATE pthread m)
+add_test(NAME menu-sounds COMMAND bananads-menu-sounds-test)
+set_tests_properties(menu-sounds PROPERTIES SKIP_RETURN_CODE 77)
+
 # BananaJIT's encoder against LLVM's assembler (runs on any host: it only encodes).
 add_executable(bananads-jit-encodings tests/jit_encodings.cpp)
 target_include_directories(bananads-jit-encodings PRIVATE jit)

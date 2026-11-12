@@ -117,22 +117,33 @@ static int by_fixed(const void *a, const void *b) {
     return fa != fb ? fb - fa : *(const int *)a - *(const int *)b;   /* (stable: the file's order among equals) */
 }
 
+int banana_setting(const char *key, char *out, int n) {
+    const char *path = getenv("BANANA_SETTINGS"); if (!path || !*path) path = "/data/banana/settings.conf";
+    FILE *f = fopen(path, "r"); if (!f) return 0;
+    char l[256]; size_t kl = strlen(key); int found = 0;
+    while (fgets(l, sizeof l, f)) {                  /* "key = value"; the last such line counts, as banana-ui reads it */
+        char *p = l; while (*p == ' ' || *p == '\t') p++;
+        if (strncmp(p, key, kl)) continue;
+        p += kl; while (*p == ' ' || *p == '\t') p++;
+        if (*p != '=') continue;
+        p++; while (*p == ' ' || *p == '\t') p++;
+        char *e2 = p + strcspn(p, " \t\r\n"); *e2 = 0;
+        if (*p && n > 0) { snprintf(out, (size_t)n, "%s", p); found = 1; }
+    }
+    fclose(f);
+    return found;
+}
+
+int banana_menu_sounds(void) {
+    char v[16];
+    return !(banana_setting("sounds", v, sizeof v) && !strcmp(v, "off"));   /* (banana-ui: on unless "off") */
+}
+
 static void setting(char *out, size_t n) {
     const char *e = getenv("BANANA_LANGUAGE");
     if (e && *e) { snprintf(out, n, "%s", e); return; }
     snprintf(out, n, "en");
-    FILE *f = fopen("/data/banana/settings.conf", "r"); if (!f) return;
-    char l[256];
-    while (fgets(l, sizeof l, f)) {
-        char *p = l; while (*p == ' ' || *p == '\t') p++;
-        if (strncmp(p, "language", 8)) continue;
-        p += 8; while (*p == ' ' || *p == '\t') p++;
-        if (*p != '=') continue;
-        p++; while (*p == ' ' || *p == '\t') p++;
-        char *e2 = p + strcspn(p, " \t\r\n"); *e2 = 0;
-        if (*p) snprintf(out, n, "%s", p);
-    }
-    fclose(f);
+    banana_setting("language", out, (int)n);
 }
 
 int lang_init(const char *part) {
