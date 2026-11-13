@@ -142,6 +142,41 @@ static void test_mic() {
         CHECK(heard > 0);
     }
     {
+        // BananaOS #14 (Nintendogs): speech on the RG DS Plus. The rk817 at its 18 dB gain gives a ~0.0001 noise floor
+        // (measured: -77 dBFS) and speech far below a blow; at Settings' Medium the game must hear a voice at 0.008
+        // (-42 dBFS), not only a blow. Before mic.gain the gate wanted floor + 0.05 and gave the game silence.
+        Mic m;
+        feed(m, 70, 0.0001, 0, seed);
+        std::vector<int16_t> in(1024), got(4096);
+        int heard = 0;
+        double sum = 0;
+        for (int b = 0; b < 10; b++) {
+            for (size_t i = 0; i < in.size(); i++)
+                in[i] = (int16_t)(0.008 * 1.4142 * 32767 * std::sin(2 * M_PI * 300 * (b * 1024 + i) / 44100.0));
+            m.push(in.data(), (int)in.size(), 44100);
+            int n = m.read(got.data(), (int)got.size());
+            for (int i = 0; i < n; i++) heard += got[i] != 0, sum += (double)got[i] * got[i];
+        }
+        if (!heard) fprintf(stderr, "  speech: level %.4f floor %.4f bar %.4f\n", m.meter().level, m.meter().floor, m.meter().bar);
+        CHECK(heard > 0);
+        // and loud enough to count: the game gets it with the gain (10x: ~0.08 RMS), as a DS's own mic amp would
+        CHECK(heard > 0 && std::sqrt(sum / heard) / 32768.0 > 0.05);
+    }
+    {
+        // a blow at the gain: clipped to full scale, never wrapped round to the other sign
+        Mic m;
+        feed(m, 70, 0.0001, 0, seed);
+        std::vector<int16_t> in(1024, 20000), got(4096);
+        int wrapped = 0, n = 0;
+        for (int b = 0; b < 4; b++) {
+            m.push(in.data(), (int)in.size(), 44100);
+            n = m.read(got.data(), (int)got.size());
+        }
+        // (the DC high-pass lets a held level sag; the first block after the step is what a sign wrap would show in)
+        for (int i = 0; i < n; i++) wrapped += got[i] < -100;
+        CHECK(wrapped == 0);
+    }
+    {
         MicTuning t;
         t.threshold = 0;  // gate off: everything passes
         Mic m(t);

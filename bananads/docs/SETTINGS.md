@@ -128,6 +128,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `wifi.local_players` | `4` | how many can join a host |
 | `mic.source` | `device` | `device` (ALSA or SDL capture) or `none` (only the menu's Blow) |
 | `mic.device` | `default` | the ALSA capture device |
+| `mic.gain` | `10` | the mic's samples multiplied by this before the gate, its meter and the game (clipped at full scale for the game only). The RG DS Plus's rk817 gives a voice at about -40 dBFS, which the gate never let through (BananaOS #14); melonDS Android uses 10 the same way. `1`: the mic as it is |
 | `mic.threshold` | `0.05` | how far above the room's noise a sound must be to reach the game (full scale 1). Settings > Nintendo DS > Microphone: High 0.02, Medium 0.05, Low 0.15 (a blow, hardly a word). `0` turns the gate off |
 | `mic.gate` | `3` | the echo gate's factor over the learned speaker leak; `0` turns it off |
 | `mic.coupling_max` | `4` | the most leak it will learn |

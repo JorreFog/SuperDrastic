@@ -31,12 +31,13 @@ void Mic::put(int16_t s) {
 void Mic::push(const int16_t* pcm, int n, int rate) {
     std::lock_guard<std::mutex> l(mu_);
     if (rate > 0) rate_ = rate;
+    const double gain = t_.gain > 0 ? t_.gain : 1.0;
     for (int i = 0; i < n; i++) {
-        double x = pcm[i];
+        double x = pcm[i] * gain;
         double y = x - hp_x_ + 0.998 * hp_y_;
         hp_x_ = x;
         hp_y_ = y;
-        blk_.push_back((int16_t)std::clamp(y, -32768.0, 32767.0));
+        blk_.push_back(y);
         captured_++;
         if ((int)blk_.size() >= t_.block) block_done();
     }
@@ -44,7 +45,7 @@ void Mic::push(const int16_t* pcm, int n, int rate) {
 
 void Mic::block_done() {
     double sum = 0;
-    for (int16_t s : blk_) sum += (double)s * s;
+    for (double s : blk_) sum += s * s;
     double level = std::sqrt(sum / blk_.size()) / 32768.0;
     double out = out_level_.load(std::memory_order_relaxed);
 
@@ -88,7 +89,7 @@ void Mic::block_done() {
     for (size_t i = 0; i < blk_.size();) {
         double a = i == 0 ? last_ : blk_[i - 1];
         double s = a + (blk_[i] - a) * frac_;
-        put(open_ ? (int16_t)s : 0);
+        put(open_ ? (int16_t)std::clamp(s, -32768.0, 32767.0) : 0);  // (clipped here only: a gained blow is full scale)
         frac_ += step;
         while (frac_ >= 1.0 && i < blk_.size()) {
             frac_ -= 1.0;

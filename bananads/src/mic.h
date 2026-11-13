@@ -21,6 +21,11 @@
 namespace bananads {
 
 struct MicTuning {
+    // mic.gain: what the mic gives is multiplied by this first (the gate, its meter and the game all see the louder
+    // sound). A DS's own mic has an amplifier the game turns up; the rk817 on the RG DS Plus gives a voice at about
+    // -40 dBFS, which the gate's bar never let through (BananaOS #14: Nintendogs heard no voice, only blows).
+    // melonDS Android multiplies its device mic by 10 the same way. 1 = the mic as it is.
+    double gain = 10.0;
     double threshold = 0.05;     // mic.threshold: above the floor, full scale = 1 (Settings: high 0.02, medium 0.05, low 0.15)
     double gate_k = 3.0;         // mic.gate: 0 turns the echo gate off
     double coupling_max = 4.0;   // mic.coupling_max
@@ -66,7 +71,7 @@ private:
     size_t rd_ = 0, wr_ = 0;
 
     // capture-rate state
-    std::vector<int16_t> blk_;
+    std::vector<double> blk_;     // (after the gain, not clipped: the gate tells a blow from loud game sound)
     double hp_x_ = 0, hp_y_ = 0;
     double floor_ = 0;
     int floor_n_ = 0;
@@ -77,7 +82,7 @@ private:
     int64_t captured_ = 0;
     int rate_ = 44100;
     double frac_ = 0;         // resampler phase
-    int16_t last_ = 0;
+    double last_ = 0;
     float m_level_ = 0, m_bar_ = 0;
 
     std::atomic<float> out_level_{0};

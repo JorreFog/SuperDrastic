@@ -115,6 +115,7 @@ static uint64_t now_us() {
 
 Emu::Emu(const Config& cfg) : cfg_(cfg) {
     MicTuning mt;
+    mt.gain = cfg.real("mic.gain", mt.gain);
     mt.threshold = cfg.real("mic.threshold", mt.threshold);
     mt.gate_k = cfg.real("mic.gate", mt.gate_k);
     mt.coupling_max = cfg.real("mic.coupling_max", mt.coupling_max);
