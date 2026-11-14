@@ -10,6 +10,7 @@ Test and measurement tools, run on the device unless noted.
 | `touchcal.c` | Draws crosshairs on the panels to calibrate the touchscreen (KMS) |
 | `dsprobe.c` | Logs DraStic's display path (SDL calls and timings), for studying a DraStic build |
 | `kmstest.c` | Minimal KMS bring-up test for two panels |
+| `clock-gap-test.c` | Host test of the wall-clock gap taken out of DraStic's gettimeofday (`gcc -o /tmp/clock-gap-test tools/clock-gap-test.c && /tmp/clock-gap-test`) |
 | `ramp.py` | Maps a stress-ROM run's presents to its levels |
 | `shaders.sh`, `shbench.sh` | GPU time per shader on real frames (run `shaders.sh` on a PC with `RGDS_SSH`/`RGDS_HOST`; it pushes `build/shtest`, `shaders/` and `shbench.sh` to the device) |
 | `gen-color-shaders.py` | Writes `ds-crisp-color` and `ds-grid-color` from `ds-crisp` and `ds-grid` (on a PC) |

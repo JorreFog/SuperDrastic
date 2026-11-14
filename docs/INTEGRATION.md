@@ -160,6 +160,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
 | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
 | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |
 | `DSFLIP_FALLBACK` | 1 | 0 = don't run DraStic without SuperDrastic when it can't take the display |
+| `DSFLIP_CLOCK_GAPS` | 0 | 1 = give DraStic the raw wall clock. Otherwise a jump of more than a second (a sleep, a stop, a clock change) is taken out, so its 32-bit frame wait does not sleep for up to another 36 minutes after a long pause |
 
 **Shaders** are GLSL ES 1.0 fragment shaders with the inputs DraStic's stock shaders use (`u_texture`,
 `u_texture_size`, `u_output_size`, `v_texcoord`; see the top of `src/shader.c`). A shader that draws the DS screen
