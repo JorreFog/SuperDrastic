@@ -20,9 +20,11 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "NetDriver.h"
 #include "Platform.h"
+#include "SPI_Firmware.h"
 
 namespace bananads {
 
@@ -32,6 +34,23 @@ uint32_t wfc_dns_address(const std::string& name);
 // 00:09:BF:xx:yy:zz from the given machine id (a hex string); a fixed fallback when it is empty.
 std::array<uint8_t, 6> wifi_mac_from_id(const std::string& machine_id);
 std::array<uint8_t, 6> wifi_mac();  // from /etc/machine-id
+
+std::string format_mac(const std::array<uint8_t, 6>& m);  // "00:09:bf:12:34:56"
+// the file replaced whole or not at all: path.tmp written, fsynced, renamed over path, the folder fsynced
+bool write_file_durable(const std::string& path, const void* data, size_t len);
+
+// ---- the Nintendo WFC settings, kept between sessions ---------------------------------------------------------
+// The firmware is generated at every start, so the access points the game writes (with the Nintendo WFC ID:
+// SPI_Firmware.h WifiAccessPoint::NintendoWFCID) were lost at quit and the game asked for a new WFC ID at the next
+// connection. As melonDS's own frontend (EmuInstance.cpp, Platform.cpp WriteFirmware): the extended access points
+// and the access points, side by side in the generated firmware, 3 x (512 + 256) bytes, the same wfcsettings.bin.
+constexpr size_t kWfcSettingsSize = 3 * (512 + 256);
+// the region as it is now in fw (false: not the generated firmware's layout)
+bool wfc_settings_get(const melonDS::Firmware& fw, std::vector<uint8_t>& out);
+// the file into fw's region (before UpdateChecksums). An access point whose checksum is wrong keeps fw's own; a
+// file of the wrong size is set aside as <path>.bad. 1 loaded, 0 no file, -1 not usable
+int wfc_settings_load(melonDS::Firmware& fw, const std::string& path);
+
 
 // Wraps another NetDriver (slirp). DNS queries to slirp's DNS address go to `upstream` instead.
 class WfcDns : public melonDS::NetDriver {

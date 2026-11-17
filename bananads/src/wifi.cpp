@@ -7,13 +7,18 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstring>
+#include <cstdio>
 #include <fstream>
 
 #include "Platform.h"
 
 using melonDS::Platform::Log;
 using melonDS::Platform::LogLevel;
+using melonDS::u8;
+using melonDS::u16;
+using melonDS::u32;
 
 namespace bananads {
 
@@ -40,6 +45,96 @@ std::array<uint8_t, 6> wifi_mac() {
     std::string id;
     std::getline(f, id);
     return wifi_mac_from_id(id);
+}
+
+std::string format_mac(const std::array<uint8_t, 6>& m) {
+    char b[24];
+    snprintf(b, sizeof b, "%02x:%02x:%02x:%02x:%02x:%02x", m[0], m[1], m[2], m[3], m[4], m[5]);
+    return b;
+}
+
+bool write_file_durable(const std::string& path, const void* data, size_t len) {
+    const std::string tmp = path + ".tmp";
+    int fd = open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (fd < 0) return false;
+    const uint8_t* p = (const uint8_t*)data;
+    size_t done = 0;
+    while (done < len) {
+        ssize_t n = write(fd, p + done, len - done);
+        if (n <= 0) {
+            close(fd);
+            unlink(tmp.c_str());
+            return false;
+        }
+        done += (size_t)n;
+    }
+    if (fsync(fd) != 0 || close(fd) != 0) {
+        unlink(tmp.c_str());
+        return false;
+    }
+    if (rename(tmp.c_str(), path.c_str()) != 0) {
+        unlink(tmp.c_str());
+        return false;
+    }
+    size_t s = path.find_last_of('/');
+    const std::string dir = s == std::string::npos ? "." : s == 0 ? "/" : path.substr(0, s);
+    int d = open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (d >= 0) {
+        fsync(d);
+        close(d);
+    }
+    return true;
+}
+
+// ---- the Nintendo WFC settings --------------------------------------------------------------------------------
+
+static bool wfc_layout_ok(const melonDS::Firmware& fw) {
+    const u32 eap = fw.GetExtendedAccessPointOffset(), ap = fw.GetWifiAccessPointOffset();
+    return eap + 3 * sizeof(melonDS::Firmware::ExtendedWifiAccessPoint) == ap &&
+           ap + 3 * sizeof(melonDS::Firmware::WifiAccessPoint) <= fw.Length() &&
+           eap + kWfcSettingsSize <= fw.Length();
+}
+
+bool wfc_settings_get(const melonDS::Firmware& fw, std::vector<uint8_t>& out) {
+    if (!fw.Buffer() || !wfc_layout_ok(fw)) return false;
+    const u8* p = fw.GetExtendedAccessPointPosition();
+    out.assign(p, p + kWfcSettingsSize);
+    return true;
+}
+
+int wfc_settings_load(melonDS::Firmware& fw, const std::string& path) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return 0;
+    std::vector<uint8_t> b(kWfcSettingsSize + 1);
+    const size_t n = fread(b.data(), 1, b.size(), f);
+    fclose(f);
+    if (n != kWfcSettingsSize) {
+        Log(LogLevel::Warn, "[wifi] %s is %zu%s bytes, not %zu: set aside as %s.bad, the WFC settings start empty\n",
+            path.c_str(), n, n > kWfcSettingsSize ? "+" : "", kWfcSettingsSize, path.c_str());
+        rename(path.c_str(), (path + ".bad").c_str());
+        return -1;
+    }
+    if (!fw.Buffer() || !wfc_layout_ok(fw)) {
+        Log(LogLevel::Warn, "[wifi] the firmware's access points aren't where %s expects them: not loaded\n",
+            path.c_str());
+        return -1;
+    }
+    constexpr size_t kExt = 3 * sizeof(melonDS::Firmware::ExtendedWifiAccessPoint);
+    constexpr size_t kAP = sizeof(melonDS::Firmware::WifiAccessPoint);
+    u8* dst = fw.GetExtendedAccessPointPosition();
+    int good = 0;
+    for (int i = 0; i < 3; i++) {
+        const u8* ap = b.data() + kExt + i * kAP;
+        const u16 sum = (u16)(ap[0xFE] | ap[0xFF] << 8);
+        if (melonDS::CRC16(ap, 0xFE, 0x0000) != sum) {
+            Log(LogLevel::Warn, "[wifi] %s: access point %d's checksum is wrong: it starts empty\n", path.c_str(), i + 1);
+            continue;
+        }
+        memcpy(dst + kExt + i * kAP, ap, kAP);
+        good++;
+    }
+    memcpy(dst, b.data(), kExt);  // the DSi's extended ones, as melonDS keeps them (a DS doesn't read them)
+    return good ? 1 : -1;
 }
 
 static uint16_t rd16(const uint8_t* p) { return (uint16_t)(p[0] << 8 | p[1]); }

@@ -124,6 +124,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `debug.dump` | (none) | with `debug.pc`, once at its third report: memory as a CPU reads it, `c:addr:len,...` (c 7 or 9, hex address or `sp`, hex length; `[dump7]`/`[dump9]` lines). Not the TCMs |
 | `rtc.fixed` | none | the DS clock's start, `YYYY-MM-DD HH:MM:SS` (or `T` or `_` for the space), instead of the current time: two runs of a game that seeds its random numbers from the clock then go the same way (for tests) |
 | `wifi.dns` | `kaeru` | `kaeru`, `altwfc`, `wiilink`, an IPv4 address, `system` (the handheld's own DNS) or `off` (no Wi-Fi at all) |
+| `wifi.wfc_settings` | `wfcsettings.bin` | where the Nintendo WFC settings the game writes (its WFC ID) are kept between sessions, melonDS's 2304-byte file (under `BANANADS_DATA`; `off`: not kept, a new WFC ID every session) |
 | `wifi.local` | `off` | `host`, or `join:<the host's address>`: local wireless with another handheld (builds with `BANANADS_LAN`) |
 | `wifi.local_players` | `4` | how many can join a host |
 | `mic.source` | `device` | `device` (ALSA or SDL capture) or `none` (only the menu's Blow) |
