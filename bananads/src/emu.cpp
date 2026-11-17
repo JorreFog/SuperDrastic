@@ -522,6 +522,115 @@ void Emu::export_dsi_saves() {
     m.ExportTitleData(dsi_title_cat_, dsi_title_id_, DSi_NAND::TitleData_PrivateSav, (base + ".private.sav").c_str());
 }
 
+// Writes the boot data the System Menu passes to a DSi title, which melonDS's direct boot does not set up (GBATEK:
+// "DSi SD/MMC Device List", "BIOS RAM Usage"): SD/MMC register access, the device list, the eMMC register block and
+// the installed-title list. A title needs them to open files on the NAND (nand:/<sharedFont>) and to open its save
+// by title ID (otherPub:).
+void Emu::dsi_boot_data() {
+    if (!dsi_ || !dsi_nand_ || !nds_ || nds_->ConsoleType != 1) return;
+    if (!cfg_.flag("dsi.boot_data", true)) return;
+    const u8* rom = nds_->NDSCartSlot.GetCart() ? nds_->NDSCartSlot.GetCart()->GetROM() : nullptr;
+    if (!rom) return;
+    DSi& dsi = static_cast<DSi&>(*nds_);
+    const u32 list = le32(rom + 0x1D4), access = le32(rom + 0x1B4);
+    if (list < 0x02000000 || list >= 0x04000000) return;
+
+    // SD/MMC register access (SCFG_EXT7 bit 18) when the header's SCFG_EXT7 (0x1B8) sets it
+    if (le32(rom + 0x1B8) & (1u << 18)) dsi.SCFG_EXT[1] |= (1u << 18);
+
+    // the device list: up to 11 entries of 0x54 bytes, selected by the header's access bits (0x1B4) and save sizes
+    u8 buf[0x400] = {};
+    int n = 0;
+    auto add = [&](char letter, u8 flags, u8 rights, const char* name, const char* path) {
+        if (n >= 11) return;
+        u8* e = buf + n++ * 0x54;
+        e[0] = (u8)letter;
+        e[1] = flags;
+        e[2] = rights;
+        snprintf((char*)e + 0x04, 0x10, "%s", name);
+        snprintf((char*)e + 0x14, 0x40, "%s", path);
+    };
+    char title[0x40] = "";
+    if (dsi_title_id_) snprintf(title, sizeof(title), "nand:/title/%08x/%08x", dsi_title_cat_, dsi_title_id_);
+    if (access & (1u << 4)) {
+        // access rights on the two partitions' roots only with header 0x234 bit 4
+        const u8 raw = (le32(rom + 0x234) & (1u << 4)) ? 0x06 : 0x00;
+        add('A', 0x81, raw, "nand", "/");
+        add('B', 0xA1, raw, "nand2", "/");
+        add('D', 0x11, 0x04, "shared1", "nand:/shared1");
+        add('E', 0x11, 0x06, "shared2", "nand:/shared2");
+        add('F', 0x31, 0x06, "photo", "nand2:/photo");
+        if (*title) {
+            char p[0x40];
+            if (le32(rom + 0x23C)) {
+                snprintf(p, sizeof(p), "%s/data/private.sav", title);
+                add('G', 0x09, 0x06, "dataPrv", p);
+            }
+            if (le32(rom + 0x238)) {
+                snprintf(p, sizeof(p), "%s/data/public.sav", title);
+                add('H', 0x09, 0x06, "dataPub", p);
+            }
+        }
+    }
+    if (access & (1u << 3)) add('I', 0x00, 0x06, "sdmc", "/");
+
+    DSi_NAND::NANDImage* img = dsi.SDMMC.GetNAND();
+    if (img && *img) {
+        // the eMMC register block at 0x02FFD7BC
+        u8 mmc[0x44] = {};
+        memcpy(mmc + 0x00, img->GetEMMCID().data(), 15);
+        static const u8 csd[15] = {0x40, 0x40, 0x96, 0xE9, 0x7F, 0xDB, 0xF6, 0xDF, 0x01, 0x59, 0x0F, 0x2A, 0x01, 0x26, 0x90};
+        memcpy(mmc + 0x10, csd, 15);
+        const u8 tail[] = {0x80, 0x80, 0xFF, 0x80,                          // OCR
+                           0x00, 0x00, 0x2A, 0x01, 0x00, 0x00, 0x00, 0x00,  // SCR
+                           0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,  // RCA 1, an MMC, byte addressing
+                           0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00,  // card status: tran
+                           0x00, 0x01, 0xE0, 0x40, 0x00, 0x00, 0x01, 0x00}; // clock, option, the eMMC
+        memcpy(mmc + 0x20, tail, sizeof(tail));
+        for (u32 i = 0; i < sizeof(mmc); i++) nds_->ARM9Write8(0x02FFD7BC + i, mmc[i]);
+    }
+    if (*title) {
+        // the installed-title list at 0x02FFD800, holding this title only
+        u8 tl[0x58] = {};
+        tl[0x00] = 1;                            // title count
+        tl[0x10] = le32(rom + 0x238) ? 1 : 0;    // has a public save
+        tl[0x20] = le32(rom + 0x23C) ? 1 : 0;    // has a private save
+        tl[0x30] = 1;                            // may be jumped to
+        tl[0x40] = 1;                            // same maker
+        memcpy(tl + 0x50, rom + 0x230, 8);
+        for (u32 i = 0; i < sizeof(tl); i++) nds_->ARM9Write8(0x02FFD800 + i, tl[i]);
+
+        u32 version = 0;
+        if (img && *img) {
+            DSi_NAND::NANDMount m(*img);
+            if (m) {
+                u32 v = 0xFFFFFFFF;
+                NDSHeader h{};
+                NDSBanner b{};
+                m.GetTitleInfo(dsi_title_cat_, dsi_title_id_, v, &h, &b);
+                if (v != 0xFFFFFFFF) version = v;
+            }
+        }
+        snprintf((char*)buf + 0x3C0, 0x40, "%s/content/%08x.app", title, version);
+    }
+    for (u32 i = 0; i < sizeof(buf); i++) nds_->ARM7Write8(list + i, buf[i]);
+    Log(LogLevel::Info, "[dsi] device list at %08x: %d drives%s%s\n", list, n, *title ? ", " : "", (const char*)buf + 0x3C0);
+}
+
+// Called after a frame in which the title reset the console (BPTWL 0x11, counted by patches/melonds/0440). When the
+// launch parameters ("TLNC" at 0x02000300, title ID at +0x10) name this title, it is restarted; otherwise the reset
+// targets the System Menu and the emulator quits.
+void Emu::dsi_soft_reset() {
+    const u32 lo = nds_->ARM9Read32(0x02000310), hi = nds_->ARM9Read32(0x02000314);
+    if (nds_->ARM9Read32(0x02000300) == 0x434E4C54 && dsi_title_id_ && lo == dsi_title_id_ && hi == dsi_title_cat_) {
+        Log(LogLevel::Info, "[dsi] the game asked for a reset into itself: restarting it\n");
+        restart();
+        return;
+    }
+    Log(LogLevel::Info, "[dsi] the game asked for the DSi's System Menu (title %08x/%08x): quitting\n", hi, lo);
+    stop_ = true;
+}
+
 // Without the user's NAND, the DSi's region and languages (HWINFO_S.dat, which melonDS's direct boot copies to
 // 0x02FFFD68) were zeros: region Japan, no language, so a European DSiWare title (3D Space Tank, game code KDXV)
 // came up in Japanese. They are the ones a DSi of the game's own region has (the last letter of its game code,
@@ -609,6 +718,7 @@ void Emu::restart() {
     nds_->Reset();
     arm9_clock();
     nds_->SetupDirectBoot(game_ + ".nds");
+    dsi_boot_data();
     set_clock();
     nds_->Start();
     Log(LogLevel::Info, "[emu] %s restarted\n", game_.c_str());
@@ -1108,6 +1218,7 @@ bool Emu::load_rom(const std::string& path) {
     start_mark("reset");
     arm9_clock();
     nds_->SetupDirectBoot(game_ + ".nds");
+    dsi_boot_data();
     start_mark("direct boot");
     debug_pc_ = (uint64_t)std::max(0L, cfg_.num("debug.pc", 0));
     idle_stats_ = (unsigned)std::max(0L, cfg_.num("core.idle_stats", 0));
@@ -1346,6 +1457,10 @@ void Emu::run_frame() {
     if (prof_) prof_->frame(frames_run_);  // prof.hz: on the emulator's thread, whichever runs the frames
     frames_run_++;
     nds_->RunFrame();
+    if (dsi_) {
+        const u32 n = static_cast<DSi&>(*nds_).SoftResetCount;
+        if (n != dsi_resets_) { dsi_resets_ = n; dsi_soft_reset(); }
+    }
     if (idle_stats_) {   // core.idle_stats=N: the ARM9's halted share, and the frames it never halted in (a game that
                          // overruns its frame: its own lost frames, the same on every emulator)
         const uint64_t idle = nds_->ARM9IdleCycles, d = idle - idle_last_;

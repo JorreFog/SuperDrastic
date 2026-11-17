@@ -156,6 +156,9 @@ private:
     void check_secure_area();
     void set_dsi_region();
     void export_dsi_saves();
+    void dsi_boot_data();    // writes the boot data the System Menu passes to a DSi title
+    void dsi_soft_reset();   // handles a console reset requested by the title: restart or quit
+    uint32_t dsi_resets_ = 0;
     uint64_t debug_pc_ = 0;
     const melonDS::NDSCart::CartCommon* dsi_cart_ = nullptr;  // (the game's, while make_dsi runs)
     bool dsi_nand_ = false;  // the NAND's working copy is in
