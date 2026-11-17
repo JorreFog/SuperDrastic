@@ -12,8 +12,8 @@
 //   system   the handheld's own resolver (melonDS's default: no WFC revival)
 // WfcDns forwards the DS's DNS queries to that server and hands the answers back as if from slirp's DNS.
 //
-// Each handheld gets its own MAC (Nintendo's 00:09:BF prefix; choose_wifi_mac below, kept in wifi.mac_file): WFC
-// servers tell players apart by MAC, and DraStic's firmware gives every device 00:01:02:03:04:05.
+// Each handheld gets its own MAC (Nintendo's 00:09:BF prefix, the rest from /etc/machine-id): WFC servers tell
+// players apart by MAC, and DraStic's firmware gives every device 00:01:02:03:04:05.
 #pragma once
 #include <array>
 #include <cstdint>
@@ -35,20 +35,7 @@ uint32_t wfc_dns_address(const std::string& name);
 std::array<uint8_t, 6> wifi_mac_from_id(const std::string& machine_id);
 std::array<uint8_t, 6> wifi_mac();  // from /etc/machine-id
 
-// ---- the DS's MAC, one per handheld and kept for good ---------------------------------------------------------
-// BananaOS has no /etc/machine-id, so wifi_mac() gave every handheld 00:09:BF:11:22:33 (two of them clash in
-// local wireless). The MAC is chosen once and kept: wifi.mac (BANANADS_WIFI_MAC) if set; else the one saved in
-// mac_file; else, with no saved MAC but WFC settings already saved (wfc_file), wifi_mac()'s as before (the
-// settings' WFC ID was made with it); else one made from the eMMC's CID, wlan0's MAC or at random (00:09:BF:...),
-// saved in mac_file. A saved MAC never changes. `sysroot` prefixes /sys for the tests ("" on the handheld).
-struct WifiMac {
-    std::array<uint8_t, 6> mac{};
-    std::string source;
-};
-bool parse_mac(const std::string& s, std::array<uint8_t, 6>& out);  // "00:09:bf:12:34:56" (or with '-')
-std::string format_mac(const std::array<uint8_t, 6>& m);
-WifiMac choose_wifi_mac(const std::string& setting, const std::string& mac_file, const std::string& wfc_file,
-                        const std::string& sysroot = "");
+std::string format_mac(const std::array<uint8_t, 6>& m);  // "00:09:bf:12:34:56"
 // the file replaced whole or not at all: path.tmp written, fsynced, renamed over path, the folder fsynced
 bool write_file_durable(const std::string& path, const void* data, size_t len);
 

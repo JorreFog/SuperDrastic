@@ -795,19 +795,15 @@ bool Emu::load_rom(const std::string& path) {
 #endif
 
     auto& hdr = args.Firmware.GetHeader();
-    // the DS's MAC, one per handheld and kept (wifi.h choose_wifi_mac), and the Nintendo WFC settings the game saved
+    // the DS's MAC (wifi_mac(): from /etc/machine-id, one per handheld), and the Nintendo WFC settings the game saved
     // last time (wifi.wfc_settings, melonDS's wfcsettings.bin): without them the game makes a new WFC ID (a new
     // friend code) at the first connection of every session
+    auto mac = wifi_mac();
+    Log(LogLevel::Info, "[wifi] the DS's MAC: %s\n", format_mac(mac).c_str());
     {
         const std::string wfc = cfg_.str("wifi.wfc_settings", "wfcsettings.bin");
         wfc_path_ = wfc == "off" ? "" : Platform::GetLocalFilePath(wfc);
     }
-    const std::string mac_file_set = cfg_.str("wifi.mac_file", "wifi-mac");
-    const WifiMac wm = choose_wifi_mac(cfg_.str("wifi.mac", ""),
-                                       mac_file_set == "off" ? "" : Platform::GetLocalFilePath(mac_file_set),
-                                       wfc_path_);
-    const auto mac = wm.mac;
-    Log(LogLevel::Info, "[wifi] the DS's MAC: %s (%s)\n", format_mac(mac).c_str(), wm.source.c_str());
     memcpy(hdr.MacAddr.data(), mac.data(), 6);
     auto& user = args.Firmware.GetEffectiveUserData();
     std::string nick = cfg_.str("firmware.nickname", "BananaDS");
