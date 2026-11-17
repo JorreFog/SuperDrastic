@@ -499,7 +499,9 @@ std::optional<DSi_NAND::NANDImage> Emu::setup_nand(const std::array<uint8_t, 0x1
                                                                 {DSi_NAND::TitleData_PrivateSav, ".private.sav"}};
             for (auto& sv : saves) {
                 const std::string p = base + sv.ext;
-                if ((fresh || mtime_of(p) > mtime_of(copy)) && m.ImportTitleData(cat, id, sv.type, p.c_str()))
+                // ImportTitleData removes the NAND's file first: only with a file to put in
+                const time_t t = mtime_of(p);
+                if (t != 0 && (fresh || t > mtime_of(copy)) && m.ImportTitleData(cat, id, sv.type, p.c_str()))
                     Log(LogLevel::Info, "[dsi] save %s into the NAND\n", p.c_str());
             }
         }
