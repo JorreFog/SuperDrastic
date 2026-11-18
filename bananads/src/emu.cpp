@@ -483,14 +483,25 @@ std::optional<DSi_NAND::NANDImage> Emu::setup_nand(const std::array<uint8_t, 0x1
                 Log(LogLevel::Error, "[dsi] the NAND's file system doesn't mount\n");
                 return std::nullopt;
             }
+            bool installed = false;
             if (!m.TitleExists(cat, id)) {
                 DSi_TMD::TitleMetadata tmd;
                 const size_t len = (size_t)le32(rom + 0x210) ? std::min((size_t)le32(rom + 0x210), (size_t)dsi_cart_->GetROMLength())
                                                             : (size_t)dsi_cart_->GetROMLength();
                 make_tmd(tmd, cia_tmd_, rom, len);
-                const bool ok = m.ImportTitle(rom, len, tmd, false);
-                Log(ok ? LogLevel::Info : LogLevel::Error, "[dsi] title %08x/%08x into the NAND: %s\n", cat, id,
-                    ok ? "installed" : "failed");
+                installed = m.ImportTitle(rom, len, tmd, false);
+                if (!installed) {
+                    // no room: the other DSiWare titles are removed (their saves were exported at their last quit)
+                    std::vector<u32> others;
+                    m.ListTitles(0x00030004, others);
+                    for (u32 other : others) m.DeleteTitle(0x00030004, other);
+                    m.DeleteTitle(cat, id);
+                    Log(LogLevel::Info, "[dsi] the NAND had no room: %zu DSiWare titles removed\n", others.size());
+                    installed = m.ImportTitle(rom, len, tmd, false);
+                    if (!installed) m.DeleteTitle(cat, id);
+                }
+                Log(installed ? LogLevel::Info : LogLevel::Error, "[dsi] title %08x/%08x into the NAND: %s\n", cat, id,
+                    installed ? "installed" : "failed");
             }
             dsi_title_cat_ = cat;
             dsi_title_id_ = id;
@@ -501,7 +512,7 @@ std::optional<DSi_NAND::NANDImage> Emu::setup_nand(const std::array<uint8_t, 0x1
                 const std::string p = base + sv.ext;
                 // ImportTitleData removes the NAND's file first: only with a file to put in
                 const time_t t = mtime_of(p);
-                if (t != 0 && (fresh || t > mtime_of(copy)) && m.ImportTitleData(cat, id, sv.type, p.c_str()))
+                if (t != 0 && (fresh || installed || t > mtime_of(copy)) && m.ImportTitleData(cat, id, sv.type, p.c_str()))
                     Log(LogLevel::Info, "[dsi] save %s into the NAND\n", p.c_str());
             }
         }
