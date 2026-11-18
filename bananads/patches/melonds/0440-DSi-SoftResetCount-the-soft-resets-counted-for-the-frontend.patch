@@ -1,0 +1,25 @@
+From: Gerwout van der Veen <gerwoutvdveen@gmail.com>
+Subject: [PATCH] DSi: SoftResetCount, the soft resets counted for the frontend
+
+SoftReset() runs inside RunFrame(); the counter lets the frontend detect it after the frame.
+---
+--- a/src/DSi.cpp
++++ b/src/DSi.cpp
+@@ -765,6 +765,7 @@
+
+ void DSi::SoftReset()
+ {
++    SoftResetCount++;
+     // TODO: check exactly what is reset
+     // presumably, main RAM isn't reset, since the DSi can be told
+     // to boot a specific title this way
+--- a/src/DSi.h
++++ b/src/DSi.h
+@@ -56,6 +56,7 @@
+     u16 SCFG_BIOS;
+     u16 SCFG_Clock9;
+     u32 SCFG_EXT[2];
++    u32 SoftResetCount = 0;  // incremented by SoftReset()
+
+     std::array<u8, DSiBIOSSize> ARM9iBIOS;
+     std::array<u8, DSiBIOSSize> ARM7iBIOS;
