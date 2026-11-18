@@ -113,7 +113,7 @@ key can also come from the environment as `BANANADS_<KEY>` (dots become undersco
 | `resume.on_start` | `on` | load it when the game starts |
 | `firmware.nickname` | `BananaDS` | the DS's user name (10 characters at most; games and WFC show it) |
 | `firmware.language` | the firmware's | 0 Japanese, 1 English, 2 French, 3 German, 4 Italian, 5 Spanish |
-| `console` | `auto` | the console: `auto` a DSi for a game only a DSi plays (unit code 3 in its header: DSiWare, DSi-only cartridges), a DS for the rest (DSi-enhanced games play as on a DS); `ds`; `dsi` |
+| `console` | `auto` | the console: `auto` a DSi for a game only a DSi plays (unit code 3 in its header: DSiWare, DSi-only cartridges; or unit code 2 with DSiWare's title ID, 00030004), a DS for the rest (DSi-enhanced games play as on a DS); `ds`; `dsi` |
 | `bios` | `/data/bios` (`$BANANADS_BIOS`) | the folder of the BIOS files below (none is needed for a DS game) |
 | `dsi.bios9`, `dsi.bios7` | `<bios>/dsi_bios9.bin`, `<bios>/dsi_bios7.bin` | the DSi's own BIOS (64 KB each, both or neither): with them a DSi game runs on them, else on melonDS's free DSi BIOS. Found in any case (a dump's `DSI_bios9.bin`), under the other names dumps and emulators use (`bios9i.bin`, `biosdsi9.rom`; the same for 7), in `<bios>` or a folder inside it (`<bios>/DSi BIOS/`). Without the user's NAND, the DSi's region and languages are the game's own (its game code's last letter) |
 | `bios7` | `<bios>/bios7.bin` | a DS's ARM7 BIOS (16 KB): with the free DSi BIOS, its KEY1 table decrypts a DSi game's secure area (DSiWare's first 2 KB of code are encrypted; without one of these files such a game stops at a black screen and a notice says so) |
