@@ -1116,7 +1116,10 @@ bool Emu::load_rom(const std::string& path) {
             const auto t = dsi_settings(cfg_);
             for (u32 i = 0; i < 0x128; i += 4) nds_->ARM9Write32(0x02000400 + i, le32(t.Bytes + 0x88 + i));
         }
-        if (!dsi_user_nand_) set_dsi_region();
+        // the user's NAND keeps its region unless the title's region mask (header 0x1B0, its copy at 0x02FFE1B0; one bit per region) excludes it
+        const u8 region = nds_->ARM9Read8(0x02FFFD70);
+        const bool region_ok = dsi_user_nand_ && region < 32 && (nds_->ARM9Read32(0x02FFE1B0) & (1u << region));
+        if (!region_ok) set_dsi_region();
         check_secure_area();
     }
     setup_slice();
