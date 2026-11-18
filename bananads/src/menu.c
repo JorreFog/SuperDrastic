@@ -291,6 +291,28 @@ static float text_w(font *F, const char *t, float px, int max_cp) { return text_
 static void text(canvas *c, font *F, const char *t, float x, float y, float px, uint32_t rgb, float maxw, int align) {
     text_raw(c, F, lang_tr(t), x, y, px, rgb, maxw, align);
 }
+/* text whose ink (the letters themselves) is centred at cy: a button's label, a key cap's letter, a row's. Placed by
+ * the line box, caps and the CJK font sit a few pixels high: their ascents differ (font_load). Measured on the whole
+ * string: a cut at maxw keeps whole letters, whose ink reaches about the same height as the whole line's */
+static void text_raw_mid(canvas *c, font *F, const char *t, float x, float cy, float px, uint32_t rgb, float maxw, int align) {
+    if (!F->ok || !*t) return;
+    int ymin = 0, ymax = 0, any = 0;
+    for (const char *s = t; *s; ) {
+        int cp = utf8_next(&s);
+        float sc; font *g = glyph_font(F, cp, px, &sc);
+        int x0, y0, x1, y1;
+        stbtt_GetCodepointBitmapBoxSubpixel(&g->f, cp, sc, sc, 0, 0, &x0, &y0, &x1, &y1);
+        if (x1 > x0 && y1 > y0) {
+            if (!any) { ymin = y0; ymax = y1; any = 1; }
+            else { if (y0 < ymin) ymin = y0; if (y1 > ymax) ymax = y1; }
+        }
+    }
+    float base = any ? cy - (ymin + ymax) / 2.0f : cy;
+    text_raw(c, F, t, x, base - F->asc * px, px, rgb, maxw, align);
+}
+static void text_mid(canvas *c, font *F, const char *t, float x, float cy, float px, uint32_t rgb, float maxw, int align) {
+    text_raw_mid(c, F, lang_tr(t), x, cy, px, rgb, maxw, align);
+}
 /* split t into at most two lines that fit maxw (the second cut with "..." if needed); returns the line count. tr: t is
  * the menu's own text (translated first: whole, never in pieces). A line breaks at a space, or between two Chinese
  * characters (not before a closing mark nor after an opening one) */
@@ -717,7 +739,7 @@ static void draw_top(void) {
         const char *paused = lang_active() ? "Paused" : "PAUSED";   /* (the translator's line is "Paused") */
         float pwid = text_w(&F_MED, paused, S(14), 99) + S(18);
         rrect(c, L, S(68), L + (int)pwid, S(68) + S(24), S(4), C_LIGHT, 1.0f);
-        text(c, &F_MED, paused, L + S(9), S(71), S(14), C_DARK, 0, 0);
+        text_mid(c, &F_MED, paused, L + S(9), S(68) + S(24) / 2.0f, S(14), C_DARK, 0, 0);
         int y = ra_has ? S(102) : S(126);           /* without achievements the rest sits lower, centred */
         char l1[200], l2[200]; int n = wrap2(&F_MED, gtitle, S(28), cw, l1, l2, sizeof l1, 0);
         text(c, &F_MED, l1, L, y, S(28), C_LIGHT, cw, 0); y += S(34);
@@ -753,8 +775,8 @@ static void draw_top(void) {
             for (int i = 0; i < 4 && y + S(24) <= y1 - S(12); i++, y += S(30)) {
                 float kw = text_w(&F_MED, keys[i][0], S(15), 99) + S(14);
                 rrect(c, L, y - S(3), L + (int)kw, y + S(21), S(4), C_LIGHT, 1.0f);
-                text(c, &F_MED, keys[i][0], L + S(7), y, S(15), C_DARK, 0, 0);
-                text(c, &F_REG, keys[i][1], L + S(132), y + S(1), S(16), C_LIGHT, cw - S(132), 0);
+                text_mid(c, &F_MED, keys[i][0], L + S(7), y + S(9), S(15), C_DARK, 0, 0);
+                text_mid(c, &F_REG, keys[i][1], L + S(132), y + S(9), S(16), C_LIGHT, cw - S(132), 0);
             }
         }
         /* RetroAchievements: progress, then the latest unlocks with their badges */
@@ -793,7 +815,7 @@ static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= 
 
 static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
     rrect(c, x, y, x + sz, y + sz, S(5), C_LIGHT, 1.0f);
-    text_raw(c, &F_MED, k, x + sz / 2.0f, y + (sz - sz * 0.62f) / 2 - S(1), sz * 0.62f, C_DARK, 0, 1);
+    text_raw_mid(c, &F_MED, k, x + sz / 2.0f, y + sz / 2.0f, sz * 0.62f, C_DARK, 0, 1);
 }
 /* a footer/dialog pill: [key] label; returns its rect */
 static rect pill(canvas *c, int x, int y, int right, const char *k, const char *label, uint32_t border, uint32_t txt, uint32_t bg) {
@@ -803,7 +825,7 @@ static rect pill(canvas *c, int x, int y, int right, const char *k, const char *
     if (right) x -= w;
     box(c, x, y, x + w, y + h, S(10), S(3) < 2 ? 2 : S(3), border, bg);
     keycap(c, x + pad, y + (h - ks) / 2, ks, k);
-    text(c, &F_MED, label, x + pad + ks + S(10), y + (h - S(18)) / 2.0f - S(1), S(18), txt, 0, 0);
+    text_mid(c, &F_MED, label, x + pad + ks + S(10), y + h / 2.0f, S(18), txt, 0, 0);
     return (rect){ x, y, x + w, y + h };
 }
 static const char *const IC_RESTART[12] = { "............", "....####.#..", "...#....##..", "..#....###..", ".#..........", ".#..........",
@@ -841,12 +863,12 @@ static void level_row(canvas *c, int x0, int y, int x1, int rh, int sel, const c
     box(c, x0, y, x1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
     int k = S(2) < 2 ? 2 : S(2);
     bitmap(c, ic, 12, x0 + S(16), y + (rh - 12 * k) / 2, k, sel ? C_ONSEL : C_LIGHT);
-    text(c, &F_MED, lab, x0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
+    text_mid(c, &F_MED, lab, x0 + S(56), y + rh / 2.0f, S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
     int bx = x1 - S(110) - S(146);
     bar(c, bx, y + (rh - S(20)) / 2, val, sel);
     *bar_r = (rect){ bx - S(8), y, bx + S(150), y + rh };
     char v[16]; snprintf(v, sizeof v, "%d%%", val);
-    text_raw(c, &F_MED, v, x1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
+    text_raw_mid(c, &F_MED, v, x1 - S(18), y + rh / 2.0f, S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
 }
 static int bar_value(rect b, int px, canvas *c) {   /* a tap on a row's bar: its level, in steps of 5 */
     int v = (px - b.x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5;
@@ -949,7 +971,7 @@ static void draw_bottom(void) {
             int k = S(2) < 2 ? 2 : S(2);
             bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? C_ONSEL : C_LIGHT);
             const char *lab = id == ROW_MIC ? "Microphone" : id == ROW_CHEAT ? "Cheats" : H.opt_label(H.ctx, id - ROW_OPT);
-            text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
+            text_mid(c, &F_MED, lab, gx0 + S(56), y + rh / 2.0f, S(20), sel ? C_ONSEL : C_LIGHT, 0, 0);
             char v[32] = "";
             if (id == ROW_MIC) snprintf(v, sizeof v, "Test / blow");
             else if (id == ROW_CHEAT) {
@@ -958,7 +980,7 @@ static void draw_bottom(void) {
                 if (n) snprintf(v, sizeof v, "%d of %d on", on, n); else snprintf(v, sizeof v, "None found");
             }
             else { snprintf(v, sizeof v, "< %s >", lang_tr(H.opt_value_name(H.ctx, id - ROW_OPT, H.opt_get(H.ctx, id - ROW_OPT)))); lang_keep(v); }
-            text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
+            text_mid(c, &F_MED, v, gx1 - S(18), y + rh / 2.0f, S(20), sel ? C_ONSEL : C_CYAN, 0, 2);
             y += rh + gap;
         }
         const char *help = "";
@@ -997,8 +1019,8 @@ static void draw_bottom(void) {
                 box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
                 int pw = S(58), px1 = gx1 - S(12), py0 = y + S(8), py1 = y + rh - S(8);
                 rrect(c, px1 - pw, py0, px1, py1, (float)S(6), o ? (sel ? C_ONSEL : C_CYAN) : C_LINE, 1.0f);
-                text(c, &F_MED, o ? "On" : "Off", px1 - pw / 2.0f, py0 + S(2), S(17), o ? (sel ? C_CYAN : C_DARK) : C_LIGHT, 0, 1);
-                text_raw(c, &F_REG, H.cheat_name(H.ctx, i), gx0 + S(16), y + (rh - S(18)) / 2.0f - S(1), S(18),
+                text_mid(c, &F_MED, o ? "On" : "Off", px1 - pw / 2.0f, y + rh / 2.0f, S(17), o ? (sel ? C_CYAN : C_DARK) : C_LIGHT, 0, 1);
+                text_raw_mid(c, &F_REG, H.cheat_name(H.ctx, i), gx0 + S(16), y + rh / 2.0f, S(18),
                      sel ? C_ONSEL : C_LIGHT, gx1 - gx0 - pw - S(44), 0);
                 y += rh + gap;
             }
@@ -1017,7 +1039,7 @@ static void draw_bottom(void) {
             if (i) fill(c, gx0, y - S(4), gx1, y - S(3), C_LINE, 1.0f);
             float kw = text_w_raw(&F_MED, KEYS[i].keys, S(16), 99) + S(16);   /* the theme's light key pill, as the top panel's */
             rrect(c, kx, y + S(2), kx + (int)kw, y + rh - S(10), S(4), C_LIGHT, 1.0f);
-            text_raw(c, &F_MED, KEYS[i].keys, kx + S(8), y + (rh - S(8) - S(16)) / 2.0f, S(16), C_DARK, 0, 0);
+            text_raw_mid(c, &F_MED, KEYS[i].keys, kx + S(8), y + (rh - S(8)) / 2.0f, S(16), C_DARK, 0, 0);
             text(c, &F_REG, KEYS[i].what, dx, y + S(4), S(17), C_LIGHT, gx1 - dx, 0);
         }
     }
