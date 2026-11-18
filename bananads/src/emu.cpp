@@ -310,6 +310,8 @@ std::unique_ptr<NDS> Emu::make_dsi(NDSArgs&& args) {
         }
     }
     DSiArgs d{std::move(args), std::move(a9), std::move(a7), std::nullopt, std::nullopt, false};
+    // melonDS's HLE of the SDK's DSP programs; a program it doesn't know runs on Teakra
+    d.DSPHLE = cfg_.flag("dsi.dsp_hle", true);
     d.NANDImage = setup_nand(*d.ARM7iBIOS);
     return std::make_unique<DSi>(std::move(d), this);
 }
