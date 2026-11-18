@@ -1,0 +1,17 @@
+From: Gerwout van der Veen <gerwoutvdveen@gmail.com>
+Subject: [PATCH] DSi: StopDMAs passes the NDMA start mode
+
+StopDMAs gave StopNDMAs the DS start mode. The VBlank's StopDMAs(0, 4) (main memory display FIFO) disabled
+ARM9 NDMAs in NDMA mode 4, the DS cart slot. The mode is translated as in CheckDMAs.
+---
+--- a/src/DSi.cpp
++++ b/src/DSi.cpp
+@@ -1131,7 +1131,7 @@
+ void DSi::StopDMAs(u32 cpu, u32 mode)
+ {
+     NDS::StopDMAs(cpu, mode);
+-    StopNDMAs(cpu, mode);
++    StopNDMAs(cpu, NDMAModes[mode]);
+ }
+ 
+ void DSi::CheckDMAs(u32 cpu, u32 mode)
