@@ -728,11 +728,13 @@ bool Emu::load_rom(const std::string& path) {
         }
     }
     // the console: console = auto (the default: a DSi for a game only a DSi plays, unit code 3 - DSiWare and DSi-only
-    // cartridges; a DS for the rest, DSi-enhanced games included, as they play on a DS), ds or dsi
+    // cartridges - or unit code 2 with DSiWare's title ID, 00030004; a DS for the rest, DSi-enhanced games included,
+    // as they play on a DS), ds or dsi
     {
         const u8 unit = romdata[0x12];
+        const bool dsiware = (unit & 2) && romlen >= 0x238 && le32(romdata.get() + 0x234) == 0x00030004;
         const std::string want = cfg_.str("console", "auto");
-        dsi_ = want == "dsi" || (want != "ds" && unit == 3);
+        dsi_ = want == "dsi" || (want != "ds" && (unit == 3 || dsiware));
         if (dsi_) Log(LogLevel::Info, "[dsi] DSi mode (console=%s, unit code %u)\n", want.c_str(), unit);
     }
     rom_path_ = path;
