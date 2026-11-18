@@ -627,6 +627,8 @@ void Emu::dsi_boot_data() {
         snprintf((char*)buf + 0x3C0, 0x40, "%s/content/%08x.app", title, version);
     }
     for (u32 i = 0; i < sizeof(buf); i++) nds_->ARM7Write8(list + i, buf[i]);
+    // the boot type of a title started from the NAND (the SDK's OS_GetBootType: 1 card, 3 NAND); direct boot writes 1
+    if (*title) nds_->ARM9Write16(0x02FFFC40, 3);
     Log(LogLevel::Info, "[dsi] device list at %08x: %d drives%s%s\n", list, n, *title ? ", " : "", (const char*)buf + 0x3C0);
 }
 
