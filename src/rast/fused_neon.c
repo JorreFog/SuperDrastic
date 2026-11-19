@@ -47,12 +47,12 @@ static inline uint16x8_t depth_less(u32x8 da, u32x8 dep) {           /* (da & 0x
             : "=w"(r), "+w"(da.l), "+w"(da.h) : "w"(dep.l), "w"(dep.h));
     return r;
 }
-static inline uint16x8_t depth_equal(u32x8 da, u32x8 dep) {          /* |dep - (da & 0xffffff)| < 0x100 */
-    uint16x8_t r; uint32x4_t c;
+static inline uint16x8_t depth_equal(u32x8 da, u32x8 dep, uint32x4_t c) {   /* |dep - (da & 0xffffff)| < c */
+    uint16x8_t r;
     __asm__("bic %1.4s, #0xff, lsl #24\n\tbic %2.4s, #0xff, lsl #24\n\t"
             "sub %1.4s, %3.4s, %1.4s\n\tsub %2.4s, %4.4s, %2.4s\n\tabs %1.4s, %1.4s\n\tabs %2.4s, %2.4s\n\t"
-            "movi %5.4s, #1, lsl #8\n\tcmhi %1.4s, %5.4s, %1.4s\n\tcmhi %2.4s, %5.4s, %2.4s\n\tuzp1 %0.8h, %1.8h, %2.8h"
-            : "=w"(r), "+w"(da.l), "+w"(da.h), "=&w"(c) : "w"(dep.l), "w"(dep.h));
+            "cmhi %1.4s, %5.4s, %1.4s\n\tcmhi %2.4s, %5.4s, %2.4s\n\tuzp1 %0.8h, %1.8h, %2.8h"
+            : "=w"(r), "+w"(da.l), "+w"(da.h) : "w"(dep.l), "w"(dep.h), "w"(c));
     return r;
 }
 
@@ -178,7 +178,7 @@ void batch_neon(poly_t *P, const uint8_t *bs, unsigned k, unsigned line, uint8_t
             }
             /* depth test -> u16 lanes 0 / 0xffff */
             u32x8 da = { vld1q_u32(att_l + i0), vld1q_u32(att_l + i0 + 4) };
-            uint16x8_t m16 = equal ? depth_equal(da, dep) : depth_less(da, dep);
+            uint16x8_t m16 = equal ? depth_equal(da, dep, vdupq_n_u32(DEQ_MARGIN(P->flags))) : depth_less(da, dep);
             if (i0 + 8 > C) m16 = vandq_u16(m16, vld1q_u16(tail[C - i0]));
             uint8x8_t m8 = vmovn_u16(m16);
             uint64_t mb = vget_lane_u64(vreinterpret_u64_u8(m8), 0);

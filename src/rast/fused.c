@@ -340,8 +340,7 @@ int f_run(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_
         P.t_lo = P.mt == CLAMP ? 0 : -32768; P.t_hi = P.mt == CLAMP ? (int16_t)(P.th - 1) : 32767;
         P.t_and = P.mt == CLAMP ? 0xffff : (uint16_t)(P.th - 1); P.t_flip = P.mt == FLIP ? (uint16_t)(P.th & ~(P.th - 1)) : 0;
     }
-    /* (depth equal with z depth: the scalar lines; the batches test below 0x100) */
-    batch_fn *bf = DEQ_Z(P.attr, flags) ? 0 : P.mode == 3 ? 0 : use_neon >= 3 || L->hr ? asm_batch_for(&P) : use_neon ? neon_batch_for(&P) : 0;
+    batch_fn *bf = P.mode == 3 ? 0 : use_neon >= 3 || L->hr ? asm_batch_for(&P) : use_neon ? neon_batch_for(&P) : 0;
 
     /* batches: runs of lines with pixels, at most 512 pixels (DraStic's batches: the flat colour and the id quirk
      * follow them); the hi-res pipeline, with lines of up to 768 pixels and no exactness to keep, batches longer */

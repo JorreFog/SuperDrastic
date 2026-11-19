@@ -25,7 +25,7 @@ typedef struct {                /* layout shared with kerngen.py (K dict): the p
     uint8_t fraclut[16];        /* bilinear: the texel fraction (0..7) -> blend weight (0..8) */
     uint16_t *owner; uint64_t pad2;  /* deferred shading: the owner buffer and the polygon's index, splat */
     uint16_t idx16[8];
-    uint32_t lstride, attr_off, id_off, id_stride, owner_stride, pad3[3];   /* the hi-res kernels' buffer layout */
+    uint32_t lstride, attr_off, id_off, id_stride, owner_stride, pad3[2], deq;   /* the hi-res kernels' buffer layout */
     uint8_t pal16[4][16];       /* the palette when it has at most 16 entries (flag bit 7), per channel: tbl lookups */
 } kargs_t;
 _Static_assert(sizeof(kargs_t) == 0x150, "kargs_t layout");
@@ -34,7 +34,7 @@ _Static_assert(__builtin_offsetof(kargs_t, pid24) == 0x20 && __builtin_offsetof(
                __builtin_offsetof(kargs_t, s_and) == 0x40 && __builtin_offsetof(kargs_t, fraclut) == 0xc0 &&
                __builtin_offsetof(kargs_t, owner) == 0xd0 && __builtin_offsetof(kargs_t, idx16) == 0xe0 &&
                __builtin_offsetof(kargs_t, lstride) == 0xf0 && __builtin_offsetof(kargs_t, owner_stride) == 0x100 &&
-               __builtin_offsetof(kargs_t, pal16) == 0x110, "kargs_t layout");
+               __builtin_offsetof(kargs_t, deq) == 0x10c && __builtin_offsetof(kargs_t, pal16) == 0x110, "kargs_t layout");
 
 typedef uint64_t kern_fn(const kargs_t *, const uint8_t *bs, uint32_t k, uint32_t line, uint8_t *ctx, uint32_t flags, uint8_t *id0);
 /* the kernel tables, for the exact 2x set (rast_kern_) and the hi-res set (rast_kern_h, strides from kargs) */
@@ -74,6 +74,7 @@ static void kargs_poly(poly_t *P) {
     kargs_t *a = (kargs_t *)P->kargs;
     a->recip = P->recip; a->recip_u = P->recip_u;
     for (int i = 0; i < 4; i++) a->pid24[i] = P->pid << 24;
+    a->deq = DEQ_MARGIN(P->flags);
     a->bytes[0] = (uint8_t)P->A; a->bytes[1] = (uint8_t)P->aref; a->bytes[2] = (P->attr >> 15) & 1 ? 0x80 : 0;
     a->bytes[3] = (uint8_t)P->pid;
     a->K = P->K; a->tw = P->tw;
