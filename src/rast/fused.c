@@ -93,7 +93,7 @@ static void line_px(poly_t *P, uint8_t *s, const uint8_t *bs, unsigned y, uint8_
         else if (fl & 8) dep = (uint32_t)W0 + (uint32_t)(((int64_t)dW * st) >> 15);
         else dep = (uint32_t)((((uint64_t)Z0 << 30) + (uint64_t)i * zstep) >> 30);
         uint32_t da = att_l[i], pass;
-        if (P->attr & (1u << 14)) { uint32_t d = dep - (da & 0xffffff); if ((int32_t)d < 0) d = 0u - d; pass = d < 0x100; }
+        if (P->attr & (1u << 14)) { uint32_t d = dep - (da & 0xffffff); if ((int32_t)d < 0) d = 0u - d; pass = d < DEQ_MARGIN(fl); }
         else pass = (da & 0xffffff) > dep;
         if (shadow) {
             if (!P->pid) { if (!pass) att_l[i] = da | 0x80000000u; continue; }
@@ -212,7 +212,7 @@ static uint8_t tail_id(poly_t *P, const uint8_t *s, const uint8_t *bs, unsigned 
     else if (fl & 8) dep = (uint32_t)W0 + (uint32_t)(((int64_t)dW * st) >> 15);
     else dep = (uint32_t)((((uint64_t)Z0 << 30) + (uint64_t)i * zstep) >> 30);
     uint32_t da = att_l[i], m;
-    if (P->attr & (1u << 14)) { uint32_t d = dep - (da & 0xffffff); if ((int32_t)d < 0) d = 0u - d; m = d < 0x100; }
+    if (P->attr & (1u << 14)) { uint32_t d = dep - (da & 0xffffff); if ((int32_t)d < 0) d = 0u - d; m = d < DEQ_MARGIN(P->flags); }
     else m = (da & 0xffffff) > dep;
     uint32_t sa = P->A;
     if (fl & 2) {

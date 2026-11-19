@@ -91,7 +91,8 @@ rast_kern_00000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -290,7 +291,8 @@ rast_kern_00000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -476,7 +478,8 @@ rast_kern_00010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -633,7 +636,8 @@ rast_kern_00100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -881,7 +885,8 @@ rast_kern_00100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -1084,7 +1089,8 @@ rast_kern_00110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -1203,7 +1209,8 @@ rast_kern_01000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -1518,7 +1525,8 @@ rast_kern_01000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -1677,7 +1685,8 @@ rast_kern_01001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -2211,7 +2220,8 @@ rast_kern_01001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -2376,7 +2386,8 @@ rast_kern_01010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -2622,7 +2633,8 @@ rast_kern_01010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -2781,7 +2793,8 @@ rast_kern_01011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -3249,7 +3262,8 @@ rast_kern_01011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -3411,7 +3425,8 @@ rast_kern_01100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -3776,7 +3791,8 @@ rast_kern_01100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -3894,7 +3910,8 @@ rast_kern_01101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -4489,7 +4506,8 @@ rast_kern_01101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -4611,7 +4629,8 @@ rast_kern_01110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -4907,7 +4926,8 @@ rast_kern_01110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -5025,7 +5045,8 @@ rast_kern_01111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -5554,7 +5575,8 @@ rast_kern_01111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -5673,7 +5695,8 @@ rast_kern_02000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -5968,7 +5991,8 @@ rast_kern_02000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -6127,7 +6151,8 @@ rast_kern_02001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -6621,7 +6646,8 @@ rast_kern_02001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -6786,7 +6812,8 @@ rast_kern_02010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -7012,7 +7039,8 @@ rast_kern_02010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -7171,7 +7199,8 @@ rast_kern_02011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -7599,7 +7628,8 @@ rast_kern_02011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -7761,7 +7791,8 @@ rast_kern_02100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -8106,7 +8137,8 @@ rast_kern_02100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -8224,7 +8256,8 @@ rast_kern_02101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -8779,7 +8812,8 @@ rast_kern_02101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -8901,7 +8935,8 @@ rast_kern_02110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -9177,7 +9212,8 @@ rast_kern_02110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -9295,7 +9331,8 @@ rast_kern_02111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -9784,7 +9821,8 @@ rast_kern_02111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -9904,7 +9942,8 @@ rast_kern_03000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -10245,7 +10284,8 @@ rast_kern_03000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -10404,7 +10444,8 @@ rast_kern_03001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -10970,7 +11011,8 @@ rast_kern_03001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -11135,7 +11177,8 @@ rast_kern_03010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -11407,7 +11450,8 @@ rast_kern_03010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -11566,7 +11610,8 @@ rast_kern_03011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -12066,7 +12111,8 @@ rast_kern_03011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -12231,7 +12277,8 @@ rast_kern_03100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -12633,7 +12680,8 @@ rast_kern_03100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -12751,7 +12799,8 @@ rast_kern_03101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -13378,7 +13427,8 @@ rast_kern_03101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -13501,7 +13551,8 @@ rast_kern_03110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -13823,7 +13874,8 @@ rast_kern_03110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -13941,7 +13993,8 @@ rast_kern_03111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -14502,7 +14555,8 @@ rast_kern_03111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -14622,7 +14676,8 @@ rast_kern_04000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -14943,7 +14998,8 @@ rast_kern_04000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -15102,7 +15158,8 @@ rast_kern_04001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -15628,7 +15685,8 @@ rast_kern_04001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -15793,7 +15851,8 @@ rast_kern_04010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -16045,7 +16104,8 @@ rast_kern_04010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -16204,7 +16264,8 @@ rast_kern_04011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -16664,7 +16725,8 @@ rast_kern_04011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -16829,7 +16891,8 @@ rast_kern_04100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -17211,7 +17274,8 @@ rast_kern_04100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -17329,7 +17393,8 @@ rast_kern_04101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -17916,7 +17981,8 @@ rast_kern_04101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -18039,7 +18105,8 @@ rast_kern_04110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -18341,7 +18408,8 @@ rast_kern_04110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -18459,7 +18527,8 @@ rast_kern_04111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -18980,7 +19049,8 @@ rast_kern_04111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -19221,7 +19291,8 @@ rast_kern_10000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -19471,7 +19542,8 @@ rast_kern_10010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -19821,7 +19893,8 @@ rast_kern_10100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -20090,7 +20163,8 @@ rast_kern_10110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -20465,7 +20539,8 @@ rast_kern_11000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -21098,7 +21173,8 @@ rast_kern_11001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -21448,7 +21524,8 @@ rast_kern_11010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -22015,7 +22092,8 @@ rast_kern_11011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -22485,7 +22563,8 @@ rast_kern_11100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -23144,7 +23223,8 @@ rast_kern_11101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -23507,7 +23587,8 @@ rast_kern_11110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -24100,7 +24181,8 @@ rast_kern_11111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -24455,7 +24537,8 @@ rast_kern_12000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -25048,7 +25131,8 @@ rast_kern_12001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -25378,7 +25462,8 @@ rast_kern_12010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -25905,7 +25990,8 @@ rast_kern_12011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -26355,7 +26441,8 @@ rast_kern_12100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -26974,7 +27061,8 @@ rast_kern_12101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -27317,7 +27405,8 @@ rast_kern_12110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -27870,7 +27959,8 @@ rast_kern_12111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -28273,7 +28363,8 @@ rast_kern_13000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -28938,7 +29029,8 @@ rast_kern_13001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -29314,7 +29406,8 @@ rast_kern_13010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -29913,7 +30006,8 @@ rast_kern_13011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -30424,7 +30518,8 @@ rast_kern_13100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -31115,7 +31210,8 @@ rast_kern_13101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -31506,7 +31602,8 @@ rast_kern_13110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -32131,7 +32228,8 @@ rast_kern_13111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -32514,7 +32612,8 @@ rast_kern_14000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -33139,7 +33238,8 @@ rast_kern_14001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -33495,7 +33595,8 @@ rast_kern_14010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -34054,7 +34155,8 @@ rast_kern_14011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -34545,7 +34647,8 @@ rast_kern_14100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -35196,7 +35299,8 @@ rast_kern_14101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -35567,7 +35671,8 @@ rast_kern_14110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -36152,7 +36257,8 @@ rast_kern_14111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -36258,7 +36364,8 @@ rast_kern_20000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -36447,7 +36554,8 @@ rast_kern_20000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -36610,7 +36718,8 @@ rast_kern_20010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -36744,7 +36853,8 @@ rast_kern_20100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -36982,7 +37092,8 @@ rast_kern_20100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -37162,7 +37273,8 @@ rast_kern_20110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -37259,7 +37371,8 @@ rast_kern_21000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -37563,7 +37676,8 @@ rast_kern_21000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -37699,7 +37813,8 @@ rast_kern_21001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -38222,7 +38337,8 @@ rast_kern_21001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -38365,7 +38481,8 @@ rast_kern_21010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -38600,7 +38717,8 @@ rast_kern_21010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -38736,7 +38854,8 @@ rast_kern_21011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -39193,7 +39312,8 @@ rast_kern_21011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -39333,7 +39453,8 @@ rast_kern_21100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -39687,7 +39808,8 @@ rast_kern_21100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -39782,7 +39904,8 @@ rast_kern_21101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -40366,7 +40489,8 @@ rast_kern_21101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -40466,7 +40590,8 @@ rast_kern_21110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -40751,7 +40876,8 @@ rast_kern_21110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -40846,7 +40972,8 @@ rast_kern_21111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -41364,7 +41491,8 @@ rast_kern_21111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -41461,7 +41589,8 @@ rast_kern_22000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -41745,7 +41874,8 @@ rast_kern_22000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -41881,7 +42011,8 @@ rast_kern_22001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -42364,7 +42495,8 @@ rast_kern_22001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -42507,7 +42639,8 @@ rast_kern_22010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -42722,7 +42855,8 @@ rast_kern_22010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -42858,7 +42992,8 @@ rast_kern_22011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -43275,7 +43410,8 @@ rast_kern_22011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -43415,7 +43551,8 @@ rast_kern_22100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -43749,7 +43886,8 @@ rast_kern_22100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -43844,7 +43982,8 @@ rast_kern_22101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -44388,7 +44527,8 @@ rast_kern_22101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -44488,7 +44628,8 @@ rast_kern_22110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -44753,7 +44894,8 @@ rast_kern_22110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -44848,7 +44990,8 @@ rast_kern_22111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -45326,7 +45469,8 @@ rast_kern_22111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -45423,7 +45567,8 @@ rast_kern_23000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -45753,7 +45898,8 @@ rast_kern_23000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -45889,7 +46035,8 @@ rast_kern_23001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -46444,7 +46591,8 @@ rast_kern_23001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -46587,7 +46735,8 @@ rast_kern_23010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -46848,7 +46997,8 @@ rast_kern_23010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -46984,7 +47134,8 @@ rast_kern_23011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -47473,7 +47624,8 @@ rast_kern_23011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -47615,7 +47767,8 @@ rast_kern_23100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -48006,7 +48159,8 @@ rast_kern_23100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -48101,7 +48255,8 @@ rast_kern_23101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -48717,7 +48872,8 @@ rast_kern_23101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -48817,7 +48973,8 @@ rast_kern_23110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -49128,7 +49285,8 @@ rast_kern_23110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -49223,7 +49381,8 @@ rast_kern_23111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -49773,7 +49932,8 @@ rast_kern_23111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -49870,7 +50030,8 @@ rast_kern_24000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -50180,7 +50341,8 @@ rast_kern_24000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -50316,7 +50478,8 @@ rast_kern_24001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -50831,7 +50994,8 @@ rast_kern_24001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -50974,7 +51138,8 @@ rast_kern_24010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -51215,7 +51380,8 @@ rast_kern_24010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -51351,7 +51517,8 @@ rast_kern_24011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -51800,7 +51967,8 @@ rast_kern_24011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -51942,7 +52110,8 @@ rast_kern_24100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -52313,7 +52482,8 @@ rast_kern_24100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -52408,7 +52578,8 @@ rast_kern_24101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -52984,7 +53155,8 @@ rast_kern_24101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -53084,7 +53256,8 @@ rast_kern_24110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -53375,7 +53548,8 @@ rast_kern_24110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -53470,7 +53644,8 @@ rast_kern_24111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -53980,7 +54155,8 @@ rast_kern_24111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -54117,7 +54293,8 @@ rast_kern_v00:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -54282,7 +54459,8 @@ rast_kern_v01:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -54508,7 +54686,8 @@ rast_kern_v01:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -54675,7 +54854,8 @@ rast_kern_v02:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -54881,7 +55061,8 @@ rast_kern_v02:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -55050,7 +55231,8 @@ rast_kern_v03:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -55300,7 +55482,8 @@ rast_kern_v03:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -55469,7 +55652,8 @@ rast_kern_v04:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -55699,7 +55883,8 @@ rast_kern_v04:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -55931,7 +56116,8 @@ rast_kern_v10:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -56263,7 +56449,8 @@ rast_kern_v11:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -56575,7 +56762,8 @@ rast_kern_v12:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -56933,7 +57121,8 @@ rast_kern_v13:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -57271,7 +57460,8 @@ rast_kern_v14:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -57440,7 +57630,8 @@ rast_kern_v20:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -57582,7 +57773,8 @@ rast_kern_v21:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -57798,7 +57990,8 @@ rast_kern_v21:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -57942,7 +58135,8 @@ rast_kern_v22:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -58138,7 +58332,8 @@ rast_kern_v22:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -58285,7 +58480,8 @@ rast_kern_v23:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -58524,7 +58720,8 @@ rast_kern_v23:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -58671,7 +58868,8 @@ rast_kern_v24:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -58890,7 +59088,8 @@ rast_kern_v24:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -66141,7 +66340,8 @@ rast_kern_h00000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -66341,7 +66541,8 @@ rast_kern_h00000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -66530,7 +66731,8 @@ rast_kern_h00010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -66693,7 +66895,8 @@ rast_kern_h00100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -66942,7 +67145,8 @@ rast_kern_h00100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -67151,7 +67355,8 @@ rast_kern_h00110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -67273,7 +67478,8 @@ rast_kern_h01000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -67589,7 +67795,8 @@ rast_kern_h01000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -67751,7 +67958,8 @@ rast_kern_h01001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -68286,7 +68494,8 @@ rast_kern_h01001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -68454,7 +68663,8 @@ rast_kern_h01010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -68701,7 +68911,8 @@ rast_kern_h01010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -68863,7 +69074,8 @@ rast_kern_h01011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -69332,7 +69544,8 @@ rast_kern_h01011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -69500,7 +69713,8 @@ rast_kern_h01100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -69866,7 +70080,8 @@ rast_kern_h01100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -69990,7 +70205,8 @@ rast_kern_h01101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -70586,7 +70802,8 @@ rast_kern_h01101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -70714,7 +70931,8 @@ rast_kern_h01110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -71011,7 +71229,8 @@ rast_kern_h01110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -71135,7 +71354,8 @@ rast_kern_h01111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -71665,7 +71885,8 @@ rast_kern_h01111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -71787,7 +72008,8 @@ rast_kern_h02000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -72083,7 +72305,8 @@ rast_kern_h02000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -72245,7 +72468,8 @@ rast_kern_h02001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -72740,7 +72964,8 @@ rast_kern_h02001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -72908,7 +73133,8 @@ rast_kern_h02010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -73135,7 +73361,8 @@ rast_kern_h02010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -73297,7 +73524,8 @@ rast_kern_h02011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -73726,7 +73954,8 @@ rast_kern_h02011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -73894,7 +74123,8 @@ rast_kern_h02100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -74240,7 +74470,8 @@ rast_kern_h02100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -74364,7 +74595,8 @@ rast_kern_h02101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -74920,7 +75152,8 @@ rast_kern_h02101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -75048,7 +75281,8 @@ rast_kern_h02110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -75325,7 +75559,8 @@ rast_kern_h02110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -75449,7 +75684,8 @@ rast_kern_h02111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -75939,7 +76175,8 @@ rast_kern_h02111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -76062,7 +76299,8 @@ rast_kern_h03000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -76404,7 +76642,8 @@ rast_kern_h03000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -76566,7 +76805,8 @@ rast_kern_h03001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -77133,7 +77373,8 @@ rast_kern_h03001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -77301,7 +77542,8 @@ rast_kern_h03010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -77574,7 +77816,8 @@ rast_kern_h03010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -77736,7 +77979,8 @@ rast_kern_h03011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -78237,7 +78481,8 @@ rast_kern_h03011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -78408,7 +78653,8 @@ rast_kern_h03100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -78811,7 +79057,8 @@ rast_kern_h03100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -78935,7 +79182,8 @@ rast_kern_h03101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -79563,7 +79811,8 @@ rast_kern_h03101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -79692,7 +79941,8 @@ rast_kern_h03110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -80015,7 +80265,8 @@ rast_kern_h03110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -80139,7 +80390,8 @@ rast_kern_h03111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -80701,7 +80953,8 @@ rast_kern_h03111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -80824,7 +81077,8 @@ rast_kern_h04000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -81146,7 +81400,8 @@ rast_kern_h04000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -81308,7 +81563,8 @@ rast_kern_h04001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -81835,7 +82091,8 @@ rast_kern_h04001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -82003,7 +82260,8 @@ rast_kern_h04010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -82256,7 +82514,8 @@ rast_kern_h04010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -82418,7 +82677,8 @@ rast_kern_h04011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -82879,7 +83139,8 @@ rast_kern_h04011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -83050,7 +83311,8 @@ rast_kern_h04100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -83433,7 +83695,8 @@ rast_kern_h04100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -83557,7 +83820,8 @@ rast_kern_h04101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -84145,7 +84409,8 @@ rast_kern_h04101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -84274,7 +84539,8 @@ rast_kern_h04110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -84577,7 +84843,8 @@ rast_kern_h04110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -84701,7 +84968,8 @@ rast_kern_h04111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -85223,7 +85491,8 @@ rast_kern_h04111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -85467,7 +85736,8 @@ rast_kern_h10000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -85720,7 +85990,8 @@ rast_kern_h10010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -86076,7 +86347,8 @@ rast_kern_h10100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -86351,7 +86623,8 @@ rast_kern_h10110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -86729,7 +87002,8 @@ rast_kern_h11000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -87365,7 +87639,8 @@ rast_kern_h11001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -87718,7 +87993,8 @@ rast_kern_h11010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -88288,7 +88564,8 @@ rast_kern_h11011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -88764,7 +89041,8 @@ rast_kern_h11100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -89429,7 +89707,8 @@ rast_kern_h11101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -89798,7 +90077,8 @@ rast_kern_h11110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -90397,7 +90677,8 @@ rast_kern_h11111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -90755,7 +91036,8 @@ rast_kern_h12000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -91351,7 +91633,8 @@ rast_kern_h12001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -91684,7 +91967,8 @@ rast_kern_h12010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -92214,7 +92498,8 @@ rast_kern_h12011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -92670,7 +92955,8 @@ rast_kern_h12100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -93295,7 +93581,8 @@ rast_kern_h12101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -93644,7 +93931,8 @@ rast_kern_h12110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -94203,7 +94491,8 @@ rast_kern_h12111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -94609,7 +94898,8 @@ rast_kern_h13000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -95277,7 +95567,8 @@ rast_kern_h13001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -95656,7 +95947,8 @@ rast_kern_h13010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -96258,7 +96550,8 @@ rast_kern_h13011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -96775,7 +97068,8 @@ rast_kern_h13100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -97472,7 +97766,8 @@ rast_kern_h13101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -97869,7 +98164,8 @@ rast_kern_h13110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -98500,7 +98796,8 @@ rast_kern_h13111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -98886,7 +99183,8 @@ rast_kern_h14000:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -99514,7 +99812,8 @@ rast_kern_h14001:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -99873,7 +100172,8 @@ rast_kern_h14010:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -100435,7 +100735,8 @@ rast_kern_h14011:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -100932,7 +101233,8 @@ rast_kern_h14100:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -101589,7 +101891,8 @@ rast_kern_h14101:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -101966,7 +102269,8 @@ rast_kern_h14110:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -102557,7 +102861,8 @@ rast_kern_h14111:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -102666,7 +102971,8 @@ rast_kern_h20000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -102856,7 +103162,8 @@ rast_kern_h20000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -103022,7 +103329,8 @@ rast_kern_h20010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -103162,7 +103470,8 @@ rast_kern_h20100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -103401,7 +103710,8 @@ rast_kern_h20100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -103587,7 +103897,8 @@ rast_kern_h20110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -103687,7 +103998,8 @@ rast_kern_h21000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -103992,7 +104304,8 @@ rast_kern_h21000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -104131,7 +104444,8 @@ rast_kern_h21001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -104655,7 +104969,8 @@ rast_kern_h21001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -104801,7 +105116,8 @@ rast_kern_h21010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -105037,7 +105353,8 @@ rast_kern_h21010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -105176,7 +105493,8 @@ rast_kern_h21011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -105634,7 +105952,8 @@ rast_kern_h21011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -105780,7 +106099,8 @@ rast_kern_h21100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -106135,7 +106455,8 @@ rast_kern_h21100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -106236,7 +106557,8 @@ rast_kern_h21101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -106821,7 +107143,8 @@ rast_kern_h21101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -106927,7 +107250,8 @@ rast_kern_h21110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -107213,7 +107537,8 @@ rast_kern_h21110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -107314,7 +107639,8 @@ rast_kern_h21111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -107833,7 +108159,8 @@ rast_kern_h21111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -107933,7 +108260,8 @@ rast_kern_h22000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -108218,7 +108546,8 @@ rast_kern_h22000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -108357,7 +108686,8 @@ rast_kern_h22001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -108841,7 +109171,8 @@ rast_kern_h22001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -108987,7 +109318,8 @@ rast_kern_h22010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -109203,7 +109535,8 @@ rast_kern_h22010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -109342,7 +109675,8 @@ rast_kern_h22011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -109760,7 +110094,8 @@ rast_kern_h22011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -109906,7 +110241,8 @@ rast_kern_h22100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -110241,7 +110577,8 @@ rast_kern_h22100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -110342,7 +110679,8 @@ rast_kern_h22101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -110887,7 +111225,8 @@ rast_kern_h22101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -110993,7 +111332,8 @@ rast_kern_h22110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -111259,7 +111599,8 @@ rast_kern_h22110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -111360,7 +111701,8 @@ rast_kern_h22111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -111839,7 +112181,8 @@ rast_kern_h22111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -111939,7 +112282,8 @@ rast_kern_h23000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -112270,7 +112614,8 @@ rast_kern_h23000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -112409,7 +112754,8 @@ rast_kern_h23001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -112965,7 +113311,8 @@ rast_kern_h23001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -113111,7 +113458,8 @@ rast_kern_h23010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -113373,7 +113721,8 @@ rast_kern_h23010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -113512,7 +113861,8 @@ rast_kern_h23011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -114002,7 +114352,8 @@ rast_kern_h23011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -114150,7 +114501,8 @@ rast_kern_h23100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -114542,7 +114894,8 @@ rast_kern_h23100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -114643,7 +114996,8 @@ rast_kern_h23101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -115260,7 +115614,8 @@ rast_kern_h23101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -115366,7 +115721,8 @@ rast_kern_h23110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -115678,7 +116034,8 @@ rast_kern_h23110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -115779,7 +116136,8 @@ rast_kern_h23111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -116330,7 +116688,8 @@ rast_kern_h23111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -116430,7 +116789,8 @@ rast_kern_h24000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -116741,7 +117101,8 @@ rast_kern_h24000:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -116880,7 +117241,8 @@ rast_kern_h24001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -117396,7 +117758,8 @@ rast_kern_h24001:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -117542,7 +117905,8 @@ rast_kern_h24010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -117784,7 +118148,8 @@ rast_kern_h24010:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -117923,7 +118288,8 @@ rast_kern_h24011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -118373,7 +118739,8 @@ rast_kern_h24011:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -118521,7 +118888,8 @@ rast_kern_h24100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -118893,7 +119261,8 @@ rast_kern_h24100:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -118994,7 +119363,8 @@ rast_kern_h24101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -119571,7 +119941,8 @@ rast_kern_h24101:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -119677,7 +120048,8 @@ rast_kern_h24110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -119969,7 +120341,8 @@ rast_kern_h24110:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -120070,7 +120443,8 @@ rast_kern_h24111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -120581,7 +120955,8 @@ rast_kern_h24111:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -120723,7 +121098,8 @@ rast_kern_hv00:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -120893,7 +121269,8 @@ rast_kern_hv01:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -121119,7 +121496,8 @@ rast_kern_hv01:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -121291,7 +121669,8 @@ rast_kern_hv02:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -121497,7 +121876,8 @@ rast_kern_hv02:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -121671,7 +122051,8 @@ rast_kern_hv03:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -121921,7 +122302,8 @@ rast_kern_hv03:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -122095,7 +122477,8 @@ rast_kern_hv04:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -122325,7 +122708,8 @@ rast_kern_hv04:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -122562,7 +122946,8 @@ rast_kern_hv10:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -122899,7 +123284,8 @@ rast_kern_hv11:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -123216,7 +123602,8 @@ rast_kern_hv12:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -123579,7 +123966,8 @@ rast_kern_hv13:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -123922,7 +124310,8 @@ rast_kern_hv14:
 	sub v28.4s, v26.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -124096,7 +124485,8 @@ rast_kern_hv20:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -124243,7 +124633,8 @@ rast_kern_hv21:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -124459,7 +124850,8 @@ rast_kern_hv21:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -124608,7 +125000,8 @@ rast_kern_hv22:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -124804,7 +125197,8 @@ rast_kern_hv22:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -124956,7 +125350,8 @@ rast_kern_hv23:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -125195,7 +125590,8 @@ rast_kern_hv23:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
@@ -125347,7 +125743,8 @@ rast_kern_hv24:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 35b
@@ -125566,7 +125963,8 @@ rast_kern_hv24:
 	sub v28.4s, v6.4s, v28.4s
 	abs v27.4s, v27.4s
 	abs v28.4s, v28.4s
-	movi v29.4s, #1, lsl #8
+	ldr s29, [x19, #268]
+	dup v29.4s, v29.s[0]
 	cmhi v27.4s, v29.4s, v27.4s
 	cmhi v28.4s, v29.4s, v28.4s
 	b 25b
