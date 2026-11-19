@@ -67,7 +67,7 @@ from kernsched import schedule
 K = dict(recip=0x00, recip_u=0x08, tex=0x10, pal=0x18, pid24=0x20, bytes=0x30, K=0x38, tw=0x3c,
          s_and=0x40, t_and=0x50, s_lo=0x60, t_lo=0x70, s_hi=0x80, t_hi=0x90, s_flip=0xa0, t_flip=0xb0,
          fraclut=0xc0, owner=0xd0, idx16=0xe0, lstride=0xf0, attr_off=0xf4, id_off=0xf8, id_stride=0xfc,
-         owner_stride=0x100, pal16=0x110, size=0x150)
+         owner_stride=0x100, deq=0x10c, pal16=0x110, size=0x150)
 # span entry fields (stride 4 per line), see spec/edges.c; SPS = bytes per array (DraStic's 0xb0; the hi-res
 # pipeline's 48-line bins use 0x100), HR = the hi-res kernel set: buffer strides from kargs instead of DraStic's
 # context layout (line 0x800 bytes, attributes at +0x10000, ids at +0x20000 with 0x200 per line, owners 0x400)
@@ -547,12 +547,12 @@ def advance(affine=None):
         e("fadd v0.4s, v0.4s, v4.4s"); e("fadd v1.4s, v1.4s, v4.4s"); e("fsub v2.4s, v2.4s, v5.4s"); e("fsub v3.4s, v3.4s, v5.4s")
 
 def test_equal(D, eq=24):
-    """out of line: the depth-equal test (attribute bit 14), |dep - d| < 0x100"""
+    """out of line: the depth-equal test (attribute bit 14), |dep - d| < kargs.deq"""
     dl, dh = depth_regs(D)
     e(f"{eq}:")
     e(f"sub v27.4s, {dl}.4s, v27.4s"); e(f"sub v28.4s, {dh}.4s, v28.4s")
     e("abs v27.4s, v27.4s"); e("abs v28.4s, v28.4s")
-    e("movi v29.4s, #1, lsl #8")
+    e(f"ldr s29, [x19, #{K['deq']}]"); e("dup v29.4s, v29.s[0]")
     e("cmhi v27.4s, v29.4s, v27.4s"); e("cmhi v28.4s, v29.4s, v28.4s")
     e(f"b {eq + 1}b")
 
