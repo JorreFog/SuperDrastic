@@ -189,11 +189,11 @@ void batch_hr(poly_t *P, const uint8_t *bs, unsigned k, unsigned line, uint8_t *
                 uint32x4_t al = vandq_u32(da.l, m24), ah = vandq_u32(da.h, m24);
                 uint32x4_t pl, ph;
                 if (equal) {
-                    /* d = dep - (da & 0xffffff); |d| as s32 (0 - d when negative, mod 2^32) < 0x100 unsigned */
+                    /* d = dep - (da & 0xffffff); |d| as s32 (0 - d when negative, mod 2^32) below the margin */
                     uint32x4_t dl_ = vsubq_u32(dep.l, al), dh_ = vsubq_u32(dep.h, ah);
                     dl_ = vreinterpretq_u32_s32(vabsq_s32(vreinterpretq_s32_u32(dl_)));
                     dh_ = vreinterpretq_u32_s32(vabsq_s32(vreinterpretq_s32_u32(dh_)));
-                    pl = vcltq_u32(dl_, vdupq_n_u32(0x100)); ph = vcltq_u32(dh_, vdupq_n_u32(0x100));
+                    pl = vcltq_u32(dl_, vdupq_n_u32(DEQ_MARGIN(P->flags))); ph = vcltq_u32(dh_, vdupq_n_u32(DEQ_MARGIN(P->flags)));
                 } else { pl = vcgtq_u32(al, dep.l); ph = vcgtq_u32(ah, dep.h); }
                 m16 = vcombine_u16(vmovn_u32(pl), vmovn_u32(ph));
             }
