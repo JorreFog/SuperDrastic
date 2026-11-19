@@ -244,7 +244,8 @@ void b0_flush(uint8_t *ctx, uint8_t *spans, uint8_t *poly, unsigned line0, unsig
 /* ---- deferred shading: can a texture's alpha test fail? ----
  * The lowest texel alpha of each texture used, found once per frame per render thread (the texture cache entries
  * are stable while a frame renders): the texels of direct and compressed textures, the palette entries of paletted
- * ones (spec/texture.c: formats 2/3/4 have 4/16/256 entries, A3I5 and A5I3 256). */
+ * ones (spec/texture.c: formats 2/3/4 have 4/16/256 entries, A3I5 and A5I3 256; a texture with 8 at
+ * +0x49 has a palette of its highest index + 1 entries). */
 typedef struct { const uint8_t *tex; uint32_t gen; uint8_t min_a; } texinfo_t;
 #define TEXINFO_N 1024
 /* one thread-local block (one TLS lookup per call); gen is 1 and up from the first frame's f_begin_frame */
@@ -255,6 +256,14 @@ static unsigned tex_min_alpha_scan(const poly_t *P) {
     unsigned m = 255;
     if (P->paletted) {
         unsigned fmt = P->tex[0x49], np = fmt == 2 ? 4 : fmt == 3 ? 16 : 256;
+        if (fmt == 8) {
+            unsigned n = (unsigned)P->tw * P->th, i = 0, hi;
+            uint8x16_t acc = vdupq_n_u8(0);
+            for (; i + 16 <= n; i += 16) acc = vmaxq_u8(acc, vld1q_u8(P->idx8 + i));
+            hi = vmaxvq_u8(acc);
+            for (; i < n; i++) if (P->idx8[i] > hi) hi = P->idx8[i];
+            np = hi + 1;
+        }
         for (unsigned i = 0; i < np; i++) { unsigned a = P->pal[i] >> 24; if (a < m) m = a; }
     } else {
         unsigned n = (unsigned)P->tw * P->th;
