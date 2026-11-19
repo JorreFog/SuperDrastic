@@ -25,6 +25,10 @@ typedef struct {
     int noat;               /* textured: the alpha test cannot fail (the texture's lowest alpha passes it) */
     uint8_t kargs[0x150] __attribute__((aligned(16)));   /* fused_asm.c: the assembly kernels' arguments */
 } poly_t;
+/* the depth-equal test (attribute bit 14) passes a difference below 0x100 with w depth (flag bit 3) and up to
+ * 0x200 with z depth */
+#define DEQ_Z(attr, fl) (((attr) >> 14 & 1) && !((fl) & 8))
+#define DEQ_MARGIN(fl) (((fl) & 8) ? 0x100u : 0x201u)
 #define SPO(P, k) ((P)->sps * (k))      /* span array k: 0 W0, 1 dW, 2 Z0, 3 dZ, 4 st, 5 dst, 6 rg, 7 drg, 8 xb, 9 cdb, 10 edges */
 /* the layouts (also for the hi-res pipeline, hr.c): per scale, the span block stride and the context strides */
 typedef struct { unsigned sps, lstride, attr_off, id_off, id_stride, owner_stride, width, lines, hr, hdr_off; } layout_t;

@@ -56,6 +56,11 @@ uint16_t *defer_owner(void) {
 
 void defer_poly(const layout_t *L, uint8_t *ctx, uint8_t *spans, uint8_t *poly, uint8_t *buf, unsigned line0,
                 unsigned nlines, unsigned flags, uint8_t *v0) {
+    if (DEQ_Z(*(uint32_t *)(poly + 4), flags)) {     /* not on the kernels (f_run): rendered now, in its turn */
+        defer_flush(L, ctx);
+        f_run(L, ctx, spans, poly, buf, line0, nlines, flags, v0, 0, 0);
+        return;
+    }
     if (dq_n == DQ_MAX) defer_flush(L, ctx);
     if (dq_n == dq_cap) { dq_cap = dq_cap ? 2 * dq_cap : 256; dq = realloc(dq, dq_cap * sizeof *dq); }
     if (!f_run(L, ctx, spans, poly, buf, line0, nlines, flags, v0, 1, dq_base + dq_n)) return;   /* no pixel: nothing to shade */
