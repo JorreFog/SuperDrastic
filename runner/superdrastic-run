@@ -112,10 +112,15 @@ put_back() { cpu_back; gpu_back; audio_back; restore_display; }
 say "start: $* (handover $HANDOVER, shader $SHADER, gpu ${GOV:-untouched})"
 release
 rm -f "$DSFLIP_STATE"
+# A stop (a shutdown, the frontend ending the game). DraStic's SDL turns TERM into a quit event DraStic
+# ignores, so the game has to be killed. put_back restores the clocks and the display.
+stop_game() {
+    kill -9 $P 2>/dev/null; wait $P; put_back; say "stopped by a signal"; exit 143
+}
 # SuperDrastic retries the display for 3 s itself, so no wait here for the frontend to let go
 ( cd "$WORKDIR" && SDL_VIDEODRIVER=dummy DSFLIP_SHADER="$SHADER" LD_PRELOAD="$LIB${LD_PRELOAD:+:$LD_PRELOAD}" exec "$DRASTIC" "$@" ) &
 P=$!
-trap 'kill -9 $P 2>/dev/null; wait $P; put_back; say "stopped by a signal"; exit 143' TERM INT HUP
+trap stop_game TERM INT HUP
 # other services (a battery/charger watcher, say) may change the GPU's governor mid-game: put ours back
 [ -n "$GOV" ] && ( while kill -0 $P 2>/dev/null; do
     sleep 2
@@ -136,7 +141,10 @@ if [ "$v" != ready ]; then
     trap - TERM INT HUP
     [ "${DSFLIP_FALLBACK:-1}" = 0 ] && exit 1
     say "running DraStic without SuperDrastic"
-    plain "$@"
+    # not exec'd: the shell has to stay, so a TERM still kills DraStic (SDL would swallow it)
+    ( cd "$WORKDIR" && exec "$DRASTIC" "$@" ) &
+    P=$!
+    trap stop_game TERM INT HUP
 fi
 wait $P; rc=$?
 cpu_back                       # at once: SuperDrastic's governor may have lowered the limit
